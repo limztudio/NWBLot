@@ -21,7 +21,7 @@ b8 ConcreteTypeAnalyzer::isKnownConcreteTypeName(const MStringView name)const no
         return true;
     if(BuiltinTypeSemantics::IsScalarType(name) || SymbolTable::IsSimdType(name) || SymbolTable::IsUnalignedVectorType(name) || m_symbols.hasTypeSymbol(name))
         return true;
-    if(FindBuiltinObjectType(name) != nullptr)
+    if(FindBuiltinObjectType(name) != nullptr || FindBuiltinEnum(name) != nullptr)
         return true;
     if(FindBuiltinGenericType(name) != nullptr)
         return true;

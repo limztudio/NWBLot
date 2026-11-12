@@ -4,45 +4,23 @@
 
 #include "benchmark_support.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_box_normal_benchmark{
+namespace SimdOptimizationBenchmark{
+namespace BoxNormalKernels{
 
+NWB_INLINE volatile u64 s_ChecksumSink = 0u;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using SimdOptimizationBenchmark::NextSeed;
-
-template<typename Scalar>
-struct Case{
-    using Storage = Conditional_T<IsSame_V<Scalar, f64>, Double4, Float4>;
-
-
-public:
-    Storage position;
-    Storage extents;
-    Storage fallback;
-    Scalar threshold = Scalar(0);
-};
-
-inline constexpr usize s_CaseCount = 32768u;
-inline constexpr usize s_DataCount = 128u;
-static volatile u64 s_Checksum = 0u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVectorSingle outside = VectorMax(q, VectorZero());
     const SIMDVectorSingle signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
@@ -62,7 +40,7 @@ static volatile u64 s_Checksum = 0u;
     return VectorSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
+[[nodiscard]] NWB_NOINLINE SIMDVectorDouble NWB_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     const SIMDVectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
     const SIMDVectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
     const SIMDVectorDouble signedOutside = VectorDoubleSelect(VectorDoubleNegate(outside), outside, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
@@ -82,171 +60,145 @@ static volatile u64 s_Checksum = 0u;
     return VectorDoubleSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     return SdfTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
+[[nodiscard]] NWB_NOINLINE SIMDVectorDouble NWB_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     return SdfDoubleTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-template<typename Scalar>
-[[nodiscard]] Case<Scalar> Fill(const usize index, u64& seed)noexcept{
-    using Storage = typename Case<Scalar>::Storage;
-    using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
-    constexpr Array<u64, 15> s_Exceptional64 = {
-        0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
-        0x7fefffffffffffffull, 0xffefffffffffffffull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000142ull, 0xfff8000000000284ull, 0x7ff0000000000011ull, 0xfff0000000000022ull,
-    };
-    constexpr Array<u32, 15> s_Exceptional32 = {
-        0u, 0x80000000u, 1u, 0x80000001u, 0x00800000u, 0x3f800000u, 0xbf800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00142u, 0xffc00284u, 0x7f800011u, 0xff800022u,
-    };
-    Array<Bits, 13> words = {};
-    for(usize word = 0u; word < words.size(); ++word){
-        const u64 random = NextSeed(seed);
-        if constexpr(IsSame_V<Scalar, f64>)
-            words[word] = index < 8192u ? s_Exceptional64[random % s_Exceptional64.size()] : random;
-        else
-            words[word] = index < 8192u ? s_Exceptional32[random % s_Exceptional32.size()] : static_cast<u32>(random);
-    }
-    Storage position;
-    Storage extents;
-    Storage fallback;
-    for(usize lane = 0u; lane < 4u; ++lane){
-        position.raw[lane] = BitCast<Scalar>(words[lane]);
-        extents.raw[lane] = BitCast<Scalar>(words[lane + 4u]);
-        fallback.raw[lane] = BitCast<Scalar>(words[lane + 8u]);
-    }
-    return { position, extents, fallback, BitCast<Scalar>(words[12]) };
+template<b8 Candidate, typename CaseT>
+[[nodiscard]] NWB_NOINLINE SIMDVectorSingle RunSingle(const CaseT& input)noexcept{
+    const SIMDVectorSingle position = LoadFloat(input.position);
+    const SIMDVectorSingle extents = LoadFloat(input.extents);
+    const SIMDVectorSingle fallback = LoadFloat(input.fallback);
+    if constexpr(Candidate)
+        return CandidateSingle(position, extents, fallback, input.threshold);
+    else
+        return OriginalSingle(position, extents, fallback, input.threshold);
 }
 
-template<typename Scalar, b8 Candidate>
-[[nodiscard]] FOUNDATION_NOINLINE auto Run(const Case<Scalar>& input)noexcept{
-    if constexpr(IsSame_V<Scalar, f64>){
-        const SIMDVectorDouble position = LoadDouble(input.position);
-        const SIMDVectorDouble extents = LoadDouble(input.extents);
-        const SIMDVectorDouble fallback = LoadDouble(input.fallback);
-        if constexpr(Candidate)
-            return CandidateDouble(position, extents, fallback, input.threshold);
-        else
-            return OriginalDouble(position, extents, fallback, input.threshold);
-    }
-    else{
-        const SIMDVectorSingle position = LoadFloat(input.position);
-        const SIMDVectorSingle extents = LoadFloat(input.extents);
-        const SIMDVectorSingle fallback = LoadFloat(input.fallback);
-        if constexpr(Candidate)
-            return CandidateSingle(position, extents, fallback, input.threshold);
-        else
-            return OriginalSingle(position, extents, fallback, input.threshold);
-    }
+template<b8 Candidate, typename CaseT>
+[[nodiscard]] NWB_NOINLINE SIMDVectorDouble RunDouble(const CaseT& input)noexcept{
+    const SIMDVectorDouble position = LoadDouble(input.position);
+    const SIMDVectorDouble extents = LoadDouble(input.extents);
+    const SIMDVectorDouble fallback = LoadDouble(input.fallback);
+    if constexpr(Candidate)
+        return CandidateDouble(position, extents, fallback, input.threshold);
+    else
+        return OriginalDouble(position, extents, fallback, input.threshold);
 }
 
-template<typename Scalar>
-[[nodiscard]] u32 Verify(){
-#pragma STDC FENV_ACCESS ON
-    using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
-    constexpr u64 s_VerifyInitialSeed = 0x12ace40f893d5847ull;
-    u64 seed = s_VerifyInitialSeed;
-    u32 failures = 0u;
-    for(const i32 mode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-        if(!SetFloatingPointRoundingMode(mode))
-            return failures + 1u;
-        for(usize index = 0u; index < s_CaseCount; ++index){
-            const Case<Scalar> input = Fill<Scalar>(index, seed);
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-                return failures + 1u;
-            errno = 71;
-            const auto original = Run<Scalar, false>(input);
-            const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-            const i32 originalErrno = errno;
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-                return failures + 1u;
-            errno = 71;
-            const auto candidate = Run<Scalar, true>(input);
-            const i32 candidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-            const i32 candidateErrno = errno;
-            b8 equal = originalFlags == candidateFlags && originalErrno == candidateErrno;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                equal &= BitCast<Bits>(static_cast<Scalar>(original[lane])) == BitCast<Bits>(static_cast<Scalar>(candidate[lane]));
-            if(!equal && ++failures <= 8u)
-                FOUNDATION_COUT << "mismatch precision=" << sizeof(Scalar) << " mode=" << mode << " index=" << index << " flags=" << originalFlags << '/' << candidateFlags << " errno=" << originalErrno << '/' << candidateErrno << '\n';
-        }
-    }
-    return failures;
-}
-
-template<typename Scalar, b8 Candidate, b8 Latency>
-[[nodiscard]] FOUNDATION_NOINLINE u64 Workload(const usize iterations)noexcept{
-    using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
-    Array<Case<Scalar>, s_DataCount> data = {};
-    for(usize index = 0u; index < s_DataCount; ++index){
-        if constexpr(IsSame_V<Scalar, f64>){
-            const SIMDVectorDouble position = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>((index % 7u) + 1u), static_cast<f64>((index % 5u) + 1u), static_cast<f64>((index % 3u) + 1u), 0.0), VectorDoubleSet(0.375, -0.625, 0.875, 0.0));
-            StoreDouble(position, data[index].position);
-            StoreDouble(VectorDoubleSet(0.5, 0.75, 0.125, 0.0), data[index].extents);
-            StoreDouble(VectorDoubleSet(1.0, 0.0, 0.0, 0.0), data[index].fallback);
-            data[index].threshold = 1e-12;
-        }
-        else{
-            const SIMDVectorSingle position = VectorMultiply(VectorSet(static_cast<f32>((index % 7u) + 1u), static_cast<f32>((index % 5u) + 1u), static_cast<f32>((index % 3u) + 1u), 0.0f), VectorSet(0.375f, -0.625f, 0.875f, 0.0f));
-            StoreFloat(position, data[index].position);
-            StoreFloat(VectorSet(0.5f, 0.75f, 0.125f, 0.0f), data[index].extents);
-            StoreFloat(VectorSet(1.0f, 0.0f, 0.0f, 0.0f), data[index].fallback);
-            data[index].threshold = 1e-12f;
-        }
-    }
-    alignas(Vector) Array<Vector, 8> accumulators = {};
-    for(auto& accumulator : accumulators){
-        if constexpr(IsSame_V<Scalar, f64>)
-            accumulator = LoadDouble(data[0].position);
-        else
-            accumulator = LoadFloat(data[0].position);
-    }
+template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
+[[nodiscard]] NWB_NOINLINE u64 WorkloadSingle(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, 8> accumulators = {};
+    for(auto& accumulator : accumulators)
+        accumulator = LoadFloat(data[0].position);
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         if constexpr(Latency){
-            Case<Scalar> input = data[iteration % s_DataCount];
-            if constexpr(IsSame_V<Scalar, f64>)
-                StoreDouble(accumulators[0], input.position);
-            else
-                StoreFloat(accumulators[0], input.position);
-            accumulators[0] = Run<Scalar, Candidate>(input);
+            CaseT input = data[iteration % DataCount];
+            StoreFloat(accumulators[0], input.position);
+            accumulators[0] = RunSingle<Candidate>(input);
         }
         else{
-            for(usize lane = 0u; lane < 8u; ++lane){
-                const auto value = Run<Scalar, Candidate>(data[(iteration + lane) % s_DataCount]);
-                if constexpr(IsSame_V<Scalar, f64>)
-                    accumulators[lane] = VectorDoubleAdd(accumulators[lane], value);
-                else
-                    accumulators[lane] = VectorAdd(accumulators[lane], value);
-            }
+            for(usize lane = 0u; lane < 8u; ++lane)
+                accumulators[lane] = VectorAdd(accumulators[lane], RunSingle<Candidate>(data[(iteration + lane) % DataCount]));
         }
     }
-    using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
     u64 checksum = 0u;
     for(const auto& accumulator : accumulators){
         for(usize lane = 0u; lane < 4u; ++lane)
-            checksum ^= BitCast<Bits>(static_cast<Scalar>(accumulator[lane]));
+            checksum ^= BitCast<u32>(static_cast<f32>(accumulator[lane]));
     }
-    s_Checksum = checksum;
+    s_ChecksumSink = checksum;
     return checksum;
 }
 
-template<typename Scalar>
-[[nodiscard]] i32 Measure(const b8 candidate, const b8 latency, const usize iterations){
-    const Timer begin = TimerNow();
-    const u64 checksum = latency ? (candidate ? Workload<Scalar, true, true>(iterations) : Workload<Scalar, false, true>(iterations)) : (candidate ? Workload<Scalar, true, false>(iterations) : Workload<Scalar, false, false>(iterations));
-    constexpr f64 s_NanosecondsPerSecond = 1.0e9;
-    const f64 seconds = DurationInNS<f64>(TimerNow(), begin) / s_NanosecondsPerSecond;
-    FOUNDATION_COUT.precision(17);
-    FOUNDATION_COUT << "{\"precision\":" << sizeof(Scalar) << ",\"candidate\":" << candidate << ",\"latency\":" << latency << ",\"iterations\":" << iterations << ",\"seconds\":" << seconds << ",\"checksum\":" << checksum << "}\n";
-    return 0;
+template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
+[[nodiscard]] NWB_NOINLINE u64 WorkloadDouble(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
+    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
+    for(auto& accumulator : accumulators)
+        accumulator = LoadDouble(data[0].position);
+    for(usize iteration = 0u; iteration < iterations; ++iteration){
+        if constexpr(Latency){
+            CaseT input = data[iteration % DataCount];
+            StoreDouble(accumulators[0], input.position);
+            accumulators[0] = RunDouble<Candidate>(input);
+        }
+        else{
+            for(usize lane = 0u; lane < 8u; ++lane)
+                accumulators[lane] = VectorDoubleAdd(accumulators[lane], RunDouble<Candidate>(data[(iteration + lane) % DataCount]));
+        }
+    }
+    u64 checksum = 0u;
+    for(const auto& accumulator : accumulators){
+        for(usize lane = 0u; lane < 4u; ++lane)
+            checksum ^= BitCast<u64>(static_cast<f64>(accumulator[lane]));
+    }
+    s_ChecksumSink = checksum;
+    return checksum;
 }
 
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template<typename CaseT>
+[[nodiscard]] NWB_INLINE b8 CompareBoxNormalSingleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    errno = 71;
+    const SIMDVectorSingle original = BoxNormalKernels::RunSingle<false>(input);
+    outOriginalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    outOriginalErrno = errno;
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    errno = 71;
+    const SIMDVectorSingle candidate = BoxNormalKernels::RunSingle<true>(input);
+    outCandidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    outCandidateErrno = errno;
+    b8 equal = outOriginalFlags == outCandidateFlags && outOriginalErrno == outCandidateErrno;
+    for(usize lane = 0u; lane < 4u; ++lane)
+        equal &= BitCast<u32>(static_cast<f32>(original[lane])) == BitCast<u32>(static_cast<f32>(candidate[lane]));
+    outEqual = equal;
+    return true;
+}
 
+template<typename CaseT>
+[[nodiscard]] NWB_INLINE b8 CompareBoxNormalDoubleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    errno = 71;
+    const SIMDVectorDouble original = BoxNormalKernels::RunDouble<false>(input);
+    outOriginalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    outOriginalErrno = errno;
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    errno = 71;
+    const SIMDVectorDouble candidate = BoxNormalKernels::RunDouble<true>(input);
+    outCandidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    outCandidateErrno = errno;
+    b8 equal = outOriginalFlags == outCandidateFlags && outOriginalErrno == outCandidateErrno;
+    for(usize lane = 0u; lane < 4u; ++lane)
+        equal &= BitCast<u64>(static_cast<f64>(original[lane])) == BitCast<u64>(static_cast<f64>(candidate[lane]));
+    outEqual = equal;
+    return true;
+}
 
+template<typename CaseT, usize DataCount>
+[[nodiscard]] NWB_INLINE u64 DispatchBoxNormalSingleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
+    if(latency)
+        return candidate ? BoxNormalKernels::WorkloadSingle<true, true>(data, iterations) : BoxNormalKernels::WorkloadSingle<false, true>(data, iterations);
+    return candidate ? BoxNormalKernels::WorkloadSingle<true, false>(data, iterations) : BoxNormalKernels::WorkloadSingle<false, false>(data, iterations);
+}
+
+template<typename CaseT, usize DataCount>
+[[nodiscard]] NWB_INLINE u64 DispatchBoxNormalDoubleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
+    if(latency)
+        return candidate ? BoxNormalKernels::WorkloadDouble<true, true>(data, iterations) : BoxNormalKernels::WorkloadDouble<false, true>(data, iterations);
+    return candidate ? BoxNormalKernels::WorkloadDouble<true, false>(data, iterations) : BoxNormalKernels::WorkloadDouble<false, false>(data, iterations);
+}
 };
 
 
@@ -255,39 +207,294 @@ template<typename Scalar>
 
 }
 
-b8 BoxNormalBenchmarkSupported(){
-    return true;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_BoxNormalCaseCount = 32768u;
+const usize s_BoxNormalDataCount = 128u;
+const u64 s_BoxNormalVerifySeed = 0x12ace40f893d5847ull;
+const f64 s_NanosecondsPerSecond = 1.0e9;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BoxNormalSingleCase{
+    public f32x4 position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 extents = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 fallback = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 threshold = 0.0f;
 }
 
-native{
-int main(const int argc, const char* const* argv){
-    using namespace __hidden_box_normal_benchmark;
-    if(argc == 2 && StringView(argv[1]) == "verify"){
-        const auto original = HoldFloatingPointExceptions();
-        if(!original)
-            return 1;
-        ScopeExit restore([&]()noexcept{
-            if(!SetFloatingPointEnvironment(*original))
-                __builtin_trap();
-        });
-        const u32 singleFailures = Verify<f32>();
-        const u32 doubleFailures = Verify<f64>();
-        FOUNDATION_COUT << "verification single=" << singleFailures << " double=" << doubleFailures << " cases=262144\n";
-        return singleFailures || doubleFailures ? 1 : 0;
+class BoxNormalDoubleCase{
+    public f64x4 position = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f64x4 extents = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f64x4 fallback = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f64 threshold = 0.0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 BoolToBoxNormalFlag(in b8 value){
+    if(value)
+        return 1u;
+    return 0u;
+}
+
+u32 ExceptionalBoxNormalBits32(in usize index){
+    switch(index){
+    case 0u: return 0u;
+    case 1u: return 0x80000000u;
+    case 2u: return 1u;
+    case 3u: return 0x80000001u;
+    case 4u: return 0x00800000u;
+    case 5u: return 0x3f800000u;
+    case 6u: return 0xbf800000u;
+    case 7u: return 0x7f7fffffu;
+    case 8u: return 0xff7fffffu;
+    case 9u: return 0x7f800000u;
+    case 10u: return 0xff800000u;
+    case 11u: return 0x7fc00142u;
+    case 12u: return 0xffc00284u;
+    case 13u: return 0x7f800011u;
+    default: return 0xff800022u;
     }
-    if(argc == 6 && StringView(argv[1]) == "measure"){
-        const b8 single = StringView(argv[2]) == "single";
-        const b8 candidate = StringView(argv[3]) == "candidate";
-        const b8 latency = StringView(argv[4]) == "latency";
-        if((!single && StringView(argv[2]) != "double") || (!candidate && StringView(argv[3]) != "original") || (!latency && StringView(argv[4]) != "throughput"))
-            return 2;
-        const auto parsedIterations = ParseU64(AStringView(argv[5]));
-        if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > Limit<usize>::s_Max / 1u)
-            return 2;
-        const usize iterations = static_cast<usize>(*parsedIterations);
-        return single ? Measure<f32>(candidate, latency, iterations) : Measure<f64>(candidate, latency, iterations);
+}
+
+u64 ExceptionalBoxNormalBits64(in usize index){
+    switch(index){
+    case 0u: return 0u;
+    case 1u: return 0x8000000000000000ull;
+    case 2u: return 1u;
+    case 3u: return 0x8000000000000001ull;
+    case 4u: return 0x0010000000000000ull;
+    case 5u: return 0x3ff0000000000000ull;
+    case 6u: return 0xbff0000000000000ull;
+    case 7u: return 0x7fefffffffffffffull;
+    case 8u: return 0xffefffffffffffffull;
+    case 9u: return 0x7ff0000000000000ull;
+    case 10u: return 0xfff0000000000000ull;
+    case 11u: return 0x7ff8000000000142ull;
+    case 12u: return 0xfff8000000000284ull;
+    case 13u: return 0x7ff0000000000011ull;
+    default: return 0xfff0000000000022ull;
     }
-    FOUNDATION_CERR << "usage: simd_box_normal_benchmark verify | measure single|double original|candidate throughput|latency iterations\n";
+}
+
+BoxNormalSingleCase FillBoxNormalSingleCase(in usize index, mut u64 seed){
+    Array<u32, 13> words;
+    for(usize word = 0u; word < words.size(); ++word){
+        const u64 random = NextSeed(seed);
+        if(index < 8192u)
+            words[word] = ExceptionalBoxNormalBits32(cast<usize>(random % 15u));
+        else
+            words[word] = cast<u32>(random);
+    }
+    BoxNormalSingleCase result = BoxNormalSingleCase();
+    result.position = f32x4(bit_cast<f32>(words[0]), bit_cast<f32>(words[1]), bit_cast<f32>(words[2]), bit_cast<f32>(words[3]));
+    result.extents = f32x4(bit_cast<f32>(words[4]), bit_cast<f32>(words[5]), bit_cast<f32>(words[6]), bit_cast<f32>(words[7]));
+    result.fallback = f32x4(bit_cast<f32>(words[8]), bit_cast<f32>(words[9]), bit_cast<f32>(words[10]), bit_cast<f32>(words[11]));
+    result.threshold = bit_cast<f32>(words[12]);
+    return result;
+}
+
+BoxNormalDoubleCase FillBoxNormalDoubleCase(in usize index, mut u64 seed){
+    Array<u64, 13> words;
+    for(usize word = 0u; word < words.size(); ++word){
+        const u64 random = NextSeed(seed);
+        if(index < 8192u)
+            words[word] = ExceptionalBoxNormalBits64(cast<usize>(random % 15u));
+        else
+            words[word] = random;
+    }
+    BoxNormalDoubleCase result = BoxNormalDoubleCase();
+    result.position = f64x4(bit_cast<f64>(words[0]), bit_cast<f64>(words[1]), bit_cast<f64>(words[2]), bit_cast<f64>(words[3]));
+    result.extents = f64x4(bit_cast<f64>(words[4]), bit_cast<f64>(words[5]), bit_cast<f64>(words[6]), bit_cast<f64>(words[7]));
+    result.fallback = f64x4(bit_cast<f64>(words[8]), bit_cast<f64>(words[9]), bit_cast<f64>(words[10]), bit_cast<f64>(words[11]));
+    result.threshold = bit_cast<f64>(words[12]);
+    return result;
+}
+
+u32 VerifyBoxNormalSingle(){
+    u64 seed = s_BoxNormalVerifySeed;
+    u32 failures = 0u;
+    for(usize modeIndex = 0u; modeIndex < 4u; ++modeIndex){
+        const i32 mode = SimdRoundingModeByIndex(modeIndex);
+        if(!SetFloatingPointRoundingMode(mode).has_value()){
+            ++failures;
+            break;
+        }
+        b8 abortSweep = false;
+        for(usize index = 0u; index < s_BoxNormalCaseCount; ++index){
+            const BoxNormalSingleCase input = FillBoxNormalSingleCase(index, seed);
+            b8 equal = false;
+            i32 originalFlags = 0;
+            i32 candidateFlags = 0;
+            i32 originalErrno = 0;
+            i32 candidateErrno = 0;
+            if(!CompareBoxNormalSingleKernel(input, equal, originalFlags, candidateFlags, originalErrno, candidateErrno)){
+                ++failures;
+                abortSweep = true;
+                break;
+            }
+            if(!equal){
+                ++failures;
+                if(failures <= 8u){
+                    WriteBenchmarkStdout(StringFormat(
+                        "mismatch precision=4 mode={} index={} flags={}/{} errno={}/{}\n",
+                        mode,
+                        index,
+                        originalFlags,
+                        candidateFlags,
+                        originalErrno,
+                        candidateErrno
+                    ));
+                }
+            }
+        }
+        if(abortSweep)
+            break;
+    }
+    return failures;
+}
+
+u32 VerifyBoxNormalDouble(){
+    u64 seed = s_BoxNormalVerifySeed;
+    u32 failures = 0u;
+    for(usize modeIndex = 0u; modeIndex < 4u; ++modeIndex){
+        const i32 mode = SimdRoundingModeByIndex(modeIndex);
+        if(!SetFloatingPointRoundingMode(mode).has_value()){
+            ++failures;
+            break;
+        }
+        b8 abortSweep = false;
+        for(usize index = 0u; index < s_BoxNormalCaseCount; ++index){
+            const BoxNormalDoubleCase input = FillBoxNormalDoubleCase(index, seed);
+            b8 equal = false;
+            i32 originalFlags = 0;
+            i32 candidateFlags = 0;
+            i32 originalErrno = 0;
+            i32 candidateErrno = 0;
+            if(!CompareBoxNormalDoubleKernel(input, equal, originalFlags, candidateFlags, originalErrno, candidateErrno)){
+                ++failures;
+                abortSweep = true;
+                break;
+            }
+            if(!equal){
+                ++failures;
+                if(failures <= 8u){
+                    WriteBenchmarkStdout(StringFormat(
+                        "mismatch precision=8 mode={} index={} flags={}/{} errno={}/{}\n",
+                        mode,
+                        index,
+                        originalFlags,
+                        candidateFlags,
+                        originalErrno,
+                        candidateErrno
+                    ));
+                }
+            }
+        }
+        if(abortSweep)
+            break;
+    }
+    return failures;
+}
+
+void InitializeBoxNormalSingleData(mut Array<BoxNormalSingleCase, s_BoxNormalDataCount> data){
+    for(usize index = 0u; index < s_BoxNormalDataCount; ++index){
+        const f32 px = cast<f32>((index % 7u) + 1u) * 0.375f;
+        const f32 py = cast<f32>((index % 5u) + 1u) * -0.625f;
+        const f32 pz = cast<f32>((index % 3u) + 1u) * 0.875f;
+        data[index].position = f32x4(px, py, pz, 0.0f);
+        data[index].extents = f32x4(0.5f, 0.75f, 0.125f, 0.0f);
+        data[index].fallback = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        data[index].threshold = 1.0e-12f;
+    }
+}
+
+void InitializeBoxNormalDoubleData(mut Array<BoxNormalDoubleCase, s_BoxNormalDataCount> data){
+    for(usize index = 0u; index < s_BoxNormalDataCount; ++index){
+        const f64 px = cast<f64>((index % 7u) + 1u) * 0.375;
+        const f64 py = cast<f64>((index % 5u) + 1u) * -0.625;
+        const f64 pz = cast<f64>((index % 3u) + 1u) * 0.875;
+        data[index].position = f64x4(px, py, pz, 0.0);
+        data[index].extents = f64x4(0.5, 0.75, 0.125, 0.0);
+        data[index].fallback = f64x4(1.0, 0.0, 0.0, 0.0);
+        data[index].threshold = 1.0e-12;
+    }
+}
+
+i32 MeasureBoxNormalSingle(in b8 candidate, in b8 latency, in usize iterations){
+    Array<BoxNormalSingleCase, s_BoxNormalDataCount> data;
+    InitializeBoxNormalSingleData(data);
+    const Timer begin = TimerNow();
+    const u64 checksum = DispatchBoxNormalSingleWorkload(data, candidate, latency, iterations);
+    const f64 elapsedNs = DurationInNS<f64>(TimerNow(), begin);
+    const f64 seconds = elapsedNs / s_NanosecondsPerSecond;
+    WriteBenchmarkStdout(StringFormat(
+        "{{\"precision\":4,\"candidate\":{},\"latency\":{},\"iterations\":{},\"seconds\":{:.17g},\"checksum\":{}}}\n",
+        BoolToBoxNormalFlag(candidate),
+        BoolToBoxNormalFlag(latency),
+        iterations,
+        seconds,
+        checksum
+    ));
+    return 0;
+}
+
+i32 MeasureBoxNormalDouble(in b8 candidate, in b8 latency, in usize iterations){
+    Array<BoxNormalDoubleCase, s_BoxNormalDataCount> data;
+    InitializeBoxNormalDoubleData(data);
+    const Timer begin = TimerNow();
+    const u64 checksum = DispatchBoxNormalDoubleWorkload(data, candidate, latency, iterations);
+    const f64 elapsedNs = DurationInNS<f64>(TimerNow(), begin);
+    const f64 seconds = elapsedNs / s_NanosecondsPerSecond;
+    WriteBenchmarkStdout(StringFormat(
+        "{{\"precision\":8,\"candidate\":{},\"latency\":{},\"iterations\":{},\"seconds\":{:.17g},\"checksum\":{}}}\n",
+        BoolToBoxNormalFlag(candidate),
+        BoolToBoxNormalFlag(latency),
+        iterations,
+        seconds,
+        checksum
+    ));
+    return 0;
+}
+
+i32 RunBoxNormalVerify(){
+    const Expected<FloatingPointEnvironment> original = HoldFloatingPointExceptions();
+    if(!original.has_value())
+        return 1;
+    FloatingPointEnvironmentGuard restoreEnvironment = FloatingPointEnvironmentGuard(original.value());
+    const u32 singleFailures = VerifyBoxNormalSingle();
+    const u32 doubleFailures = VerifyBoxNormalDouble();
+    WriteBenchmarkStdout(StringFormat("verification single={} double={} cases=262144\n", singleFailures, doubleFailures));
+    if(singleFailures != 0u || doubleFailures != 0u)
+        return 1;
+    return 0;
+}
+
+i32 RunBoxNormalBenchmarkCli(in Span<StringView> args){
+    if(args.size() == 2u && args[1] == "verify")
+        return RunBoxNormalVerify();
+    if(args.size() == 6u && args[1] == "measure"){
+        const b8 single = args[2] == "single";
+        const b8 candidate = args[3] == "candidate";
+        const b8 latency = args[4] == "latency";
+        if((!single && args[2] != "double") || (!candidate && args[3] != "original") || (!latency && args[4] != "throughput"))
+            return 2;
+        const Expected<u64> parsedIterations = ParseU64(args[5]);
+        if(!parsedIterations.has_value() || parsedIterations.value() == 0u || parsedIterations.value() > cast<u64>(usize.max))
+            return 2;
+        const usize iterations = cast<usize>(parsedIterations.value());
+        if(single)
+            return MeasureBoxNormalSingle(candidate, latency, iterations);
+        return MeasureBoxNormalDouble(candidate, latency, iterations);
+    }
+    WriteBenchmarkStderr("usage: simd_box_normal_benchmark verify | measure single|double original|candidate throughput|latency iterations\n");
     return 2;
 }
 
@@ -295,7 +502,29 @@ int main(const int argc, const char* const* argv){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+int main(const int argc, const char* const* argv){
+    if(argc <= 0)
+        return 2;
+    Array<StringView, 8> args{};
+    const usize count = Min(static_cast<usize>(argc), args.size());
+    for(usize index = 0u; index < count; ++index)
+        args[index] = StringView(argv[index]);
+    return SimdOptimizationBenchmark::RunBoxNormalBenchmarkCli(Span<const StringView>(args.data(), count));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

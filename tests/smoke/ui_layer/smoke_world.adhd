@@ -4,406 +4,528 @@
 
 #include "document_window_scenes.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-NWB_BEGIN
-namespace Tests::Smoke{
-
-[[nodiscard]] Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context);
-void ClearUiLayerSmokeWorld(ProjectRuntimeContext& context, Core::ECS::World& world);
-
-static b8 CheckPersistentStateSelfFilter(ProjectRuntimeContext& context){
-    Core::Alloc::ScratchArena scratch{Name(s_UiSmokeNameTestsUiLayerPersistentState)};
-    Core::BufferDesc desc;
-    desc.setDebugName(Name(s_UiSmokeNameTestsUiLayerPersistentStateBuffer)).setByteSize(16u);
-    const auto first = context.graphics.createBuffer(desc);
-    const auto second = context.graphics.createBuffer(desc);
-    auto& device = context.graphics.getDevice();
-    const auto list = device.createCommandList();
-    if(!first || !second || !list)
-        return false;
-
-    Core::CommandListResourceStateHandoff state(context.objectArena);
-    (*list)->open();
-    (*list)->beginTrackingBufferState(first->get(), Core::ResourceStates::CopyDest);
-    (*list)->beginTrackingBufferState(second->get(), Core::ResourceStates::CopyDest);
-    (*list)->close(&state);
-    const Core::GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-    if(!state.valid() || !queue.valid() || (*list)->commandRecordingFailed())
-        return false;
-
-    Core::GpuPersistentResourceStateCache cache(context.objectArena);
-    Core::GpuPersistentResourceStateCache::Candidate candidate(cache);
-    const Array<Core::BufferHandle, 2u> buffers{ *first, *second };
-    if(!cache.buildFilteredBufferSubset(state, buffers, scratch, candidate) || !candidate.source() || cache.valid())
-        return false;
-    if(!cache.buildFilteredBufferSubset(*candidate.source(), Span<const Core::BufferHandle>(buffers.data(), 1u), scratch, candidate))
-        return false;
-    const auto* filtered = candidate.source();
-    if(!filtered || !filtered->coversBufferWithOwnership(first->get(), queue, {}) || filtered->coversBufferWithOwnership(second->get(), queue, {}) || cache.valid())
-        return false;
-    if(!cache.commit(candidate) || candidate.valid() || !cache.source())
-        return false;
-    return cache.source()->coversBufferWithOwnership(first->get(), queue, {}) && !cache.source()->coversBufferWithOwnership(second->get(), queue, {});
-}
-
-
-namespace __hidden_ui_layer_smoke_world{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_AlternateSkin{"alternate_skin"};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context){
-    if(!context.shaderPathResolver){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: shader path resolver is unavailable"));
-        return MakeUnexpected(Failure{});
-    }
-    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
-    if(!world){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: ECS world allocation failed"));
-        return MakeUnexpected(Failure{});
-    }
-
-
-    const b8 windowSmoke = IsUiLayerWindowSmokeEnabled();
-    const b8 popupSmoke = IsUiLayerPopupSmokeEnabled();
-    const b8 popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
-    const b8 nestedPopupSmoke = IsUiLayerNestedPopupSmokeEnabled();
-    const b8 radioGroupSmoke = IsUiLayerRadioGroupSmokeEnabled();
-    const b8 sliderSmoke = IsUiLayerSliderSmokeEnabled();
-    const b8 progressSmoke = IsUiLayerProgressSmokeEnabled();
-    const b8 imageSmoke = IsUiLayerImageSmokeEnabled();
-    const b8 textureImageSmoke = IsUiLayerTextureImageSmokeEnabled();
-    const b8 textAreaSmoke = ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA");
-    const b8 numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
-    const b8 listSmoke = IsUiLayerListSmokeEnabled();
-    const b8 comboSmoke = IsUiLayerComboSmokeEnabled();
-    const b8 searchComboSmoke = IsUiLayerSearchComboSmokeEnabled();
-    const b8 alternateSkin = (windowSmoke && IsUiLayerWindowSkinSmokeEnabled())
-        || (popupSmoke && IsUiLayerPopupSkinSmokeEnabled()) || (listSmoke && IsUiLayerListSkinSmokeEnabled())
-        || (comboSmoke && IsUiLayerComboSkinSmokeEnabled())
-        || (searchComboSmoke && IsUiLayerSearchComboSkinSmokeEnabled())
-        || (popupToolsSmoke && IsUiLayerPopupToolsSkinSmokeEnabled())
-        || (nestedPopupSmoke && IsUiLayerNestedPopupSkinSmokeEnabled())
-        || (numericEditSmoke && IsUiLayerNumericEditSkinSmokeEnabled())
-        || (textAreaSmoke && ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN"))
-        || (radioGroupSmoke && IsUiLayerRadioGroupSkinSmokeEnabled())
-        || (sliderSmoke && IsUiLayerSliderSkinSmokeEnabled())
-        || (progressSmoke && IsUiLayerProgressSkinSmokeEnabled())
-        || (imageSmoke && IsUiLayerImageSkinSmokeEnabled())
-        || (textureImageSmoke && IsUiLayerTextureImageSkinSmokeEnabled());
-    const Core::Assets::AssetRef<Impl::UiSkin> skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : Core::Assets::AssetRef<Impl::UiSkin>{};
-    if(windowSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(popupSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiPopupSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(listSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiListSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(comboSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiComboSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(searchComboSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiSearchComboSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(popupToolsSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiPopupToolsSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(nestedPopupSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiNestedPopupSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(numericEditSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiNumericEditSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(textAreaSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(radioGroupSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiRadioGroupSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(sliderSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiSliderSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(progressSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiProgressSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(imageSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiImageSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    if(textureImageSmoke){
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: skin={}"), alternateSkin ? FOUNDATION_TEXT("alternate") : FOUNDATION_TEXT("default"));
-    }
-    auto& layer = world->addSystem<Impl::UiLayerSystem>(*world, context.graphics, context.input, context.clipboard, context.textInput, context.assetManager, context.shaderPathResolver, skin, Impl::UiLayerPresentation::Standalone);
-    if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE")){
-        Impl::Ui::InputBindings defaults(context.objectArena);
-        Impl::Ui::InputBindings::BindingVector bindings(context.objectArena);
-        bindings.reserve(defaults.bindings().size() + 4u);
-        for(const auto& binding : defaults.bindings()){
-            if(binding.key != Core::Key::Tab)
-                bindings.push_back(binding);
-        }
-        bindings.push_back({ .key = Core::Key::Q, .command = Impl::Ui::InputCommand::Activate });
-        bindings.push_back({ .key = Core::Key::W, .command = Impl::Ui::InputCommand::Left });
-        bindings.push_back({ .key = Core::Key::R, .command = Impl::Ui::InputCommand::FocusNext });
-        bindings.push_back({ .key = Core::Key::T, .command = Impl::Ui::InputCommand::FocusPrevious });
-        if(!layer.setInputBindings(bindings)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: configured input profile was rejected"));
-            return MakeUnexpected(Failure{});
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: custom input profile Q=Activate W=Left R=FocusNext T=FocusPrevious Tab=unbound"));
-    }
-    if(ReadSmokeEnvironmentFlag("NWB_UI_IR_REPLAY")){
-        layer.setGpuCommandRecordingMode(Impl::Ui::GpuCommandRecordingMode::CommandIrReplay);
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: command IR replay enabled"));
-    }
-    if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_MANY_ROOTS")){
-        for(usize index = 0u; index < Impl::Ui::s_InputMaxTargets; ++index){
-            auto root = world->createEntity();
-            root.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext&){};
-        }
-        auto lastRoot = world->createEntity();
-        lastRoot.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext& context){
-            const Core::ECS::EntityID id = context.entity;
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
-            context.world.destroyEntity(id);
-            if(context.world.entity(id).alive())
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: root removal during paint failed"));
-            else
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root removed during paint"));
-        };
-    }
-    auto entity = world->createEntity();
-    auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(textureImageSmoke){
-        const auto scene = CreateUiTextureImageSmokeScene(context.objectArena, context.input, context.assetManager);
-        paint.paint = [scene](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
-        };
-    }
-    else if(imageSmoke){
-        paint.paint = [scene = CreateUiImageSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: image UI paint failed"));
-        };
-    }
-    else if(progressSmoke){
-        paint.paint = [scene = CreateUiProgressSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: progress UI paint failed"));
-        };
-    }
-    else if(sliderSmoke){
-        paint.paint = [scene = CreateUiSliderSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: slider UI paint failed"));
-        };
-    }
-    else if(radioGroupSmoke){
-        paint.paint = [scene = CreateUiRadioGroupSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
-        };
-    }
-    else if(textAreaSmoke){
-        paint.paint = [scene = CreateUiTextAreaSmokeScene(context.objectArena, context.clipboard)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: text area UI paint failed"));
-        };
-    }
-    else if(numericEditSmoke){
-        paint.paint = [scene = CreateUiNumericEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
-        };
-    }
-    else if(nestedPopupSmoke){
-        paint.paint = [scene = CreateUiNestedPopupSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
-        };
-    }
-    else if(popupToolsSmoke){
-        paint.paint = [scene = CreateUiPopupToolsSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
-        };
-    }
-    else if(searchComboSmoke){
-        paint.paint = [scene = CreateUiSearchComboSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
-        };
-    }
-    else if(comboSmoke){
-        paint.paint = [scene = CreateUiComboSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: combo UI paint failed"));
-        };
-    }
-    else if(listSmoke){
-        paint.paint = [scene = CreateUiListSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: virtual list paint failed"));
-        };
-    }
-    else if(popupSmoke){
-        const auto scene = CreateUiPopupSmokeScene(context.objectArena, context.input);
-        paint.paint = [scene](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: popup UI paint failed"));
-        };
-        auto laterEntity = world->createEntity();
-        auto& laterPaint = laterEntity.addComponent<Impl::UiPaintComponent>();
-        laterPaint.order = 100;
-        laterPaint.paint = [scene](Impl::UiPaintContext& paintContext){
-            if(!scene->paintLaterRoot(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: later popup root paint failed"));
-        };
-    }
-    else if(IsUiLayerEditSmokeEnabled()){
-        paint.paint = [scene = CreateUiEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: edit UI paint failed"));
-        };
-    }
-    else if(windowSmoke){
-        paint.paint = [scene = CreateUiWindowSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: window UI paint failed"));
-        };
-    }
-    else if(IsUiLayerInteractionSmokeEnabled()){
-        paint.paint = [scene = CreateUiInteractiveSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
-            if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
-        };
-    }
-    else{
-        paint.paint = [textSamples = CreateUiTextSmokeSamples(context.objectArena), paintFrame = 0u](Impl::UiPaintContext& paintContext)mutable{
-            if(paintFrame < 3u){
-                ++paintFrame;
-                if(paintFrame <= 2u)
-                    return;
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"));
-            }
-            PaintUiLayerSmokeScene(paintContext);
-            if(!textSamples->paint(paintContext))
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: text or glyph coverage painting failed"));
-        };
-    }
-
-    return MakeNotNullUnique(Move(world));
-}
-
-void ClearUiLayerSmokeWorld(ProjectRuntimeContext& context, Core::ECS::World& world){
-    world.taskScope().wait();
-    auto* const layer = world.getSystem<Impl::UiLayerSystem>();
-    if(!layer)
-        return;
-
-    context.graphics.removeRenderPass(*layer);
-    const b8 deviceIdle = context.graphics.waitForIdle();
-    FOUNDATION_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), FOUNDATION_TEXT("UI smoke teardown requires device idle or terminal loss"));
-    world.clear();
-}
-
+namespace NWB::Tests::Smoke{
 
 class UiLayerResizeRenderPass final : public Core::IRenderPass{
 public:
-    explicit UiLayerResizeRenderPass(Core::GraphicsRuntime& graphics)noexcept : Core::IRenderPass(graphics){}
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+    explicit UiLayerResizeRenderPass(Core::GraphicsRuntime& graphics)noexcept
+        : Core::IRenderPass(graphics)
+    {}
+
+    virtual b8 shouldRenderUnfocused()noexcept override{
+        return true;
+    }
 };
 
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return Move(world);
 }
 
-[[nodiscard]] inline b8 CheckUiLayerSmokePersistentState(ProjectRuntimeContext& context){
-    return CheckPersistentStateSelfFilter(context);
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
+    return Move(world);
 }
 
-[[nodiscard]] inline b8 ConfigureUiLayerSmokeStartup(
-    ProjectRuntimeContext& context,
-    NotNullUniquePtr<Core::ECS::World>& world,
-    UiLayerResizeRenderPass& resizeRenderPass,
-    b8& outResizeRenderPassRegistered,
-    u64& outResizePresentationBaseline,
-    UniquePtr<FramebufferCapture>& outFramebufferCapture
+[[nodiscard]] NWB_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World> world)noexcept{
+    if(!world)
+        return MakeUnexpected(Failure{});
+    return MakeNotNullUnique(Move(world));
+}
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiLayerSmokeModeFlags{
+    public b8 windowSmoke = false;
+    public b8 popupSmoke = false;
+    public b8 popupToolsSmoke = false;
+    public b8 nestedPopupSmoke = false;
+    public b8 radioGroupSmoke = false;
+    public b8 sliderSmoke = false;
+    public b8 progressSmoke = false;
+    public b8 imageSmoke = false;
+    public b8 textureImageSmoke = false;
+    public b8 textAreaSmoke = false;
+    public b8 numericEditSmoke = false;
+    public b8 listSmoke = false;
+    public b8 comboSmoke = false;
+    public b8 searchComboSmoke = false;
+    public b8 editSmoke = false;
+    public b8 interactionSmoke = false;
+    public b8 alternateSkin = false;
+}
+
+
+class UiDefaultSmokeScene{
+    private UiTextSmokeSamples m_textSamples;
+    private u32 m_paintFrame = 0u;
+
+    public UiDefaultSmokeScene(mut GlobalArena arena);
+
+    public void paint(mut UiPaintContext paintContext);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiDefaultSmokeScene::UiDefaultSmokeScene(mut GlobalArena arena){
+    this.m_textSamples = UiTextSmokeSamples(arena);
+}
+
+void UiDefaultSmokeScene::paint(mut UiPaintContext paintContext){
+    if(this.m_paintFrame < 3u){
+        ++this.m_paintFrame;
+        if(this.m_paintFrame <= 2u)
+            return;
+        [essential] info("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted");
+    }
+    PaintUiLayerSmokeScene(paintContext);
+    if(!this.m_textSamples.paint(paintContext))
+        error("UiLayerSmokeProject: text or glyph coverage painting failed");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiLayerSmokeModeFlags ResolveUiLayerSmokeModes(){
+    UiLayerSmokeModeFlags modes();
+    modes.windowSmoke = IsUiLayerWindowSmokeEnabled();
+    modes.popupSmoke = IsUiLayerPopupSmokeEnabled();
+    modes.popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
+    modes.nestedPopupSmoke = IsUiLayerNestedPopupSmokeEnabled();
+    modes.radioGroupSmoke = IsUiLayerRadioGroupSmokeEnabled();
+    modes.sliderSmoke = IsUiLayerSliderSmokeEnabled();
+    modes.progressSmoke = IsUiLayerProgressSmokeEnabled();
+    modes.imageSmoke = IsUiLayerImageSmokeEnabled();
+    modes.textureImageSmoke = IsUiLayerTextureImageSmokeEnabled();
+    modes.textAreaSmoke = ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA");
+    modes.numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
+    modes.listSmoke = IsUiLayerListSmokeEnabled();
+    modes.comboSmoke = IsUiLayerComboSmokeEnabled();
+    modes.searchComboSmoke = IsUiLayerSearchComboSmokeEnabled();
+    modes.editSmoke = IsUiLayerEditSmokeEnabled();
+    modes.interactionSmoke = IsUiLayerInteractionSmokeEnabled();
+    modes.alternateSkin = (modes.windowSmoke && IsUiLayerWindowSkinSmokeEnabled())
+        || (modes.popupSmoke && IsUiLayerPopupSkinSmokeEnabled())
+        || (modes.listSmoke && IsUiLayerListSkinSmokeEnabled())
+        || (modes.comboSmoke && IsUiLayerComboSkinSmokeEnabled())
+        || (modes.searchComboSmoke && IsUiLayerSearchComboSkinSmokeEnabled())
+        || (modes.popupToolsSmoke && IsUiLayerPopupToolsSkinSmokeEnabled())
+        || (modes.nestedPopupSmoke && IsUiLayerNestedPopupSkinSmokeEnabled())
+        || (modes.numericEditSmoke && IsUiLayerNumericEditSkinSmokeEnabled())
+        || (modes.textAreaSmoke && ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN"))
+        || (modes.radioGroupSmoke && IsUiLayerRadioGroupSkinSmokeEnabled())
+        || (modes.sliderSmoke && IsUiLayerSliderSkinSmokeEnabled())
+        || (modes.progressSmoke && IsUiLayerProgressSkinSmokeEnabled())
+        || (modes.imageSmoke && IsUiLayerImageSkinSmokeEnabled())
+        || (modes.textureImageSmoke && IsUiLayerTextureImageSkinSmokeEnabled());
+    return modes;
+}
+
+void LogSmokeSkinIfEnabled(in b8 enabled, in StringView tag, in b8 alternateSkin){
+    if(!enabled)
+        return;
+    StringView skinName = "default";
+    if(alternateSkin)
+        skinName = "alternate";
+    [essential] info("{}: skin={}", tag, skinName);
+}
+
+void LogActiveUiLayerSmokeSkins(in UiLayerSmokeModeFlags modes){
+    LogSmokeSkinIfEnabled(modes.windowSmoke, "UiWindowSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.popupSmoke, "UiPopupSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.listSmoke, "UiListSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.comboSmoke, "UiComboSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.searchComboSmoke, "UiSearchComboSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.popupToolsSmoke, "UiPopupToolsSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.nestedPopupSmoke, "UiNestedPopupSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.numericEditSmoke, "UiNumericEditSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.textAreaSmoke, "UiTextAreaSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.radioGroupSmoke, "UiRadioGroupSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.sliderSmoke, "UiSliderSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.progressSmoke, "UiProgressSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.imageSmoke, "UiImageSmoke", modes.alternateSkin);
+    LogSmokeSkinIfEnabled(modes.textureImageSmoke, "UiTextureImageSmoke", modes.alternateSkin);
+}
+
+b8 CheckUiLayerSmokePersistentState(mut ProjectRuntimeContext context){
+    b8 passed = false;
+    native(mut context, mut passed){
+        Core::Alloc::ScratchArena scratch{Name(s_UiSmokeNameTestsUiLayerPersistentState)};
+        Core::BufferDesc desc;
+        desc.setDebugName(Name(s_UiSmokeNameTestsUiLayerPersistentStateBuffer)).setByteSize(16u);
+        const auto first = context.graphics.createBuffer(desc);
+        const auto second = context.graphics.createBuffer(desc);
+        auto& device = context.graphics.getDevice();
+        const auto list = device.createCommandList();
+        if(first && second && list){
+            Core::CommandListResourceStateHandoff state(context.objectArena);
+            (*list)->open();
+            (*list)->beginTrackingBufferState(first->get(), Core::ResourceStates::CopyDest);
+            (*list)->beginTrackingBufferState(second->get(), Core::ResourceStates::CopyDest);
+            (*list)->close(&state);
+            const Core::GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
+            if(state.valid() && queue.valid() && !(*list)->commandRecordingFailed()){
+                Core::GpuPersistentResourceStateCache cache(context.objectArena);
+                Core::GpuPersistentResourceStateCache::Candidate candidate(cache);
+                const Array<Core::BufferHandle, 2u> buffers{ *first, *second };
+                if(
+                    cache.buildFilteredBufferSubset(state, buffers, scratch, candidate)
+                    && candidate.source() != nullptr
+                    && !cache.valid()
+                    && cache.buildFilteredBufferSubset(*candidate.source(), Span<const Core::BufferHandle>(buffers.data(), 1u), scratch, candidate)
+                ){
+                    const auto* filtered = candidate.source();
+                    if(
+                        filtered != nullptr
+                        && filtered->coversBufferWithOwnership(first->get(), queue, {})
+                        && !filtered->coversBufferWithOwnership(second->get(), queue, {})
+                        && !cache.valid()
+                        && cache.commit(candidate)
+                        && !candidate.valid()
+                        && cache.source() != nullptr
+                    ){
+                        passed = cache.source()->coversBufferWithOwnership(first->get(), queue, {})
+                            && !cache.source()->coversBufferWithOwnership(second->get(), queue, {});
+                    }
+                }
+            }
+        }
+    }
+    return passed;
+}
+
+b8 ConfigureSmokeLayerInputProfile(mut GlobalArena arena, mut UiLayerSystem layer){
+    if(!ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE"))
+        return true;
+    const InputBindings defaults(arena);
+    Vector<InputKeyBinding> bindings = Vector<InputKeyBinding>();
+    bindings.reserve(defaults.bindings().size() + 4u);
+    for(in InputKeyBinding binding : defaults.bindings()){
+        if(binding.key != s_SmokeKeyTab)
+            bindings.push_back(binding);
+    }
+    InputKeyBinding activateBinding();
+    activateBinding.key = s_SmokeKeyQ;
+    activateBinding.command = InputCommand::Activate;
+    bindings.push_back(activateBinding);
+    InputKeyBinding leftBinding();
+    leftBinding.key = s_SmokeKeyW;
+    leftBinding.command = InputCommand::Left;
+    bindings.push_back(leftBinding);
+    InputKeyBinding focusNextBinding();
+    focusNextBinding.key = s_SmokeKeyR;
+    focusNextBinding.command = InputCommand::FocusNext;
+    bindings.push_back(focusNextBinding);
+    InputKeyBinding focusPrevBinding();
+    focusPrevBinding.key = s_SmokeKeyT;
+    focusPrevBinding.command = InputCommand::FocusPrevious;
+    bindings.push_back(focusPrevBinding);
+    if(!layer.setInputBindings(bindings)){
+        error("UiLayerSmokeProject: configured input profile was rejected");
+        return false;
+    }
+    [essential] info("UiLayerSmokeProject: custom input profile Q=Activate W=Left R=FocusNext T=FocusPrevious Tab=unbound");
+    return true;
+}
+
+void ConfigureSmokeLayerRecordingMode(mut UiLayerSystem layer){
+    if(ReadSmokeEnvironmentFlag("NWB_UI_IR_REPLAY")){
+        layer.setGpuCommandRecordingMode(GpuCommandRecordingMode::CommandIrReplay);
+        [essential] info("UiLayerSmokeProject: command IR replay enabled");
+    }
+}
+
+void SpawnManySmokeRootsIfEnabled(mut World world){
+    if(!ReadSmokeEnvironmentFlag("NWB_UI_LAYER_MANY_ROOTS"))
+        return;
+    native(mut world){
+        for(usize index = 0u; index < Impl::Ui::s_InputMaxTargets; ++index){
+            auto root = world.createEntity();
+            root.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext&){};
+        }
+        auto lastRoot = world.createEntity();
+        lastRoot.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext& paintContext){
+            const Core::ECS::EntityID id = paintContext.entity;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
+            paintContext.world.destroyEntity(id);
+            if(paintContext.world.entity(id).alive())
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: root removal during paint failed"));
+            else
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: root removed during paint"));
+        };
+    }
+}
+
+void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world, in UiLayerSmokeModeFlags modes){
+    native(mut context, mut world, in modes){
+        auto entity = world.createEntity();
+        auto& paint = entity.addComponent<Impl::UiPaintComponent>();
+        if(modes.textureImageSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiTextureImageSmokeScene>(context.objectArena, context.input, context.objectArena, context.assetManager);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
+            };
+        }
+        else if(modes.imageSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiImageSmokeScene>(context.objectArena, context.input);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: image UI paint failed"));
+            };
+        }
+        else if(modes.progressSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiProgressSmokeScene>(context.objectArena, context.input);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: progress UI paint failed"));
+            };
+        }
+        else if(modes.sliderSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiSliderSmokeScene>(context.objectArena, context.input);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: slider UI paint failed"));
+            };
+        }
+        else if(modes.radioGroupSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiRadioGroupSmokeScene>(context.objectArena, context.input);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
+            };
+        }
+        else if(modes.textAreaSmoke){
+            const auto scene = CreateSmokeSceneBox<UiTextAreaSmokeScene>(context.objectArena, context.objectArena, context.clipboard);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: text area UI paint failed"));
+            };
+        }
+        else if(modes.numericEditSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiNumericEditSmokeScene>(context.objectArena, context.input, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
+            };
+        }
+        else if(modes.nestedPopupSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiNestedPopupSmokeScene>(context.objectArena, context.input, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
+            };
+        }
+        else if(modes.popupToolsSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiPopupToolsSmokeScene>(context.objectArena, context.input, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
+            };
+        }
+        else if(modes.searchComboSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiSearchComboSmokeScene>(context.objectArena, context.input, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
+            };
+        }
+        else if(modes.comboSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiComboSmokeScene>(context.objectArena, context.input);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: combo UI paint failed"));
+            };
+        }
+        else if(modes.listSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiListSmokeScene>(context.objectArena, context.input);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: virtual list paint failed"));
+            };
+        }
+        else if(modes.popupSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiPopupSmokeScene>(context.objectArena, context.input, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: popup UI paint failed"));
+            };
+            auto laterEntity = world.createEntity();
+            auto& laterPaint = laterEntity.addComponent<Impl::UiPaintComponent>();
+            laterPaint.order = 100;
+            laterPaint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->scene.paintLaterRoot(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: later popup root paint failed"));
+            };
+        }
+        else if(modes.editSmoke){
+            const auto scene = CreateSmokeInputSceneBox<UiEditSmokeScene>(context.objectArena, context.input, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: edit UI paint failed"));
+            };
+        }
+        else if(modes.windowSmoke){
+            const auto scene = CreateSmokeSceneBox<UiWindowSmokeScene>(context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: window UI paint failed"));
+            };
+        }
+        else if(modes.interactionSmoke){
+            const auto scene = CreateSmokeSceneBox<UiInteractiveSmokeScene>(context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                if(!scene->paint(paintContext))
+                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
+            };
+        }
+        else{
+            const auto scene = CreateSmokeSceneBox<UiDefaultSmokeScene>(context.objectArena, context.objectArena);
+            paint.paint = [scene](Impl::UiPaintContext& paintContext){
+                scene->scene.paint(paintContext);
+            };
+        }
+    }
+}
+
+b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut World world, in b8 alternateSkin){
+    b8 ok = false;
+    native(mut context, mut world, in alternateSkin, mut ok){
+        const Core::Assets::AssetRef<Impl::UiSkin> skin = alternateSkin
+            ? Core::Assets::AssetRef<Impl::UiSkin>("alternate_skin")
+            : Core::Assets::AssetRef<Impl::UiSkin>{};
+        auto& layer = world.addSystem<Impl::UiLayerSystem>(
+            world,
+            context.graphics,
+            context.input,
+            context.clipboard,
+            context.textInput,
+            context.assetManager,
+            context.shaderPathResolver,
+            skin,
+            Impl::UiLayerPresentation::Standalone
+        );
+        if(ConfigureSmokeLayerInputProfile(context.objectArena, layer)){
+            ConfigureSmokeLayerRecordingMode(layer);
+            ok = true;
+        }
+    }
+    return ok;
+}
+
+Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeContext context){
+    i32 initError = 0;
+    UniquePtr<World> allocatedWorld = UniquePtr<World>();
+    native(mut context, mut allocatedWorld, mut initError){
+        if(!context.shaderPathResolver){
+            initError = 1;
+        }
+        else{
+            allocatedWorld = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
+            if(!allocatedWorld)
+                initError = 2;
+        }
+    }
+    if(initError == 1){
+        error("UiLayerSmokeProject: shader path resolver is unavailable");
+        return MakeUnexpected(Failure());
+    }
+    if(initError == 2){
+        error("UiLayerSmokeProject: ECS world allocation failed");
+        return MakeUnexpected(Failure());
+    }
+
+    Expected<NotNullUniquePtr<World>> finalized = FinalizeUiLayerSmokeWorld(allocatedWorld);
+    if(!finalized.has_value())
+        return MakeUnexpected(Failure());
+    NotNullUniquePtr<World> world = TakeUiLayerSmokeWorld(finalized.value());
+
+    const UiLayerSmokeModeFlags modes = ResolveUiLayerSmokeModes();
+    LogActiveUiLayerSmokeSkins(modes);
+    if(!InitUiLayerSmokeSystem(context, SmokeWorldRef(world), modes.alternateSkin))
+        return MakeUnexpected(Failure());
+
+    SpawnManySmokeRootsIfEnabled(SmokeWorldRef(world));
+    AttachUiLayerSmokeScene(context, SmokeWorldRef(world), modes);
+    return world;
+}
+
+void ClearUiLayerSmokeWorld(mut ProjectRuntimeContext context, mut World world){
+    b8 hasLayer = false;
+    native(mut context, mut world, mut hasLayer){
+        world.taskScope().wait();
+        if(auto* const layer = world.getSystem<Impl::UiLayerSystem>()){
+            context.graphics.removeRenderPass(*layer);
+            hasLayer = true;
+        }
+    }
+    if(!hasLayer)
+        return;
+    const b8 deviceIdle = context.graphics.waitForIdle();
+    [essential] assert(deviceIdle || context.graphics.isDeviceLost(), "UI smoke teardown requires device idle or terminal loss");
+    world.clear();
+}
+
+b8 ConfigureUiLayerSmokeStartup(
+    mut ProjectRuntimeContext context,
+    mut NotNullUniquePtr<World> world,
+    mut UiLayerResizeRenderPass resizeRenderPass,
+    mut b8 outResizeRenderPassRegistered,
+    mut u64 outResizePresentationBaseline,
+    mut UniquePtr<FramebufferCapture> outFramebufferCapture
 ){
-    auto& layer = *MakeNotNull(world->getSystem<Impl::UiLayerSystem>());
-    context.graphics.addRenderPassToBack(layer);
+    native(mut context, mut world){
+        auto& layer = *MakeNotNull(world->getSystem<Impl::UiLayerSystem>());
+        context.graphics.addRenderPassToBack(layer);
+    }
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_RENDER")){
         outResizePresentationBaseline = context.graphics.getSuccessfulPresentationCount();
         context.graphics.addRenderPassToBack(resizeRenderPass);
         outResizeRenderPassRegistered = true;
     }
-    FramebufferCaptureOptions captureOptions;
+    FramebufferCaptureOptions captureOptions();
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_CAPTURE")){
         captureOptions.requiredWidth = 800u;
         captureOptions.requiredHeight = 600u;
     }
-    auto capture = SmokeCaptureFactory(context).configure(FOUNDATION_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions);
-    if(!capture)
-        return false;
-    outFramebufferCapture = Move(*capture);
-    return true;
+    return ConfigureSmokeFramebufferCapture(context, "UiLayerSmokeProject", s_DefaultCaptureFrameCount, captureOptions, outFramebufferCapture);
 }
 
-[[nodiscard]] inline b8 TickUiLayerSmokeWorld(const f32 delta, NotNullUniquePtr<Core::ECS::World>& world, UniquePtr<FramebufferCapture>& framebufferCapture){
-    return TickSmokeWorldWithCapture(delta, *world, framebufferCapture);
+b8 TickUiLayerSmokeWorld(in f32 delta, mut NotNullUniquePtr<World> world, mut UniquePtr<FramebufferCapture> framebufferCapture){
+    return TickSmokeWorldWithCapture(delta, SmokeWorldRef(world), framebufferCapture);
 }
 
-inline void StopUiLayerSmokeCaptureAndClearWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world, UniquePtr<FramebufferCapture>& framebufferCapture){
-    if(framebufferCapture){
-        framebufferCapture->stop();
-        framebufferCapture.reset();
-    }
-    ClearUiLayerSmokeWorld(context, *world);
-}
-
-};
-NWB_END
+void StopUiLayerSmokeCaptureAndClearWorld(
+    mut ProjectRuntimeContext context,
+    mut NotNullUniquePtr<World> world,
+    mut UniquePtr<FramebufferCapture> framebufferCapture
+){
+    StopAndResetSmokeFramebufferCapture(framebufferCapture);
+    ClearUiLayerSmokeWorld(context, SmokeWorldRef(world));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void PaintUiLayerSmokeScene(mut UiPaintContext context){
-    const VectorSingle extent(context.display.logicalWidth, context.display.logicalHeight, context.display.logicalWidth, context.display.logicalHeight);
-
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.08f, 0.28f, 0.20f), Color(0.0f, 0.0f, 1.0f, 1.0f));
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.12f, 0.12f, 0.20f, 0.12f), Color(1.0f, 0.0f, 0.0f, 0.5f));
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.34f, 0.08f, 0.16f, 0.20f), Color(1.0f, 0.0f, 0.0f, 0.5f));
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.54f, 0.08f, 0.18f, 0.20f), Color(0.25f, 0.25f, 0.25f, 1.0f));
-    if(!context.paint.drawRegion(s_UiSmokeNameWhite, ScaleSmokeSceneRect(extent, 0.76f, 0.08f, 0.20f, 0.20f), Color(0.1f, 0.8f, 0.2f, 0.5f))){
-        error("UiLayerSmokeProject: white sprite is absent from the default atlas");
-        return;
-    }
-
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.38f, 0.28f, 0.26f), Color(0.0f, 0.2f, 0.3f, 1.0f));
-    context.paint.pushClip(ScaleSmokeSceneRect(extent, 0.10f, 0.44f, 0.16f, 0.12f));
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.38f, 0.28f, 0.26f), Color(0.0f, 1.0f, 0.0f, 1.0f));
-    context.paint.pushClip(ScaleSmokeSceneRect(extent, 0.14f, 0.42f, 0.16f, 0.16f));
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.38f, 0.28f, 0.26f), Color(1.0f, 0.0f, 0.0f, 1.0f));
-    if(!context.paint.popClip() || !context.paint.popClip()){
-        error("UiLayerSmokeProject: nested clip stack became unbalanced");
-        return;
-    }
-
-    if(!context.paint.drawRegion(s_UiSmokeNamePanelNormal, ScaleSmokeSceneRect(extent, 0.36f, 0.40f, 0.26f, 0.24f))
-        || !context.paint.drawRegion(s_UiSmokeNameButtonNormal, ScaleSmokeSceneRect(extent, 0.66f, 0.40f, 0.13f, 0.14f))
-        || !context.paint.drawRegion(s_UiSmokeNameButtonHover, ScaleSmokeSceneRect(extent, 0.82f, 0.40f, 0.14f, 0.14f))){
-        error("UiLayerSmokeProject: named nine-slice regions are absent from the default atlas");
-        return;
-    }
-
-    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.64f, 0.64f, 0.16f, 0.16f), Color(0.0f, 0.1f, 0.2f, 1.0f));
-    if(!context.paint.drawRegion(s_UiSmokeNameComboArrow, ScaleSmokeSceneRect(extent, 0.68f, 0.68f, 0.08f, 0.08f)))
-        error("UiLayerSmokeProject: combo arrow sprite is absent from the default atlas");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

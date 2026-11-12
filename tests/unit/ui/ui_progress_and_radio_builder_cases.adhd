@@ -1,21 +1,31 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiProgressAndRadioBuilderCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/name_cases.adhd>
 
-native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
+
 #include <global/simdmath.h>
+#include <global/simplemath.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,18 +48,9 @@ constexpr AStringView s_ScrollbarTrackRegion = "scrollbar.track";
 constexpr AStringView s_ScrollbarThumbRegion = "scrollbar.thumb.normal";
 constexpr AStringView s_MissingTrackRegion = "missing.track";
 constexpr AStringView s_MissingFillRegion = "missing.fill";
-constexpr AStringView s_PanelKey = "panel";
 
 class UiProgressBuilderTests : public WidgetFixture{
-protected:
-    [[nodiscard]] static ProgressOptions MakeOptions()noexcept{
-        ProgressOptions options;
-        options.width = { LayoutSizePolicy::Fixed, 240.0f };
-        return options;
-    }
-
-
-protected:
+public:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         if(HasFatalFailure())
@@ -63,7 +64,7 @@ protected:
         UiSkin::RegionVector regions(m_arena);
         for(const UiSkinRegion& region : m_skin.regions())
             regions.push_back(region);
-        const Array<Name, 4> names{ Name(s_ProgressTrackRegion), Name(s_ProgressFillRegion), Name(s_ScrollbarTrackRegion), Name(s_ScrollbarThumbRegion) };
+        const Array<Name, 4u> names{ Name(s_ProgressTrackRegion), Name(s_ProgressFillRegion), Name(s_ScrollbarTrackRegion), Name(s_ScrollbarThumbRegion) };
         for(u32 index = 0u; index < 4u; ++index){
             if((index < 2u && !preferred) || (index >= 2u && !fallback))
                 continue;
@@ -80,559 +81,46 @@ protected:
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
     }
+
+    [[nodiscard]] Expected<SkinPaintSample> sampleTrackRegion(const DrawSnapshot& snapshot)const{
+        return sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion));
+    }
+
+    [[nodiscard]] Expected<SkinPaintSample> sampleFillRegion(const DrawSnapshot& snapshot)const{
+        return sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
+    }
+
+    [[nodiscard]] Expected<SkinPaintSample> sampleScrollbarTrackRegion(const DrawSnapshot& snapshot)const{
+        return sampleSkinPaint(snapshot, Name(s_ScrollbarTrackRegion));
+    }
+
+    [[nodiscard]] Expected<SkinPaintSample> sampleScrollbarThumbRegion(const DrawSnapshot& snapshot)const{
+        return sampleSkinPaint(snapshot, Name(s_ScrollbarThumbRegion));
+    }
+
+    void setMissingStyleRegions()noexcept{
+        m_builder.progressStyle().track = Name(s_MissingTrackRegion);
+        m_builder.progressStyle().fill = Name(s_MissingFillRegion);
+    }
+
+    void setMissingFallbackRegions()noexcept{
+        m_builder.progressStyle().trackFallback = Name(s_MissingTrackRegion);
+        m_builder.progressStyle().fillFallback = Name(s_MissingFillRegion);
+    }
+
+    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
+        const HitTarget* hit = target(widget);
+        if(!hit)
+            return MakeUnexpected(Failure{});
+        return *hit;
+    }
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiProgressBuilderTests, CallerMutationCannotChangeDeferredProgressGeometryStyleOrResolvedNames){
-    ASSERT_TRUE(panel(1u));
-    f64 fraction = 0.25;
-    ProgressOptions options = MakeOptions();
-    m_builder.progressStyle().fillTint = { 0.8f, 0.6f, 0.4f, 0.5f };
-    ASSERT_TRUE(m_builder.progress("amount", fraction, options));
-    fraction = 0.75;
-    options.width.value = 100.0f;
-    options.height = 80.0f;
-    ProgressStyle& style = m_builder.progressStyle();
-    style.padding = { 12.0f, 12.0f, 12.0f, 12.0f };
-    style.track = Name(s_MissingTrackRegion);
-    style.fill = Name(s_MissingFillRegion);
-    style.fillTint = {};
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    const auto track = sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion));
-    ASSERT_TRUE(track);
-    const auto fill = sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
-    ASSERT_TRUE(fill);
-    EXPECT_FLOAT_EQ(track->bounds.width, 240.0f);
-    EXPECT_FLOAT_EQ(track->bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(fill->bounds.x - (track->bounds.x), 4.0f);
-    EXPECT_FLOAT_EQ(fill->bounds.width, 58.0f);
-    EXPECT_FLOAT_EQ(fill->bounds.height, 24.0f);
-    EXPECT_FLOAT_EQ(fill->color.r, 0.4f);
-    EXPECT_FLOAT_EQ(fill->color.a, 0.5f);
-}
-
-TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint){
-    configureProgress(false, true);
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.5, MakeOptions()));
-    m_builder.progressStyle().trackFallback = Name(s_MissingTrackRegion);
-    m_builder.progressStyle().fillFallback = Name(s_MissingFillRegion);
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    const auto track = sampleSkinPaint(snapshot, Name(s_ScrollbarTrackRegion));
-    ASSERT_TRUE(track);
-    const auto fill = sampleSkinPaint(snapshot, Name(s_ScrollbarThumbRegion));
-    ASSERT_TRUE(fill);
-}
-
-TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
-    const Array<f64, 4> fractions{ -4.0, 0.0, 1.0, 4.0 };
-    for(u64 index = 0u; index < 4u; ++index){
-        ASSERT_TRUE(panel(index + 1u));
-        ASSERT_TRUE(m_builder.progress("amount", fractions[index], MakeOptions()));
-        ASSERT_TRUE(finishPanel());
-        const DrawSnapshot snapshot = m_paint.freeze();
-        const auto track = sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion));
-        ASSERT_TRUE(track);
-        const auto fill = sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
-        EXPECT_EQ(fill.has_value(), index >= 2u);
-        if(index >= 2u){
-            ASSERT_TRUE(fill);
-            EXPECT_FLOAT_EQ(fill->bounds.x, track->bounds.x + 4.0f);
-            EXPECT_FLOAT_EQ(fill->bounds.width, track->bounds.width - 8.0f);
-            EXPECT_FLOAT_EQ(fill->bounds.height, track->bounds.height - 8.0f);
-        }
-        m_context.abandonFrame();
-    }
-}
-
-TEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressingBothCaps){
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.01, MakeOptions()));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    const auto track = sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion));
-    ASSERT_TRUE(track);
-    const auto fill = sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
-    ASSERT_TRUE(fill);
-    EXPECT_NEAR(fill->bounds.width, (track->bounds.width - 8.0f) * 0.01f, 0.000001f);
-    EXPECT_LT(fill->maximumU, 134.0f / 256.0f);
-    EXPECT_NEAR(fill->maximumU, (128.0f + fill->bounds.width) / 256.0f, 0.000001f);
-    EXPECT_EQ(fill->quads, 3u);
-}
-
-TEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFill){
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", BitCast<f64>(1ull), MakeOptions()));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion)));
-    EXPECT_FALSE(sampleSkinPaint(snapshot, Name(s_ProgressFillRegion)));
-}
-
-TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreRestored){
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.25, MakeOptions()));
-    m_paint.pushClip({ 20.0f, 0.0f, 20.0f, 600.0f });
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_paint.popClip());
-    m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
-    const DrawSnapshot snapshot = m_paint.freeze();
-    const auto fill = sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
-    ASSERT_TRUE(fill);
-    EXPECT_FLOAT_EQ(fill->bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(fill->bounds.width, 20.0f);
-    b8 sentinel = false;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Solid)
-            continue;
-        const Vertex& vertex = snapshot.vertices()[snapshot.indices()[command.firstIndex]];
-        sentinel = sentinel || (vertex.position.x == 60.0f && vertex.position.y == 80.0f);
-    }
-    EXPECT_TRUE(sentinel);
-}
-
-TEST_F(UiProgressBuilderTests, InvalidFractionLeavesTheAcceptedTargetsAvailable){
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.progress("amount", 0.5, MakeOptions()));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id("before", s_PanelKey);
-    ASSERT_NE(target(before), nullptr);
-    const HitTarget accepted = *target(before);
-    const usize count = m_context.input().targets().size();
-    ASSERT_TRUE(panel(2u));
-    EXPECT_FALSE(m_builder.progress("amount", BitCast<f64>(0x7ff8000000000001ull), MakeOptions()));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    ASSERT_NE(target(before), nullptr);
-    EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);
-    EXPECT_FLOAT_EQ(target(before)->rectangle.x, accepted.rectangle.x);
-    EXPECT_FLOAT_EQ(target(before)->rectangle.width, accepted.rectangle.width);
-    EXPECT_EQ(m_context.input().targets().size(), count);
-}
-
-TEST_F(UiProgressBuilderTests, MissingPreferredAndFallbackRegionsRejectTheCandidate){
-    configureProgress(false, false);
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.progress("amount", 0.5, MakeOptions()));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_FALSE(m_context.commitFrame(1u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
-
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_progress_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-
-static UiSkinRegion NineSlice()noexcept{
-    UiSkinRegion region;
-    region.name = Name(NWB::Tests::UiCases::s_UiCaseProgressTest);
-    region.rectangle = { 0u, 0u, 24u, 24u };
-    region.sliceInsets = { 6u, 6u, 6u, 6u };
-    region.padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    region.minimumWidth = 12.0f;
-    region.minimumHeight = 12.0f;
-    region.drawMode = UiSkinDrawMode::NineSlice;
-    return region;
-}
-
-static void ExpectPoint(const Point& actual, const Point& expected){
-    EXPECT_EQ(BitCast<u32>(actual.x), BitCast<u32>(expected.x));
-    EXPECT_EQ(BitCast<u32>(actual.y), BitCast<u32>(expected.y));
-}
-
-static void ExpectPadding(const Insets& actual, const Insets& expected){
-    EXPECT_EQ(BitCast<u32>(actual.left), BitCast<u32>(expected.left));
-    EXPECT_EQ(BitCast<u32>(actual.top), BitCast<u32>(expected.top));
-    EXPECT_EQ(BitCast<u32>(actual.right), BitCast<u32>(expected.right));
-    EXPECT_EQ(BitCast<u32>(actual.bottom), BitCast<u32>(expected.bottom));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(UiProgressLayoutTests, LogicalRegionMinimumsCanExceedSliceBordersWithoutDensityScaling){
-    UiSkinRegion track = NineSlice();
-    UiSkinRegion fill = NineSlice();
-    track.minimumWidth = 80.0f;
-    track.minimumHeight = 60.0f;
-    fill.minimumWidth = 30.0f;
-    fill.minimumHeight = 20.0f;
-    auto metrics = MeasureProgress({}, {}, track, fill, 4.0f);
-    ASSERT_TRUE(metrics);
-    ExpectPoint(metrics->fillMinimum, { 30.0f, 20.0f });
-    ExpectPoint(metrics->contentSize, { 80.0f, 60.0f });
-}
-
-TEST(UiProgressLayoutTests, FillMetadataPaddingDoesNotInsetTheProgressAmountTwice){
-    const UiSkinRegion track = NineSlice();
-    UiSkinRegion fill = NineSlice();
-    fill.padding = { 100.0f, 200.0f, 300.0f, 400.0f };
-    auto metrics = MeasureProgress({}, {}, track, fill, 1.0f);
-    ASSERT_TRUE(metrics);
-    ExpectPadding(metrics->padding, { 8.0f, 8.0f, 8.0f, 8.0f });
-    ExpectPoint(metrics->contentSize, { 28.0f, 32.0f });
-}
-
-TEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    auto zero = PlaceProgress(bounds, bounds, *metrics, 0.0);
-    ASSERT_TRUE(zero);
-    auto full = PlaceProgress(bounds, bounds, *metrics, 1.0);
-    ASSERT_TRUE(full);
-    UiWidgetTests::ExpectRectExact(zero->fillReveal, { 18.0f, 28.0f, 0.0f, 16.0f });
-    UiWidgetTests::ExpectRectExact(zero->fillCanvas, zero->fillReveal);
-    UiWidgetTests::ExpectRectExact(full->fillReveal, full->content);
-    UiWidgetTests::ExpectRectExact(full->fillCanvas, full->content);
-    // Lanes are the fill end and the content end.
-    const SIMDVectorSingle ends = VectorAdd(VectorSet(full->fillReveal.x, full->content.x, 0.0f, 0.0f), VectorSet(full->fillReveal.width, full->content.width, 0.0f, 0.0f));
-    EXPECT_EQ(BitCast<u32>(VectorGetX(ends)), BitCast<u32>(VectorGetY(ends)));
-}
-
-TEST(UiProgressLayoutTests, FiniteFractionsOutsideTheUnitIntervalClampVisually){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    for(const f64 fraction : { -Limit<f64>::s_Max, -0.1, 1.1, Limit<f64>::s_Max }){
-        auto placement = PlaceProgress(bounds, bounds, *metrics, fraction);
-        ASSERT_TRUE(placement);
-        if(fraction < 0.0){
-            EXPECT_FLOAT_EQ(placement->fillReveal.width, 0.0f);
-            EXPECT_FLOAT_EQ(placement->fillCanvas.width, 0.0f);
-        }
-        else{
-            UiWidgetTests::ExpectRectExact(placement->fillReveal, placement->content);
-            UiWidgetTests::ExpectRectExact(placement->fillCanvas, placement->content);
-        }
-    }
-}
-
-TEST(UiProgressLayoutTests, SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanvas){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    auto placement = PlaceProgress(bounds, bounds, *metrics, 0.01);
-    ASSERT_TRUE(placement);
-    EXPECT_FLOAT_EQ(placement->fillReveal.width, 1.84f);
-    UiWidgetTests::ExpectRectExact(placement->fillCanvas, { 18.0f, 28.0f, 12.0f, 16.0f });
-    EXPECT_GT(placement->fillCanvas.width, placement->fillReveal.width);
-    EXPECT_LT(placement->fillCanvas.width, placement->content.width);
-}
-
-TEST(UiProgressLayoutTests, AMinimumCanvasNeverExtendsPastContentNarrowerThanTheSkinMinimum){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 20.0f, 32.0f };
-    auto placement = PlaceProgress(bounds, bounds, *metrics, 0.5);
-    ASSERT_TRUE(placement);
-    UiWidgetTests::ExpectRectExact(placement->content, { 18.0f, 28.0f, 4.0f, 16.0f });
-    UiWidgetTests::ExpectRectExact(placement->fillReveal, { 18.0f, 28.0f, 2.0f, 16.0f });
-    UiWidgetTests::ExpectRectExact(placement->fillCanvas, placement->content);
-}
-
-TEST(UiProgressLayoutTests, ClippingChangesVisibilityWithoutChangingTheProgressAmountOrCanvas){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    auto full = PlaceProgress(bounds, bounds, *metrics, 0.25);
-    ASSERT_TRUE(full);
-    auto clipped = PlaceProgress(bounds, { 40.0f, 24.0f, 60.0f, 12.0f }, *metrics, 0.25);
-    ASSERT_TRUE(clipped);
-    UiWidgetTests::ExpectRectExact(clipped->clip, { 40.0f, 24.0f, 60.0f, 12.0f });
-    UiWidgetTests::ExpectRectExact(clipped->content, full->content);
-    UiWidgetTests::ExpectRectExact(clipped->fillReveal, full->fillReveal);
-    UiWidgetTests::ExpectRectExact(clipped->fillCanvas, full->fillCanvas);
-}
-
-TEST(UiProgressLayoutTests, ACompletelyDisjointClipProducesValidEmptyVisibility){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    auto placement = PlaceProgress(bounds, { 300.0f, 20.0f, 10.0f, 10.0f }, *metrics, 0.5);
-    ASSERT_TRUE(placement);
-    EXPECT_FLOAT_EQ(placement->clip.width, 0.0f);
-    EXPECT_FLOAT_EQ(placement->fillReveal.width, 92.0f);
-    EXPECT_FLOAT_EQ(placement->fillCanvas.width, 92.0f);
-}
-
-TEST(UiProgressLayoutTests, TinyAndEmptyAreasBoundPaddingWithoutNegativeContent){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    for(const Rect bounds : { Rect{ 10.0f, 20.0f, 4.0f, 3.0f }, Rect{ 10.0f, 20.0f, 0.0f, 0.0f } }){
-        auto placement = PlaceProgress(bounds, bounds, *metrics, 0.5);
-        ASSERT_TRUE(placement);
-        EXPECT_FLOAT_EQ(placement->content.width, 0.0f);
-        EXPECT_FLOAT_EQ(placement->content.height, 0.0f);
-        EXPECT_FLOAT_EQ(placement->fillReveal.width, 0.0f);
-        EXPECT_FLOAT_EQ(placement->fillCanvas.width, 0.0f);
-        const SIMDVectorSingle boundsEnd = VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(bounds.width, bounds.height, 0.0f, 0.0f));
-        EXPECT_LE(placement->content.x, VectorGetX(boundsEnd));
-        EXPECT_LE(placement->content.y, VectorGetY(boundsEnd));
-    }
-}
-
-TEST(UiProgressLayoutTests, PositiveSubnormalAndUnrepresentableRevealEdgesRemainValidEmptyFill){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    for(const f64 fraction : { BitCast<f64>(u64{ 1u }), 1.0e-15 }){
-        auto placement = PlaceProgress(bounds, bounds, *metrics, fraction);
-        ASSERT_TRUE(placement);
-        EXPECT_FLOAT_EQ(placement->fillReveal.width, 0.0f);
-        EXPECT_FLOAT_EQ(placement->fillCanvas.width, 0.0f);
-        UiWidgetTests::ExpectRectExact(placement->content, { 18.0f, 28.0f, 184.0f, 16.0f });
-    }
-}
-
-TEST(UiProgressLayoutTests, RepresentableFloatSubnormalRevealIsPreservedAtTheOrigin){
-    ProgressMetrics metrics;
-    metrics.contentSize = { 1.0f, 1.0f };
-    const Rect bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
-    const f32 leastPositive = BitCast<f32>(u32{ 1u });
-    auto placement = PlaceProgress(bounds, bounds, metrics, leastPositive);
-    ASSERT_TRUE(placement);
-    EXPECT_EQ(BitCast<u32>(placement->fillReveal.width), u32{ 1u });
-    UiWidgetTests::ExpectRectExact(placement->fillCanvas, placement->fillReveal);
-}
-
-TEST(UiProgressLayoutTests, ZeroIntrinsicMetricsAndEmptyBoundsAreValid){
-    UiSkinRegion region;
-    region.rectangle = { 0u, 0u, 1u, 1u };
-    ProgressOptions options;
-    options.height = 0.0f;
-    auto metrics = MeasureProgress(options, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    ExpectPoint(metrics->contentSize, {});
-    auto placement = PlaceProgress({}, {}, *metrics, 1.0);
-    ASSERT_TRUE(placement);
-    UiWidgetTests::ExpectRectExact(placement->content, {});
-    UiWidgetTests::ExpectRectExact(placement->fillReveal, {});
-    UiWidgetTests::ExpectRectExact(placement->fillCanvas, {});
-}
-
-TEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsRejectMetrics){
-    const UiSkinRegion region = NineSlice();
-    for(u32 field = 0u; field < 14u; ++field){
-        ProgressOptions options;
-        ProgressStyle style;
-        switch(field){
-        case 0u: options.width.policy = static_cast<LayoutSizePolicy::Enum>(3u); break;
-        case 1u: options.width.value = 0.0f; break;
-        case 2u: options.width.value = -1.0f; break;
-        case 3u: options.width.value = Limit<f32>::s_Infinity; break;
-        case 4u: options.height = -1.0f; break;
-        case 5u: options.height = Limit<f32>::s_QuietNaN; break;
-        case 6u: style.padding.left = -1.0f; break;
-        case 7u: style.padding.bottom = Limit<f32>::s_Infinity; break;
-        case 8u: style.trackTint.r = -1.0f; break;
-        case 9u: style.trackTint.a = 1.01f; break;
-        case 10u: style.fillTint.g = Limit<f32>::s_QuietNaN; break;
-        case 11u: style.fillTint.a = -0.01f; break;
-        case 12u: style.fillTint.b = Limit<f32>::s_Infinity; break;
-        default: style.trackTint.a = Limit<f32>::s_QuietNaN; break;
-        }
-        EXPECT_FALSE(MeasureProgress(options, style, region, region, 1.0f));
-    }
-}
-
-TEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectMetrics){
-    const UiSkinRegion valid = NineSlice();
-    for(u32 field = 0u; field < 17u; ++field){
-        UiSkinRegion track = valid;
-        UiSkinRegion fill = valid;
-        f32 density = 1.0f;
-        switch(field){
-        case 0u: density = 0.0f; break;
-        case 1u: density = -1.0f; break;
-        case 2u: density = Limit<f32>::s_Infinity; break;
-        case 3u: density = Limit<f32>::s_QuietNaN; break;
-        case 4u: track.minimumWidth = -1.0f; break;
-        case 5u: fill.minimumHeight = Limit<f32>::s_QuietNaN; break;
-        case 6u: track.padding.left = -1.0f; break;
-        case 7u: fill.padding.right = Limit<f32>::s_Infinity; break;
-        case 8u: track.rectangle.width = 0u; break;
-        case 9u: fill.rectangle.height = 0u; break;
-        case 10u: track.sliceInsets.left = 25u; break;
-        case 11u: fill.sliceInsets.bottom = 25u; break;
-        case 12u: track.drawMode = static_cast<UiSkinDrawMode::Enum>(2u); break;
-        case 13u: fill.drawMode = UiSkinDrawMode::Sprite; break;
-        case 14u:
-            fill.padding.left = Limit<f32>::s_Max;
-            fill.padding.right = Limit<f32>::s_Max;
-            break;
-        case 15u:
-            fill.padding.top = Limit<f32>::s_Max;
-            fill.padding.bottom = Limit<f32>::s_Max;
-            break;
-        default: fill.minimumWidth = Limit<f32>::s_Infinity; break;
-        }
-        EXPECT_FALSE(MeasureProgress({}, {}, track, fill, density));
-    }
-}
-
-TEST(UiProgressLayoutTests, OverflowingLogicalSumsAndDensityScaledBordersRejectMetrics){
-    const UiSkinRegion valid = NineSlice();
-    for(u32 field = 0u; field < 4u; ++field){
-        UiSkinRegion region = valid;
-        ProgressStyle style;
-        f32 density = 1.0f;
-        switch(field){
-        case 0u:
-            style.padding.left = Limit<f32>::s_Max;
-            style.padding.right = Limit<f32>::s_Max;
-            break;
-        case 1u:
-            region.minimumWidth = Limit<f32>::s_Max;
-            region.padding.left = Limit<f32>::s_Max;
-            break;
-        case 2u:
-            density = BitCast<f32>(u32{ 1u });
-            break;
-        default:
-            region.rectangle.width = Limit<u32>::s_Max;
-            region.sliceInsets.left = Limit<u32>::s_Max;
-            region.sliceInsets.right = Limit<u32>::s_Max;
-            break;
-        }
-        EXPECT_FALSE(MeasureProgress({}, style, region, region, density));
-    }
-}
-
-TEST(UiProgressLayoutTests, InvalidProspectiveRectanglesMetricsAndFractionsRejectPlacement){
-    const UiSkinRegion region = NineSlice();
-    auto metrics = MeasureProgress({}, {}, region, region, 1.0f);
-    ASSERT_TRUE(metrics);
-    const Rect normal{ 10.0f, 20.0f, 200.0f, 32.0f };
-    for(u32 field = 0u; field < 13u; ++field){
-        Rect bounds = normal;
-        Rect clip = normal;
-        ProgressMetrics invalid = *metrics;
-        f64 fraction = 0.5;
-        switch(field){
-        case 0u: bounds.x = Limit<f32>::s_QuietNaN; break;
-        case 1u: bounds.width = -1.0f; break;
-        case 2u: bounds.height = Limit<f32>::s_Infinity; break;
-        case 3u: clip.y = Limit<f32>::s_Infinity; break;
-        case 4u: clip.height = -1.0f; break;
-        case 5u: invalid.padding.top = -1.0f; break;
-        case 6u: invalid.fillMinimum.x = -1.0f; break;
-        case 7u: invalid.fillMinimum.y = Limit<f32>::s_QuietNaN; break;
-        case 8u: invalid.contentSize.x = 1.0f; break;
-        case 9u: invalid.contentSize.y = Limit<f32>::s_Infinity; break;
-        case 10u: fraction = Limit<f64>::s_Infinity; break;
-        case 11u: fraction = -Limit<f64>::s_Infinity; break;
-        default: fraction = Limit<f64>::s_QuietNaN; break;
-        }
-        EXPECT_FALSE(PlaceProgress(bounds, clip, invalid, fraction));
-    }
-}
-
-TEST(UiProgressLayoutTests, FiniteExtremeCoordinatesRetainValidExactFullEndpoints){
-    ProgressMetrics metrics;
-    metrics.contentSize = { Limit<f32>::s_Max, 32.0f };
-    const Rect bounds{ -Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 32.0f };
-    auto placement = PlaceProgress(bounds, bounds, metrics, 1.0);
-    ASSERT_TRUE(placement);
-    UiWidgetTests::ExpectRectExact(placement->content, bounds);
-    UiWidgetTests::ExpectRectExact(placement->fillReveal, bounds);
-    UiWidgetTests::ExpectRectExact(placement->fillCanvas, bounds);
-    placement = PlaceProgress(bounds, bounds, metrics, 0.5);
-    ASSERT_TRUE(placement);
-    EXPECT_FLOAT_EQ(placement->fillReveal.width, Limit<f32>::s_Max * 0.5f);
-    EXPECT_FLOAT_EQ(placement->fillReveal.x, -Limit<f32>::s_Max);
-}
-
-TEST(UiProgressLayoutTests, OverflowingAndCollapsedPositiveInputEndpointsRejectPlacement){
-    ProgressMetrics metrics;
-    metrics.contentSize = { 1.0f, 1.0f };
-    const Rect normal{ 0.0f, 0.0f, 20.0f, 10.0f };
-    for(const Rect invalid : {
-        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
-        Rect{ Limit<f32>::s_Max, 0.0f, 1.0f, 1.0f },
-        Rect{ 0.0f, Limit<f32>::s_Max, 1.0f, 1.0f }
-    }){
-        EXPECT_FALSE(PlaceProgress(invalid, normal, metrics, 0.5));
-        EXPECT_FALSE(PlaceProgress(normal, invalid, metrics, 0.5));
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-
-#include <global/simplemath.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -672,6 +160,10 @@ public:
         return allowed;
     }
 
+    void bindState(RadioGroupState& targetState)noexcept{
+        state = &targetState;
+    }
+
 
 public:
     RadioGroupState* state = nullptr;
@@ -688,6 +180,14 @@ public:
 
 
 public:
+    void bindState(RadioGroupState& targetState)noexcept{
+        state = &targetState;
+    }
+
+    void bindGate(ReconcileGate& targetGate)noexcept{
+        gate = &targetGate;
+    }
+
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
         callback(CallbackPhase::Generation);
         return generation;
@@ -834,408 +334,16 @@ public:
     mutable b8 nestedSucceeded = true;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static ControlAction Action(const RadioGroupState& state, const ControlActionKind::Enum kind, const u64 key = 0u)noexcept{
-    const RadioGroupSnapshot snapshot = state.snapshot();
-    ControlAction action;
-    action.control = { snapshot.inputGeneration, snapshot.sourceGeneration, snapshot.sourceRevision };
-    action.kind = kind;
-    action.value = key;
-    return action;
+[[nodiscard]] NWB_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
+    return RadioGroupBehavior::Reconcile(source, nullptr, state, result);
 }
 
-static void ExpectResult(const RadioGroupResult& actual, const RadioGroupResult& expected){
-    EXPECT_EQ(actual.valid, expected.valid);
-    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
-    EXPECT_EQ(actual.activated, expected.activated);
-    EXPECT_EQ(actual.focused, expected.focused);
+[[nodiscard]] NWB_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
+    return RadioGroupBehavior::Reconcile(source, &guard, state, result);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(UiRadioGroupBehaviorTests, DisabledCheckedChoiceIsPreservedWhileCursorMovesForward){
-    ChoiceSource source;
-    source.rows[1u].enabled = false;
-    source.rows[2u].enabled = false;
-    RadioGroupState state;
-    state.select(2u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(state.selectedKey(), 2u);
-    EXPECT_EQ(state.cursorKey(), 4u);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_FALSE(choices->rows[1u].enabled);
-}
-
-TEST(UiRadioGroupBehaviorTests, RevisionReorderPreservesStableKeys){
-    ChoiceSource source;
-    RadioGroupState state;
-    state.select(3u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    Swap(source.rows[0u], source.rows[2u]);
-    ++source.revisionValue;
-    result = {};
-    choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(state.selectedKey(), 3u);
-    EXPECT_EQ(state.cursorKey(), 3u);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_EQ(choices->rows[0u].key, 3u);
-}
-
-TEST(UiRadioGroupBehaviorTests, RemovedSelectionAndSourceReplacementClearKnownChoices){
-    ChoiceSource source;
-    RadioGroupState state;
-    state.select(4u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    source.count = 3u;
-    ++source.revisionValue;
-    result = {};
-    choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(state.selectedKey(), 0u);
-    EXPECT_EQ(state.cursorKey(), 1u);
-    EXPECT_TRUE(result.selectionChanged);
-    state.select(2u);
-    choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    ++source.generation;
-    result = {};
-    choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(state.selectedKey(), 0u);
-    EXPECT_EQ(state.cursorKey(), 1u);
-    EXPECT_TRUE(result.selectionChanged);
-}
-
-TEST(UiRadioGroupBehaviorTests, ResetAllowsExplicitChoiceOnANewFirstBinding){
-    ChoiceSource source;
-    RadioGroupState state;
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    state.reset();
-    state.select(3u);
-    ++source.generation;
-    choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(state.selectedKey(), 3u);
-}
-
-TEST(UiRadioGroupBehaviorTests, EmptyAndAllDisabledSourcesAreValidWithoutAutomaticSelection){
-    ChoiceSource source;
-    RadioGroupState state;
-    RadioGroupResult result;
-    source.count = 0u;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_TRUE(result.valid);
-    EXPECT_EQ(state.selectedKey(), 0u);
-    EXPECT_EQ(state.cursorKey(), 0u);
-    source.count = 4u;
-    for(u32 index = 0u; index < 4u; ++index)
-        source.rows[index].enabled = false;
-    ++source.revisionValue;
-    state.select(2u);
-    choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(state.selectedKey(), 2u);
-    EXPECT_EQ(state.cursorKey(), 0u);
-    result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Apply(*choices, {}, Action(state, ControlActionKind::Submit), state, result));
-    EXPECT_FALSE(result.activated);
-    EXPECT_FALSE(result.selectionChanged);
-}
-
-TEST(UiRadioGroupBehaviorTests, AllFourArrowsWrapAndSkipDisabledChoices){
-    ChoiceSource source;
-    source.rows[1u].enabled = false;
-    source.rows[2u].enabled = false;
-    RadioGroupState state;
-    state.select(1u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    const u64 input = state.inputGeneration();
-    const Array<ControlActionKind::Enum, 4> kinds{ ControlActionKind::Up, ControlActionKind::Right, ControlActionKind::Left, ControlActionKind::Down };
-    const Array<u64, 4> expected{ 4u, 1u, 4u, 1u };
-    for(u32 index = 0u; index < 4u; ++index){
-        result = {};
-        ASSERT_TRUE(RadioGroupBehavior::Apply(*choices, {}, Action(state, kinds[index]), state, result));
-        EXPECT_EQ(state.selectedKey(), expected[index]);
-        EXPECT_EQ(state.cursorKey(), expected[index]);
-        EXPECT_EQ(state.inputGeneration(), input);
-        EXPECT_TRUE(result.selectionChanged);
-        EXPECT_FALSE(result.activated);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, HomeEndChooseEnabledEndpoints){
-    ChoiceSource source;
-    source.rows[0u].enabled = false;
-    source.rows[3u].enabled = false;
-    RadioGroupState state;
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    ASSERT_TRUE(RadioGroupBehavior::Apply(*choices, {}, Action(state, ControlActionKind::End), state, result));
-    EXPECT_EQ(state.selectedKey(), 3u);
-    ASSERT_TRUE(RadioGroupBehavior::Apply(*choices, {}, Action(state, ControlActionKind::Home), state, result));
-    EXPECT_EQ(state.selectedKey(), 2u);
-    EXPECT_FALSE(result.activated);
-}
-
-
-TEST(UiRadioGroupBehaviorTests, IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput){
-    ChoiceSource source;
-    source.count = 1u;
-    RadioGroupState state;
-    state.select(1u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    const RadioGroupSnapshot before = state.snapshot();
-    ASSERT_TRUE(RadioGroupBehavior::Apply(*choices, {}, Action(state, ControlActionKind::Down), state, result));
-    ASSERT_TRUE(RadioGroupBehavior::Apply(*choices, {}, Action(state, ControlActionKind::PageUp), state, result));
-    EXPECT_EQ(state.selectedKey(), 1u);
-    EXPECT_EQ(state.inputGeneration(), before.inputGeneration);
-    EXPECT_EQ(state.revision(), before.revision + 2u);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_FALSE(result.activated);
-}
-
-TEST(UiRadioGroupBehaviorTests, RejectedActionsPreserveStateAndResult){
-    ChoiceSource source;
-    source.rows[1u].enabled = false;
-    RadioGroupState state;
-    state.select(1u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    const RadioGroupSnapshot before = state.snapshot();
-    const RadioGroupResult expected{ true, true, true, true };
-    result = expected;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(*choices, {}, Action(state, ControlActionKind::Activate, 2u), state, result));
-    EXPECT_TRUE(state.matches(before));
-    ExpectResult(result, expected);
-    RadioGroupOptions disabled;
-    disabled.enabled = false;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(*choices, disabled, Action(state, ControlActionKind::Down), state, result));
-    EXPECT_TRUE(state.matches(before));
-    ExpectResult(result, expected);
-    ControlAction stale = Action(state, ControlActionKind::Down);
-    ++stale.control.contentRevision;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(*choices, {}, stale, state, result));
-    EXPECT_TRUE(state.matches(before));
-    ExpectResult(result, expected);
-}
-
-TEST(UiRadioGroupBehaviorTests, IdenticalPublicSelectionRejectsCopiedOlderInput){
-    ChoiceSource source;
-    RadioGroupState state;
-    state.select(2u);
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    const ControlAction action = Action(state, ControlActionKind::Down);
-    state.select(2u);
-    const RadioGroupSnapshot before = state.snapshot();
-    result = {};
-    EXPECT_FALSE(RadioGroupBehavior::Apply(*choices, {}, action, state, result));
-    EXPECT_TRUE(state.matches(before));
-    EXPECT_FALSE(result.valid);
-}
-
-TEST(UiRadioGroupBehaviorTests, FullBoundIsAcceptedAndOversizedSourcePreservesStateAndDiagnostics){
-    ChoiceSource source;
-    source.count = s_RadioGroupMaxChoices;
-    RadioGroupState state;
-    RadioGroupResult result;
-    auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-    ASSERT_TRUE(choices);
-    EXPECT_EQ(choices->count, s_RadioGroupMaxChoices);
-    const RadioGroupSnapshot before = state.snapshot();
-    const RadioGroupResult expectedResult = result;
-    source.count = s_RadioGroupMaxChoices + 1u;
-    source.keyCalls = 0u;
-    EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-    EXPECT_TRUE(state.matches(before));
-    ExpectResult(result, expectedResult);
-    EXPECT_EQ(source.keyCalls, 0u);
-}
-
-TEST(UiRadioGroupBehaviorTests, MalformedKeysAndLookupsRejectAtomically){
-    const Array<u32, 6> modes{ 0u, 1u, 2u, 3u, 4u, 5u };
-    for(const u32 mode : modes){
-        ChoiceSource source;
-        RadioGroupState state;
-        state.select(3u);
-        RadioGroupResult result{ true, true, true, true };
-        const RadioGroupSnapshot before = state.snapshot();
-        const RadioGroupResult expectedResult = result;
-        switch(mode){
-        case 0u: source.rows[0u].key = 0u; break;
-        case 1u: source.rows[1u].key = source.rows[0u].key; break;
-        case 2u: source.badLookup = true; break;
-        case 3u: source.missingLookup = true; break;
-        case 4u: source.generation = 0u; break;
-        case 5u: source.revisionValue = 0u; break;
-        }
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        EXPECT_TRUE(state.matches(before));
-        ExpectResult(result, expectedResult);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult){
-    const Array<CallbackPhase::Enum, 6> phases{ CallbackPhase::Generation, CallbackPhase::Revision, CallbackPhase::Count, CallbackPhase::Key, CallbackPhase::Lookup, CallbackPhase::Enabled };
-    for(const CallbackPhase::Enum phase : phases){
-        ChoiceSource source;
-        RadioGroupState state;
-        state.select(2u);
-        RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        const RadioGroupSnapshot before = state.snapshot();
-        const RadioGroupResult expectedResult = result;
-        source.state = &state;
-        source.phase = phase;
-        source.mutation = CallbackMutation::SelectAba;
-        source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        EXPECT_EQ(state.selectedKey(), before.selectedKey);
-        EXPECT_EQ(state.cursorKey(), before.cursorKey);
-        EXPECT_EQ(state.revision(), before.revision + 2u);
-        EXPECT_NE(state.inputGeneration(), before.inputGeneration);
-        ExpectResult(result, expectedResult);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, CallbackIdenticalSelectionAndResetRemainAuthoritativeAfterRejection){
-    const Array<CallbackMutation::Enum, 2> mutations{ CallbackMutation::SelectIdentical, CallbackMutation::Reset };
-    for(const CallbackMutation::Enum mutation : mutations){
-        ChoiceSource source;
-        RadioGroupState state;
-        state.select(2u);
-        RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        const RadioGroupSnapshot before = state.snapshot();
-        source.state = &state;
-        source.phase = CallbackPhase::Lookup;
-        source.mutation = mutation;
-        source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        EXPECT_EQ(state.revision(), before.revision + 1u);
-        EXPECT_NE(state.inputGeneration(), before.inputGeneration);
-        EXPECT_EQ(state.selectedKey(), mutation == CallbackMutation::Reset ? 0u : 2u);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAndLeavesStateUsable){
-    const Array<CallbackMutation::Enum, 2> mutations{ CallbackMutation::Reconcile, CallbackMutation::Apply };
-    for(const CallbackMutation::Enum mutation : mutations){
-        ChoiceSource source;
-        RadioGroupState state;
-        RadioGroupResult result;
-        auto choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-        ASSERT_TRUE(choices);
-        const RadioGroupSnapshot before = state.snapshot();
-        const RadioGroupResult expectedResult = result;
-        source.state = &state;
-        source.borrowedChoices = *choices;
-        source.phase = CallbackPhase::Enabled;
-        source.mutation = mutation;
-        source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        EXPECT_FALSE(source.nestedSucceeded);
-        EXPECT_TRUE(state.matches(before));
-        ExpectResult(result, expectedResult);
-        choices = RadioGroupBehavior::Reconcile(source, nullptr, state, result);
-        ASSERT_TRUE(choices);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState){
-    const Array<CallbackMutation::Enum, 3> mutations{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration, CallbackMutation::SourceCount };
-    for(const CallbackMutation::Enum mutation : mutations){
-        ChoiceSource source;
-        RadioGroupState state;
-        RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        const RadioGroupSnapshot before = state.snapshot();
-        const RadioGroupResult expectedResult = result;
-        source.phase = CallbackPhase::Enabled;
-        source.mutation = mutation;
-        source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        EXPECT_TRUE(state.matches(before));
-        ExpectResult(result, expectedResult);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, FinalOneShotMetadataMutationIsRejectedBeforeCommit){
-    const Array<CallbackMutation::Enum, 2> mutations{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration };
-    for(const CallbackMutation::Enum mutation : mutations){
-        ChoiceSource source;
-        RadioGroupState state;
-        RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        const RadioGroupSnapshot before = state.snapshot();
-        const RadioGroupResult expectedResult = result;
-        source.countCalls = 0u;
-        source.phase = CallbackPhase::Count;
-        source.mutation = mutation;
-        source.triggerCount = static_cast<u32>(source.count) * 3u + 3u;
-        source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-        EXPECT_FALSE(source.armed);
-        EXPECT_TRUE(state.matches(before));
-        ExpectResult(result, expectedResult);
-    }
-}
-
-TEST(UiRadioGroupBehaviorTests, FailedBorrowedGuardStopsAllFurtherSourceCallbacks){
-    ChoiceSource source;
-    RadioGroupState state;
-    RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(source, nullptr, state, result));
-    const RadioGroupSnapshot before = state.snapshot();
-    const RadioGroupResult expectedResult = result;
-    ReconcileGate gate;
-    source.gate = &gate;
-    source.phase = CallbackPhase::Enabled;
-    source.mutation = CallbackMutation::GuardFailure;
-    source.armed = true;
-    EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, &gate, state, result));
-    EXPECT_EQ(source.callbackCalls, source.callbacksAtMutation);
-    EXPECT_TRUE(state.matches(before));
-    ExpectResult(result, expectedResult);
-}
-
-TEST(UiRadioGroupBehaviorTests, BorrowedGuardMutationIsRejectedBeforeTheFirstSourceCall){
-    ChoiceSource source;
-    RadioGroupState state;
-    state.select(2u);
-    const RadioGroupSnapshot before = state.snapshot();
-    RadioGroupResult result;
-    ReconcileGate gate;
-    gate.state = &state;
-    gate.mutateState = true;
-    EXPECT_FALSE(RadioGroupBehavior::Reconcile(source, &gate, state, result));
-    EXPECT_EQ(source.callbackCalls, 0u);
-    EXPECT_EQ(state.selectedKey(), 2u);
-    EXPECT_EQ(state.revision(), before.revision + 1u);
-    EXPECT_FALSE(state.matches(before));
-    EXPECT_FALSE(result.valid);
+[[nodiscard]] NWB_INLINE b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
+    return RadioGroupBehavior::Apply(choices, options, action, state, result);
 }
 
 
@@ -1254,18 +362,6 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_ui_radio_group_builder_tests{
 
 
@@ -1276,312 +372,68 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiRadioGroupTests;
 
-class UiRadioGroupBuilderTests : public RadioGroupFixture{};
+class UiRadioGroupBuilderTests : public RadioGroupFixture{
+public:
+    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
+        return target(widget) != nullptr;
+    }
 
+    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
+        const HitTarget* hit = target(widget);
+        if(!hit)
+            return MakeUnexpected(Failure{});
+        return *hit;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [[nodiscard]] Expected<RadioGroupChoicePlacement> findChoice(const u64 keyValue)const noexcept{
+        const RadioGroupChoicePlacement* found = choice(keyValue, m_state);
+        if(!found)
+            return MakeUnexpected(Failure{});
+        return *found;
+    }
 
-
-TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallback){
-    ASSERT_TRUE(accept(1u));
-    const DrawSnapshot actual = m_paint.freeze();
-    PaintBuilder reference(m_arena);
-    reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<Impl::UiSkin>("tests/ui/skin"), m_skin);
-    for(u32 index = 0u; index < 5u; ++index){
-        const Array<char, 4u> bytes{ static_cast<char>('A' + index), 'b', 'c', 'd' };
-        TextLayout layout(m_arena);
-        {
-            auto layoutResult = m_text.layout({ .text = { bytes.data(), bytes.size() }, .fontSize = 14.0f });
-            ASSERT_TRUE(layoutResult);
-            layout = Move(*layoutResult);
+    void verifyTemporaryLabelsOwned(const DrawSnapshot& actual){
+        PaintBuilder reference(m_arena);
+        reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<Impl::UiSkin>("tests/ui/skin"), m_skin);
+        for(u32 index = 0u; index < 5u; ++index){
+            const Array<char, 4u> bytes{ static_cast<char>('A' + index), 'b', 'c', 'd' };
+            TextLayout layout(m_arena);
+            {
+                auto layoutResult = m_text.layout({ .text = { bytes.data(), bytes.size() }, .fontSize = 14.0f });
+                ASSERT_TRUE(layoutResult);
+                layout = Move(*layoutResult);
+            }
+            const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
+            const auto measured = m_text.measure(layout, reference.displayMetrics());
+            ASSERT_TRUE(measured);
+            const f32 centering = Max(0.0f, (row.rectangle.height - measured->height) * 0.5f);
+            const f32 textStart = row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap;
+            const f32 textTop = row.rectangle.y + centering;
+            const SIMDVectorSingle originValue = VectorSubtract(VectorSet(textStart, textTop, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+            const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
+            reference.pushClip(row.clip);
+            reference.pushClip(row.textClip);
+            const Color& color = row.enabled ? m_builder.style().text : m_builder.style().disabledText;
+            ASSERT_TRUE(m_text.paint(reference, layout, origin, color));
+            ASSERT_TRUE(reference.popClip());
+            ASSERT_TRUE(reference.popClip());
         }
-        const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
-        const auto measured = m_text.measure(layout, reference.displayMetrics());
-        ASSERT_TRUE(measured);
-        const f32 centering = Max(0.0f, (row.rectangle.height - measured->height) * 0.5f);
-        const f32 textStart = row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap;
-        const f32 textTop = row.rectangle.y + centering;
-        const SIMDVectorSingle originValue = VectorSubtract(VectorSet(textStart, textTop, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
-        const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
-        reference.pushClip(row.clip);
-        reference.pushClip(row.textClip);
-        const Color& color = row.enabled ? m_builder.style().text : m_builder.style().disabledText;
-        ASSERT_TRUE(m_text.paint(reference, layout, origin, color));
-        ASSERT_TRUE(reference.popClip());
-        ASSERT_TRUE(reference.popClip());
+        const DrawSnapshot expected = reference.freeze();
+        Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::UiCases::s_UiCaseTestsUiRadioTemporaryLabels) };
+        Vector<Vertex, Core::Alloc::ScratchArena> actualGlyphs(scratch);
+        Vector<Vertex, Core::Alloc::ScratchArena> expectedGlyphs(scratch);
+        UiWidgetTests::CopyGlyphVertices(actual, actualGlyphs);
+        UiWidgetTests::CopyGlyphVertices(expected, expectedGlyphs);
+        ASSERT_EQ(actualGlyphs.size(), expectedGlyphs.size());
+        ASSERT_GT(actualGlyphs.size(), 0u);
+        for(usize index = 0u; index < actualGlyphs.size(); ++index){
+            EXPECT_FLOAT_EQ(actualGlyphs[index].position.x, expectedGlyphs[index].position.x);
+            EXPECT_FLOAT_EQ(actualGlyphs[index].position.y, expectedGlyphs[index].position.y);
+            EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.x, expectedGlyphs[index].texCoord.x);
+            EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.y, expectedGlyphs[index].texCoord.y);
+        }
     }
-    const DrawSnapshot expected = reference.freeze();
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiRadioTemporaryLabels)};
-    Vector<Vertex, Core::Alloc::ScratchArena> actualGlyphs(scratch);
-    Vector<Vertex, Core::Alloc::ScratchArena> expectedGlyphs(scratch);
-    CopyGlyphVertices(actual, actualGlyphs);
-    CopyGlyphVertices(expected, expectedGlyphs);
-    ASSERT_EQ(actualGlyphs.size(), expectedGlyphs.size());
-    ASSERT_GT(actualGlyphs.size(), 0u);
-    for(usize index = 0u; index < actualGlyphs.size(); ++index){
-        EXPECT_FLOAT_EQ(actualGlyphs[index].position.x, expectedGlyphs[index].position.x);
-        EXPECT_FLOAT_EQ(actualGlyphs[index].position.y, expectedGlyphs[index].position.y);
-        EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.x, expectedGlyphs[index].texCoord.x);
-        EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.y, expectedGlyphs[index].texCoord.y);
-    }
-}
-
-TEST_F(UiRadioGroupBuilderTests, SelectionCommitsOnReleaseAndNotOnPress){
-    ASSERT_TRUE(accept(1u));
-    const Point point = choicePoint(20u);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 20u);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.activated);
-}
-
-TEST_F(UiRadioGroupBuilderTests, ReleaseOutsideAndDisabledChoiceCannotActivate){
-    ASSERT_TRUE(accept(1u));
-    drag(choicePoint(20u), { 700.0f, 500.0f });
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.activated);
-    click(choicePoint(30u));
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.activated);
-}
-
-TEST_F(UiRadioGroupBuilderTests, HorizontalAndVerticalKeysShareTheHostAndSkipDisabledChoices){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    const u64 token = m_state.inputGeneration();
-    press(Core::Key::Right);
-    press(Core::Key::Down);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(m_state.selectedKey(), 40u);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_EQ(m_state.inputGeneration(), token);
-    press(Core::Key::End);
-    press(Core::Key::Right);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    press(Core::Key::Left);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_EQ(m_state.selectedKey(), 50u);
-    press(Core::Key::Home);
-    press(Core::Key::Up);
-    ASSERT_TRUE(accept(5u));
-    EXPECT_EQ(m_state.selectedKey(), 50u);
-}
-
-TEST_F(UiRadioGroupBuilderTests, HeldSubmitWaitsForReleaseWhileAnUnchangedChoiceStaysSelected){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    InputEvent event;
-    event.type = InputEventType::KeyDown;
-    event.key = Core::Key::Enter;
-    EXPECT_TRUE(send(event).commandConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-    event.repeat = true;
-    EXPECT_TRUE(send(event).commandConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_FALSE(m_result.activated);
-    event.type = InputEventType::KeyUp;
-    event.repeat = false;
-    EXPECT_TRUE(send(event).commandConsumed);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_TRUE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-    press(Core::Key::Space);
-    ASSERT_TRUE(accept(5u));
-    EXPECT_TRUE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-}
-
-TEST_F(UiRadioGroupBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission){
-    ASSERT_TRUE(accept(1u));
-    const Point point = choicePoint(20u);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_FALSE(m_result.activated);
-    press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-    press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), host());
-    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_FALSE(m_result.activated);
-    press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
-    ASSERT_TRUE(accept(5u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-    press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), host());
-    press(Core::Key::Enter);
-    ASSERT_TRUE(accept(6u));
-    EXPECT_TRUE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-}
-
-TEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMark){
-    m_state.select(30u);
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(m_state.selectedKey(), 30u);
-    EXPECT_EQ(m_state.cursorKey(), 40u);
-    const WidgetId part = UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(host(), "choices"), 30u);
-    ASSERT_NE(target(part), nullptr);
-    EXPECT_FALSE(target(part)->enabled);
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(regionQuads(snapshot, Name(NWB::Tests::UiCases::s_UiInputNameRadioChecked)), 1u);
-    EXPECT_EQ(regionQuads(snapshot, Name(NWB::Tests::UiCases::s_UiInputNameRadioMark)), 1u);
-}
-
-TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::Right);
-    RadioGroupOptions options;
-    options.enabled = false;
-    ASSERT_TRUE(accept(2u, options));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.activated);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_FALSE(target(host())->enabled);
-    EXPECT_FALSE(target(host())->focusable);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(host(), "choices"), 10u)), nullptr);
-    const Point point = choicePoint(10u);
-    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_RadioPanelKey));
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(accept(3u, options));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.selectionChanged);
-}
-
-TEST_F(UiRadioGroupBuilderTests, EmptyAndAllDisabledSourcesAreValidWithoutATabStop){
-    m_source.m_count = 0u;
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(m_state.placement().count, 0u);
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_FALSE(target(host())->focusable);
-    m_source.m_count = 5u;
-    m_source.m_allDisabled = true;
-    ++m_source.m_contentRevision;
-    m_state.select(30u);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(m_state.selectedKey(), 30u);
-    EXPECT_EQ(m_state.cursorKey(), 0u);
-    EXPECT_FALSE(target(host())->enabled);
-    EXPECT_FALSE(m_result.activated);
-}
-
-TEST_F(UiRadioGroupBuilderTests, SixtyFourChoicesSucceedAndTheSixtyFifthRejectsAtomically){
-    m_source.m_count = 64u;
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(m_state.placement().count, 64u);
-    const AcceptedInputState<128u> displayed = accepted();
-    const RadioGroupSnapshot saved = m_state.snapshot();
-    m_source.resetCounters();
-    m_source.m_count = 65u;
-    ++m_source.m_contentRevision;
-    EXPECT_FALSE(declare(2u));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_TRUE(m_state.matches(saved));
-    EXPECT_EQ(m_source.m_textCalls, 0u);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectAccepted(displayed);
-}
-
-TEST_F(UiRadioGroupBuilderTests, DuplicateStableKeysRejectBeforeAnyLabelBorrow){
-    ASSERT_TRUE(accept(1u));
-    const AcceptedInputState<128u> displayed = accepted();
-    const RadioGroupSnapshot saved = m_state.snapshot();
-    m_source.resetCounters();
-    m_source.m_duplicate = true;
-    ++m_source.m_contentRevision;
-    EXPECT_FALSE(declare(2u));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_TRUE(m_state.matches(saved));
-    EXPECT_EQ(m_source.m_textCalls, 0u);
-    expectAccepted(displayed);
-}
-
-TEST_F(UiRadioGroupBuilderTests, SourceRevisionFencesQueuedKeysAndReorderKeepsStableSelection){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::Right);
-    m_source.m_reverse = true;
-    ++m_source.m_contentRevision;
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(m_state.selectedKey(), 10u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_EQ(m_state.placement().rows[4u].key, 10u);
-    press(Core::Key::Right);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 50u);
-    EXPECT_TRUE(m_result.selectionChanged);
-}
-
-TEST_F(UiRadioGroupBuilderTests, RemovalAndKnownSourceReplacementClearTheCommittedSelection){
-    m_state.select(20u);
-    ASSERT_TRUE(accept(1u));
-    m_source.m_removed = 20u;
-    ++m_source.m_contentRevision;
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_TRUE(m_result.selectionChanged);
-    m_state.select(40u);
-    ++m_source.m_generation;
-    ++m_source.m_contentRevision;
-    m_source.m_removed = 0u;
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_TRUE(m_result.selectionChanged);
-}
-
-TEST_F(UiRadioGroupBuilderTests, PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit){
-    ASSERT_TRUE(accept(1u));
-    const Rect oldBounds = target(host())->rectangle;
-    ASSERT_TRUE(prepare(2u, {}, { 80.0f, 40.0f, 420.0f, 360.0f }));
-    UiPaintAssertions::ExpectRect(target(host())->rectangle, oldBounds);
-    EXPECT_NE(m_state.placement().bounds.x, oldBounds.x);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    UiPaintAssertions::ExpectRect(target(host())->rectangle, m_state.placement().bounds);
-}
-
-TEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds){
-    ASSERT_TRUE(declare(1u));
-    m_builder.radioGroupStyle().indicatorExtent = 40.0f;
-    m_builder.style().fontSize = 28.0f;
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(choice(10u, m_state), nullptr);
-    EXPECT_FLOAT_EQ(choice(10u, m_state)->indicator.width, 24.0f);
-    EXPECT_FLOAT_EQ(choice(10u, m_state)->rectangle.height, 24.0f);
-}
-
-TEST_F(UiRadioGroupBuilderTests, InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation){
-    const RadioGroupSnapshot saved = m_state.snapshot();
-    RadioGroupOptions options;
-    options.width = { LayoutSizePolicy::Fixed, -1.0f };
-    EXPECT_FALSE(declare(1u, options));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_TRUE(m_state.matches(saved));
-    EXPECT_EQ(m_source.m_textCalls, 0u);
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1593,6 +445,1526 @@ TEST_F(UiRadioGroupBuilderTests, InvalidWidthRejectsBeforeSourceCallbacksOrState
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
+namespace __hidden_ui_glyph_sdf_tests{
+using UiProgressBuilderTests = ::__hidden_ui_progress_builder_tests::UiProgressBuilderTests;
+using UiRadioGroupBuilderTests = ::__hidden_ui_radio_group_builder_tests::UiRadioGroupBuilderTests;
+namespace UiRadioCallbackPhase = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackPhase;
+using UiRadioCallbackPhaseEnum = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackPhase::Enum;
+namespace UiRadioCallbackMutation = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackMutation;
+using UiRadioCallbackMutationEnum = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackMutation::Enum;
+using UiRadioReconcileGate = ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileGate;
+using UiRadioChoiceSource = ::NWB::__hidden_ui_radio_group_behavior_tests::ChoiceSource;
+using ::NWB::Tests::UiCases::s_UiCaseProgressTest;
+using ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileUiRadioGroupChoices;
+using ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileUiRadioGroupChoicesGuarded;
+using ::NWB::__hidden_ui_radio_group_behavior_tests::ApplyUiRadioGroupAction;
+
+namespace Key = ::NWB::Core::Key;
+using KeyEnum = ::NWB::Core::Key::Enum;
+using Insets = ::NWB::Impl::Ui::Insets;
+using Color = ::NWB::Impl::Ui::Color;
+namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+using UiSkinRegion = ::NWB::Impl::UiSkinRegion;
+namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
+using SkinPaintSample = ::NWB::UiWidgetTests::SkinPaintSample;
+using ProgressOptions = ::NWB::Impl::Ui::ProgressOptions;
+using ProgressStyle = ::NWB::Impl::Ui::ProgressStyle;
+using ProgressMetrics = ::NWB::Impl::Ui::ProgressMetrics;
+using ProgressPlacement = ::NWB::Impl::Ui::ProgressPlacement;
+using ::NWB::Impl::Ui::MeasureProgress;
+using ::NWB::Impl::Ui::PlaceProgress;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
+using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
+using RadioGroupChoice = ::NWB::Impl::Ui::RadioGroupChoice;
+using RadioGroupChoices = ::NWB::Impl::Ui::RadioGroupChoices;
+using RadioGroupOptions = ::NWB::Impl::Ui::RadioGroupOptions;
+using RadioGroupState = ::NWB::Impl::Ui::RadioGroupState;
+using RadioGroupSnapshot = ::NWB::Impl::Ui::RadioGroupSnapshot;
+using RadioGroupResult = ::NWB::Impl::Ui::RadioGroupResult;
+using RadioGroupChoicePlacement = ::NWB::Impl::Ui::RadioGroupChoicePlacement;
+using UiRadioAcceptedInputState = ::NWB::UiWidgetTests::AcceptedInputState<128u>;
+using ::NWB::Impl::Ui::s_RadioGroupMaxChoices;
+using ::NWB::Tests::UiCases::s_UiInputNameRadioChecked;
+using ::NWB::Tests::UiCases::s_UiInputNameRadioMark;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_UiProgressCasePanelKey = "panel";
+const StringView s_UiRadioCasePanelKey = "panel";
+
+Point MakeUiProgressPoint(in f32 x, in f32 y){
+    Point point = Point();
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+Rect MakeUiProgressRect(in f32 x, in f32 y, in f32 width, in f32 height){
+    Rect rect = Rect();
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+Insets MakeUiProgressInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
+    Insets insets = Insets();
+    insets.left = left;
+    insets.top = top;
+    insets.right = right;
+    insets.bottom = bottom;
+    return insets;
+}
+
+Color MakeUiProgressColor(in f32 r, in f32 g, in f32 b, in f32 a){
+    Color color = Color();
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    return color;
+}
+
+UiSkinRegion MakeUiProgressNineSliceRegion(){
+    UiSkinRegion region = UiSkinRegion();
+    region.name = Name(s_UiCaseProgressTest);
+    region.rectangle.x = 0u;
+    region.rectangle.y = 0u;
+    region.rectangle.width = 24u;
+    region.rectangle.height = 24u;
+    region.sliceInsets.left = 6u;
+    region.sliceInsets.top = 6u;
+    region.sliceInsets.right = 6u;
+    region.sliceInsets.bottom = 6u;
+    region.padding.left = 8.0f;
+    region.padding.top = 8.0f;
+    region.padding.right = 8.0f;
+    region.padding.bottom = 8.0f;
+    region.minimumWidth = 12.0f;
+    region.minimumHeight = 12.0f;
+    region.drawMode = UiSkinDrawMode::NineSlice;
+    return region;
+}
+
+ProgressOptions MakeUiProgressDefaultOptions(){
+    ProgressOptions options = ProgressOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 240.0f;
+    return options;
+}
+
+void ExpectUiProgressPointExact(in Point actual, in Point expected){
+    EXPECT_EQ(bit_cast<u32>(actual.x), bit_cast<u32>(expected.x));
+    EXPECT_EQ(bit_cast<u32>(actual.y), bit_cast<u32>(expected.y));
+}
+
+void ExpectUiProgressPaddingExact(in Insets actual, in Insets expected){
+    EXPECT_EQ(bit_cast<u32>(actual.left), bit_cast<u32>(expected.left));
+    EXPECT_EQ(bit_cast<u32>(actual.top), bit_cast<u32>(expected.top));
+    EXPECT_EQ(bit_cast<u32>(actual.right), bit_cast<u32>(expected.right));
+    EXPECT_EQ(bit_cast<u32>(actual.bottom), bit_cast<u32>(expected.bottom));
+}
+
+ControlAction MakeUiRadioGroupActionKey(in RadioGroupState state, in ControlActionKindEnum kind, in u64 keyValue){
+    const RadioGroupSnapshot snapshot = state.snapshot();
+    ControlAction action = ControlAction();
+    action.control.instanceGeneration = snapshot.inputGeneration;
+    action.control.contentGeneration = snapshot.sourceGeneration;
+    action.control.contentRevision = snapshot.sourceRevision;
+    action.kind = kind;
+    action.value = keyValue;
+    return action;
+}
+
+ControlAction MakeUiRadioGroupAction(in RadioGroupState state, in ControlActionKindEnum kind){
+    return MakeUiRadioGroupActionKey(state, kind, 0u);
+}
+
+RadioGroupResult MakeUiRadioGroupResult(in b8 valid, in b8 selectionChanged, in b8 activated, in b8 focused){
+    RadioGroupResult result = RadioGroupResult();
+    result.valid = valid;
+    result.selectionChanged = selectionChanged;
+    result.activated = activated;
+    result.focused = focused;
+    return result;
+}
+
+void ExpectUiRadioGroupResult(in RadioGroupResult actual, in RadioGroupResult expected){
+    EXPECT_EQ(actual.valid, expected.valid);
+    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
+    EXPECT_EQ(actual.activated, expected.activated);
+    EXPECT_EQ(actual.focused, expected.focused);
+}
+
+InputEvent MakeUiRadioPointEvent(in InputEventTypeEnum type, in Point point){
+    InputEvent event = InputEvent();
+    event.type = type;
+    event.position = point;
+    return event;
+}
+
+InputEvent MakeUiRadioKeyEvent(in InputEventTypeEnum type, in KeyEnum key){
+    InputEvent event = InputEvent();
+    event.type = type;
+    event.key = key;
+    return event;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiProgressBuilderTests_CallerMutationCannotChangeDeferredProgressGeometryStyleOrResolvedNames(mut UiProgressBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    f64 fraction = 0.25;
+    ProgressOptions options = MakeUiProgressDefaultOptions();
+    self.m_builder.progressStyle().fillTint = MakeUiProgressColor(0.8f, 0.6f, 0.4f, 0.5f);
+    ASSERT_TRUE(self.m_builder.progress("amount", fraction, options));
+    fraction = 0.75;
+    options.width.value = 100.0f;
+    options.height = 80.0f;
+    self.m_builder.progressStyle().padding = MakeUiProgressInsets(12.0f, 12.0f, 12.0f, 12.0f);
+    self.setMissingStyleRegions();
+    self.m_builder.progressStyle().fillTint = Color();
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const auto trackResult = self.sampleTrackRegion(snapshot);
+    ASSERT_TRUE(trackResult.has_value());
+    const SkinPaintSample track = trackResult.value();
+    const auto fillResult = self.sampleFillRegion(snapshot);
+    ASSERT_TRUE(fillResult.has_value());
+    const SkinPaintSample fill = fillResult.value();
+    EXPECT_FLOAT_EQ(track.bounds.width, 240.0f);
+    EXPECT_FLOAT_EQ(track.bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(fill.bounds.x - track.bounds.x, 4.0f);
+    EXPECT_FLOAT_EQ(fill.bounds.width, 58.0f);
+    EXPECT_FLOAT_EQ(fill.bounds.height, 24.0f);
+    EXPECT_FLOAT_EQ(fill.color.r, 0.4f);
+    EXPECT_FLOAT_EQ(fill.color.a, 0.5f);
+}
+
+void VerifyUiProgressBuilderTests_ExplicitFallbackRegionsResolveBeforeDeferredPaint(mut UiProgressBuilderTests self){
+    self.configureProgress(false, true);
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.progress("amount", 0.5, MakeUiProgressDefaultOptions()));
+    self.setMissingFallbackRegions();
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(self.sampleScrollbarTrackRegion(snapshot).has_value());
+    EXPECT_TRUE(self.sampleScrollbarThumbRegion(snapshot).has_value());
+}
+
+void VerifyUiProgressBuilderTests_FiniteFractionsClampAtExactEmptyAndFullGeometry(mut UiProgressBuilderTests self){
+    Array<f64, 4u> fractions = Array<f64, 4u>();
+    fractions[0u] = -4.0;
+    fractions[1u] = 0.0;
+    fractions[2u] = 1.0;
+    fractions[3u] = 4.0;
+    for(u64 index = 0u; index < 4u; ++index){
+        ASSERT_TRUE(self.panel(index + 1u));
+        ASSERT_TRUE(self.m_builder.progress("amount", fractions[cast<usize>(index)], MakeUiProgressDefaultOptions()));
+        ASSERT_TRUE(self.finishPanel());
+        const DrawSnapshot snapshot = self.m_paint.freeze();
+        const auto trackResult = self.sampleTrackRegion(snapshot);
+        ASSERT_TRUE(trackResult.has_value());
+        const SkinPaintSample track = trackResult.value();
+        const auto fillResult = self.sampleFillRegion(snapshot);
+        EXPECT_EQ(fillResult.has_value(), index >= 2u);
+        if(index >= 2u){
+            ASSERT_TRUE(fillResult.has_value());
+            const SkinPaintSample fill = fillResult.value();
+            EXPECT_FLOAT_EQ(fill.bounds.x, track.bounds.x + 4.0f);
+            EXPECT_FLOAT_EQ(fill.bounds.width, track.bounds.width - 8.0f);
+            EXPECT_FLOAT_EQ(fill.bounds.height, track.bounds.height - 8.0f);
+        }
+        self.m_context.abandonFrame();
+    }
+}
+
+void VerifyUiProgressBuilderTests_TinyFillClipsNaturalBorderTexelsWithoutCompressingBothCaps(mut UiProgressBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.progress("amount", 0.01, MakeUiProgressDefaultOptions()));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const auto trackResult = self.sampleTrackRegion(snapshot);
+    ASSERT_TRUE(trackResult.has_value());
+    const SkinPaintSample track = trackResult.value();
+    const auto fillResult = self.sampleFillRegion(snapshot);
+    ASSERT_TRUE(fillResult.has_value());
+    const SkinPaintSample fill = fillResult.value();
+    EXPECT_NEAR(fill.bounds.width, (track.bounds.width - 8.0f) * 0.01f, 0.000001f);
+    EXPECT_LT(fill.maximumU, 134.0f / 256.0f);
+    EXPECT_NEAR(fill.maximumU, (128.0f + fill.bounds.width) / 256.0f, 0.000001f);
+    EXPECT_EQ(fill.quads, 3u);
+}
+
+void VerifyUiProgressBuilderTests_SubresolutionPositiveFractionRemainsAValidEmptyFill(mut UiProgressBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.progress("amount", bit_cast<f64>(cast<u64>(1u)), MakeUiProgressDefaultOptions()));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(self.sampleTrackRegion(snapshot).has_value());
+    EXPECT_FALSE(self.sampleFillRegion(snapshot).has_value());
+}
+
+void VerifyUiProgressBuilderTests_ExternalClipConstrainsPaintAndBothNestedClipsAreRestored(mut UiProgressBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.progress("amount", 0.25, MakeUiProgressDefaultOptions()));
+    self.m_paint.pushClip(MakeUiProgressRect(20.0f, 0.0f, 20.0f, 600.0f));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_paint.popClip());
+    self.m_paint.fillRect(MakeUiProgressRect(60.0f, 80.0f, 8.0f, 8.0f), MakeUiProgressColor(1.0f, 0.0f, 0.0f, 1.0f));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const auto fillResult = self.sampleFillRegion(snapshot);
+    ASSERT_TRUE(fillResult.has_value());
+    const SkinPaintSample fill = fillResult.value();
+    EXPECT_FLOAT_EQ(fill.bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(fill.bounds.width, 20.0f);
+    b8 sentinel = false;
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material != PaintMaterial::Solid)
+            continue;
+        const Vertex vertex = snapshot.vertices()[snapshot.indices()[command.firstIndex]];
+        sentinel = sentinel || (vertex.position.x == 60.0f && vertex.position.y == 80.0f);
+    }
+    EXPECT_TRUE(sentinel);
+}
+
+void VerifyUiProgressBuilderTests_InvalidFractionLeavesTheAcceptedTargetsAvailable(mut UiProgressBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    EXPECT_FALSE(self.m_builder.button("before", "Before"));
+    ASSERT_TRUE(self.m_builder.progress("amount", 0.5, MakeUiProgressDefaultOptions()));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const WidgetId before = self.id("before", s_UiProgressCasePanelKey);
+    const auto acceptedResult = self.findTarget(before);
+    ASSERT_TRUE(acceptedResult.has_value());
+    const HitTarget accepted = acceptedResult.value();
+    const usize count = self.m_context.input().targets().size();
+    ASSERT_TRUE(self.panel(2u));
+    EXPECT_FALSE(self.m_builder.progress("amount", bit_cast<f64>(cast<u64>(0x7ff8000000000001u)), MakeUiProgressDefaultOptions()));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    const auto currentResult = self.findTarget(before);
+    ASSERT_TRUE(currentResult.has_value());
+    const HitTarget current = currentResult.value();
+    EXPECT_EQ(current.declarationGeneration, accepted.declarationGeneration);
+    EXPECT_FLOAT_EQ(current.rectangle.x, accepted.rectangle.x);
+    EXPECT_FLOAT_EQ(current.rectangle.width, accepted.rectangle.width);
+    EXPECT_EQ(self.m_context.input().targets().size(), count);
+}
+
+void VerifyUiProgressBuilderTests_MissingPreferredAndFallbackRegionsRejectTheCandidate(mut UiProgressBuilderTests self){
+    self.configureProgress(false, false);
+    ASSERT_TRUE(self.panel(1u));
+    EXPECT_FALSE(self.m_builder.progress("amount", 0.5, MakeUiProgressDefaultOptions()));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_FALSE(self.m_context.commitFrame(1u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiProgressLayoutTests_LogicalRegionMinimumsCanExceedSliceBordersWithoutDensityScaling(){
+    UiSkinRegion track = MakeUiProgressNineSliceRegion();
+    UiSkinRegion fill = MakeUiProgressNineSliceRegion();
+    track.minimumWidth = 80.0f;
+    track.minimumHeight = 60.0f;
+    fill.minimumWidth = 30.0f;
+    fill.minimumHeight = 20.0f;
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), track, fill, 4.0f);
+    ASSERT_TRUE(metrics.has_value());
+    ExpectUiProgressPointExact(metrics.value().fillMinimum, MakeUiProgressPoint(30.0f, 20.0f));
+    ExpectUiProgressPointExact(metrics.value().contentSize, MakeUiProgressPoint(80.0f, 60.0f));
+}
+
+void VerifyUiProgressLayoutTests_FillMetadataPaddingDoesNotInsetTheProgressAmountTwice(){
+    const UiSkinRegion track = MakeUiProgressNineSliceRegion();
+    UiSkinRegion fill = MakeUiProgressNineSliceRegion();
+    fill.padding.left = 100.0f;
+    fill.padding.top = 200.0f;
+    fill.padding.right = 300.0f;
+    fill.padding.bottom = 400.0f;
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), track, fill, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    ExpectUiProgressPaddingExact(metrics.value().padding, MakeUiProgressInsets(8.0f, 8.0f, 8.0f, 8.0f));
+    ExpectUiProgressPointExact(metrics.value().contentSize, MakeUiProgressPoint(28.0f, 32.0f));
+}
+
+void VerifyUiProgressLayoutTests_ZeroSkipsFillAndFullCopiesTheExactContentEndpoints(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const auto zero = PlaceProgress(bounds, bounds, metrics.value(), 0.0);
+    ASSERT_TRUE(zero.has_value());
+    const auto full = PlaceProgress(bounds, bounds, metrics.value(), 1.0);
+    ASSERT_TRUE(full.has_value());
+    ExpectUiRectExact(zero.value().fillReveal, MakeUiProgressRect(18.0f, 28.0f, 0.0f, 16.0f));
+    ExpectUiRectExact(zero.value().fillCanvas, zero.value().fillReveal);
+    ExpectUiRectExact(full.value().fillReveal, full.value().content);
+    ExpectUiRectExact(full.value().fillCanvas, full.value().content);
+    const f32 fillEnd = full.value().fillReveal.x + full.value().fillReveal.width;
+    const f32 contentEnd = full.value().content.x + full.value().content.width;
+    EXPECT_EQ(bit_cast<u32>(fillEnd), bit_cast<u32>(contentEnd));
+}
+
+void VerifyUiProgressLayoutTests_FiniteFractionsOutsideTheUnitIntervalClampVisually(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    Array<f64, 4u> fractions = Array<f64, 4u>();
+    fractions[0u] = -f64.max;
+    fractions[1u] = -0.1;
+    fractions[2u] = 1.1;
+    fractions[3u] = f64.max;
+    for(in f64 fraction : fractions){
+        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), fraction);
+        ASSERT_TRUE(placement.has_value());
+        if(fraction < 0.0){
+            EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 0.0f);
+            EXPECT_FLOAT_EQ(placement.value().fillCanvas.width, 0.0f);
+        }
+        else{
+            ExpectUiRectExact(placement.value().fillReveal, placement.value().content);
+            ExpectUiRectExact(placement.value().fillCanvas, placement.value().content);
+        }
+    }
+}
+
+void VerifyUiProgressLayoutTests_SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanvas(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.01);
+    ASSERT_TRUE(placement.has_value());
+    EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 1.84f);
+    ExpectUiRectExact(placement.value().fillCanvas, MakeUiProgressRect(18.0f, 28.0f, 12.0f, 16.0f));
+    EXPECT_GT(placement.value().fillCanvas.width, placement.value().fillReveal.width);
+    EXPECT_LT(placement.value().fillCanvas.width, placement.value().content.width);
+}
+
+void VerifyUiProgressLayoutTests_AMinimumCanvasNeverExtendsPastContentNarrowerThanTheSkinMinimum(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 20.0f, 32.0f);
+    const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5);
+    ASSERT_TRUE(placement.has_value());
+    ExpectUiRectExact(placement.value().content, MakeUiProgressRect(18.0f, 28.0f, 4.0f, 16.0f));
+    ExpectUiRectExact(placement.value().fillReveal, MakeUiProgressRect(18.0f, 28.0f, 2.0f, 16.0f));
+    ExpectUiRectExact(placement.value().fillCanvas, placement.value().content);
+}
+
+void VerifyUiProgressLayoutTests_ClippingChangesVisibilityWithoutChangingTheProgressAmountOrCanvas(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const auto full = PlaceProgress(bounds, bounds, metrics.value(), 0.25);
+    ASSERT_TRUE(full.has_value());
+    const auto clipped = PlaceProgress(bounds, MakeUiProgressRect(40.0f, 24.0f, 60.0f, 12.0f), metrics.value(), 0.25);
+    ASSERT_TRUE(clipped.has_value());
+    ExpectUiRectExact(clipped.value().clip, MakeUiProgressRect(40.0f, 24.0f, 60.0f, 12.0f));
+    ExpectUiRectExact(clipped.value().content, full.value().content);
+    ExpectUiRectExact(clipped.value().fillReveal, full.value().fillReveal);
+    ExpectUiRectExact(clipped.value().fillCanvas, full.value().fillCanvas);
+}
+
+void VerifyUiProgressLayoutTests_ACompletelyDisjointClipProducesValidEmptyVisibility(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const auto placement = PlaceProgress(bounds, MakeUiProgressRect(300.0f, 20.0f, 10.0f, 10.0f), metrics.value(), 0.5);
+    ASSERT_TRUE(placement.has_value());
+    EXPECT_FLOAT_EQ(placement.value().clip.width, 0.0f);
+    EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 92.0f);
+    EXPECT_FLOAT_EQ(placement.value().fillCanvas.width, 92.0f);
+}
+
+void VerifyUiProgressLayoutTests_TinyAndEmptyAreasBoundPaddingWithoutNegativeContent(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    Array<Rect, 2u> areas = Array<Rect, 2u>();
+    areas[0u] = MakeUiProgressRect(10.0f, 20.0f, 4.0f, 3.0f);
+    areas[1u] = MakeUiProgressRect(10.0f, 20.0f, 0.0f, 0.0f);
+    for(in Rect bounds : areas){
+        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5);
+        ASSERT_TRUE(placement.has_value());
+        EXPECT_FLOAT_EQ(placement.value().content.width, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().content.height, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().fillCanvas.width, 0.0f);
+        EXPECT_LE(placement.value().content.x, bounds.x + bounds.width);
+        EXPECT_LE(placement.value().content.y, bounds.y + bounds.height);
+    }
+}
+
+void VerifyUiProgressLayoutTests_PositiveSubnormalAndUnrepresentableRevealEdgesRemainValidEmptyFill(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    Array<f64, 2u> fractions = Array<f64, 2u>();
+    fractions[0u] = bit_cast<f64>(cast<u64>(1u));
+    fractions[1u] = 1.0e-15;
+    for(in f64 fraction : fractions){
+        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), fraction);
+        ASSERT_TRUE(placement.has_value());
+        EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().fillCanvas.width, 0.0f);
+        ExpectUiRectExact(placement.value().content, MakeUiProgressRect(18.0f, 28.0f, 184.0f, 16.0f));
+    }
+}
+
+void VerifyUiProgressLayoutTests_RepresentableFloatSubnormalRevealIsPreservedAtTheOrigin(){
+    ProgressMetrics metrics = ProgressMetrics();
+    metrics.contentSize = MakeUiProgressPoint(1.0f, 1.0f);
+    const Rect bounds = MakeUiProgressRect(0.0f, 0.0f, 1.0f, 1.0f);
+    const f32 leastPositive = bit_cast<f32>(1u);
+    const auto placement = PlaceProgress(bounds, bounds, metrics, cast<f64>(leastPositive));
+    ASSERT_TRUE(placement.has_value());
+    EXPECT_EQ(bit_cast<u32>(placement.value().fillReveal.width), 1u);
+    ExpectUiRectExact(placement.value().fillCanvas, placement.value().fillReveal);
+}
+
+void VerifyUiProgressLayoutTests_ZeroIntrinsicMetricsAndEmptyBoundsAreValid(){
+    UiSkinRegion region = UiSkinRegion();
+    region.rectangle.width = 1u;
+    region.rectangle.height = 1u;
+    ProgressOptions options = ProgressOptions();
+    options.height = 0.0f;
+    const auto metrics = MeasureProgress(options, ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    ExpectUiProgressPointExact(metrics.value().contentSize, Point());
+    const auto placement = PlaceProgress(Rect(), Rect(), metrics.value(), 1.0);
+    ASSERT_TRUE(placement.has_value());
+    ExpectUiRectExact(placement.value().content, Rect());
+    ExpectUiRectExact(placement.value().fillReveal, Rect());
+    ExpectUiRectExact(placement.value().fillCanvas, Rect());
+}
+
+void VerifyUiProgressLayoutTests_InvalidOptionsPaddingAndTintsRejectMetrics(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    for(u32 field = 0u; field < 14u; ++field){
+        ProgressOptions options = ProgressOptions();
+        ProgressStyle style = ProgressStyle();
+        switch(field){
+        case 0u:
+            options.width.policy = cast<LayoutSizePolicyEnum>(3u);
+            break;
+        case 1u:
+            options.width.value = 0.0f;
+            break;
+        case 2u:
+            options.width.value = -1.0f;
+            break;
+        case 3u:
+            options.width.value = bit_cast<f32>(0x7f800000u);
+            break;
+        case 4u:
+            options.height = -1.0f;
+            break;
+        case 5u:
+            options.height = bit_cast<f32>(0x7fc00000u);
+            break;
+        case 6u:
+            style.padding.left = -1.0f;
+            break;
+        case 7u:
+            style.padding.bottom = bit_cast<f32>(0x7f800000u);
+            break;
+        case 8u:
+            style.trackTint.r = -1.0f;
+            break;
+        case 9u:
+            style.trackTint.a = 1.01f;
+            break;
+        case 10u:
+            style.fillTint.g = bit_cast<f32>(0x7fc00000u);
+            break;
+        case 11u:
+            style.fillTint.a = -0.01f;
+            break;
+        case 12u:
+            style.fillTint.b = bit_cast<f32>(0x7f800000u);
+            break;
+        default:
+            style.trackTint.a = bit_cast<f32>(0x7fc00000u);
+            break;
+        }
+        EXPECT_FALSE(MeasureProgress(options, style, region, region, 1.0f).has_value());
+    }
+}
+
+void VerifyUiProgressLayoutTests_InvalidRegionMetricsSlicesModesAndDensityRejectMetrics(){
+    const UiSkinRegion valid = MakeUiProgressNineSliceRegion();
+    for(u32 field = 0u; field < 17u; ++field){
+        UiSkinRegion track = valid;
+        UiSkinRegion fill = valid;
+        f32 density = 1.0f;
+        switch(field){
+        case 0u:
+            density = 0.0f;
+            break;
+        case 1u:
+            density = -1.0f;
+            break;
+        case 2u:
+            density = bit_cast<f32>(0x7f800000u);
+            break;
+        case 3u:
+            density = bit_cast<f32>(0x7fc00000u);
+            break;
+        case 4u:
+            track.minimumWidth = -1.0f;
+            break;
+        case 5u:
+            fill.minimumHeight = bit_cast<f32>(0x7fc00000u);
+            break;
+        case 6u:
+            track.padding.left = -1.0f;
+            break;
+        case 7u:
+            fill.padding.right = bit_cast<f32>(0x7f800000u);
+            break;
+        case 8u:
+            track.rectangle.width = 0u;
+            break;
+        case 9u:
+            fill.rectangle.height = 0u;
+            break;
+        case 10u:
+            track.sliceInsets.left = 25u;
+            break;
+        case 11u:
+            fill.sliceInsets.bottom = 25u;
+            break;
+        case 12u:
+            track.drawMode = cast<UiSkinDrawModeEnum>(2u);
+            break;
+        case 13u:
+            fill.drawMode = UiSkinDrawMode::Sprite;
+            break;
+        case 14u:
+            fill.padding.left = f32.max;
+            fill.padding.right = f32.max;
+            break;
+        case 15u:
+            fill.padding.top = f32.max;
+            fill.padding.bottom = f32.max;
+            break;
+        default:
+            fill.minimumWidth = bit_cast<f32>(0x7f800000u);
+            break;
+        }
+        EXPECT_FALSE(MeasureProgress(ProgressOptions(), ProgressStyle(), track, fill, density).has_value());
+    }
+}
+
+void VerifyUiProgressLayoutTests_OverflowingLogicalSumsAndDensityScaledBordersRejectMetrics(){
+    const UiSkinRegion valid = MakeUiProgressNineSliceRegion();
+    for(u32 field = 0u; field < 4u; ++field){
+        UiSkinRegion region = valid;
+        ProgressStyle style = ProgressStyle();
+        f32 density = 1.0f;
+        switch(field){
+        case 0u:
+            style.padding.left = f32.max;
+            style.padding.right = f32.max;
+            break;
+        case 1u:
+            region.minimumWidth = f32.max;
+            region.padding.left = f32.max;
+            break;
+        case 2u:
+            density = bit_cast<f32>(1u);
+            break;
+        default:
+            region.rectangle.width = u32.max;
+            region.sliceInsets.left = u32.max;
+            region.sliceInsets.right = u32.max;
+            break;
+        }
+        EXPECT_FALSE(MeasureProgress(ProgressOptions(), style, region, region, density).has_value());
+    }
+}
+
+void VerifyUiProgressLayoutTests_InvalidProspectiveRectanglesMetricsAndFractionsRejectPlacement(){
+    const UiSkinRegion region = MakeUiProgressNineSliceRegion();
+    const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect normal = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    for(u32 field = 0u; field < 13u; ++field){
+        Rect bounds = normal;
+        Rect clip = normal;
+        ProgressMetrics invalid = metrics.value();
+        f64 fraction = 0.5;
+        switch(field){
+        case 0u:
+            bounds.x = bit_cast<f32>(0x7fc00000u);
+            break;
+        case 1u:
+            bounds.width = -1.0f;
+            break;
+        case 2u:
+            bounds.height = bit_cast<f32>(0x7f800000u);
+            break;
+        case 3u:
+            clip.y = bit_cast<f32>(0x7f800000u);
+            break;
+        case 4u:
+            clip.height = -1.0f;
+            break;
+        case 5u:
+            invalid.padding.top = -1.0f;
+            break;
+        case 6u:
+            invalid.fillMinimum.x = -1.0f;
+            break;
+        case 7u:
+            invalid.fillMinimum.y = bit_cast<f32>(0x7fc00000u);
+            break;
+        case 8u:
+            invalid.contentSize.x = 1.0f;
+            break;
+        case 9u:
+            invalid.contentSize.y = bit_cast<f32>(0x7f800000u);
+            break;
+        case 10u:
+            fraction = bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
+            break;
+        case 11u:
+            fraction = bit_cast<f64>(cast<u64>(0xfff0000000000000u));
+            break;
+        default:
+            fraction = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
+            break;
+        }
+        EXPECT_FALSE(PlaceProgress(bounds, clip, invalid, fraction).has_value());
+    }
+}
+
+void VerifyUiProgressLayoutTests_FiniteExtremeCoordinatesRetainValidExactFullEndpoints(){
+    ProgressMetrics metrics = ProgressMetrics();
+    metrics.contentSize = MakeUiProgressPoint(f32.max, 32.0f);
+    const Rect bounds = MakeUiProgressRect(-f32.max, 0.0f, f32.max, 32.0f);
+    auto placement = PlaceProgress(bounds, bounds, metrics, 1.0);
+    ASSERT_TRUE(placement.has_value());
+    ExpectUiRectExact(placement.value().content, bounds);
+    ExpectUiRectExact(placement.value().fillReveal, bounds);
+    ExpectUiRectExact(placement.value().fillCanvas, bounds);
+    placement = PlaceProgress(bounds, bounds, metrics, 0.5);
+    ASSERT_TRUE(placement.has_value());
+    EXPECT_FLOAT_EQ(placement.value().fillReveal.width, f32.max * 0.5f);
+    EXPECT_FLOAT_EQ(placement.value().fillReveal.x, -f32.max);
+}
+
+void VerifyUiProgressLayoutTests_OverflowingAndCollapsedPositiveInputEndpointsRejectPlacement(){
+    ProgressMetrics metrics = ProgressMetrics();
+    metrics.contentSize = MakeUiProgressPoint(1.0f, 1.0f);
+    const Rect normal = MakeUiProgressRect(0.0f, 0.0f, 20.0f, 10.0f);
+    Array<Rect, 3u> invalidRects = Array<Rect, 3u>();
+    invalidRects[0u] = MakeUiProgressRect(f32.max, 0.0f, f32.max, 1.0f);
+    invalidRects[1u] = MakeUiProgressRect(f32.max, 0.0f, 1.0f, 1.0f);
+    invalidRects[2u] = MakeUiProgressRect(0.0f, f32.max, 1.0f, 1.0f);
+    for(in Rect invalid : invalidRects){
+        EXPECT_FALSE(PlaceProgress(invalid, normal, metrics, 0.5).has_value());
+        EXPECT_FALSE(PlaceProgress(normal, invalid, metrics, 0.5).has_value());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiRadioGroupBehaviorTests_DisabledCheckedChoiceIsPreservedWhileCursorMovesForward(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    source.rows[1u].enabled = false;
+    source.rows[2u].enabled = false;
+    RadioGroupState state = RadioGroupState();
+    state.select(2u);
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(state.selectedKey(), 2u);
+    EXPECT_EQ(state.cursorKey(), 4u);
+    EXPECT_FALSE(result.selectionChanged);
+    EXPECT_FALSE(choices.value().rows[1u].enabled);
+}
+
+void VerifyUiRadioGroupBehaviorTests_RevisionReorderPreservesStableKeys(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    state.select(3u);
+    RadioGroupResult result = RadioGroupResult();
+    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    const RadioGroupChoice swapped = source.rows[0u];
+    source.rows[0u] = source.rows[2u];
+    source.rows[2u] = swapped;
+    ++source.revisionValue;
+    result = RadioGroupResult();
+    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(state.selectedKey(), 3u);
+    EXPECT_EQ(state.cursorKey(), 3u);
+    EXPECT_FALSE(result.selectionChanged);
+    EXPECT_EQ(choices.value().rows[0u].key, 3u);
+}
+
+void VerifyUiRadioGroupBehaviorTests_RemovedSelectionAndSourceReplacementClearKnownChoices(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    state.select(4u);
+    RadioGroupResult result = RadioGroupResult();
+    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    source.count = 3u;
+    ++source.revisionValue;
+    result = RadioGroupResult();
+    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.cursorKey(), 1u);
+    EXPECT_TRUE(result.selectionChanged);
+    state.select(2u);
+    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    ++source.generation;
+    result = RadioGroupResult();
+    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.cursorKey(), 1u);
+    EXPECT_TRUE(result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBehaviorTests_ResetAllowsExplicitChoiceOnANewFirstBinding(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    RadioGroupResult result = RadioGroupResult();
+    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    state.reset();
+    state.select(3u);
+    ++source.generation;
+    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(state.selectedKey(), 3u);
+}
+
+void VerifyUiRadioGroupBehaviorTests_EmptyAndAllDisabledSourcesAreValidWithoutAutomaticSelection(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    RadioGroupResult result = RadioGroupResult();
+    source.count = 0u;
+    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_TRUE(result.valid);
+    EXPECT_EQ(state.selectedKey(), 0u);
+    EXPECT_EQ(state.cursorKey(), 0u);
+    source.count = 4u;
+    for(usize index = 0u; index < 4u; ++index)
+        source.rows[index].enabled = false;
+    ++source.revisionValue;
+    state.select(2u);
+    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(state.selectedKey(), 2u);
+    EXPECT_EQ(state.cursorKey(), 0u);
+    result = RadioGroupResult();
+    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Submit), state, result));
+    EXPECT_FALSE(result.activated);
+    EXPECT_FALSE(result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBehaviorTests_AllFourArrowsWrapAndSkipDisabledChoices(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    source.rows[1u].enabled = false;
+    source.rows[2u].enabled = false;
+    RadioGroupState state = RadioGroupState();
+    state.select(1u);
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    const u64 input = state.inputGeneration();
+    Array<ControlActionKindEnum, 4u> kinds = Array<ControlActionKindEnum, 4u>();
+    kinds[0u] = ControlActionKind::Up;
+    kinds[1u] = ControlActionKind::Right;
+    kinds[2u] = ControlActionKind::Left;
+    kinds[3u] = ControlActionKind::Down;
+    Array<u64, 4u> expected = Array<u64, 4u>();
+    expected[0u] = 4u;
+    expected[1u] = 1u;
+    expected[2u] = 4u;
+    expected[3u] = 1u;
+    for(usize index = 0u; index < 4u; ++index){
+        result = RadioGroupResult();
+        ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, kinds[index]), state, result));
+        EXPECT_EQ(state.selectedKey(), expected[index]);
+        EXPECT_EQ(state.cursorKey(), expected[index]);
+        EXPECT_EQ(state.inputGeneration(), input);
+        EXPECT_TRUE(result.selectionChanged);
+        EXPECT_FALSE(result.activated);
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_HomeEndChooseEnabledEndpoints(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    source.rows[0u].enabled = false;
+    source.rows[3u].enabled = false;
+    RadioGroupState state = RadioGroupState();
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::End), state, result));
+    EXPECT_EQ(state.selectedKey(), 3u);
+    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Home), state, result));
+    EXPECT_EQ(state.selectedKey(), 2u);
+    EXPECT_FALSE(result.activated);
+}
+
+void VerifyUiRadioGroupBehaviorTests_IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    source.count = 1u;
+    RadioGroupState state = RadioGroupState();
+    state.select(1u);
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    const RadioGroupSnapshot before = state.snapshot();
+    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::PageUp), state, result));
+    EXPECT_EQ(state.selectedKey(), 1u);
+    EXPECT_EQ(state.inputGeneration(), before.inputGeneration);
+    EXPECT_EQ(state.revision(), before.revision + 2u);
+    EXPECT_FALSE(result.selectionChanged);
+    EXPECT_FALSE(result.activated);
+}
+
+void VerifyUiRadioGroupBehaviorTests_RejectedActionsPreserveStateAndResult(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    source.rows[1u].enabled = false;
+    RadioGroupState state = RadioGroupState();
+    state.select(1u);
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    const RadioGroupSnapshot before = state.snapshot();
+    const RadioGroupResult expected = MakeUiRadioGroupResult(true, true, true, true);
+    result = expected;
+    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupActionKey(state, ControlActionKind::Activate, 2u), state, result));
+    EXPECT_TRUE(state.matches(before));
+    ExpectUiRadioGroupResult(result, expected);
+    RadioGroupOptions disabled = RadioGroupOptions();
+    disabled.enabled = false;
+    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), disabled, MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
+    EXPECT_TRUE(state.matches(before));
+    ExpectUiRadioGroupResult(result, expected);
+    ControlAction stale = MakeUiRadioGroupAction(state, ControlActionKind::Down);
+    ++stale.control.contentRevision;
+    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), stale, state, result));
+    EXPECT_TRUE(state.matches(before));
+    ExpectUiRadioGroupResult(result, expected);
+}
+
+void VerifyUiRadioGroupBehaviorTests_IdenticalPublicSelectionRejectsCopiedOlderInput(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    state.select(2u);
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    const ControlAction action = MakeUiRadioGroupAction(state, ControlActionKind::Down);
+    state.select(2u);
+    const RadioGroupSnapshot before = state.snapshot();
+    result = RadioGroupResult();
+    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), action, state, result));
+    EXPECT_TRUE(state.matches(before));
+    EXPECT_FALSE(result.valid);
+}
+
+void VerifyUiRadioGroupBehaviorTests_FullBoundIsAcceptedAndOversizedSourcePreservesStateAndDiagnostics(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    source.count = s_RadioGroupMaxChoices;
+    RadioGroupState state = RadioGroupState();
+    RadioGroupResult result = RadioGroupResult();
+    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ASSERT_TRUE(choices.has_value());
+    EXPECT_EQ(choices.value().count, s_RadioGroupMaxChoices);
+    const RadioGroupSnapshot before = state.snapshot();
+    const RadioGroupResult expectedResult = result;
+    source.count = s_RadioGroupMaxChoices + 1u;
+    source.keyCalls = 0u;
+    EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+    EXPECT_TRUE(state.matches(before));
+    ExpectUiRadioGroupResult(result, expectedResult);
+    EXPECT_EQ(source.keyCalls, 0u);
+}
+
+void VerifyUiRadioGroupBehaviorTests_MalformedKeysAndLookupsRejectAtomically(){
+    for(u32 mode = 0u; mode < 6u; ++mode){
+        UiRadioChoiceSource source = UiRadioChoiceSource();
+        RadioGroupState state = RadioGroupState();
+        state.select(3u);
+        RadioGroupResult result = MakeUiRadioGroupResult(true, true, true, true);
+        const RadioGroupSnapshot before = state.snapshot();
+        const RadioGroupResult expectedResult = result;
+        switch(mode){
+        case 0u:
+            source.rows[0u].key = 0u;
+            break;
+        case 1u:
+            source.rows[1u].key = source.rows[0u].key;
+            break;
+        case 2u:
+            source.badLookup = true;
+            break;
+        case 3u:
+            source.missingLookup = true;
+            break;
+        case 4u:
+            source.generation = 0u;
+            break;
+        default:
+            source.revisionValue = 0u;
+            break;
+        }
+        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_TRUE(state.matches(before));
+        ExpectUiRadioGroupResult(result, expectedResult);
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult(){
+    Array<UiRadioCallbackPhaseEnum, 6u> phases = Array<UiRadioCallbackPhaseEnum, 6u>();
+    phases[0u] = UiRadioCallbackPhase::Generation;
+    phases[1u] = UiRadioCallbackPhase::Revision;
+    phases[2u] = UiRadioCallbackPhase::Count;
+    phases[3u] = UiRadioCallbackPhase::Key;
+    phases[4u] = UiRadioCallbackPhase::Lookup;
+    phases[5u] = UiRadioCallbackPhase::Enabled;
+    for(in UiRadioCallbackPhaseEnum phase : phases){
+        UiRadioChoiceSource source = UiRadioChoiceSource();
+        RadioGroupState state = RadioGroupState();
+        state.select(2u);
+        RadioGroupResult result = RadioGroupResult();
+        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        const RadioGroupSnapshot before = state.snapshot();
+        const RadioGroupResult expectedResult = result;
+        source.bindState(state);
+        source.phase = phase;
+        source.mutation = UiRadioCallbackMutation::SelectAba;
+        source.armed = true;
+        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_EQ(state.selectedKey(), before.selectedKey);
+        EXPECT_EQ(state.cursorKey(), before.cursorKey);
+        EXPECT_EQ(state.revision(), before.revision + 2u);
+        EXPECT_NE(state.inputGeneration(), before.inputGeneration);
+        ExpectUiRadioGroupResult(result, expectedResult);
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_CallbackIdenticalSelectionAndResetRemainAuthoritativeAfterRejection(){
+    Array<UiRadioCallbackMutationEnum, 2u> mutations = Array<UiRadioCallbackMutationEnum, 2u>();
+    mutations[0u] = UiRadioCallbackMutation::SelectIdentical;
+    mutations[1u] = UiRadioCallbackMutation::Reset;
+    for(in UiRadioCallbackMutationEnum mutation : mutations){
+        UiRadioChoiceSource source = UiRadioChoiceSource();
+        RadioGroupState state = RadioGroupState();
+        state.select(2u);
+        RadioGroupResult result = RadioGroupResult();
+        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        const RadioGroupSnapshot before = state.snapshot();
+        source.bindState(state);
+        source.phase = UiRadioCallbackPhase::Lookup;
+        source.mutation = mutation;
+        source.armed = true;
+        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_EQ(state.revision(), before.revision + 1u);
+        EXPECT_NE(state.inputGeneration(), before.inputGeneration);
+        u64 expectedKey = 2u;
+        if(mutation == UiRadioCallbackMutation::Reset)
+            expectedKey = 0u;
+        EXPECT_EQ(state.selectedKey(), expectedKey);
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_ReentrantBehaviorRejectsTheOuterReconciliationAndLeavesStateUsable(){
+    Array<UiRadioCallbackMutationEnum, 2u> mutations = Array<UiRadioCallbackMutationEnum, 2u>();
+    mutations[0u] = UiRadioCallbackMutation::Reconcile;
+    mutations[1u] = UiRadioCallbackMutation::Apply;
+    for(in UiRadioCallbackMutationEnum mutation : mutations){
+        UiRadioChoiceSource source = UiRadioChoiceSource();
+        RadioGroupState state = RadioGroupState();
+        RadioGroupResult result = RadioGroupResult();
+        auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+        ASSERT_TRUE(choices.has_value());
+        const RadioGroupSnapshot before = state.snapshot();
+        const RadioGroupResult expectedResult = result;
+        source.bindState(state);
+        source.borrowedChoices = choices.value();
+        source.phase = UiRadioCallbackPhase::Enabled;
+        source.mutation = mutation;
+        source.armed = true;
+        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_FALSE(source.nestedSucceeded);
+        EXPECT_TRUE(state.matches(before));
+        ExpectUiRadioGroupResult(result, expectedResult);
+        choices = ReconcileUiRadioGroupChoices(source, state, result);
+        ASSERT_TRUE(choices.has_value());
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState(){
+    Array<UiRadioCallbackMutationEnum, 3u> mutations = Array<UiRadioCallbackMutationEnum, 3u>();
+    mutations[0u] = UiRadioCallbackMutation::SourceRevision;
+    mutations[1u] = UiRadioCallbackMutation::SourceGeneration;
+    mutations[2u] = UiRadioCallbackMutation::SourceCount;
+    for(in UiRadioCallbackMutationEnum mutation : mutations){
+        UiRadioChoiceSource source = UiRadioChoiceSource();
+        RadioGroupState state = RadioGroupState();
+        RadioGroupResult result = RadioGroupResult();
+        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        const RadioGroupSnapshot before = state.snapshot();
+        const RadioGroupResult expectedResult = result;
+        source.phase = UiRadioCallbackPhase::Enabled;
+        source.mutation = mutation;
+        source.armed = true;
+        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_TRUE(state.matches(before));
+        ExpectUiRadioGroupResult(result, expectedResult);
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_FinalOneShotMetadataMutationIsRejectedBeforeCommit(){
+    Array<UiRadioCallbackMutationEnum, 2u> mutations = Array<UiRadioCallbackMutationEnum, 2u>();
+    mutations[0u] = UiRadioCallbackMutation::SourceRevision;
+    mutations[1u] = UiRadioCallbackMutation::SourceGeneration;
+    for(in UiRadioCallbackMutationEnum mutation : mutations){
+        UiRadioChoiceSource source = UiRadioChoiceSource();
+        RadioGroupState state = RadioGroupState();
+        RadioGroupResult result = RadioGroupResult();
+        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        const RadioGroupSnapshot before = state.snapshot();
+        const RadioGroupResult expectedResult = result;
+        source.countCalls = 0u;
+        source.phase = UiRadioCallbackPhase::Count;
+        source.mutation = mutation;
+        source.triggerCount = cast<u32>(source.count) * 3u + 3u;
+        source.armed = true;
+        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_FALSE(source.armed);
+        EXPECT_TRUE(state.matches(before));
+        ExpectUiRadioGroupResult(result, expectedResult);
+    }
+}
+
+void VerifyUiRadioGroupBehaviorTests_FailedBorrowedGuardStopsAllFurtherSourceCallbacks(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    RadioGroupResult result = RadioGroupResult();
+    ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+    const RadioGroupSnapshot before = state.snapshot();
+    const RadioGroupResult expectedResult = result;
+    UiRadioReconcileGate gate = UiRadioReconcileGate();
+    source.bindGate(gate);
+    source.phase = UiRadioCallbackPhase::Enabled;
+    source.mutation = UiRadioCallbackMutation::GuardFailure;
+    source.armed = true;
+    EXPECT_FALSE(ReconcileUiRadioGroupChoicesGuarded(source, gate, state, result).has_value());
+    EXPECT_EQ(source.callbackCalls, source.callbacksAtMutation);
+    EXPECT_TRUE(state.matches(before));
+    ExpectUiRadioGroupResult(result, expectedResult);
+}
+
+void VerifyUiRadioGroupBehaviorTests_BorrowedGuardMutationIsRejectedBeforeTheFirstSourceCall(){
+    UiRadioChoiceSource source = UiRadioChoiceSource();
+    RadioGroupState state = RadioGroupState();
+    state.select(2u);
+    const RadioGroupSnapshot before = state.snapshot();
+    RadioGroupResult result = RadioGroupResult();
+    UiRadioReconcileGate gate = UiRadioReconcileGate();
+    gate.bindState(state);
+    gate.mutateState = true;
+    EXPECT_FALSE(ReconcileUiRadioGroupChoicesGuarded(source, gate, state, result).has_value());
+    EXPECT_EQ(source.callbackCalls, 0u);
+    EXPECT_EQ(state.selectedKey(), 2u);
+    EXPECT_EQ(state.revision(), before.revision + 1u);
+    EXPECT_FALSE(state.matches(before));
+    EXPECT_FALSE(result.valid);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiRadioGroupBuilderTests_TemporaryLabelsAreOwnedBeforeTheNextSourceCallback(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const DrawSnapshot actual = self.m_paint.freeze();
+    self.verifyTemporaryLabelsOwned(actual);
+}
+
+void VerifyUiRadioGroupBuilderTests_SelectionCommitsOnReleaseAndNotOnPress(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point point = self.choicePoint(20u);
+    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 20u);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    EXPECT_TRUE(self.m_result.activated);
+}
+
+void VerifyUiRadioGroupBuilderTests_ReleaseOutsideAndDisabledChoiceCannotActivate(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.drag(self.choicePoint(20u), MakeUiProgressPoint(700.0f, 500.0f));
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.activated);
+    self.click(self.choicePoint(30u));
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    EXPECT_FALSE(self.m_result.activated);
+}
+
+void VerifyUiRadioGroupBuilderTests_HorizontalAndVerticalKeysShareTheHostAndSkipDisabledChoices(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(Key::Tab);
+    const u64 token = self.m_state.inputGeneration();
+    self.press(Key::Right);
+    self.press(Key::Down);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 40u);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_EQ(self.m_state.inputGeneration(), token);
+    self.press(Key::End);
+    self.press(Key::Right);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    self.press(Key::Left);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_EQ(self.m_state.selectedKey(), 50u);
+    self.press(Key::Home);
+    self.press(Key::Up);
+    ASSERT_TRUE(self.accept(5u));
+    EXPECT_EQ(self.m_state.selectedKey(), 50u);
+}
+
+void VerifyUiRadioGroupBuilderTests_HeldSubmitWaitsForReleaseWhileAnUnchangedChoiceStaysSelected(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(Key::Tab);
+    InputEvent event = InputEvent();
+    event.type = InputEventType::KeyDown;
+    event.key = Key::Enter;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    event.repeat = true;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_FALSE(self.m_result.activated);
+    event.type = InputEventType::KeyUp;
+    event.repeat = false;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_TRUE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    self.press(Key::Space);
+    ASSERT_TRUE(self.accept(5u));
+    EXPECT_TRUE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point point = self.choicePoint(20u);
+    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_FALSE(self.m_result.activated);
+    self.press(Key::Escape);
+    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    self.press(Key::Tab);
+    ASSERT_EQ(self.m_context.input().focus(), self.host());
+    EXPECT_TRUE(self.send(MakeUiRadioKeyEvent(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_FALSE(self.m_result.activated);
+    self.press(Key::Escape);
+    EXPECT_TRUE(self.send(MakeUiRadioKeyEvent(InputEventType::KeyUp, Key::Enter)).commandConsumed);
+    ASSERT_TRUE(self.accept(5u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    self.press(Key::Tab);
+    ASSERT_EQ(self.m_context.input().focus(), self.host());
+    self.press(Key::Enter);
+    ASSERT_TRUE(self.accept(6u));
+    EXPECT_TRUE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBuilderTests_SelectedDisabledChoiceKeepsItsCheckedFrameAndMark(mut UiRadioGroupBuilderTests self){
+    self.m_state.select(30u);
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_EQ(self.m_state.selectedKey(), 30u);
+    EXPECT_EQ(self.m_state.cursorKey(), 40u);
+    const WidgetId part = RequireUiWidgetPartId(RequireUiWidgetId(self.host(), "choices"), 30u);
+    const auto partTarget = self.findTarget(part);
+    ASSERT_TRUE(partTarget.has_value());
+    EXPECT_FALSE(partTarget.value().enabled);
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_EQ(self.regionQuads(snapshot, s_UiInputNameRadioChecked), 1u);
+    EXPECT_EQ(self.regionQuads(snapshot, s_UiInputNameRadioMark), 1u);
+}
+
+void VerifyUiRadioGroupBuilderTests_WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(Key::Tab);
+    self.press(Key::Right);
+    RadioGroupOptions options = RadioGroupOptions();
+    options.enabled = false;
+    ASSERT_TRUE(self.accept(2u, options));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.activated);
+    const auto hostTarget = self.findTarget(self.host());
+    ASSERT_TRUE(hostTarget.has_value());
+    EXPECT_FALSE(hostTarget.value().enabled);
+    EXPECT_FALSE(hostTarget.value().focusable);
+    EXPECT_FALSE(self.hasTarget(RequireUiWidgetPartId(RequireUiWidgetId(self.host(), "choices"), 10u)));
+    const Point point = self.choicePoint(10u);
+    EXPECT_EQ(self.m_context.input().hitTest(point), RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiRadioCasePanelKey));
+    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u, options));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBuilderTests_EmptyAndAllDisabledSourcesAreValidWithoutATabStop(mut UiRadioGroupBuilderTests self){
+    self.m_source.m_count = 0u;
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_EQ(self.m_state.placement().count, 0u);
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    const auto emptyHost = self.findTarget(self.host());
+    ASSERT_TRUE(emptyHost.has_value());
+    EXPECT_FALSE(emptyHost.value().focusable);
+    self.m_source.m_count = 5u;
+    self.m_source.m_allDisabled = true;
+    ++self.m_source.m_contentRevision;
+    self.m_state.select(30u);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 30u);
+    EXPECT_EQ(self.m_state.cursorKey(), 0u);
+    const auto disabledHost = self.findTarget(self.host());
+    ASSERT_TRUE(disabledHost.has_value());
+    EXPECT_FALSE(disabledHost.value().enabled);
+    EXPECT_FALSE(self.m_result.activated);
+}
+
+void VerifyUiRadioGroupBuilderTests_SixtyFourChoicesSucceedAndTheSixtyFifthRejectsAtomically(mut UiRadioGroupBuilderTests self){
+    self.m_source.m_count = 64u;
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_EQ(self.m_state.placement().count, 64u);
+    const UiRadioAcceptedInputState displayed = self.accepted();
+    const RadioGroupSnapshot saved = self.m_state.snapshot();
+    self.m_source.resetCounters();
+    self.m_source.m_count = 65u;
+    ++self.m_source.m_contentRevision;
+    EXPECT_FALSE(self.declare(2u));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_TRUE(self.m_state.matches(saved));
+    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiRadioGroupBuilderTests_DuplicateStableKeysRejectBeforeAnyLabelBorrow(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const UiRadioAcceptedInputState displayed = self.accepted();
+    const RadioGroupSnapshot saved = self.m_state.snapshot();
+    self.m_source.resetCounters();
+    self.m_source.m_duplicate = true;
+    ++self.m_source.m_contentRevision;
+    EXPECT_FALSE(self.declare(2u));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_TRUE(self.m_state.matches(saved));
+    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiRadioGroupBuilderTests_SourceRevisionFencesQueuedKeysAndReorderKeepsStableSelection(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(Key::Tab);
+    self.press(Key::Right);
+    self.m_source.m_reverse = true;
+    ++self.m_source.m_contentRevision;
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    EXPECT_EQ(self.m_state.placement().rows[4u].key, 10u);
+    self.press(Key::Right);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 50u);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBuilderTests_RemovalAndKnownSourceReplacementClearTheCommittedSelection(mut UiRadioGroupBuilderTests self){
+    self.m_state.select(20u);
+    ASSERT_TRUE(self.accept(1u));
+    self.m_source.m_removed = 20u;
+    ++self.m_source.m_contentRevision;
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    self.m_state.select(40u);
+    ++self.m_source.m_generation;
+    ++self.m_source.m_contentRevision;
+    self.m_source.m_removed = 0u;
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+}
+
+void VerifyUiRadioGroupBuilderTests_PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const auto initialHost = self.findTarget(self.host());
+    ASSERT_TRUE(initialHost.has_value());
+    const Rect oldBounds = initialHost.value().rectangle;
+    ASSERT_TRUE(self.prepare(2u, RadioGroupOptions(), MakeUiProgressRect(80.0f, 40.0f, 420.0f, 360.0f)));
+    const auto preparedHost = self.findTarget(self.host());
+    ASSERT_TRUE(preparedHost.has_value());
+    ExpectUiRect(preparedHost.value().rectangle, oldBounds);
+    EXPECT_NE(self.m_state.placement().bounds.x, oldBounds.x);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    const auto committedHost = self.findTarget(self.host());
+    ASSERT_TRUE(committedHost.has_value());
+    ExpectUiRect(committedHost.value().rectangle, self.m_state.placement().bounds);
+}
+
+void VerifyUiRadioGroupBuilderTests_DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds(mut UiRadioGroupBuilderTests self){
+    ASSERT_TRUE(self.declare(1u));
+    self.m_builder.radioGroupStyle().indicatorExtent = 40.0f;
+    self.m_builder.style().fontSize = 28.0f;
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const auto row = self.findChoice(10u);
+    ASSERT_TRUE(row.has_value());
+    EXPECT_FLOAT_EQ(row.value().indicator.width, 24.0f);
+    EXPECT_FLOAT_EQ(row.value().rectangle.height, 24.0f);
+}
+
+void VerifyUiRadioGroupBuilderTests_InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation(mut UiRadioGroupBuilderTests self){
+    const RadioGroupSnapshot saved = self.m_state.snapshot();
+    RadioGroupOptions options = RadioGroupOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = -1.0f;
+    EXPECT_FALSE(self.declare(1u, options));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_TRUE(self.m_state.matches(saved));
+    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, CallerMutationCannotChangeDeferredProgressGeometryStyleOrResolvedNames, VerifyUiProgressBuilderTests_CallerMutationCannotChangeDeferredProgressGeometryStyleOrResolvedNames)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint, VerifyUiProgressBuilderTests_ExplicitFallbackRegionsResolveBeforeDeferredPaint)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry, VerifyUiProgressBuilderTests_FiniteFractionsClampAtExactEmptyAndFullGeometry)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressingBothCaps, VerifyUiProgressBuilderTests_TinyFillClipsNaturalBorderTexelsWithoutCompressingBothCaps)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFill, VerifyUiProgressBuilderTests_SubresolutionPositiveFractionRemainsAValidEmptyFill)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreRestored, VerifyUiProgressBuilderTests_ExternalClipConstrainsPaintAndBothNestedClipsAreRestored)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, InvalidFractionLeavesTheAcceptedTargetsAvailable, VerifyUiProgressBuilderTests_InvalidFractionLeavesTheAcceptedTargetsAvailable)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, MissingPreferredAndFallbackRegionsRejectTheCandidate, VerifyUiProgressBuilderTests_MissingPreferredAndFallbackRegionsRejectTheCandidate)
+
+NWB_ADHD_GTEST(UiProgressLayoutTests, LogicalRegionMinimumsCanExceedSliceBordersWithoutDensityScaling, VerifyUiProgressLayoutTests_LogicalRegionMinimumsCanExceedSliceBordersWithoutDensityScaling)
+NWB_ADHD_GTEST(UiProgressLayoutTests, FillMetadataPaddingDoesNotInsetTheProgressAmountTwice, VerifyUiProgressLayoutTests_FillMetadataPaddingDoesNotInsetTheProgressAmountTwice)
+NWB_ADHD_GTEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints, VerifyUiProgressLayoutTests_ZeroSkipsFillAndFullCopiesTheExactContentEndpoints)
+NWB_ADHD_GTEST(UiProgressLayoutTests, FiniteFractionsOutsideTheUnitIntervalClampVisually, VerifyUiProgressLayoutTests_FiniteFractionsOutsideTheUnitIntervalClampVisually)
+NWB_ADHD_GTEST(UiProgressLayoutTests, SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanvas, VerifyUiProgressLayoutTests_SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanvas)
+NWB_ADHD_GTEST(UiProgressLayoutTests, AMinimumCanvasNeverExtendsPastContentNarrowerThanTheSkinMinimum, VerifyUiProgressLayoutTests_AMinimumCanvasNeverExtendsPastContentNarrowerThanTheSkinMinimum)
+NWB_ADHD_GTEST(UiProgressLayoutTests, ClippingChangesVisibilityWithoutChangingTheProgressAmountOrCanvas, VerifyUiProgressLayoutTests_ClippingChangesVisibilityWithoutChangingTheProgressAmountOrCanvas)
+NWB_ADHD_GTEST(UiProgressLayoutTests, ACompletelyDisjointClipProducesValidEmptyVisibility, VerifyUiProgressLayoutTests_ACompletelyDisjointClipProducesValidEmptyVisibility)
+NWB_ADHD_GTEST(UiProgressLayoutTests, TinyAndEmptyAreasBoundPaddingWithoutNegativeContent, VerifyUiProgressLayoutTests_TinyAndEmptyAreasBoundPaddingWithoutNegativeContent)
+NWB_ADHD_GTEST(UiProgressLayoutTests, PositiveSubnormalAndUnrepresentableRevealEdgesRemainValidEmptyFill, VerifyUiProgressLayoutTests_PositiveSubnormalAndUnrepresentableRevealEdgesRemainValidEmptyFill)
+NWB_ADHD_GTEST(UiProgressLayoutTests, RepresentableFloatSubnormalRevealIsPreservedAtTheOrigin, VerifyUiProgressLayoutTests_RepresentableFloatSubnormalRevealIsPreservedAtTheOrigin)
+NWB_ADHD_GTEST(UiProgressLayoutTests, ZeroIntrinsicMetricsAndEmptyBoundsAreValid, VerifyUiProgressLayoutTests_ZeroIntrinsicMetricsAndEmptyBoundsAreValid)
+NWB_ADHD_GTEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsRejectMetrics, VerifyUiProgressLayoutTests_InvalidOptionsPaddingAndTintsRejectMetrics)
+NWB_ADHD_GTEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectMetrics, VerifyUiProgressLayoutTests_InvalidRegionMetricsSlicesModesAndDensityRejectMetrics)
+NWB_ADHD_GTEST(UiProgressLayoutTests, OverflowingLogicalSumsAndDensityScaledBordersRejectMetrics, VerifyUiProgressLayoutTests_OverflowingLogicalSumsAndDensityScaledBordersRejectMetrics)
+NWB_ADHD_GTEST(UiProgressLayoutTests, InvalidProspectiveRectanglesMetricsAndFractionsRejectPlacement, VerifyUiProgressLayoutTests_InvalidProspectiveRectanglesMetricsAndFractionsRejectPlacement)
+NWB_ADHD_GTEST(UiProgressLayoutTests, FiniteExtremeCoordinatesRetainValidExactFullEndpoints, VerifyUiProgressLayoutTests_FiniteExtremeCoordinatesRetainValidExactFullEndpoints)
+NWB_ADHD_GTEST(UiProgressLayoutTests, OverflowingAndCollapsedPositiveInputEndpointsRejectPlacement, VerifyUiProgressLayoutTests_OverflowingAndCollapsedPositiveInputEndpointsRejectPlacement)
+
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, DisabledCheckedChoiceIsPreservedWhileCursorMovesForward, VerifyUiRadioGroupBehaviorTests_DisabledCheckedChoiceIsPreservedWhileCursorMovesForward)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, RevisionReorderPreservesStableKeys, VerifyUiRadioGroupBehaviorTests_RevisionReorderPreservesStableKeys)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, RemovedSelectionAndSourceReplacementClearKnownChoices, VerifyUiRadioGroupBehaviorTests_RemovedSelectionAndSourceReplacementClearKnownChoices)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, ResetAllowsExplicitChoiceOnANewFirstBinding, VerifyUiRadioGroupBehaviorTests_ResetAllowsExplicitChoiceOnANewFirstBinding)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, EmptyAndAllDisabledSourcesAreValidWithoutAutomaticSelection, VerifyUiRadioGroupBehaviorTests_EmptyAndAllDisabledSourcesAreValidWithoutAutomaticSelection)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, AllFourArrowsWrapAndSkipDisabledChoices, VerifyUiRadioGroupBehaviorTests_AllFourArrowsWrapAndSkipDisabledChoices)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, HomeEndChooseEnabledEndpoints, VerifyUiRadioGroupBehaviorTests_HomeEndChooseEnabledEndpoints)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput, VerifyUiRadioGroupBehaviorTests_IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, RejectedActionsPreserveStateAndResult, VerifyUiRadioGroupBehaviorTests_RejectedActionsPreserveStateAndResult)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, IdenticalPublicSelectionRejectsCopiedOlderInput, VerifyUiRadioGroupBehaviorTests_IdenticalPublicSelectionRejectsCopiedOlderInput)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, FullBoundIsAcceptedAndOversizedSourcePreservesStateAndDiagnostics, VerifyUiRadioGroupBehaviorTests_FullBoundIsAcceptedAndOversizedSourcePreservesStateAndDiagnostics)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, MalformedKeysAndLookupsRejectAtomically, VerifyUiRadioGroupBehaviorTests_MalformedKeysAndLookupsRejectAtomically)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult, VerifyUiRadioGroupBehaviorTests_EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, CallbackIdenticalSelectionAndResetRemainAuthoritativeAfterRejection, VerifyUiRadioGroupBehaviorTests_CallbackIdenticalSelectionAndResetRemainAuthoritativeAfterRejection)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAndLeavesStateUsable, VerifyUiRadioGroupBehaviorTests_ReentrantBehaviorRejectsTheOuterReconciliationAndLeavesStateUsable)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState, VerifyUiRadioGroupBehaviorTests_SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, FinalOneShotMetadataMutationIsRejectedBeforeCommit, VerifyUiRadioGroupBehaviorTests_FinalOneShotMetadataMutationIsRejectedBeforeCommit)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, FailedBorrowedGuardStopsAllFurtherSourceCallbacks, VerifyUiRadioGroupBehaviorTests_FailedBorrowedGuardStopsAllFurtherSourceCallbacks)
+NWB_ADHD_GTEST(UiRadioGroupBehaviorTests, BorrowedGuardMutationIsRejectedBeforeTheFirstSourceCall, VerifyUiRadioGroupBehaviorTests_BorrowedGuardMutationIsRejectedBeforeTheFirstSourceCall)
+
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallback, VerifyUiRadioGroupBuilderTests_TemporaryLabelsAreOwnedBeforeTheNextSourceCallback)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, SelectionCommitsOnReleaseAndNotOnPress, VerifyUiRadioGroupBuilderTests_SelectionCommitsOnReleaseAndNotOnPress)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, ReleaseOutsideAndDisabledChoiceCannotActivate, VerifyUiRadioGroupBuilderTests_ReleaseOutsideAndDisabledChoiceCannotActivate)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, HorizontalAndVerticalKeysShareTheHostAndSkipDisabledChoices, VerifyUiRadioGroupBuilderTests_HorizontalAndVerticalKeysShareTheHostAndSkipDisabledChoices)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, HeldSubmitWaitsForReleaseWhileAnUnchangedChoiceStaysSelected, VerifyUiRadioGroupBuilderTests_HeldSubmitWaitsForReleaseWhileAnUnchangedChoiceStaysSelected)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission, VerifyUiRadioGroupBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMark, VerifyUiRadioGroupBuilderTests_SelectedDisabledChoiceKeepsItsCheckedFrameAndMark)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation, VerifyUiRadioGroupBuilderTests_WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, EmptyAndAllDisabledSourcesAreValidWithoutATabStop, VerifyUiRadioGroupBuilderTests_EmptyAndAllDisabledSourcesAreValidWithoutATabStop)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, SixtyFourChoicesSucceedAndTheSixtyFifthRejectsAtomically, VerifyUiRadioGroupBuilderTests_SixtyFourChoicesSucceedAndTheSixtyFifthRejectsAtomically)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, DuplicateStableKeysRejectBeforeAnyLabelBorrow, VerifyUiRadioGroupBuilderTests_DuplicateStableKeysRejectBeforeAnyLabelBorrow)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, SourceRevisionFencesQueuedKeysAndReorderKeepsStableSelection, VerifyUiRadioGroupBuilderTests_SourceRevisionFencesQueuedKeysAndReorderKeepsStableSelection)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, RemovalAndKnownSourceReplacementClearTheCommittedSelection, VerifyUiRadioGroupBuilderTests_RemovalAndKnownSourceReplacementClearTheCommittedSelection)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit, VerifyUiRadioGroupBuilderTests_PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds, VerifyUiRadioGroupBuilderTests_DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds)
+NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation, VerifyUiRadioGroupBuilderTests_InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

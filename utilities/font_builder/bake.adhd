@@ -1,0 +1,638 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/asset_writer.adhd>
+#include <utilities/font_builder/atlas_pack.adhd>
+#include <utilities/font_builder/bake_types.adhd>
+#include <utilities/font_builder/font_atlas_packer.adhd>
+#include <utilities/font_builder/font_source.adhd>
+#include <utilities/font_builder/global.adhd>
+#include <utilities/font_builder/sdf_raster.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font_atlas/model.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct BakeOptions{
+    Path source;
+    Path output;
+    u32 ppem = Impl::s_FontAtlasDefaultBakePpem;
+    u32 spread = Impl::s_FontAtlasDefaultSpreadPixels;
+    u32 extent = s_DefaultBakeExtent;
+    u32 maxGroups = Impl::s_FontAtlasMaxGroupCount;
+    b8 outline = false;
+    b8 overwrite = false;
+
+
+public:
+    explicit BakeOptions(Core::Alloc::GlobalArena& arena)noexcept
+        : source(arena)
+        , output(arena)
+    {}
+};
+
+struct RasterGlyph{
+    Impl::FontAtlasGlyph record;
+    Core::Assets::AssetBytes pixels;
+
+
+public:
+    explicit RasterGlyph(Core::Assets::AssetArena& arena)noexcept
+        : pixels(arena)
+    {}
+};
+
+using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
+using MetadataString = ::AString<Core::Alloc::ScratchArena>;
+using Impl::FontAtlasPayload;
+using Impl::FontAtlasGroup;
+using Impl::FontAtlasGlyph;
+using Impl::FontAtlasGroupCompactBounds;
+using Impl::ComputeFontAtlasGroupCompactBounds;
+using Impl::OffsetFontAtlasGroupGlyph;
+using Core::Assets::AssetBytes;
+
+[[nodiscard]] b8 ValidateOptions(const BakeOptions& options);
+// Options must already pass ValidateOptions.
+[[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes);
+[[nodiscard]] b8 PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena);
+[[nodiscard]] b8 WriteOutputs(const BakeOptions& options, Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView ResolveBakeFontAtlasRasterModeText(in FontAtlasRasterMode mode){
+    if(mode == FontAtlasRasterMode::Bitmap)
+        return s_FontAtlasRasterModeBitmap;
+    return s_FontAtlasRasterModeOutline;
+}
+
+void CompactAtlasGroups(mut FontAtlasPayload payload){
+    for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
+        mut FontAtlasGroup group = payload.groups[groupIndex];
+        const FontAtlasGroupCompactBounds bounds = ComputeFontAtlasGroupCompactBounds(
+            payload.glyphs,
+            cast<u32>(groupIndex),
+            group.width,
+            group.height,
+            group.channelCount,
+            payload.guardTexels
+        );
+        if(bounds.unchanged)
+            continue;
+
+        AssetBytes compactPixels(group.pixels.get_allocator().arena());
+        FontAtlasPacker().compactGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
+        for(usize glyphIndex = 0u; glyphIndex < payload.glyphs.size(); ++glyphIndex)
+            OffsetFontAtlasGroupGlyph(cast<u32>(groupIndex), bounds.firstX, bounds.firstY, payload.glyphs[glyphIndex]);
+        group.width = bounds.width;
+        group.height = bounds.height;
+        group.channelCount = bounds.channelCount;
+        group.pixels = compactPixels;
+    }
+}
+
+void BuildFontMetadata(in FontAtlasPayload payload, mut MetadataString outText){
+    outText.assign("font face;\r\n\r\nfont_atlas atlas;\r\natlas.font = face;\r\n");
+    StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);
+    StringAppendFormat(outText, "atlas.spread_pixels = {};\r\n", payload.spreadPixels);
+    StringAppendFormat(outText, "atlas.raster_mode = \"{}\";\r\n", ResolveBakeFontAtlasRasterModeText(payload.rasterMode));
+    StringAppendFormat(outText, "atlas.ascender_units = {:#.9g};\r\n", payload.ascenderUnits);
+    StringAppendFormat(outText, "atlas.descender_units = {:#.9g};\r\n", payload.descenderUnits);
+    StringAppendFormat(outText, "atlas.line_gap_units = {:#.9g};\r\n", payload.lineGapUnits);
+    outText.append("atlas.glyphs = [\r\n");
+    for(in FontAtlasGlyph glyph : payload.glyphs){
+        if(glyph.drawable == 0u){
+            StringAppendFormat(outText, "    {{ \"advance_units\": {:#.9g} }},\r\n", glyph.advanceUnits);
+            continue;
+        }
+        StringAppendFormat(
+            outText,
+            "    {{ \"group\": {}, \"channel\": {}, \"x\": {}, \"y\": {}, \"width\": {}, \"height\": {}, \"plane_left\": {:#.9g}, \"plane_top\": {:#.9g}, \"advance_units\": {:#.9g} }},\r\n",
+            glyph.group,
+            glyph.channel,
+            glyph.x,
+            glyph.y,
+            glyph.width,
+            glyph.height,
+            glyph.planeLeft,
+            glyph.planeTop,
+            glyph.advanceUnits
+        );
+    }
+    outText.append("];\r\n\r\nasset_bunch bunch = [face, atlas];\r\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/asset.adhd.h>
+#include <impl/assets_font/prepared_source.adhd.h>
+#include <impl/assets_font_atlas/asset.adhd.h>
+
+#include <core/common/log.h>
+
+#include <global/diagnostics.h>
+#include <global/filesystem/file_staging.h>
+#include <global/sha256.h>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_MODULE_H
+#include FT_SYSTEM_H
+#include FT_DRIVER_H
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_font_builder_bake{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(static_cast<u8>(StagedFilePairFailureStage::StagePrimary) == 8u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::StageSecondary) == 9u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::VerifyPrimary) == 10u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::VerifySecondary) == 11u);
+
+class FreeTypeMemoryFace final : NoCopy{
+private:
+    [[nodiscard]] static void* Allocate(FT_Memory memory, const FT_Long size)noexcept{
+        if(size <= 0)
+            return nullptr;
+        auto& arena = *MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user));
+        return arena.allocate(alignof(MaxAlign), static_cast<usize>(size));
+    }
+
+    static void Release(FT_Memory memory, void* block)noexcept{
+        if(block){
+            auto& arena = *MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user));
+            arena.deallocate(block, alignof(MaxAlign), 0u);
+        }
+    }
+
+    [[nodiscard]] static void* Reallocate(FT_Memory memory, [[maybe_unused]] const FT_Long oldSize, const FT_Long newSize, void* block)noexcept{
+        if(newSize <= 0){
+            Release(memory, block);
+            return nullptr;
+        }
+        auto& arena = *MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user));
+        return arena.reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize));
+    }
+
+
+public:
+    explicit FreeTypeMemoryFace(Core::Assets::AssetArena& arena)noexcept{
+        m_memory.user = &arena;
+        m_memory.alloc = &Allocate;
+        m_memory.free = &Release;
+        m_memory.realloc = &Reallocate;
+    }
+
+    ~FreeTypeMemoryFace()noexcept{
+        reset();
+    }
+
+
+public:
+    void reset()noexcept{
+        const FT_Face face = m_face;
+        const FT_Library library = m_library;
+        m_face = nullptr;
+        m_library = nullptr;
+        const FT_Error faceError = face ? FT_Done_Face(face) : 0;
+        const FT_Error libraryError = library ? FT_Done_Library(library) : 0;
+        if(faceError != 0){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText(Impl::s_NativeCleanupFailedFormat, faceError);
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = Impl::s_WarningEventName, .category = Impl::s_NativeValidationCategory, .expression = Impl::s_FontOpFtDoneFace, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
+        if(libraryError != 0){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText(Impl::s_NativeCleanupFailedFormat, libraryError);
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = Impl::s_WarningEventName, .category = Impl::s_NativeValidationCategory, .expression = Impl::s_FontOpFtDoneLibrary, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
+    }
+
+    [[nodiscard]] Expected<void, Impl::NativeFontFailure> openStaticScalableFace(const Span<const u8> bytes)noexcept{
+        reset();
+        const FT_Error libraryError = FT_New_Library(&m_memory, &m_library);
+        if(libraryError != 0)
+            return MakeUnexpected(Impl::MakeNativeFontFailure(Impl::s_FontOpFtNewLibrary, libraryError));
+        FT_Add_Default_Modules(m_library);
+        const FT_Error faceError = FT_New_Memory_Face(m_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &m_face);
+        if(faceError != 0)
+            return MakeUnexpected(Impl::MakeNativeFontFailure(Impl::s_FontOpFtNewMemoryFace, faceError));
+        if(m_face->num_faces != 1 || m_face->num_glyphs <= 0 || m_face->units_per_EM == 0u || !FT_IS_SFNT(m_face) || !FT_IS_SCALABLE(m_face) || FT_HAS_MULTIPLE_MASTERS(m_face))
+            return MakeUnexpected(Impl::MakeNativeFontPolicyFailure(Impl::s_FontOpAdmitStaticScalableFace));
+        const FT_Error charmapError = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE);
+        if(charmapError != 0)
+            return MakeUnexpected(Impl::MakeNativeFontFailure(Impl::s_FontOpFtSelectCharmap, charmapError));
+        return {};
+    }
+
+    [[nodiscard]] b8 openAndValidate(const Span<const u8> bytes, const u32 faceIndex){
+        if(!Impl::ValidateFontSourceDirectory(bytes, faceIndex))
+            return false;
+        const auto nativeValidation = openStaticScalableFace(bytes);
+        if(!nativeValidation){
+            Impl::ReportNativeFontFailure(nativeValidation.error());
+            return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] FT_Library library()const noexcept{ return m_library; }
+    [[nodiscard]] FT_Face face()const noexcept{ return m_face; }
+
+
+private:
+    FT_MemoryRec_ m_memory = {};
+    FT_Library m_library = nullptr;
+    FT_Face m_face = nullptr;
+};
+
+class FontSource final : NoCopy{
+public:
+    explicit FontSource(Core::Assets::AssetArena& arena)noexcept
+        : m_bytes(arena)
+        , m_freeType(arena)
+    {}
+    ~FontSource()noexcept = default;
+
+
+public:
+    [[nodiscard]] b8 open(const BakeOptions& options, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& payload){
+        auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena());
+        if(!bytes){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
+            return false;
+        }
+        m_bytes = Move(*bytes);
+        if(!m_freeType.openAndValidate(m_bytes, 0u)){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed"));
+            return false;
+        }
+        const FT_Library library = m_freeType.library();
+        const FT_Face face = m_freeType.face();
+        if(!IsValidBakeFontFaceMetrics(face->num_glyphs, face->units_per_EM)){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unsupported glyph count or units per em"));
+            return false;
+        }
+        u32 spread = options.spread;
+        const AStringView module = ResolveBakeFreeTypeSdfModule(options.outline);
+        const FT_Error spreadSet = FT_Property_Set(library, module.data(), "spread", &spread);
+        if(spreadSet != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected SDF spread, error {}"), spreadSet);
+            return false;
+        }
+        const FT_Error sizeSet = FT_Set_Pixel_Sizes(face, 0u, options.ppem);
+        if(sizeSet != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
+            return false;
+        }
+        const auto stem = PathToGenericString(scratch, options.output.stemView());
+        const auto fontReference = Core::Assets::AssetRef<Impl::Font>::FromText(AStringView(stem));
+        if(!fontReference){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output asset stem contains an embedded null"));
+            return false;
+        }
+        payload.font = *fontReference;
+        payload.fontSha256 = ComputeSha256(BinaryByteView{ .bytes = m_bytes.data(), .byteCount = m_bytes.size() });
+        payload.faceIndex = 0u;
+        payload.unitsPerEm = face->units_per_EM;
+        payload.sourceGlyphCount = static_cast<u32>(face->num_glyphs);
+        payload.bakePpem = options.ppem;
+        payload.spreadPixels = options.spread;
+        payload.guardTexels = 1u;
+        payload.rasterMode = ResolveBakeFontAtlasRasterMode(options.outline);
+        payload.ascenderUnits = static_cast<f32>(face->ascender);
+        payload.descenderUnits = static_cast<f32>(face->descender);
+        payload.lineGapUnits = ComputeBakeFontLineGapUnits(face->height, face->ascender, face->descender);
+        return true;
+    }
+
+    [[nodiscard]] Span<const u8> bytes()const noexcept{ return m_bytes; }
+    [[nodiscard]] Core::Assets::AssetArena& arena()noexcept{ return m_bytes.get_allocator().arena(); }
+    [[nodiscard]] FreeTypeMemoryFace& freeType()noexcept{ return m_freeType; }
+    [[nodiscard]] Core::Assets::AssetBytes takeBytes()noexcept{
+        m_freeType.reset();
+        return Move(m_bytes);
+    }
+
+
+private:
+    Core::Assets::AssetBytes m_bytes;
+    FreeTypeMemoryFace m_freeType;
+};
+
+[[nodiscard]] static Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFont){
+    RasterGlyphs glyphs(inOutFont.arena());
+    FT_Face face = inOutFont.freeType().face();
+    const f32 designPerPixel = Impl::ComputeFontAtlasUnitsPerPixel(face->units_per_EM, options.ppem);
+    const u64 capacity = ComputeBakePixelCapacity(options.extent, options.maxGroups);
+    u64 rasterBytes = 0u;
+    glyphs.reserve(static_cast<usize>(face->num_glyphs));
+    for(u32 glyphId = 0u; glyphId < static_cast<u32>(face->num_glyphs); ++glyphId){
+        RasterGlyph glyph(glyphs.get_allocator().arena());
+        glyph.record.glyphId = glyphId;
+        const FT_Error loaded = FT_Load_Glyph(face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
+        if(loaded != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: design metrics failed for glyph {}, FreeType error {}"), glyphId, loaded);
+            return MakeUnexpected(Failure{});
+        }
+        glyph.record.advanceUnits = static_cast<f32>(face->glyph->advance.x);
+        if(face->glyph->format != FT_GLYPH_FORMAT_OUTLINE){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} is not a supported scalable outline"), glyphId);
+            return MakeUnexpected(Failure{});
+        }
+        if(face->glyph->outline.n_points == 0){
+            glyphs.push_back(Move(glyph));
+            continue;
+        }
+        FT_Error result = FT_Load_Glyph(face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
+        if(result == 0 && !options.outline)
+            result = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+        if(result == 0)
+            result = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
+        if(result != 0){
+            LogBakeSdfRenderFailure(options.outline, glyphId, result);
+            return MakeUnexpected(Failure{});
+        }
+        const FT_Bitmap& bitmap = face->glyph->bitmap;
+        if(IsEmptyGlyphBitmap(bitmap.width, bitmap.rows)){
+            glyphs.push_back(Move(glyph));
+            continue;
+        }
+        usize byteCount = 0u;
+        if(!ValidateBakeGlyphBitmapFootprint(glyphId, bitmap.pixel_mode == FT_PIXEL_MODE_GRAY, bitmap.width, bitmap.rows, options.extent, options.maxGroups, capacity, rasterBytes, byteCount))
+            return MakeUnexpected(Failure{});
+        glyph.pixels.resize(byteCount);
+        const i32 pitch = bitmap.pitch;
+        const usize absolutePitch = ComputeAbsoluteGlyphBitmapPitch(pitch);
+        if(!bitmap.buffer || absolutePitch < bitmap.width){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid native bitmap for glyph {}"), glyphId);
+            return MakeUnexpected(Failure{});
+        }
+        for(u32 y = 0u; y < bitmap.rows; ++y){
+            const u32 sourceY = ComputeGlyphBitmapSourceRow(pitch, bitmap.rows, y);
+            NWB_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
+        }
+        PopulateBakeGlyphRecord(bitmap.width, bitmap.rows, face->glyph->bitmap_left, face->glyph->bitmap_top, designPerPixel, glyph.record);
+        glyphs.push_back(Move(glyph));
+    }
+    return glyphs;
+}
+
+[[nodiscard]] static b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
+    Core::Assets::AssetArena& arena = payload.positioningTables.get_allocator().arena();
+    auto tables = Impl::CopyFontAtlasPositioningTables(font.bytes(), payload.faceIndex, payload.sourceGlyphCount, arena);
+    if(!tables)
+        return false;
+    payload.positioningTables = Move(*tables);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateOptions(const BakeOptions& options){
+    return ValidateBakeOptionsFields(options.ppem, options.spread, options.extent, options.maxGroups, options.source, options.output);
+}
+
+Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena){
+    if(IsPreparedFontSourcePath(path)){
+        auto prepared = Impl::ReadPreparedFontSource(path, false, arena);
+        if(!prepared)
+            return MakeUnexpected(prepared.error());
+        if(!IsValidPreparedFontFaceIndex(prepared->faceIndex)){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: malformed prepared .font input"));
+            return MakeUnexpected(AStringView("prepared font face index must be zero"));
+        }
+        return Move(prepared->fontBytes);
+    }
+    InputFileStream stream(path, InputFileStream::binary | InputFileStream::ate);
+    if(!stream.is_open())
+        return MakeUnexpected(AStringView("failed to open font source"));
+    const StreamOffset sourceSize = stream.tellg();
+    if(!IsValidFontSourceByteCount(static_cast<b8>(stream), static_cast<i64>(sourceSize), Impl::s_FontMaxSourceBytes) || !CanRepresentStreamSize(static_cast<u64>(sourceSize))){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source size is invalid or unreadable"));
+        return MakeUnexpected(AStringView("source size is invalid or unreadable"));
+    }
+    stream.seekg(0, InputFileStream::beg);
+    if(!stream)
+        return MakeUnexpected(AStringView("failed to seek font source"));
+    Core::Assets::AssetBytes input(arena);
+    input.resize(static_cast<usize>(sourceSize));
+    if(!ReadStreamExact(stream, NotNull<void*>(input.data()), input.size()))
+        return MakeUnexpected(AStringView("failed to read complete font source"));
+    if(!VerifyStreamAtEnd(stream))
+        return MakeUnexpected(AStringView("font source changed while reading"));
+    return input;
+}
+
+b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, [[maybe_unused]] Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload){
+    outPayload.glyphs.reserve(glyphs.size());
+    for(const RasterGlyph& glyph : glyphs)
+        outPayload.glyphs.push_back(glyph.record);
+    const ::Vector<u32, ::ArenaBase> order = BuildSortedDrawableGlyphOrder(scratch, outPayload.glyphs);
+    Array<Shelf, s_MaxBakeShelfPages> shelves{};
+    u32 lastPage = 0u;
+    for(const u32 index : order){
+        const RasterGlyph& glyph = glyphs[index];
+        const u32 width = ComputeGuardedGlyphExtent(glyph.record.width);
+        const u32 height = ComputeGuardedGlyphExtent(glyph.record.height);
+        const auto placed = FontAtlasPacker{}.placeInShelves(width, height, options.extent, options.maxGroups, shelves);
+        if(!placed){
+            LogAtlasPackCapacityExhausted(glyph.record.glyphId, width, height, options.extent, options.maxGroups);
+            return false;
+        }
+        const u32 groupIndex = placed->group;
+        while(outPayload.groups.size() <= groupIndex){
+            Impl::FontAtlasGroup group(outPayload.groups.get_allocator().arena());
+            group.width = options.extent;
+            group.height = options.extent;
+            group.channelCount = Impl::s_FontAtlasMaxChannelCount;
+            group.pixels.resize(ComputeGroupPixelCapacity(options.extent), 0u);
+            outPayload.groups.push_back(Move(group));
+        }
+        FontAtlasPacker{}.copyGlyphToGroup(glyph.pixels, options.extent, *placed, outPayload.glyphs[index], outPayload.groups[groupIndex].pixels);
+        lastPage = Max(lastPage, placed->page);
+    }
+    CompactAtlasGroups(outPayload);
+    for(auto& group : outPayload.groups)
+        group.sha256 = ComputeSha256(BinaryByteView{ .bytes = group.pixels.data(), .byteCount = group.pixels.size() });
+    LogAtlasPackSummary(glyphs.size(), ComputePackedLogicalPageCount(order.empty(), lastPage), outPayload.groups.size());
+    return true;
+}
+
+Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes){
+    using namespace __hidden_font_builder_bake;
+
+    Impl::FontAtlasPayload candidate(arena);
+    FontSource source(candidate.glyphs.get_allocator().arena());
+    if(!source.open(options, scratch, candidate))
+        return MakeUnexpected(Failure{});
+    auto glyphs = Rasterize(options, source);
+    if(!glyphs || !PackGlyphs(options, *glyphs, scratch, candidate) || !ExportPositioning(source, candidate))
+        return MakeUnexpected(Failure{});
+    if(!Impl::ValidateFontAtlasPayload(candidate, scratch))
+        return MakeUnexpected(Failure{});
+    outSourceFontBytes = source.takeBytes();
+    return candidate;
+}
+
+Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){
+    Core::Assets::AssetArena& arena = atlas.glyphs.get_allocator().arena();
+    if(ComputeSha256({ sourceFontBytes.data(), sourceFontBytes.size() }) != atlas.fontSha256){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source changed during bake"));
+        return MakeUnexpected(AStringView("source changed during bake"));
+    }
+
+    Vector<Impl::PreparedFontImageView, Core::Alloc::ScratchArena> images(scratch);
+    images.reserve(atlas.groups.size());
+    for(const auto& group : atlas.groups){
+        images.push_back(Impl::PreparedFontImageView(group.width, group.height, group.channelCount, { group.pixels.data(), group.pixels.size() }));
+    }
+    return Impl::SerializePreparedFontSource({ sourceFontBytes.data(), sourceFontBytes.size() }, atlas.faceIndex, images, arena);
+}
+
+b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
+    auto fontBinary = BuildPreparedFont(sourceFontBytes, payload, scratch);
+    MetadataString metadata(scratch);
+    if(!fontBinary){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), ConvertString(fontBinary.error()));
+        return false;
+    }
+    BuildFontMetadata(payload, metadata);
+
+    const StagedFilePairPaths<Core::Alloc::ScratchArena> paths(
+        scratch,
+        StagedFilePairPaths<Core::Alloc::ScratchArena>::MakeReplacedExtensionPath(scratch, options.output, Impl::s_PreparedFontExtension),
+        options.output
+    );
+    const StagedFilePairResult preValidation = ValidateStagedFilePairPaths(paths, options.overwrite, true);
+    if(!preValidation){
+        const AInteropString errMsg = preValidation.error.message();
+        LogFontBuilderPreValidationFailure(
+            preValidation.failureStage == StagedFilePairFailureStage::QueryWorkPath,
+            preValidation.failureStage == StagedFilePairFailureStage::WorkPathAlreadyExists,
+            AStringView(errMsg)
+        );
+        return false;
+    }
+    const ScratchPath directory = paths.secondary.parentPath();
+    if(!directory.empty()){
+        const auto ensured = EnsureDirectories(directory);
+        if(!ensured){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to prepare output directory '{}': {}"), PathToString<tchar>(directory), ConvertString(ensured.error().message()));
+            return false;
+        }
+    }
+
+    const Span<const u8> fontBytes(fontBinary->data(), fontBinary->size());
+    const AStringView metadataText(metadata.data(), metadata.size());
+    const StagedFilePairResult published = StageAndPublishFilePair(
+        paths,
+        fontBytes,
+        metadataText,
+        options.overwrite,
+        true,
+        true,
+        s_PublicationDiagnosticTag
+    );
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> outputs = { MakeNotNull(&paths.primary), MakeNotNull(&paths.secondary) };
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> backups = { MakeNotNull(&paths.primaryBackup), MakeNotNull(&paths.secondaryBackup) };
+
+    if(!published){
+        for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
+            if(published.removalErrors[index])
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
+            if(published.restorationErrors[index])
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.restorationErrors[index].message()));
+        }
+        const AInteropString errMsg = published.error.message();
+        LogFontBuilderPublishFailure(static_cast<u8>(published.failureStage), AStringView(errMsg));
+        return false;
+    }
+
+    for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
+        if(published.backupCleanupErrors[index])
+            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
+        else if(published.backupCleanupMissing[index])
+            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but previous backup was already absent: '{}'"), PathToString<tchar>(*backups[index]));
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

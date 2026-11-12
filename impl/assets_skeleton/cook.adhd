@@ -2,7 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_skeleton/cook_matrix.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
@@ -39,6 +51,24 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace AssetsSkeletonCookDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, AStringView metaKind, AStringView label);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
@@ -57,26 +87,38 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSkeletonCookAdhdModule(in u64 value){
-    return value != 0u;
+b8 ValidateSkeletonJointEntryMap(in b8 isMap, in Path nwbFilePath, in usize jointIndex){
+    if(isMap)
+        return true;
+
+    error("Skeleton meta '{}': joints[{}] must be a map", PathToString(nwbFilePath), jointIndex);
+    return false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#include <impl/assets_skeleton/cook_matrix.adhd.h>
+
 
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
@@ -141,42 +183,31 @@ using namespace Core::Metascript;
 
 
 Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView metaKind, const AStringView label){
-    SkeletonJointMatrix matrix = ::MatrixIdentity<Float34>();
-
-    if(!value.isList() || value.asList().size() != s_SkeletonJointMatrixRowCount){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
+    const usize rowCount = value.isList() ? value.asList().size() : 0u;
+    if(!ValidateSkeletonJointMatrixRowList(value.isList(), rowCount, nwbFilePath, metaKind, label))
         return MakeUnexpected(Failure{});
-    }
 
+    Array<Array<f32, s_SkeletonJointMatrixColumnCount>, s_SkeletonJointMatrixRowCount> matrixRows{};
     const auto& rows = value.asList();
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
         const Core::Metascript::Value& row = rows[rowIndex];
-        if(!row.isList() || row.asList().size() != s_SkeletonJointMatrixColumnCount){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex);
+        const usize columnCount = row.isList() ? row.asList().size() : 0u;
+        if(!ValidateSkeletonJointMatrixColumnList(row.isList(), columnCount, nwbFilePath, metaKind, label, rowIndex))
             return MakeUnexpected(Failure{});
-        }
 
-        Array<f32, s_SkeletonJointMatrixColumnCount> rowValues{};
         const auto& columns = row.asList();
         for(usize columnIndex = 0u; columnIndex < s_SkeletonJointMatrixColumnCount; ++columnIndex){
             const Core::Metascript::Value& column = columns[columnIndex];
             auto columnIndexResult = Core::Assets::TryDecodeMetadataFiniteF32(column);
             if(!columnIndexResult){
-                if(!column.isNumeric()){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' row {} column {} must be numeric"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
-                    return MakeUnexpected(Failure{});
-                }
-
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
+                LogSkeletonJointMatrixElementFailure(column.isNumeric(), nwbFilePath, metaKind, label, rowIndex, columnIndex);
                 return MakeUnexpected(Failure{});
             }
-            rowValues[columnIndex] = *columnIndexResult;
+            matrixRows[rowIndex][columnIndex] = *columnIndexResult;
         }
-
-        matrix.rows[rowIndex] = Float4(rowValues[0u], rowValues[1u], rowValues[2u], rowValues[3u]);
     }
 
-    return matrix;
+    return BuildSkeletonJointMatrixFromRows(matrixRows[0u], matrixRows[1u], matrixRows[2u]);
 }
 
 
@@ -184,7 +215,7 @@ Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrix
 
 
 b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("SkeletonAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
     const Skeleton& skeleton = *MakeNotNull(checked_cast<const Skeleton*>(&asset));
@@ -192,8 +223,8 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     if(!skeleton.validatePayload(scratchArena))
         return false;
 
-    Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(scratchArena);
-    return SerializeSkeletonBinaryPayload(skeleton.joints(), skeleton.jointIndices(), jointNameHashes, outBinary);
+    Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(skeleton.joints().size(), NameHash{}, scratchArena);
+    return SerializeSkeletonBinaryPayload(skeleton.joints(), skeleton.jointIndices(), Span<NameHash>(jointNameHashes.data(), jointNameHashes.size()), outBinary);
 }
 
 Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
@@ -217,10 +248,8 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
     entry.joints.reserve(jointList.size());
     for(usize jointIndex = 0u; jointIndex < jointList.size(); ++jointIndex){
         const Value& jointValue = jointList[jointIndex];
-        if(!jointValue.isMap()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Skeleton meta '{}': joints[{}] must be a map"), PathToString<tchar>(nwbFilePath), jointIndex);
+        if(!ValidateSkeletonJointEntryMap(jointValue.isMap(), nwbFilePath, jointIndex))
             return MakeUnexpected(Failure{});
-        }
 
         auto jointResult = ParseSkeletonJoint(nwbFilePath, jointValue);
         if(!jointResult)
@@ -264,7 +293,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

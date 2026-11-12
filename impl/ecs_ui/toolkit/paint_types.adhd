@@ -204,19 +204,13 @@ void ResolveNineSliceCoordinates(
     f32 secondX = endX - borderRight;
     if(rectangle.width < borderExtentX){
         // Do not evaluate the division outside this branch.
-        native(in rectangle, in borderLeft, in borderExtentX, mut firstX){
-            #pragma STDC FENV_ACCESS ON
-            firstX = rectangle.x + rectangle.width * (borderLeft / borderExtentX);
-        }
+        firstX = rectangle.x + rectangle.width * (borderLeft / borderExtentX);
         secondX = firstX;
     }
     f32 firstY = rectangle.y + borderTop;
     f32 secondY = endY - borderBottom;
     if(rectangle.height < borderExtentY){
-        native(in rectangle, in borderTop, in borderExtentY, mut firstY){
-            #pragma STDC FENV_ACCESS ON
-            firstY = rectangle.y + rectangle.height * (borderTop / borderExtentY);
-        }
+        firstY = rectangle.y + rectangle.height * (borderTop / borderExtentY);
         secondY = firstY;
     }
     outX = VectorSingle(rectangle.x, firstX, secondX, endX);

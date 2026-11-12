@@ -549,7 +549,7 @@ Each source and head file is split firm by field job, so no one file grows too b
 2. **`adhd` Language & Compiler Library (`core/metascript/adhd/`)**:
  - `compiler.h` / `compiler.cpp`: Top-level `Compiler` pipeline entry (preprocess, parse, type-check, layout, emit); `export_functions.h`, `export_keywords.h`, `export_operators.h`, and `export_types.h` declare the centralized X-macro language tables consumed across the parser, semantic analyzer, and code generators.
  - **AST (`core/metascript/adhd/ast/`)**:
- - `ast_common.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
+ - `global.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
  - `ast_types.h`: Scalar, SIMD (`f32x4`, `f32x4x4`), `Func<...>`, `enum<SizeType> Name` / `flag<SizeType> Name`, and template bound (`<T : IBar, const usize N>`) nodes.
  - `ast_expr.h`: Expressions (`this.XXX`, calls, operators, `cast<T>`, `bit_cast<T>`, `lambda`, vector swizzles).
  - `ast_stmt.h`: Statements (`if`/`else`, `switch`/`case`, `for`, `parallel_for`, `parallel`, `native`, variable declarations).

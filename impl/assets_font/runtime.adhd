@@ -2,15 +2,53 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+const i64 s_AdmittedFontFaceCount = 1;
+
+b8 IsAdmittedStaticScalableFontFace(
+    in i64 faceCount,
+    in i64 glyphCount,
+    in u32 unitsPerEm,
+    in b8 isSfnt,
+    in b8 isScalable,
+    in b8 hasMultipleMasters
+){
+    return
+        faceCount == s_AdmittedFontFaceCount
+        && glyphCount > 0
+        && unitsPerEm != 0u
+        && isSfnt
+        && isScalable
+        && !hasMultipleMasters
+    ;
+}
+
+b8 IsPreparedFontFileLengthInBounds(in b8 streamGood, in i64 fileEndBytes, in usize minHeaderBytes, in u64 maxFileBytes){
+    return streamGood && fileEndBytes >= cast<i64>(minHeaderBytes) && cast<u64>(fileEndBytes) <= maxFileBytes;
+}
+
+b8 MatchesExpectedPreparedFontFileBytes(in b8 hasExpectedBytes, in u64 expectedBytes, in i64 fileEndBytes){
+    return hasExpectedBytes && expectedBytes == cast<u64>(fileEndBytes);
+}
+
+b8 VerifyPreparedFontBytesSha256(in Span<u8> bytes, in Sha256Digest expectedDigest){
+    return ComputeSha256(bytes) == expectedDigest;
+}
+
+void LogPreparedFontReadFailure(in Path path, in StringView reason){
+    error("Prepared font '{}': {}", PathToString(path), reason);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_font/asset.adhd.h>
 #include <core/common/log.h>
 #include <global/diagnostics.h>
@@ -18,7 +56,6 @@ native{
 #include FT_FREETYPE_H
 #include FT_MODULE_H
 #include FT_SYSTEM_H
-#include <impl/assets_font/prepared_source.adhd.h>
 #include <impl/assets_font/font_binary_codec.adhd.h>
 #include <impl/assets_font/prepared_font_binary_codec.adhd.h>
 #include <core/assets/auto_registration.h>
@@ -100,7 +137,7 @@ public:
         const FT_Error faceError = FT_New_Memory_Face(m_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &m_face);
         if(faceError != 0)
             return MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, faceError));
-        if(m_face->num_faces != 1 || m_face->num_glyphs <= 0 || m_face->units_per_EM == 0u || !FT_IS_SFNT(m_face) || !FT_IS_SCALABLE(m_face) || FT_HAS_MULTIPLE_MASTERS(m_face))
+        if(!IsAdmittedStaticScalableFontFace(static_cast<i64>(m_face->num_faces), static_cast<i64>(m_face->num_glyphs), static_cast<u32>(m_face->units_per_EM), FT_IS_SFNT(m_face) != 0, FT_IS_SCALABLE(m_face) != 0, FT_HAS_MULTIPLE_MASTERS(m_face) != 0))
             return MakeUnexpected(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
         const FT_Error charmapError = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE);
         if(charmapError != 0)
@@ -145,9 +182,87 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Unexpected<AStringView> ReadFailure(const Path& path, const AStringView reason){
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), ConvertString(reason));
+template<typename PathArenaT>
+[[nodiscard]] static Unexpected<AStringView> ReadFailure(const ::Path<PathArenaT>& path, const AStringView reason){
+    LogPreparedFontReadFailure(path, reason);
     return MakeUnexpected(reason);
+}
+
+template<typename PathArenaT>
+[[nodiscard]] static Expected<PreparedFontSource, AStringView> ReadPreparedFontSourceImpl(const ::Path<PathArenaT>& path, const b8 includePixels, Core::Assets::AssetArena& arena){
+    InputFileStream stream(path, InputFileStream::binary);
+    if(!stream.is_open())
+        return ReadFailure(path, s_PreparedFontOpenFailedReason);
+    stream.seekg(0, InputFileStream::end);
+    const StreamOffset fileEnd = stream.tellg();
+    if(!IsPreparedFontFileLengthInBounds(static_cast<b8>(stream), static_cast<i64>(fileEnd), s_PreparedFontHeaderBytes, s_PreparedFontMaxFileBytes))
+        return ReadFailure(path, s_PreparedFontLengthOutOfBoundsReason);
+    stream.seekg(0, InputFileStream::beg);
+    if(!stream)
+        return ReadFailure(path, s_PreparedFontSeekFailedReason);
+
+    Array<u8, s_PreparedFontHeaderBytes> header{};
+    if(!ReadStreamExact(stream, NotNull<void*>(header.data()), sizeof(header)))
+        return ReadFailure(path, s_PreparedFontHeaderTruncatedReason);
+    u32 faceIndex = 0u;
+    u32 fontByteCount = 0u;
+    u32 groupCount = 0u;
+    const Expected<b8, AStringView> headerDecode = PreparedFontBinaryCodec{}.decodeHeader(header, faceIndex, fontByteCount, groupCount);
+    if(!headerDecode)
+        return ReadFailure(path, headerDecode.error());
+
+    PreparedFontSource candidate(arena);
+    candidate.faceIndex = faceIndex;
+    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
+    candidate.groups.reserve(groupCount);
+    Array<u32, s_PreparedFontMaxGroupCount> groupByteCounts{};
+    u64 pixelByteCount = 0u;
+    for(u32 index = 0u; index < groupCount; ++index){
+        Array<u8, s_PreparedFontGroupHeaderBytes> groupHeader{};
+        if(!ReadStreamExact(stream, NotNull<void*>(groupHeader.data()), sizeof(groupHeader)))
+            return ReadFailure(path, s_PreparedFontImageDirectoryTruncatedReason);
+        PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
+        const Expected<b8, AStringView> groupDecode = PreparedFontBinaryCodec{}.decodeGroupHeader(
+            groupHeader,
+            pixelByteCount,
+            group.width,
+            group.height,
+            group.channelCount,
+            groupByteCounts[index]
+        );
+        if(!groupDecode)
+            return ReadFailure(path, groupDecode.error());
+        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
+        candidate.groups.push_back(Move(group));
+    }
+
+    const Expected<u64> expectedFileBytes = PreparedFontBinaryCodec{}.expectedPayloadBytes(fontByteCount, groupCount, pixelByteCount);
+    if(!MatchesExpectedPreparedFontFileBytes(expectedFileBytes.has_value(), expectedFileBytes ? *expectedFileBytes : 0u, static_cast<i64>(fileEnd)))
+        return ReadFailure(path, s_PreparedFontLayoutMismatchReason);
+    candidate.fontBytes.resize(fontByteCount);
+    if(!ReadStreamExact(stream, NotNull<void*>(candidate.fontBytes.data()), candidate.fontBytes.size()))
+        return ReadFailure(path, s_PreparedFontSfntBytesTruncatedReason);
+    if(!VerifyPreparedFontBytesSha256(Span<const u8>(candidate.fontBytes.data(), candidate.fontBytes.size()), candidate.fontSha256))
+        return ReadFailure(path, s_PreparedFontSfntHashMismatchReason);
+
+    if(includePixels){
+        for(u32 index = 0u; index < groupCount; ++index){
+            PreparedFontImageGroup& group = candidate.groups[index];
+            group.pixels.resize(groupByteCounts[index]);
+            if(!ReadStreamExact(stream, NotNull<void*>(group.pixels.data()), group.pixels.size()))
+                return ReadFailure(path, s_PreparedFontImageBytesTruncatedReason);
+            if(!VerifyPreparedFontBytesSha256(Span<const u8>(group.pixels.data(), group.pixels.size()), group.sha256))
+                return ReadFailure(path, s_PreparedFontImageHashMismatchReason);
+        }
+    }
+
+    // Recheck the opened stream length even when its image payloads were skipped.
+    stream.seekg(0, InputFileStream::end);
+    if(!stream || stream.tellg() != fileEnd)
+        return ReadFailure(path, s_PreparedFontLengthChangedReason);
+    if(!VerifyStreamAtEnd(stream))
+        return ReadFailure(path, s_PreparedFontChangedDuringReadReason);
+    return candidate;
 }
 
 
@@ -185,80 +300,11 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
 }
 
 Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, const b8 includePixels, Core::Assets::AssetArena& arena){
-    using namespace __hidden_font_runtime;
-    InputFileStream stream(path, InputFileStream::binary);
-    if(!stream.is_open())
-        return ReadFailure(path, s_PreparedFontOpenFailedReason);
-    stream.seekg(0, InputFileStream::end);
-    const StreamOffset fileEnd = stream.tellg();
-    if(!stream || fileEnd < static_cast<StreamOffset>(s_PreparedFontHeaderBytes) || static_cast<u64>(fileEnd) > s_PreparedFontMaxFileBytes)
-        return ReadFailure(path, s_PreparedFontLengthOutOfBoundsReason);
-    stream.seekg(0, InputFileStream::beg);
-    if(!stream)
-        return ReadFailure(path, s_PreparedFontSeekFailedReason);
+    return __hidden_font_runtime::ReadPreparedFontSourceImpl(path, includePixels, arena);
+}
 
-    Array<u8, s_PreparedFontHeaderBytes> header{};
-    if(!ReadStreamExact(stream, NotNull<void*>(header.data()), sizeof(header)))
-        return ReadFailure(path, s_PreparedFontHeaderTruncatedReason);
-    u32 faceIndex = 0u;
-    u32 fontByteCount = 0u;
-    u32 groupCount = 0u;
-    const Expected<b8, AStringView> headerDecode = PreparedFontBinaryCodec{}.decodeHeader(header, faceIndex, fontByteCount, groupCount);
-    if(!headerDecode)
-        return ReadFailure(path, headerDecode.error());
-
-    PreparedFontSource candidate(arena);
-    candidate.faceIndex = faceIndex;
-    FOUNDATION_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
-    candidate.groups.reserve(groupCount);
-    Array<u32, s_PreparedFontMaxGroupCount> groupByteCounts{};
-    u64 pixelByteCount = 0u;
-    for(u32 index = 0u; index < groupCount; ++index){
-        Array<u8, s_PreparedFontGroupHeaderBytes> groupHeader{};
-        if(!ReadStreamExact(stream, NotNull<void*>(groupHeader.data()), sizeof(groupHeader)))
-            return ReadFailure(path, s_PreparedFontImageDirectoryTruncatedReason);
-        PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
-        const Expected<b8, AStringView> groupDecode = PreparedFontBinaryCodec{}.decodeGroupHeader(
-            groupHeader,
-            pixelByteCount,
-            group.width,
-            group.height,
-            group.channelCount,
-            groupByteCounts[index]
-        );
-        if(!groupDecode)
-            return ReadFailure(path, groupDecode.error());
-        FOUNDATION_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
-        candidate.groups.push_back(Move(group));
-    }
-
-    const Expected<u64> expectedFileBytes = PreparedFontBinaryCodec{}.expectedPayloadBytes(fontByteCount, groupCount, pixelByteCount);
-    if(!expectedFileBytes || *expectedFileBytes != static_cast<u64>(fileEnd))
-        return ReadFailure(path, s_PreparedFontLayoutMismatchReason);
-    candidate.fontBytes.resize(fontByteCount);
-    if(!ReadStreamExact(stream, NotNull<void*>(candidate.fontBytes.data()), candidate.fontBytes.size()))
-        return ReadFailure(path, s_PreparedFontSfntBytesTruncatedReason);
-    if(ComputeSha256({ candidate.fontBytes.data(), candidate.fontBytes.size() }) != candidate.fontSha256)
-        return ReadFailure(path, s_PreparedFontSfntHashMismatchReason);
-
-    if(includePixels){
-        for(u32 index = 0u; index < groupCount; ++index){
-            PreparedFontImageGroup& group = candidate.groups[index];
-            group.pixels.resize(groupByteCounts[index]);
-            if(!ReadStreamExact(stream, NotNull<void*>(group.pixels.data()), group.pixels.size()))
-                return ReadFailure(path, s_PreparedFontImageBytesTruncatedReason);
-            if(ComputeSha256({ group.pixels.data(), group.pixels.size() }) != group.sha256)
-                return ReadFailure(path, s_PreparedFontImageHashMismatchReason);
-        }
-    }
-
-    // Recheck the opened stream length even when its image payloads were skipped.
-    stream.seekg(0, InputFileStream::end);
-    if(!stream || stream.tellg() != fileEnd)
-        return ReadFailure(path, s_PreparedFontLengthChangedReason);
-    if(!VerifyStreamAtEnd(stream))
-        return ReadFailure(path, s_PreparedFontChangedDuringReadReason);
-    return candidate;
+Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const ::Path<::ArenaBase>& path, const b8 includePixels, Core::Assets::AssetArena& arena){
+    return __hidden_font_runtime::ReadPreparedFontSourceImpl(path, includePixels, arena);
 }
 
 
@@ -269,7 +315,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

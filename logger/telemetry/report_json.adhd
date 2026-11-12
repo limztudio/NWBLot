@@ -1,0 +1,147 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/memory_report.adhd>
+#include <logger/telemetry/report_dot.adhd>
+#include <logger/telemetry/report_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TelemetryEventKindTextLog = "textLog";
+const StringView s_TelemetryEventKindDiagnostic = "diagnostic";
+const StringView s_TelemetryEventKindPerfFrame = "perfFrame";
+const StringView s_TelemetryEventKindFrameGraphFrame = "frameGraphFrame";
+const StringView s_TelemetryEventKindMemoryFrame = "memoryFrame";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeTelemetryGraphJsonReserveBytes(
+    in usize nodeCount,
+    in usize edgeCount,
+    in usize labelBytes,
+    in usize runtimeStatisticsNodes,
+    in usize physicalQueueCount,
+    in usize packetSubmissionCount
+){
+    return s_LogTelemetryReportJsonJsonReportBytesPerGraph
+        + nodeCount * s_LogTelemetryReportJsonJsonReportBytesPerNode
+        + edgeCount * s_LogTelemetryReportJsonJsonReportBytesPerEdge
+        + labelBytes
+        + runtimeStatisticsNodes * s_LogTelemetryReportJsonJsonReportRuntimeStatisticsBytes
+        + physicalQueueCount * s_LogTelemetryReportJsonJsonReportPhysicalQueueRuntimeStatisticsBytes
+        + packetSubmissionCount * s_LogTelemetryReportJsonJsonReportPacketSubmissionStatisticsBytes;
+}
+
+StringView SelectTelemetryEventKindText(in usize kindIndex){
+    switch(kindIndex){
+    case 1u:
+        return s_TelemetryEventKindTextLog;
+    case 2u:
+        return s_TelemetryEventKindDiagnostic;
+    case 3u:
+        return s_TelemetryEventKindPerfFrame;
+    case 4u:
+        return s_TelemetryEventKindFrameGraphFrame;
+    case 5u:
+        return s_TelemetryEventKindMemoryFrame;
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+StringView SelectJsonTrailingComma(in b8 isFinalItem){
+    if(isFinalItem)
+        return "";
+    return ",";
+}
+
+StringView SelectJsonFieldTerminator(in b8 isFinalField){
+    if(isFinalField)
+        return s_LogTelemetryReportJsonJsonLastFieldEnd;
+    return s_LogTelemetryReportJsonJsonFieldEnd;
+}
+
+StringView SelectJsonBoolLiteral(in b8 flagValue){
+    if(flagValue)
+        return "true";
+    return "false";
+}
+
+void AppendPhysicalQueueJsonText(in b8 valid, in u32 index, in u32 deviceGeneration, mut String out){
+    if(!valid){
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
+        return;
+    }
+    StringAppendFormat(out, s_LogTelemetryReportJsonJsonQueueIndexFormat, index, deviceGeneration);
+}
+
+void AppendCompiledTaskJsonText(in b8 present, in u64 planGeneration, in u32 packetIndex, in u32 decisionIndex, mut String out){
+    if(!present){
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
+        return;
+    }
+    StringAppendFormat(out, "{{\"planGeneration\": {}, \"packetIndex\": {}, \"packetizationDecision\": ", planGeneration, packetIndex);
+    AppendJsonQuotedText(out, SelectFrameGraphTaskPacketizationDecisionText(decisionIndex));
+    out.append("}");
+}
+
+void AppendTelemetrySummaryJsonPrefix(in TelemetryReportSummary summary, in StringView memoryRecords, mut String out){
+    out.append(s_LogTelemetryReportJsonJsonDocumentOpen);
+    StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
+    out.append("  \"frameRange\": {");
+    StringAppendFormat(out, "\"present\": {}", SelectJsonBoolLiteral(summary.hasFrameRange));
+    if(summary.hasFrameRange)
+        StringAppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
+    out.append("},\n");
+
+    out.append("  \"events\": {\n");
+    for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
+        out.append("    ");
+        AppendJsonQuotedText(out, SelectTelemetryEventKindText(i));
+        StringAppendFormat(out, ": {}{}", summary.eventKindCounts[i], SelectJsonFieldTerminator(i + 1u == s_TelemetryReportEventKindCount));
+    }
+    out.append(s_LogTelemetryReportJsonJsonSectionClose);
+
+    out.append("  \"perf\": {\n");
+    StringAppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
+    StringAppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
+    out.append("    \"cpuTimingSeconds\": ");
+    if(summary.cpuTimingSecondsValid)
+        StringAppendFormat(out, s_LogTelemetryReportJsonJsonSecondsFormat, summary.cpuTimingSeconds);
+    else
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
+    out.append(s_LogTelemetryReportJsonJsonFieldEnd);
+    StringAppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
+    StringAppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
+    StringAppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
+    out.append("    \"gpuTimingSeconds\": ");
+    if(summary.gpuTimingSecondsValid)
+        StringAppendFormat(out, s_LogTelemetryReportJsonJsonSecondsFormat, summary.gpuTimingSeconds);
+    else
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
+    out.append(s_LogTelemetryReportJsonJsonFieldEnd);
+    StringAppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
+    StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
+    AppendTelemetryMemorySourcesJsonText(summary, out);
+    out.append("    \"memoryRecords\": [\n");
+    out.append(memoryRecords);
+    out.append("\n    ]\n");
+    out.append(s_LogTelemetryReportJsonJsonSectionClose);
+
+    out.append("  \"frameGraph\": {\n");
+    StringAppendFormat(out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
+    StringAppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
+    StringAppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
+    StringAppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
+    StringAppendFormat(out, "    \"maxEdges\": {},\n", summary.maxFrameGraphEdgeCount);
+    out.append("    \"records\": [\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

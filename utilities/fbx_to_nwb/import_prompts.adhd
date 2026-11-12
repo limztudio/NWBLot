@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/common.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SelectPromptBoolSuffix(in b8 defaultValue){
+    if(defaultValue)
+        return " [Y/n]: ";
+    return " [y/N]: ";
+}
+
+b8 ShouldPromptPreserveSpace(in b8 hasPreserveSpace, in b8 acceptDefaults, in b8 listMeshes){
+    return !hasPreserveSpace && !acceptDefaults && !listMeshes;
+}
+
+Expected<b8> ParseFbxConfirmText(in StringView rawText){
+    const String normalized = NormalizeFbxOptionText(rawText);
+    const StringView view = normalized;
+    if(view == "y" || view == "yes" || view == "true" || view == "1")
+        return true;
+    if(view == "n" || view == "no" || view == "false" || view == "0")
+        return false;
+    return MakeUnexpected(Failure());
+}
+
+String FormatAssetTypePromptLabel(){
+    const String choices = OutputAssetTypeOptionsText();
+    String prompt;
+    prompt.reserve(16u + choices.size());
+    prompt.append("Asset type (");
+    prompt.append(choices);
+    prompt.append(")");
+    return prompt;
+}
+
+String FormatNormalModePromptLabel(){
+    const String choices = NormalModeOptionsText();
+    String prompt;
+    prompt.reserve(16u + choices.size());
+    prompt.append("Normal mode (");
+    prompt.append(choices);
+    prompt.append(")");
+    return prompt;
+}
+
+String UnquoteFbxInputText(in StringView text){
+    StringView view = TrimView(text);
+    if(view.size() >= 2u){
+        const u8 first = view[0u];
+        const u8 last = view[view.size() - 1u];
+        if((first == s_AsciiDoubleQuoteByte && last == s_AsciiDoubleQuoteByte) || (first == s_AsciiSingleQuoteByte && last == s_AsciiSingleQuoteByte))
+            view = view.substr(1u, view.size() - 2u);
+    }
+    String out;
+    out.assign(view);
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView ResolveAttributeSourceLabel(in b8 sawImported){
+    if(sawImported)
+        return s_ImportedSourceLabel;
+    return s_DefaultSourceLabel;
+}
+
+StringView ResolveBunchAssetLayoutLabel(in b8 separateAssets){
+    if(separateAssets)
+        return s_SeparateAssetLayoutLabel;
+    return s_DefaultOutputAssetTypeText;
+}
+
+usize ComputeReportedMeshTriangleCount(in usize indexCount){
+    return indexCount / cast<usize>(s_MeshletTriangleIndexCount);
+}
+
+String FormatFbxWriteCompletionReport(
+    in StringView outputText,
+    in usize positionCount,
+    in usize normalCount,
+    in usize vertexRefCount,
+    in usize indexCount,
+    in StringView assetTypeText,
+    in OutputAssetType assetTypeValue,
+    in b8 separateAssets,
+    in StringView normalModeText,
+    in b8 sawVertexColors,
+    in b8 sawVertexUvs,
+    in usize skeletonJointCount,
+    in SourceTangentReport tangentReport
+){
+    String report;
+    report.reserve(320u + outputText.size());
+    report.append("Wrote ");
+    report.append(outputText);
+    report.append(s_ReportLineEndText);
+    report.append("  positions: ");
+    AppendUnsignedU64Text(report, cast<u64>(positionCount));
+    report.append(s_ReportLineEndText);
+    report.append("  normals: ");
+    AppendUnsignedU64Text(report, cast<u64>(normalCount));
+    report.append(s_ReportLineEndText);
+    report.append("  vertex_refs: ");
+    AppendUnsignedU64Text(report, cast<u64>(vertexRefCount));
+    report.append(s_ReportLineEndText);
+    report.append("  triangles: ");
+    AppendUnsignedU64Text(report, cast<u64>(ComputeReportedMeshTriangleCount(indexCount)));
+    report.append(s_ReportLineEndText);
+    report.append("  asset_type: ");
+    report.append(assetTypeText);
+    report.append(s_ReportLineEndText);
+    report.append("  normal_mode: ");
+    report.append(normalModeText);
+    report.append(s_ReportLineEndText);
+    report.append("  tangents: ");
+    report.append(SourceTangentModeText(tangentReport.mode));
+    report.append(s_ReportLineEndText);
+    report.append("  vertex colors: ");
+    report.append(ResolveAttributeSourceLabel(sawVertexColors));
+    report.append(s_ReportLineEndText);
+    if(assetTypeValue == OutputAssetType::Bunch){
+        report.append("  asset_layout: ");
+        report.append(ResolveBunchAssetLayoutLabel(separateAssets));
+        report.append(s_ReportLineEndText);
+    }
+    report.append("  uv0: ");
+    report.append(ResolveAttributeSourceLabel(sawVertexUvs));
+    report.append(s_ReportLineEndText);
+    if(skeletonJointCount != 0u){
+        report.append("  skeleton_joints: ");
+        AppendUnsignedU64Text(report, cast<u64>(skeletonJointCount));
+        report.append(s_ReportLineEndText);
+    }
+    if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
+        report.append("  tangent_fallback_vertices: ");
+        AppendUnsignedU64Text(report, cast<u64>(tangentReport.fallbackTangentVertexCount));
+        report.append(s_ReportLineEndText);
+        report.append("  tangent_degenerate_uv_triangles: ");
+        AppendUnsignedU64Text(report, cast<u64>(tangentReport.degenerateUvTriangleCount));
+        report.append(s_ReportLineEndText);
+    }
+    return report;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

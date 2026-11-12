@@ -8,15 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-namespace NWB::Impl{
-using ScratchArena = Core::Alloc::ScratchArena;
-using ScratchModelSkeletonObjectBinaryVector = Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena>;
-using ScratchModelStaticMeshObjectBinaryVector = Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena>;
-using ScratchModelSkinnedMeshObjectBinaryVector = Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena>;
-using ScratchModelObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
-};
-}
+const usize s_ModelHeaderBinaryBytes = 32u;
+const usize s_ModelSkeletonObjectBinaryBytes = 176u;
+const usize s_ModelStaticMeshObjectBinaryBytes = 368u;
+const usize s_ModelSkinnedMeshObjectBinaryBytes = 304u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,7 +19,7 @@ using ScratchModelObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 
 void PackModelSkeletonObjectBinaries(
     in Span<ModelSkeletonObject> objects,
-    mut ScratchModelSkeletonObjectBinaryVector outBinaries
+    mut Vector<ModelSkeletonObjectBinary> outBinaries
 ){
     outBinaries.reserve(objects.size());
     for(in ModelSkeletonObject object : objects)
@@ -33,7 +28,7 @@ void PackModelSkeletonObjectBinaries(
 
 void PackModelStaticMeshObjectBinaries(
     in Span<ModelStaticMeshObject> objects,
-    mut ScratchModelStaticMeshObjectBinaryVector outBinaries
+    mut Vector<ModelStaticMeshObjectBinary> outBinaries
 ){
     outBinaries.reserve(objects.size());
     for(in ModelStaticMeshObject object : objects)
@@ -42,7 +37,7 @@ void PackModelStaticMeshObjectBinaries(
 
 void PackModelSkinnedMeshObjectBinaries(
     in Span<ModelSkinnedMeshObject> objects,
-    mut ScratchModelSkinnedMeshObjectBinaryVector outBinaries
+    mut Vector<ModelSkinnedMeshObjectBinary> outBinaries
 ){
     outBinaries.reserve(objects.size());
     for(in ModelSkinnedMeshObject object : objects)
@@ -249,7 +244,7 @@ b8 ValidateModelSkinnedMeshObject(
 void IndexModelObjectName(
     in Name objectName,
     in u8 flags,
-    mut ScratchModelObjectNameMap objectNames
+    mut HashMap<Name, u8> objectNames
 ){
     if(objectNames.contains(objectName))
         MarkDuplicateModelObjectNameFlags(objectNames[objectName]);
@@ -279,8 +274,7 @@ b8 ValidateSingleModelPayloadObject(
 b8 ValidateModelPayloadObjects(
     in Span<ModelSkeletonObject> skeletonObjects,
     in Span<ModelStaticMeshObject> staticMeshObjects,
-    in Span<ModelSkinnedMeshObject> skinnedMeshObjects,
-    mut ScratchArena scratchArena
+    in Span<ModelSkinnedMeshObject> skinnedMeshObjects
 ){
     const Expected<usize> objectCountResult = ResolveModelObjectCount(
         skeletonObjects.size(),
@@ -295,8 +289,8 @@ b8 ValidateModelPayloadObjects(
     if(objectCount == 1u)
         return ValidateSingleModelPayloadObject(skeletonObjects, staticMeshObjects, skinnedMeshObjects);
 
-    // Construct the final bucket array at the map's default 0.5 load factor so scratch storage never needs a reserve-time rehash.
-    ScratchModelObjectNameMap objectNames(objectCount * 2u, scratchArena);
+    HashMap<Name, u8> objectNames;
+    objectNames.reserve(objectCount);
     for(in ModelSkeletonObject object : skeletonObjects)
         IndexModelObjectName(object.name, s_ModelSkeletonObjectNameFlag, objectNames);
     for(in ModelStaticMeshObject object : staticMeshObjects)
@@ -343,10 +337,6 @@ b8 ValidateModelPayloadObjects(
     return true;
 }
 
-const usize s_ModelHeaderBinaryBytes = 32u;
-const usize s_ModelSkeletonObjectBinaryBytes = 176u;
-const usize s_ModelStaticMeshObjectBinaryBytes = 368u;
-const usize s_ModelSkinnedMeshObjectBinaryBytes = 304u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

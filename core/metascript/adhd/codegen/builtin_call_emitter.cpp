@@ -11,10 +11,16 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
-    if(expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
-        const MStringView callee = expr.lhs->text;
-        const MStringView registerCall = MapSimdRegisterCall(callee);
+    const BuiltinFunctionInfo* scopedFn = (expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::ScopeAccess && expr.lhs->scopeChain.size() == 2u)
+        ? FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1])
+        : nullptr;
+    if(expr.isBuiltinCall && expr.lhs && (expr.lhs->kind == ExprKind::Identifier || scopedFn != nullptr)){
+        const MStringView callee = (expr.lhs->kind == ExprKind::Identifier) ? expr.lhs->text : scopedFn->adhdName;
+        const MStringView registerCall = expr.callTemplateArgs.empty() ? MapSimdRegisterCall(callee) : MStringView{};
         if(!registerCall.empty()){
             out.append(registerCall.data(), registerCall.size());
             out.push_back('(');
@@ -22,7 +28,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 if(i > 0u)
                     out.append(", ");
                 if(expr.arguments[i]){
-                    if(IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
+                    if(!expr.arguments[i]->isMutArg && IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
                         m_emitter.emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
                     else
                         m_emitter.emitExpr(out, *expr.arguments[i]);
@@ -122,12 +128,121 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.append("))");
             return true;
         }
+        if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(callee)){
+            switch(fnInfo->callLowering){
+            case BuiltinCallLowering::BinaryByteViewArg0:{
+                if(!expr.arguments.empty() && expr.arguments[0]){
+                    out.append((fnInfo->prependsScratchArena || expr.arguments.size() > 1u) ? "([&](const auto& __adhd_bytes)" : "([](const auto& __adhd_bytes)");
+                    out.append("noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ");
+                    out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
+                    out.push_back('(');
+                    if(fnInfo->prependsScratchArena){
+                        const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
+                        out.append(arenaExpr.data(), arenaExpr.size());
+                        out.append(", ");
+                    }
+                    out.append("::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }");
+                    for(usize i = 1u; i < expr.arguments.size(); ++i){
+                        out.append(", ");
+                        if(expr.arguments[i])
+                            m_emitter.emitExpr(out, *expr.arguments[i]);
+                    }
+                    out.append("); }else{ const ::AStringView __adhd_sv(__adhd_bytes); return ");
+                    out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
+                    out.push_back('(');
+                    if(fnInfo->prependsScratchArena){
+                        const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
+                        out.append(arenaExpr.data(), arenaExpr.size());
+                        out.append(", ");
+                    }
+                    out.append("::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_sv.data()), __adhd_sv.size() }");
+                    for(usize i = 1u; i < expr.arguments.size(); ++i){
+                        out.append(", ");
+                        if(expr.arguments[i])
+                            m_emitter.emitExpr(out, *expr.arguments[i]);
+                    }
+                    out.append("); } }(");
+                    m_emitter.emitExpr(out, *expr.arguments[0]);
+                    out.append("))");
+                    return true;
+                }
+                break;
+            }
+            case BuiltinCallLowering::StagedWriteTextAtomic:{
+                if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    out.append("(::StagedFileWriter(");
+                    m_emitter.emitExpr(out, *expr.arguments[0]);
+                    out.append(").writeTextAtomic(");
+                    m_emitter.emitExpr(out, *expr.arguments[1]);
+                    out.append("))");
+                    return true;
+                }
+                break;
+            }
+            case BuiltinCallLowering::StagedWriteBinaryAtomic:{
+                if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    out.append("(::StagedFileWriter(");
+                    m_emitter.emitExpr(out, *expr.arguments[0]);
+                    out.append(").writeBinaryAtomic(");
+                    m_emitter.emitExpr(out, *expr.arguments[1]);
+                    out.append("))");
+                    return true;
+                }
+                break;
+            }
+            case BuiltinCallLowering::StagedWriteAtomicChecked:{
+                if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ::StagedFileWriter(__adhd_p).writeAtomicChecked(reinterpret_cast<const ::u8*>(__adhd_b.data()), __adhd_b.size()); }(");
+                    m_emitter.emitExpr(out, *expr.arguments[0]);
+                    out.append(", ");
+                    m_emitter.emitExpr(out, *expr.arguments[1]);
+                    out.append("))");
+                    return true;
+                }
+                break;
+            }
+            case BuiltinCallLowering::Arg0AndBytePtrSizeArg1:{
+                if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ");
+                    out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
+                    out.append("(__adhd_p, reinterpret_cast<const ::u8*>(__adhd_b.data()), __adhd_b.size()); }(");
+                    m_emitter.emitExpr(out, *expr.arguments[0]);
+                    out.append(", ");
+                    m_emitter.emitExpr(out, *expr.arguments[1]);
+                    out.append("))");
+                    return true;
+                }
+                break;
+            }
+            case BuiltinCallLowering::None:
+                break;
+            }
+            if(fnInfo->prependsScratchArena){
+                out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
+                if(!expr.callTemplateArgs.empty())
+                    m_emitter.m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
+                out.push_back('(');
+                const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
+                out.append(arenaExpr.data(), arenaExpr.size());
+                for(usize i = 0u; i < expr.arguments.size(); ++i){
+                    out.append(", ");
+                    if(expr.arguments[i])
+                        m_emitter.emitExpr(out, *expr.arguments[i]);
+                }
+                out.push_back(')');
+                return true;
+            }
+        }
     }
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

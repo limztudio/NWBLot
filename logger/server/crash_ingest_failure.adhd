@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CrashIngestFailure{
+    public StringView detail = "";
+    public Optional<ErrorCode> code;
+}
+
+CrashIngestFailure MakeCrashIngestFailure(in StringView detail){
+    CrashIngestFailure failure;
+    failure.detail = detail;
+    return failure;
+}
+
+CrashIngestFailure MakeCrashIngestCodeFailure(in StringView detail, in ErrorCode code){
+    CrashIngestFailure failure;
+    failure.detail = detail;
+    failure.code = Optional<ErrorCode>(code);
+    return failure;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

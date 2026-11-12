@@ -2,14 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_graphics/cook_shader_plan_and_validation.adhd>
-#include <impl/assets_graphics/cook_graphics_volume_pipeline.adhd>
+[header]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
 #if defined(NWB_COOK)
 
 
@@ -48,22 +47,54 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsGraphicsCookComponentsAdhdModule(in u64 value){
-    return value != 0u;
+b8 ValidateRendererOpticalVolumeGroupUnpadded(in StringView prefix, in Path nwbFilePath, in StringView fieldName, in b8 unpadded){
+    if(unpadded)
+        return true;
+
+    error("{} '{}': field '{}' must not be empty or padded", prefix, PathToString(nwbFilePath), fieldName);
+    return false;
+}
+
+b8 ValidateRendererOpticalVolumeGroupParsedName(in StringView prefix, in Path nwbFilePath, in StringView fieldName, in b8 validName){
+    if(validName)
+        return true;
+
+    error("{} '{}': field '{}' contains an embedded null", prefix, PathToString(nwbFilePath), fieldName);
+    return false;
+}
+
+const StringView s_RendererOpticalVolumeCoincidenceChoices = "'independent', 'identical_material', or 'shared_group'";
+const StringView s_RendererOpticalBoundaryModeChoices = "'unspecified', 'closed_nested', or 'closed_priority'";
+
+b8 IsValidRendererOpticalVolumeGroupName(in b8 parsedOk, in Name groupName){
+    return parsedOk && groupName != s_NameNone;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_graphics/csg_shader_variants.adhd.h>
 #include <impl/assets_shader/cook.adhd.h>
 #include <global/containers.h>
@@ -109,6 +140,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 using Core::Assets::ScratchArena;
 using Core::Assets::ScratchString;
@@ -221,7 +253,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
             s_RendererComponentDiagnosticPrefix,
             s_RendererComponentOpticalVolumeCoincidenceField,
             Span<const ::NamedEnumCase<OpticalVolumeCoincidence::Enum>>(s_CoincidenceCases.data(), s_CoincidenceCases.size()),
-            "'independent', 'identical_material', or 'shared_group'"
+            s_RendererOpticalVolumeCoincidenceChoices
         );
         if(!parsedCoincidence)
             return MakeUnexpected(Failure{});
@@ -232,15 +264,11 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
         const auto groupField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeGroupField, true);
         if(!groupField)
             return MakeUnexpected(Failure{});
-        if(!IsUnpaddedRendererOpticalVolumeGroup(groupField->text)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must not be empty or padded"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
+        if(!ValidateRendererOpticalVolumeGroupUnpadded(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsUnpaddedRendererOpticalVolumeGroup(groupField->text)))
             return MakeUnexpected(Failure{});
-        }
         const auto groupName = Name::FromText(groupField->text);
-        if(!groupName || !*groupName){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
+        if(!ValidateRendererOpticalVolumeGroupParsedName(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsValidRendererOpticalVolumeGroupName(groupName.has_value(), groupName ? *groupName : s_NameNone)))
             return MakeUnexpected(Failure{});
-        }
         entry.component.opticalVolumeGroup = *groupName;
     }
 
@@ -256,7 +284,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
             s_RendererComponentDiagnosticPrefix,
             s_RendererComponentOpticalBoundaryModeField,
             Span<const ::NamedEnumCase<OpticalBoundaryMode::Enum>>(s_BoundaryModeCases.data(), s_BoundaryModeCases.size()),
-            "'unspecified', 'closed_nested', or 'closed_priority'"
+            s_RendererOpticalBoundaryModeChoices
         );
         if(!parsedBoundaryMode)
             return MakeUnexpected(Failure{});
@@ -345,8 +373,18 @@ b8 RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistr
 
 NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,864 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "case_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/compile.h>
+#include <global/simd/vector_clamp_ordered.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::MathPowerRoundingDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct alignas(SIMDVectorSingle) PowerObservation{
+    SIMDVectorSingle value;
+    u64 rawNativeStatus = 0u;
+    i32 flags = 0;
+    i32 error = 0;
+    u32 nativeStatus = 0u;
+};
+static_assert(alignof(Expected<PowerObservation>) >= alignof(PowerObservation));
+
+class PowerEnvironmentGuard final : NoCopy{
+public:
+    PowerEnvironmentGuard()noexcept
+        : m_originalError(errno)
+        , m_originalEnvironment(HoldFloatingPointExceptions())
+    {
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+        __asm__ __volatile__("mrs %0, fpsr" : "=r"(m_originalNativeStatus));
+#endif
+    }
+
+    PowerEnvironmentGuard(PowerEnvironmentGuard&&) = delete;
+
+    ~PowerEnvironmentGuard()noexcept{
+        if(!m_originalEnvironment)
+            return;
+        if(!SetFloatingPointEnvironment(*m_originalEnvironment))
+            __builtin_trap();
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+        __asm__ __volatile__("msr fpsr, %0" : : "r"(m_originalNativeStatus));
+#endif
+        errno = m_originalError;
+    }
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return m_originalEnvironment.has_value(); }
+
+
+private:
+    i32 m_originalError = 0;
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+    u64 m_originalNativeStatus = 0u;
+#endif
+    Expected<FloatingPointEnvironment> m_originalEnvironment;
+};
+
+class MxcsrEnvironmentGuard final : NoCopy{
+public:
+    MxcsrEnvironmentGuard()noexcept
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        : m_originalControl(_mm_getcsr())
+        , m_originalEnvironment(HoldFloatingPointExceptions())
+#else
+        : m_originalEnvironment(HoldFloatingPointExceptions())
+#endif
+    {
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        m_heldControl = _mm_getcsr();
+#endif
+    }
+
+    MxcsrEnvironmentGuard(MxcsrEnvironmentGuard&&) = delete;
+
+    ~MxcsrEnvironmentGuard()noexcept{
+        if(m_originalEnvironment && !SetFloatingPointEnvironment(*m_originalEnvironment))
+            NWB_ASSERT(false);
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        _mm_setcsr(m_originalControl);
+#endif
+    }
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return m_originalEnvironment.has_value(); }
+
+    void applyMode([[maybe_unused]] const u32 mode)const noexcept{
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        _mm_setcsr((m_heldControl & ~(0x8040u | 0x3fu)) | mode);
+#endif
+    }
+
+
+private:
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+    u32 m_originalControl = 0u;
+    u32 m_heldControl = 0u;
+#endif
+    Expected<FloatingPointEnvironment> m_originalEnvironment;
+};
+
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+inline constexpr Array<u32, 2u> s_PowerDenormalModes = { _DN_SAVE, _DN_FLUSH };
+inline constexpr Array<u64, 4u> s_PowerNativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
+#else
+inline constexpr Array<u32, 1u> s_PowerDenormalModes = { 0u };
+inline constexpr Array<u64, 1u> s_PowerNativeSeeds = { 0u };
+#endif
+inline constexpr Array<i32, 2u> s_PowerInitialFlags = { 0, FE_INEXACT };
+
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+inline constexpr Array<u32, 4u> s_OrderedClampModes = { 0u, 0x40u, 0x8000u, 0x8040u };
+#else
+inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
+#endif
+
+[[nodiscard]] inline constexpr b8 ShouldSkipNeon32SqrtCase()noexcept{
+#if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
+    return true;
+#else
+    return false;
+#endif
+}
+
+[[nodiscard]] inline constexpr b8 HasDoubleFmaResidual()noexcept{
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON)
+    return true;
+#else
+    return false;
+#endif
+}
+
+[[nodiscard]] inline constexpr b8 HasSingleFmaResidual()noexcept{
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+    return true;
+#else
+    return false;
+#endif
+}
+
+[[nodiscard]] NWB_INLINE b8 ConfigurePowerDenormalMode([[maybe_unused]] const u32 denormalMode, [[maybe_unused]] const b8 unmaskInvalid)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+    u32 control = 0u;
+    if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0)
+        return false;
+    if((control & _MCW_DN) != denormalMode)
+        return false;
+    if(unmaskInvalid && _controlfp_s(&control, control & ~_EM_INVALID, _MCW_EM) != 0)
+        return false;
+#endif
+    return true;
+}
+
+NWB_NOINLINE SIMDVectorSingle FrozenPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
+NWB_NOINLINE SIMDVectorSingle CurrentPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
+[[nodiscard]] Expected<PowerObservation> ObserveFrozenPower(SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
+[[nodiscard]] Expected<PowerObservation> ObserveCurrentPower(SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
+
+NWB_NOINLINE f32 LegacyMultiplyAddExpression(f32 first, f32 second, f32 addend)noexcept;
+NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(f64 first, f64 second, f64 addend)noexcept;
+NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(f32 first, f32 second, f32 addend)noexcept;
+NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(f64 first, f64 second, f64 addend)noexcept;
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+namespace NWB::Tests::MathCases{
+using MathPowerRoundingDetail::PowerObservation;
+using MathPowerRoundingDetail::PowerEnvironmentGuard;
+using MathPowerRoundingDetail::MxcsrEnvironmentGuard;
+using MathPowerRoundingDetail::s_PowerDenormalModes;
+using MathPowerRoundingDetail::s_PowerNativeSeeds;
+using MathPowerRoundingDetail::s_PowerInitialFlags;
+using MathPowerRoundingDetail::s_OrderedClampModes;
+using MathPowerRoundingDetail::ShouldSkipNeon32SqrtCase;
+using MathPowerRoundingDetail::HasDoubleFmaResidual;
+using MathPowerRoundingDetail::HasSingleFmaResidual;
+using MathPowerRoundingDetail::ConfigurePowerDenormalMode;
+using MathPowerRoundingDetail::ObserveFrozenPower;
+using MathPowerRoundingDetail::ObserveCurrentPower;
+using MathPowerRoundingDetail::LegacyMultiplyAddExpression;
+using MathPowerRoundingDetail::LegacyDoubleMultiplyAddExpression;
+using MathPowerRoundingDetail::LegacyNegativeMultiplySubtractExpression;
+using MathPowerRoundingDetail::LegacyDoubleMultiplyThenAdd;
+using MathPowerRoundingDetail::DoubleMultiplyAddExpression;
+using MathPowerRoundingDetail::DoubleMultiplyThenAdd;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle EvalPowerSetInt(in u32 x, in u32 y, in u32 z, in u32 w){
+    return VectorSetInt(x, y, z, w);
+}
+
+VectorSingle EvalPowerVectorMultiplyAddExpression(in VectorSingle lhs, in VectorSingle rhs, in VectorSingle addend){
+    return VectorMultiplyAddExpression(lhs, rhs, addend);
+}
+
+VectorSingle EvalPowerVectorNegativeMultiplySubtractExpression(in VectorSingle lhs, in VectorSingle rhs, in VectorSingle minuend){
+    return VectorNegativeMultiplySubtractExpression(lhs, rhs, minuend);
+}
+
+VectorDouble EvalPowerVectorDoubleClampOrdered(in VectorDouble value, in VectorDouble minVal, in VectorDouble maxVal){
+    return VectorDoubleClampOrdered(value, minVal, maxVal);
+}
+
+VectorDouble EvalPowerDoubleMultiplyAddExpression(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return DoubleMultiplyAddExpression(first, second, addend);
+}
+
+VectorDouble EvalPowerDoubleMultiplyThenAdd(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return DoubleMultiplyThenAdd(first, second, addend);
+}
+
+VectorDouble EvalPowerVectorDoubleMultiplyAddExpression(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return VectorDoubleMultiplyAddExpression(first, second, addend);
+}
+
+VectorDouble EvalPowerVectorDoubleMultiplySubtract(in VectorDouble first, in VectorDouble second, in VectorDouble subtrahend){
+    return VectorDoubleMultiplySubtract(first, second, subtrahend);
+}
+
+VectorDouble EvalPowerVectorDoubleMultiplyAdd(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return VectorDoubleMultiplyAdd(first, second, addend);
+}
+
+VectorDouble EvalPowerVectorDoubleNegativeMultiplySubtract(in VectorDouble first, in VectorDouble second, in VectorDouble minuend){
+    return VectorDoubleNegativeMultiplySubtract(first, second, minuend);
+}
+
+VectorSingle EvalPowerVectorMultiplySubtract(in VectorSingle first, in VectorSingle second, in VectorSingle subtrahend){
+    return VectorMultiplySubtract(first, second, subtrahend);
+}
+
+VectorSingle EvalPowerVectorTruncate(in VectorSingle value){
+    return VectorTruncate(value);
+}
+
+VectorDouble EvalPowerVectorDoubleTruncate(in VectorDouble value){
+    return VectorDoubleTruncate(value);
+}
+
+void CheckPowerObservationPair(in VectorSingle x, in VectorSingle y, in i32 seed, in u64 nativeSeed){
+    const Expected<PowerObservation> expected = ObserveFrozenPower(x, y, seed, nativeSeed);
+    const Expected<PowerObservation> actual = ObserveCurrentPower(x, y, seed, nativeSeed);
+    ASSERT_TRUE(expected.has_value());
+    ASSERT_TRUE(actual.has_value());
+    EXPECT_EQ(actual.value().flags, expected.value().flags);
+    EXPECT_EQ(actual.value().error, expected.value().error);
+    EXPECT_EQ(actual.value().nativeStatus, expected.value().nativeStatus);
+    EXPECT_EQ(actual.value().rawNativeStatus, expected.value().rawNativeStatus);
+    u32x4 expectedBits = u32x4(0u, 0u, 0u, 0u);
+    u32x4 actualBits = u32x4(0u, 0u, 0u, 0u);
+    StoreInt(expected.value().value, expectedBits);
+    StoreInt(actual.value().value, actualBits);
+    EXPECT_EQ(actualBits.x, expectedBits.x);
+    EXPECT_EQ(actualBits.y, expectedBits.y);
+    EXPECT_EQ(actualBits.z, expectedBits.z);
+    EXPECT_EQ(actualBits.w, expectedBits.w);
+}
+
+void VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    PowerEnvironmentGuard envGuard = PowerEnvironmentGuard();
+    ASSERT_TRUE(envGuard.valid());
+
+    Array<u32x4, 8> casesX = Array<u32x4, 8>();
+    casesX[0u] = u32x4(1u, 0x80000001u, 0x007fffffu, 0x3f800000u);
+    casesX[1u] = u32x4(0u, 0x3f800000u, 0x3e800000u, 0x3f000000u);
+    casesX[2u] = u32x4(0x37800000u, 0x47800000u, 0u, 0x3f800000u);
+    casesX[3u] = u32x4(0x80000000u, 0u, 0xbf800000u, 0x7f7fffffu);
+    casesX[4u] = u32x4(0x7fc00123u, 0x7f800125u, 0xbf800000u, 0x3f800000u);
+    casesX[5u] = u32x4(1u, 0x007fffffu, 0x00800000u, 0xff800000u);
+    casesX[6u] = u32x4(0x3d32b0b2u, 0x3d32b0b3u, 0x3d32b0b4u, 0x3eb048afu);
+    casesX[7u] = u32x4(0x3eb048aeu, 0x3eb048afu, 0x3eb048b0u, 0x3d2dc666u);
+
+    Array<u32x4, 8> casesY = Array<u32x4, 8>();
+    casesY[0u] = u32x4(0x3f800000u, 0x3f800000u, 0x3f800000u, 0x4019999au);
+    casesY[1u] = u32x4(0x3ed55555u, 0xc0800000u, 0x80000000u, 0x3f800000u);
+    casesY[2u] = u32x4(0xc0800000u, 0x40800000u, 0x40400000u, 0u);
+    casesY[3u] = u32x4(0xc0400000u, 0xbf800000u, 0x3f000000u, 0x40000000u);
+    casesY[4u] = u32x4(0u, 0x3f800000u, 0xff800126u, 0x7f800125u);
+    casesY[5u] = u32x4(0x40000000u, 0x3f000000u, 0x40200000u, 0xc0400000u);
+    casesY[6u] = u32x4(0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0x3ed55555u);
+    casesY[7u] = u32x4(0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0xc13fc46au);
+
+    for(in u32 denormalMode : s_PowerDenormalModes){
+        ASSERT_TRUE(ConfigurePowerDenormalMode(denormalMode, false));
+        for(in i32 mode : s_FloatingPointRoundingModes){
+            ASSERT_TRUE(SetFloatingPointRoundingMode(mode).has_value());
+            for(in u64 nativeSeed : s_PowerNativeSeeds){
+                for(in i32 seed : s_PowerInitialFlags){
+                    for(usize index = 0u; index < 8u; ++index){
+                        ScopedTestTrace trace(index);
+                        const u32x4 cx = casesX[index];
+                        const u32x4 cy = casesY[index];
+                        const VectorSingle x = EvalPowerSetInt(cx.x, cx.y, cx.z, cx.w);
+                        const VectorSingle y = EvalPowerSetInt(cy.x, cy.y, cy.z, cy.w);
+                        CheckPowerObservationPair(x, y, seed, nativeSeed);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+
+    PowerEnvironmentGuard envGuard = PowerEnvironmentGuard();
+    ASSERT_TRUE(envGuard.valid());
+
+    const VectorSingle x = MakeVolatileSingleBits(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u);
+    const VectorSingle y = VectorSingle(2.0f, 1.0f, 1.0f, 1.0f);
+    for(in u32 denormalMode : s_PowerDenormalModes){
+        ASSERT_TRUE(ConfigurePowerDenormalMode(denormalMode, true));
+        for(in i32 mode : s_FloatingPointRoundingModes){
+            ASSERT_TRUE(SetFloatingPointRoundingMode(mode).has_value());
+            for(in u64 nativeSeed : s_PowerNativeSeeds){
+                for(in i32 seed : s_PowerInitialFlags){
+                    CheckPowerObservationPair(x, y, seed, nativeSeed);
+                }
+            }
+        }
+    }
+}
+
+void VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero(){
+    const Array<f32, 4> first = MakeF32Array4(bit_cast<f32>(0x3f800400u), bit_cast<f32>(0xbf800400u), 0.0f, -0.0f);
+    const Array<f32, 4> second = MakeF32Array4(bit_cast<f32>(0x3f7ff800u), bit_cast<f32>(0x3f7ff800u), -0.0f, 1.0f);
+    const Array<f32, 4> addend = MakeF32Array4(-1.0f, 1.0f, -0.0f, -0.0f);
+    const Array<f32, 4> difference = MakeF32Array4(1.0f, -1.0f, -0.0f, 0.0f);
+
+    const VectorSingle lhs = MakeVolatileSingleFloats(first[0u], first[1u], first[2u], first[3u]);
+    const VectorSingle rhs = MakeVolatileSingleFloats(second[0u], second[1u], second[2u], second[3u]);
+    const VectorSingle addendVec = MakeVolatileSingleFloats(addend[0u], addend[1u], addend[2u], addend[3u]);
+    const VectorSingle diffVec = MakeVolatileSingleFloats(difference[0u], difference[1u], difference[2u], difference[3u]);
+
+    const VectorSingle sum = EvalPowerVectorMultiplyAddExpression(lhs, rhs, addendVec);
+    const VectorSingle subtraction = EvalPowerVectorNegativeMultiplySubtractExpression(lhs, rhs, diffVec);
+
+    for(usize lane = 0u; lane < 4u; ++lane){
+        ScopedTestTrace trace(lane);
+        EXPECT_EQ(GetSingleLaneBits(sum, lane), bit_cast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane])));
+        EXPECT_EQ(GetSingleLaneBits(subtraction, lane), bit_cast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane])));
+    }
+}
+
+void VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    MxcsrEnvironmentGuard envGuard = MxcsrEnvironmentGuard();
+    ASSERT_TRUE(envGuard.valid());
+
+    Array<Array<u64, 4>, 2> inputBits = Array<Array<u64, 4>, 2>();
+    inputBits[0u] = MakeU64Array4(0x8000000000000000u, 0u, 0x7ff8123456789abcu, 0xfff8abcdef012345u);
+    inputBits[1u] = MakeU64Array4(1u, 0x8000000000000001u, 0x7ff0000000000000u, 0xfff0000000000000u);
+
+    Array<Array<u64, 4>, 2> expected = Array<Array<u64, 4>, 2>();
+    expected[0u] = MakeU64Array4(0x8000000000000000u, 0u, 0x7ff8123456789abcu, 0xfff8abcdef012345u);
+    expected[1u] = MakeU64Array4(1u, 0x8000000000000001u, 0x3ff0000000000000u, 0xbff0000000000000u);
+
+    const VectorDouble clampMin = VectorDouble(-1.0, -1.0, -1.0, -1.0);
+    const VectorDouble clampMax = VectorDouble(1.0, 1.0, 1.0, 1.0);
+    for(in u32 mode : s_OrderedClampModes){
+        envGuard.applyMode(mode);
+        for(usize row = 0u; row < 2u; ++row){
+            const VectorDouble input = MakeVolatileDoubleBits(inputBits[row][0u], inputBits[row][1u], inputBits[row][2u], inputBits[row][3u]);
+            const VectorDouble result = EvalPowerVectorDoubleClampOrdered(input, clampMin, clampMax);
+            for(usize lane = 0u; lane < 4u; ++lane){
+                ScopedTestTrace trace(lane);
+                EXPECT_EQ(GetDoubleLaneBits(result, lane), expected[row][lane]);
+            }
+        }
+    }
+
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 negInf = bit_cast<f64>(cast<u64>(s_F64NegInfinityBits));
+    const VectorDouble tieInput = VectorDouble(-0.0, 0.0, negInf, posInf);
+    const VectorDouble posZeroBounds = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    const VectorDouble negZeroBounds = VectorDouble(-0.0, -0.0, -0.0, -0.0);
+    const VectorDouble zeroTies = EvalPowerVectorDoubleClampOrdered(tieInput, posZeroBounds, negZeroBounds);
+    EXPECT_EQ(GetDoubleLaneBits(zeroTies, 0u), 0x8000000000000000u);
+    EXPECT_EQ(GetDoubleLaneBits(zeroTies, 1u), 0u);
+    EXPECT_EQ(GetDoubleLaneBits(zeroTies, 2u), 0u);
+    EXPECT_EQ(GetDoubleLaneBits(zeroTies, 3u), 0x8000000000000000u);
+}
+
+void VerifyMath_MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes(){
+    Array<Array<u32, 4>, 4> singleBits = Array<Array<u32, 4>, 4>();
+    singleBits[0u] = MakeU32Array4(0u, 0x80000000u, 0x7FC12345u, 0x40E00000u);
+    singleBits[1u] = MakeU32Array4(0x80000000u, 0u, 0x40800000u, 0x7FC56789u);
+    singleBits[2u] = MakeU32Array4(0x7FC12345u, 0xFFC12345u, 0x7F800000u, 0xFF800000u);
+    singleBits[3u] = MakeU32Array4(0x7FC56789u, 0xFFC56789u, 0x7F800000u, 0xFF800000u);
+
+    Array<Array<u64, 4>, 4> doubleBits = Array<Array<u64, 4>, 4>();
+    doubleBits[0u] = MakeU64Array4(0u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0x401C000000000000u);
+    doubleBits[1u] = MakeU64Array4(0x8000000000000000u, 0u, 0x4010000000000000u, 0x7FF8ABCDEF012345u);
+    doubleBits[2u] = MakeU64Array4(0x7FF8123456789ABCu, 0xFFF8123456789ABCu, 0x7FF0000000000000u, 0xFFF0000000000000u);
+    doubleBits[3u] = MakeU64Array4(0x7FF8ABCDEF012345u, 0xFFF8ABCDEF012345u, 0x7FF0000000000000u, 0xFFF0000000000000u);
+
+    Array<b8, 2> directions = Array<b8, 2>();
+    directions[0u] = false;
+    directions[1u] = true;
+
+    for(usize pair = 0u; pair < 4u; pair += 2u){
+        for(in b8 reverse : directions){
+            usize firstRow = pair;
+            usize secondRow = pair + 1u;
+            if(reverse){
+                firstRow = pair + 1u;
+                secondRow = pair;
+            }
+            const VectorSingle first = MakeVolatileSingleBits(singleBits[firstRow][0u], singleBits[firstRow][1u], singleBits[firstRow][2u], singleBits[firstRow][3u]);
+            const VectorSingle second = MakeVolatileSingleBits(singleBits[secondRow][0u], singleBits[secondRow][1u], singleBits[secondRow][2u], singleBits[secondRow][3u]);
+            const VectorSingle minimum = Min(first, second);
+            const VectorSingle maximum = Max(first, second);
+
+            const VectorDouble firstDouble = MakeVolatileDoubleBits(doubleBits[firstRow][0u], doubleBits[firstRow][1u], doubleBits[firstRow][2u], doubleBits[firstRow][3u]);
+            const VectorDouble secondDouble = MakeVolatileDoubleBits(doubleBits[secondRow][0u], doubleBits[secondRow][1u], doubleBits[secondRow][2u], doubleBits[secondRow][3u]);
+            const VectorDouble minimumDouble = Min(firstDouble, secondDouble);
+            const VectorDouble maximumDouble = Max(firstDouble, secondDouble);
+
+            for(usize lane = 0u; lane < 4u; ++lane){
+                ScopedTestTrace trace(lane);
+                EXPECT_EQ(GetSingleLaneBits(minimum, lane), singleBits[secondRow][lane]);
+                EXPECT_EQ(GetSingleLaneBits(maximum, lane), singleBits[secondRow][lane]);
+                EXPECT_EQ(GetDoubleLaneBits(minimumDouble, lane), doubleBits[secondRow][lane]);
+                EXPECT_EQ(GetDoubleLaneBits(maximumDouble, lane), doubleBits[secondRow][lane]);
+            }
+        }
+    }
+}
+
+void VerifyMath_SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    if(ShouldSkipNeon32SqrtCase()){
+        GTEST_SKIP();
+        return;
+    }
+
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const VectorSingle input = MakeVolatileSingleBits(0u, 0x80000000u, 0x7f800000u, 2u);
+    ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+    const VectorSingle root = Sqrt(input);
+    const i32 rootInvalid = TestFloatingPointExceptions(s_FeInvalid);
+    EXPECT_EQ(rootInvalid, 0);
+
+    const Array<u32, 4> expectedRoot = MakeU32Array4(0u, 0x80000000u, 0x7f800000u, 0x1a800000u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        ScopedTestTrace trace(lane);
+        EXPECT_EQ(GetSingleLaneBits(root, lane), expectedRoot[lane]);
+    }
+
+    ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+    const VectorSingle reciprocalRoot = Rsqrt(input);
+    const i32 reciprocalInvalid = TestFloatingPointExceptions(s_FeInvalid);
+    EXPECT_EQ(reciprocalInvalid, 0);
+
+    const Array<u32, 4> expectedReciprocal = MakeU32Array4(0x7f800000u, 0xff800000u, 0u, 0x64800000u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        ScopedTestTrace trace(lane);
+        EXPECT_EQ(GetSingleLaneBits(reciprocalRoot, lane), expectedReciprocal[lane]);
+    }
+}
+
+void VerifyMath_DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero(){
+    const f64 posPow40 = bit_cast<f64>(cast<u64>(0x4270000000000000u));
+    const f64 posPowNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const f64 negPow40 = bit_cast<f64>(cast<u64>(0xc270000000000000u));
+    const f64 negPowNeg40 = bit_cast<f64>(cast<u64>(0xbd70000000000000u));
+    const f64 posPowNeg80 = bit_cast<f64>(cast<u64>(0x3af0000000000000u));
+    const f64 negPowNeg80 = bit_cast<f64>(cast<u64>(0xbaf0000000000000u));
+
+    const VectorDouble precision = VectorDouble(posPow40, posPowNeg40, negPow40, negPowNeg40) + VectorDouble(1.0, posPowNeg80, -1.0, negPowNeg80);
+    EXPECT_EQ(precision.x, bit_cast<f64>(cast<u64>(0x4270000000001000u)));
+    EXPECT_EQ(precision.y, bit_cast<f64>(cast<u64>(0x3d70000000001000u)));
+    EXPECT_EQ(precision.z, bit_cast<f64>(cast<u64>(0xc270000000001000u)));
+    EXPECT_EQ(precision.w, bit_cast<f64>(cast<u64>(0xbd70000000001000u)));
+
+    const Array<f64, 4> row0 = MakeF64Array4(bit_cast<f64>(cast<u64>(0x3ff0000002000000u)), bit_cast<f64>(cast<u64>(0xbff0000002000000u)), 0.0, -0.0);
+    const Array<f64, 4> row1 = MakeF64Array4(bit_cast<f64>(cast<u64>(0x3feffffffc000000u)), bit_cast<f64>(cast<u64>(0x3feffffffc000000u)), -0.0, 1.0);
+    const Array<f64, 4> row2 = MakeF64Array4(-1.0, 1.0, -0.0, -0.0);
+
+    const VectorDouble first = MakeVolatileDoubleFloats(row0[0u], row0[1u], row0[2u], row0[3u]);
+    const VectorDouble second = MakeVolatileDoubleFloats(row1[0u], row1[1u], row1[2u], row1[3u]);
+    const VectorDouble addend = MakeVolatileDoubleFloats(row2[0u], row2[1u], row2[2u], row2[3u]);
+
+    const VectorDouble expression = EvalPowerDoubleMultiplyAddExpression(first, second, addend);
+    const VectorDouble separate = EvalPowerDoubleMultiplyThenAdd(first, second, addend);
+    const VectorDouble namedExpression = EvalPowerVectorDoubleMultiplyAddExpression(first, second, addend);
+
+    for(usize lane = 0u; lane < 4u; ++lane){
+        ScopedTestTrace trace(lane);
+        const f64 firstLane = GetDoubleLaneFloat(first, lane);
+        const f64 secondLane = GetDoubleLaneFloat(second, lane);
+        const f64 addendLane = GetDoubleLaneFloat(addend, lane);
+        const u64 expectedExpression = bit_cast<u64>(LegacyDoubleMultiplyAddExpression(firstLane, secondLane, addendLane));
+        EXPECT_EQ(GetDoubleLaneBits(expression, lane), expectedExpression);
+        EXPECT_EQ(GetDoubleLaneBits(namedExpression, lane), expectedExpression);
+        EXPECT_EQ(GetDoubleLaneBits(separate, lane), bit_cast<u64>(LegacyDoubleMultiplyThenAdd(firstLane, secondLane, addendLane)));
+    }
+
+    const f64 sub1 = bit_cast<f64>(cast<u64>(1u));
+    const f64 sub3 = bit_cast<f64>(cast<u64>(3u));
+    const VectorDouble subnormal = VectorDouble(sub1, sub3, -sub1, -sub3) * VectorDouble(2.0, 0.5, 2.0, 0.5);
+    EXPECT_EQ(bit_cast<u64>(subnormal.x), 2u);
+    EXPECT_EQ(bit_cast<u64>(subnormal.y), 2u);
+    EXPECT_EQ(bit_cast<u64>(subnormal.z), 0x8000000000000002u);
+    EXPECT_EQ(bit_cast<u64>(subnormal.w), 0x8000000000000002u);
+
+    const VectorDouble signedZero = VectorDouble(-0.0, 0.0, -0.0, 0.0) * VectorDouble(1.0, -1.0, -1.0, 1.0);
+    EXPECT_TRUE(SignBit(signedZero.x));
+    EXPECT_TRUE(SignBit(signedZero.y));
+    EXPECT_FALSE(SignBit(signedZero.z));
+    EXPECT_FALSE(SignBit(signedZero.w));
+}
+
+void VerifyMath_MultiplySubtractRetainsCancellationDirectionAndSignedZero(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+    ASSERT_TRUE(SetFloatingPointRoundingMode(s_FloatingPointRoundingModes[0u]).has_value());
+
+    const VectorDouble first = MakeVolatileDoubleFloats(bit_cast<f64>(cast<u64>(0x3ff0000002000000u)), bit_cast<f64>(cast<u64>(0xbff0000002000000u)), 1.0, -0.0);
+    const VectorDouble second = MakeVolatileDoubleFloats(bit_cast<f64>(cast<u64>(0x3feffffffc000000u)), bit_cast<f64>(cast<u64>(0x3feffffffc000000u)), 1.0, 1.0);
+    const VectorDouble difference = MakeVolatileDoubleFloats(1.0, -1.0, 1.0, 0.0);
+
+    const VectorDouble productMinusDifference = EvalPowerVectorDoubleMultiplySubtract(first, second, difference);
+    const VectorDouble productPlusNegativeDifference = EvalPowerVectorDoubleMultiplyAdd(first, second, -difference);
+    const VectorDouble differenceMinusProduct = EvalPowerVectorDoubleNegativeMultiplySubtract(first, second, difference);
+
+    u64 negativeDoubleResidual = 0u;
+    u64 positiveDoubleResidual = 0u;
+    if(HasDoubleFmaResidual()){
+        negativeDoubleResidual = 0xbc90000000000000u;
+        positiveDoubleResidual = 0x3c90000000000000u;
+    }
+
+    Array<u64, 4> doubleExpected = Array<u64, 4>();
+    doubleExpected[0u] = negativeDoubleResidual;
+    doubleExpected[1u] = positiveDoubleResidual;
+    doubleExpected[2u] = 0u;
+    doubleExpected[3u] = 0x8000000000000000u;
+
+    Array<u64, 4> doubleNegativeExpected = Array<u64, 4>();
+    doubleNegativeExpected[0u] = positiveDoubleResidual;
+    doubleNegativeExpected[1u] = negativeDoubleResidual;
+    doubleNegativeExpected[2u] = 0u;
+    doubleNegativeExpected[3u] = 0u;
+
+    const VectorSingle singleFirst = MakeVolatileSingleFloats(bit_cast<f32>(0x3f800400u), bit_cast<f32>(0xbf800400u), 1.0f, -0.0f);
+    const VectorSingle singleSecond = MakeVolatileSingleFloats(bit_cast<f32>(0x3f7ff800u), bit_cast<f32>(0x3f7ff800u), 1.0f, 1.0f);
+    const VectorSingle singleDifference = MakeVolatileSingleFloats(1.0f, -1.0f, 1.0f, 0.0f);
+    const VectorSingle singleResult = EvalPowerVectorMultiplySubtract(singleFirst, singleSecond, singleDifference);
+
+    u32 negativeSingleResidual = 0u;
+    u32 positiveSingleResidual = 0u;
+    if(HasSingleFmaResidual()){
+        negativeSingleResidual = 0xb2800000u;
+        positiveSingleResidual = 0x32800000u;
+    }
+
+    Array<u32, 4> singleExpected = Array<u32, 4>();
+    singleExpected[0u] = negativeSingleResidual;
+    singleExpected[1u] = positiveSingleResidual;
+    singleExpected[2u] = 0u;
+    singleExpected[3u] = 0x80000000u;
+
+    for(usize lane = 0u; lane < 4u; ++lane){
+        ScopedTestTrace trace(lane);
+        EXPECT_EQ(GetDoubleLaneBits(productMinusDifference, lane), doubleExpected[lane]);
+        EXPECT_EQ(GetDoubleLaneBits(productPlusNegativeDifference, lane), doubleExpected[lane]);
+        EXPECT_EQ(GetDoubleLaneBits(differenceMinusProduct, lane), doubleNegativeExpected[lane]);
+        EXPECT_EQ(GetSingleLaneBits(singleResult, lane), singleExpected[lane]);
+    }
+}
+
+void VerifyMath_SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const f32 p23 = bit_cast<f32>(0x4b000000u);
+    const f32 n23 = bit_cast<f32>(0xcb000000u);
+    const f32 subMin = bit_cast<f32>(0x00000001u);
+    const f32 negSubMin = bit_cast<f32>(0x80000001u);
+    const f32 belowP23 = bit_cast<f32>(0x4affffffu);
+    const f32 negBelowP23 = bit_cast<f32>(0xcaffffffu);
+    const f32 truncP23 = bit_cast<f32>(0x4afffffeu);
+    const f32 negTruncP23 = bit_cast<f32>(0xcafffffeu);
+
+    const Array<f32x4, 4> runtimeInputs = MakeF32x4Array4(VectorSingle(0.5f, -0.5f, 1.5f, -1.5f), VectorSingle(0.25f, -0.25f, 2.5f, -2.5f), VectorSingle(-0.0f, 0.0f, p23, n23), VectorSingle(subMin, negSubMin, belowP23, negBelowP23));
+    Array<Array<f32x4, 4>, 4> expected = Array<Array<f32x4, 4>, 4>();
+    expected[0u] = MakeF32x4Array4(VectorSingle(0.0f, -0.0f, 2.0f, -2.0f), VectorSingle(0.0f, -0.0f, 2.0f, -2.0f), VectorSingle(-0.0f, 0.0f, p23, n23), VectorSingle(0.0f, -0.0f, p23, n23));
+    expected[1u] = MakeF32x4Array4(VectorSingle(0.0f, -0.0f, 1.0f, -1.0f), VectorSingle(0.0f, -0.0f, 2.0f, -2.0f), VectorSingle(-0.0f, 0.0f, p23, n23), VectorSingle(0.0f, -0.0f, truncP23, negTruncP23));
+    expected[2u] = MakeF32x4Array4(VectorSingle(0.0f, -1.0f, 1.0f, -2.0f), VectorSingle(0.0f, -1.0f, 2.0f, -3.0f), VectorSingle(-0.0f, 0.0f, p23, n23), VectorSingle(0.0f, -1.0f, truncP23, n23));
+    expected[3u] = MakeF32x4Array4(VectorSingle(1.0f, -0.0f, 2.0f, -1.0f), VectorSingle(1.0f, -0.0f, 3.0f, -2.0f), VectorSingle(-0.0f, 0.0f, p23, n23), VectorSingle(1.0f, -0.0f, p23, negTruncP23));
+    const Array<u32, 4> specialBits = MakeU32Array4(0x7f800000u, 0xff800000u, 0x7fc01234u, 0xffc05678u);
+
+    for(in i32 mode : s_FloatingPointRoundingModes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(mode).has_value());
+        for(usize row = 0u; row < 4u; ++row){
+            const f32x4 r = runtimeInputs[row];
+            const VectorSingle input = MakeVolatileSingleFloats(r.x, r.y, r.z, r.w);
+            Array<f32x4, 4> results = Array<f32x4, 4>();
+            results[0u] = f32x4(Round(input));
+            results[1u] = f32x4(EvalPowerVectorTruncate(input));
+            results[2u] = f32x4(Floor(input));
+            results[3u] = f32x4(Ceil(input));
+            for(usize operation = 0u; operation < 4u; ++operation){
+                const VectorSingle actualOp = VectorSingle(results[operation]);
+                const VectorSingle expectedOp = VectorSingle(expected[operation][row]);
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(GetSingleLaneBits(actualOp, lane), GetSingleLaneBits(expectedOp, lane));
+            }
+        }
+
+        const VectorSingle special = MakeVolatileSingleBits(specialBits[0u], specialBits[1u], specialBits[2u], specialBits[3u]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        Array<f32x4, 4> specialResults = Array<f32x4, 4>();
+        specialResults[0u] = f32x4(Round(special));
+        specialResults[1u] = f32x4(EvalPowerVectorTruncate(special));
+        specialResults[2u] = f32x4(Floor(special));
+        specialResults[3u] = f32x4(Ceil(special));
+        const i32 invalid = TestFloatingPointExceptions(s_FeInvalid);
+        EXPECT_EQ(invalid, 0);
+        for(usize operation = 0u; operation < 4u; ++operation){
+            const VectorSingle actualSpecial = VectorSingle(specialResults[operation]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(GetSingleLaneBits(actualSpecial, lane), specialBits[lane]);
+        }
+    }
+}
+
+void VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const f64 p53 = bit_cast<f64>(cast<u64>(0x4340000000000000u));
+    const f64 n53 = bit_cast<f64>(cast<u64>(0xc340000000000000u));
+    const f64 p52 = bit_cast<f64>(cast<u64>(0x4330000000000000u));
+    const f64 n52 = bit_cast<f64>(cast<u64>(0xc330000000000000u));
+    const f64 subMin = bit_cast<f64>(cast<u64>(0x0000000000000001u));
+    const f64 negSubMin = bit_cast<f64>(cast<u64>(0x8000000000000001u));
+    const f64 belowP52 = bit_cast<f64>(cast<u64>(0x432fffffffffffffu));
+    const f64 negBelowP52 = bit_cast<f64>(cast<u64>(0xc32fffffffffffffu));
+    const f64 truncP52 = bit_cast<f64>(cast<u64>(0x432ffffffffffffeu));
+    const f64 negTruncP52 = bit_cast<f64>(cast<u64>(0xc32ffffffffffffeu));
+
+    const Array<f64x4, 4> runtimeInputs = MakeF64x4Array4(VectorDouble(0.5, -0.5, 1.5, -1.5), VectorDouble(0.25, -0.25, 2.5, -2.5), VectorDouble(-0.0, 0.0, p53, n53), VectorDouble(subMin, negSubMin, belowP52, negBelowP52));
+    Array<Array<f64x4, 4>, 4> expected = Array<Array<f64x4, 4>, 4>();
+    expected[0u] = MakeF64x4Array4(VectorDouble(0.0, -0.0, 2.0, -2.0), VectorDouble(0.0, -0.0, 2.0, -2.0), VectorDouble(-0.0, 0.0, p53, n53), VectorDouble(0.0, -0.0, p52, n52));
+    expected[1u] = MakeF64x4Array4(VectorDouble(0.0, -0.0, 1.0, -1.0), VectorDouble(0.0, -0.0, 2.0, -2.0), VectorDouble(-0.0, 0.0, p53, n53), VectorDouble(0.0, -0.0, truncP52, negTruncP52));
+    expected[2u] = MakeF64x4Array4(VectorDouble(0.0, -1.0, 1.0, -2.0), VectorDouble(0.0, -1.0, 2.0, -3.0), VectorDouble(-0.0, 0.0, p53, n53), VectorDouble(0.0, -1.0, truncP52, n52));
+    expected[3u] = MakeF64x4Array4(VectorDouble(1.0, -0.0, 2.0, -1.0), VectorDouble(1.0, -0.0, 3.0, -2.0), VectorDouble(-0.0, 0.0, p53, n53), VectorDouble(1.0, -0.0, p52, negTruncP52));
+
+    for(in i32 mode : s_DirectedRoundingModes){
+        const b8 setOk = SetFloatingPointRoundingMode(mode).has_value();
+        EXPECT_TRUE(setOk);
+        if(!setOk)
+            continue;
+        for(usize row = 0u; row < 4u; ++row){
+            const f64x4 r = runtimeInputs[row];
+            const VectorDouble input = MakeVolatileDoubleFloats(r.x, r.y, r.z, r.w);
+            Array<f64x4, 4> results = Array<f64x4, 4>();
+            results[0u] = f64x4(Round(input));
+            results[1u] = f64x4(EvalPowerVectorDoubleTruncate(input));
+            results[2u] = f64x4(Floor(input));
+            results[3u] = f64x4(Ceil(input));
+            for(usize operation = 0u; operation < 4u; ++operation){
+                const VectorDouble actualOp = VectorDouble(results[operation]);
+                const VectorDouble expectedOp = VectorDouble(expected[operation][row]);
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(GetDoubleLaneBits(actualOp, lane), GetDoubleLaneBits(expectedOp, lane));
+            }
+        }
+    }
+
+    EXPECT_TRUE(envGuard.restoreNow());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::MathPowerRoundingDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using PowerEvaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
+
+[[nodiscard]] static Expected<PowerObservation> ObservePowerImpl(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, [[maybe_unused]] const u64 initialNativeFlags)noexcept{
+#pragma STDC FENV_ACCESS ON
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+    const u64 clearNativeStatus = 0u;
+    __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
+#endif
+#if defined(NWB_PLATFORM_WINDOWS)
+    _clearfp();
+#endif
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || !RaiseFloatingPointExceptions(initialFlags))
+        return MakeUnexpected(Failure{});
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+    u64 seededNativeStatus{};
+    __asm__ __volatile__("mrs %0, fpsr" : "=r"(seededNativeStatus));
+    seededNativeStatus |= initialNativeFlags;
+    __asm__ __volatile__("msr fpsr, %0" : : "r"(seededNativeStatus));
+#endif
+    errno = E2BIG;
+    const SIMDVectorSingle value = evaluate.get()(x, y);
+    const i32 errCode = errno;
+    const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    u32 nativeStatus = 0u;
+#if defined(NWB_PLATFORM_WINDOWS)
+    nativeStatus = _statusfp();
+#endif
+    u64 rawNativeStatus{};
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+    __asm__ __volatile__("mrs %0, fpsr" : "=r"(rawNativeStatus));
+#endif
+    return PowerObservation{ value, rawNativeStatus, flags, errCode, nativeStatus };
+}
+
+NWB_NOINLINE SIMDVectorSingle FrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+    return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
+}
+
+NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+    return VectorPow(x, y);
+}
+
+Expected<PowerObservation> ObserveFrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
+    return ObservePowerImpl(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, initialFlags, initialNativeFlags);
+}
+
+Expected<PowerObservation> ObserveCurrentPower(const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
+    return ObservePowerImpl(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, initialFlags, initialNativeFlags);
+}
+
+#pragma STDC FENV_ACCESS OFF
+NWB_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+    return first * second + addend;
+}
+
+NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(const f64 first, const f64 second, const f64 addend)noexcept{
+    return first * second + addend;
+}
+
+NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+    return addend - first * second;
+}
+
+NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, const f64 addend)noexcept{
+    const f64 product = first * second;
+    return product + addend;
+}
+
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
+    return first * second + addend;
+}
+
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
+    const SIMDVectorDouble product = first * second;
+    return product + addend;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ NWB::Tests::MathCases::VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState, VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState)
+NWB_ADHD_GTEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero, VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero)
+NWB_ADHD_GTEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads, VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads)
+NWB_ADHD_GTEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes, VerifyMath_MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes)
+NWB_ADHD_GTEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions, VerifyMath_SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions)
+NWB_ADHD_GTEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero, VerifyMath_DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero)
+NWB_ADHD_GTEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero, VerifyMath_MultiplySubtractRetainsCancellationDirectionAndSignedZero)
+NWB_ADHD_GTEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes, VerifyMath_SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes)
+NWB_ADHD_GTEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero, VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

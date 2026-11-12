@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/caustic/settings.adhd.h>
 #include <impl/ecs_render/shadow/push_constants.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
@@ -40,7 +46,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u32 ResolveSceneLights(Core::ECS::World& world, const Span<SceneLightGpuData> outLights, const Span<f32> outCausticImportance)noexcept{
+[[nodiscard]] NWB_INLINE u32 ResolveSceneLights(Core::ECS::World& world, const Span<SceneLightGpuData> outLights, const Span<f32> outCausticImportance)noexcept{
     const usize maxLightCount = Min(outLights.size(), outCausticImportance.size());
     if(maxLightCount == 0u)
         return 0u;
@@ -80,7 +86,7 @@ namespace ECSRenderDetail{
     return static_cast<u32>(gatheredCount);
 }
 
-[[nodiscard]] inline SceneShadingGpuData ResolveSceneShadingState(const f32 fallbackAspectRatio, const u32 lightCount, Core::ECS::World& world)noexcept{
+[[nodiscard]] NWB_INLINE SceneShadingGpuData ResolveSceneShadingState(const f32 fallbackAspectRatio, const u32 lightCount, Core::ECS::World& world)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid())
         return MakeSceneShadingGpuData(LoadFloat(cameraView.transform->position), lightCount);
@@ -103,15 +109,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderSharedRendererScenePrivateAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

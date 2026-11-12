@@ -83,6 +83,28 @@ class MeshViewStatePolicy{
         return state;
     }
 
+    private b8 equalMatrixBits(in MatrixSingle lhs, in MatrixSingle rhs)const{
+        for(u32 row = 0u; row < 4u; ++row){
+            if(!EqualF32x4Bits(lhs[row], rhs[row]))
+                return false;
+        }
+        return true;
+    }
+
+    private b8 equalViewStateBits(in MeshViewGpuData lhs, in MeshViewGpuData rhs)const{
+        if(!this.equalMatrixBits(MatrixSingle(lhs.worldToClip), MatrixSingle(rhs.worldToClip)))
+            return false;
+        if(!this.equalMatrixBits(MatrixSingle(lhs.clipToWorld), MatrixSingle(rhs.clipToWorld)))
+            return false;
+        if(!EqualF32x4Bits(VectorSingle(lhs.cameraPosition), VectorSingle(rhs.cameraPosition)))
+            return false;
+        for(usize i = 0u; i < 6u; ++i){
+            if(!EqualF32x4Bits(VectorSingle(lhs.frustumPlanes[i]), VectorSingle(rhs.frustumPlanes[i])))
+                return false;
+        }
+        return true;
+    }
+
     public Expected<MeshViewGpuData> readAccepted(in b8 valid, in Span<u8> storedBytes)const{
         if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
             return MakeUnexpected(Failure());
@@ -91,13 +113,10 @@ class MeshViewStatePolicy{
     }
 
     public b8 uploadRequired(in b8 valid, in Span<u8> storedBytes, in MeshViewGpuData viewState)const{
-        if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
+        const Expected<MeshViewGpuData> accepted = this.readAccepted(valid, storedBytes);
+        if(!accepted.has_value())
             return true;
-        b8 matches = false;
-        native(in storedBytes, in viewState, mut matches){
-            matches = FOUNDATION_MEMCMP(storedBytes.data(), &viewState, sizeof(viewState)) == 0;
-        }
-        return !matches;
+        return !this.equalViewStateBits(accepted.value(), viewState);
     }
 
     public void storeConfirmed(
@@ -105,12 +124,14 @@ class MeshViewStatePolicy{
         mut Array<u8, 240u> outStoredBytes,
         mut b8 outValid
     )const{
-        native(in viewState, mut outStoredBytes){
-            FOUNDATION_MEMCPY(outStoredBytes.data(), outStoredBytes.size(), &viewState, sizeof(viewState));
-        }
+        FixedVector<u8, 240u> temp;
+        AppendPOD(temp, viewState);
+        for(usize i = 0u; i < s_MeshViewGpuDataBytes; ++i)
+            outStoredBytes[i] = temp[i];
         outValid = true;
     }
-};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

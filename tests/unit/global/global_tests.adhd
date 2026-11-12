@@ -1,176 +1,39 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "global_arena_and_propagation_cases.adhd"
-#include "global_shared_and_failure_cases.adhd"
-#include "global_numeric_and_text_cases.adhd"
-#include "global_process_and_filesystem_cases.adhd"
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/global/algorithm_case_types.adhd>
+#include <tests/unit/global/name_case_types.adhd>
 
-b8 GlobalGlobalTestsReady(in u64 value){
-    return value != 0u;
-}
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/base64.h>
-
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits){
-    TestArena<> context;
-    using Bytes = ::Vector<u8, Core::Alloc::GlobalArena>;
-    const typename Bytes::allocator_type allocator(context.arena);
-    const Array<AStringView, 20u> invalid = {
-        "Z", "Zg", "Zg=", "Zg===", "=g==", "Z===", "Zg=A", "Zg==AAAA", "AAAAZg==AAAA",
-        "Zm9=", "Zh==", "AB==", "AAB=", "Zg-_", "Zg\r\n", "Zg \t", "Zg#=", "====",
-        AStringView("Zg\0=", 4u), AStringView("Zg\xff=", 4u),
-    };
-    for(const AStringView text : invalid){
-        EXPECT_FALSE(Base64DecodedSize(text, 1024u));
-        EXPECT_FALSE(DecodeBase64<Bytes>(text, allocator, 1024u));
-    }
-}
-
-TEST(Base64, ExactDecodedBoundsAreCheckedBeforeAllocation){
-    TestArena<> context;
-    using Bytes = ::Vector<u8, Core::Alloc::GlobalArena>;
-    const typename Bytes::allocator_type allocator(context.arena);
-    const auto before = context.arena.memoryStats();
-    EXPECT_FALSE(Base64DecodedSize("Zm9v", 2u));
-    EXPECT_FALSE(DecodeBase64<Bytes>("Zm9v", allocator, 2u));
-    EXPECT_EQ(context.arena.memoryStats().allocationCount, before.allocationCount);
-    const auto size = Base64DecodedSize("Zm9v", 3u);
-    ASSERT_TRUE(size);
-    EXPECT_EQ(*size, 3u);
-    const auto output = DecodeBase64<Bytes>("Zm9v", allocator, 3u);
-    ASSERT_TRUE(output);
-    ASSERT_EQ(output->size(), 3u);
-    EXPECT_EQ((*output)[0u], static_cast<u8>('f'));
-    const auto empty = DecodeBase64<Bytes>("", allocator, 0u);
-    ASSERT_TRUE(empty);
-    EXPECT_TRUE(empty->empty());
-}
-
-TEST(Base64, InvalidEncodeInputAndSizeOverflowDoNotAllocate){
-    TestArena<> context;
-    using Text = ::AString<Core::Alloc::GlobalArena>;
-    const typename Text::allocator_type allocator(context.arena);
-    const auto before = context.arena.memoryStats();
-    EXPECT_FALSE(EncodeBase64<Text>({ nullptr, 1u }, allocator));
-    const u8 byte = 0u;
-    EXPECT_FALSE(EncodeBase64<Text>({ &byte, Limit<usize>::s_Max }, allocator));
-    EXPECT_EQ(context.arena.memoryStats().allocationCount, before.allocationCount);
-    const auto empty = EncodeBase64<Text>({}, allocator);
-    ASSERT_TRUE(empty);
-    EXPECT_TRUE(empty->empty());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-#include <global/atomic_identity.h>
-#include <global/limit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_atomic_identity_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, AtomicIdentityAndHighWaterRespectLimits){
-    Atomic<u64> highWater{ Limit<u64>::s_Max - 1u };
-    UpdateAtomicMaxRelaxed(highWater, u64(0));
-    EXPECT_EQ(highWater.load(MemoryOrder::relaxed), Limit<u64>::s_Max - 1u);
-    UpdateAtomicMaxRelaxed(highWater, Limit<u64>::s_Max);
-    EXPECT_EQ(DecrementAtomicOrTerminate(highWater), Limit<u64>::s_Max);
-    EXPECT_EQ(highWater.load(MemoryOrder::relaxed), Limit<u64>::s_Max - 1u);
-    Atomic<u64> identities{ Limit<u64>::s_Max - 1u };
-    EXPECT_EQ(TryNextAtomicIdentity(identities), Limit<u64>::s_Max - 1u);
-    EXPECT_EQ(TryNextAtomicIdentity(identities), 0u);
-    EXPECT_EQ(identities.load(MemoryOrder::relaxed), Limit<u64>::s_Max);
-    Atomic<u32> boundedIdentity{ Limit<u16>::s_Max };
-    const auto lastBoundedIdentity = TryNextAtomicBoundedIdentity<u16>(boundedIdentity);
-    ASSERT_TRUE(lastBoundedIdentity);
-    EXPECT_EQ(*lastBoundedIdentity, Limit<u16>::s_Max);
-    EXPECT_EQ(boundedIdentity.load(MemoryOrder::relaxed), static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    EXPECT_FALSE(TryNextAtomicBoundedIdentity<u16>(boundedIdentity));
-    Atomic<u32> zeroBoundedIdentity{ 0u };
-    EXPECT_FALSE(TryNextAtomicBoundedIdentity<u16>(zeroBoundedIdentity));
-    EXPECT_EQ(zeroBoundedIdentity.load(MemoryOrder::relaxed), 0u);
-    Atomic<u64> zeroIdentity{ 0u };
-    EXPECT_EQ(TryNextAtomicIdentity(zeroIdentity), 0u);
-    EXPECT_EQ(zeroIdentity.load(MemoryOrder::relaxed), 0u);
-    const auto allowedZeroIdentity = TryNextAtomicIdentityAllowZero(zeroIdentity);
-    ASSERT_TRUE(allowedZeroIdentity);
-    EXPECT_EQ(*allowedZeroIdentity, 0u);
-    EXPECT_EQ(zeroIdentity.load(MemoryOrder::relaxed), 1u);
-    EXPECT_FALSE(TryNextAtomicIdentityAllowZero(identities));
-    EXPECT_EQ(identities.load(MemoryOrder::relaxed), Limit<u64>::s_Max);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 
-#include <gtest/gtest.h>
-
+#include <global/algorithm.h>
+#include <global/atomic_identity.h>
+#include <global/base64.h>
 #include <global/binary.h>
 #include <global/containers.h>
+#include <global/diagnostics.h>
+#include <global/disjoint_set.h>
+#include <global/fixed_buffer.h>
+#include <global/interval.h>
+#include <global/limit.h>
+#include <global/not_null.h>
+#include <global/projected_index.h>
+#include <global/range_algorithms.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,14 +45,8 @@ namespace __hidden_global_binary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_TableAlpha = NWB::Tests::GlobalCases::s_GlobalTestTableAlpha;
-static constexpr AStringView s_TableBeta = NWB::Tests::GlobalCases::s_GlobalTestTableBeta;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct U32VectorView{
+public:
     using value_type = u32;
 
 
@@ -212,6 +69,11 @@ public:
     [[nodiscard]] const u32* begin()const noexcept{ return values; }
 
     [[nodiscard]] const u32* end()const noexcept{ return values + valueCount; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 
@@ -219,129 +81,332 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Global, ExhaustedPodReadsPreserveCursor){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> binary(scratchArena);
+namespace __hidden_diagnostic_event_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DiagnosticCaptureSnapshot{
+public:
+    u32 captureCount = 0u;
+    AStringView name = {};
+    AStringView category = {};
+    AStringView expression = {};
+    AStringView message = {};
+    AStringView file = {};
+};
+
+void ResetDiagnosticEventCapture()noexcept;
+void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept;
+[[nodiscard]] DiagnosticCaptureSnapshot ReadDiagnosticCaptureSnapshot()noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::GlobalCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using BinaryVectorPayloadFailureEnum = ::BinaryVectorPayloadFailure::Enum;
+using BinaryVectorVoidResult = Expected<void, ::BinaryVectorPayloadFailure::Enum>;
+namespace BinaryVectorPayloadFailure = ::BinaryVectorPayloadFailure;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StableDedupValue MakeStableDedupValue(in u32 key, in u32 order){
+    StableDedupValue item;
+    item.key = key;
+    item.order = order;
+    return item;
+}
+
+void VerifyBase64_RejectsMalformedAlphabetLengthPaddingAndUnusedBits(){
+    Array<StringView, 18> invalid = Array<StringView, 18>();
+    invalid[0u] = "Z";
+    invalid[1u] = "Zg";
+    invalid[2u] = "Zg=";
+    invalid[3u] = "Zg===";
+    invalid[4u] = "=g==";
+    invalid[5u] = "Z===";
+    invalid[6u] = "Zg=A";
+    invalid[7u] = "Zg==AAAA";
+    invalid[8u] = "AAAAZg==AAAA";
+    invalid[9u] = "Zm9=";
+    invalid[10u] = "Zh==";
+    invalid[11u] = "AB==";
+    invalid[12u] = "AAB=";
+    invalid[13u] = "Zg-_";
+    invalid[14u] = "Zg\r\n";
+    invalid[15u] = "Zg \t";
+    invalid[16u] = "Zg#=";
+    invalid[17u] = "====";
+    for(in StringView text : invalid){
+        const Expected<usize> sizeResult = Base64DecodedSize(text, 1024u);
+        EXPECT_FALSE(sizeResult.has_value());
+        b8 decodedOk = true;
+        native(in text, mut decodedOk){
+            NWB::Tests::TestArena<> context;
+            using Bytes = ::Vector<u8, NWB::Core::Alloc::GlobalArena>;
+            const typename Bytes::allocator_type allocator(context.arena);
+            decodedOk = DecodeBase64<Bytes>(text, allocator, 1024u).has_value();
+        }
+        EXPECT_FALSE(decodedOk);
+    }
+    native{
+        NWB::Tests::TestArena<> context;
+        using Bytes = ::Vector<u8, NWB::Core::Alloc::GlobalArena>;
+        const typename Bytes::allocator_type allocator(context.arena);
+        const Array<AStringView, 2u> binaryInvalid = {
+            AStringView("Zg\0=", 4u),
+            AStringView("Zg\xff=", 4u),
+        };
+        for(const AStringView text : binaryInvalid){
+            EXPECT_FALSE(Base64DecodedSize(text, 1024u));
+            EXPECT_FALSE(DecodeBase64<Bytes>(text, allocator, 1024u));
+        }
+    }
+}
+
+void VerifyBase64_ExactDecodedBoundsAreCheckedBeforeAllocation(){
+    EXPECT_FALSE(Base64DecodedSize("Zm9v", 2u).has_value());
+    const Expected<usize> size = Base64DecodedSize("Zm9v", 3u);
+    ASSERT_TRUE(size.has_value());
+    EXPECT_EQ(size.value(), 3u);
+    native{
+        NWB::Tests::TestArena<> context;
+        using Bytes = ::Vector<u8, NWB::Core::Alloc::GlobalArena>;
+        const typename Bytes::allocator_type allocator(context.arena);
+        const auto before = context.arena.memoryStats();
+        EXPECT_FALSE(DecodeBase64<Bytes>("Zm9v", allocator, 2u));
+        EXPECT_EQ(context.arena.memoryStats().allocationCount, before.allocationCount);
+        const auto output = DecodeBase64<Bytes>("Zm9v", allocator, 3u);
+        ASSERT_TRUE(output);
+        ASSERT_EQ(output->size(), 3u);
+        EXPECT_EQ((*output)[0u], static_cast<u8>('f'));
+        const auto empty = DecodeBase64<Bytes>("", allocator, 0u);
+        ASSERT_TRUE(empty);
+        EXPECT_TRUE(empty->empty());
+    }
+}
+
+void VerifyBase64_InvalidEncodeInputAndSizeOverflowDoNotAllocate(){
+    b8 encodedNullNonzero = true;
+    b8 encodedSizeOverflow = true;
+    u64 beforeAllocations = 0u;
+    u64 afterInvalidAllocations = 1u;
+    b8 emptySucceeded = false;
+    String emptyEncoded = "nonempty";
+    native(mut encodedNullNonzero, mut encodedSizeOverflow, mut beforeAllocations, mut afterInvalidAllocations, mut emptySucceeded, mut emptyEncoded){
+        NWB::Tests::TestArena<> context;
+        using Text = ::AString<NWB::Core::Alloc::GlobalArena>;
+        const typename Text::allocator_type allocator(context.arena);
+        const auto before = context.arena.memoryStats();
+        beforeAllocations = before.allocationCount;
+        encodedNullNonzero = EncodeBase64<Text>({ nullptr, 1u }, allocator).has_value();
+        const u8 byte = 0u;
+        encodedSizeOverflow = EncodeBase64<Text>({ &byte, Limit<usize>::s_Max }, allocator).has_value();
+        afterInvalidAllocations = context.arena.memoryStats().allocationCount;
+        const auto empty = EncodeBase64<Text>({}, allocator);
+        emptySucceeded = empty.has_value();
+        if(empty)
+            emptyEncoded.assign(*empty);
+    }
+    EXPECT_FALSE(encodedNullNonzero);
+    EXPECT_FALSE(encodedSizeOverflow);
+    EXPECT_EQ(afterInvalidAllocations, beforeAllocations);
+    ASSERT_TRUE(emptySucceeded);
+    EXPECT_TRUE(emptyEncoded.empty());
+}
+
+void VerifyGlobal_AtomicIdentityAndHighWaterRespectLimits(){
+    Atomic<u64> highWater = Atomic<u64>(u64.max - 1u);
+    UpdateAtomicMaxRelaxed(highWater, cast<u64>(0u));
+    EXPECT_EQ(highWater.load(MemoryOrder::relaxed), u64.max - 1u);
+    UpdateAtomicMaxRelaxed(highWater, u64.max);
+    EXPECT_EQ(DecrementAtomicOrTerminate(highWater), u64.max);
+    EXPECT_EQ(highWater.load(MemoryOrder::relaxed), u64.max - 1u);
+
+    Atomic<u64> identities = Atomic<u64>(u64.max - 1u);
+    EXPECT_EQ(TryNextAtomicIdentity(identities), u64.max - 1u);
+    EXPECT_EQ(TryNextAtomicIdentity(identities), 0u);
+    EXPECT_EQ(identities.load(MemoryOrder::relaxed), u64.max);
+
+    Atomic<u32> boundedIdentity = Atomic<u32>(cast<u32>(u16.max));
+    const Expected<u16> lastBoundedIdentity = TryNextAtomicBoundedIdentity<u16>(boundedIdentity);
+    ASSERT_TRUE(lastBoundedIdentity.has_value());
+    EXPECT_EQ(lastBoundedIdentity.value(), u16.max);
+    EXPECT_EQ(boundedIdentity.load(MemoryOrder::relaxed), cast<u32>(u16.max) + 1u);
+    EXPECT_FALSE(TryNextAtomicBoundedIdentity<u16>(boundedIdentity).has_value());
+
+    Atomic<u32> zeroBoundedIdentity = Atomic<u32>(0u);
+    EXPECT_FALSE(TryNextAtomicBoundedIdentity<u16>(zeroBoundedIdentity).has_value());
+    EXPECT_EQ(zeroBoundedIdentity.load(MemoryOrder::relaxed), 0u);
+
+    Atomic<u64> zeroIdentity = Atomic<u64>(0u);
+    EXPECT_EQ(TryNextAtomicIdentity(zeroIdentity), 0u);
+    EXPECT_EQ(zeroIdentity.load(MemoryOrder::relaxed), 0u);
+    const Expected<u64> allowedZeroIdentity = TryNextAtomicIdentityAllowZero(zeroIdentity);
+    ASSERT_TRUE(allowedZeroIdentity.has_value());
+    EXPECT_EQ(allowedZeroIdentity.value(), 0u);
+    EXPECT_EQ(zeroIdentity.load(MemoryOrder::relaxed), 1u);
+    EXPECT_FALSE(TryNextAtomicIdentityAllowZero(identities).has_value());
+    EXPECT_EQ(identities.load(MemoryOrder::relaxed), u64.max);
+}
+
+void VerifyGlobal_ExhaustedPodReadsPreserveCursor(){
+    Vector<u8> binary = Vector<u8>();
     binary.reserve(4u);
     const u32 writtenValue = 0x11223344u;
     AppendPOD(binary, writtenValue);
 
     usize cursor = 0u;
-    const auto readValue = ReadPOD<u32>(binary, cursor);
-    ASSERT_TRUE(readValue);
-    EXPECT_EQ(*readValue, writtenValue);
-    EXPECT_EQ(cursor, sizeof(writtenValue));
+    const Expected<u32> readValue = ReadPOD<u32>(binary, cursor);
+    ASSERT_TRUE(readValue.has_value());
+    EXPECT_EQ(readValue.value(), writtenValue);
+    EXPECT_EQ(cursor, 4u);
 
     const usize failedCursor = cursor;
-    EXPECT_FALSE(ReadPOD<u32>(binary, cursor));
+    EXPECT_FALSE(ReadPOD<u32>(binary, cursor).has_value());
     EXPECT_EQ(cursor, failedCursor);
 }
 
-TEST(Global, TruncatedStringReadsDoNotAdvanceCursor){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> truncated(scratchArena);
+void VerifyGlobal_TruncatedStringReadsDoNotAdvanceCursor(){
+    Vector<u8> truncated = Vector<u8>();
     truncated.reserve(5u);
-    AppendPOD(truncated, static_cast<u32>(4u));
-    truncated.push_back(static_cast<u8>('x'));
+    AppendPOD(truncated, 4u);
+    truncated.push_back(cast<u8>(120u));
     usize cursor = 0u;
-    EXPECT_FALSE(ReadString(truncated, cursor));
+    const Expected<StringView> parsed = ReadString(truncated, cursor);
+    EXPECT_FALSE(parsed.has_value());
     EXPECT_EQ(cursor, 0u);
 }
 
-TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> stringTable(scratchArena);
+void VerifyGlobal_StringTableUsesPrefixedBoundsAndRejectsEmptyAppend(){
+    Vector<u8> stringTable = Vector<u8>();
     stringTable.reserve(16u);
-    const auto alphaOffset = AppendStringTableText(stringTable, s_TableAlpha);
-    const auto betaOffset = AppendStringTableText(stringTable, s_TableBeta);
-    ASSERT_TRUE(alphaOffset);
-    ASSERT_TRUE(betaOffset);
+    const Expected<u32> alphaOffset = AppendStringTableText(stringTable, s_GlobalTestTableAlpha);
+    const Expected<u32> betaOffset = AppendStringTableText(stringTable, s_GlobalTestTableBeta);
+    ASSERT_TRUE(alphaOffset.has_value());
+    ASSERT_TRUE(betaOffset.has_value());
 
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> prefixedBinary(scratchArena);
+    Vector<u8> prefixedBinary = Vector<u8>();
     prefixedBinary.reserve(17u);
     prefixedBinary.push_back(0xFFu);
-    prefixedBinary.insert(prefixedBinary.end(), stringTable.begin(), stringTable.end());
-    const auto parsed = ReadStringTableText(prefixedBinary, 1u, stringTable.size(), *betaOffset);
-    ASSERT_TRUE(parsed);
-    EXPECT_EQ(parsed->view(), s_TableBeta);
+    for(in u8 byte : stringTable)
+        prefixedBinary.push_back(byte);
+
+    const Expected<CompactString> parsed = ReadStringTableText(prefixedBinary, 1u, stringTable.size(), betaOffset.value());
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().view(), s_GlobalTestTableBeta);
 
     const usize previousSize = stringTable.size();
-    EXPECT_FALSE(AppendStringTableText(stringTable, AStringView()));
+    const Expected<u32> emptyOffset = AppendStringTableText(stringTable, StringView());
+    EXPECT_FALSE(emptyOffset.has_value());
     EXPECT_EQ(stringTable.size(), previousSize);
 }
 
-TEST(Global, InvalidStringTableReads){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> unterminated(scratchArena);
+void VerifyGlobal_InvalidStringTableReads(){
+    Vector<u8> unterminated = Vector<u8>();
     unterminated.reserve(2u);
-    unterminated.push_back(static_cast<u8>('a'));
-    unterminated.push_back(static_cast<u8>('b'));
-    EXPECT_FALSE(ReadStringTableText(unterminated, 0u, unterminated.size(), 0u));
+    unterminated.push_back(cast<u8>(97u));
+    unterminated.push_back(cast<u8>(98u));
+    const Expected<CompactString> first = ReadStringTableText(unterminated, 0u, unterminated.size(), 0u);
+    EXPECT_FALSE(first.has_value());
 
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> emptyText(scratchArena);
+    Vector<u8> emptyText = Vector<u8>();
     emptyText.reserve(1u);
     emptyText.push_back(0u);
-    EXPECT_FALSE(ReadStringTableText(emptyText, 0u, emptyText.size(), 0u));
+    const Expected<CompactString> second = ReadStringTableText(emptyText, 0u, emptyText.size(), 0u);
+    EXPECT_FALSE(second.has_value());
 }
 
-TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> binary(scratchArena);
+void VerifyGlobal_EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing(){
+    Vector<u8> binary = Vector<u8>();
     binary.reserve(6u);
-    ::Vector<u16, NWB::Core::Alloc::ScratchArena> source(scratchArena);
+    Vector<u16> source = Vector<u16>();
     source.reserve(3u);
     source.push_back(1u);
     source.push_back(2u);
-    source.push_back(static_cast<u16>(0xBEEFu));
+    source.push_back(cast<u16>(0xBEEFu));
 
     ASSERT_TRUE(AppendBinaryVectorPayload(binary, source));
 
     usize cursor = 0u;
-    ::Vector<u16, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
+    Vector<u16> parsed = Vector<u16>();
     parsed.reserve(4u);
-    ASSERT_TRUE(ReadBinaryVectorPayload(binary, static_cast<u64>(source.size()), cursor, parsed));
+    const BinaryVectorVoidResult firstRead = ReadBinaryVectorPayload(binary, cast<u64>(source.size()), cursor, parsed);
+    ASSERT_TRUE(firstRead.has_value());
 
     cursor = 0u;
     parsed.push_back(7u);
-    ASSERT_TRUE(ReadBinaryVectorPayload(binary, 0u, cursor, parsed));
+    const BinaryVectorVoidResult emptyRead = ReadBinaryVectorPayload(binary, 0u, cursor, parsed);
+    ASSERT_TRUE(emptyRead.has_value());
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
 
-TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> vectorBinary(scratchArena);
+void VerifyGlobal_FixedVectorOverflowDoesNotAdvanceBinaryCursor(){
+    Vector<u8> vectorBinary = Vector<u8>();
     vectorBinary.reserve(6u);
-    const Array<u16, 3u> values = { 4u, 5u, 6u };
-    for(const u16 value : values)
+    Array<u16, 3> values = Array<u16, 3>();
+    values[0u] = 4u;
+    values[1u] = 5u;
+    values[2u] = 6u;
+    for(in u16 value : values)
         AppendPOD(vectorBinary, value);
 
     usize vectorCursor = 0u;
-    FixedVector<u16, 2u> tooSmall;
-    EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, 3u, vectorCursor, tooSmall), MakeUnexpected(BinaryVectorPayloadFailure::OutputOverflow));
+    FixedVector<u16, 2> tooSmall = FixedVector<u16, 2>();
+    const BinaryVectorVoidResult overflowRead = ReadBinaryVectorPayload(vectorBinary, 3u, vectorCursor, tooSmall);
+    ASSERT_FALSE(overflowRead.has_value());
+    EXPECT_EQ(overflowRead.error(), BinaryVectorPayloadFailure::OutputOverflow);
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
 }
 
-TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> truncated(scratchArena);
+void VerifyGlobal_RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(){
+    Vector<u8> truncated = Vector<u8>();
     truncated.reserve(5u);
     const u32 source = 0x12345678u;
     AppendPOD(truncated, source);
 
     usize cursor = 0u;
-    ::Vector<u32, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
+    Vector<u32> parsed = Vector<u32>();
     parsed.reserve(4u);
     parsed.push_back(0xAABBCCDDu);
-    EXPECT_EQ(ReadBinaryVectorPayload(truncated, 2u, cursor, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
+    const BinaryVectorVoidResult truncatedRead = ReadBinaryVectorPayload(truncated, 2u, cursor, parsed);
+    ASSERT_FALSE(truncatedRead.has_value());
+    EXPECT_EQ(truncatedRead.error(), BinaryVectorPayloadFailure::SourceTruncated);
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
 
-TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+void VerifyGlobal_AppendTriviallyCopyableVectorSelfAppend(){
+    Vector<u32> values = Vector<u32>();
     values.reserve(3u);
     values.push_back(1u);
     values.push_back(2u);
@@ -358,17 +423,18 @@ TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
     EXPECT_EQ(values[5u], 3u);
 }
 
-TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+void VerifyGlobal_TriviallyCopyableVectorPreservesOverlappingSourceRanges(){
+    Vector<u32> values = Vector<u32>();
     values.reserve(4u);
     values.push_back(1u);
     values.push_back(2u);
     values.push_back(3u);
     values.push_back(4u);
 
-    const U32VectorView middle{ values.data() + 1u, 2u };
-    AppendTriviallyCopyableVector(values, middle);
+    native(mut values){
+        const __hidden_global_binary_tests::U32VectorView middle{ values.data() + 1u, 2u };
+        AppendTriviallyCopyableVector(values, middle);
+    }
 
     EXPECT_EQ(values.size(), 6u);
     EXPECT_EQ(values[0u], 1u);
@@ -378,8 +444,10 @@ TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
     EXPECT_EQ(values[4u], 2u);
     EXPECT_EQ(values[5u], 3u);
 
-    const U32VectorView assignedMiddle{ values.data() + 1u, 3u };
-    AssignTriviallyCopyableVector(values, assignedMiddle);
+    native(mut values){
+        const __hidden_global_binary_tests::U32VectorView assignedMiddle{ values.data() + 1u, 3u };
+        AssignTriviallyCopyableVector(values, assignedMiddle);
+    }
 
     EXPECT_EQ(values.size(), 3u);
     EXPECT_EQ(values[0u], 2u);
@@ -387,206 +455,259 @@ TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
     EXPECT_EQ(values[2u], 4u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <gtest/gtest.h>
-
-#include <global/algorithm.h>
-#include <global/containers.h>
-#include <global/disjoint_set.h>
-#include <global/interval.h>
-#include <global/limit.h>
-#include <global/projected_index.h>
-#include <global/range_algorithms.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_collection_algorithm_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, DirectionalSearchHandlesChangingCountsAndThrows){
+void VerifyGlobal_DirectionalSearchHandlesChangingCountsAndThrows(){
     u32 countCalls = 0u;
-    const auto countRows = [&countCalls]()noexcept{ ++countCalls; return u64(3u); };
-    const auto matchFirst = [](const u64 index)noexcept{ return index == 0u; };
-    const auto firstReverse = FindDirectionalIndex(2u, true, countRows, matchFirst);
-    ASSERT_TRUE(firstReverse);
-    EXPECT_EQ(*firstReverse, 0u);
+    const auto countRows = lambda[mut countCalls]() -> u64{
+        ++countCalls;
+        return 3u;
+    };
+    const auto matchFirst = lambda[](in u64 index) -> b8{
+        return index == 0u;
+    };
+    const Expected<u64> firstReverse = FindDirectionalIndex(2u, true, countRows, matchFirst);
+    ASSERT_TRUE(firstReverse.has_value());
+    EXPECT_EQ(firstReverse.value(), 0u);
     EXPECT_EQ(countCalls, 4u);
+
     countCalls = 0u;
-    EXPECT_FALSE(FindDirectionalIndex(3u, false, countRows, matchFirst));
+    EXPECT_FALSE(FindDirectionalIndex(3u, false, countRows, matchFirst).has_value());
     EXPECT_EQ(countCalls, 1u);
-    const auto matchNone = [](const u64)noexcept{ return false; };
-    EXPECT_FALSE(FindDirectionalIndex(0u, true, countRows, matchNone));
-    const auto throwingMatch = [](const u64) -> b8{ throw RuntimeException("directional predicate failure"); };
-    static_assert(!noexcept(FindDirectionalIndex(0u, false, countRows, throwingMatch)));
-    EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, countRows, throwingMatch)), RuntimeException);
-    u32 shrinkingCalls = 0u;
-    u32 matchedCalls = 0u;
-    const auto shrinkingCount = [&shrinkingCalls]()noexcept{ return ++shrinkingCalls == 1u ? u64(3u) : u64(1u); };
-    const auto trackMatch = [&matchedCalls](const u64)noexcept{ ++matchedCalls; return true; };
-    EXPECT_FALSE(FindDirectionalIndex(2u, false, shrinkingCount, trackMatch));
-    EXPECT_EQ(shrinkingCalls, 2u);
-    EXPECT_EQ(matchedCalls, 0u);
-    const auto maximumRowCount = []()noexcept{ return Limit<u64>::s_Max; };
-    EXPECT_FALSE(FindDirectionalIndex(Limit<u64>::s_Max - 1u, false, maximumRowCount, matchNone));
-    const auto throwingCount = []() -> u64{ throw RuntimeException("directional count failure"); };
-    static_assert(!noexcept(FindDirectionalIndex(0u, false, throwingCount, matchNone)));
-    EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, throwingCount, matchNone)), RuntimeException);
+
+    native{
+        u32 nativeCountCalls = 0u;
+        const auto nativeCountRows = [&nativeCountCalls]()noexcept{ ++nativeCountCalls; return u64(3u); };
+        const auto matchNone = [](const u64)noexcept{ return false; };
+        EXPECT_FALSE(FindDirectionalIndex(0u, true, nativeCountRows, matchNone));
+        const auto throwingMatch = [](const u64) -> b8{ throw RuntimeException("directional predicate failure"); };
+        static_assert(!noexcept(FindDirectionalIndex(0u, false, nativeCountRows, throwingMatch)));
+        EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, nativeCountRows, throwingMatch)), RuntimeException);
+        u32 shrinkingCalls = 0u;
+        u32 matchedCalls = 0u;
+        const auto shrinkingCount = [&shrinkingCalls]()noexcept{ return ++shrinkingCalls == 1u ? u64(3u) : u64(1u); };
+        const auto trackMatch = [&matchedCalls](const u64)noexcept{ ++matchedCalls; return true; };
+        EXPECT_FALSE(FindDirectionalIndex(2u, false, shrinkingCount, trackMatch));
+        EXPECT_EQ(shrinkingCalls, 2u);
+        EXPECT_EQ(matchedCalls, 0u);
+        const auto maximumRowCount = []()noexcept{ return Limit<u64>::s_Max; };
+        EXPECT_FALSE(FindDirectionalIndex(Limit<u64>::s_Max - 1u, false, maximumRowCount, matchNone));
+        const auto throwingCount = []() -> u64{ throw RuntimeException("directional count failure"); };
+        static_assert(!noexcept(FindDirectionalIndex(0u, false, throwingCount, matchNone)));
+        EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, throwingCount, matchNone)), RuntimeException);
+    }
 }
 
-TEST(Global, CollectionValidationAndOrderingPreserveBoundaries){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    const Array<u32, 3u> valuesToValidate{ 2u, 3u, 0u };
-    Array<u32, 4u> validationEvents{};
+void VerifyGlobal_CollectionValidationAndOrderingPreserveBoundaries(){
+    Array<u32, 3> valuesToValidate = Array<u32, 3>();
+    valuesToValidate[0u] = 2u;
+    valuesToValidate[1u] = 3u;
+    valuesToValidate[2u] = 0u;
+    Array<u32, 4> validationEvents = Array<u32, 4>();
     usize validationEventCount = 0u;
-    const auto recordValid = [&validationEvents, &validationEventCount](const u32 value)noexcept{ validationEvents[validationEventCount++] = 100u + value; return value != 0u; };
-    const auto recordDuplicate = [&validationEvents, &validationEventCount](const u32 current, const u32 previous)noexcept{ validationEvents[validationEventCount++] = current * 10u + previous; return current == previous; };
-    EXPECT_TRUE(AllValidAndDistinct(Span<const u32>{}, recordValid, recordDuplicate));
-    EXPECT_TRUE(AllValidAndDistinct(Span<const u32>(valuesToValidate.data(), 1u), [](const u32 value)noexcept{ return value != 0u; }, [](const u32 lhs, const u32 rhs)noexcept{ return lhs == rhs; }));
-    EXPECT_FALSE(AllValidAndDistinct(Span<const u32>(valuesToValidate), recordValid, recordDuplicate));
+    const auto recordValid = lambda[mut validationEvents, mut validationEventCount](in u32 value) -> b8{
+        validationEvents[validationEventCount] = 100u + value;
+        ++validationEventCount;
+        return value != 0u;
+    };
+    const auto recordDuplicate = lambda[mut validationEvents, mut validationEventCount](in u32 current, in u32 previous) -> b8{
+        validationEvents[validationEventCount] = current * 10u + previous;
+        ++validationEventCount;
+        return current == previous;
+    };
+    const Span<u32> emptyValues = Span<u32>();
+    const Span<u32> allValues = valuesToValidate;
+    const Span<u32> singleValue = allValues.subspan(0u, 1u);
+    EXPECT_TRUE(AllValidAndDistinct(emptyValues, recordValid, recordDuplicate));
+    const b8 singleValid = AllValidAndDistinct(singleValue, lambda[](in u32 value) -> b8{ return value != 0u; }, lambda[](in u32 lhs, in u32 rhs) -> b8{ return lhs == rhs; });
+    EXPECT_TRUE(singleValid);
+    EXPECT_FALSE(AllValidAndDistinct(allValues, recordValid, recordDuplicate));
     EXPECT_EQ(validationEventCount, 4u);
-    EXPECT_EQ(validationEvents, (Array<u32, 4u>{ 102u, 103u, 32u, 100u }));
-    const Array<u32, 4u> duplicateValues{ 2u, 3u, 3u, 5u };
+    EXPECT_EQ(validationEvents[0u], 102u);
+    EXPECT_EQ(validationEvents[1u], 103u);
+    EXPECT_EQ(validationEvents[2u], 32u);
+    EXPECT_EQ(validationEvents[3u], 100u);
+
+    Array<u32, 4> duplicateValues = Array<u32, 4>();
+    duplicateValues[0u] = 2u;
+    duplicateValues[1u] = 3u;
+    duplicateValues[2u] = 3u;
+    duplicateValues[3u] = 5u;
     u32 visitedValues = 0u;
     u32 comparedValues = 0u;
-    const auto countValid = [&visitedValues](const u32)noexcept{ ++visitedValues; return true; };
-    const auto countDuplicate = [&comparedValues](const u32 current, const u32 previous)noexcept{ ++comparedValues; return current == previous; };
-    EXPECT_FALSE(AllValidAndDistinct(Span<const u32>(duplicateValues), countValid, countDuplicate));
+    const auto countValid = lambda[mut visitedValues](in u32 value) -> b8{
+        if(value == 0u)
+            ++visitedValues;
+        else
+            ++visitedValues;
+        return true;
+    };
+    const auto countDuplicate = lambda[mut comparedValues](in u32 current, in u32 previous) -> b8{
+        ++comparedValues;
+        return current == previous;
+    };
+    const Span<u32> duplicateSpan = duplicateValues;
+    EXPECT_FALSE(AllValidAndDistinct(duplicateSpan, countValid, countDuplicate));
     EXPECT_EQ(visitedValues, 3u);
     EXPECT_EQ(comparedValues, 3u);
-    const auto throwingValid = [](const u32) -> b8{ throw RuntimeException("validity predicate failure"); };
-    static_assert(!noexcept(AllValidAndDistinct(Span<const u32>{}, throwingValid, recordDuplicate)));
-    EXPECT_THROW(static_cast<void>(AllValidAndDistinct(Span<const u32>(valuesToValidate), throwingValid, recordDuplicate)), RuntimeException);
-    using KeyedValue = NWB::Tests::GlobalCases::StableDedupValue;
-    Vector<KeyedValue, NWB::Core::Alloc::ScratchArena> duplicates(scratchArena);
-    duplicates.push_back({ 2u, 0u });
-    duplicates.push_back({ 1u, 1u });
-    duplicates.push_back({ 2u, 2u });
-    duplicates.push_back({ 1u, 3u });
-    duplicates.push_back({ 3u, 4u });
-    StableDeduplicate(duplicates, [](const KeyedValue& lhs, const KeyedValue& rhs)noexcept{ return lhs.key == rhs.key; });
+
+    Vector<StableDedupValue> duplicates = Vector<StableDedupValue>();
+    duplicates.reserve(5u);
+    duplicates.push_back(MakeStableDedupValue(2u, 0u));
+    duplicates.push_back(MakeStableDedupValue(1u, 1u));
+    duplicates.push_back(MakeStableDedupValue(2u, 2u));
+    duplicates.push_back(MakeStableDedupValue(1u, 3u));
+    duplicates.push_back(MakeStableDedupValue(3u, 4u));
+    StableDeduplicate(duplicates, lambda[](in StableDedupValue lhs, in StableDedupValue rhs) -> b8{ return lhs.key == rhs.key; });
     ASSERT_EQ(duplicates.size(), 3u);
     EXPECT_EQ(duplicates[0u].order, 0u);
     EXPECT_EQ(duplicates[1u].order, 1u);
     EXPECT_EQ(duplicates[2u].order, 4u);
-    const auto throwingSameKey = [](const KeyedValue&, const KeyedValue&) -> b8{ throw RuntimeException("deduplication predicate failure"); };
-    EXPECT_THROW(StableDeduplicate(duplicates, throwingSameKey), RuntimeException);
+
+    native(in valuesToValidate, mut duplicates){
+        const auto recordDuplicateNoexcept = [](const u32 current, const u32 previous)noexcept{ return current == previous; };
+        const auto throwingValid = [](const u32) -> b8{ throw RuntimeException("validity predicate failure"); };
+        static_assert(!noexcept(AllValidAndDistinct(Span<const u32>{}, throwingValid, recordDuplicateNoexcept)));
+        EXPECT_THROW(static_cast<void>(AllValidAndDistinct(Span<const u32>(valuesToValidate), throwingValid, recordDuplicateNoexcept)), RuntimeException);
+
+        using KeyedValue = NWB::Tests::GlobalCases::StableDedupValue;
+        const auto throwingSameKey = [](const KeyedValue&, const KeyedValue&) -> b8{ throw RuntimeException("deduplication predicate failure"); };
+        EXPECT_THROW(StableDeduplicate(duplicates, throwingSameKey), RuntimeException);
+
+        struct ThrowingAssignment{
+            u32 key = 0u;
+            ThrowingAssignment& operator=(ThrowingAssignment& other)noexcept{ key = other.key; return *this; }
+            ThrowingAssignment& operator=(const ThrowingAssignment&){ throw RuntimeException("const assignment failure"); }
+        };
+        struct SmallSequence{
+            Array<ThrowingAssignment, 3u> entries{ ThrowingAssignment{ 1u }, ThrowingAssignment{ 1u }, ThrowingAssignment{ 2u } };
+            usize count = 3u;
+            [[nodiscard]] usize size()const noexcept{ return count; }
+            ThrowingAssignment& operator[](const usize index)noexcept{ return entries[index]; }
+            void resize(const usize value)noexcept{ count = value; }
+        };
+        struct ThrowingComparison{
+            [[nodiscard]] b8 operator()(ThrowingAssignment& lhs, ThrowingAssignment& rhs)const noexcept{ return lhs.key == rhs.key; }
+            [[nodiscard]] b8 operator()(ThrowingAssignment&, const ThrowingAssignment&)const{ throw RuntimeException("const comparison failure"); }
+        };
+        const auto sameAssignmentKey = [](const ThrowingAssignment& lhs, const ThrowingAssignment& rhs)noexcept{ return lhs.key == rhs.key; };
+        SmallSequence assignmentValues;
+        static_assert(!noexcept(StableDeduplicate(assignmentValues, sameAssignmentKey)));
+        EXPECT_THROW(StableDeduplicate(assignmentValues, sameAssignmentKey), RuntimeException);
+        SmallSequence comparisonValues;
+        const ThrowingComparison throwingComparison;
+        static_assert(!noexcept(StableDeduplicate(comparisonValues, throwingComparison)));
+        EXPECT_THROW(StableDeduplicate(comparisonValues, throwingComparison), RuntimeException);
+
+        struct ThrowingIndexSequence{
+            KeyedValue value{};
+            [[nodiscard]] usize size()const noexcept{ return 1u; }
+            KeyedValue& operator[](usize&){ throw RuntimeException("lvalue index failure"); }
+            KeyedValue& operator[](usize&&)noexcept{ return value; }
+            void resize(usize&)noexcept{}
+            void resize(usize&&)noexcept{}
+        };
+        const auto sameKeyedValue = [](const KeyedValue& lhs, const KeyedValue& rhs)noexcept{ return lhs.key == rhs.key; };
+        ThrowingIndexSequence indexValues;
+        static_assert(!noexcept(StableDeduplicate(indexValues, sameKeyedValue)));
+        EXPECT_THROW(StableDeduplicate(indexValues, sameKeyedValue), RuntimeException);
+
+        struct ThrowingResizeSequence{
+            KeyedValue value{};
+            [[nodiscard]] usize size()const noexcept{ return 0u; }
+            KeyedValue& operator[](usize&)noexcept{ return value; }
+            KeyedValue& operator[](usize&&)noexcept{ return value; }
+            void resize(usize&){ throw RuntimeException("lvalue resize failure"); }
+            void resize(usize&&)noexcept{}
+        };
+        ThrowingResizeSequence resizeValues;
+        static_assert(!noexcept(StableDeduplicate(resizeValues, sameKeyedValue)));
+        EXPECT_THROW(StableDeduplicate(resizeValues, sameKeyedValue), RuntimeException);
+    }
     EXPECT_EQ(duplicates.size(), 3u);
-    struct ThrowingAssignment{
-        u32 key = 0u;
-        ThrowingAssignment& operator=(ThrowingAssignment& other)noexcept{ key = other.key; return *this; }
-        ThrowingAssignment& operator=(const ThrowingAssignment&){ throw RuntimeException("const assignment failure"); }
-    };
-    struct SmallSequence{
-        Array<ThrowingAssignment, 3u> entries{ ThrowingAssignment{ 1u }, ThrowingAssignment{ 1u }, ThrowingAssignment{ 2u } };
-        usize count = 3u;
-        [[nodiscard]] usize size()const noexcept{ return count; }
-        ThrowingAssignment& operator[](const usize index)noexcept{ return entries[index]; }
-        void resize(const usize value)noexcept{ count = value; }
-    };
-    struct ThrowingComparison{
-        [[nodiscard]] b8 operator()(ThrowingAssignment& lhs, ThrowingAssignment& rhs)const noexcept{ return lhs.key == rhs.key; }
-        [[nodiscard]] b8 operator()(ThrowingAssignment&, const ThrowingAssignment&)const{ throw RuntimeException("const comparison failure"); }
-    };
-    const auto sameAssignmentKey = [](const ThrowingAssignment& lhs, const ThrowingAssignment& rhs)noexcept{ return lhs.key == rhs.key; };
-    SmallSequence assignmentValues;
-    static_assert(!noexcept(StableDeduplicate(assignmentValues, sameAssignmentKey)));
-    EXPECT_THROW(StableDeduplicate(assignmentValues, sameAssignmentKey), RuntimeException);
-    SmallSequence comparisonValues;
-    const ThrowingComparison throwingComparison;
-    static_assert(!noexcept(StableDeduplicate(comparisonValues, throwingComparison)));
-    EXPECT_THROW(StableDeduplicate(comparisonValues, throwingComparison), RuntimeException);
-    struct ThrowingIndexSequence{
-        KeyedValue value{};
-        [[nodiscard]] usize size()const noexcept{ return 1u; }
-        KeyedValue& operator[](usize&){ throw RuntimeException("lvalue index failure"); }
-        KeyedValue& operator[](usize&&)noexcept{ return value; }
-        void resize(usize&)noexcept{}
-        void resize(usize&&)noexcept{}
-    };
-    const auto sameKeyedValue = [](const KeyedValue& lhs, const KeyedValue& rhs)noexcept{ return lhs.key == rhs.key; };
-    ThrowingIndexSequence indexValues;
-    static_assert(!noexcept(StableDeduplicate(indexValues, sameKeyedValue)));
-    EXPECT_THROW(StableDeduplicate(indexValues, sameKeyedValue), RuntimeException);
-    struct ThrowingResizeSequence{
-        KeyedValue value{};
-        [[nodiscard]] usize size()const noexcept{ return 0u; }
-        KeyedValue& operator[](usize&)noexcept{ return value; }
-        KeyedValue& operator[](usize&&)noexcept{ return value; }
-        void resize(usize&){ throw RuntimeException("lvalue resize failure"); }
-        void resize(usize&&)noexcept{}
-    };
-    ThrowingResizeSequence resizeValues;
-    static_assert(!noexcept(StableDeduplicate(resizeValues, sameKeyedValue)));
-    EXPECT_THROW(StableDeduplicate(resizeValues, sameKeyedValue), RuntimeException);
-    const Array<i32, 4u> projectedValues{ 3, 0, 1, -2 };
-    Vector<usize, NWB::Core::Alloc::ScratchArena> projectedIndices(scratchArena);
-    BuildProjectedRecordIndex(projectedIndices, projectedValues, [](const i32 value)noexcept{ return value != 0; }, [](const i32 lhs, const i32 rhs)noexcept{ return lhs < rhs; });
+
+    Array<i32, 4> projectedValues = Array<i32, 4>();
+    projectedValues[0u] = 3;
+    projectedValues[1u] = 0;
+    projectedValues[2u] = 1;
+    projectedValues[3u] = -2;
+    Vector<usize> projectedIndices = Vector<usize>();
+    BuildProjectedRecordIndex(projectedIndices, projectedValues, lambda[](in i32 value) -> b8{ return value != 0; }, lambda[](in i32 lhs, in i32 rhs) -> b8{ return lhs < rhs; });
     ASSERT_EQ(projectedIndices.size(), 3u);
     EXPECT_EQ(projectedIndices[0u], 3u);
     EXPECT_EQ(projectedIndices[1u], 2u);
     EXPECT_EQ(projectedIndices[2u], 0u);
-    const u32 one = 1u;
-    const u32 two = 2u;
-    const u32 three = 3u;
-    const Array<const u32*, 4u> items{ &one, &two, nullptr, &three };
-    Vector<u8, NWB::Core::Alloc::ScratchArena> state(items.size(), 0u, scratchArena);
-    Vector<const u32*, NWB::Core::Alloc::ScratchArena> sorted(scratchArena);
-    TopologicallySortPointers(Span<const u32* const>(items.data(), items.size()), [](const u32 current, const u32 dependency)noexcept{
-        return (current == 1u && dependency == 2u) || (current == 2u && dependency == 1u);
-    }, state, sorted);
-    ASSERT_EQ(sorted.size(), 4u);
-    EXPECT_EQ(sorted[0u], &two);
-    EXPECT_EQ(sorted[1u], &one);
-    EXPECT_EQ(sorted[2u], nullptr);
-    EXPECT_EQ(sorted[3u], &three);
+
+    FixedVector<u32, 4> sortedValues = FixedVector<u32, 4>();
+    b8 pointerIdentitiesMatched = false;
+    native(mut sortedValues, mut pointerIdentitiesMatched){
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+        const u32 one = 1u;
+        const u32 two = 2u;
+        const u32 three = 3u;
+        const Array<const u32*, 4u> items{ &one, &two, nullptr, &three };
+        ::Vector<u8, NWB::Core::Alloc::ScratchArena> state(items.size(), 0u, scratchArena);
+        ::Vector<const u32*, NWB::Core::Alloc::ScratchArena> sorted(scratchArena);
+        TopologicallySortPointers(Span<const u32* const>(items.data(), items.size()), [](const u32 current, const u32 dependency)noexcept{
+            return (current == 1u && dependency == 2u) || (current == 2u && dependency == 1u);
+        }, state, sorted);
+        for(const u32* const ptr : sorted)
+            sortedValues.push_back(ptr != nullptr ? *ptr : 0u);
+        pointerIdentitiesMatched =
+            sorted.size() == 4u
+            && sorted[0u] == &two
+            && sorted[1u] == &one
+            && sorted[2u] == nullptr
+            && sorted[3u] == &three
+        ;
+    }
+    ASSERT_EQ(sortedValues.size(), 4u);
+    EXPECT_EQ(sortedValues[0u], 2u);
+    EXPECT_EQ(sortedValues[1u], 1u);
+    EXPECT_EQ(sortedValues[2u], 0u);
+    EXPECT_EQ(sortedValues[3u], 3u);
+    EXPECT_TRUE(pointerIdentitiesMatched);
 }
 
-TEST(Global, IntervalCoverageHandlesOverlapAndThrows){
-    using TestInterval = NWB::Tests::GlobalCases::IntervalProbe;
-    const Array<TestInterval, 3u> unsortedIntervals{ TestInterval{ 5u, 10u, 0u }, TestInterval{ 0u, 5u, 1u }, TestInterval{ 2u, 3u, 2u } };
-    const auto eligible = [](const TestInterval&)noexcept{ return true; };
-    const auto intervalBegin = [](const TestInterval& interval)noexcept{ return interval.first; };
-    const auto intervalEnd = [](const TestInterval& interval)noexcept{ return interval.last; };
-    static_assert(noexcept(CoversHalfOpenRange(0u, 0u, Span<const TestInterval>{}, eligible, intervalBegin, intervalEnd)));
-    EXPECT_TRUE(CoversHalfOpenRange(0u, 0u, Span<const TestInterval>{}, eligible, intervalBegin, intervalEnd));
-    const auto throwingEligible = [](const TestInterval&) -> b8{ throw RuntimeException("interval predicate failure"); };
-    static_assert(!noexcept(CoversHalfOpenRange(0u, 1u, Span<const TestInterval>{}, throwingEligible, intervalBegin, intervalEnd)));
-    EXPECT_THROW(static_cast<void>(CoversHalfOpenRange(0u, 10u, Span<const TestInterval>(unsortedIntervals), throwingEligible, intervalBegin, intervalEnd)), RuntimeException);
-    EXPECT_TRUE(CoversHalfOpenRange(0u, 10u, Span<const TestInterval>(unsortedIntervals), eligible, intervalBegin, intervalEnd));
-    EXPECT_FALSE(CoversHalfOpenRange(0u, 11u, Span<const TestInterval>(unsortedIntervals), eligible, intervalBegin, intervalEnd));
-    const Array<TestInterval, 5u> sortedIntervals{ TestInterval{ 0u, 10u, 0u }, TestInterval{ 1u, 2u, 1u }, TestInterval{ 3u, 4u, 2u }, TestInterval{ 10u, 11u, 3u }, TestInterval{ 10u, 11u, 4u } };
-    Array<u8, 5u> overlapFlags{};
-    const auto noVisit = [](const TestInterval&)noexcept{};
-    static_assert(noexcept(VisitOverlappingSortedIntervals(Span<const TestInterval>{}, intervalBegin, intervalEnd, noVisit)));
-    const auto throwingVisit = [](const TestInterval&){ throw RuntimeException("interval visitor failure"); };
-    static_assert(!noexcept(VisitOverlappingSortedIntervals(Span<const TestInterval>{}, intervalBegin, intervalEnd, throwingVisit)));
-    EXPECT_THROW(VisitOverlappingSortedIntervals(Span<const TestInterval>(sortedIntervals), intervalBegin, intervalEnd, throwingVisit), RuntimeException);
-    VisitOverlappingSortedIntervals(Span<const TestInterval>(sortedIntervals), intervalBegin, intervalEnd, [&overlapFlags](const TestInterval& interval)noexcept{ overlapFlags[interval.index] = 1u; });
-    for(const u8 overlap : overlapFlags)
+void VerifyGlobal_IntervalCoverageHandlesOverlapAndThrows(){
+    Array<u8, 5> overlapFlags = Array<u8, 5>();
+    native(mut overlapFlags){
+        using TestInterval = NWB::Tests::GlobalCases::IntervalProbe;
+        auto makeInterval = [](const u64 first, const u64 last, const u32 index)noexcept{
+            TestInterval item;
+            item.first = first;
+            item.last = last;
+            item.index = index;
+            return item;
+        };
+        const Array<TestInterval, 3u> unsortedIntervals{ makeInterval(5u, 10u, 0u), makeInterval(0u, 5u, 1u), makeInterval(2u, 3u, 2u) };
+        const auto eligible = [](const TestInterval&)noexcept{ return true; };
+        const auto intervalBegin = [](const TestInterval& interval)noexcept{ return interval.first; };
+        const auto intervalEnd = [](const TestInterval& interval)noexcept{ return interval.last; };
+        static_assert(noexcept(CoversHalfOpenRange(0u, 0u, Span<const TestInterval>{}, eligible, intervalBegin, intervalEnd)));
+        EXPECT_TRUE(CoversHalfOpenRange(0u, 0u, Span<const TestInterval>{}, eligible, intervalBegin, intervalEnd));
+        const auto throwingEligible = [](const TestInterval&) -> b8{ throw RuntimeException("interval predicate failure"); };
+        static_assert(!noexcept(CoversHalfOpenRange(0u, 1u, Span<const TestInterval>{}, throwingEligible, intervalBegin, intervalEnd)));
+        EXPECT_THROW(static_cast<void>(CoversHalfOpenRange(0u, 10u, Span<const TestInterval>(unsortedIntervals), throwingEligible, intervalBegin, intervalEnd)), RuntimeException);
+        EXPECT_TRUE(CoversHalfOpenRange(0u, 10u, Span<const TestInterval>(unsortedIntervals), eligible, intervalBegin, intervalEnd));
+        EXPECT_FALSE(CoversHalfOpenRange(0u, 11u, Span<const TestInterval>(unsortedIntervals), eligible, intervalBegin, intervalEnd));
+        const Array<TestInterval, 5u> sortedIntervals{ makeInterval(0u, 10u, 0u), makeInterval(1u, 2u, 1u), makeInterval(3u, 4u, 2u), makeInterval(10u, 11u, 3u), makeInterval(10u, 11u, 4u) };
+        const auto noVisit = [](const TestInterval&)noexcept{};
+        static_assert(noexcept(VisitOverlappingSortedIntervals(Span<const TestInterval>{}, intervalBegin, intervalEnd, noVisit)));
+        const auto throwingVisit = [](const TestInterval&){ throw RuntimeException("interval visitor failure"); };
+        static_assert(!noexcept(VisitOverlappingSortedIntervals(Span<const TestInterval>{}, intervalBegin, intervalEnd, throwingVisit)));
+        EXPECT_THROW(VisitOverlappingSortedIntervals(Span<const TestInterval>(sortedIntervals), intervalBegin, intervalEnd, throwingVisit), RuntimeException);
+        VisitOverlappingSortedIntervals(Span<const TestInterval>(sortedIntervals), intervalBegin, intervalEnd, [&overlapFlags](const TestInterval& interval)noexcept{ overlapFlags[interval.index] = 1u; });
+    }
+    for(in u8 overlap : overlapFlags)
         EXPECT_EQ(overlap, 1u);
 }
 
-TEST(Global, DisjointSetJoinsPreserveRoots){
-    Array<u32, 4> parents{ 0u, 1u, 2u, 3u };
-    Array<u8, 4> ranks{ 0u, 0u, 0u, 0u };
+void VerifyGlobal_DisjointSetJoinsPreserveRoots(){
+    Array<u32, 4> parents = Array<u32, 4>();
+    parents[0u] = 0u;
+    parents[1u] = 1u;
+    parents[2u] = 2u;
+    parents[3u] = 3u;
+    Array<u8, 4> ranks = Array<u8, 4>();
     JoinDisjointSets(0u, 1u, parents, ranks);
     JoinDisjointSets(2u, 3u, parents, ranks);
     JoinDisjointSets(0u, 2u, parents, ranks);
@@ -595,38 +716,101 @@ TEST(Global, DisjointSetJoinsPreserveRoots){
     EXPECT_EQ(ranks[0u], 2u);
 }
 
+void VerifyGlobal_DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters(){
+    const StringView formatPrefix = s_GlobalDiagnosticValueFormatTrailing.substr(0u, 8u);
+    const StringView expected = s_GlobalDiagnosticValue42;
+    const DiagnosticEventText narrow = MakeDiagnosticEventText(formatPrefix, 42u);
+    EXPECT_EQ(narrow.view(), expected);
+
+    DiagnosticEventText wide = DiagnosticEventText();
+    DiagnosticEventText nullFormatted = DiagnosticEventText();
+    native(mut wide, mut nullFormatted){
+        constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
+        wide = MakeDiagnosticEventText(s_ValueFormatTrailingWide.substr(0u, 8u), 42u);
+        nullFormatted = MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u);
+    }
+    EXPECT_EQ(wide.view(), expected);
+    EXPECT_EQ(nullFormatted.view(), StringView());
+}
+
+void VerifyGlobal_DiagnosticEventTextViewsStopAtNullOrBufferBounds(){
+    DiagnosticEventText text = DiagnosticEventText();
+    usize capacity = 0u;
+    native(mut text, mut capacity){
+        capacity = sizeof(text.value);
+        for(char& character : text.value)
+            character = 'x';
+    }
+    const StringView fullView = text.view();
+    EXPECT_EQ(fullView.size(), capacity);
+    const DiagnosticEventText formatted = MakeDiagnosticEventText("{}", text);
+    const StringView formattedView = formatted.view();
+    EXPECT_EQ(formattedView.size(), capacity - 1u);
+    EXPECT_EQ(formattedView, fullView.substr(0u, capacity - 1u));
+
+    native(mut text){
+        text.value[3u] = '\0';
+    }
+    EXPECT_EQ(text.view(), StringView("xxx"));
+}
+
+void VerifyGlobal_DiagnosticEventHookRejectsReentryAndHonorsBoundedText(){
+    const StringView unitCategory = s_GlobalDiagnosticUnit;
+    u32 captureCount = 0u;
+    b8 nonNullFields = false;
+    StringView capturedName = StringView();
+    StringView capturedCategory = StringView();
+    StringView capturedExpression = StringView();
+    StringView capturedMessage = StringView();
+    native(in unitCategory, mut captureCount, mut nonNullFields, mut capturedName, mut capturedCategory, mut capturedExpression, mut capturedMessage){
+        using namespace __hidden_diagnostic_event_tests;
+        ResetDiagnosticEventCapture();
+
+        const auto callback = MakeNotNull<DiagnosticEventCallback>([](const DiagnosticEventRecord& record)noexcept{
+            RecordDiagnosticEvent(record);
+            CaptureDiagnosticEvent("recursive", "ignored");
+        });
+
+        SetDiagnosticEventCallback(callback.get());
+        CaptureDiagnosticEvent(AStringView("unit.trailing").substr(0u, 4u), AStringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
+        ClearDiagnosticEventCallback(callback.get());
+        CaptureDiagnosticEvent(unitCategory, "ignored");
+
+        const DiagnosticCaptureSnapshot snapshot = ReadDiagnosticCaptureSnapshot();
+        captureCount = snapshot.captureCount;
+        nonNullFields =
+            snapshot.name.data() != nullptr
+            && snapshot.category.data() != nullptr
+            && snapshot.expression.data() != nullptr
+            && snapshot.message.data() != nullptr
+            && snapshot.file.data() != nullptr
+        ;
+        capturedName = snapshot.name;
+        capturedCategory = snapshot.category;
+        capturedExpression = snapshot.expression;
+        capturedMessage = snapshot.message;
+    }
+    EXPECT_EQ(captureCount, 1u);
+    ASSERT_TRUE(nonNullFields);
+    EXPECT_EQ(capturedName, StringView(""));
+    EXPECT_EQ(capturedCategory, StringView("unit"));
+    EXPECT_EQ(capturedExpression, StringView(""));
+    EXPECT_EQ(capturedMessage, StringView("message"));
+    EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), StringView());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/global/name_case_types.adhd.h>
-
-#include <gtest/gtest.h>
-
-#include <global/diagnostics.h>
-#include <global/fixed_buffer.h>
-#include <global/not_null.h>
+[source]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_diagnostic_event_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_Unit = NWB::Tests::GlobalCases::s_GlobalDiagnosticUnit;
-static constexpr AStringView s_Value42 = NWB::Tests::GlobalCases::s_GlobalDiagnosticValue42;
-static constexpr AStringView s_ValueFormatTrailing = NWB::Tests::GlobalCases::s_GlobalDiagnosticValueFormatTrailing;
-static constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -644,11 +828,7 @@ static Array<char, s_MaxEventTextBytes> s_DiagnosticEventExpressionText = {};
 static Array<char, s_MaxEventTextBytes> s_DiagnosticEventMessageText = {};
 static Array<char, s_MaxEventTextBytes> s_DiagnosticEventFileText = {};
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void ResetDiagnosticEventCapture()noexcept{
+void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventCaptureCount = 0u;
     s_DiagnosticEventName = {};
     s_DiagnosticEventCategory = {};
@@ -662,7 +842,7 @@ static void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventFileText[0u] = 0;
 }
 
-static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
+void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     ++s_DiagnosticEventCaptureCount;
     CopyFixedBuffer(s_DiagnosticEventNameText, record.event);
     CopyFixedBuffer(s_DiagnosticEventCategoryText, record.category);
@@ -676,55 +856,15 @@ static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     s_DiagnosticEventFile = AStringView(s_DiagnosticEventFileText.data());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters){
-    const DiagnosticEventText narrow = MakeDiagnosticEventText(s_ValueFormatTrailing.substr(0u, 8u), 42u);
-    EXPECT_EQ(narrow.view(), s_Value42);
-    const DiagnosticEventText wide = MakeDiagnosticEventText(s_ValueFormatTrailingWide.substr(0u, 8u), 42u);
-    EXPECT_EQ(wide.view(), s_Value42);
-    EXPECT_EQ(MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u).view(), AStringView{});
-}
-
-TEST(Global, DiagnosticEventTextViewsStopAtNullOrBufferBounds){
-    DiagnosticEventText text;
-    for(char& character : text.value)
-        character = 'x';
-    EXPECT_EQ(text.view().size(), sizeof(text.value));
-    const DiagnosticEventText formatted = MakeDiagnosticEventText("{}", text);
-    EXPECT_EQ(formatted.view().size(), sizeof(text.value) - 1u);
-    EXPECT_EQ(formatted.view(), text.view().substr(0u, sizeof(text.value) - 1u));
-
-    text.value[3u] = '\0';
-    EXPECT_EQ(text.view(), AStringView("xxx"));
-}
-
-TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
-    ResetDiagnosticEventCapture();
-
-    const auto callback = MakeNotNull<DiagnosticEventCallback>([](const DiagnosticEventRecord& record)noexcept{
-        RecordDiagnosticEvent(record);
-        CaptureDiagnosticEvent("recursive", "ignored");
-    });
-
-    SetDiagnosticEventCallback(callback.get());
-    CaptureDiagnosticEvent(AStringView("unit.trailing").substr(0u, 4u), AStringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
-    ClearDiagnosticEventCallback(callback.get());
-    CaptureDiagnosticEvent(s_Unit, "ignored");
-
-    EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
-    ASSERT_NE(s_DiagnosticEventName.data(), nullptr);
-    ASSERT_NE(s_DiagnosticEventCategory.data(), nullptr);
-    ASSERT_NE(s_DiagnosticEventExpression.data(), nullptr);
-    ASSERT_NE(s_DiagnosticEventMessage.data(), nullptr);
-    ASSERT_NE(s_DiagnosticEventFile.data(), nullptr);
-    EXPECT_EQ(s_DiagnosticEventName, AStringView(""));
-    EXPECT_EQ(s_DiagnosticEventCategory, AStringView("unit"));
-    EXPECT_EQ(s_DiagnosticEventExpression, AStringView(""));
-    EXPECT_EQ(s_DiagnosticEventMessage, AStringView("message"));
-    EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), StringView{});
+DiagnosticCaptureSnapshot ReadDiagnosticCaptureSnapshot()noexcept{
+    DiagnosticCaptureSnapshot snapshot;
+    snapshot.captureCount = s_DiagnosticEventCaptureCount;
+    snapshot.name = s_DiagnosticEventName;
+    snapshot.category = s_DiagnosticEventCategory;
+    snapshot.expression = s_DiagnosticEventExpression;
+    snapshot.message = s_DiagnosticEventMessage;
+    snapshot.file = s_DiagnosticEventFile;
+    return snapshot;
 }
 
 
@@ -737,579 +877,33 @@ TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/arena_owner_fixture.adhd.h>
-#include <tests/unit/global/name_case_types.adhd.h>
-
-#include <core/alloc/module.h>
-
-#include <global/arena_memory.h>
-#include <global/sync.h>
-#include <global/thread.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_allocator_owner_concurrency_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core::Alloc;
-using NWB::Tests::OwnerStats;
-
-void WaitForFlag(const Atomic<b8>& flag)noexcept{
-    AtomicBackOff backoff;
-    while(!flag.load(MemoryOrder::acquire))
-        backoff.pause();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHistory){
-    static constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerConcurrentLifetimes;
-    constexpr usize s_ThreadCount = 4u;
-    constexpr usize s_Iterations = 256u;
-    constexpr u64 s_Allocations = s_ThreadCount * s_Iterations * 5u;
-    const usize poolBytes = PersistentArena::StructureAlignedSize(4096u);
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    Atomic<b8> failed{ false };
-    Atomic<b8> releaseFirstAllocations{ false };
-    Atomic<usize> completed{ 0u };
-    Latch firstAllocationsReady(s_ThreadCount);
-    Array<Thread, s_ThreadCount> workers;
-
-    for(Thread& worker : workers){
-        worker = Thread([&failed, &releaseFirstAllocations, &completed, &firstAllocationsReady, poolBytes](){
-            for(usize iteration = 0u; iteration < s_Iterations; ++iteration){
-                {
-                    GlobalArena arena(s_Owner);
-                    auto* allocation = static_cast<u8*>(arena.allocate(1u, 128u));
-                    if(allocation){
-                        allocation[0u] = 73u;
-                        auto* const replacement = static_cast<u8*>(arena.reallocate(allocation, 1u, 256u));
-                        if(replacement)
-                            allocation = replacement;
-                        else
-                            failed.store(true, MemoryOrder::relaxed);
-                        if(allocation[0u] != 73u)
-                            failed.store(true, MemoryOrder::relaxed);
-                    }
-                    else
-                        failed.store(true, MemoryOrder::relaxed);
-
-                    if(iteration == 0u){
-                        firstAllocationsReady.count_down();
-                        WaitForFlag(releaseFirstAllocations);
-                    }
-                    arena.deallocate(allocation, 1u, 256u);
-                }
-                {
-                    ScratchArena arena(s_Owner);
-                    void* const first = arena.allocate(8u, 64u);
-                    void* const second = arena.allocate(8u, 128u);
-                    if(!first || !second)
-                        failed.store(true, MemoryOrder::relaxed);
-                    if(first)
-                        arena.deallocate(first, 8u, 64u);
-                    // Out-of-order free defers release until arena destruction.
-                }
-                {
-                    PersistentArena arena(s_Owner, poolBytes);
-                    void* const first = arena.allocate(8u, 64u);
-                    void* const second = arena.allocate(8u, 128u);
-                    if(!first || !second)
-                        failed.store(true, MemoryOrder::relaxed);
-                    if(first)
-                        arena.deallocate(first, 8u, 64u);
-                    // One explicit free and one bulk free must contribute exactly two retired deallocations.
-                }
-            }
-            completed.fetch_add(1u, MemoryOrder::release);
-        });
-    }
-
-    firstAllocationsReady.wait();
-    const ArenaMemoryStats simultaneouslyLive = OwnerStats(s_Owner);
-    releaseFirstAllocations.store(true, MemoryOrder::release);
-    ArenaMemoryStats previous = simultaneouslyLive;
-    b8 snapshotsConsistent = true;
-    do{
-        const ArenaMemoryStats current = OwnerStats(s_Owner);
-        snapshotsConsistent &= current.allocationCount >= previous.allocationCount;
-        snapshotsConsistent &= current.reallocationCount >= previous.reallocationCount;
-        snapshotsConsistent &= current.deallocationCount >= previous.deallocationCount;
-        snapshotsConsistent &= current.allocationCount - before.allocationCount <= s_Allocations;
-        snapshotsConsistent &= current.deallocationCount - before.deallocationCount <= s_Allocations;
-        snapshotsConsistent &= current.usedBytes <= s_ThreadCount * 256u;
-        snapshotsConsistent &= current.reservedBytes <= s_ThreadCount * poolBytes;
-        snapshotsConsistent &= current.peakUsedBytes <= Max<u64>(before.peakUsedBytes, 256u);
-        previous = current;
-        YieldThread();
-    }while(completed.load(MemoryOrder::acquire) != s_ThreadCount);
-    for(Thread& worker : workers)
-        worker.join();
-
-    const ArenaMemoryStats after = OwnerStats(s_Owner);
-    EXPECT_FALSE(failed.load(MemoryOrder::relaxed));
-    EXPECT_TRUE(snapshotsConsistent);
-    EXPECT_EQ(simultaneouslyLive.usedBytes, s_ThreadCount * 256u);
-    EXPECT_EQ(simultaneouslyLive.reservedBytes, simultaneouslyLive.usedBytes);
-    EXPECT_EQ(simultaneouslyLive.peakUsedBytes, Max<u64>(before.peakUsedBytes, 256u));
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, s_Allocations);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, s_Allocations);
-    EXPECT_EQ(after.reallocationCount - before.reallocationCount, s_ThreadCount * s_Iterations);
-    EXPECT_EQ(after.peakUsedBytes, Max<u64>(before.peakUsedBytes, 256u));
-}
-
-TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBackingTotals){
-    constexpr usize s_AllocationCount = 64u;
-    u8* allocations[s_AllocationCount] = {};
-    u64 allocatedBytes = 0u;
-    Atomic<b8> failed{ false };
-    Atomic<b8> producerReady{ false };
-    Atomic<b8> consumerReady{ false };
-    Atomic<b8> startProducer{ false };
-    Atomic<b8> startConsumer{ false };
-    Atomic<b8> produced{ false };
-    Atomic<b8> consumed{ false };
-    Atomic<b8> releaseWorkers{ false };
-
-    Thread producer([&]()noexcept{
-        void* const warmup = CoreAlloc(1u);
-        CoreFree(warmup);
-        producerReady.store(true, MemoryOrder::release);
-        WaitForFlag(startProducer);
-        for(usize index = 0u; index < s_AllocationCount; ++index){
-            auto* const allocation = static_cast<u8*>(CoreAlloc(13u));
-            allocations[index] = allocation;
-            if(!allocation){
-                failed.store(true, MemoryOrder::relaxed);
-                continue;
-            }
-            allocatedBytes += CoreMsize(allocation);
-            allocation[0u] = static_cast<u8>(index);
-            allocation[12u] = static_cast<u8>(index + 1u);
-        }
-        produced.store(true, MemoryOrder::release);
-        WaitForFlag(releaseWorkers);
-    });
-    Thread consumer([&]()noexcept{
-        void* const warmup = CoreAlloc(1u);
-        CoreFree(warmup);
-        consumerReady.store(true, MemoryOrder::release);
-        WaitForFlag(startConsumer);
-        for(usize index = 0u; index < s_AllocationCount; ++index){
-            u8* allocation = allocations[index];
-            if(!allocation)
-                continue;
-            auto* const replacement = static_cast<u8*>(CoreRealloc(allocation, 71u));
-            if(replacement)
-                allocation = replacement;
-            else
-                failed.store(true, MemoryOrder::relaxed);
-            if(allocation[0u] != static_cast<u8>(index) || allocation[12u] != static_cast<u8>(index + 1u))
-                failed.store(true, MemoryOrder::relaxed);
-            CoreFree(allocation);
-        }
-        consumed.store(true, MemoryOrder::release);
-        WaitForFlag(releaseWorkers);
-    });
-
-    // Keep thread closures outside the measured allocation interval.
-    WaitForFlag(producerReady);
-    WaitForFlag(consumerReady);
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    startProducer.store(true, MemoryOrder::release);
-    WaitForFlag(produced);
-    const ArenaMemoryStats held = HeapBackingMemoryStats();
-    startConsumer.store(true, MemoryOrder::release);
-    WaitForFlag(consumed);
-    const ArenaMemoryStats settled = HeapBackingMemoryStats();
-    releaseWorkers.store(true, MemoryOrder::release);
-    producer.join();
-    consumer.join();
-    const ArenaMemoryStats retired = HeapBackingMemoryStats();
-
-    EXPECT_FALSE(failed.load(MemoryOrder::relaxed));
-    EXPECT_EQ(held.usedBytes - before.usedBytes, allocatedBytes);
-    EXPECT_EQ(held.reservedBytes, held.usedBytes);
-    EXPECT_GE(held.peakUsedBytes, held.usedBytes);
-    EXPECT_EQ(held.allocationCount - before.allocationCount, s_AllocationCount);
-    EXPECT_EQ(settled.usedBytes, before.usedBytes);
-    EXPECT_EQ(settled.reservedBytes, settled.usedBytes);
-    EXPECT_EQ(settled.allocationCount - before.allocationCount, s_AllocationCount);
-    EXPECT_EQ(settled.reallocationCount - before.reallocationCount, s_AllocationCount);
-    EXPECT_EQ(settled.deallocationCount - before.deallocationCount, s_AllocationCount);
-    EXPECT_GE(settled.peakUsedBytes, held.peakUsedBytes);
-    EXPECT_GE(retired.allocationCount, settled.allocationCount);
-    EXPECT_GE(retired.reallocationCount, settled.reallocationCount);
-    EXPECT_GE(retired.deallocationCount, settled.deallocationCount);
-    EXPECT_GE(retired.peakUsedBytes, settled.peakUsedBytes);
-}
+NWB_ADHD_GTEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits, VerifyBase64_RejectsMalformedAlphabetLengthPaddingAndUnusedBits)
+NWB_ADHD_GTEST(Base64, ExactDecodedBoundsAreCheckedBeforeAllocation, VerifyBase64_ExactDecodedBoundsAreCheckedBeforeAllocation)
+NWB_ADHD_GTEST(Base64, InvalidEncodeInputAndSizeOverflowDoNotAllocate, VerifyBase64_InvalidEncodeInputAndSizeOverflowDoNotAllocate)
+NWB_ADHD_GTEST(Global, AtomicIdentityAndHighWaterRespectLimits, VerifyGlobal_AtomicIdentityAndHighWaterRespectLimits)
+NWB_ADHD_GTEST(Global, ExhaustedPodReadsPreserveCursor, VerifyGlobal_ExhaustedPodReadsPreserveCursor)
+NWB_ADHD_GTEST(Global, TruncatedStringReadsDoNotAdvanceCursor, VerifyGlobal_TruncatedStringReadsDoNotAdvanceCursor)
+NWB_ADHD_GTEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend, VerifyGlobal_StringTableUsesPrefixedBoundsAndRejectsEmptyAppend)
+NWB_ADHD_GTEST(Global, InvalidStringTableReads, VerifyGlobal_InvalidStringTableReads)
+NWB_ADHD_GTEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing, VerifyGlobal_EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing)
+NWB_ADHD_GTEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor, VerifyGlobal_FixedVectorOverflowDoesNotAdvanceBinaryCursor)
+NWB_ADHD_GTEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor, VerifyGlobal_RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor)
+NWB_ADHD_GTEST(Global, AppendTriviallyCopyableVectorSelfAppend, VerifyGlobal_AppendTriviallyCopyableVectorSelfAppend)
+NWB_ADHD_GTEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges, VerifyGlobal_TriviallyCopyableVectorPreservesOverlappingSourceRanges)
+NWB_ADHD_GTEST(Global, DirectionalSearchHandlesChangingCountsAndThrows, VerifyGlobal_DirectionalSearchHandlesChangingCountsAndThrows)
+NWB_ADHD_GTEST(Global, CollectionValidationAndOrderingPreserveBoundaries, VerifyGlobal_CollectionValidationAndOrderingPreserveBoundaries)
+NWB_ADHD_GTEST(Global, IntervalCoverageHandlesOverlapAndThrows, VerifyGlobal_IntervalCoverageHandlesOverlapAndThrows)
+NWB_ADHD_GTEST(Global, DisjointSetJoinsPreserveRoots, VerifyGlobal_DisjointSetJoinsPreserveRoots)
+NWB_ADHD_GTEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters, VerifyGlobal_DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters)
+NWB_ADHD_GTEST(Global, DiagnosticEventTextViewsStopAtNullOrBufferBounds, VerifyGlobal_DiagnosticEventTextViewsStopAtNullOrBufferBounds)
+NWB_ADHD_GTEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText, VerifyGlobal_DiagnosticEventHookRejectsReentryAndHonorsBoundedText)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/arena_owner_fixture.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/global/name_case_types.adhd.h>
-
-#include <core/alloc/module.h>
-
-#include <global/arena_memory.h>
-#include <global/thread.h>
-#include <global/timer.h>
-#include <global/text_utils.h>
-
-#include <gtest/gtest.h>
-#include <tbb/scalable_allocator.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_allocator_owner_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core::Alloc;
-using NWB::Tests::OwnerStats;
-
-TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerIdentityRetirement;
-    constexpr const Name& s_LaterOwner = NWB::Tests::GlobalCases::s_AllocationOwnerIdentityLater;
-    const ArenaMemoryOwnerRecord* retained = nullptr;
-    const ArenaMemoryOwnerRecord* successor = nullptr;
-    {
-        GlobalArena arena(s_Owner);
-        const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-        while(record){
-            ArenaMemoryOwnerIdentity identity;
-            const ArenaMemoryOwnerRecord* const next = ReadArenaMemoryOwnerIdentity(*record, identity);
-            if(identity.ownerName == s_Owner){
-                retained = record;
-                successor = next;
-                break;
-            }
-            record = next;
-        }
-        ASSERT_NE(retained, nullptr);
-        void* const allocation = arena.allocate(1u, 37u);
-        ASSERT_NE(allocation, nullptr);
-        arena.deallocate(allocation, 1u, 37u);
-    }
-
-    GlobalArena later(s_LaterOwner);
-    ArenaMemoryOwnerIdentity identity;
-    EXPECT_EQ(ReadArenaMemoryOwnerIdentity(*retained, identity), successor);
-    EXPECT_EQ(identity.ownerName, s_Owner);
-    EXPECT_EQ(identity.source, ArenaMemorySource::Arena);
-    ArenaMemoryOwnerSnapshot retired;
-    EXPECT_EQ(ReadArenaMemoryOwnerRecord(*retained, retired), successor);
-    EXPECT_EQ(retired.ownerName, identity.ownerName);
-    EXPECT_EQ(retired.source, identity.source);
-    EXPECT_EQ(retired.stats.usedBytes, 0u);
-    EXPECT_EQ(retired.stats.reservedBytes, 0u);
-    EXPECT_GE(retired.stats.allocationCount, 1u);
-    EXPECT_GE(retired.stats.deallocationCount, 1u);
-
-    b8 foundLater = false;
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerIdentity current;
-        record = ReadArenaMemoryOwnerIdentity(*record, current);
-        foundLater |= current.ownerName == s_LaterOwner;
-    }
-    EXPECT_TRUE(foundLater);
-}
-
-TEST(AllocationOwners, SharedNameAggregatesBytesAndRetainsIndividualHighwater){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerSharedName;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    u64 combinedBytes = 0u;
-    u64 largestArenaBytes = 0u;
-    {
-        GlobalArena first(s_Owner);
-        GlobalArena second("TESTS/ALLOCATION_OWNERS/SHARED_NAME");
-        void* firstAllocation = first.allocate(1u, 13u);
-        void* secondAllocation = second.allocate(1u, 21u);
-        ASSERT_NE(firstAllocation, nullptr);
-        ASSERT_NE(secondAllocation, nullptr);
-        combinedBytes = CoreMsize(firstAllocation) + CoreMsize(secondAllocation);
-        largestArenaBytes = Max(CoreMsize(firstAllocation), CoreMsize(secondAllocation));
-        EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes + combinedBytes);
-        EXPECT_EQ(first.memoryStats().allocationCount, 1u);
-        EXPECT_EQ(second.memoryStats().allocationCount, 1u);
-        first.deallocate(firstAllocation, 1u, 13u);
-        EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes + CoreMsize(secondAllocation));
-        second.deallocate(secondAllocation, 1u, 21u);
-    }
-    const ArenaMemoryStats after = OwnerStats(s_Owner);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, 2u);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, 2u);
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, largestArenaBytes));
-}
-
-TEST(AllocationOwners, TransientScratchBulkReleaseRetainsChurnWithoutAccumulatingPeak){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerTransientScratch;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    for(usize pass = 0u; pass < 3u; ++pass){
-        ScratchArena arena(s_Owner);
-        void* first = arena.allocate(16u, 208u);
-        void* second = arena.allocate(16u, 64u);
-        ASSERT_NE(first, nullptr);
-        ASSERT_NE(second, nullptr);
-        arena.deallocate(first, 16u, 208u);
-        EXPECT_EQ(arena.memoryStats().usedBytes, 272u);
-        EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes + 272u);
-    }
-    const ArenaMemoryStats after = OwnerStats(s_Owner);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, 6u);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, 6u);
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, u64{ 272u }));
-}
-
-TEST(AllocationOwners, PersistentPoolBulkReleaseRetainsReallocationHistory){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerTransientPersistent;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    {
-        PersistentArena arena(s_Owner, 65536u);
-        void* allocation = arena.allocate(1u, 13u);
-        ASSERT_NE(allocation, nullptr);
-        allocation = arena.reallocate(allocation, 1u, 67u);
-        ASSERT_NE(allocation, nullptr);
-        EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, before.reservedBytes + 65536u);
-        EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes + arena.memoryStats().usedBytes);
-    }
-    const ArenaMemoryStats after = OwnerStats(s_Owner);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, 1u);
-    EXPECT_EQ(after.reallocationCount - before.reallocationCount, 1u);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, 1u);
-}
-
-TEST(AllocationOwners, SharedNamePreservesPoolReservationAlongsideDirectHeapUsage){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerMixedReservation;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    {
-        PersistentArena pool(s_Owner, 65536u);
-        GlobalArena direct(s_Owner);
-        void* allocation = direct.allocate(1u, 13u);
-        ASSERT_NE(allocation, nullptr);
-        EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes + CoreMsize(allocation));
-        EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, before.reservedBytes + 65536u + CoreMsize(allocation));
-        void* replacement = direct.reallocate(allocation, 1u, 21u);
-        ASSERT_NE(replacement, nullptr);
-        allocation = replacement;
-        EXPECT_EQ(direct.memoryStats().reservedBytes, CoreMsize(allocation));
-        EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, before.reservedBytes + 65536u + CoreMsize(allocation));
-        direct.deallocate(allocation, 1u, 21u);
-        EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes);
-        EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, before.reservedBytes + 65536u);
-    }
-    EXPECT_EQ(OwnerStats(s_Owner).usedBytes, before.usedBytes);
-    EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, before.reservedBytes);
-}
-
-TEST(AllocationOwners, ResetPreservesRetiredCountersAndIndividualPeakExactlyOnce){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerResetHistory;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    {
-        ArenaMemoryTracker tracker(s_Owner);
-        tracker.reset(512u);
-        tracker.recordAllocation(64u);
-        tracker.recordAllocation(128u);
-        tracker.reset(256u);
-        const ArenaMemoryStats resetOwner = OwnerStats(s_Owner);
-        EXPECT_EQ(tracker.snapshot().allocationCount, 0u);
-        EXPECT_EQ(tracker.snapshot().peakUsedBytes, 0u);
-        EXPECT_EQ(resetOwner.reservedBytes, before.reservedBytes + 256u);
-        EXPECT_EQ(resetOwner.usedBytes, before.usedBytes);
-        EXPECT_EQ(resetOwner.allocationCount - before.allocationCount, 2u);
-        EXPECT_EQ(resetOwner.deallocationCount - before.deallocationCount, 2u);
-        EXPECT_EQ(resetOwner.peakUsedBytes, Max(before.peakUsedBytes, u64{ 192u }));
-        tracker.recordAllocation(16u);
-        tracker.reset();
-        tracker.reset();
-    }
-    const ArenaMemoryStats after = OwnerStats(s_Owner);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, 3u);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, 3u);
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, u64{ 192u }));
-}
-
-TEST(AllocationOwners, RetiredGlobalArenaPreservesUnreleasedOwnership){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerRetiredOutstanding;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    void* allocation = nullptr;
-    {
-        GlobalArena arena(s_Owner);
-        allocation = arena.allocate(1u, 13u);
-        ASSERT_NE(allocation, nullptr);
-    }
-    const u64 bytes = CoreMsize(allocation);
-    const ArenaMemoryStats retired = OwnerStats(s_Owner);
-    CoreFree(allocation);
-    EXPECT_EQ(retired.usedBytes, before.usedBytes + bytes);
-    EXPECT_EQ(retired.reservedBytes, before.reservedBytes + bytes);
-    EXPECT_EQ(retired.allocationCount - before.allocationCount, 1u);
-    EXPECT_EQ(retired.deallocationCount, before.deallocationCount);
-    EXPECT_EQ(retired.peakUsedBytes, Max(before.peakUsedBytes, bytes));
-}
-
-TEST(AllocationOwners, BackingCountsRawAlignedAllocationsAndPreservesFailedReallocation){
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    auto* allocation = static_cast<u8*>(CoreAllocAligned(13u, 64u));
-    const u64 bytes = allocation ? CoreMsize(allocation) : 0u;
-    const ArenaMemoryStats allocated = HeapBackingMemoryStats();
-    ASSERT_NE(allocation, nullptr);
-    allocation[0u] = 37u;
-    errno = ERANGE;
-    void* backendInvalidZero = scalable_aligned_realloc(allocation, 0u, 3u);
-    const i32 backendInvalidZeroError = errno;
-    errno = ERANGE;
-    void* backendInvalidAlignment = scalable_aligned_realloc(allocation, 21u, 0u);
-    const i32 backendInvalidAlignmentError = errno;
-    errno = ERANGE;
-    void* invalidZero = CoreReallocAligned(allocation, 0u, 3u);
-    const i32 invalidZeroError = errno;
-    errno = ERANGE;
-    void* invalidAlignment = CoreReallocAligned(allocation, 21u, 0u);
-    const i32 invalidAlignmentError = errno;
-    const ArenaMemoryStats failed = HeapBackingMemoryStats();
-    EXPECT_EQ(invalidZero, nullptr);
-    EXPECT_EQ(invalidZero, backendInvalidZero);
-    EXPECT_EQ(invalidZeroError, backendInvalidZeroError);
-    EXPECT_EQ(invalidAlignment, nullptr);
-    EXPECT_EQ(invalidAlignment, backendInvalidAlignment);
-    EXPECT_EQ(invalidAlignmentError, backendInvalidAlignmentError);
-    EXPECT_EQ(allocation[0u], 37u);
-    EXPECT_EQ(allocated.usedBytes - before.usedBytes, bytes);
-    EXPECT_EQ(allocated.reservedBytes, allocated.usedBytes);
-    EXPECT_EQ(failed.reservedBytes, failed.usedBytes);
-    EXPECT_EQ(allocated.allocationCount - before.allocationCount, 1u);
-    EXPECT_EQ(failed.usedBytes, allocated.usedBytes);
-    EXPECT_EQ(failed.reallocationCount, allocated.reallocationCount);
-    EXPECT_EQ(failed.deallocationCount, allocated.deallocationCount);
-    const ArenaMemoryStats beforeFree = HeapBackingMemoryStats();
-    CoreFreeSizeAligned(allocation, 13u);
-    const ArenaMemoryStats freed = HeapBackingMemoryStats();
-    EXPECT_EQ(beforeFree.usedBytes - freed.usedBytes, bytes);
-    EXPECT_EQ(freed.reservedBytes, freed.usedBytes);
-    EXPECT_EQ(freed.deallocationCount - beforeFree.deallocationCount, 1u);
-}
-
-TEST(AllocationOwners, RawReallocationMaintainsBackingReservationAndCounts){
-    const ArenaMemoryStats before = HeapBackingMemoryStats();
-    auto* allocation = static_cast<u8*>(CoreRealloc(nullptr, 13u));
-    ASSERT_NE(allocation, nullptr);
-    allocation[0u] = 29u;
-    const u64 originalBytes = CoreMsize(allocation);
-    const ArenaMemoryStats allocated = HeapBackingMemoryStats();
-    auto* replacement = static_cast<u8*>(CoreRealloc(allocation, 71u));
-    ASSERT_NE(replacement, nullptr);
-    allocation = replacement;
-    const u64 grownBytes = CoreMsize(allocation);
-    const ArenaMemoryStats grown = HeapBackingMemoryStats();
-    EXPECT_EQ(allocation[0u], 29u);
-    const ArenaMemoryStats beforeRelease = HeapBackingMemoryStats();
-    void* released = CoreRealloc(allocation, 0u);
-    const ArenaMemoryStats afterRelease = HeapBackingMemoryStats();
-    EXPECT_EQ(released, nullptr);
-    EXPECT_EQ(allocated.usedBytes - before.usedBytes, originalBytes);
-    EXPECT_EQ(allocated.allocationCount - before.allocationCount, 1u);
-    EXPECT_EQ(grown.usedBytes - allocated.usedBytes, grownBytes - originalBytes);
-    EXPECT_EQ(grown.reallocationCount - allocated.reallocationCount, 1u);
-    EXPECT_EQ(beforeRelease.usedBytes - afterRelease.usedBytes, grownBytes);
-    EXPECT_EQ(afterRelease.deallocationCount - beforeRelease.deallocationCount, 1u);
-    EXPECT_EQ(allocated.reservedBytes, allocated.usedBytes);
-    EXPECT_EQ(grown.reservedBytes, grown.usedBytes);
-    EXPECT_EQ(afterRelease.reservedBytes, afterRelease.usedBytes);
-}
-
-TEST(AllocationOwners, BackingDomainCannotCollideWithAnArenaName){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerHeapBacking;
-    GlobalArena arena(s_Owner);
-    void* allocation = arena.allocate(1u, 13u);
-    ASSERT_NE(allocation, nullptr);
-    const ArenaMemoryStats arenaStats = OwnerStats(s_Owner, ArenaMemorySource::Arena);
-    const ArenaMemoryStats backingStats = OwnerStats(s_Owner, ArenaMemorySource::HeapBacking);
-    EXPECT_EQ(arenaStats.usedBytes, CoreMsize(allocation));
-    EXPECT_GE(backingStats.usedBytes, arenaStats.usedBytes);
-    EXPECT_GT(backingStats.allocationCount, arenaStats.allocationCount);
-    arena.deallocate(allocation, 1u, 13u);
-}
-
-TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
-    constexpr const Name& s_Owner = NWB::Tests::GlobalCases::s_AllocationOwnerConcurrent;
-    constexpr u32 s_ThreadCount = 4u;
-    constexpr u32 s_AllocationCount = 8192u;
-    const ArenaMemoryStats before = OwnerStats(s_Owner);
-    Latch startGate(s_ThreadCount + 1u);
-    Atomic<b8> failed{ false };
-    Array<Thread, s_ThreadCount> workers;
-    for(Thread& worker : workers){
-        worker = Thread([&startGate, &failed](){
-            GlobalArena arena(s_Owner);
-            startGate.arrive_and_wait();
-            for(u32 index = 0u; index < s_AllocationCount; ++index){
-                void* allocation = arena.allocate(1u, 128u);
-                if(!allocation){
-                    failed.store(true, MemoryOrder::relaxed);
-                    return;
-                }
-                arena.deallocate(allocation, 1u, 128u);
-            }
-        });
-    }
-    const Timer begin = TimerNow();
-    startGate.arrive_and_wait();
-    for(Thread& worker : workers)
-        worker.join();
-    const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
-    const ArenaMemoryStats after = OwnerStats(s_Owner);
-    EXPECT_FALSE(failed.load(MemoryOrder::relaxed));
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, s_ThreadCount * s_AllocationCount);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, s_ThreadCount * s_AllocationCount);
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, u64{ 128u }));
-    NWB::Tests::RecordUnsignedTestProperty("shared_owner_churn_ns", elapsed);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

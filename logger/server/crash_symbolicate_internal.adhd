@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<StringView> ExtractCallstackFrameHexToken(in StringView line){
+    const usize prefix = line.find(s_CrashSymbolicateInternalHexAddressPrefix);
+    if(prefix >= line.size())
+        return MakeUnexpected(Failure());
+
+    const usize start = prefix + s_CrashSymbolicateInternalHexAddressPrefix.size();
+    usize end = start;
+    while(end < line.size()){
+        const u8 ch = cast<u8>(line[end]);
+        if(ch == 32u || ch == 9u || ch == 13u || ch == 10u)
+            break;
+        ++end;
+    }
+    if(end == start)
+        return MakeUnexpected(Failure());
+    return line.substr(start, end - start);
+}
+
+Expected<u64> ParseCallstackFrameAddress(in StringView line){
+    const Expected<StringView> hexToken = ExtractCallstackFrameHexToken(line);
+    if(!hexToken.has_value())
+        return MakeUnexpected(Failure());
+    return ParseVariableHexU64(hexToken.value());
+}
+
+void AppendCrashHexAddress(in u64 address, mut String outReport){
+    outReport.append(s_CrashSymbolicateInternalHexAddressPrefix);
+    outReport.append(FormatHex64A(address));
+}
+
+void AppendCrashDecimal(in u64 value, mut String outReport){
+    AppendUnsignedU64Text(outReport, value);
+}
+
+StringView SelectSymbolStoreStatusText(in b8 checkSucceeded, in b8 directoryExists){
+    if(!checkSucceeded)
+        return s_CrashSymbolicateInternalSymbolStoreErrorText;
+    if(directoryExists)
+        return s_CrashSymbolicateInternalSymbolStorePresentText;
+    return s_CrashSymbolicateInternalSymbolStoreMissingText;
+}
+
+b8 HasCrashHeadlineFields(in StringView triggerExpression, in StringView triggerMessage, in StringView triggerFile, in u64 triggerLine){
+    return !triggerExpression.empty() || !triggerMessage.empty() || !triggerFile.empty() || triggerLine != 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

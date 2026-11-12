@@ -215,6 +215,11 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
         ConstructorArgumentEmitter(m_sourceEmitter).emit(out, baseConstType, c.arguments, {}, false, true);
         out.append(";\r\n");
     }
+    else if(c.expr && c.expr->kind == ExprKind::StringLiteral && c.varType && c.varType->name != "StringView" && c.varType->name != "Name"){
+        out.push_back('(');
+        m_sourceEmitter.emitExpr(out, *c.expr);
+        out.append(");\r\n");
+    }
     else{
         out.append(" = ");
         if(c.expr)

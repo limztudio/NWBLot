@@ -1,0 +1,58 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/asset_reference_text_writer.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendModelAssetBodyText(
+    in StringView variableName,
+    in StringView meshName,
+    in b8 hasSkeletonAndSkin,
+    in StringView skinName,
+    in StringView skeletonName,
+    in StringView skinnedMeshSkeletonName,
+    in b8 quoteAssetReferences,
+    in b8 quoteSkinnedMeshSkeletonReference,
+    mut String out
+){
+    if(hasSkeletonAndSkin){
+        out.append(variableName);
+        out.append(".skeletons = {\n");
+        out.append("    \"skeleton\": {\n");
+        out.append(s_SkeletonPropertyText);
+        AppendAssetReferenceText(skeletonName, quoteAssetReferences, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_TableEntryCloseText);
+        out.append(s_TableCloseSectionText);
+
+        out.append(variableName);
+        out.append(".skinned_meshes = {\n");
+        out.append("    \"mesh\": {\n");
+        out.append("        \"skin\": ");
+        AppendAssetReferenceText(skinName, quoteAssetReferences, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_SkeletonPropertyText);
+        AppendAssetReferenceText(skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_TableEntryCloseText);
+        out.append(s_TableCloseText);
+    }
+    else{
+        out.append(variableName);
+        out.append(".static_meshes = {\n");
+        out.append("    \"base\": {\n");
+        out.append("        \"mesh\": ");
+        AppendAssetReferenceText(meshName, quoteAssetReferences, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_TableEntryCloseText);
+        out.append(s_TableCloseText);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

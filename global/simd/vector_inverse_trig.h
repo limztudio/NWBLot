@@ -107,6 +107,17 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorASin(SIMDVectorSin
     return VectorSubtract(s_SIMDHalfPi, t0);
 }
 
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleASin(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(ASin(value[0]), ASin(value[1]), ASin(value[2]), ASin(value[3]));
+}
+
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorACos(SIMDVectorSingle value)noexcept{
+    const SIMDVectorSingle nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
+    SIMDVectorSingle t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
+    SIMDVectorSingle t1 = VectorSubtract(s_SIMDPi, t0);
+    return VectorSelect(t1, t0, nonnegative);
+}
+
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleACos(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(ACos(value[0]), ACos(value[1]), ACos(value[2]), ACos(value[3]));
 }
@@ -140,6 +151,10 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorATan(SIMDVectorSin
     return VectorSelect(result1, result, comp);
 }
 
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleATan(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(ATan(value[0]), ATan(value[1]), ATan(value[2]), ATan(value[3]));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -156,4 +171,5 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleATan2(SIMDVe
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

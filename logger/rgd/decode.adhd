@@ -1,0 +1,300 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/rgd/arena_names.adhd>
+#include <logger/rgd/decode_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/global.h>
+
+#include <global/basic_string.h>
+#include <global/expected.h>
+#include <global/string_view.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Rgd{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Boundary to the vendor's native C++ string API; bad file/format returns static diagnostics, exceptions leave the worker.
+[[nodiscard]] Expected<AInteropString, StringView> DecodeCrashDumpToText(StringView filePath);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RgdSystemInfoErrorLine = "ERROR: failed to serialize system information.\n";
+const StringView s_RgdMarkerSummaryErrorLine = "ERROR: failed to serialize the execution marker summary.\n";
+const StringView s_RgdMarkerTreeErrorLine = "ERROR: failed to serialize the execution marker tree.\n";
+const StringView s_RgdResourceHistoryInitErrorLine = "ERROR: failed to initialize page-fault resource history.\n";
+const StringView s_RgdResourceHistoryErrorLine = "ERROR: failed to serialize page-fault resource history.\n";
+const StringView s_RgdMarkersInProgressTitle = "MARKERS IN PROGRESS";
+const StringView s_RgdExecutionMarkerTreeTitle = "EXECUTION MARKER TREE";
+const StringView s_RgdLegendTitle = "Legend";
+const StringView s_RgdLegendFinishedLine = "[X] finished";
+const StringView s_RgdLegendInProgressLine = "[>] in progress";
+const StringView s_RgdLegendNotStartedLine = "[ ] not started";
+const StringView s_RgdPageFaultSummaryTitle = "PAGE FAULT SUMMARY";
+const StringView s_RgdOffendingVaPrefix = "Offending VA: 0x";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAdmissibleRgdInputPath(in StringView filePath){
+    if(filePath.empty())
+        return false;
+    return !HasEmbeddedNull(filePath);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/alloc/scratch.h>
+
+#include <global/algorithm.h>
+#include <global/containers.h>
+#include <global/sync.h>
+
+#include "rgd_data_types.h"
+#include "rgd_parsing_utils.h"
+#include "rgd_serializer.h"
+#include "rgd_marker_data_serializer.h"
+#include "rgd_resource_info_serializer.h"
+#include "dev_driver/include/rgdevents.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Rgd{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_rgd_decode{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Futex& RgdDecodeMutex()noexcept{
+    static Futex s_Mutex;
+    return s_Mutex;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Serializer APIs need native strings; decode failures keep produced sections while project streams use scratch.
+AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchArena& scratchArena, RgdCrashDumpContents& contents){
+    AStringStream<Core::Alloc::ScratchArena> txt(s_FileOpenWrite, scratchArena);
+
+    {
+        AInteropString systemInfo;
+        if(!RgdSerializer::ToString(config, contents.system_info, contents.driver_experiments_json, systemInfo))
+            txt << s_RgdSystemInfoErrorLine;
+        txt << systemInfo << '\n';
+    }
+
+    {
+        ExecMarkerDataSerializer markerSerializer({});
+
+        AInteropString markerSummary;
+        if(!markerSerializer.GenerateExecutionMarkerSummaryList(config, contents.umd_crash_data, contents.cmd_buffer_mapping, markerSummary))
+            txt << s_RgdMarkerSummaryErrorLine;
+
+        txt << '\n' << '\n';
+        txt << s_RgdDecodeValueMarkersInProgressDivider << '\n';
+        txt << s_RgdMarkersInProgressTitle << '\n';
+        txt << s_RgdDecodeValueMarkersInProgressDivider << '\n' << '\n';
+        txt << markerSummary;
+
+        AInteropString markerTree;
+        if(!markerSerializer.GenerateExecutionMarkerTree(config, contents.umd_crash_data, contents.cmd_buffer_mapping, markerTree))
+            txt << s_RgdMarkerTreeErrorLine;
+
+        txt << '\n' << '\n';
+        txt << s_RgdDecodeValueExecutionMarkerTreeDivider << '\n';
+        txt << s_RgdExecutionMarkerTreeTitle << '\n';
+        txt << s_RgdDecodeValueExecutionMarkerTreeDivider << '\n' << '\n';
+        txt << s_RgdLegendTitle << '\n';
+        txt << s_RgdDecodeValueLegendDivider << '\n';
+        txt << s_RgdLegendFinishedLine << '\n';
+        txt << s_RgdLegendInProgressLine << '\n';
+        txt << s_RgdLegendNotStartedLine << '\n' << '\n';
+        txt << markerTree;
+    }
+
+    {
+        const auto isPageFault = [](const RgdEventOccurrence& event)noexcept{
+            return event.rgd_event != nullptr && event.rgd_event->header.eventId == static_cast<u8>(KmdEventId::RgdEventVmPageFault);
+        };
+        const auto eventsEnd = contents.kmd_crash_data.events.end();
+        const auto firstPageFault = FindIf(contents.kmd_crash_data.events.begin(), eventsEnd, isPageFault);
+        if(firstPageFault != eventsEnd){
+            txt << '\n' << '\n';
+            txt << s_RgdDecodeValuePageFaultSummaryDivider << '\n';
+            txt << s_RgdPageFaultSummaryTitle << '\n';
+            txt << s_RgdDecodeValuePageFaultSummaryDivider << '\n' << '\n';
+
+            RgdResourceInfoSerializer resourceSerializer;
+            const b8 resourceHistoryReady = resourceSerializer.InitializeWithTraceFile(config.crash_dump_file);
+            if(!resourceHistoryReady)
+                txt << s_RgdResourceHistoryInitErrorLine;
+
+            for(auto eventIt = firstPageFault; eventIt != eventsEnd; ++eventIt){
+                const RgdEventOccurrence& pageFaultEvent = *eventIt;
+                if(!isPageFault(pageFaultEvent))
+                    continue;
+                const VmPageFaultEvent& pageFault = static_cast<const VmPageFaultEvent&>(*pageFaultEvent.rgd_event);
+
+                txt << s_RgdOffendingVaPrefix << StreamHex << pageFault.faultVmAddress << StreamDec << '\n' << '\n';
+
+                AInteropString resourceInfo;
+                if(resourceHistoryReady && !resourceSerializer.GetVirtualAddressHistoryInfo(config, pageFault.faultVmAddress, resourceInfo))
+                    txt << s_RgdResourceHistoryErrorLine;
+                txt << resourceInfo << '\n';
+            }
+        }
+    }
+
+    AInteropString inputInfo;
+    RgdSerializer::InputInfoToString(config, contents, InteropVector<AInteropString>{}, inputInfo);
+
+    const AStringView summary = txt.view();
+    inputInfo.append(summary.data(), summary.size());
+    return inputInfo;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// RDF's C API returns explicit file/open/format status instead of using its throwing C++ file wrappers for expected input failures.
+[[nodiscard]] Expected<void, StringView> AdmitRdfInput(Core::Alloc::ScratchArena& scratchArena, const StringView filePath){
+    if(!IsAdmissibleRgdInputPath(filePath))
+        return MakeUnexpected(s_RgdDecodeValueRdfOpenFailedError);
+
+    const AString<Core::Alloc::ScratchArena> pathText(filePath, scratchArena);
+    rdfStream* stream = nullptr;
+    if(rdfStreamOpenFile(pathText.c_str(), &stream) != rdfResultOk)
+        return MakeUnexpected(s_RgdDecodeValueRdfOpenFailedError);
+
+    rdfChunkFile* chunks = nullptr;
+    const int formatStatus = rdfChunkFileOpenStream(stream, &chunks);
+    const int chunksCloseStatus = chunks ? rdfChunkFileClose(&chunks) : rdfResultOk;
+    const int streamCloseStatus = rdfStreamClose(&stream);
+    if(formatStatus != rdfResultOk)
+        return MakeUnexpected(s_RgdDecodeValueParseFailedError);
+    if(chunksCloseStatus != rdfResultOk || streamCloseStatus != rdfResultOk)
+        return MakeUnexpected(s_RgdDecodeValueRdfCloseFailedError);
+    return {};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<AInteropString, StringView> DecodeCrashDumpToText(const StringView filePath){
+    // The vendor trace loader owns process-global state; retain this lock through report assembly and local teardown.
+    ScopedLock decodeLock(__hidden_rgd_decode::RgdDecodeMutex());
+    Core::Alloc::ScratchArena scratchArena(s_RgdArenaNameLogRgdDecodeScratch);
+
+    const auto admitted = __hidden_rgd_decode::AdmitRdfInput(scratchArena, filePath);
+    if(!admitted)
+        return MakeUnexpected(admitted.error());
+
+    Config config;
+    config.crash_dump_file.assign(filePath.data(), filePath.size());
+    RgdCrashDumpContents contents;
+    // Keep vendor console diagnostics on their existing streams; replacing shared buffers races with the server output worker.
+    if(!RgdParsingUtils::ParseCrashDump(config, contents))
+        return MakeUnexpected(s_RgdDecodeValueParseFailedError);
+
+    return __hidden_rgd_decode::AssembleTextSummary(config, scratchArena, contents);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

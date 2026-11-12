@@ -3,27 +3,9 @@
 
 
 #include <impl/assets_font_atlas/types.adhd>
+#include <impl/ecs_ui/toolkit/global.adhd>
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-native{
-#include <global/sha256.h>
-namespace NWB::Impl{
-class Font;
-};
-namespace NWB::Impl::Ui{
-template<typename TFont>
-class GlyphPageBindingRecord;
-template<typename TFont>
-class SdfAtlasPageBindingRecord;
-using GlyphPageBinding = GlyphPageBindingRecord<NWB::Impl::Font>;
-using SdfAtlasPageBinding = SdfAtlasPageBindingRecord<NWB::Impl::Font>;
-};
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,10 +6,20 @@
 #include "simd_codegen_utils.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_simd_lane_zero_analysis{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] u32 InferSimdRegZeroedAboveLaneImpl(
     const Expr& expr,
@@ -188,31 +198,14 @@ namespace __hidden_simd_lane_zero_analysis{
                     return 3u;
                 return 4u;
             }
-            if(
-                (
-                    callee == "Abs"
-                    || callee == "Sqrt"
-                    || callee == "Floor"
-                    || callee == "Ceil"
-                    || callee == "Round"
-                    || callee == "trunc"
-                    || callee == "frac"
-                    || callee == "Saturate"
-                    || callee == "Sin"
-                    || callee == "Tan"
-                    || callee == "asin"
-                    || callee == "atan"
-                    || callee == "FoldOctahedralAxis"
-                )
-                && expr.arguments.size() == 1u
-                && expr.arguments[0]
-            ){
-                return InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
-            }
-            if((callee == "Min" || callee == "Max") && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                const u32 z0 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
-                const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[1], isDouble, symbols, localVarDecls, depth + 1u);
-                return z0 > z1 ? z0 : z1;
+            if(IsSimdZeroPreservingCall(callee)){
+                if(expr.arguments.size() == 1u && expr.arguments[0])
+                    return InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
+                if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    const u32 z0 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
+                    const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[1], isDouble, symbols, localVarDecls, depth + 1u);
+                    return z0 > z1 ? z0 : z1;
+                }
             }
             if(callee == "Clamp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
                 if(SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*expr.arguments[1], isDouble, symbols) && SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[2], isDouble, symbols))
@@ -252,9 +245,10 @@ namespace __hidden_simd_lane_zero_analysis{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] u32 SimdLaneZeroAnalysis::InferSimdRegZeroedAboveLane(
@@ -267,7 +261,11 @@ namespace __hidden_simd_lane_zero_analysis{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

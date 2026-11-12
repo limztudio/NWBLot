@@ -1,0 +1,361 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/task/cpu/cleanup_case_types.adhd.h>
+#include <tests/unit/task/cpu/scheduler_test_config.adhd.h>
+
+#include <loader/callback_shutdown.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/task/cpu/scheduler.h>
+
+#include <global/atomic.h>
+#include <global/platform.h>
+#include <global/sync.h>
+#include <global/terminal_entry.h>
+#include <global/termination.h>
+#include <global/thread.h>
+#include <global/timer.h>
+#include <global/type.h>
+
+#include <cstdlib>
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Watchdog and capture probes shared by the CPU scheduler suites.
+namespace CpuTaskSchedulerTestSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core;
+
+
+[[noreturn]] NWB_INLINE void ExitTestProcess(const u32 code)noexcept{
+    std::_Exit(static_cast<int>(code));
+}
+
+
+class DeadlineGuard final{
+public:
+    explicit DeadlineGuard(const b8 deathTest = false, const u32 timeoutMS = s_TestTimeoutMS)
+        : m_watchdog([deathTest, timeoutMS](const StopToken& stop)noexcept {
+            const Timer begin = TimerNow();
+            while(!stop.stop_requested()){
+                if(DurationInMS<u64>(TimerNow(), begin) >= timeoutMS){
+                    // A timeout must fail a death test instead of being mistaken for the expected invariant rejection.
+                    if(deathTest)
+                        ExitTestProcess(0u);
+                    TerminateInvariant();
+                }
+                SleepMS(s_PollIntervalMS);
+            }
+        })
+    {}
+    ~DeadlineGuard()noexcept = default;
+
+
+private:
+    JoiningThread m_watchdog;
+};
+
+
+struct LifetimeProbe{
+    Atomic<u32>* retirements;
+    u32 value;
+
+
+public:
+    explicit LifetimeProbe(Atomic<u32>& counter, const u32 payload = 0u)noexcept
+        : retirements(&counter)
+        , value(payload)
+    {}
+    LifetimeProbe(const LifetimeProbe&) = delete;
+    LifetimeProbe(LifetimeProbe&& other)noexcept
+        : retirements(other.retirements)
+        , value(other.value)
+    {
+        other.retirements = nullptr;
+    }
+    ~LifetimeProbe()noexcept{
+        if(retirements)
+            retirements->fetch_add(1u, MemoryOrder::release);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::CpuTaskSuite{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core;
+using TestSchedulerConfig = CpuTaskSchedulerTestSupport::TestSchedulerConfig;
+using CpuTaskAdmissionErrorEnum = NWB::Core::CpuTaskAdmissionError::Enum;
+using CpuTaskCostEnum = NWB::Core::CpuTaskCost::Enum;
+using CpuTaskPriorityEnum = NWB::Core::CpuTaskPriority::Enum;
+using CpuTaskTargetEnum = NWB::Core::CpuTaskTarget::Enum;
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::ExitTestProcess;
+using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
+using CpuTaskSchedulerTestSupport::LifetimeProbe;
+using CpuTaskSchedulerTestSupport::TaskGate;
+using CpuTaskSchedulerTestSupport::WaitUntil;
+using CpuTaskSchedulerTestSupport::WaitUntilCount;
+using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
+using CpuTaskSchedulerTestSupport::s_GateTimeoutMS;
+using CpuTaskSchedulerTestSupport::s_TestTimeoutMS;
+using CpuTaskSchedulerTestSupport::s_ProfilingPollIntervalMS;
+using CpuTaskSchedulerTestSupport::s_CompletionTimeoutMS;
+using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuScope;
+using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuTask;
+using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuLocalName;
+using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuEmptyScope;
+using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCompletedScope;
+using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCanceledScope;
+
+[[nodiscard]] NWB_INLINE usize ReadNullProfileEvents(CpuTaskScheduler& scheduler, const usize capacity)noexcept{
+    return scheduler.readProfileEvents(nullptr, capacity);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_FanInGateTimeoutMS = 20000u;
+const u32 s_FanInTestTimeoutMS = 60000u;
+
+const u32 s_MpmcWatchdogTimeoutMS = 12000u;
+const u32 s_MpmcWorkerCount = 4u;
+const u32 s_MpmcExternalProducerCount = 4u;
+const u32 s_MpmcProducerCount = 1u + s_MpmcExternalProducerCount + s_MpmcWorkerCount;
+const u32 s_MpmcTasksPerProducer = 128u;
+const u32 s_MpmcVisitSlotCount = s_MpmcProducerCount * s_MpmcTasksPerProducer * 4u;
+const u32 s_MpmcExternalVisitSlotCount = s_MpmcExternalProducerCount * s_MpmcTasksPerProducer;
+const u32 s_MpmcGateTimeoutMS = 4000u;
+
+
+class ProducerState{
+    public Array<Array<CpuTaskHandle, s_MpmcTasksPerProducer>, s_MpmcProducerCount> handles;
+    public Array<Atomic<u32>, s_MpmcVisitSlotCount> visits;
+    public Atomic<u32> ready = 0u;
+    public Atomic<u32> workerMask = 0u;
+    public Atomic<u32> consumedPrefixMask = 0u;
+    public Array<Atomic<b8>, s_MpmcProducerCount> published;
+    public Atomic<b8> start = false;
+    public Atomic<b8> expired = false;
+    public Atomic<b8> rejected = false;
+    public Atomic<b8> invalidOrder = false;
+}
+
+
+void VerifyFanIn(in usize uniqueDependencyCount, in usize repetitionCount){
+    DeadlineGuard deadline(false, s_FanInTestTimeoutMS);
+    Atomic<b8> rootEntered(false);
+    Atomic<b8> releaseRoot(false);
+    Atomic<b8> rootExpired(false);
+    Atomic<u32> dependencyCompletionCount(0u);
+    Atomic<u32> completionCountObservedByJoin(0u);
+    Atomic<u32> joinInvocationCount(0u);
+    Vector<u32> dependencyInvocations = Vector<u32>();
+    dependencyInvocations.resize(uniqueDependencyCount, 0u);
+    const TestSchedulerConfig config = HomogeneousWorkers(1u);
+    CpuTaskScheduler scheduler(config);
+    ScopeExit releaseGuard(lambda[mut releaseRoot]() -> void{
+        releaseRoot.store(true, MemoryOrder::release);
+    });
+
+    const auto completedTaskAdmission = scheduler.submit(lambda[]() -> void{});
+    ASSERT_TRUE(completedTaskAdmission.has_value());
+    const CpuTaskHandle completed = completedTaskAdmission.value();
+    ASSERT_TRUE(completed.valid());
+    scheduler.wait(completed);
+
+    const auto cpuTaskAdmission = scheduler.submit(lambda[mut rootEntered, mut releaseRoot, mut rootExpired]() -> void{
+        rootEntered.store(true, MemoryOrder::release);
+        if(!WaitUntil(releaseRoot, s_FanInGateTimeoutMS)){
+            rootExpired.store(true, MemoryOrder::release);
+        }
+    });
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    const CpuTaskHandle root = cpuTaskAdmission.value();
+    ASSERT_TRUE(root.valid());
+    ASSERT_TRUE(WaitUntil(rootEntered, s_FanInGateTimeoutMS));
+    EXPECT_TRUE(scheduler.isComplete(completed));
+    EXPECT_FALSE(scheduler.isComplete(root));
+
+    Vector<CpuTaskHandle> tasks = Vector<CpuTaskHandle>();
+    Vector<CpuTaskHandle> dependencies = Vector<CpuTaskHandle>();
+    tasks.reserve(uniqueDependencyCount);
+    dependencies.reserve(uniqueDependencyCount * repetitionCount + 2u);
+    for(usize index = 0u; index < uniqueDependencyCount; ++index){
+        const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut dependencyInvocations, mut dependencyCompletionCount, in index]() -> void{
+            ++dependencyInvocations[index];
+            dependencyCompletionCount.fetch_add(1u, MemoryOrder::release);
+        }, root);
+        ASSERT_TRUE(secondCpuTaskAdmission.has_value());
+        const CpuTaskHandle dependency = secondCpuTaskAdmission.value();
+        ASSERT_TRUE(dependency.valid());
+        tasks.push_back(dependency);
+    }
+
+    // An odd stride permutes the power-of-two task counts, separating repeated edges by a full pass.
+    for(usize repeat = 0u; repeat < repetitionCount; ++repeat){
+        for(usize index = 0u; index < uniqueDependencyCount; ++index){
+            dependencies.push_back(tasks[(index * 4051u + repeat) % uniqueDependencyCount]);
+        }
+    }
+    // Retired generations and default handles add no pending prerequisite after node storage is reused.
+    dependencies.push_back(completed);
+    dependencies.push_back(CpuTaskHandle());
+
+    const CpuTaskOptions joinOptions = CpuTaskOptions();
+    const auto thirdCpuTaskAdmission = scheduler.submit(lambda[mut dependencyCompletionCount, mut completionCountObservedByJoin, mut joinInvocationCount]() -> void{
+        completionCountObservedByJoin.store(dependencyCompletionCount.load(MemoryOrder::acquire), MemoryOrder::release);
+        joinInvocationCount.fetch_add(1u, MemoryOrder::release);
+    }, joinOptions, dependencies.data(), dependencies.size());
+    ASSERT_TRUE(thirdCpuTaskAdmission.has_value());
+    const CpuTaskHandle joined = thirdCpuTaskAdmission.value();
+    ASSERT_TRUE(joined.valid());
+    EXPECT_FALSE(scheduler.isComplete(joined));
+    EXPECT_EQ(dependencyCompletionCount.load(MemoryOrder::acquire), 0u);
+    EXPECT_EQ(joinInvocationCount.load(MemoryOrder::acquire), 0u);
+
+    releaseRoot.store(true, MemoryOrder::release);
+    scheduler.wait(joined);
+    scheduler.wait();
+    EXPECT_FALSE(rootExpired.load(MemoryOrder::acquire));
+    EXPECT_EQ(dependencyCompletionCount.load(MemoryOrder::acquire), cast<u32>(uniqueDependencyCount));
+    EXPECT_EQ(completionCountObservedByJoin.load(MemoryOrder::acquire), cast<u32>(uniqueDependencyCount));
+    EXPECT_EQ(joinInvocationCount.load(MemoryOrder::acquire), 1u);
+    for(in u32 invocations : dependencyInvocations){
+        EXPECT_EQ(invocations, 1u);
+    }
+    const auto stats = scheduler.statistics();
+    EXPECT_EQ(stats.completedTasks, cast<u64>(uniqueDependencyCount + 3u));
+    EXPECT_EQ(stats.canceledTasks, 0u);
+    EXPECT_EQ(stats.outstandingTasks, 0u);
+}
+
+void Produce(mut CpuTaskScheduler scheduler, mut CpuTaskScope scope, mut ProducerState state, in u32 producer){
+    if(!WaitUntil(state.start, s_MpmcGateTimeoutMS)){
+        state.expired.store(true, MemoryOrder::release);
+        return;
+    }
+    for(u32 task = 0u; task < s_MpmcTasksPerProducer; ++task){
+        const u32 slot = (producer * s_MpmcTasksPerProducer + task) * 4u;
+        auto callback = lambda[mut scheduler, mut state, in slot]() -> void{
+            state.visits[slot].fetch_add(1u, MemoryOrder::relaxed);
+            const auto cpuTaskAdmission = scheduler.submit(lambda[mut scheduler, mut state, in slot]() -> void{
+                state.visits[slot + 1u].fetch_add(1u, MemoryOrder::relaxed);
+                const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut state, in slot]() -> void{
+                    state.visits[slot + 2u].fetch_add(1u, MemoryOrder::relaxed);
+                });
+                if(!secondCpuTaskAdmission.has_value() || !secondCpuTaskAdmission.value().valid()){
+                    state.rejected.store(true, MemoryOrder::release);
+                }
+            });
+            if(!cpuTaskAdmission.has_value() || !cpuTaskAdmission.value().valid()){
+                state.rejected.store(true, MemoryOrder::release);
+            }
+        };
+        CpuTaskOptions options = CpuTaskOptions();
+        options.cost = cast<CpuTaskCostEnum>(task % 3u);
+        options.priority = cast<CpuTaskPriorityEnum>((task / 3u) % 3u);
+        Expected<CpuTaskHandle, CpuTaskAdmissionErrorEnum> thirdCpuTaskAdmission = MakeUnexpected(CpuTaskAdmissionError::Aborting);
+        if(task % 2u == 0u){
+            thirdCpuTaskAdmission = scope.submit(callback, options);
+        }
+        else{
+            thirdCpuTaskAdmission = scheduler.submit(callback, options);
+        }
+        if(!thirdCpuTaskAdmission.has_value()){
+            state.rejected.store(true, MemoryOrder::release);
+            state.published[producer].store(true, MemoryOrder::release);
+            return;
+        }
+        const CpuTaskHandle handle = thirdCpuTaskAdmission.value();
+        state.handles[producer][task] = handle;
+        if(!handle.valid()){
+            state.rejected.store(true, MemoryOrder::release);
+        }
+        if(task == 31u && scheduler.currentWorkerIndex() != 0u && handle.valid()){
+            scheduler.wait(handle);
+            for(u32 descendant = 0u; descendant < 3u; ++descendant){
+                if(state.visits[slot + descendant].load(MemoryOrder::acquire) != 1u){
+                    state.invalidOrder.store(true, MemoryOrder::release);
+                }
+            }
+            if(state.published[producer].load(MemoryOrder::acquire)){
+                state.invalidOrder.store(true, MemoryOrder::release);
+            }
+            state.consumedPrefixMask.fetch_or(1u << (producer - 1u - s_MpmcExternalProducerCount), MemoryOrder::release);
+        }
+    }
+    state.published[producer].store(true, MemoryOrder::release);
+    const u32 predecessor = (producer + 1u) % s_MpmcProducerCount;
+    if(!WaitUntil(state.published[predecessor], s_MpmcGateTimeoutMS)){
+        state.expired.store(true, MemoryOrder::release);
+        return;
+    }
+    for(u32 task = 0u; task < s_MpmcTasksPerProducer; ++task){
+        const u32 slot = (producer * s_MpmcTasksPerProducer + task) * 4u;
+        const u32 precedingSlot = (predecessor * s_MpmcTasksPerProducer + task) * 4u;
+        const auto fourthCpuTaskAdmission = scope.submit(lambda[mut state, in slot, in precedingSlot]() -> void{
+            for(u32 descendant = 0u; descendant < 3u; ++descendant){
+                if(state.visits[precedingSlot + descendant].load(MemoryOrder::acquire) != 1u){
+                    state.invalidOrder.store(true, MemoryOrder::release);
+                }
+            }
+            state.visits[slot + 3u].fetch_add(1u, MemoryOrder::relaxed);
+        }, state.handles[predecessor][task]);
+        if(!fourthCpuTaskAdmission.has_value() || !fourthCpuTaskAdmission.value().valid()){
+            state.rejected.store(true, MemoryOrder::release);
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

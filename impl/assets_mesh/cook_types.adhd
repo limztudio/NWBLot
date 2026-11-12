@@ -116,6 +116,82 @@ void CopySourceMeshStreamsToCookStreams(
         outVertexRefs.push_back(ref);
 }
 
+String FormatMeshMetadataIndexedLabel(in StringView baseLabel, in usize index){
+    return StringFormat("{}[{}]", baseLabel, index);
+}
+
+String FormatMeshVertexRefComponentLabel(in usize vertexRefIndex, in StringView componentName){
+    return StringFormat("{}[{}].{}", s_MeshVertexRefsFieldNameView, vertexRefIndex, componentName);
+}
+
+StringView ResolveMetadataF32ValueFailureReason(in MetadataF32ValueFailure failure){
+    if(failure == MetadataF32ValueFailure::NotNumeric)
+        return "must contain only numeric values";
+    if(failure == MetadataF32ValueFailure::NonFinite)
+        return "must contain only finite numeric values";
+    if(failure == MetadataF32ValueFailure::OutOfRange)
+        return "contains a value outside the f32 range";
+    return "";
+}
+
+StringView ResolveMetadataU32ValueFailureReason(in MetadataU32ValueFailure failure){
+    if(failure == MetadataU32ValueFailure::NotNumeric)
+        return "must contain only integer values";
+    if(failure == MetadataU32ValueFailure::NonIntegerOrNegative)
+        return "contains a non-integer or negative value";
+    if(failure == MetadataU32ValueFailure::OutOfRange)
+        return "contains a value that exceeds u32";
+    return "";
+}
+
+StringView ResolveSourceIndexStreamFailureReason(in SourceIndexStreamFailure failure){
+    if(failure == SourceIndexStreamFailure::EmptyOrNotMultipleOfThree)
+        return "'indices' must contain whole triangles";
+    if(failure == SourceIndexStreamFailure::IndexOutOfRange)
+        return "'indices' references an out-of-range vertex_ref";
+    return "";
+}
+
+StringView FindOutOfRangeVertexRefStreamName(
+    in u32 positionIndex,
+    in u32 normalIndex,
+    in u32 tangentIndex,
+    in u32 uv0Index,
+    in u32 colorIndex,
+    in usize positionCount,
+    in usize normalCount,
+    in usize tangentCount,
+    in usize uv0Count,
+    in usize colorCount
+){
+    if(cast<usize>(positionIndex) >= positionCount)
+        return s_VertexRefPositionName;
+    if(cast<usize>(normalIndex) >= normalCount)
+        return s_VertexRefNormalName;
+    if(cast<usize>(tangentIndex) >= tangentCount)
+        return s_VertexRefTangentName;
+    if(cast<usize>(uv0Index) >= uv0Count)
+        return s_VertexRefUvName;
+    if(cast<usize>(colorIndex) >= colorCount)
+        return s_VertexRefColorName;
+    return "";
+}
+
+Expected<u16> TryValidateSkinInfluenceJointIndex(in b8 isNumeric, in f64 numericValue){
+    const Expected<u32, MetadataU32ValueFailure> parsedJoint = ValidateMetadataU32Number(isNumeric, numericValue);
+    if(!parsedJoint.has_value() || parsedJoint.value() > cast<u32>(u16.max))
+        return MakeUnexpected(Failure());
+    return cast<u16>(parsedJoint.value());
+}
+
+StringView ResolveSkinInfluenceWeightFailureReason(in SkinInfluenceWeightFailure failure){
+    if(failure == SkinInfluenceWeightFailure::NegativeWeight)
+        return "must be finite and non-negative";
+    if(failure == SkinInfluenceWeightFailure::ZeroTotalWeight)
+        return "must contain a positive total";
+    return "";
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

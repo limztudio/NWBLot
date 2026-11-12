@@ -2,15 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsModelVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
+const b8 s_ModelCookEntryLogBuildFailure = true;
+
+b8 ShouldCollectOptionalModelDependency(in b8 hasDependency, in Name dependencyName){
+    return hasDependency && dependencyName != s_NameNone;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
@@ -50,13 +58,13 @@ static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext
     for(const ModelStaticMeshObject& staticMeshObject : modelEntry->staticMeshObjects){
         if(!collector.addAssetDependency(staticMeshObject.mesh.name(), Mesh::AssetTypeName()))
             return false;
-        if(staticMeshObject.material.valid() && !collector.addAssetDependency(staticMeshObject.material.name(), Material::AssetTypeName()))
+        if(ShouldCollectOptionalModelDependency(staticMeshObject.material.valid(), staticMeshObject.material.name()) && !collector.addAssetDependency(staticMeshObject.material.name(), Material::AssetTypeName()))
             return false;
     }
     for(const ModelSkinnedMeshObject& skinnedMeshObject : modelEntry->skinnedMeshObjects){
         if(!collector.addAssetDependency(skinnedMeshObject.skin.name(), Skin::AssetTypeName()))
             return false;
-        if(skinnedMeshObject.material.valid() && !collector.addAssetDependency(skinnedMeshObject.material.name(), Material::AssetTypeName()))
+        if(ShouldCollectOptionalModelDependency(skinnedMeshObject.material.valid(), skinnedMeshObject.material.name()) && !collector.addAssetDependency(skinnedMeshObject.material.name(), Material::AssetTypeName()))
             return false;
     }
     return true;
@@ -72,7 +80,7 @@ static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildModelAsset,
-        true,
+        s_ModelCookEntryLogBuildFailure,
         registry
     );
 }
@@ -108,7 +116,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

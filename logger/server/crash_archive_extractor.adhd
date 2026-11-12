@@ -1,0 +1,54 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ParsedCrashArchiveFileHeader{
+    public StringView relativePath = "";
+    public usize fileSize = 0u;
+}
+
+Expected<ParsedCrashArchiveFileHeader> ParseCrashArchiveFileHeaderBody(in StringView line, in StringView prefix){
+    if(line.size() <= prefix.size() || !line.starts_with(prefix))
+        return MakeUnexpected(Failure());
+
+    const StringView body = line.substr(prefix.size());
+    usize split = usize.max;
+    for(usize i = body.size(); i > 0u; --i){
+        if(cast<u8>(body[i - 1u]) == 32u){
+            split = i - 1u;
+            break;
+        }
+    }
+    if(split == usize.max || split == 0u || split + 1u >= body.size())
+        return MakeUnexpected(Failure());
+
+    const StringView sizeText = body.substr(split + 1u);
+    const Expected<u64> fileSize = ParseU64(sizeText);
+    if(!fileSize.has_value() || fileSize.value() > cast<u64>(usize.max))
+        return MakeUnexpected(Failure());
+
+    ParsedCrashArchiveFileHeader header;
+    header.relativePath = body.substr(0u, split);
+    header.fileSize = cast<usize>(fileSize.value());
+    return header;
+}
+
+b8 IsCrashArchivePayloadWithinBounds(in usize archiveByteCount, in usize cursor, in usize fileSize){
+    if(cursor > archiveByteCount)
+        return false;
+    return fileSize <= archiveByteCount - cursor;
+}
+
+b8 IsValidCrashArchiveFooter(in StringView separator, in StringView endMarker, in StringView expectedEndMarker){
+    return separator.empty() && endMarker == expectedEndMarker;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -152,11 +152,17 @@ struct Expr{
     b8 injectClassArena = false;
     b8 lambdaUsesScratchArena = false;
     b8 lambdaUsesTaskScope = false;
+    b8 lambdaInjectsCallerArena = false;
+    b8 useAdhdAssign = false;
+    b8 useAdhdOptionalClassAssign = false;
+    b8 useAdhdOptionalScratchAssign = false;
+    b8 useAdhdMapIndex = false;
     b8 hasMutLocalCapture = false;
     b8 hasMutContainerCapture = false;
     b8 isVectorRawIndex = false;
     b8 isMatrixRowIndex = false;
     b8 isBuiltinCall = false;
+    b8 isUserCallableCall = false;
     b8 isBuiltinConstant = false;
     b8 isStringSubstr = false;
     b8 isStringByteRead = false;
@@ -164,6 +170,8 @@ struct Expr{
     b8 isStringByteMutRef = false;
     b8 wrapInSimdResult = false;
     b8 unwrapSimdResultValue = false;
+    u8 formatArgWrapKind = 0u;
+    const TypeRef* wrapInFuncType = nullptr;
 
 
 public:

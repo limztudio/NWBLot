@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void LogUnsupportedAssetBuildVirtualRoot(in StringView assetRootPath, in StringView virtualRoot){
+    error("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'", assetRootPath, virtualRoot);
+}
+
+void LogAssetRootResolveFailure(in StringView assetRootPath, in StringView reason){
+    error("AssetBuilder: failed to resolve asset root '{}': {}", assetRootPath, reason);
+}
+
+void LogOutputDirectoryResolveFailure(in StringView outputDirectory, in StringView reason){
+    error("AssetBuilder: failed to resolve output directory '{}': {}", outputDirectory, reason);
+}
+
+void LogCacheDirectoryCreateFailure(in StringView cacheDirectory, in StringView reason){
+    error("AssetBuilder: failed to create cache directory '{}': {}", cacheDirectory, reason);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

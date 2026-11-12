@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/tex_conv/texture_mip_preparer.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ResolveTexConvMipHdrMode(in b8 alphaOnly, in b8 isHdrPayloadFormat){
+    return !alphaOnly && isHdrPayloadFormat;
+}
+
+u64 ComputeTexConvMipPlaneByteCount(in u64 sizeBytes, in u32 sliceCount){
+    return sizeBytes / cast<u64>(sliceCount);
+}
+
+usize SelectTexConvSliceEntry(in u32 sourceFileIndex, in u32 sliceCount, in Span<usize> slices){
+    if(sourceFileIndex < sliceCount)
+        return slices[cast<usize>(sourceFileIndex)];
+    return 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

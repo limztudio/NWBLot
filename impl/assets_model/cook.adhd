@@ -2,7 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_model/model_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
@@ -61,32 +73,73 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsModelCookAdhdModule(in u64 value){
-    return value != 0u;
+SkeletonJointMatrix DefaultModelObjectTransform(){
+    return SkeletonJointMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+b8 ValidateModelMetadataMapField(in b8 isMap, in StringView filePathText, in StringView fieldName){
+    if(isMap)
+        return true;
+
+    error("Model meta '{}': field '{}' must be a map", filePathText, fieldName);
+    return false;
+}
+
+b8 ValidateModelObjectMapValue(in b8 isMap, in StringView objectKind, in StringView filePathText){
+    if(isMap)
+        return true;
+
+    error("{} '{}': value must be a map", objectKind, filePathText);
+    return false;
+}
+
+b8 ValidateModelObjectNameResolved(in b8 hasName, in StringView objectKind, in StringView filePathText){
+    if(hasName)
+        return true;
+
+    error("{} '{}': object name contains an embedded null", objectKind, filePathText);
+    return false;
+}
+
+b8 SerializeModelBinaryPayload(
+    in Span<ModelSkeletonObject> skeletonObjects,
+    in Span<ModelStaticMeshObject> staticMeshObjects,
+    in Span<ModelSkinnedMeshObject> skinnedMeshObjects,
+    mut Vector<u8> outBinary
+){
+    ModelBinaryCodec codec;
+    return codec.serialize(skeletonObjects, staticMeshObjects, skinnedMeshObjects, outBinary);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#include <impl/assets_model/model_binary_codec.adhd.h>
 
-#include <impl/assets_skeleton/cook_matrix.adhd.h>
+
+#include <impl/assets_skeleton/cook.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
-#include <core/common/log.h>
 #include <core/metascript/parser.h>
 
 #include <global/binary.h>
@@ -116,30 +169,26 @@ using namespace Core::Metascript;
 [[nodiscard]] Expected<SkeletonJointMatrix> ReadTransformField(const Path& nwbFilePath, const Value& object, const AStringView objectKind){
     const Value* fieldValue = object.findField(s_ModelTransformField);
     if(!fieldValue)
-        return ::MatrixIdentity<Float34>();
+        return DefaultModelObjectTransform();
     return AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, *fieldValue, objectKind, s_ModelTransformField);
 }
 
 template<typename ObjectT, typename ParseObjectFn>
-[[nodiscard]] Expected<Core::Assets::AssetVector<ObjectT>> ParseObjectMap(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const AStringView objectKind, ParseObjectFn&& parseObject, Core::Assets::AssetArena& arena){
+[[nodiscard]] Expected<Core::Assets::AssetVector<ObjectT>> ParseObjectMap(const AStringView filePathText, const Value& asset, const AStringView fieldName, const AStringView objectKind, ParseObjectFn&& parseObject, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<ObjectT> objects(arena);
 
     const Value* fieldValue = asset.findField(fieldName);
     if(!fieldValue)
         return objects;
-    if(!fieldValue->isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Model meta '{}': field '{}' must be a map"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+    if(!ValidateModelMetadataMapField(fieldValue->isMap(), filePathText, fieldName))
         return MakeUnexpected(Failure{});
-    }
 
     const auto& map = fieldValue->asMap();
     objects.reserve(map.size());
     for(const auto& [objectName, objectValue] : map){
         const auto nameResult = Name::FromText(AStringView(objectName.data(), objectName.size()));
-        if(!nameResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': object name contains an embedded null"), ConvertString(objectKind), PathToString<tchar>(nwbFilePath));
+        if(!ValidateModelObjectNameResolved(nameResult.has_value(), objectKind, filePathText))
             return MakeUnexpected(Failure{});
-        }
         const Name name = *nameResult;
         auto object = parseObject(objectValue);
         if(!object)
@@ -151,12 +200,10 @@ template<typename ObjectT, typename ParseObjectFn>
     return objects;
 }
 
-[[nodiscard]] Expected<ModelSkeletonObject> ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue){
+[[nodiscard]] Expected<ModelSkeletonObject> ParseSkeletonObject(const Path& nwbFilePath, const AStringView filePathText, const Value& objectValue){
     ModelSkeletonObject object{};
-    if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkeletonObjectKind), PathToString<tchar>(nwbFilePath));
+    if(!ValidateModelObjectMapValue(objectValue.isMap(), s_ModelSkeletonObjectKind, filePathText))
         return MakeUnexpected(Failure{});
-    }
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, &IsAllowedModelSkeletonObjectField))
         return MakeUnexpected(Failure{});
 
@@ -171,12 +218,10 @@ template<typename ObjectT, typename ParseObjectFn>
     return object;
 }
 
-[[nodiscard]] Expected<ModelStaticMeshObject> ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue){
+[[nodiscard]] Expected<ModelStaticMeshObject> ParseStaticMeshObject(const Path& nwbFilePath, const AStringView filePathText, const Value& objectValue){
     ModelStaticMeshObject object{};
-    if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelStaticMeshObjectKind), PathToString<tchar>(nwbFilePath));
+    if(!ValidateModelObjectMapValue(objectValue.isMap(), s_ModelStaticMeshObjectKind, filePathText))
         return MakeUnexpected(Failure{});
-    }
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, &IsAllowedModelStaticMeshObjectField))
         return MakeUnexpected(Failure{});
 
@@ -203,12 +248,10 @@ template<typename ObjectT, typename ParseObjectFn>
     return object;
 }
 
-[[nodiscard]] Expected<ModelSkinnedMeshObject> ParseSkinnedMeshObject(const Path& nwbFilePath, const Value& objectValue){
+[[nodiscard]] Expected<ModelSkinnedMeshObject> ParseSkinnedMeshObject(const Path& nwbFilePath, const AStringView filePathText, const Value& objectValue){
     ModelSkinnedMeshObject object{};
-    if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkinnedMeshObjectKind), PathToString<tchar>(nwbFilePath));
+    if(!ValidateModelObjectMapValue(objectValue.isMap(), s_ModelSkinnedMeshObjectKind, filePathText))
         return MakeUnexpected(Failure{});
-    }
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, &IsAllowedModelSkinnedMeshObjectField))
         return MakeUnexpected(Failure{});
 
@@ -250,7 +293,7 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(!model.validatePayload(scratchArena))
         return false;
 
-    return ModelBinaryCodec().serialize(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
+    return SerializeModelBinaryPayload(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
 }
 
 Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
@@ -266,22 +309,24 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, &IsAllowedModelMetadataField))
         return MakeUnexpected(Failure{});
 
-    auto skeletonObjectsResult = ParseObjectMap<ModelSkeletonObject>(nwbFilePath, asset, s_ModelSkeletonsField, s_ModelSkeletonObjectKind, [&](const Core::Metascript::Value& objectValue){
-        return ParseSkeletonObject(nwbFilePath, objectValue);
+    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
+
+    auto skeletonObjectsResult = ParseObjectMap<ModelSkeletonObject>(filePathText, asset, s_ModelSkeletonsField, s_ModelSkeletonObjectKind, [&](const Core::Metascript::Value& objectValue){
+        return ParseSkeletonObject(nwbFilePath, filePathText, objectValue);
     }, arena);
     if(!skeletonObjectsResult)
         return MakeUnexpected(Failure{});
     entry.skeletonObjects = Move(*skeletonObjectsResult);
 
-    auto staticMeshObjectsResult = ParseObjectMap<ModelStaticMeshObject>(nwbFilePath, asset, s_ModelStaticMeshesField, s_ModelStaticMeshObjectKind, [&](const Core::Metascript::Value& objectValue){
-        return ParseStaticMeshObject(nwbFilePath, objectValue);
+    auto staticMeshObjectsResult = ParseObjectMap<ModelStaticMeshObject>(filePathText, asset, s_ModelStaticMeshesField, s_ModelStaticMeshObjectKind, [&](const Core::Metascript::Value& objectValue){
+        return ParseStaticMeshObject(nwbFilePath, filePathText, objectValue);
     }, arena);
     if(!staticMeshObjectsResult)
         return MakeUnexpected(Failure{});
     entry.staticMeshObjects = Move(*staticMeshObjectsResult);
 
-    auto skinnedMeshObjectsResult = ParseObjectMap<ModelSkinnedMeshObject>(nwbFilePath, asset, s_ModelSkinnedMeshesField, s_ModelSkinnedMeshObjectKind, [&](const Core::Metascript::Value& objectValue){
-        return ParseSkinnedMeshObject(nwbFilePath, objectValue);
+    auto skinnedMeshObjectsResult = ParseObjectMap<ModelSkinnedMeshObject>(filePathText, asset, s_ModelSkinnedMeshesField, s_ModelSkinnedMeshObjectKind, [&](const Core::Metascript::Value& objectValue){
+        return ParseSkinnedMeshObject(nwbFilePath, filePathText, objectValue);
     }, arena);
     if(!skinnedMeshObjectsResult)
         return MakeUnexpected(Failure{});
@@ -321,7 +366,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,27 +1,32 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiTextRegionAndVisibleCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include <tests/unit/ui/name_cases.adhd.h>
 
+#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
 
 #include <core/alloc/scratch.h>
 
+#include <global/algorithm.h>
 #include <global/simdmath.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,8 +45,6 @@ using namespace NWB::UiWidgetTests;
 
 constexpr AStringView s_OrdinaryRowText = "Next";
 constexpr AStringView s_StackedAccentText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
-constexpr AStringView s_MultilineAccentText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
-constexpr AStringView s_PaddedStackedAccentSample = "A\xCC\x81\xCC\x81 g\xCC\xA3 ";
 constexpr AStringView s_CheckboxNormalRegion = "checkbox.normal";
 constexpr AStringView s_ButtonNormalRegion = "button.normal";
 constexpr AStringView s_ButtonHoverRegion = "button.hover";
@@ -49,42 +52,9 @@ constexpr AStringView s_ButtonPressedRegion = "button.pressed";
 constexpr AStringView s_ButtonDisabledRegion = "button.disabled";
 constexpr AStringView s_PanelKey = "panel";
 
-static constexpr StringView s_OverflowText = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static usize GlyphIndexCount(const DrawSnapshot& snapshot)noexcept{
-    usize count = 0u;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
-            count += command.indexCount;
-    }
-    return count;
-}
-
-static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected){
-    const f32 expectedEndX = expected.x + expected.width;
-    const f32 expectedEndY = expected.y + expected.height;
-    usize count = 0u;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
-            continue;
-        UiPaintAssertions::ExpectRect(command.clip, expected);
-        ASSERT_LE(static_cast<usize>(command.firstIndex) + command.indexCount, snapshot.indices().size());
-        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index){
-            ASSERT_LT(snapshot.indices()[index], snapshot.vertices().size());
-            const Point& position = snapshot.vertices()[snapshot.indices()[index]].position;
-            EXPECT_GE(position.x, expected.x);
-            EXPECT_LE(position.x, expectedEndX);
-            EXPECT_GE(position.y, expected.y);
-            EXPECT_LE(position.y, expectedEndY);
-        }
-        count += command.indexCount;
-    }
-    EXPECT_GT(count, 0u);
-}
 
 // Compare nonzero native raster coverage rather than transparent atlas borders that may legitimately be clipped.
 [[nodiscard]] static Expected<f64> GlyphCoverageArea(const DrawSnapshot& snapshot)noexcept{
@@ -160,7 +130,7 @@ public:
 
 
 class UiTextRegionTests : public WidgetFixture{
-protected:
+public:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         if(HasFatalFailure())
@@ -185,6 +155,28 @@ protected:
             if(region.name == Name(s_ButtonNormalRegion) || region.name == Name(s_ButtonHoverRegion) || region.name == Name(s_ButtonPressedRegion) || region.name == Name(s_ButtonDisabledRegion)){
                 region.padding = { 8.0f, 8.0f, 8.0f, 8.0f };
                 region.minimumHeight = 32.0f;
+            }
+        }
+        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+        ASSERT_TRUE(m_skin.validatePayload());
+        m_builder.setSkin(m_skin);
+    }
+
+    void useAsymmetricSelectableButtons(){
+        UiSkin::RegionVector regions(m_arena);
+        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
+        for(UiSkinRegion& region : regions){
+            if(region.name == Name("button.normal"))
+                region.padding = { 9.0f, 1.0f, 2.0f, 3.0f };
+            else if(region.name == Name("button.hover"))
+                region.padding = { 1.0f, 11.0f, 2.0f, 3.0f };
+            else if(region.name == Name("button.pressed")){
+                region.padding = { 1.0f, 2.0f, 13.0f, 3.0f };
+                region.minimumHeight = 55.0f;
+            }
+            else if(region.name == Name("button.disabled")){
+                region.padding = { 1.0f, 2.0f, 3.0f, 15.0f };
+                region.minimumWidth = 100.0f;
             }
         }
         m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
@@ -354,438 +346,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales){
-    Label label(m_arena);
-    ASSERT_EQ(label.setText({ .text = s_OverflowText, .fontSize = 16.0f }), TextLayoutStatus::Success);
-    u64 generation = 1u;
-    for(const f32 scale : { 1.0f, 1.5f, 2.0f }){
-        usize previousIndices = 0u;
-        for(const Rect& bounds : { Rect{ 20.0f, 20.0f, 80.0f, 34.0f }, Rect{ 20.0f, 20.0f, 41.0f, 19.0f } }){
-            m_paint.begin({ 300.0f, 200.0f, scale, scale }, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-            m_paint.pushClip({ 12.0f, 10.0f, 210.0f, 140.0f });
-            const Rect inherited{ 25.0f, 24.0f, 110.0f, 70.0f };
-            m_paint.pushClip(inherited);
-            ASSERT_TRUE(label.paint(m_text, m_paint, bounds));
-            EXPECT_GT(label.layout().measure().x, bounds.width);
-            EXPECT_GT(label.layout().measure().y, bounds.height);
-            UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
-            ASSERT_TRUE(m_paint.popClip());
-            ASSERT_TRUE(m_paint.popClip());
-            EXPECT_FALSE(m_paint.popClip());
-            const DrawSnapshot snapshot = m_paint.freeze();
-            ExpectGlyphRegion(snapshot, { 25.0f, 24.0f, bounds.width - 5.0f, bounds.height - 4.0f });
-            const usize indices = GlyphIndexCount(snapshot);
-            if(previousIndices != 0u)
-                EXPECT_LT(indices, previousIndices);
-            previousIndices = indices;
-        }
-    }
-}
-
-TEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling){
-    Label label(m_arena);
-    ASSERT_EQ(label.setText({ .text = s_OverflowText }), TextLayoutStatus::Success);
-    const Rect inherited{ 10.0f, 10.0f, 180.0f, 120.0f };
-    u64 generation = 1u;
-    for(const Rect& bounds : { Rect{ 20.0f, 20.0f, 0.0f, 40.0f }, Rect{ 20.0f, 20.0f, 40.0f, 0.0f }, Rect{ 20.0f, 20.0f, 0.0f, 0.0f }, Rect{ 220.0f, 20.0f, 40.0f, 40.0f } }){
-        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        m_paint.pushClip(inherited);
-        ASSERT_TRUE(label.paint(m_text, m_paint, bounds));
-        UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
-        ASSERT_TRUE(m_paint.popClip());
-        EXPECT_FALSE(m_paint.popClip());
-        const DrawSnapshot snapshot = m_paint.freeze();
-        EXPECT_TRUE(snapshot.commands().empty());
-        EXPECT_TRUE(snapshot.vertices().empty());
-        EXPECT_TRUE(snapshot.indices().empty());
-    }
-    ASSERT_EQ(label.setText({ .text = "MMMMMMMMMMMM" }), TextLayoutStatus::Success);
-    m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-    m_paint.pushClip(inherited);
-    EXPECT_FALSE(label.paint(m_text, m_paint, { 20.0f, 20.0f, 30.0f, 20.0f }, { 1.0f, 1.0f, 1.0f, 2.0f }));
-    UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
-    const Rect sibling{ 110.0f, 70.0f, 60.0f, 22.0f };
-    ASSERT_TRUE(label.paint(m_text, m_paint, sibling));
-    UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
-    ASSERT_TRUE(m_paint.popClip());
-    EXPECT_FALSE(m_paint.popClip());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ExpectGlyphRegion(snapshot, sibling);
-}
-
-TEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrinkingItsSkinOrHitTarget){
-    u64 generation = 1u;
-    for(const f32 scale : { 1.0f, 1.5f, 2.0f }){
-        ASSERT_TRUE(begin(generation, { 800.0f, 600.0f, scale, scale }));
-        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 130.0f }));
-        WidgetOptions options;
-        options.width = { LayoutSizePolicy::Fixed, 80.0f };
-        options.height = { LayoutSizePolicy::Fixed, 28.0f };
-        EXPECT_FALSE(m_builder.button("button", s_OverflowText, options));
-        ASSERT_TRUE(finishPanel());
-        EXPECT_FALSE(m_paint.popClip());
-        const DrawSnapshot snapshot = m_paint.freeze();
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        const HitTarget* button = target(id("button", s_PanelKey));
-        ASSERT_NE(button, nullptr);
-        UiPaintAssertions::ExpectRect(button->rectangle, { 13.0f, 24.0f, 80.0f, 28.0f });
-        UiPaintAssertions::ExpectRect(button->clip, button->rectangle);
-        const auto skin = sampleSkinPaint(snapshot, Name(s_ButtonNormalRegion));
-        ASSERT_TRUE(skin);
-        UiPaintAssertions::ExpectRect(skin->bounds, button->rectangle);
-        ExpectGlyphRegion(snapshot, { 15.0f, 27.0f, 74.0f, 20.0f });
-    }
-}
-
-TEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling){
-    m_builder.listStyle().row.padding = { 7.0f, 11.0f, 13.0f, 3.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 240.0f }));
-    WidgetOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 4.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    EXPECT_FALSE(m_builder.button("button", "MMMM", options));
-    options.width.value = 10.0f;
-    EXPECT_FALSE(m_builder.selectable("selectable", "MMMM", false, options));
-    options.width.value = 20.0f;
-    b8 checked = false;
-    EXPECT_FALSE(m_builder.checkbox("checkbox", "MMMM", checked, options));
-    options.width.value = 50.0f;
-    options.height.value = 32.0f;
-    EXPECT_FALSE(m_builder.button("sibling", "MMMMMMMM", options));
-    ASSERT_TRUE(finishPanel());
-    EXPECT_FALSE(m_paint.popClip());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* sibling = target(id("sibling", s_PanelKey));
-    ASSERT_NE(sibling, nullptr);
-    ExpectGlyphRegion(snapshot, { sibling->rectangle.x + 2.0f, sibling->rectangle.y + 3.0f, 44.0f, 24.0f });
-}
-
-TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip){
-    m_builder.style().fontSize = 48.0f;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 100.0f, 110.0f }));
-    WidgetOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 120.0f };
-    options.height = { LayoutSizePolicy::Fixed, 36.0f };
-    b8 checked = false;
-    EXPECT_FALSE(m_builder.checkbox("checkbox", "jjjjjjjjjjjjjjjj", checked, options));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* checkbox = target(id("checkbox", s_PanelKey));
-    ASSERT_NE(checkbox, nullptr);
-    UiPaintAssertions::ExpectRect(checkbox->rectangle, { 13.0f, 24.0f, 120.0f, 36.0f });
-    UiPaintAssertions::ExpectRect(checkbox->clip, { 13.0f, 24.0f, 92.0f, 36.0f });
-    ExpectGlyphRegion(snapshot, { 45.0f, 24.0f, 60.0f, 36.0f });
-    const auto skin = sampleSkinPaint(snapshot, Name(s_CheckboxNormalRegion));
-    ASSERT_TRUE(skin);
-    UiPaintAssertions::ExpectRect(skin->bounds, { 13.0f, 30.0f, 24.0f, 24.0f });
-}
-
-TEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds){
-    m_builder.listStyle().row.padding = { 7.0f, 11.0f, 13.0f, 3.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 130.0f }));
-    WidgetOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 90.0f };
-    options.height = { LayoutSizePolicy::Fixed, 34.0f };
-    EXPECT_FALSE(m_builder.selectable("selectable", s_OverflowText, false, options));
-    ASSERT_TRUE(finishPanel());
-    EXPECT_FALSE(m_paint.popClip());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* selectable = target(id("selectable", s_PanelKey));
-    ASSERT_NE(selectable, nullptr);
-    UiPaintAssertions::ExpectRect(selectable->rectangle, { 13.0f, 24.0f, 90.0f, 34.0f });
-    UiPaintAssertions::ExpectRect(selectable->clip, selectable->rectangle);
-    const auto skin = sampleSkinPaint(snapshot, Name(s_ButtonNormalRegion));
-    ASSERT_TRUE(skin);
-    UiPaintAssertions::ExpectRect(skin->bounds, selectable->rectangle);
-    ExpectGlyphRegion(snapshot, { 20.0f, 35.0f, 70.0f, 18.0f });
-}
-
-TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow){
-    const StringView text = "MMMMMMMMMMMMMMMM";
-    m_builder.listStyle().row.padding = { 7.0f, 11.0f, 13.0f, 3.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 130.0f }));
-    WidgetOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 90.0f };
-    options.height = { LayoutSizePolicy::Fixed, 70.0f };
-    EXPECT_FALSE(m_builder.selectable("selectable", text, false, options));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot actual = m_paint.freeze();
-    const Rect content{ 20.0f, 35.0f, 70.0f, 54.0f };
-    ExpectGlyphRegion(actual, content);
-    auto layout = m_text.layout({ .text = text, .fontSize = m_builder.style().fontSize });
-    ASSERT_TRUE(layout);
-    const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
-    const auto measured = m_text.measure(*layout, display);
-    ASSERT_TRUE(measured);
-    ASSERT_LT(measured->height, content.height);
-    PaintBuilder reference(m_arena);
-    reference.begin(display, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-    reference.pushClip(content);
-    const f32 centeredY = (content.height - measured->height) * 0.5f + content.y;
-    const Point origin{ content.x - measured->x, centeredY - measured->y };
-    ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
-    ASSERT_TRUE(reference.popClip());
-    const DrawSnapshot expected = reference.freeze();
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextRegionsCentering)};
-    Vector<Vertex, Core::Alloc::ScratchArena> actualGlyphs(scratch);
-    Vector<Vertex, Core::Alloc::ScratchArena> expectedGlyphs(scratch);
-    CopyGlyphVertices(actual, actualGlyphs);
-    CopyGlyphVertices(expected, expectedGlyphs);
-    ASSERT_EQ(actualGlyphs.size(), expectedGlyphs.size());
-    ASSERT_GT(actualGlyphs.size(), 0u);
-    for(usize index = 0u; index < actualGlyphs.size(); ++index){
-        EXPECT_FLOAT_EQ(actualGlyphs[index].position.x, expectedGlyphs[index].position.x);
-        EXPECT_FLOAT_EQ(actualGlyphs[index].position.y, expectedGlyphs[index].position.y);
-        EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.x, expectedGlyphs[index].texCoord.x);
-        EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.y, expectedGlyphs[index].texCoord.y);
-    }
-}
-
-TEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks){
-    m_builder.style().fontSize = 24.0f;
-    u64 generation = 1u;
-    for(const b8 collapsible : { false, true }){
-        WindowState state;
-        WindowOptions options;
-        options.initialBounds = { 10.0f, 15.0f, 75.0f, 100.0f };
-        options.minimumSize = { 0.0f, 0.0f };
-        options.collapsible = collapsible;
-        options.resizable = false;
-        for(const f32 width : { 800.0f, 100.0f }){
-            const f32 scale = width == 800.0f ? 1.0f : 2.0f;
-            ASSERT_TRUE(begin(generation, { width, 200.0f, scale, scale }));
-            ASSERT_TRUE(m_builder.beginWindow("window", "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj", state, options));
-            ASSERT_TRUE(finishWindow());
-            EXPECT_FALSE(m_paint.popClip());
-            const DrawSnapshot snapshot = m_paint.freeze();
-            ASSERT_TRUE(m_context.commitFrame(generation++));
-            const HitTarget* title = target(id("@window.title"));
-            ASSERT_NE(title, nullptr);
-            const Rect& header = title->rectangle;
-            const f32 titleStart = header.x + 5.0f;
-            const f32 left = titleStart + (collapsible ? 28.0f : 0.0f);
-            const f32 right = Min(width, header.x + header.width - 7.0f);
-            const f32 inkTop = header.y + 6.0f;
-            const f32 inkHeight = header.height - 14.0f;
-            ExpectGlyphRegion(snapshot, { left, inkTop, right - left, inkHeight });
-            const auto skin = sampleSkinPaint(snapshot, Name(NWB::Tests::UiCases::s_UiCaseWindowTitle));
-            ASSERT_TRUE(skin);
-            UiPaintAssertions::ExpectRect(skin->bounds, title->clip);
-            if(collapsible){
-                const HitTarget* collapse = target(id("@window.collapse"));
-                ASSERT_NE(collapse, nullptr);
-                EXPECT_FLOAT_EQ(collapse->rectangle.x, titleStart);
-                EXPECT_FLOAT_EQ(collapse->rectangle.width, 20.0f);
-                EXPECT_LE(collapse->rectangle.x + collapse->rectangle.width, left);
-            }
-        }
-    }
-}
-
-TEST_F(UiTextRegionTests, ContentNavigationHeightPreservesCoverageThatFixed32PixelRowsCut){
-    ASSERT_NO_FATAL_FAILURE(useDefaultButtonPadding());
-    ASSERT_NO_FATAL_FAILURE(checkContentButtonRow("Previous", "Next", 16.0f, 1.0f, 1u, true));
-    u64 generation = 2u;
-    for(const f32 fontSize : { 12.0f, 16.0f, 22.0f }){
-        for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f })
-            ASSERT_NO_FATAL_FAILURE(checkContentButtonRow("Previous", "Next", fontSize, scale, generation++));
-    }
-}
-
-TEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage){
-    ASSERT_NO_FATAL_FAILURE(useDefaultButtonPadding());
-    ASSERT_TRUE(installKoreanFallback());
-    const Array<StringView, 4> samples{
-        "Agjpqy A\xCC\x81 e\xCC\x88 ",
-        s_PaddedStackedAccentSample,
-        "Previous\nA\xCC\x81\xCC\x81 gjpqy g\xCC\xA3 ",
-        "\xED\x95\x9C\xEA\xB8\x80 Agjpqy A\xCC\x81 e\xCC\x88 ",
-    };
-    auto mixed = m_text.layout({ .text = samples[3u] });
-    ASSERT_TRUE(mixed);
-    b8 sawLatin = false;
-    b8 sawKorean = false;
-    for(const PlacedGlyph& glyph : mixed->glyphs()){
-        sawLatin = sawLatin || glyph.face->identity().name() == Name(s_TestLatinFontPath);
-        sawKorean = sawKorean || glyph.face->identity().name() == Name(s_TestKoreanFontPath);
-    }
-    ASSERT_TRUE(sawLatin);
-    ASSERT_TRUE(sawKorean);
-    u64 generation = 1u;
-    for(u32 index = 0u; index < LengthOf(samples); ++index){
-        SCOPED_TRACE(testing::Message() << "sample=" << index);
-        for(const f32 fontSize : { 12.0f, 16.0f, 22.0f }){
-            for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f })
-                ASSERT_NO_FATAL_FAILURE(checkContentButtonRow("Next", samples[index], fontSize, scale, generation++));
-        }
-    }
-}
-
-TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLogicalLineMetrics){
-    ASSERT_NO_FATAL_FAILURE(useDefaultButtonPadding());
-    ASSERT_TRUE(installKoreanFallback());
-    m_builder.style().fontSize = 16.0f;
-    m_builder.editStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    const Array<StringView, 2> samples{ s_PaddedStackedAccentSample, "A\xCC\x81\xCC\x81 g\xCC\xA3 \xED\x95\x9C\xEA\xB8\x80 " };
-    u64 generation = 1u;
-    for(const StringView sample : samples){
-        for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f }){
-            SCOPED_TRACE(testing::Message() << "scale=" << scale);
-            const DisplayMetrics display{ 800.0f, 600.0f, scale, scale };
-            EditModel model(m_arena);
-            ASSERT_TRUE(model.setText(sample));
-            EditBoxState state;
-            auto layout = m_text.layout({ .text = sample, .fontSize = 16.0f });
-            ASSERT_TRUE(layout);
-            const auto measured = m_text.measure(*layout, display);
-            ASSERT_TRUE(measured);
-            ASSERT_TRUE(begin(generation, display));
-            ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 740.0f, 200.0f }));
-            EditBoxOptions options;
-            options.width = { LayoutSizePolicy::Fixed, 300.0f };
-            ASSERT_TRUE(m_builder.editBox("edit", model, state, options).valid);
-            ASSERT_TRUE(finishPanel());
-            const DrawSnapshot actual = m_paint.freeze();
-            ASSERT_TRUE(m_context.commitFrame(generation));
-            EXPECT_FLOAT_EQ(state.placement.bounds.height, Max(32.0f, measured->height + 8.0f + 8.0f));
-            EXPECT_FLOAT_EQ(state.placement.scroll, 0.0f);
-            const f32 inkTop = state.placement.textOrigin.y + measured->y;
-            const f32 contentBottom = state.placement.content.y + state.placement.content.height;
-            EXPECT_GE(inkTop, state.placement.content.y - 0.0001f);
-            EXPECT_LE(inkTop + measured->height, contentBottom + 0.0001f);
-            PaintBuilder reference(m_arena);
-            reference.begin(display, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-            ASSERT_TRUE(m_text.paint(reference, *layout, state.placement.textOrigin, m_builder.editStyle().text));
-            const auto expectedCoverage = GlyphCoverageArea(reference.freeze());
-            const auto actualCoverage = GlyphCoverageArea(actual);
-            ASSERT_TRUE(expectedCoverage);
-            ASSERT_TRUE(actualCoverage);
-            ASSERT_GT(*expectedCoverage, 0.0);
-            EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
-        }
-    }
-}
-
-TEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage){
-    ASSERT_TRUE(installKoreanFallback());
-    IntrinsicRowSource source;
-    source.count = 3u;
-    source.ordinaryText = "A\xCC\x81\xCC\x81 g\xCC\xA3 gjpqy";
-    source.specialText = "\xED\x95\x9C\xEA\xB8\x80 Next\nA\xCC\x81\xCC\x81 g\xCC\xA3";
-    ListState list;
-    ComboState combo;
-    u64 generation = 1u;
-    for(const b8 popup : { false, true }){
-        for(const f32 fontSize : { 12.0f, 16.0f, 22.0f }){
-            for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.25f, 1.25f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 1.5f } })
-                ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, fontSize, { 800.0f, 600.0f, scale.x, scale.y }, generation++, source, list, combo));
-        }
-    }
-}
-
-TEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges){
-    IntrinsicRowSource source;
-    source.count = 3u;
-    source.specialText = s_MultilineAccentText;
-    ListState list;
-    ComboState combo;
-    const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
-    u64 generation = 1u;
-    for(const b8 popup : { false, true }){
-        source.specialText = s_MultilineAccentText;
-        ++source.contentRevision;
-        m_builder.listStyle().row.padding = { 8.0f, 16.0f, 8.0f, 18.0f };
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 22.0f, display, generation++, source, list, combo));
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 12.0f, display, generation++, source, list, combo));
-        m_builder.listStyle().row.padding = { 8.0f, 4.0f, 8.0f, 4.0f };
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 12.0f, display, generation++, source, list, combo));
-        source.specialText = s_OrdinaryRowText;
-        ++source.contentRevision;
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 12.0f, display, generation++, source, list, combo));
-        source.specialText = s_StackedAccentText;
-        ++source.generation;
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 16.0f, display, generation++, source, list, combo));
-    }
-}
-
-TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement){
-    UiSkin::RegionVector regions(m_arena);
-    regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    for(UiSkinRegion& region : regions){
-        if(region.name == Name(s_ButtonNormalRegion))
-            region.padding = { 9.0f, 1.0f, 2.0f, 3.0f };
-        else if(region.name == Name(s_ButtonHoverRegion))
-            region.padding = { 1.0f, 11.0f, 2.0f, 3.0f };
-        else if(region.name == Name(s_ButtonPressedRegion)){
-            region.padding = { 1.0f, 2.0f, 13.0f, 3.0f };
-            region.minimumHeight = 55.0f;
-        }
-        else if(region.name == Name(s_ButtonDisabledRegion)){
-            region.padding = { 1.0f, 2.0f, 3.0f, 15.0f };
-            region.minimumWidth = 100.0f;
-        }
-    }
-    m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-    ASSERT_TRUE(m_skin.validatePayload());
-    m_builder.setSkin(m_skin);
-    const SelectableStyle style;
-    const auto metrics = MeasureSelectable(m_skin, style);
-    ASSERT_TRUE(metrics);
-    EXPECT_FLOAT_EQ(metrics->padding.left, 9.0f);
-    EXPECT_FLOAT_EQ(metrics->padding.top, 11.0f);
-    EXPECT_FLOAT_EQ(metrics->padding.right, 13.0f);
-    EXPECT_FLOAT_EQ(metrics->padding.bottom, 15.0f);
-    EXPECT_FLOAT_EQ(metrics->minimum.x, 100.0f);
-    EXPECT_FLOAT_EQ(metrics->minimum.y, 55.0f);
-    const auto layout = m_text.layout({ .text = "Agjpqy", .fontSize = 16.0f });
-    ASSERT_TRUE(layout);
-    const auto textBounds = m_text.measure(*layout, { 800.0f, 600.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(textBounds);
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiSelectableStateMetrics)};
-    Vector<Vertex, Core::Alloc::ScratchArena> baseline(scratch);
-    u64 generation = 1u;
-    for(const SelectablePaintFlags flags : { SelectablePaintFlags{}, SelectablePaintFlags{ true, false, true, false }, SelectablePaintFlags{ true, true, false, false }, SelectablePaintFlags{ false, false, false, false } }){
-        m_paint.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, generation++, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        ASSERT_TRUE(PaintSelectable(m_paint, m_text, m_skin, *layout, *textBounds, metrics->padding, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
-        const DrawSnapshot snapshot = m_paint.freeze();
-        ExpectGlyphRegion(snapshot, { 29.0f, 41.0f, 158.0f, 44.0f });
-        Vector<Vertex, Core::Alloc::ScratchArena> glyphs(scratch);
-        CopyGlyphVertices(snapshot, glyphs);
-        if(baseline.empty())
-            baseline = glyphs;
-        ASSERT_EQ(glyphs.size(), baseline.size());
-        for(usize index = 0u; index < glyphs.size(); ++index){
-            EXPECT_FLOAT_EQ(glyphs[index].position.x, baseline[index].position.x);
-            EXPECT_FLOAT_EQ(glyphs[index].position.y, baseline[index].position.y);
-            EXPECT_FLOAT_EQ(glyphs[index].texCoord.x, baseline[index].texCoord.x);
-            EXPECT_FLOAT_EQ(glyphs[index].texCoord.y, baseline[index].texCoord.y);
-        }
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -803,32 +364,13 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleBakedTests : public TextVisibleFixture{
-protected:
-    [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin)noexcept{
-        const Rect outline = OutlineRectangle(glyph, origin);
-        return { outline.x + (outline.width * 0.5f), outline.y + (outline.height * 0.5f), 1.0f, 1.0f };
-    }
-
-    [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-        const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
-        const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
-        const f32 scale = 32.0f / static_cast<f32>(atlas.unitsPerEm());
-        return Rect{
-            origin.x + glyph.position.x + record.planeLeft * scale,
-            origin.y + glyph.position.y + record.planeTop * scale,
-            (record.planeRight - record.planeLeft) * scale,
-            (record.planeBottom - record.planeTop) * scale,
-        };
-    }
-
-
 public:
     TextVisibleBakedTests()
         : m_baked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsVisibleAtlas))
     {}
 
 
-protected:
+public:
     [[nodiscard]] b8 installBaked(const StringView text){
         if(!installCoverageFonts())
             return false;
@@ -899,7 +441,7 @@ protected:
     }
 
 
-protected:
+public:
     FontAtlas m_baked;
 };
 
@@ -907,215 +449,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingOutlineIsOutside){
-    ASSERT_TRUE(installBaked("A"));
-    ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    const PlacedGlyph& glyph = m_layout.glyphs()[0u];
-    ASSERT_TRUE(glyph.face->bakedAtlas());
-    ASSERT_GT(glyph.ink.width, 0.0f);
-    ASSERT_GT(glyph.ink.height, 0.0f);
-    const Point origin{ 40.0f, 40.0f };
-    const Rect outline = OutlineRectangle(glyph, origin);
-    const Rect plane = BakedRectangle(glyph, origin);
-    const f32 clipX = outline.x - 4.0f;
-    const f32 clipY = outline.height * 0.5f + outline.y;
-    const Rect clip{ clipX, clipY, 2.0f, 1.0f };
-    // Lanes are clip right, clip bottom, plane right, plane bottom.
-    const SIMDVectorSingle ends = VectorAdd(VectorSet(clip.x, clip.y, plane.x, plane.y), VectorSet(clip.width, clip.height, plane.width, plane.height));
-    ASSERT_LT(VectorGetX(ends), outline.x);
-    ASSERT_GE(clip.x, plane.x);
-    ASSERT_GE(clip.y, plane.y);
-    ASSERT_LE(VectorGetX(ends), VectorGetZ(ends));
-    ASSERT_LE(VectorGetY(ends), VectorGetW(ends));
-    beginPaint(1u);
-    m_paint.pushClip(clip);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
-    ASSERT_TRUE(m_paint.popClip());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.glyphPages().empty());
-    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    const FontAtlasGlyph& record = *glyph.face->bakedAtlas()->glyph(glyph.glyphId);
-    EXPECT_EQ(snapshot.sdfPages()[0u].get(), glyph.face->bakedAtlas()->page(record.group).get());
-    ASSERT_EQ(snapshot.commands().size(), 1u);
-    UiPaintAssertions::ExpectRect(snapshot.commands()[0u].clip, clip);
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_EQ(snapshot.indices().size(), 6u);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, VectorGetX(ends));
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, VectorGetY(ends));
-}
-
-TEST_F(TextVisibleBakedTests, EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry){
-    ASSERT_TRUE(installBaked("A\nB\nC"));
-    ASSERT_EQ(m_baked.payload().groups.size(), 3u);
-    for(u64 scenario = 0u; scenario < 2u; ++scenario){
-        beginPaint(scenario + 1u);
-        m_paint.pushClip({ 20.0f, 20.0f, scenario == 0u ? 0.0f : 100.0f, 100.0f });
-        const Color color{ 0.7f, 0.2f, 0.5f, scenario == 0u ? 1.0f : 0.0f };
-        ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }, color));
-        ASSERT_TRUE(m_paint.popClip());
-        const DrawSnapshot snapshot = m_paint.freeze();
-        EXPECT_TRUE(snapshot.glyphPages().empty());
-        EXPECT_TRUE(snapshot.sdfPages().empty());
-        EXPECT_TRUE(snapshot.vertices().empty());
-        EXPECT_TRUE(snapshot.indices().empty());
-        EXPECT_TRUE(snapshot.commands().empty());
-    }
-}
-
-TEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisibleBakedGroup){
-    ASSERT_TRUE(installBaked("A\nB\nC"));
-    ASSERT_EQ(m_layout.glyphs().size(), 3u);
-    ASSERT_EQ(m_baked.payload().groups.size(), 3u);
-    FixedVector<SharedGlyphPage, s_PaintMaxImages - 1u> prior;
-    for(usize index = 0u; index < prior.max_size(); ++index){
-        auto pageCreationResult = makePage(1000u + index);
-        ASSERT_TRUE(pageCreationResult);
-        SharedGlyphPage page = Move(*pageCreationResult);
-        ASSERT_TRUE(page);
-        prior.push_back(Move(page));
-    }
-    const Point origin{ 20.0f, 20.0f };
-    const Rect clip = OutlineCenterClip(m_layout.glyphs()[0u], origin);
-    const f32 clipBottom = clip.y + clip.height;
-    for(usize index = 1u; index < m_layout.glyphs().size(); ++index)
-        ASSERT_GT(BakedRectangle(m_layout.glyphs()[index], origin).y, clipBottom);
-    beginPaint(1u);
-    ASSERT_TRUE(m_paint.prepareGlyphPages(prior));
-    m_paint.pushClip(clip);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
-    ASSERT_TRUE(m_paint.popClip());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.glyphPages().size(), prior.size());
-    for(usize index = 0u; index < prior.size(); ++index)
-        EXPECT_EQ(snapshot.glyphPages()[index].get(), prior[index].get());
-    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    const PlacedGlyph& visible = m_layout.glyphs()[0u];
-    const FontAtlasGlyph& record = *visible.face->bakedAtlas()->glyph(visible.glyphId);
-    EXPECT_EQ(snapshot.sdfPages()[0u].get(), visible.face->bakedAtlas()->page(record.group).get());
-    EXPECT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size(), s_PaintMaxImages);
-    ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_EQ(snapshot.indices().size(), 6u);
-}
-
-TEST_F(TextVisibleBakedTests, FullyOutsideBakedGroupsRemainAbsentUntilALaterVisiblePaint){
-    ASSERT_TRUE(installBaked("A\nB\nC"));
-    ASSERT_EQ(m_layout.glyphs().size(), 3u);
-    beginPaint(1u);
-    m_paint.pushClip({ 700.0f, 500.0f, 2.0f, 2.0f });
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    ASSERT_TRUE(m_paint.popClip());
-    const DrawSnapshot hidden = m_paint.freeze();
-    EXPECT_TRUE(hidden.glyphPages().empty());
-    EXPECT_TRUE(hidden.sdfPages().empty());
-    EXPECT_TRUE(hidden.vertices().empty());
-    EXPECT_TRUE(hidden.indices().empty());
-    EXPECT_TRUE(hidden.commands().empty());
-    beginPaint(2u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot revealed = m_paint.freeze();
-    EXPECT_TRUE(revealed.glyphPages().empty());
-    ASSERT_EQ(revealed.sdfPages().size(), 3u);
-    ASSERT_EQ(revealed.commands().size(), 3u);
-    for(usize index = 0u; index < m_layout.glyphs().size(); ++index){
-        const PlacedGlyph& glyph = m_layout.glyphs()[index];
-        const FontAtlasGlyph& record = *glyph.face->bakedAtlas()->glyph(glyph.glyphId);
-        EXPECT_EQ(revealed.sdfPages()[index].get(), glyph.face->bakedAtlas()->page(record.group).get());
-    }
-    EXPECT_EQ(revealed.vertices().size(), 12u);
-    EXPECT_EQ(revealed.indices().size(), 18u);
-    EXPECT_TRUE(hidden.sdfPages().empty());
-}
-
-TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry){
-    ASSERT_TRUE(installBaked("A"));
-    {
-        auto layoutResult = m_text.layout({ .text = "\xED\x95\x9C", .fontSize = 32.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    ASSERT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
-    const u32 warmGlyph = m_layout.glyphs()[0u].glyphId;
-    beginPaint(1u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot warm = m_paint.freeze();
-    ASSERT_EQ(warm.glyphPages().size(), 1u);
-    ASSERT_TRUE(warm.sdfPages().empty());
-    const SharedGlyphPage oldPage = warm.glyphPages()[0u];
-    FixedVector<SharedGlyphPage, s_PaintMaxImages> prior;
-    prior.push_back(oldPage);
-    for(usize index = 1u; index < prior.max_size(); ++index){
-        auto pageCreationResult = makePage(2000u + index);
-        ASSERT_TRUE(pageCreationResult);
-        SharedGlyphPage page = Move(*pageCreationResult);
-        ASSERT_TRUE(page);
-        prior.push_back(Move(page));
-    }
-    {
-        auto layoutResult = m_text.layout({ .text = "\xEA\xB8\x80" "A", .fontSize = 32.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 2u);
-    ASSERT_NE(m_layout.glyphs()[0u].glyphId, warmGlyph);
-    ASSERT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
-    ASSERT_TRUE(m_layout.glyphs()[1u].face->bakedAtlas());
-    beginPaint(2u);
-    ASSERT_TRUE(m_paint.prepareGlyphPages(prior));
-    m_paint.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
-    ASSERT_TRUE(m_paint.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
-    PaintBuilder reference(m_arena);
-    reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-    ASSERT_TRUE(reference.prepareGlyphPages(prior));
-    reference.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
-    ASSERT_TRUE(reference.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
-    const DrawSnapshot expected = reference.freeze();
-    EXPECT_FALSE(m_text.paint(m_paint, m_layout, { 80.0f, 80.0f }));
-    const DrawSnapshot rejected = m_paint.freeze();
-    ExpectSamePaint(rejected, expected);
-    EXPECT_TRUE(rejected.sdfPages().empty());
-    ASSERT_EQ(rejected.glyphPages().size(), s_PaintMaxImages);
-    EXPECT_EQ(rejected.glyphPages()[0u].get(), oldPage.get());
-    EXPECT_EQ(rejected.glyphPages()[0u]->binding().generation, oldPage->binding().generation);
-    {
-        auto layoutResult = m_text.layout({ .text = "\xEA\xB8\x80", .fontSize = 32.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    beginPaint(3u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot upgraded = m_paint.freeze();
-    ASSERT_EQ(upgraded.glyphPages().size(), 1u);
-    EXPECT_EQ(upgraded.glyphPages()[0u]->binding().atlasIdentity, oldPage->binding().atlasIdentity);
-    EXPECT_GT(upgraded.glyphPages()[0u]->binding().generation, oldPage->binding().generation);
-    EXPECT_NE(upgraded.glyphPages()[0u].get(), oldPage.get());
-    EXPECT_TRUE(upgraded.sdfPages().empty());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
-#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
-
-#include <global/algorithm.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1128,399 +462,9 @@ namespace __hidden_ui_text_visible_coverage_tests{
 
 
 using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
 using namespace NWB::UiTextVisibleTests;
-
-constexpr AStringView s_SampleGlyphText = "A";
-constexpr AStringView s_WideGlyphText = "W";
-
-
-class TextVisibleCoverageTests : public TextVisibleFixture{
-protected:
-    [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline)noexcept{
-        if(raster.x + 0.001f < outline.x)
-            return { raster.x, raster.y, Min(0.05f, (outline.x - raster.x) * 0.5f), raster.height };
-        if(raster.y + 0.001f < outline.y)
-            return { raster.x, raster.y, raster.width, Min(0.05f, (outline.y - raster.y) * 0.5f) };
-        const f32 rasterRight = raster.x + raster.width;
-        const f32 rasterBottom = raster.y + raster.height;
-        const f32 outlineRight = outline.x + outline.width;
-        const f32 outlineBottom = outline.y + outline.height;
-        if(rasterRight > outlineRight + 0.001f){
-            const f32 fringe = Min(0.05f, (rasterRight - outlineRight) * 0.5f);
-            return { rasterRight - fringe, raster.y, fringe, raster.height };
-        }
-        if(rasterBottom > outlineBottom + 0.001f){
-            const f32 fringe = Min(0.05f, (rasterBottom - outlineBottom) * 0.5f);
-            return { raster.x, rasterBottom - fringe, raster.width, fringe };
-        }
-        return {};
-    }
-
-
-public:
-    TextVisibleCoverageTests()
-        : m_bitmap(m_arena)
-    {}
-
-
-protected:
-    [[nodiscard]] b8 paintClipped(const TextLayout& layout, const Rect& clip, const Point origin = { 20.0f, 20.0f }){
-        m_paint.pushClip(clip);
-        const b8 painted = m_text.paint(m_paint, layout, origin);
-        const b8 popped = m_paint.popClip();
-        return painted && popped;
-    }
-
-    [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
-        const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
-        if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(physicalSize), m_bitmap))
-            return MakeUnexpected(Failure{});
-        const f32 scale = physicalSize / fontSize;
-        const f64 scaleDouble = static_cast<f64>(scale);
-        const f64 unsnappedX = static_cast<f64>(origin.x) + static_cast<f64>(glyph.position.x) + static_cast<f64>(m_bitmap.bearingX) / scaleDouble;
-        const f64 unsnappedY = static_cast<f64>(origin.y) + static_cast<f64>(glyph.position.y) - static_cast<f64>(m_bitmap.bearingY) / scaleDouble;
-        const f64 snappedX = Floor(unsnappedX * static_cast<f64>(display.pixelScaleX) + 0.5) / static_cast<f64>(display.pixelScaleX);
-        const f64 snappedY = Floor(unsnappedY * static_cast<f64>(display.pixelScaleY) + 0.5) / static_cast<f64>(display.pixelScaleY);
-        const Rect rectangle{ static_cast<f32>(snappedX), static_cast<f32>(snappedY), static_cast<f32>(m_bitmap.width) / scale, static_cast<f32>(m_bitmap.height) / scale };
-        if(!(rectangle.width > 0.0f && rectangle.height > 0.0f))
-            return MakeUnexpected(Failure{});
-        return rectangle;
-    }
-
-
-protected:
-    GlyphBitmap m_bitmap;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache){
-    AString<Core::Alloc::GlobalArena> text("A\n", m_arena);
-    const usize hiddenCount = s_GlyphAtlasMaxGlyphs + 1u;
-    text.reserve(2u + hiddenCount * 3u);
-    constexpr u32 s_HangulSyllableBase = 0xac00u;
-    Array<char, s_Utf8MaxSequenceBytes> encoded{};
-    for(u32 index = 0u; index < hiddenCount; ++index){
-        const auto encodedLength = EncodeUtf8CodePoint(s_HangulSyllableBase + index, encoded);
-        ASSERT_TRUE(encodedLength);
-        text.append(encoded.data(), *encodedLength);
-    }
-    {
-        auto layoutResult = m_text.layout({ text });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.lines().size(), 2u);
-    ASSERT_EQ(m_layout.glyphs().size(), hiddenCount + 1u);
-    ASSERT_TRUE(m_text.measure(m_layout, { 800.0f, 600.0f, 1.0f, 1.0f }));
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisibleHangul)};
-    Vector<u32, Core::Alloc::ScratchArena> ids(scratch);
-    ids.reserve(hiddenCount);
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
-    for(const PlacedGlyph& glyph : m_layout.glyphs()){
-        if(glyph.byteBegin < 2u)
-            continue;
-        EXPECT_EQ(glyph.face->identity().name(), Name(s_TestKoreanFontPath));
-        EXPECT_TRUE(glyph.coverage.known);
-        EXPECT_GT(glyph.coverage.ink.width, 0.0f);
-        EXPECT_GT(glyph.coverage.ink.height, 0.0f);
-        EXPECT_GE(OutlineRectangle(glyph, { 20.0f, 20.0f }).y, clip.height);
-        ids.push_back(glyph.glyphId);
-    }
-    Sort(ids.begin(), ids.end());
-    ASSERT_EQ(ids.size(), hiddenCount);
-    for(usize index = 1u; index < ids.size(); ++index)
-        ASSERT_NE(ids[index], ids[index - 1u]);
-    beginPaint(1u);
-    ASSERT_TRUE(paintClipped(m_layout, clip));
-    const DrawSnapshot prefix = m_paint.freeze();
-    ASSERT_EQ(prefix.glyphPages().size(), 1u);
-    EXPECT_EQ(prefix.glyphPages()[0u]->binding().font.name(), Name(s_TestLatinFontPath));
-    EXPECT_EQ(prefix.vertices().size(), 4u);
-    EXPECT_EQ(prefix.indices().size(), 6u);
-    const PlacedGlyph& reveal = m_layout.glyphs()[hiddenCount / 2u];
-    const Point origin{ 20.0f - reveal.position.x - reveal.ink.x, 20.0f - reveal.position.y - reveal.ink.y };
-    beginPaint(2u);
-    ASSERT_TRUE(paintClipped(m_layout, { 20.0f, 20.0f, 80.0f, 40.0f }, origin));
-    const DrawSnapshot revealed = m_paint.freeze();
-    ASSERT_EQ(revealed.glyphPages().size(), 1u);
-    EXPECT_EQ(revealed.glyphPages()[0u]->binding().font.name(), Name(s_TestKoreanFontPath));
-    EXPECT_FALSE(revealed.vertices().empty());
-    beginPaint(3u);
-    ASSERT_TRUE(paintClipped(m_layout, clip));
-    const DrawSnapshot warm = m_paint.freeze();
-    ASSERT_EQ(warm.glyphPages().size(), 1u);
-    EXPECT_EQ(warm.glyphPages()[0u].get(), prefix.glyphPages()[0u].get());
-}
-
-TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed){
-    {
-        auto layoutResult = m_text.layout({ "A\nB" });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.lines().size(), 2u);
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
-    beginPaint(1u);
-    ASSERT_TRUE(paintClipped(m_layout, clip));
-    const DrawSnapshot first = m_paint.freeze();
-    ASSERT_EQ(first.glyphPages().size(), 1u);
-    ASSERT_EQ(first.vertices().size(), 4u);
-    const SharedGlyphPage original = first.glyphPages()[0u];
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisibleRetainedPixels)};
-    Vector<u8, Core::Alloc::ScratchArena> pixels(scratch);
-    pixels.assign(original->pixels().begin(), original->pixels().end());
-    beginPaint(2u);
-    ASSERT_TRUE(paintClipped(m_layout, clip));
-    const DrawSnapshot hidden = m_paint.freeze();
-    ExpectSamePaint(hidden, first);
-    beginPaint(3u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot revealed = m_paint.freeze();
-    ASSERT_EQ(revealed.glyphPages().size(), 1u);
-    EXPECT_NE(revealed.glyphPages()[0u].get(), original.get());
-    EXPECT_GT(revealed.glyphPages()[0u]->binding().generation, original->binding().generation);
-    EXPECT_EQ(revealed.vertices().size(), 8u);
-    ASSERT_EQ(original->pixels().size(), pixels.size());
-    EXPECT_EQ(FOUNDATION_MEMCMP(original->pixels().data(), pixels.data(), pixels.size()), 0);
-}
-
-TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage){
-    {
-        auto layoutResult = m_text.layout({ s_SampleGlyphText });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    TextLayout oversized(m_arena);
-    {
-        auto layoutResult = m_text.layout({ .text = s_WideGlyphText, .fontSize = 1024.0f });
-        ASSERT_TRUE(layoutResult);
-        oversized = Move(*layoutResult);
-    }
-    beginPaint(1u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot before = m_paint.freeze();
-    beginPaint(2u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    ASSERT_TRUE(m_text.paint(m_paint, oversized, { 10000.0f, 10000.0f }));
-    const DrawSnapshot hidden = m_paint.freeze();
-    ExpectSamePaint(hidden, before);
-    {
-        auto layoutResult = m_text.layout({ s_WideGlyphText });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    beginPaint(3u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot ordinary = m_paint.freeze();
-    ASSERT_EQ(ordinary.glyphPages().size(), 1u);
-    EXPECT_GT(ordinary.glyphPages()[0u]->binding().generation, before.glyphPages()[0u]->binding().generation);
-    EXPECT_EQ(ordinary.vertices().size(), 4u);
-}
-
-TEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage){
-    {
-        auto layoutResult = m_text.layout({ .text = s_WideGlyphText, .fontSize = 1024.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    beginPaint(1u);
-    m_paint.fillRect({ 1.0f, 1.0f, 4.0f, 4.0f });
-    m_paint.pushClip({ 10.0f, 10.0f, 20.0f, 20.0f });
-    m_paint.pushClip({ 40.0f, 40.0f, 20.0f, 20.0f });
-    EXPECT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    ASSERT_TRUE(m_paint.popClip());
-    ASSERT_TRUE(m_paint.popClip());
-    EXPECT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }, { 1.0f, 1.0f, 1.0f, 0.0f }));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.glyphPages().empty());
-    EXPECT_TRUE(snapshot.sdfPages().empty());
-    EXPECT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_EQ(snapshot.indices().size(), 6u);
-    {
-        auto layoutResult = m_text.layout({ s_WideGlyphText });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    beginPaint(2u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    EXPECT_FALSE(m_paint.freeze().glyphPages().empty());
-}
-
-TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline){
-    const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.5f };
-    const Point origin{ 40.375f, 20.125f };
-    {
-        auto layoutResult = m_text.layout({ .text = s_WideGlyphText, .fontSize = 17.25f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
-    ASSERT_TRUE(raster);
-    const Rect clip = RasterFringe(*raster, OutlineRectangle(m_layout.glyphs()[0u], origin));
-    ASSERT_GT(clip.width, 0.0f);
-    ASSERT_GT(clip.height, 0.0f);
-    beginPaint(1u, display);
-    ASSERT_TRUE(paintClipped(m_layout, clip, origin));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
-    EXPECT_NEAR(snapshot.vertices()[2u].position.x, clip.x + clip.width, 0.0001f);
-    EXPECT_NEAR(snapshot.vertices()[2u].position.y, clip.y + clip.height, 0.0001f);
-}
-
-TEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid){
-    const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.5f };
-    const Point origin{ 40.375f, 20.125f };
-    {
-        auto layoutResult = m_text.layout({ .text = "g", .fontSize = 17.25f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
-    ASSERT_TRUE(raster);
-    beginPaint(1u, display);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_NEAR(snapshot.vertices()[0u].position.x, raster->x, 0.0001f);
-    EXPECT_NEAR(snapshot.vertices()[0u].position.y, raster->y, 0.0001f);
-}
-
-TEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin){
-    const Point origin{ 50.0f, 20.0f };
-    const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.25f };
-    {
-        auto layoutResult = m_text.layout({ .text = "j", .fontSize = 32.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
-    ASSERT_TRUE(raster);
-    const f32 glyphOrigin = origin.x + m_layout.glyphs()[0u].position.x;
-    ASSERT_LT(raster->x, glyphOrigin);
-    const Rect clip{ raster->x, raster->y, (glyphOrigin - raster->x) * 0.5f, raster->height };
-    beginPaint(1u, display);
-    ASSERT_TRUE(paintClipped(m_layout, clip, origin));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_LT(snapshot.vertices()[2u].position.x, glyphOrigin);
-    EXPECT_EQ(snapshot.glyphPages().size(), 1u);
-}
-
-TEST_F(TextVisibleCoverageTests, CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad){
-    const Point origin{ 50.0f, 20.0f };
-    const DisplayMetrics display{ 200.0f, 100.0f, 1.5f, 1.5f };
-    {
-        auto layoutResult = m_text.layout({ .text = "x\xcc\x81", .fontSize = 32.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.glyphs().size(), 2u);
-    ASSERT_EQ(m_layout.clusters().size(), 1u);
-    const auto base = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
-    ASSERT_TRUE(base);
-    const auto mark = rasterRectangle(m_layout.glyphs()[1u], m_layout.fontSize(), display, origin);
-    ASSERT_TRUE(mark);
-    ASSERT_LT(mark->y, base->y);
-    const Rect clip{ mark->x, mark->y, mark->width, Min(mark->height, base->y - (mark->y)) * 0.5f };
-    beginPaint(1u, display);
-    ASSERT_TRUE(paintClipped(m_layout, clip, origin));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    ASSERT_EQ(snapshot.indices().size(), 6u);
-    EXPECT_LT(snapshot.vertices()[2u].position.y, base->y);
-    EXPECT_EQ(snapshot.glyphPages().size(), 1u);
-}
-
-TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace){
-    {
-        auto layoutResult = m_text.layout({ "A\n\xed\x95\x9c" });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_EQ(m_layout.lines().size(), 2u);
-    Array<SharedGlyphPage, s_PaintMaxImages - 1u> prior{};
-    for(usize index = 0u; index < prior.size(); ++index){
-        auto pageResult = makePage(Limit<u64>::s_Max - index);
-        ASSERT_TRUE(pageResult);
-        prior[index] = Move(*pageResult);
-        ASSERT_TRUE(prior[index]);
-    }
-    beginPaint(1u);
-    ASSERT_TRUE(m_paint.prepareGlyphPages(prior));
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
-    ASSERT_TRUE(paintClipped(m_layout, clip));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages);
-    EXPECT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_TRUE(snapshot.sdfPages().empty());
-    for(usize index = 0u; index < prior.size(); ++index)
-        EXPECT_EQ(snapshot.glyphPages()[index].get(), prior[index].get());
-    EXPECT_EQ(snapshot.glyphPages().back()->binding().font.name(), Name(s_TestLatinFontPath));
-    beginPaint(2u);
-    ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
-    const DrawSnapshot revealed = m_paint.freeze();
-    EXPECT_EQ(revealed.glyphPages().size(), 2u);
-    EXPECT_EQ(revealed.vertices().size(), 8u);
-}
-
-
-TEST_F(TextVisibleCoverageTests, OversizedMeasurementDoesNotAdmitAtlasCoverage){
-    const auto layout = m_text.layout({ .text = "Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80" });
-    ASSERT_TRUE(layout);
-    const auto large = m_text.layout({ .text = s_WideGlyphText, .fontSize = 1024.0f });
-    ASSERT_TRUE(large);
-    ASSERT_TRUE(m_text.measure(*large, { 800.0f, 600.0f, 1.0f, 1.0f }));
-    beginPaint(1u);
-    ASSERT_TRUE(m_text.paint(m_paint, *layout, { 20.0f, 20.0f }));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_FALSE(snapshot.glyphPages().empty());
-    EXPECT_EQ(snapshot.glyphPages()[0u]->binding().generation, 1u);
-}
-
-TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase){
-    const Array<StringView, 8> samples{ "Previous", "Next", "gyjpq", "\xc3\x81\xc3\x89\xc3\x8d\xc3\x93\xc3\x9a \xc3\x87", "A\xcc\x81\xcc\x81", "g\xcc\xa3", "\xed\x95\x9c\xea\xb8\x80", "Edit me: \xed\x95\x9c\xea\xb8\x80" };
-    for(const f32 size : { 12.0f, 14.0f, 16.0f }){
-        for(const StringView sample : samples){
-            const auto layout = m_text.layout({ .text = sample, .fontSize = size });
-            ASSERT_TRUE(layout);
-            for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.25f, 1.25f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 1.5f } }){
-                const DisplayMetrics display{ 800.0f, 600.0f, scale.x, scale.y };
-                const auto measured = m_text.measure(*layout, display);
-                ASSERT_TRUE(measured);
-                const u32 presetSize = static_cast<u32>(Ceil(size * Max(scale.x, scale.y)));
-                for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
-                    const Rect content{ 32.0f + phase, 24.0f + phase, measured->width, measured->height };
-                    const Point origin{ content.x - measured->x, content.y - measured->y };
-                    const f32 contentLimitX = content.x + content.width + 0.0001f;
-                    const f32 contentLimitY = content.y + content.height + 0.0001f;
-                    for(const PlacedGlyph& glyph : layout->glyphs()){
-                        const auto preset = glyph.face->rasterBounds(glyph.glyphId, presetSize);
-                        ASSERT_TRUE(preset);
-                        if(preset->width == 0.0f || preset->height == 0.0f)
-                            continue;
-                        const auto raster = rasterRectangle(glyph, size, display, origin);
-                        ASSERT_TRUE(raster);
-                        EXPECT_GE(raster->x + 0.0001f, content.x);
-                        EXPECT_GE(raster->y + 0.0001f, content.y);
-                        EXPECT_LE(raster->x + raster->width, contentLimitX);
-                        EXPECT_LE(raster->y + raster->height, contentLimitY);
-                    }
-                }
-            }
-        }
-    }
-}
-
 
 // Lanes are texel x and y.
 [[nodiscard]] static f32 SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
@@ -1545,107 +489,1396 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
     return ((encoded * 255.0f - 128.0f) * static_cast<f32>(binding.spreadPixels)) / 128.0f;
 }
 
-TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage){
-    const auto initial = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 32.0f });
-    ASSERT_TRUE(initial);
-    ASSERT_EQ(initial->glyphs().size(), 1u);
-    FontAtlas baked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsMeasuredSdf));
-    FontAtlasPayload payload(m_arena);
-    payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
-    const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
-    payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
-    UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
-    payload.bakePpem = 32u;
-    payload.ascenderUnits = 1069.0f;
-    payload.descenderUnits = -293.0f;
-    payload.glyphs.resize(payload.sourceGlyphCount);
-    for(u32 index = 0u; index < payload.sourceGlyphCount; ++index)
-        payload.glyphs[index].glyphId = index;
-    FontAtlasGlyph& glyph = payload.glyphs[initial->glyphs()[0u].glyphId];
-    glyph.drawable = 1u;
-    glyph.channel = 3u;
-    glyph.x = 1u;
-    glyph.y = 1u;
-    glyph.width = 48u;
-    glyph.height = 48u;
-    glyph.planeLeft = -1000.0f;
-    glyph.planeTop = -2000.0f;
-    const f32 bakeScale = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
-    glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width) * bakeScale;
-    glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height) * bakeScale;
-    payload.groups.emplace_back(m_arena);
-    FontAtlasGroup& group = payload.groups.back();
-    group.width = 64u;
-    group.height = 64u;
-    // Other channels are fully opaque: measurement must follow the selected glyph channel.
-    group.pixels.resize(64u * 64u * 4u, 255u);
-    for(u32 y = 0u; y < group.height; ++y){
-        for(u32 x = 0u; x < group.width; ++x){
-            const i32 localX = static_cast<i32>(x) - static_cast<i32>(glyph.x);
-            const i32 localY = static_cast<i32>(y) - static_cast<i32>(glyph.y);
-            const i32 distance = Min(Min(localX - 15, 25 - localX), Min(localY - 13, 23 - localY));
-            group.pixels[(static_cast<usize>(y) * group.width + x) * 4u + glyph.channel] = static_cast<u8>(Clamp(128 + 16 * distance, 0, 255));
+
+class TextVisibleCoverageTests : public TextVisibleFixture{
+public:
+    TextVisibleCoverageTests()
+        : m_bitmap(m_arena)
+        , m_measuredBaked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsMeasuredSdf))
+    {}
+
+
+public:
+    [[nodiscard]] b8 paintClipped(const TextLayout& layout, const Rect& clip, Point origin = { 20.0f, 20.0f });
+    [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, f32 fontSize, const DisplayMetrics& display, Point origin);
+
+    [[nodiscard]] b8 installMeasuredSdfAtlas(const u32 targetGlyphId){
+        FontAtlasPayload payload(m_arena);
+        payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
+        const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
+        payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
+        UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
+        payload.bakePpem = 32u;
+        payload.ascenderUnits = 1069.0f;
+        payload.descenderUnits = -293.0f;
+        payload.glyphs.resize(payload.sourceGlyphCount);
+        for(u32 index = 0u; index < payload.sourceGlyphCount; ++index)
+            payload.glyphs[index].glyphId = index;
+        FontAtlasGlyph& glyph = payload.glyphs[targetGlyphId];
+        glyph.drawable = 1u;
+        glyph.channel = 3u;
+        glyph.x = 1u;
+        glyph.y = 1u;
+        glyph.width = 48u;
+        glyph.height = 48u;
+        glyph.planeLeft = -1000.0f;
+        glyph.planeTop = -2000.0f;
+        const f32 bakeScale = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
+        glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width) * bakeScale;
+        glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height) * bakeScale;
+        payload.groups.emplace_back(m_arena);
+        FontAtlasGroup& group = payload.groups.back();
+        group.width = 64u;
+        group.height = 64u;
+        // Other channels are fully opaque: measurement must follow the selected glyph channel.
+        group.pixels.resize(64u * 64u * 4u, 255u);
+        for(u32 y = 0u; y < group.height; ++y){
+            for(u32 x = 0u; x < group.width; ++x){
+                const i32 localX = static_cast<i32>(x) - static_cast<i32>(glyph.x);
+                const i32 localY = static_cast<i32>(y) - static_cast<i32>(glyph.y);
+                const i32 distance = Min(Min(localX - 15, 25 - localX), Min(localY - 13, 23 - localY));
+                group.pixels[(static_cast<usize>(y) * group.width + x) * 4u + glyph.channel] = static_cast<u8>(Clamp(128 + 16 * distance, 0, 255));
+            }
+        }
+        group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
+        m_measuredBaked.setPayload(Move(payload));
+        Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextMeasureSdf)};
+        if(!m_measuredBaked.validatePayload(scratch))
+            return false;
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, &m_measuredBaked };
+        return m_text.setFonts(scratch, Span(&source, 1u));
+    }
+
+
+public:
+    GlyphBitmap m_bitmap;
+    FontAtlas m_measuredBaked;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_glyph_sdf_tests{
+using UiTextRegionIntrinsicRowSource = ::__hidden_ui_text_region_tests::IntrinsicRowSource;
+using UiTextRegionTests = ::__hidden_ui_text_region_tests::UiTextRegionTests;
+using TextVisibleBakedTests = ::__hidden_ui_text_visible_baked_tests::TextVisibleBakedTests;
+using TextVisibleCoverageTests = ::__hidden_ui_text_visible_coverage_tests::TextVisibleCoverageTests;
+using Label = ::NWB::Impl::Ui::Label;
+using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using WidgetOptions = ::NWB::Impl::Ui::WidgetOptions;
+using WindowState = ::NWB::Impl::Ui::WindowState;
+using WindowOptions = ::NWB::Impl::Ui::WindowOptions;
+using EditModel = ::NWB::Impl::Ui::EditModel;
+using EditBoxState = ::NWB::Impl::Ui::EditBoxState;
+using EditBoxOptions = ::NWB::Impl::Ui::EditBoxOptions;
+using ListState = ::NWB::Impl::Ui::ListState;
+using ComboState = ::NWB::Impl::Ui::ComboState;
+using SelectableStyle = ::NWB::Impl::Ui::SelectableStyle;
+using SelectablePaintFlags = ::NWB::Impl::Ui::SelectablePaintFlags;
+using Color = ::NWB::Impl::Ui::Color;
+using Insets = ::NWB::Impl::Ui::Insets;
+using TextLayout = ::NWB::Impl::Ui::TextLayout;
+using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
+using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
+using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
+namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
+
+using ::NWB::UiWidgetTests::CopyGlyphVertices;
+using ::NWB::Impl::Ui::MeasureSelectable;
+using ::NWB::Impl::Ui::PaintSelectable;
+using ::NWB::Impl::Ui::s_PaintMaxImages;
+using ::NWB::Impl::Ui::s_GlyphAtlasMaxGlyphs;
+using ::NWB::Tests::UiCases::s_UiCaseWindowTitle;
+
+[[nodiscard]] NWB_INLINE Expected<f64> UiTextRegionGlyphCoverageArea(const ::NWB::Impl::Ui::DrawSnapshot& snapshot)noexcept{
+    return ::__hidden_ui_text_region_tests::GlyphCoverageArea(snapshot);
+}
+
+[[nodiscard]] NWB_INLINE Expected<Rect> UiTextVisibleAtlasRect(const ::NWB::Impl::Ui::PlacedGlyph& glyph, const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas, const f32 fontSize, const ::NWB::Impl::Ui::Point& origin)noexcept{
+    return ::NWB::Impl::Ui::TextGlyphVisibility::AtlasRectangle(glyph, *atlas, fontSize, origin);
+}
+
+[[nodiscard]] NWB_INLINE f32 SampleUiMeasuredSdfDistance(const ::NWB::Impl::Ui::SharedSdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
+    return ::__hidden_ui_text_visible_coverage_tests::SampleSdfDistance(*page, channel, texel);
+}
+
+template<typename StringT>
+[[nodiscard]] NWB_INLINE b8 AppendUiUtf8CodePoint(StringT& out, const u32 codePoint){
+    Array<char, s_Utf8MaxSequenceBytes> encoded{};
+    const auto encodedLength = EncodeUtf8CodePoint(codePoint, encoded);
+    if(!encodedLength)
+        return false;
+    out.append(encoded.data(), *encodedLength);
+    return true;
+}
+
+template<typename VectorT>
+NWB_INLINE void SortUiGlyphIds(VectorT& ids)noexcept{
+    Sort(ids.begin(), ids.end());
+}
+
+NWB_INLINE void ExpectUiTextVisibleSamePaint(const ::NWB::Impl::Ui::DrawSnapshot& actual, const ::NWB::Impl::Ui::DrawSnapshot& expected){
+    ::NWB::UiPaintAssertions::ExpectSamePaint(actual, expected);
+}
+
+b8 PaintUiTextVisibleClipped(TextVisibleCoverageTests& self, const ::NWB::Impl::Ui::TextLayout& layout, const ::NWB::Impl::Ui::Rect& clip, const ::NWB::Impl::Ui::Point& origin)noexcept;
+Expected<Rect> ComputeUiTextVisibleRasterRect(TextVisibleCoverageTests& self, const ::NWB::Impl::Ui::PlacedGlyph& glyph, f32 fontSize, const ::NWB::Impl::Ui::DisplayMetrics& display, const ::NWB::Impl::Ui::Point& origin)noexcept;
+};
+
+namespace __hidden_ui_text_visible_coverage_tests{
+NWB_INLINE b8 TextVisibleCoverageTests::paintClipped(const TextLayout& layout, const Rect& clip, const Point origin){
+    return ::__hidden_ui_glyph_sdf_tests::PaintUiTextVisibleClipped(*this, layout, clip, origin);
+}
+NWB_INLINE Expected<Rect> TextVisibleCoverageTests::rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
+    return ::__hidden_ui_glyph_sdf_tests::ComputeUiTextVisibleRasterRect(*this, glyph, fontSize, display, origin);
+}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const AStringView s_UiTextRegionOrdinaryRowText = "Next";
+const AStringView s_UiTextRegionStackedAccentText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
+const AStringView s_UiTextRegionMultilineAccentText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
+const AStringView s_UiTextRegionPaddedStackedAccentSample = "A\xCC\x81\xCC\x81 g\xCC\xA3 ";
+const AStringView s_UiTextRegionCheckboxNormalRegion = "checkbox.normal";
+const AStringView s_UiTextRegionButtonNormalRegion = "button.normal";
+const AStringView s_UiTextRegionPanelKey = "panel";
+const StringView s_UiTextRegionOverflowText = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
+const AStringView s_UiTextVisibleSampleGlyphText = "A";
+const AStringView s_UiTextVisibleWideGlyphText = "W";
+
+
+usize CountUiTextRegionGlyphIndices(in DrawSnapshot snapshot){
+    usize count = 0u;
+    const usize commandCount = snapshot.commands().size();
+    for(usize cmdIndex = 0u; cmdIndex < commandCount; ++cmdIndex){
+        const DrawCommand command = snapshot.commands()[cmdIndex];
+        if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
+            count += command.indexCount;
+    }
+    return count;
+}
+
+void ExpectUiTextGlyphRegion(in DrawSnapshot snapshot, in Rect expected){
+    const f32 expectedEndX = expected.x + expected.width;
+    const f32 expectedEndY = expected.y + expected.height;
+    usize count = 0u;
+    const usize commandCount = snapshot.commands().size();
+    for(usize cmdIndex = 0u; cmdIndex < commandCount; ++cmdIndex){
+        const DrawCommand command = snapshot.commands()[cmdIndex];
+        if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
+            continue;
+        ExpectUiRect(command.clip, expected);
+        ASSERT_LE(cast<usize>(command.firstIndex) + command.indexCount, snapshot.indices().size());
+        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index){
+            ASSERT_LT(snapshot.indices()[index], snapshot.vertices().size());
+            const Point position = snapshot.vertices()[snapshot.indices()[index]].position;
+            EXPECT_GE(position.x, expected.x);
+            EXPECT_LE(position.x, expectedEndX);
+            EXPECT_GE(position.y, expected.y);
+            EXPECT_LE(position.y, expectedEndY);
+        }
+        count += command.indexCount;
+    }
+    EXPECT_GT(count, 0u);
+}
+
+Rect UiTextVisibleBakedRect(in PlacedGlyph glyph, in Point origin){
+    const FontAtlasGlyph record = FontFaceBakedGlyph(glyph.face, glyph.glyphId);
+    const f32 scale = 32.0f / cast<f32>(FontFaceBakedUnitsPerEm(glyph.face));
+    return Rect(
+        origin.x + glyph.position.x + record.planeLeft * scale,
+        origin.y + glyph.position.y + record.planeTop * scale,
+        (record.planeRight - record.planeLeft) * scale,
+        (record.planeBottom - record.planeTop) * scale
+    );
+}
+
+b8 PaintUiTextVisibleClipped(mut TextVisibleCoverageTests self, in TextLayout layout, in Rect clip, in Point origin){
+    self.m_paint.pushClip(clip);
+    const b8 painted = self.m_text.paint(self.m_paint, layout, origin);
+    const b8 popped = self.m_paint.popClip();
+    return painted && popped;
+}
+
+Expected<Rect> ComputeUiTextVisibleRasterRect(mut TextVisibleCoverageTests self, in PlacedGlyph glyph, in f32 fontSize, in DisplayMetrics display, in Point origin){
+    const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
+    if(!FontFaceRasterize(glyph.face, glyph.glyphId, cast<u32>(physicalSize), self.m_bitmap))
+        return MakeUnexpected(Failure());
+    const f32 scale = physicalSize / fontSize;
+    const f64 scaleDouble = cast<f64>(scale);
+    const f64 unsnappedX = cast<f64>(origin.x) + cast<f64>(glyph.position.x) + cast<f64>(self.m_bitmap.bearingX) / scaleDouble;
+    const f64 unsnappedY = cast<f64>(origin.y) + cast<f64>(glyph.position.y) - cast<f64>(self.m_bitmap.bearingY) / scaleDouble;
+    const f64 snappedX = Floor(unsnappedX * cast<f64>(display.pixelScaleX) + 0.5) / cast<f64>(display.pixelScaleX);
+    const f64 snappedY = Floor(unsnappedY * cast<f64>(display.pixelScaleY) + 0.5) / cast<f64>(display.pixelScaleY);
+    const Rect rectangle = Rect(cast<f32>(snappedX), cast<f32>(snappedY), cast<f32>(self.m_bitmap.width) / scale, cast<f32>(self.m_bitmap.height) / scale);
+    if(!(rectangle.width > 0.0f && rectangle.height > 0.0f))
+        return MakeUnexpected(Failure());
+    return rectangle;
+}
+
+SelectablePaintFlags MakeUiSelectablePaintFlags(in b8 enabled, in b8 selected, in b8 hovered, in b8 focused){
+    SelectablePaintFlags flags = SelectablePaintFlags();
+    flags.enabled = enabled;
+    flags.selected = selected;
+    flags.hover = hovered;
+    flags.focused = focused;
+    return flags;
+}
+
+Rect UiTextVisibleBakedOutlineCenterClip(in PlacedGlyph glyph, in Point origin){
+    const Rect outline = ComputePlacedGlyphOutlineRect(glyph, origin);
+    return Rect(outline.x + (outline.width * 0.5f), outline.y + (outline.height * 0.5f), 1.0f, 1.0f);
+}
+
+Rect ComputeUiTextVisibleRasterFringe(in Rect raster, in Rect outline){
+    if(raster.x + 0.001f < outline.x)
+        return Rect(raster.x, raster.y, Min(0.05f, (outline.x - raster.x) * 0.5f), raster.height);
+    if(raster.y + 0.001f < outline.y)
+        return Rect(raster.x, raster.y, raster.width, Min(0.05f, (outline.y - raster.y) * 0.5f));
+    const f32 rasterRight = raster.x + raster.width;
+    const f32 rasterBottom = raster.y + raster.height;
+    const f32 outlineRight = outline.x + outline.width;
+    const f32 outlineBottom = outline.y + outline.height;
+    if(rasterRight > outlineRight + 0.001f){
+        const f32 fringe = Min(0.05f, (rasterRight - outlineRight) * 0.5f);
+        return Rect(rasterRight - fringe, raster.y, fringe, raster.height);
+    }
+    if(rasterBottom > outlineBottom + 0.001f){
+        const f32 fringe = Min(0.05f, (rasterBottom - outlineBottom) * 0.5f);
+        return Rect(raster.x, rasterBottom - fringe, raster.width, fringe);
+    }
+    return Rect();
+}
+
+ShapeRequest MakeUiTextRegionShapeRequest(in StringView text, in f32 fontSize){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.fontSize = fontSize;
+    return request;
+}
+
+ShapeRequest MakeUiTextRegionDefaultShapeRequest(in StringView text){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    return request;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales(mut UiTextRegionTests self){
+    Label label = Label(self.m_arena);
+    ASSERT_EQ(label.setText(MakeUiTextRegionShapeRequest(s_UiTextRegionOverflowText, 16.0f)), TextLayoutStatus::Success);
+    u64 generation = 1u;
+    Array<f32, 3u> scales;
+    scales[0u] = 1.0f;
+    scales[1u] = 1.5f;
+    scales[2u] = 2.0f;
+    Array<Rect, 2u> boundsList;
+    boundsList[0u] = Rect(20.0f, 20.0f, 80.0f, 34.0f);
+    boundsList[1u] = Rect(20.0f, 20.0f, 41.0f, 19.0f);
+    for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+        const f32 scale = scales[scaleIndex];
+        usize previousIndices = 0u;
+        for(usize boundsIndex = 0u; boundsIndex < boundsList.size(); ++boundsIndex){
+            const Rect bounds = boundsList[boundsIndex];
+            self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, scale, scale), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+            ++generation;
+            self.m_paint.pushClip(Rect(12.0f, 10.0f, 210.0f, 140.0f));
+            const Rect inherited = Rect(25.0f, 24.0f, 110.0f, 70.0f);
+            self.m_paint.pushClip(inherited);
+            ASSERT_TRUE(label.paint(self.m_text, self.m_paint, bounds));
+            EXPECT_GT(label.layout().measure().x, bounds.width);
+            EXPECT_GT(label.layout().measure().y, bounds.height);
+            ExpectUiRect(self.m_paint.currentClip(), inherited);
+            ASSERT_TRUE(self.m_paint.popClip());
+            ASSERT_TRUE(self.m_paint.popClip());
+            EXPECT_FALSE(self.m_paint.popClip());
+            const DrawSnapshot snapshot = self.m_paint.freeze();
+            ExpectUiTextGlyphRegion(snapshot, Rect(25.0f, 24.0f, bounds.width - 5.0f, bounds.height - 4.0f));
+            const usize indices = CountUiTextRegionGlyphIndices(snapshot);
+            if(previousIndices != 0u)
+                EXPECT_LT(indices, previousIndices);
+            previousIndices = indices;
         }
     }
-    group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-    baked.setPayload(Move(payload));
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextMeasureSdf)};
-    ASSERT_TRUE(baked.validatePayload(scratch));
-    const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, &baked };
-    ASSERT_TRUE(m_text.setFonts(scratch, Span(&source, 1u)));
+}
+
+void VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling(mut UiTextRegionTests self){
+    Label label = Label(self.m_arena);
+    ASSERT_EQ(label.setText(MakeUiTextRegionDefaultShapeRequest(s_UiTextRegionOverflowText)), TextLayoutStatus::Success);
+    const Rect inherited = Rect(10.0f, 10.0f, 180.0f, 120.0f);
+    u64 generation = 1u;
+    Array<Rect, 4u> emptyRegions;
+    emptyRegions[0u] = Rect(20.0f, 20.0f, 0.0f, 40.0f);
+    emptyRegions[1u] = Rect(20.0f, 20.0f, 40.0f, 0.0f);
+    emptyRegions[2u] = Rect(20.0f, 20.0f, 0.0f, 0.0f);
+    emptyRegions[3u] = Rect(220.0f, 20.0f, 40.0f, 40.0f);
+    for(usize regionIndex = 0u; regionIndex < emptyRegions.size(); ++regionIndex){
+        const Rect bounds = emptyRegions[regionIndex];
+        self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+        ++generation;
+        self.m_paint.pushClip(inherited);
+        ASSERT_TRUE(label.paint(self.m_text, self.m_paint, bounds));
+        ExpectUiRect(self.m_paint.currentClip(), inherited);
+        ASSERT_TRUE(self.m_paint.popClip());
+        EXPECT_FALSE(self.m_paint.popClip());
+        const DrawSnapshot snapshot = self.m_paint.freeze();
+        EXPECT_TRUE(snapshot.commands().empty());
+        EXPECT_TRUE(snapshot.vertices().empty());
+        EXPECT_TRUE(snapshot.indices().empty());
+    }
+    ASSERT_EQ(label.setText(MakeUiTextRegionDefaultShapeRequest("MMMMMMMMMMMM")), TextLayoutStatus::Success);
+    self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    self.m_paint.pushClip(inherited);
+    EXPECT_FALSE(label.paint(self.m_text, self.m_paint, Rect(20.0f, 20.0f, 30.0f, 20.0f), Color(1.0f, 1.0f, 1.0f, 2.0f)));
+    ExpectUiRect(self.m_paint.currentClip(), inherited);
+    const Rect sibling = Rect(110.0f, 70.0f, 60.0f, 22.0f);
+    ASSERT_TRUE(label.paint(self.m_text, self.m_paint, sibling));
+    ExpectUiRect(self.m_paint.currentClip(), inherited);
+    ASSERT_TRUE(self.m_paint.popClip());
+    EXPECT_FALSE(self.m_paint.popClip());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ExpectUiTextGlyphRegion(snapshot, sibling);
+}
+
+void VerifyUiTextRegionTests_OversizedButtonTextKeepsAsymmetricPaddingWithoutShrinkingItsSkinOrHitTarget(mut UiTextRegionTests self){
+    u64 generation = 1u;
+    Array<f32, 3u> scales;
+    scales[0u] = 1.0f;
+    scales[1u] = 1.5f;
+    scales[2u] = 2.0f;
+    for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+        const f32 scale = scales[scaleIndex];
+        ASSERT_TRUE(self.begin(generation, DisplayMetrics(800.0f, 600.0f, scale, scale)));
+        ASSERT_TRUE(self.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 220.0f, 130.0f)));
+        WidgetOptions options = WidgetOptions();
+        options.width = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+        options.height = LayoutSize(LayoutSizePolicy::Fixed, 28.0f);
+        EXPECT_FALSE(self.m_builder.button("button", s_UiTextRegionOverflowText, options));
+        ASSERT_TRUE(self.finishPanel());
+        EXPECT_FALSE(self.m_paint.popClip());
+        const DrawSnapshot snapshot = self.m_paint.freeze();
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const auto foundButton = self.tryTarget(self.id("button", s_UiTextRegionPanelKey));
+        ASSERT_TRUE(foundButton.has_value());
+        const HitTarget button = foundButton.value();
+        ExpectUiRect(button.rectangle, Rect(13.0f, 24.0f, 80.0f, 28.0f));
+        ExpectUiRect(button.clip, button.rectangle);
+        const auto skin = self.sampleSkinPaint(snapshot, Name(s_UiTextRegionButtonNormalRegion));
+        ASSERT_TRUE(skin.has_value());
+        ExpectUiRect(skin.value().bounds, button.rectangle);
+        ExpectUiTextGlyphRegion(snapshot, Rect(15.0f, 27.0f, 74.0f, 20.0f));
+    }
+}
+
+void VerifyUiTextRegionTests_EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling(mut UiTextRegionTests self){
+    self.m_builder.listStyle().row.padding = Insets(7.0f, 11.0f, 13.0f, 3.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 220.0f, 240.0f)));
+    WidgetOptions options = WidgetOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 4.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+    EXPECT_FALSE(self.m_builder.button("button", "MMMM", options));
+    options.width.value = 10.0f;
+    EXPECT_FALSE(self.m_builder.selectable("selectable", "MMMM", false, options));
+    options.width.value = 20.0f;
+    b8 checked = false;
+    EXPECT_FALSE(self.m_builder.checkbox("checkbox", "MMMM", checked, options));
+    EXPECT_FALSE(checked);
+    options.width.value = 50.0f;
+    options.height.value = 32.0f;
+    EXPECT_FALSE(self.m_builder.button("sibling", "MMMMMMMM", options));
+    ASSERT_TRUE(self.finishPanel());
+    EXPECT_FALSE(self.m_paint.popClip());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const auto foundSibling = self.tryTarget(self.id("sibling", s_UiTextRegionPanelKey));
+    ASSERT_TRUE(foundSibling.has_value());
+    const HitTarget sibling = foundSibling.value();
+    ExpectUiTextGlyphRegion(snapshot, Rect(sibling.rectangle.x + 2.0f, sibling.rectangle.y + 3.0f, 44.0f, 24.0f));
+}
+
+void VerifyUiTextRegionTests_CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip(mut UiTextRegionTests self){
+    self.m_builder.style().fontSize = 48.0f;
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 100.0f, 110.0f)));
+    WidgetOptions options = WidgetOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 36.0f);
+    b8 checked = false;
+    EXPECT_FALSE(self.m_builder.checkbox("checkbox", "jjjjjjjjjjjjjjjj", checked, options));
+    EXPECT_FALSE(checked);
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const auto foundCheckbox = self.tryTarget(self.id("checkbox", s_UiTextRegionPanelKey));
+    ASSERT_TRUE(foundCheckbox.has_value());
+    const HitTarget checkbox = foundCheckbox.value();
+    ExpectUiRect(checkbox.rectangle, Rect(13.0f, 24.0f, 120.0f, 36.0f));
+    ExpectUiRect(checkbox.clip, Rect(13.0f, 24.0f, 92.0f, 36.0f));
+    ExpectUiTextGlyphRegion(snapshot, Rect(45.0f, 24.0f, 60.0f, 36.0f));
+    const auto skin = self.sampleSkinPaint(snapshot, Name(s_UiTextRegionCheckboxNormalRegion));
+    ASSERT_TRUE(skin.has_value());
+    ExpectUiRect(skin.value().bounds, Rect(13.0f, 30.0f, 24.0f, 24.0f));
+}
+
+void VerifyUiTextRegionTests_OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds(mut UiTextRegionTests self){
+    self.m_builder.listStyle().row.padding = Insets(7.0f, 11.0f, 13.0f, 3.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 220.0f, 130.0f)));
+    WidgetOptions options = WidgetOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 34.0f);
+    EXPECT_FALSE(self.m_builder.selectable("selectable", s_UiTextRegionOverflowText, false, options));
+    ASSERT_TRUE(self.finishPanel());
+    EXPECT_FALSE(self.m_paint.popClip());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const auto foundSelectable = self.tryTarget(self.id("selectable", s_UiTextRegionPanelKey));
+    ASSERT_TRUE(foundSelectable.has_value());
+    const HitTarget selectable = foundSelectable.value();
+    ExpectUiRect(selectable.rectangle, Rect(13.0f, 24.0f, 90.0f, 34.0f));
+    ExpectUiRect(selectable.clip, selectable.rectangle);
+    const auto skin = self.sampleSkinPaint(snapshot, Name(s_UiTextRegionButtonNormalRegion));
+    ASSERT_TRUE(skin.has_value());
+    ExpectUiRect(skin.value().bounds, selectable.rectangle);
+    ExpectUiTextGlyphRegion(snapshot, Rect(20.0f, 35.0f, 70.0f, 18.0f));
+}
+
+void VerifyUiTextRegionTests_SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow(mut UiTextRegionTests self){
+    const StringView text = "MMMMMMMMMMMMMMMM";
+    self.m_builder.listStyle().row.padding = Insets(7.0f, 11.0f, 13.0f, 3.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 220.0f, 130.0f)));
+    WidgetOptions options = WidgetOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 70.0f);
+    EXPECT_FALSE(self.m_builder.selectable("selectable", text, false, options));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot actual = self.m_paint.freeze();
+    const Rect content = Rect(20.0f, 35.0f, 70.0f, 54.0f);
+    ExpectUiTextGlyphRegion(actual, content);
+    auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(text, self.m_builder.style().fontSize));
+    ASSERT_TRUE(layout.has_value());
+    const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f);
+    const auto measured = self.m_text.measure(layout.value(), display);
+    ASSERT_TRUE(measured.has_value());
+    ASSERT_LT(measured.value().height, content.height);
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    reference.begin(display, 2u, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    reference.pushClip(content);
+    const f32 centeredY = (content.height - measured.value().height) * 0.5f + content.y;
+    const Point origin = Point(content.x - measured.value().x, centeredY - measured.value().y);
+    ASSERT_TRUE(self.m_text.paint(reference, layout.value(), origin, self.m_builder.style().text));
+    ASSERT_TRUE(reference.popClip());
+    const DrawSnapshot expected = reference.freeze();
+    Vector<Vertex> actualGlyphs = Vector<Vertex>();
+    Vector<Vertex> expectedGlyphs = Vector<Vertex>();
+    CopyGlyphVertices(actual, actualGlyphs);
+    CopyGlyphVertices(expected, expectedGlyphs);
+    ASSERT_EQ(actualGlyphs.size(), expectedGlyphs.size());
+    ASSERT_GT(actualGlyphs.size(), 0u);
+    for(usize index = 0u; index < actualGlyphs.size(); ++index){
+        EXPECT_FLOAT_EQ(actualGlyphs[index].position.x, expectedGlyphs[index].position.x);
+        EXPECT_FLOAT_EQ(actualGlyphs[index].position.y, expectedGlyphs[index].position.y);
+        EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.x, expectedGlyphs[index].texCoord.x);
+        EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.y, expectedGlyphs[index].texCoord.y);
+    }
+}
+
+void VerifyUiTextRegionTests_WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks(mut UiTextRegionTests self){
+    self.m_builder.style().fontSize = 24.0f;
+    u64 generation = 1u;
+    Array<b8, 2u> collapsibleModes;
+    collapsibleModes[0u] = false;
+    collapsibleModes[1u] = true;
+    Array<f32, 2u> widths;
+    widths[0u] = 800.0f;
+    widths[1u] = 100.0f;
+    for(usize modeIndex = 0u; modeIndex < collapsibleModes.size(); ++modeIndex){
+        const b8 collapsible = collapsibleModes[modeIndex];
+        WindowState state = WindowState();
+        WindowOptions options = WindowOptions();
+        options.initialBounds = Rect(10.0f, 15.0f, 75.0f, 100.0f);
+        options.minimumSize = Point(0.0f, 0.0f);
+        options.collapsible = collapsible;
+        options.resizable = false;
+        for(usize widthIndex = 0u; widthIndex < widths.size(); ++widthIndex){
+            const f32 width = widths[widthIndex];
+            f32 scale = 2.0f;
+            if(width == 800.0f)
+                scale = 1.0f;
+            ASSERT_TRUE(self.begin(generation, DisplayMetrics(width, 200.0f, scale, scale)));
+            ASSERT_TRUE(self.m_builder.beginWindow("window", "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj", state, options));
+            ASSERT_TRUE(self.finishWindow());
+            EXPECT_FALSE(self.m_paint.popClip());
+            const DrawSnapshot snapshot = self.m_paint.freeze();
+            ASSERT_TRUE(self.m_context.commitFrame(generation));
+            ++generation;
+            const auto foundTitle = self.tryTarget(self.id("@window.title"));
+            ASSERT_TRUE(foundTitle.has_value());
+            const HitTarget title = foundTitle.value();
+            const Rect header = title.rectangle;
+            const f32 titleStart = header.x + 5.0f;
+            f32 collapseOffset = 0.0f;
+            if(collapsible)
+                collapseOffset = 28.0f;
+            const f32 left = titleStart + collapseOffset;
+            const f32 right = Min(width, header.x + header.width - 7.0f);
+            const f32 inkTop = header.y + 6.0f;
+            const f32 inkHeight = header.height - 14.0f;
+            ExpectUiTextGlyphRegion(snapshot, Rect(left, inkTop, right - left, inkHeight));
+            const Name windowTitleName = Name(s_UiCaseWindowTitle);
+            const auto skin = self.sampleSkinPaint(snapshot, windowTitleName);
+            ASSERT_TRUE(skin.has_value());
+            ExpectUiRect(skin.value().bounds, title.clip);
+            if(collapsible){
+                const auto foundCollapse = self.tryTarget(self.id("@window.collapse"));
+                ASSERT_TRUE(foundCollapse.has_value());
+                const HitTarget collapse = foundCollapse.value();
+                EXPECT_FLOAT_EQ(collapse.rectangle.x, titleStart);
+                EXPECT_FLOAT_EQ(collapse.rectangle.width, 20.0f);
+                EXPECT_LE(collapse.rectangle.x + collapse.rectangle.width, left);
+            }
+        }
+        EXPECT_TRUE(state.initialized);
+    }
+}
+
+void VerifyUiTextRegionTests_ContentNavigationHeightPreservesCoverageThatFixed32PixelRowsCut(mut UiTextRegionTests self){
+    ASSERT_NO_FATAL_FAILURE(self.useDefaultButtonPadding());
+    ASSERT_NO_FATAL_FAILURE(self.checkContentButtonRow("Previous", "Next", 16.0f, 1.0f, 1u, true));
+    u64 generation = 2u;
+    Array<f32, 3u> fontSizes;
+    fontSizes[0u] = 12.0f;
+    fontSizes[1u] = 16.0f;
+    fontSizes[2u] = 22.0f;
+    Array<f32, 4u> scales;
+    scales[0u] = 1.0f;
+    scales[1u] = 1.25f;
+    scales[2u] = 1.5f;
+    scales[3u] = 2.0f;
+    for(usize sizeIndex = 0u; sizeIndex < fontSizes.size(); ++sizeIndex){
+        const f32 fontSize = fontSizes[sizeIndex];
+        for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+            const f32 scale = scales[scaleIndex];
+            ASSERT_NO_FATAL_FAILURE(self.checkContentButtonRow("Previous", "Next", fontSize, scale, generation));
+            ++generation;
+        }
+    }
+}
+
+void VerifyUiTextRegionTests_ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage(mut UiTextRegionTests self){
+    ASSERT_NO_FATAL_FAILURE(self.useDefaultButtonPadding());
+    ASSERT_TRUE(self.installKoreanFallback());
+    Array<StringView, 4u> samples;
+    samples[0u] = "Agjpqy A\xCC\x81 e\xCC\x88 ";
+    samples[1u] = s_UiTextRegionPaddedStackedAccentSample;
+    samples[2u] = "Previous\nA\xCC\x81\xCC\x81 gjpqy g\xCC\xA3 ";
+    samples[3u] = "\xED\x95\x9C\xEA\xB8\x80 Agjpqy A\xCC\x81 e\xCC\x88 ";
+    auto mixed = self.m_text.layout(MakeUiTextRegionDefaultShapeRequest(samples[3u]));
+    ASSERT_TRUE(mixed.has_value());
+    b8 sawLatin = false;
+    b8 sawKorean = false;
+    for(usize glyphIndex = 0u; glyphIndex < mixed.value().glyphs().size(); ++glyphIndex){
+        const PlacedGlyph glyph = mixed.value().glyphs()[glyphIndex];
+        sawLatin = sawLatin || FontFaceIdentityName(glyph.face) == Name(s_TestLatinFontPath);
+        sawKorean = sawKorean || FontFaceIdentityName(glyph.face) == Name(s_TestKoreanFontPath);
+    }
+    ASSERT_TRUE(sawLatin);
+    ASSERT_TRUE(sawKorean);
+    u64 generation = 1u;
+    Array<f32, 3u> fontSizes;
+    fontSizes[0u] = 12.0f;
+    fontSizes[1u] = 16.0f;
+    fontSizes[2u] = 22.0f;
+    Array<f32, 4u> scales;
+    scales[0u] = 1.0f;
+    scales[1u] = 1.25f;
+    scales[2u] = 1.5f;
+    scales[3u] = 2.0f;
+    for(usize index = 0u; index < samples.size(); ++index){
+        for(usize sizeIndex = 0u; sizeIndex < fontSizes.size(); ++sizeIndex){
+            const f32 fontSize = fontSizes[sizeIndex];
+            for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+                const f32 scale = scales[scaleIndex];
+                ASSERT_NO_FATAL_FAILURE(self.checkContentButtonRow("Next", samples[index], fontSize, scale, generation));
+                ++generation;
+            }
+        }
+    }
+}
+
+void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLogicalLineMetrics(mut UiTextRegionTests self){
+    ASSERT_NO_FATAL_FAILURE(self.useDefaultButtonPadding());
+    ASSERT_TRUE(self.installKoreanFallback());
+    self.m_builder.style().fontSize = 16.0f;
+    self.m_builder.editStyle().padding = Insets(8.0f, 8.0f, 8.0f, 8.0f);
+    Array<StringView, 2u> samples;
+    samples[0u] = s_UiTextRegionPaddedStackedAccentSample;
+    samples[1u] = "A\xCC\x81\xCC\x81 g\xCC\xA3 \xED\x95\x9C\xEA\xB8\x80 ";
+    Array<f32, 4u> scales;
+    scales[0u] = 1.0f;
+    scales[1u] = 1.25f;
+    scales[2u] = 1.5f;
+    scales[3u] = 2.0f;
+    u64 generation = 1u;
+    for(usize sampleIndex = 0u; sampleIndex < samples.size(); ++sampleIndex){
+        const StringView sample = samples[sampleIndex];
+        for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+            const f32 scale = scales[scaleIndex];
+            const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale, scale);
+            EditModel model = EditModel(self.m_arena);
+            ASSERT_TRUE(model.setText(sample));
+            EditBoxState state = EditBoxState();
+            auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(sample, 16.0f));
+            ASSERT_TRUE(layout.has_value());
+            const auto measured = self.m_text.measure(layout.value(), display);
+            ASSERT_TRUE(measured.has_value());
+            ASSERT_TRUE(self.begin(generation, display));
+            ASSERT_TRUE(self.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 740.0f, 200.0f)));
+            EditBoxOptions options = EditBoxOptions();
+            options.width = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+            ASSERT_TRUE(self.m_builder.editBox("edit", model, state, options).valid);
+            EXPECT_EQ(model.text(), sample);
+            ASSERT_TRUE(self.finishPanel());
+            const DrawSnapshot actual = self.m_paint.freeze();
+            ASSERT_TRUE(self.m_context.commitFrame(generation));
+            EXPECT_FLOAT_EQ(state.placement.bounds.height, Max(32.0f, measured.value().height + 8.0f + 8.0f));
+            EXPECT_FLOAT_EQ(state.placement.scroll, 0.0f);
+            const f32 inkTop = state.placement.textOrigin.y + measured.value().y;
+            const f32 contentBottom = state.placement.content.y + state.placement.content.height;
+            EXPECT_GE(inkTop, state.placement.content.y - 0.0001f);
+            EXPECT_LE(inkTop + measured.value().height, contentBottom + 0.0001f);
+            PaintBuilder reference = PaintBuilder(self.m_arena);
+            reference.begin(display, generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+            ++generation;
+            ASSERT_TRUE(self.m_text.paint(reference, layout.value(), state.placement.textOrigin, self.m_builder.editStyle().text));
+            const auto expectedCoverage = UiTextRegionGlyphCoverageArea(reference.freeze());
+            const auto actualCoverage = UiTextRegionGlyphCoverageArea(actual);
+            ASSERT_TRUE(expectedCoverage.has_value());
+            ASSERT_TRUE(actualCoverage.has_value());
+            ASSERT_GT(expectedCoverage.value(), 0.0);
+            EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), Max(0.00001, expectedCoverage.value() * 0.000002));
+        }
+    }
+}
+
+void VerifyUiTextRegionTests_IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage(mut UiTextRegionTests self){
+    ASSERT_TRUE(self.installKoreanFallback());
+    UiTextRegionIntrinsicRowSource source = UiTextRegionIntrinsicRowSource();
+    source.count = 3u;
+    source.ordinaryText = "A\xCC\x81\xCC\x81 g\xCC\xA3 gjpqy";
+    source.specialText = "\xED\x95\x9C\xEA\xB8\x80 Next\nA\xCC\x81\xCC\x81 g\xCC\xA3";
+    ListState list = ListState();
+    ComboState combo = ComboState();
+    u64 generation = 1u;
+    Array<b8, 2u> popups;
+    popups[0u] = false;
+    popups[1u] = true;
+    Array<f32, 3u> fontSizes;
+    fontSizes[0u] = 12.0f;
+    fontSizes[1u] = 16.0f;
+    fontSizes[2u] = 22.0f;
+    Array<Point, 5u> scales;
+    scales[0u] = Point(1.0f, 1.0f);
+    scales[1u] = Point(1.25f, 1.25f);
+    scales[2u] = Point(1.5f, 1.5f);
+    scales[3u] = Point(2.0f, 2.0f);
+    scales[4u] = Point(1.25f, 1.5f);
+    for(usize popupIndex = 0u; popupIndex < popups.size(); ++popupIndex){
+        const b8 popup = popups[popupIndex];
+        for(usize sizeIndex = 0u; sizeIndex < fontSizes.size(); ++sizeIndex){
+            const f32 fontSize = fontSizes[sizeIndex];
+            for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+                const Point scale = scales[scaleIndex];
+                ASSERT_NO_FATAL_FAILURE(self.checkIntrinsicRowCoverage(popup, fontSize, DisplayMetrics(800.0f, 600.0f, scale.x, scale.y), generation, source, list, combo));
+                ++generation;
+            }
+        }
+    }
+    EXPECT_EQ(source.count, 3u);
+    EXPECT_GT(list.placement().endRow, list.placement().firstRow);
+    EXPECT_TRUE(combo.isOpen());
+}
+
+void VerifyUiTextRegionTests_IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges(mut UiTextRegionTests self){
+    UiTextRegionIntrinsicRowSource source = UiTextRegionIntrinsicRowSource();
+    source.count = 3u;
+    source.specialText = s_UiTextRegionMultilineAccentText;
+    ListState list = ListState();
+    ComboState combo = ComboState();
+    const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f);
+    u64 generation = 1u;
+    Array<b8, 2u> popups;
+    popups[0u] = false;
+    popups[1u] = true;
+    for(usize popupIndex = 0u; popupIndex < popups.size(); ++popupIndex){
+        const b8 popup = popups[popupIndex];
+        source.specialText = s_UiTextRegionMultilineAccentText;
+        ++source.contentRevision;
+        self.m_builder.listStyle().row.padding = Insets(8.0f, 16.0f, 8.0f, 18.0f);
+        ASSERT_NO_FATAL_FAILURE(self.checkIntrinsicRowCoverage(popup, 22.0f, display, generation, source, list, combo));
+        ++generation;
+        ASSERT_NO_FATAL_FAILURE(self.checkIntrinsicRowCoverage(popup, 12.0f, display, generation, source, list, combo));
+        ++generation;
+        self.m_builder.listStyle().row.padding = Insets(8.0f, 4.0f, 8.0f, 4.0f);
+        ASSERT_NO_FATAL_FAILURE(self.checkIntrinsicRowCoverage(popup, 12.0f, display, generation, source, list, combo));
+        ++generation;
+        source.specialText = s_UiTextRegionOrdinaryRowText;
+        ++source.contentRevision;
+        ASSERT_NO_FATAL_FAILURE(self.checkIntrinsicRowCoverage(popup, 12.0f, display, generation, source, list, combo));
+        ++generation;
+        source.specialText = s_UiTextRegionStackedAccentText;
+        ++source.generation;
+        ASSERT_NO_FATAL_FAILURE(self.checkIntrinsicRowCoverage(popup, 16.0f, display, generation, source, list, combo));
+        ++generation;
+    }
+    EXPECT_EQ(source.count, 3u);
+    EXPECT_GT(list.placement().endRow, list.placement().firstRow);
+    EXPECT_TRUE(combo.isOpen());
+}
+
+void VerifyUiTextRegionTests_SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement(mut UiTextRegionTests self){
+    ASSERT_NO_FATAL_FAILURE(self.useAsymmetricSelectableButtons());
+    const SelectableStyle style = SelectableStyle();
+    const auto metrics = MeasureSelectable(self.m_skin, style);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_FLOAT_EQ(metrics.value().padding.left, 9.0f);
+    EXPECT_FLOAT_EQ(metrics.value().padding.top, 11.0f);
+    EXPECT_FLOAT_EQ(metrics.value().padding.right, 13.0f);
+    EXPECT_FLOAT_EQ(metrics.value().padding.bottom, 15.0f);
+    EXPECT_FLOAT_EQ(metrics.value().minimum.x, 100.0f);
+    EXPECT_FLOAT_EQ(metrics.value().minimum.y, 55.0f);
+    const auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest("Agjpqy", 16.0f));
+    ASSERT_TRUE(layout.has_value());
+    const auto textBounds = self.m_text.measure(layout.value(), DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(textBounds.has_value());
+    Array<SelectablePaintFlags, 4u> flagCases;
+    flagCases[0u] = SelectablePaintFlags();
+    flagCases[1u] = MakeUiSelectablePaintFlags(true, false, true, false);
+    flagCases[2u] = MakeUiSelectablePaintFlags(true, true, false, false);
+    flagCases[3u] = MakeUiSelectablePaintFlags(false, false, false, false);
+    Vector<Vertex> baseline = Vector<Vertex>();
+    u64 generation = 1u;
+    for(usize flagIndex = 0u; flagIndex < flagCases.size(); ++flagIndex){
+        const SelectablePaintFlags flags = flagCases[flagIndex];
+        self.m_paint.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), generation, self.m_skinGeneration, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+        ++generation;
+        ASSERT_TRUE(PaintSelectable(self.m_paint, self.m_text, self.m_skin, layout.value(), textBounds.value(), metrics.value().padding, Rect(20.0f, 30.0f, 180.0f, 70.0f), Rect(0.0f, 0.0f, 800.0f, 600.0f), style, flags, Color(), Color()));
+        const DrawSnapshot snapshot = self.m_paint.freeze();
+        ExpectUiTextGlyphRegion(snapshot, Rect(29.0f, 41.0f, 158.0f, 44.0f));
+        Vector<Vertex> glyphs = Vector<Vertex>();
+        CopyGlyphVertices(snapshot, glyphs);
+        if(baseline.empty()){
+            baseline.reserve(glyphs.size());
+            for(usize index = 0u; index < glyphs.size(); ++index)
+                baseline.push_back(glyphs[index]);
+        }
+        ASSERT_EQ(glyphs.size(), baseline.size());
+        for(usize index = 0u; index < glyphs.size(); ++index){
+            EXPECT_FLOAT_EQ(glyphs[index].position.x, baseline[index].position.x);
+            EXPECT_FLOAT_EQ(glyphs[index].position.y, baseline[index].position.y);
+            EXPECT_FLOAT_EQ(glyphs[index].texCoord.x, baseline[index].texCoord.x);
+            EXPECT_FLOAT_EQ(glyphs[index].texCoord.y, baseline[index].texCoord.y);
+        }
+    }
+}
+
+void VerifyTextVisibleBakedTests_PaddedSdfPlaneIntersectingClipSurvivesWhenShapingOutlineIsOutside(mut TextVisibleBakedTests self){
+    ASSERT_TRUE(self.installBaked("A"));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
+    ASSERT_TRUE(FontFaceHasBakedAtlas(glyph.face));
+    ASSERT_GT(glyph.ink.width, 0.0f);
+    ASSERT_GT(glyph.ink.height, 0.0f);
+    const Point origin = Point(40.0f, 40.0f);
+    const Rect outline = ComputePlacedGlyphOutlineRect(glyph, origin);
+    const Rect plane = UiTextVisibleBakedRect(glyph, origin);
+    const f32 clipX = outline.x - 4.0f;
+    const f32 clipY = outline.height * 0.5f + outline.y;
+    const Rect clip = Rect(clipX, clipY, 2.0f, 1.0f);
+    // Lanes are clip right, clip bottom, plane right, plane bottom.
+    const VectorSingle ends = VectorSingle(clip.x, clip.y, plane.x, plane.y) + VectorSingle(clip.width, clip.height, plane.width, plane.height);
+    ASSERT_LT(ends.x, outline.x);
+    ASSERT_GE(clip.x, plane.x);
+    ASSERT_GE(clip.y, plane.y);
+    ASSERT_LE(ends.x, ends.z);
+    ASSERT_LE(ends.y, ends.w);
+    self.beginPaint(1u);
+    self.m_paint.pushClip(clip);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin));
+    ASSERT_TRUE(self.m_paint.popClip());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(snapshot.glyphPages().empty());
+    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
+    const FontAtlasGlyph record = FontFaceBakedGlyph(glyph.face, glyph.glyphId);
+    EXPECT_EQ(snapshot.sdfPages()[0u], FontFaceBakedPage(glyph.face, record.group));
+    ASSERT_EQ(snapshot.commands().size(), 1u);
+    ExpectUiRect(snapshot.commands()[0u].clip, clip);
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_EQ(snapshot.indices().size(), 6u);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, ends.x);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, ends.y);
+}
+
+void VerifyTextVisibleBakedTests_EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry(mut TextVisibleBakedTests self){
+    ASSERT_TRUE(self.installBaked("A\nB\nC"));
+    ASSERT_EQ(self.m_baked.payload().groups.size(), 3u);
+    for(u64 scenario = 0u; scenario < 2u; ++scenario){
+        self.beginPaint(scenario + 1u);
+        f32 clipWidth = 100.0f;
+        f32 alpha = 0.0f;
+        if(scenario == 0u){
+            clipWidth = 0.0f;
+            alpha = 1.0f;
+        }
+        self.m_paint.pushClip(Rect(20.0f, 20.0f, clipWidth, 100.0f));
+        const Color color = Color(0.7f, 0.2f, 0.5f, alpha);
+        ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), color));
+        ASSERT_TRUE(self.m_paint.popClip());
+        const DrawSnapshot snapshot = self.m_paint.freeze();
+        EXPECT_TRUE(snapshot.glyphPages().empty());
+        EXPECT_TRUE(snapshot.sdfPages().empty());
+        EXPECT_TRUE(snapshot.vertices().empty());
+        EXPECT_TRUE(snapshot.indices().empty());
+        EXPECT_TRUE(snapshot.commands().empty());
+    }
+}
+
+void VerifyTextVisibleBakedTests_SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisibleBakedGroup(mut TextVisibleBakedTests self){
+    ASSERT_TRUE(self.installBaked("A\nB\nC"));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 3u);
+    ASSERT_EQ(self.m_baked.payload().groups.size(), 3u);
+    const Point origin = Point(20.0f, 20.0f);
+    const Rect clip = UiTextVisibleBakedOutlineCenterClip(self.m_layout.glyphs()[0u], origin);
+    const f32 clipBottom = clip.y + clip.height;
+    for(usize index = 1u; index < self.m_layout.glyphs().size(); ++index)
+        ASSERT_GT(UiTextVisibleBakedRect(self.m_layout.glyphs()[index], origin).y, clipBottom);
+    Vector<SharedGlyphPage> prior = Vector<SharedGlyphPage>();
+    prior.reserve(s_PaintMaxImages - 1u);
+    for(usize index = 0u; index < s_PaintMaxImages - 1u; ++index){
+        const auto pageCreationResult = self.makePage(1000u + index);
+        ASSERT_TRUE(pageCreationResult.has_value());
+        const SharedGlyphPage page = pageCreationResult.value();
+        ASSERT_TRUE(cast<b8>(page));
+        prior.push_back(page);
+    }
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.m_paint.prepareGlyphPages(prior));
+    self.m_paint.pushClip(clip);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin));
+    ASSERT_TRUE(self.m_paint.popClip());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), prior.size());
+    for(usize index = 0u; index < prior.size(); ++index)
+        EXPECT_EQ(snapshot.glyphPages()[index], prior[index]);
+    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
+    const PlacedGlyph visible = self.m_layout.glyphs()[0u];
+    const FontAtlasGlyph record = FontFaceBakedGlyph(visible.face, visible.glyphId);
+    EXPECT_EQ(snapshot.sdfPages()[0u], FontFaceBakedPage(visible.face, record.group));
+    EXPECT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size(), s_PaintMaxImages);
+    ASSERT_EQ(snapshot.commands().size(), 1u);
+    EXPECT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_EQ(snapshot.indices().size(), 6u);
+}
+
+void VerifyTextVisibleBakedTests_FullyOutsideBakedGroupsRemainAbsentUntilALaterVisiblePaint(mut TextVisibleBakedTests self){
+    ASSERT_TRUE(self.installBaked("A\nB\nC"));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 3u);
+    self.beginPaint(1u);
+    self.m_paint.pushClip(Rect(700.0f, 500.0f, 2.0f, 2.0f));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_paint.popClip());
+    const DrawSnapshot hidden = self.m_paint.freeze();
+    EXPECT_TRUE(hidden.glyphPages().empty());
+    EXPECT_TRUE(hidden.sdfPages().empty());
+    EXPECT_TRUE(hidden.vertices().empty());
+    EXPECT_TRUE(hidden.indices().empty());
+    EXPECT_TRUE(hidden.commands().empty());
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot revealed = self.m_paint.freeze();
+    EXPECT_TRUE(revealed.glyphPages().empty());
+    ASSERT_EQ(revealed.sdfPages().size(), 3u);
+    ASSERT_EQ(revealed.commands().size(), 3u);
+    for(usize index = 0u; index < self.m_layout.glyphs().size(); ++index){
+        const PlacedGlyph glyph = self.m_layout.glyphs()[index];
+        const FontAtlasGlyph record = FontFaceBakedGlyph(glyph.face, glyph.glyphId);
+        EXPECT_EQ(revealed.sdfPages()[index], FontFaceBakedPage(glyph.face, record.group));
+    }
+    EXPECT_EQ(revealed.vertices().size(), 12u);
+    EXPECT_EQ(revealed.indices().size(), 18u);
+    EXPECT_TRUE(hidden.sdfPages().empty());
+}
+
+void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry(mut TextVisibleBakedTests self){
+    ASSERT_TRUE(self.installBaked("A"));
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("\xED\x95\x9C", 32.0f)));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    ASSERT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
+    const u32 warmGlyph = self.m_layout.glyphs()[0u].glyphId;
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot warm = self.m_paint.freeze();
+    ASSERT_EQ(warm.glyphPages().size(), 1u);
+    ASSERT_TRUE(warm.sdfPages().empty());
+    const SharedGlyphPage oldPage = warm.glyphPages()[0u];
+    Vector<SharedGlyphPage> prior = Vector<SharedGlyphPage>();
+    prior.reserve(s_PaintMaxImages);
+    prior.push_back(oldPage);
+    for(usize index = 1u; index < s_PaintMaxImages; ++index){
+        const auto pageCreationResult = self.makePage(2000u + index);
+        ASSERT_TRUE(pageCreationResult.has_value());
+        const SharedGlyphPage page = pageCreationResult.value();
+        ASSERT_TRUE(cast<b8>(page));
+        prior.push_back(page);
+    }
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("\352\270\200A", 32.0f)));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 2u);
+    ASSERT_NE(self.m_layout.glyphs()[0u].glyphId, warmGlyph);
+    ASSERT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
+    ASSERT_TRUE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[1u].face));
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.m_paint.prepareGlyphPages(prior));
+    self.m_paint.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
+    ASSERT_TRUE(self.m_paint.drawGlyph(oldPage, Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    reference.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), 2u, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    ASSERT_TRUE(reference.prepareGlyphPages(prior));
+    reference.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
+    ASSERT_TRUE(reference.drawGlyph(oldPage, Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
+    const DrawSnapshot expected = reference.freeze();
+    EXPECT_FALSE(self.m_text.paint(self.m_paint, self.m_layout, Point(80.0f, 80.0f)));
+    const DrawSnapshot rejected = self.m_paint.freeze();
+    ExpectUiTextVisibleSamePaint(rejected, expected);
+    EXPECT_TRUE(rejected.sdfPages().empty());
+    ASSERT_EQ(rejected.glyphPages().size(), s_PaintMaxImages);
+    EXPECT_EQ(rejected.glyphPages()[0u], oldPage);
+    EXPECT_EQ(GlyphPageBindingOf(rejected.glyphPages()[0u]).generation, GlyphPageBindingOf(oldPage).generation);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("\xEA\xB8\x80", 32.0f)));
+    self.beginPaint(3u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot upgraded = self.m_paint.freeze();
+    ASSERT_EQ(upgraded.glyphPages().size(), 1u);
+    EXPECT_EQ(GlyphPageBindingOf(upgraded.glyphPages()[0u]).atlasIdentity, GlyphPageBindingOf(oldPage).atlasIdentity);
+    EXPECT_GT(GlyphPageBindingOf(upgraded.glyphPages()[0u]).generation, GlyphPageBindingOf(oldPage).generation);
+    EXPECT_NE(upgraded.glyphPages()[0u], oldPage);
+    EXPECT_TRUE(upgraded.sdfPages().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache(mut TextVisibleCoverageTests self){
+    const usize hiddenCount = s_GlyphAtlasMaxGlyphs + 1u;
+    String text = "A\n";
+    text.reserve(2u + hiddenCount * 3u);
+    const u32 s_HangulSyllableBase = 0xac00u;
+    for(u32 index = 0u; index < cast<u32>(hiddenCount); ++index)
+        ASSERT_TRUE(AppendUiUtf8CodePoint(text, s_HangulSyllableBase + index));
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(StringView(text.data(), text.size()))));
+    ASSERT_EQ(self.m_layout.lines().size(), 2u);
+    ASSERT_EQ(self.m_layout.glyphs().size(), hiddenCount + 1u);
+    ASSERT_TRUE(self.m_text.measure(self.m_layout, DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)).has_value());
+    const Rect clip = Rect(0.0f, 0.0f, 100.0f, 20.0f + self.m_layout.lines()[1u].top);
+    Vector<u32> ids = Vector<u32>();
+    ids.reserve(hiddenCount);
+    for(usize glyphIndex = 0u; glyphIndex < self.m_layout.glyphs().size(); ++glyphIndex){
+        const PlacedGlyph glyph = self.m_layout.glyphs()[glyphIndex];
+        if(glyph.byteBegin < 2u)
+            continue;
+        EXPECT_EQ(FontFaceIdentityName(glyph.face), Name(s_TestKoreanFontPath));
+        EXPECT_TRUE(glyph.coverage.known);
+        EXPECT_GT(glyph.coverage.ink.width, 0.0f);
+        EXPECT_GT(glyph.coverage.ink.height, 0.0f);
+        EXPECT_GE(ComputePlacedGlyphOutlineRect(glyph, Point(20.0f, 20.0f)).y, clip.height);
+        ids.push_back(glyph.glyphId);
+    }
+    SortUiGlyphIds(ids);
+    ASSERT_EQ(ids.size(), hiddenCount);
+    for(usize index = 1u; index < ids.size(); ++index)
+        ASSERT_NE(ids[index], ids[index - 1u]);
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip));
+    const DrawSnapshot prefix = self.m_paint.freeze();
+    ASSERT_EQ(prefix.glyphPages().size(), 1u);
+    EXPECT_EQ(GlyphPageBindingOf(prefix.glyphPages()[0u]).font.name(), Name(s_TestLatinFontPath));
+    EXPECT_EQ(prefix.vertices().size(), 4u);
+    EXPECT_EQ(prefix.indices().size(), 6u);
+    const PlacedGlyph reveal = self.m_layout.glyphs()[hiddenCount / 2u];
+    const Point origin = Point(20.0f - reveal.position.x - reveal.ink.x, 20.0f - reveal.position.y - reveal.ink.y);
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, Rect(20.0f, 20.0f, 80.0f, 40.0f), origin));
+    const DrawSnapshot revealed = self.m_paint.freeze();
+    ASSERT_EQ(revealed.glyphPages().size(), 1u);
+    EXPECT_EQ(GlyphPageBindingOf(revealed.glyphPages()[0u]).font.name(), Name(s_TestKoreanFontPath));
+    EXPECT_FALSE(revealed.vertices().empty());
+    self.beginPaint(3u);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip));
+    const DrawSnapshot warm = self.m_paint.freeze();
+    ASSERT_EQ(warm.glyphPages().size(), 1u);
+    EXPECT_EQ(warm.glyphPages()[0u], prefix.glyphPages()[0u]);
+}
+
+void VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed(mut TextVisibleCoverageTests self){
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest("A\nB")));
+    ASSERT_EQ(self.m_layout.lines().size(), 2u);
+    const Rect clip = Rect(0.0f, 0.0f, 100.0f, 20.0f + self.m_layout.lines()[1u].top);
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip));
+    const DrawSnapshot first = self.m_paint.freeze();
+    ASSERT_EQ(first.glyphPages().size(), 1u);
+    ASSERT_EQ(first.vertices().size(), 4u);
+    const SharedGlyphPage original = first.glyphPages()[0u];
+    const Span<u8> initialPixels = GlyphPagePixelsOf(original);
+    Vector<u8> pixels = Vector<u8>();
+    pixels.reserve(initialPixels.size());
+    for(usize index = 0u; index < initialPixels.size(); ++index)
+        pixels.push_back(initialPixels[index]);
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip));
+    const DrawSnapshot hidden = self.m_paint.freeze();
+    ExpectUiTextVisibleSamePaint(hidden, first);
+    self.beginPaint(3u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot revealed = self.m_paint.freeze();
+    ASSERT_EQ(revealed.glyphPages().size(), 1u);
+    EXPECT_NE(revealed.glyphPages()[0u], original);
+    EXPECT_GT(GlyphPageBindingOf(revealed.glyphPages()[0u]).generation, GlyphPageBindingOf(original).generation);
+    EXPECT_EQ(revealed.vertices().size(), 8u);
+    const Span<u8> retainedPixels = GlyphPagePixelsOf(original);
+    ASSERT_EQ(retainedPixels.size(), pixels.size());
+    for(usize index = 0u; index < retainedPixels.size(); ++index)
+        EXPECT_EQ(retainedPixels[index], pixels[index]);
+}
+
+void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage(mut TextVisibleCoverageTests self){
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(s_UiTextVisibleSampleGlyphText)));
+    TextLayout oversized = TextLayout(self.m_arena);
+    auto oversizedLayoutResult = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
+    ASSERT_TRUE(TextVisibleFixture::AdoptLayoutInto(oversizedLayoutResult, oversized));
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot before = self.m_paint.freeze();
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, oversized, Point(10000.0f, 10000.0f)));
+    const DrawSnapshot hidden = self.m_paint.freeze();
+    ExpectUiTextVisibleSamePaint(hidden, before);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
+    self.beginPaint(3u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot ordinary = self.m_paint.freeze();
+    ASSERT_EQ(ordinary.glyphPages().size(), 1u);
+    EXPECT_GT(GlyphPageBindingOf(ordinary.glyphPages()[0u]).generation, GlyphPageBindingOf(before.glyphPages()[0u]).generation);
+    EXPECT_EQ(ordinary.vertices().size(), 4u);
+}
+
+void VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage(mut TextVisibleCoverageTests self){
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f)));
+    self.beginPaint(1u);
+    self.m_paint.fillRect(Rect(1.0f, 1.0f, 4.0f, 4.0f));
+    self.m_paint.pushClip(Rect(10.0f, 10.0f, 20.0f, 20.0f));
+    self.m_paint.pushClip(Rect(40.0f, 40.0f, 20.0f, 20.0f));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_paint.popClip());
+    ASSERT_TRUE(self.m_paint.popClip());
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color(1.0f, 1.0f, 1.0f, 0.0f)));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(snapshot.glyphPages().empty());
+    EXPECT_TRUE(snapshot.sdfPages().empty());
+    EXPECT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_EQ(snapshot.indices().size(), 6u);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_paint.freeze().glyphPages().empty());
+}
+
+void VerifyTextVisibleCoverageTests_FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline(mut TextVisibleCoverageTests self){
+    const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.25f, 1.5f);
+    const Point origin = Point(40.375f, 20.125f);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 17.25f)));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(raster.has_value());
+    const Rect clip = ComputeUiTextVisibleRasterFringe(raster.value(), ComputePlacedGlyphOutlineRect(self.m_layout.glyphs()[0u], origin));
+    ASSERT_GT(clip.width, 0.0f);
+    ASSERT_GT(clip.height, 0.0f);
+    self.beginPaint(1u, display);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip, origin));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
+    EXPECT_NEAR(snapshot.vertices()[2u].position.x, clip.x + clip.width, 0.0001f);
+    EXPECT_NEAR(snapshot.vertices()[2u].position.y, clip.y + clip.height, 0.0001f);
+}
+
+void VerifyTextVisibleCoverageTests_FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid(mut TextVisibleCoverageTests self){
+    const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.25f, 1.5f);
+    const Point origin = Point(40.375f, 20.125f);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("g", 17.25f)));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(raster.has_value());
+    self.beginPaint(1u, display);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_NEAR(snapshot.vertices()[0u].position.x, raster.value().x, 0.0001f);
+    EXPECT_NEAR(snapshot.vertices()[0u].position.y, raster.value().y, 0.0001f);
+}
+
+void VerifyTextVisibleCoverageTests_NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin(mut TextVisibleCoverageTests self){
+    const Point origin = Point(50.0f, 20.0f);
+    const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.25f, 1.25f);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("j", 32.0f)));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(raster.has_value());
+    const f32 glyphOrigin = origin.x + self.m_layout.glyphs()[0u].position.x;
+    ASSERT_LT(raster.value().x, glyphOrigin);
+    const Rect clip = Rect(raster.value().x, raster.value().y, (glyphOrigin - raster.value().x) * 0.5f, raster.value().height);
+    self.beginPaint(1u, display);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip, origin));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_LT(snapshot.vertices()[2u].position.x, glyphOrigin);
+    EXPECT_EQ(snapshot.glyphPages().size(), 1u);
+}
+
+void VerifyTextVisibleCoverageTests_CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad(mut TextVisibleCoverageTests self){
+    const Point origin = Point(50.0f, 20.0f);
+    const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.5f, 1.5f);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("x\xcc\x81", 32.0f)));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 2u);
+    ASSERT_EQ(self.m_layout.clusters().size(), 1u);
+    const auto base = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(base.has_value());
+    const auto mark = self.rasterRectangle(self.m_layout.glyphs()[1u], self.m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(mark.has_value());
+    ASSERT_LT(mark.value().y, base.value().y);
+    const Rect clip = Rect(mark.value().x, mark.value().y, mark.value().width, Min(mark.value().height, base.value().y - mark.value().y) * 0.5f);
+    self.beginPaint(1u, display);
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip, origin));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    ASSERT_EQ(snapshot.indices().size(), 6u);
+    EXPECT_LT(snapshot.vertices()[2u].position.y, base.value().y);
+    EXPECT_EQ(snapshot.glyphPages().size(), 1u);
+}
+
+void VerifyTextVisibleCoverageTests_SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace(mut TextVisibleCoverageTests self){
+    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest("A\n\xed\x95\x9c")));
+    ASSERT_EQ(self.m_layout.lines().size(), 2u);
+    const Rect clip = Rect(0.0f, 0.0f, 100.0f, 20.0f + self.m_layout.lines()[1u].top);
+    Vector<SharedGlyphPage> prior = Vector<SharedGlyphPage>();
+    prior.reserve(s_PaintMaxImages - 1u);
+    for(usize index = 0u; index < s_PaintMaxImages - 1u; ++index){
+        const auto pageResult = self.makePage(u64.max - index);
+        ASSERT_TRUE(pageResult.has_value());
+        const SharedGlyphPage page = pageResult.value();
+        ASSERT_TRUE(cast<b8>(page));
+        prior.push_back(page);
+    }
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.m_paint.prepareGlyphPages(prior));
+    ASSERT_TRUE(self.paintClipped(self.m_layout, clip));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages);
+    EXPECT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_TRUE(snapshot.sdfPages().empty());
+    for(usize index = 0u; index < prior.size(); ++index)
+        EXPECT_EQ(snapshot.glyphPages()[index], prior[index]);
+    EXPECT_EQ(GlyphPageBindingOf(snapshot.glyphPages()[snapshot.glyphPages().size() - 1u]).font.name(), Name(s_TestLatinFontPath));
+    self.beginPaint(2u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot revealed = self.m_paint.freeze();
+    EXPECT_EQ(revealed.glyphPages().size(), 2u);
+    EXPECT_EQ(revealed.vertices().size(), 8u);
+}
+
+void VerifyTextVisibleCoverageTests_OversizedMeasurementDoesNotAdmitAtlasCoverage(mut TextVisibleCoverageTests self){
+    const auto layout = self.m_text.layout(MakeUiTextRegionDefaultShapeRequest("Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80"));
+    ASSERT_TRUE(layout.has_value());
+    const auto large = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
+    ASSERT_TRUE(large.has_value());
+    ASSERT_TRUE(self.m_text.measure(large.value(), DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)).has_value());
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(20.0f, 20.0f)));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_FALSE(snapshot.glyphPages().empty());
+    EXPECT_EQ(GlyphPageBindingOf(snapshot.glyphPages()[0u]).generation, 1u);
+}
+
+void VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase(mut TextVisibleCoverageTests self){
+    Array<StringView, 8u> samples;
+    samples[0u] = "Previous";
+    samples[1u] = "Next";
+    samples[2u] = "gyjpq";
+    samples[3u] = "\xc3\x81\xc3\x89\xc3\x8d\xc3\x93\xc3\x9a \xc3\x87";
+    samples[4u] = "A\xcc\x81\xcc\x81";
+    samples[5u] = "g\xcc\xa3";
+    samples[6u] = "\xed\x95\x9c\xea\xb8\x80";
+    samples[7u] = "Edit me: \xed\x95\x9c\xea\xb8\x80";
+    Array<f32, 3u> sizes;
+    sizes[0u] = 12.0f;
+    sizes[1u] = 14.0f;
+    sizes[2u] = 16.0f;
+    Array<Point, 5u> scales;
+    scales[0u] = Point(1.0f, 1.0f);
+    scales[1u] = Point(1.25f, 1.25f);
+    scales[2u] = Point(1.5f, 1.5f);
+    scales[3u] = Point(2.0f, 2.0f);
+    scales[4u] = Point(1.25f, 1.5f);
+    Array<f32, 4u> phases;
+    phases[0u] = 0.0f;
+    phases[1u] = 0.25f;
+    phases[2u] = 0.53125f;
+    phases[3u] = 0.9375f;
+    for(usize sizeIndex = 0u; sizeIndex < sizes.size(); ++sizeIndex){
+        const f32 size = sizes[sizeIndex];
+        for(usize sampleIndex = 0u; sampleIndex < samples.size(); ++sampleIndex){
+            const StringView sample = samples[sampleIndex];
+            const auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(sample, size));
+            ASSERT_TRUE(layout.has_value());
+            for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+                const Point scale = scales[scaleIndex];
+                const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale.x, scale.y);
+                const auto measured = self.m_text.measure(layout.value(), display);
+                ASSERT_TRUE(measured.has_value());
+                const u32 presetSize = cast<u32>(Ceil(size * Max(scale.x, scale.y)));
+                for(usize phaseIndex = 0u; phaseIndex < phases.size(); ++phaseIndex){
+                    const f32 phase = phases[phaseIndex];
+                    const Rect content = Rect(32.0f + phase, 24.0f + phase, measured.value().width, measured.value().height);
+                    const Point origin = Point(content.x - measured.value().x, content.y - measured.value().y);
+                    const f32 contentLimitX = content.x + content.width + 0.0001f;
+                    const f32 contentLimitY = content.y + content.height + 0.0001f;
+                    const usize glyphCount = layout.value().glyphs().size();
+                    for(usize glyphIndex = 0u; glyphIndex < glyphCount; ++glyphIndex){
+                        const PlacedGlyph glyph = layout.value().glyphs()[glyphIndex];
+                        const auto preset = FontFaceRasterBounds(glyph.face, glyph.glyphId, presetSize);
+                        ASSERT_TRUE(preset.has_value());
+                        const b8 emptyPreset = preset.value().width == 0.0f || preset.value().height == 0.0f;
+                        if(emptyPreset)
+                            continue;
+                        const auto raster = self.rasterRectangle(glyph, size, display, origin);
+                        ASSERT_TRUE(raster.has_value());
+                        EXPECT_GE(raster.value().x + 0.0001f, content.x);
+                        EXPECT_GE(raster.value().y + 0.0001f, content.y);
+                        EXPECT_LE(raster.value().x + raster.value().width, contentLimitX);
+                        EXPECT_LE(raster.value().y + raster.value().height, contentLimitY);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage(mut TextVisibleCoverageTests self){
+    const auto initial = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleSampleGlyphText, 32.0f));
+    ASSERT_TRUE(initial.has_value());
+    ASSERT_EQ(initial.value().glyphs().size(), 1u);
+    ASSERT_TRUE(self.installMeasuredSdfAtlas(initial.value().glyphs()[0u].glyphId));
+    Array<f32, 3u> fontSizes;
+    fontSizes[0u] = 16.0f;
+    fontSizes[1u] = 24.0f;
+    fontSizes[2u] = 32.0f;
+    Array<Point, 5u> scales;
+    scales[0u] = Point(1.0f, 1.0f);
+    scales[1u] = Point(1.5f, 1.5f);
+    scales[2u] = Point(2.0f, 2.0f);
+    scales[3u] = Point(1.25f, 2.0f);
+    scales[4u] = Point(2.0f, 0.75f);
+    Array<f32, 4u> phases;
+    phases[0u] = 0.0f;
+    phases[1u] = 0.25f;
+    phases[2u] = 0.53125f;
+    phases[3u] = 0.9375f;
     usize visibleSamples = 0u;
-    for(const f32 fontSize : { 16.0f, 24.0f, 32.0f }){
-        const auto layout = m_text.layout({ .text = s_SampleGlyphText, .fontSize = fontSize });
-        ASSERT_TRUE(layout);
-        const PlacedGlyph& placed = layout->glyphs()[0u];
-        ASSERT_TRUE(placed.face->bakedAtlas());
-        const BakedFontAtlas& atlas = *placed.face->bakedAtlas();
-        const FontAtlasGlyph& record = *atlas.glyph(placed.glyphId);
-        const SdfAtlasPage& page = *atlas.page(record.group);
-        for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 2.0f }, Point{ 2.0f, 0.75f } }){
+    for(usize fontSizeIndex = 0u; fontSizeIndex < fontSizes.size(); ++fontSizeIndex){
+        const f32 fontSize = fontSizes[fontSizeIndex];
+        const auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleSampleGlyphText, fontSize));
+        ASSERT_TRUE(layout.has_value());
+        const PlacedGlyph placed = layout.value().glyphs()[0u];
+        ASSERT_TRUE(FontFaceHasBakedAtlas(placed.face));
+        const SharedBakedFontAtlas atlas = FontFaceBakedAtlas(placed.face);
+        const FontAtlasGlyph record = FontFaceBakedGlyph(placed.face, placed.glyphId);
+        const SharedSdfAtlasPage page = FontFaceBakedPage(placed.face, record.group);
+        for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
+            const Point scale = scales[scaleIndex];
             const f32 physicalSize = fontSize * Max(scale.x, scale.y);
             if(physicalSize < 24.0f || physicalSize > 48.0f)
                 continue;
-            const DisplayMetrics display{ 800.0f, 600.0f, scale.x, scale.y };
-            const auto measured = m_text.measure(*layout, display);
-            ASSERT_TRUE(measured);
-            const auto relativePlane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
-            ASSERT_TRUE(relativePlane);
-            EXPECT_GT(measured->x, relativePlane->x);
-            EXPECT_GT(measured->y, relativePlane->y);
-            for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
-                const Rect content{ 100.0f + phase, 100.0f + phase * 0.5f, measured->width, measured->height };
-                const Point origin{ content.x - measured->x, content.y - measured->y };
+            const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale.x, scale.y);
+            const auto measured = self.m_text.measure(layout.value(), display);
+            ASSERT_TRUE(measured.has_value());
+            const auto relativePlane = UiTextVisibleAtlasRect(placed, atlas, fontSize, Point());
+            ASSERT_TRUE(relativePlane.has_value());
+            EXPECT_GT(measured.value().x, relativePlane.value().x);
+            EXPECT_GT(measured.value().y, relativePlane.value().y);
+            for(usize phaseIndex = 0u; phaseIndex < phases.size(); ++phaseIndex){
+                const f32 phase = phases[phaseIndex];
+                const Rect content = Rect(100.0f + phase, 100.0f + phase * 0.5f, measured.value().width, measured.value().height);
+                const Point origin = Point(content.x - measured.value().x, content.y - measured.value().y);
                 const f32 contentLimitX = content.x + content.width + 0.0001f;
                 const f32 contentLimitY = content.y + content.height + 0.0001f;
-                const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, origin);
-                ASSERT_TRUE(plane);
-                const f32 planeRight = plane->x + plane->width;
-                const f32 planeBottom = plane->y + plane->height;
-                const i32 firstX = static_cast<i32>(Floor(plane->x * scale.x));
-                const i32 firstY = static_cast<i32>(Floor(plane->y * scale.y));
-                const i32 lastX = static_cast<i32>(Ceil(planeRight * scale.x));
-                const i32 lastY = static_cast<i32>(Ceil(planeBottom * scale.y));
-                const SIMDVectorSingle planeStart = VectorSet(plane->x, plane->y, 0.0f, 0.0f);
-                const SIMDVectorSingle pixelScale = VectorSet(scale.x, scale.y, 1.0f, 1.0f);
-                const SIMDVectorSingle recordStart = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y), 0.0f, 0.0f);
-                const SIMDVectorSingle recordSize = VectorSet(static_cast<f32>(record.width), static_cast<f32>(record.height), 0.0f, 0.0f);
-                const SIMDVectorSingle planeSize = VectorSet(plane->width, plane->height, 1.0f, 1.0f);
-                // Lanes are logical pixel center x and y.
-                const auto pixelCenter = [&](const i32 x, const i32 y)noexcept -> SIMDVectorSingle{ return VectorDivide(VectorAdd(VectorSet(static_cast<f32>(x), static_cast<f32>(y), 0.0f, 0.0f), VectorReplicate(0.5f)), pixelScale); };
-                const auto distance = [&](const i32 x, const i32 y)noexcept -> f32{
-                    const SIMDVectorSingle local = VectorSubtract(pixelCenter(x, y), planeStart);
-                    return SampleSdfDistance(page, record.channel, VectorAdd(recordStart, VectorDivide(VectorMultiply(local, recordSize), planeSize)));
-                };
+                const auto plane = UiTextVisibleAtlasRect(placed, atlas, fontSize, origin);
+                ASSERT_TRUE(plane.has_value());
+                const f32 planeRight = plane.value().x + plane.value().width;
+                const f32 planeBottom = plane.value().y + plane.value().height;
+                const i32 firstX = cast<i32>(Floor(plane.value().x * scale.x));
+                const i32 firstY = cast<i32>(Floor(plane.value().y * scale.y));
+                const i32 lastX = cast<i32>(Ceil(planeRight * scale.x));
+                const i32 lastY = cast<i32>(Ceil(planeBottom * scale.y));
+                const VectorSingle planeStart = VectorSingle(plane.value().x, plane.value().y, 0.0f, 0.0f);
+                const VectorSingle pixelScale = VectorSingle(scale.x, scale.y, 1.0f, 1.0f);
+                const VectorSingle recordStart = VectorSingle(cast<f32>(record.x), cast<f32>(record.y), 0.0f, 0.0f);
+                const VectorSingle recordSize = VectorSingle(cast<f32>(record.width), cast<f32>(record.height), 0.0f, 0.0f);
+                const VectorSingle planeSize = VectorSingle(plane.value().width, plane.value().height, 1.0f, 1.0f);
+                const VectorSingle halfPixel = VectorSingle(0.5f, 0.5f, 0.5f, 0.5f);
                 for(i32 y = firstY; y < lastY; ++y){
                     for(i32 x = firstX; x < lastX; ++x){
-                        const f32 pointX = (static_cast<f32>(x) + 0.5f) / scale.x;
-                        const f32 pointY = (static_cast<f32>(y) + 0.5f) / scale.y;
-                        if(pointX < plane->x || pointY < plane->y || pointX >= planeRight || pointY >= planeBottom)
+                        const f32 pointX = (cast<f32>(x) + 0.5f) / scale.x;
+                        const f32 pointY = (cast<f32>(y) + 0.5f) / scale.y;
+                        if(pointX < plane.value().x || pointY < plane.value().y || pointX >= planeRight || pointY >= planeBottom)
                             continue;
-                        const f32 current = distance(x, y);
+                        const VectorSingle centerCur = (VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f) + halfPixel) / pixelScale;
+                        const VectorSingle centerPartnerX = (VectorSingle(cast<f32>(x ^ 1), cast<f32>(y), 0.0f, 0.0f) + halfPixel) / pixelScale;
+                        const VectorSingle centerPartnerY = (VectorSingle(cast<f32>(x), cast<f32>(y ^ 1), 0.0f, 0.0f) + halfPixel) / pixelScale;
+                        const f32 current = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerCur - planeStart) * recordSize) / planeSize);
+                        const f32 partnerX = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerPartnerX - planeStart) * recordSize) / planeSize);
+                        const f32 partnerY = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerPartnerY - planeStart) * recordSize) / planeSize);
                         // Quad lanes share a finite difference with their horizontal and vertical partners, including helpers outside the plane.
-                        const f32 derivative = Abs(distance(x ^ 1, y) - current) + Abs(distance(x, y ^ 1) - current);
+                        const f32 derivative = Abs(partnerX - current) + Abs(partnerY - current);
                         if(0.5f + current / Max(derivative, 0.001f) <= 0.0f)
                             continue;
                         ++visibleSamples;
@@ -1665,12 +1898,40 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales, VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales)
+NWB_ADHD_GTEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling, VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling)
+NWB_ADHD_GTEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrinkingItsSkinOrHitTarget, VerifyUiTextRegionTests_OversizedButtonTextKeepsAsymmetricPaddingWithoutShrinkingItsSkinOrHitTarget)
+NWB_ADHD_GTEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling, VerifyUiTextRegionTests_EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling)
+NWB_ADHD_GTEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip, VerifyUiTextRegionTests_CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip)
+NWB_ADHD_GTEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds, VerifyUiTextRegionTests_OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds)
+NWB_ADHD_GTEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow, VerifyUiTextRegionTests_SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow)
+NWB_ADHD_GTEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks, VerifyUiTextRegionTests_WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks)
+NWB_ADHD_GTEST_F(UiTextRegionTests, ContentNavigationHeightPreservesCoverageThatFixed32PixelRowsCut, VerifyUiTextRegionTests_ContentNavigationHeightPreservesCoverageThatFixed32PixelRowsCut)
+NWB_ADHD_GTEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage, VerifyUiTextRegionTests_ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage)
+NWB_ADHD_GTEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLogicalLineMetrics, VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLogicalLineMetrics)
+NWB_ADHD_GTEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage, VerifyUiTextRegionTests_IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage)
+NWB_ADHD_GTEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges, VerifyUiTextRegionTests_IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges)
+NWB_ADHD_GTEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement, VerifyUiTextRegionTests_SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement)
+
+NWB_ADHD_GTEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingOutlineIsOutside, VerifyTextVisibleBakedTests_PaddedSdfPlaneIntersectingClipSurvivesWhenShapingOutlineIsOutside)
+NWB_ADHD_GTEST_F(TextVisibleBakedTests, EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry, VerifyTextVisibleBakedTests_EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry)
+NWB_ADHD_GTEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisibleBakedGroup, VerifyTextVisibleBakedTests_SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisibleBakedGroup)
+NWB_ADHD_GTEST_F(TextVisibleBakedTests, FullyOutsideBakedGroupsRemainAbsentUntilALaterVisiblePaint, VerifyTextVisibleBakedTests_FullyOutsideBakedGroupsRemainAbsentUntilALaterVisiblePaint)
+NWB_ADHD_GTEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry, VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry)
+
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache, VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed, VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage, VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage, VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline, VerifyTextVisibleCoverageTests_FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid, VerifyTextVisibleCoverageTests_FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin, VerifyTextVisibleCoverageTests_NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad, VerifyTextVisibleCoverageTests_CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace, VerifyTextVisibleCoverageTests_SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, OversizedMeasurementDoesNotAdmitAtlasCoverage, VerifyTextVisibleCoverageTests_OversizedMeasurementDoesNotAdmitAtlasCoverage)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase, VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase)
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage, VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

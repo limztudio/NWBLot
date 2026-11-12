@@ -198,12 +198,15 @@ void FinalizePaintBuilderRecording(
     mut b8 inOutRecording
 ){
     assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
-    native(in overlayDepth){
-        static_cast<void>(overlayDepth);
-    }
     if(!commandsOrdered){
-        native(mut inOutCommands){
-            ::Sort(inOutCommands.begin(), inOutCommands.end(), IsPaintDrawCommandBefore);
+        for(usize i = 1u; i < inOutCommands.size(); ++i){
+            const DrawCommand current = inOutCommands[i];
+            usize j = i;
+            while(j > 0u && IsPaintDrawCommandBefore(current, inOutCommands[j - 1u])){
+                inOutCommands[j] = inOutCommands[j - 1u];
+                --j;
+            }
+            inOutCommands[j] = current;
         }
     }
     inOutRecording = false;

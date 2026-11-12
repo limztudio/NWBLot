@@ -1,9 +1,5 @@
 nwb_declare_static_library(nwb_impl_global)
-nwb_target_adhd_sources(nwb_impl_global
-    NAMESPACE "NWB::Impl"
-    SOURCES
-        "${CMAKE_CURRENT_LIST_DIR}/global.adhd"
-)
+nwb_target_adhd_sources(nwb_impl_global NAMESPACE "NWB::Impl" SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
 
 add_subdirectory(assets_subsystem)
 add_subdirectory(assets_shader)

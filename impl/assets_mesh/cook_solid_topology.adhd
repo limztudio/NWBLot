@@ -228,10 +228,16 @@ b8 BuildSolidTriangleWordsInto(
     Vector<TriangleEdge> edges;
     if(!PrepareMeshTopologyEdges(positions, triangleIndices, parents, ranks, invalidTriangles, edges))
         return false;
-    native(mut edges){
-        ::Sort(edges.begin(), edges.end(), [](const TriangleEdge& first, const TriangleEdge& second)noexcept{
-            return first.positions < second.positions;
-        });
+    for(usize gap = edges.size() / 2u; gap > 0u; gap /= 2u){
+        for(usize i = gap; i < edges.size(); ++i){
+            const TriangleEdge current = edges[i];
+            usize j = i;
+            while(j >= gap && current.positions < edges[j - gap].positions){
+                edges[j] = edges[j - gap];
+                j -= gap;
+            }
+            edges[j] = current;
+        }
     }
     FinalizeMeshSolidTriangleWords(positions, triangleIndices, edges, parents, ranks, invalidTriangles, outWords);
     return true;
@@ -249,3 +255,4 @@ Expected<Vector<u32>> BuildSolidTriangleWords(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -14,11 +14,7 @@ nwb_declare_gtest_executable(nwb_global_tests)
 nwb_target_adhd_sources(nwb_global_tests NAMESPACE "NWB::Tests::GlobalCases" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/name_case_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/algorithm_case_types.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/global_tests.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/global_arena_and_propagation_cases.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/global_shared_and_failure_cases.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/global_numeric_and_text_cases.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/global_process_and_filesystem_cases.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/global_*.adhd"
 )
 target_link_libraries(nwb_global_tests PRIVATE nwb_common nwb_alloc nwb_global_hex_case_types nwb_global_fixed_vector_case_types nwb_global_scope_case_types nwb_global_terminal_case_types)
 

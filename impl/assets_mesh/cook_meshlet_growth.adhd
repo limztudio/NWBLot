@@ -2,81 +2,264 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#if defined(NWB_COOK)
+#include <impl/assets_mesh/cook_meshlet_candidates.adhd>
+#include <impl/assets_mesh/cook_meshlet_builder.adhd>
+#include <impl/assets_mesh/cook_meshlet_bounds.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_metadata.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_candidates.adhd.h>
+b8 GrowMeshletFromFrontier(
+    in StringView metaKind,
+    in StringView filePathText,
+    in usize seedSearchOffset,
+    in b8 isParallelEnabled,
+    in u32 workerThreadCount,
+    in Span<MeshletTriangleData> triangles,
+    in Span<MeshletTriangleCalculation> triangleCalculations,
+    in Span<u32> positionTriangleOffsets,
+    in Span<u32> positionTriangleIndices,
+    mut Vector<u8> visitedTriangles,
+    mut Vector<u32> localSourceVertexRefs,
+    mut Vector<u32> localTriangleIndices,
+    mut MeshletDesc meshlet,
+    mut Vector<u8> primitiveIndices,
+    mut MeshletScoreState scoreState,
+    mut Vector<MeshletCandidateSearchResult> parallelCandidates,
+    mut Vector<u32> frontier,
+    mut Vector<u8> frontierFlags
+){
+    while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
+        if(frontier.empty()){
+            const Expected<MeshletFrontierCandidate> disconnectedCandidate = FindBestDisconnectedMeshletCandidate(
+                triangles,
+                triangleCalculations,
+                visitedTriangles,
+                seedSearchOffset + 1u,
+                localTriangleIndices,
+                scoreState,
+                meshlet,
+                localSourceVertexRefs,
+                isParallelEnabled,
+                workerThreadCount,
+                parallelCandidates
+            );
+            if(!disconnectedCandidate.has_value())
+                break;
 
-#include <impl/assets_mesh/cook_meshlet_scoring.adhd.h>
+            if(!AddVisitedMeshletTriangle(
+                metaKind,
+                filePathText,
+                disconnectedCandidate.value().triangleIndex,
+                triangles,
+                triangleCalculations,
+                positionTriangleOffsets,
+                positionTriangleIndices,
+                visitedTriangles,
+                localSourceVertexRefs,
+                localTriangleIndices,
+                meshlet,
+                primitiveIndices,
+                scoreState,
+                frontier,
+                frontierFlags
+            ))
+                return false;
+            continue;
+        }
 
+        const Expected<MeshletFrontierCandidate> bestCandidate = FindBestMeshletFrontierCandidateFromPrecompute(
+            triangles,
+            triangleCalculations,
+            frontier,
+            localTriangleIndices,
+            scoreState,
+            meshlet,
+            localSourceVertexRefs
+        );
+        if(!bestCandidate.has_value())
+            break;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        RemoveMeshletFrontierCandidate(bestCandidate.value().frontierOffset, frontier, frontierFlags);
+        if(!AddVisitedMeshletTriangle(
+            metaKind,
+            filePathText,
+            bestCandidate.value().triangleIndex,
+            triangles,
+            triangleCalculations,
+            positionTriangleOffsets,
+            positionTriangleIndices,
+            visitedTriangles,
+            localSourceVertexRefs,
+            localTriangleIndices,
+            meshlet,
+            primitiveIndices,
+            scoreState,
+            frontier,
+            frontierFlags
+        ))
+            return false;
+    }
 
+    return true;
+}
 
-NWB_IMPL_BEGIN
+b8 BuildCookMeshlets(
+    in Path nwbFilePath,
+    in Span<u32> indices,
+    in b8 isParallelEnabled,
+    in u32 workerThreadCount,
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshVertexRef> vertexRefs,
+    mut Vector<MeshletDesc> outMeshlets,
+    mut Vector<MeshletBounds> outMeshletBounds,
+    mut Vector<MeshletPositionStreamRef> outMeshletPositionStreamRefs,
+    mut Vector<MeshletAttributeStreamRef> outMeshletAttributeStreamRefs,
+    mut Vector<MeshletLocalVertexRef> outMeshletLocalVertexRefs,
+    mut Vector<u8> outMeshletPrimitiveIndices
+){
+    const String filePathText = PathToString(nwbFilePath);
+    Vector<MeshletTriangleData> triangles;
+    Vector<MeshletTriangleCalculation> triangleCalculations;
+    Vector<u32> positionTriangleOffsets;
+    Vector<u32> positionTriangleIndices;
+    Vector<u8> visitedTriangles;
+    if(!ValidateAndPrecomputeMeshletTriangleStreams(
+        s_MeshMetaKindText,
+        filePathText,
+        indices,
+        vertexRefs,
+        positions,
+        triangles,
+        triangleCalculations,
+        positionTriangleOffsets,
+        positionTriangleIndices,
+        visitedTriangles
+    ))
+        return false;
 
+    MeshletDesc current;
+    Vector<u32> localSourceVertexRefs;
+    Vector<u32> localTriangleIndices;
+    Vector<MeshletCandidateSearchResult> parallelCandidates;
+    Vector<u32> frontier;
+    Vector<u8> frontierFlags;
+    PrepareMeshletBuildOutputStreams(
+        indices.size(),
+        triangles.size(),
+        outMeshlets,
+        outMeshletBounds,
+        outMeshletPositionStreamRefs,
+        outMeshletAttributeStreamRefs,
+        outMeshletLocalVertexRefs,
+        outMeshletPrimitiveIndices,
+        localSourceVertexRefs,
+        localTriangleIndices,
+        frontier,
+        frontierFlags
+    );
+    parallelCandidates.reserve(ComputeMeshletParallelCandidateReserve(workerThreadCount));
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    MeshletScoreState scoreState;
+    usize seedSearchOffset = 0u;
+    while(true){
+        const Expected<u32> seedTriangleIndex = TryFindNextUnvisitedMeshletTriangle(visitedTriangles, triangles.size(), seedSearchOffset);
+        if(!seedTriangleIndex.has_value())
+            break;
 
+        seedSearchOffset = cast<usize>(seedTriangleIndex.value());
+        ClearMeshletFrontier(frontier, frontierFlags);
+        ResetMeshletBuilderState(outMeshletPrimitiveIndices.size(), current, localSourceVertexRefs, localTriangleIndices, scoreState);
 
-// Greedy meshlet growth: seed an unvisited triangle, grow along its frontier, then flush bounds and zipped refs.
-namespace MeshCookMeshlets{
+        if(!AddVisitedMeshletTriangle(
+            s_MeshMetaKindText,
+            filePathText,
+            seedTriangleIndex.value(),
+            triangles,
+            triangleCalculations,
+            positionTriangleOffsets,
+            positionTriangleIndices,
+            visitedTriangles,
+            localSourceVertexRefs,
+            localTriangleIndices,
+            current,
+            outMeshletPrimitiveIndices,
+            scoreState,
+            frontier,
+            frontierFlags
+        ))
+            return false;
 
+        if(!GrowMeshletFromFrontier(
+            s_MeshMetaKindText,
+            filePathText,
+            seedSearchOffset,
+            isParallelEnabled,
+            workerThreadCount,
+            triangles,
+            triangleCalculations,
+            positionTriangleOffsets,
+            positionTriangleIndices,
+            visitedTriangles,
+            localSourceVertexRefs,
+            localTriangleIndices,
+            current,
+            outMeshletPrimitiveIndices,
+            scoreState,
+            parallelCandidates,
+            frontier,
+            frontierFlags
+        ))
+            return false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ClearMeshletFrontier(frontier, frontierFlags);
+        if(!FlushBuiltMeshlet(
+            s_MeshMetaKindText,
+            filePathText,
+            positions,
+            vertexRefs,
+            outMeshletPrimitiveIndices,
+            localSourceVertexRefs,
+            current,
+            outMeshletPositionStreamRefs,
+            outMeshletAttributeStreamRefs,
+            outMeshletLocalVertexRefs,
+            outMeshlets,
+            outMeshletBounds
+        ))
+            return false;
 
+        ResetMeshletBuilderState(outMeshletPrimitiveIndices.size(), current, localSourceVertexRefs, localTriangleIndices, scoreState);
+    }
 
-[[nodiscard]] b8 GrowMeshletFromFrontier(
-    AStringView metaKind,
-    AStringView filePathText,
-    usize seedSearchOffset,
-    Core::CpuTaskScheduler& cpuScheduler,
-    MeshletTrianglePrecompute& trianglePrecompute,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
-    MeshletDesc& meshlet,
-    Core::Assets::AssetVector<u8>& primitiveIndices,
-    MeshletScoreState& scoreState,
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
-);
-[[nodiscard]] b8 BuildMeshlets(const Path& nwbFilePath, TStringView metaKind, Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& entry);
+    if(!ValidateBuiltMeshletsNonEmpty(outMeshlets.size(), s_MeshMetaKindText, filePathText))
+        return false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    LogMeshletCookMetrics(
+        s_MeshMetaKindText,
+        filePathText,
+        indices,
+        positions,
+        normals,
+        tangents,
+        uv0,
+        colors,
+        vertexRefs,
+        outMeshlets,
+        outMeshletBounds,
+        outMeshletPositionStreamRefs,
+        outMeshletAttributeStreamRefs,
+        outMeshletLocalVertexRefs,
+        outMeshletPrimitiveIndices
+    );
+    return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplAssetsMeshCookMeshletGrowthAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

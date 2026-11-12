@@ -1,0 +1,80 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/report_types.adhd>
+#include <logger/telemetry/report_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SelectTelemetryMemorySourceText(in usize sourceIndex){
+    switch(sourceIndex){
+    case 1u:
+        return s_LogTelemetryMemoryReportArenaSourceText;
+    case 2u:
+        return s_LogTelemetryMemoryReportHeapBackingSourceText;
+    default:
+        return s_LogTelemetryMemoryReportExplicitScopeSourceText;
+    }
+}
+
+StringView SelectTelemetryMemoryPeakBasisText(in usize sourceIndex){
+    switch(sourceIndex){
+    case 1u:
+        return s_LogTelemetryMemoryReportLargestArenaPeakBasis;
+    case 2u:
+        return s_LogTelemetryMemoryReportSampledHeapPeakBasis;
+    default:
+        return s_LogTelemetryMemoryReportScopePeakBasis;
+    }
+}
+
+void AccumulateTelemetryMemorySourceSummary(
+    in u64 snapshotUsedBytes,
+    in u64 snapshotPeakUsedBytes,
+    in b8 deltaHasSamples,
+    in i64 deltaUsedBytes,
+    mut TelemetryMemorySummary source
+){
+    ++source.eventCount;
+    if(snapshotUsedBytes > source.maxUsedBytes)
+        source.maxUsedBytes = snapshotUsedBytes;
+    if(snapshotPeakUsedBytes > source.maxPeakUsedBytes)
+        source.maxPeakUsedBytes = snapshotPeakUsedBytes;
+    if(deltaHasSamples && source.totalUsedDeltaValid){
+        if(deltaUsedBytes > 0 && source.totalUsedDeltaBytes > i64.max - deltaUsedBytes)
+            source.totalUsedDeltaValid = false;
+        else if(deltaUsedBytes < 0 && source.totalUsedDeltaBytes < i64.min - deltaUsedBytes)
+            source.totalUsedDeltaValid = false;
+        else
+            source.totalUsedDeltaBytes += deltaUsedBytes;
+    }
+}
+
+void AppendTelemetryMemorySourcesJsonText(in TelemetryReportSummary summary, mut String out){
+    out.append(s_LogTelemetryMemoryReportMemorySourcesSectionHeader);
+    for(usize sourceIndex = 0u; sourceIndex < s_TelemetryMemorySourceCount; ++sourceIndex){
+        out.append(s_LogTelemetryMemoryReportMemorySourceEntryIndent);
+        AppendJsonQuotedText(out, SelectTelemetryMemorySourceText(sourceIndex));
+        out.append(s_LogTelemetryMemoryReportPeakBasisKeyPrefix);
+        AppendJsonQuotedText(out, SelectTelemetryMemoryPeakBasisText(sourceIndex));
+        const TelemetryMemorySummary source = summary.memorySources[sourceIndex];
+        StringAppendFormat(out, s_LogTelemetryMemoryReportMemorySourceMetricsFormat, source.eventCount, source.maxUsedBytes, source.maxPeakUsedBytes);
+        if(source.totalUsedDeltaValid)
+            StringAppendFormat(out, s_LogTelemetryMemoryReportMemorySourceDeltaFormat, source.totalUsedDeltaBytes);
+        else
+            out.append(s_LogTelemetryMemoryReportJsonNullText);
+        out.append("}");
+        if(sourceIndex + 1u == s_TelemetryMemorySourceCount)
+            out.append(s_LogTelemetryMemoryReportJsonEntryTerminator);
+        else
+            out.append(s_LogTelemetryMemoryReportJsonEntrySeparator);
+    }
+    out.append(s_LogTelemetryMemoryReportMemorySourcesSectionFooter);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

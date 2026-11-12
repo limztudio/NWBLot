@@ -276,7 +276,10 @@ FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDLogEst5 = { { { -0.145700f, -0.14
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDLogEst6 = { { { +0.057148f, +0.057148f, +0.057148f, +0.057148f } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDLogEst7 = { { { -0.010578f, -0.010578f, -0.010578f, -0.010578f } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDLgE = { { { +1.442695f, +1.442695f, +1.442695f, +1.442695f } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDInvLgE = { { { +6.93147182e-1f, +6.93147182e-1f, +6.93147182e-1f, +6.93147182e-1f } } };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

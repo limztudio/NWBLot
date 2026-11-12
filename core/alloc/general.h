@@ -20,7 +20,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GlobalArena : public ::ArenaBaseT<GlobalArena>{
+class GlobalArena final : public ::ArenaBaseT<GlobalArena>{
 public:
     using Base = ::ArenaBaseT<GlobalArena>;
 
@@ -34,17 +34,17 @@ public:
     explicit GlobalArena(const Name& allocationLog)
         : Base(allocationLog, ArenaMemoryReservation::FollowsUsage)
     {}
-    ~GlobalArena()noexcept = default;
+    ~GlobalArena()noexcept override = default;
 
 
 public:
-    inline void* allocate(usize align, usize size){
+    [[nodiscard]] NWB_INLINE void* allocate(usize align, usize size)override{
         size = Alignment(align, size);
 
         return (align <= 1) ? CoreAlloc(size, &m_memoryStats) : CoreAllocAligned(size, align, &m_memoryStats);
     }
 
-    inline void* reallocate(void* p, usize align, usize size){
+    [[nodiscard]] NWB_INLINE void* reallocate(void* p, usize align, usize size)override{
         size = Alignment(align, size);
 
         if(!p && size == 0u)
@@ -53,7 +53,7 @@ public:
         return (align <= 1) ? CoreRealloc(p, size, &m_memoryStats) : CoreReallocAligned(p, size, align, &m_memoryStats);
     }
 
-    inline void deallocate(void* p, usize align, [[maybe_unused]] usize size)noexcept{
+    NWB_INLINE void deallocate(void* p, usize align, [[maybe_unused]] usize size)noexcept override{
         if(align <= 1)
             CoreFree(p, &m_memoryStats);
         else

@@ -8,14 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <global/sha256.h>
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class PreparedFontBinaryCodec{
     private b8 validHeaderInputs(in usize fontByteCount, in u32 faceIndex, in usize groupCount)const{
         return
@@ -94,10 +86,9 @@ class PreparedFontBinaryCodec{
     }
 
     private void appendSha256(in Span<u8> sourceBytes, mut Vector<u8> outBinary)const{
-        native(in sourceBytes, mut outBinary){
-            const Sha256Digest digest = ComputeSha256({ sourceBytes.data(), sourceBytes.size() });
-            outBinary.insert(outBinary.end(), digest.bytes, digest.bytes + sizeof(digest.bytes));
-        }
+        const Array<u8, 32> digest = ComputeFontSha256Bytes(sourceBytes);
+        for(in u8 byteValue : digest)
+            outBinary.push_back(byteValue);
     }
 
     public void appendSourceBinary(
@@ -195,3 +186,4 @@ class PreparedFontBinaryCodec{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,18 +2,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsUiSkinRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/assets_ui_skin/validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateUiSkinRuntimePayload(
+    in b8 hasValidVirtualPath,
+    in AssetRef<Texture> texture,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in Span<UiSkinRegion> regions,
+    in Span<u32> regionIndex,
+    in UiSkinPalette palette,
+    in UiSkinTypography typography
+){
+    if(!hasValidVirtualPath)
+        return false;
+    return ValidateUiSkinPayloadData(
+        texture,
+        atlasWidth,
+        atlasHeight,
+        referenceDensity,
+        regions,
+        regionIndex,
+        palette,
+        typography
+    );
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_ui_skin/asset.adhd.h>
 
-#include <impl/assets_ui_skin/validation.adhd.h>
 #include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
 #include <impl/assets_texture/asset.adhd.h>
 
@@ -79,9 +111,8 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
 }
 
 b8 UiSkin::validatePayload()const{
-    if(!checkVirtualPath(FOUNDATION_TEXT("UiSkin::validatePayload")))
-        return false;
-    return ValidateUiSkinPayloadData(
+    return ValidateUiSkinRuntimePayload(
+        checkVirtualPath(NWB_TEXT("UiSkin::validatePayload")),
         m_texture,
         m_atlasWidth,
         m_atlasHeight,
@@ -153,7 +184,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

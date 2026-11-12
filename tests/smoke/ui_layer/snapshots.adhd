@@ -4,16 +4,38 @@
 
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include <tests/smoke/smoke_environment.adhd>
+#include <tests/unit/ui/arithmetic_fixture_rows.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/paint.adhd.h>
 
 namespace NWB::Tests::Smoke{
 using Impl::Ui::Color;
+using Impl::Ui::DisplayMetrics;
+using EdgeInsets = Impl::Ui::Insets;
+using Impl::Ui::Point;
+using Impl::Ui::Rect;
 using SnapshotRect = Impl::Ui::Rect;
 using SnapshotDisplay = Impl::Ui::DisplayMetrics;
 using SnapshotPoint = Impl::Ui::Point;
+using UiWidgetTests::ArithmeticFixtureRowKey;
+using UiWidgetTests::FindArithmeticFixtureRowIndex;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -30,6 +52,10 @@ const Name s_UiSmokeNameTestsUiLayerPersistentStateBuffer = "tests/ui_layer/pers
 const Name s_UiSmokeNameProgressFill = "progress.fill";
 const u64 s_ResizePreparationPresentations = 4u;
 const u32 s_DefaultCaptureFrameCount = 60u;
+const u32 s_SmokeMarker24BitMask = 0xffffffu;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Snapshot of copied image declaration inputs and expected display geometry.
@@ -126,11 +152,626 @@ class UiSearchComboRange{
 }
 
 
+// Arithmetic row lookup keeps the fixture independent of total row count and allocates labels on demand.
+class UiListSmokeSourceState{
+    private u64 m_revision = 1u;
+    private u64 m_removed = 0u;
+    private u32 m_labelReads = 0u;
+    private b8 m_reversed = false;
+
+    public u64 instanceGeneration()const{
+        return 1u;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 rowCount()const{
+        if(this.m_removed == 0u)
+            return 100000u;
+        return 99999u;
+    }
+
+    public u64 key(in u64 index)const{
+        const u64 count = this.rowCount();
+        if(index < count)
+            return ArithmeticFixtureRowKey(count, this.m_removed, this.m_reversed, index);
+        return 0u;
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        return FindArithmeticFixtureRowIndex(this.rowCount(), this.m_removed, this.m_reversed, keyValue);
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+
+    public u64 readRowKey(in u64 index){
+        ++this.m_labelReads;
+        return this.key(index);
+    }
+
+    public b8 enabled(in u64 index)const{
+        return index < this.rowCount() && this.key(index) != 5u;
+    }
+
+    public void reverse(){
+        this.m_reversed = !this.m_reversed;
+        ++this.m_revision;
+    }
+
+    public void remove(in u64 keyValue){
+        if(keyValue == 0u || keyValue > 100000u || keyValue == this.m_removed)
+            return;
+        this.m_removed = keyValue;
+        ++this.m_revision;
+    }
+
+    public void beginFrame(){
+        this.m_labelReads = 0u;
+    }
+
+    public b8 reversed()const{
+        return this.m_reversed;
+    }
+
+    public u64 removedKey()const{
+        return this.m_removed;
+    }
+
+    public u32 labelReads()const{
+        return this.m_labelReads;
+    }
+}
+
+
+// Wrapper changing source lifetime and emptiness without storing the 100000 arithmetic rows.
+class UiComboSmokeSourceState{
+    private UiListSmokeSourceState m_rows = UiListSmokeSourceState();
+    private u64 m_generation = 1u;
+    private u64 m_revision = 1u;
+    private b8 m_empty = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_generation;
+    }
+
+    public u64 revision()const{
+        return this.m_revision + this.m_rows.revision();
+    }
+
+    public u64 rowCount()const{
+        if(this.m_empty)
+            return 0u;
+        return this.m_rows.rowCount();
+    }
+
+    public u64 key(in u64 index)const{
+        if(this.m_empty)
+            return 0u;
+        return this.m_rows.key(index);
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        if(this.m_empty)
+            return MakeUnexpected(Failure());
+        return this.m_rows.indexOf(keyValue);
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const{
+        if(this.m_empty)
+            return MakeUnexpected(Failure());
+        return this.m_rows.findEnabled(start, reverse);
+    }
+
+    public u64 readRowKey(in u64 index){
+        if(this.m_empty)
+            return 0u;
+        return this.m_rows.readRowKey(index);
+    }
+
+    public b8 enabled(in u64 index)const{
+        return !this.m_empty && this.m_rows.enabled(index);
+    }
+
+    public void reverse(){
+        this.m_rows.reverse();
+    }
+
+    public void remove(in u64 keyValue){
+        this.m_rows.remove(keyValue);
+    }
+
+    public void beginFrame(){
+        this.m_rows.beginFrame();
+    }
+
+    public void toggleEmpty(){
+        this.m_empty = !this.m_empty;
+        ++this.m_revision;
+    }
+
+    public void replace(){
+        ++this.m_generation;
+    }
+
+    public b8 reversed()const{
+        return this.m_rows.reversed();
+    }
+
+    public u64 removedKey()const{
+        return this.m_rows.removedKey();
+    }
+
+    public u32 labelReads()const{
+        return this.m_rows.labelReads();
+    }
+}
+
+
+// Fixed five-key combo source state with a filtered view.
+class UiNestedPopupSmokeSourceState{
+    private String m_query = "";
+    private Array<u64, 5u> m_indices;
+    private u64 m_count = 0u;
+    private u64 m_viewRevision = 0u;
+    private u32 m_labelReads = 0u;
+
+    public UiNestedPopupSmokeSourceState();
+
+    public u64 instanceGeneration()const{
+        return 1u;
+    }
+
+    public u64 revision()const{
+        return 1u;
+    }
+
+    public u64 rowCount()const{
+        return 5u;
+    }
+
+    public u64 key(in u64 index)const{
+        if(index < this.rowCount())
+            return index + 1u;
+        return 0u;
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        if(keyValue == 0u || keyValue > this.rowCount())
+            return MakeUnexpected(Failure());
+        return keyValue - 1u;
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    public StringView readText(in u64 index);
+
+    public b8 enabled(in u64 index)const{
+        return index < this.rowCount() && this.key(index) != 3u;
+    }
+
+    public b8 filter(in StringView query);
+
+    public u64 viewRevision()const{
+        return this.m_viewRevision;
+    }
+
+    public u64 viewRowCount()const{
+        return this.m_count;
+    }
+
+    public u64 viewKey(in u64 index)const{
+        if(index < this.m_count)
+            return this.key(this.m_indices[index]);
+        return 0u;
+    }
+
+    public Expected<u64> viewIndexOf(in u64 keyValue)const{
+        for(u64 candidate = 0u; candidate < this.m_count; ++candidate){
+            if(this.viewKey(candidate) == keyValue)
+                return candidate;
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public Expected<u64> viewFindEnabled(in u64 start, in b8 reverse)const{
+        if(start >= this.m_count)
+            return MakeUnexpected(Failure());
+        u64 candidate = start;
+        while(candidate < this.m_count){
+            if(this.viewEnabled(candidate))
+                return candidate;
+            if(reverse){
+                if(candidate == 0u)
+                    break;
+                --candidate;
+            }
+            else{
+                ++candidate;
+            }
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public StringView readViewText(in u64 index){
+        if(index < this.m_count)
+            return this.readText(this.m_indices[index]);
+        return "";
+    }
+
+    public b8 viewEnabled(in u64 index)const{
+        return index < this.m_count && this.enabled(this.m_indices[index]);
+    }
+
+    public void beginFrame(){
+        this.m_labelReads = 0u;
+    }
+
+    public u32 labelReads()const{
+        return this.m_labelReads;
+    }
+}
+
+
+class UiPopupToolsSmokeSourceState{
+    private u64 m_generation = 1u;
+    private u64 m_revision = 1u;
+    private u32 m_labelReads = 0u;
+    private b8 m_reversed = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_generation;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 rowCount()const{
+        return 5u;
+    }
+
+    public u64 key(in u64 index)const{
+        if(index < this.rowCount())
+            return ArithmeticFixtureRowKey(this.rowCount(), 0u, this.m_reversed, index);
+        return 0u;
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        return FindArithmeticFixtureRowIndex(this.rowCount(), 0u, this.m_reversed, keyValue);
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    public StringView readText(in u64 index);
+
+    public b8 enabled(in u64 index)const{
+        return index < this.rowCount() && this.key(index) != 3u;
+    }
+
+    public void reverse(){
+        this.m_reversed = !this.m_reversed;
+        ++this.m_revision;
+    }
+
+    public void replace(){
+        ++this.m_generation;
+        ++this.m_revision;
+    }
+
+    public void beginFrame(){
+        this.m_labelReads = 0u;
+    }
+
+    public b8 reversed()const{
+        return this.m_reversed;
+    }
+
+    public u32 labelReads()const{
+        return this.m_labelReads;
+    }
+}
+
+
+class UiRadioGroupSmokeSourceState{
+    private u64 m_generation = 1701u;
+    private u64 m_revision = 1u;
+    private u64 m_removed = 0u;
+    private u32 m_labelReads = 0u;
+    private b8 m_reversed = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_generation;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 rowCount()const{
+        if(this.m_removed == 0u)
+            return 5u;
+        return 4u;
+    }
+
+    public u64 rawKey(in u64 index)const{
+        const u64 count = this.rowCount();
+        if(index >= count)
+            return 0u;
+        u64 forward = index;
+        if(this.m_reversed)
+            forward = count - 1u - index;
+        u64 choice = (forward + 1u) * 10u;
+        if(this.m_removed != 0u && choice >= this.m_removed)
+            choice += 10u;
+        return choice;
+    }
+
+    public u64 key(in u64 index)const{
+        return this.rawKey(index);
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        if(keyValue < 10u || keyValue > 50u || keyValue % 10u != 0u || keyValue == this.m_removed)
+            return MakeUnexpected(Failure());
+        u64 forward = keyValue / 10u - 1u;
+        if(this.m_removed != 0u && keyValue > this.m_removed)
+            --forward;
+        const u64 count = this.rowCount();
+        u64 index = forward;
+        if(this.m_reversed)
+            index = count - 1u - forward;
+        if(index < count)
+            return index;
+        return MakeUnexpected(Failure());
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverseValue)const{
+        const u64 count = this.rowCount();
+        if(start >= count)
+            return MakeUnexpected(Failure());
+        u64 cursor = start;
+        while(cursor < count){
+            if(this.rawKey(cursor) != 30u)
+                return cursor;
+            if(reverseValue){
+                if(cursor == 0u)
+                    break;
+                --cursor;
+            }
+            else{
+                ++cursor;
+            }
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public StringView readText(in u64 index);
+
+    public b8 enabled(in u64 index)const{
+        const u64 choice = this.rawKey(index);
+        return choice != 0u && choice != 30u;
+    }
+
+    public void reverse(){
+        this.m_reversed = !this.m_reversed;
+        ++this.m_revision;
+    }
+
+    public void remove(in u64 keyValue){
+        if(keyValue < 10u || keyValue > 50u || keyValue % 10u != 0u || this.m_removed != 0u)
+            return;
+        this.m_removed = keyValue;
+        ++this.m_revision;
+    }
+
+    public void replace(){
+        ++this.m_generation;
+        ++this.m_revision;
+        this.m_removed = 0u;
+        this.m_reversed = false;
+    }
+
+    public void beginFrame(){
+        this.m_labelReads = 0u;
+    }
+
+    public b8 reversed()const{
+        return this.m_reversed;
+    }
+
+    public u64 removedKey()const{
+        return this.m_removed;
+    }
+
+    public u32 labelReads()const{
+        return this.m_labelReads;
+    }
+}
+
+
+class UiSearchComboSmokeSourceState{
+    private UiListSmokeSourceState m_rows = UiListSmokeSourceState();
+    private String m_query = "";
+    private Array<UiSearchComboRange, 6u> m_ranges;
+    private usize m_rangeCount = 0u;
+    private u64 m_filteredCount = 0u;
+    private u64 m_viewRevision = 0u;
+    private u64 m_cachedSourceRevision = 0u;
+
+    public UiSearchComboSmokeSourceState();
+
+    public u64 instanceGeneration()const{
+        return this.m_rows.instanceGeneration();
+    }
+
+    public u64 revision()const{
+        return this.m_rows.revision();
+    }
+
+    public u64 rowCount()const{
+        return this.m_rows.rowCount();
+    }
+
+    public u64 key(in u64 index)const{
+        return this.m_rows.key(index);
+    }
+
+    public Expected<u64> indexOf(in u64 keyValue)const{
+        return this.m_rows.indexOf(keyValue);
+    }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const{
+        return this.m_rows.findEnabled(start, reverse);
+    }
+
+    public u64 readRowKey(in u64 index){
+        return this.m_rows.readRowKey(index);
+    }
+
+    public b8 enabled(in u64 index)const{
+        return this.m_rows.enabled(index);
+    }
+
+    public b8 filter(in StringView query);
+
+    public u64 viewRevision()const{
+        return this.m_viewRevision;
+    }
+
+    public u64 viewRowCount()const{
+        return this.m_filteredCount;
+    }
+
+    public u64 viewKey(in u64 index)const{
+        const u64 total = this.m_filteredCount;
+        if(index >= total)
+            return 0u;
+        u64 remaining = index;
+        if(this.reversed())
+            remaining = total - 1u - index;
+        const u64 removed = this.removedKey();
+        for(usize rangeIndex = 0u; rangeIndex < this.m_rangeCount; ++rangeIndex){
+            const UiSearchComboRange range = this.m_ranges[rangeIndex];
+            const b8 excludes = removed >= range.first && removed < range.past;
+            const u64 count = range.past - range.first - cast<u64>(excludes);
+            if(remaining >= count){
+                remaining -= count;
+                continue;
+            }
+            u64 value = range.first + remaining;
+            if(excludes && value >= removed)
+                ++value;
+            return value;
+        }
+        return 0u;
+    }
+
+    public Expected<u64> viewIndexOf(in u64 keyValue)const{
+        const u64 removed = this.removedKey();
+        if(keyValue == 0u || keyValue > 100000u || keyValue == removed)
+            return MakeUnexpected(Failure());
+        u64 offset = 0u;
+        for(usize rangeIndex = 0u; rangeIndex < this.m_rangeCount; ++rangeIndex){
+            const UiSearchComboRange range = this.m_ranges[rangeIndex];
+            const b8 excludes = removed >= range.first && removed < range.past;
+            if(keyValue >= range.first && keyValue < range.past){
+                const u64 natural = offset + keyValue - range.first - cast<u64>(excludes && removed < keyValue);
+                if(this.reversed())
+                    return this.m_filteredCount - 1u - natural;
+                return natural;
+            }
+            offset += range.past - range.first - cast<u64>(excludes);
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public Expected<u64> viewFindEnabled(in u64 start, in b8 reverse)const;
+
+    public u64 readViewRowKey(in u64 index){
+        const Expected<u64> fullIndex = this.m_rows.indexOf(this.viewKey(index));
+        if(!fullIndex.has_value())
+            return 0u;
+        return this.m_rows.readRowKey(fullIndex.value());
+    }
+
+    public b8 viewEnabled(in u64 index)const{
+        return index < this.m_filteredCount && this.viewKey(index) != 5u;
+    }
+
+    public void reverse(){
+        this.m_rows.reverse();
+    }
+
+    public void remove(in u64 keyValue){
+        this.m_rows.remove(keyValue);
+    }
+
+    public void beginFrame(){
+        this.m_rows.beginFrame();
+    }
+
+    public b8 reversed()const{
+        return this.m_rows.reversed();
+    }
+
+    public u64 removedKey()const{
+        return this.m_rows.removedKey();
+    }
+
+    public u32 labelReads()const{
+        return this.m_rows.labelReads();
+    }
+
+    private void addRange(in u64 first, in u64 past){
+        if(first >= past || this.m_rangeCount >= this.m_ranges.size())
+            return;
+        UiSearchComboRange range();
+        range.first = first;
+        range.past = past;
+        this.m_ranges[this.m_rangeCount] = range;
+        ++this.m_rangeCount;
+        this.m_filteredCount += past - first;
+        if(this.removedKey() >= first && this.removedKey() < past)
+            --this.m_filteredCount;
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 b8 SameSmokeRect(in SnapshotRect left, in SnapshotRect right){
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
+}
+
+b8 SameSmokeU32Span(in Span<u32> left, in Span<u32> right){
+    if(left.size() != right.size())
+        return false;
+    for(usize index = 0u; index < left.size(); ++index){
+        if(left[index] != right[index])
+            return false;
+    }
+    return true;
+}
+
+b8 SameSmokeU64Span(in Span<u64> left, in Span<u64> right){
+    if(left.size() != right.size())
+        return false;
+    for(usize index = 0u; index < left.size(); ++index){
+        if(left[index] != right[index])
+            return false;
+    }
+    return true;
+}
+
+b8 SameSmokeRectSpan(in Span<SnapshotRect> left, in Span<SnapshotRect> right){
+    if(left.size() != right.size())
+        return false;
+    for(usize index = 0u; index < left.size(); ++index){
+        if(!SameSmokeRect(left[index], right[index]))
+            return false;
+    }
+    return true;
 }
 
 PassiveSmokeColumns ResolvePassiveSmokeColumns(in SnapshotDisplay display){
@@ -158,6 +799,193 @@ Color EncodeSmokeColor(in f32 value){
 SnapshotRect ScaleSmokeSceneRect(in VectorSingle extent, in f32 x, in f32 y, in f32 w, in f32 h){
     const VectorSingle scaled = VectorSingle(x, y, w, h) * extent;
     return SnapshotRect(scaled.x, scaled.y, scaled.z, scaled.w);
+}
+
+StringView NestedPopupSmokeLabel(in u64 index){
+    switch(index){
+    case 0u:
+        return "Alpha";
+    case 1u:
+        return "Beta";
+    case 2u:
+        return "Gamma (disabled)";
+    case 3u:
+        return "Delta";
+    case 4u:
+        return "Echo";
+    default:
+        return "";
+    }
+}
+
+StringView PopupToolsSmokeLabel(in u64 rowKey){
+    switch(rowKey){
+    case 1u:
+        return "Inspect";
+    case 2u:
+        return "Duplicate";
+    case 3u:
+        return "Delete (disabled)";
+    case 4u:
+        return "Rename";
+    case 5u:
+        return "Reset view";
+    default:
+        return "";
+    }
+}
+
+StringView RadioGroupSmokeLabel(in u64 choice){
+    switch(choice){
+    case 10u:
+        return "Alpha";
+    case 20u:
+        return "Beta";
+    case 30u:
+        return "Gamma (disabled)";
+    case 40u:
+        return "Delta";
+    case 50u:
+        return "Epsilon";
+    default:
+        return "";
+    }
+}
+
+Expected<u64> ResolveAdjacentSmokeRowCandidate(in u64 rowCount, in u64 start, in b8 reverse){
+    if(reverse){
+        if(start == 0u)
+            return MakeUnexpected(Failure());
+        return start - 1u;
+    }
+    if(start + 1u >= rowCount)
+        return MakeUnexpected(Failure());
+    return start + 1u;
+}
+
+Expected<u64> UiListSmokeSourceState::findEnabled(in u64 start, in b8 reverse)const{
+    if(start >= this.rowCount())
+        return MakeUnexpected(Failure());
+    if(this.enabled(start))
+        return start;
+    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.rowCount(), start, reverse);
+    if(adjacent.has_value() && this.enabled(adjacent.value()))
+        return adjacent.value();
+    return MakeUnexpected(Failure());
+}
+
+UiNestedPopupSmokeSourceState::UiNestedPopupSmokeSourceState(){
+    const b8 initialized = this.filter("");
+    [essential] assert(initialized, "UI nested popup smoke source must initialize");
+}
+
+Expected<u64> UiNestedPopupSmokeSourceState::findEnabled(in u64 start, in b8 reverse)const{
+    if(start >= this.rowCount())
+        return MakeUnexpected(Failure());
+    if(this.enabled(start))
+        return start;
+    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.rowCount(), start, reverse);
+    if(adjacent.has_value() && this.enabled(adjacent.value()))
+        return adjacent.value();
+    return MakeUnexpected(Failure());
+}
+
+StringView UiNestedPopupSmokeSourceState::readText(in u64 index){
+    ++this.m_labelReads;
+    return NestedPopupSmokeLabel(index);
+}
+
+b8 UiNestedPopupSmokeSourceState::filter(in StringView query){
+    if(this.m_viewRevision != 0u && query == StringView(this.m_query))
+        return true;
+    if(query.empty())
+        this.m_query.clear();
+    else
+        this.m_query.assign(query);
+    this.m_count = 0u;
+    for(u64 index = 0u; index < this.rowCount(); ++index){
+        if(!ContainsAsciiIgnoreCase(NestedPopupSmokeLabel(index), query))
+            continue;
+        this.m_indices[this.m_count] = index;
+        ++this.m_count;
+    }
+    ++this.m_viewRevision;
+    return true;
+}
+
+Expected<u64> UiPopupToolsSmokeSourceState::findEnabled(in u64 start, in b8 reverse)const{
+    if(start >= this.rowCount())
+        return MakeUnexpected(Failure());
+    if(this.enabled(start))
+        return start;
+    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.rowCount(), start, reverse);
+    if(adjacent.has_value() && this.enabled(adjacent.value()))
+        return adjacent.value();
+    return MakeUnexpected(Failure());
+}
+
+StringView UiPopupToolsSmokeSourceState::readText(in u64 index){
+    ++this.m_labelReads;
+    return PopupToolsSmokeLabel(this.key(index));
+}
+
+StringView UiRadioGroupSmokeSourceState::readText(in u64 index){
+    ++this.m_labelReads;
+    return RadioGroupSmokeLabel(this.rawKey(index));
+}
+
+UiSearchComboSmokeSourceState::UiSearchComboSmokeSourceState(){
+    const b8 initialized = this.filter("");
+    [essential] assert(initialized, "UI search combo smoke source must initialize");
+}
+
+Expected<u64> UiSearchComboSmokeSourceState::viewFindEnabled(in u64 start, in b8 reverse)const{
+    if(start >= this.m_filteredCount)
+        return MakeUnexpected(Failure());
+    if(this.viewEnabled(start))
+        return start;
+    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.m_filteredCount, start, reverse);
+    if(adjacent.has_value() && this.viewEnabled(adjacent.value()))
+        return adjacent.value();
+    return MakeUnexpected(Failure());
+}
+
+b8 UiSearchComboSmokeSourceState::filter(in StringView query){
+    if(query == StringView(this.m_query) && this.m_cachedSourceRevision == this.revision())
+        return true;
+    if(query.empty())
+        this.m_query.clear();
+    else
+        this.m_query.assign(query);
+    this.m_cachedSourceRevision = this.revision();
+    this.m_rangeCount = 0u;
+    this.m_filteredCount = 0u;
+    if(query.empty()){
+        this.addRange(1u, 100001u);
+    }
+    else{
+        u64 prefix = 0u;
+        b8 valid = query.size() <= 6u && query[0u] != 48u;
+        for(usize i = 0u; i < query.size(); ++i){
+            const u8 character = cast<u8>(query[i]);
+            if(character < 48u || character > 57u){
+                valid = false;
+                break;
+            }
+            if(valid)
+                prefix = prefix * 10u + cast<u64>(character - 48u);
+        }
+        if(valid && prefix != 0u){
+            u64 span = 1u;
+            while(prefix <= 100000u){
+                this.addRange(prefix, Min(cast<u64>(100001u), prefix + span));
+                prefix *= 10u;
+                span *= 10u;
+            }
+        }
+    }
+    ++this.m_viewRevision;
+    return true;
 }
 
 b8 IsUiLayerComboSmokeEnabled(){
@@ -256,6 +1084,14 @@ b8 IsUiLayerSliderSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SLIDER_SKIN");
 }
 
+b8 IsUiLayerTextAreaSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA");
+}
+
+b8 IsUiLayerTextAreaSkinSmokeEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN");
+}
+
 b8 IsUiLayerTextureImageSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE");
 }
@@ -274,3 +1110,4 @@ b8 IsUiLayerWindowSkinSmokeEnabled(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

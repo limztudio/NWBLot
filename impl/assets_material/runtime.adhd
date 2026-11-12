@@ -2,15 +2,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMaterialRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+b8 CanAssignMaterialStageShader(in b8 isSupportedStage, in b8 isShaderValid){
+    return isSupportedStage && isShaderValid;
+}
+
+u32 NextMaterialStageShaderCount(in u32 currentCount, in b8 hadExistingStageShader){
+    if(hadExistingStageShader)
+        return currentCount;
+    return currentCount + 1u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_material/asset.adhd.h>
 
 #include <impl/assets_material/material_binary_reader.adhd.h>
@@ -107,12 +119,11 @@ void Material::setResourceReferences(const Span<const MaterialResourceReference>
 }
 
 b8 Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept{
-    if(!IsSupportedMaterialShaderStage(shaderType) || !shaderAsset.valid())
+    if(!CanAssignMaterialStageShader(IsSupportedMaterialShaderStage(shaderType), shaderAsset.valid()))
         return false;
 
     Core::Assets::AssetRef<IShader>& storedShader = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
-    if(!storedShader.valid())
-        ++m_stageShaderCount;
+    m_stageShaderCount = NextMaterialStageShaderCount(m_stageShaderCount, storedShader.valid());
 
     storedShader = shaderAsset;
     return true;
@@ -126,7 +137,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

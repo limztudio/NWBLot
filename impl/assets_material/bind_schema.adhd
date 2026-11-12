@@ -88,18 +88,7 @@ b8 HasMaterialBindInstance(in Span<MaterialBindInstance> instances, in StringVie
 
 
 Expected<Name> TryParseMaterialBindName(in StringView text){
-    Name resolved = s_NameNone;
-    b8 valid = false;
-    native(in text, mut resolved, mut valid){
-        const auto name = Name::FromText(text);
-        if(name && *name){
-            resolved = *name;
-            valid = true;
-        }
-    }
-    if(!valid)
-        return MakeUnexpected(Failure());
-    return resolved;
+    return ParseName(text);
 }
 
 
@@ -210,5 +199,4 @@ class MaterialBindSchemaValidator{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

@@ -69,9 +69,11 @@ Expected<CrashBytesT<ArenaT>, ErrorCode> CrashPackageArchive::Build(ArenaT& aren
 
 template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::Build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::GlobalArena>& packageDirectory);
 template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::Build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::Build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<::ArenaBase>& packageDirectory);
 
 template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::Build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::PersistentArena>& packageDirectory);
 template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::Build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::Build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<::ArenaBase>& packageDirectory);
 
 
 
@@ -88,5 +90,4 @@ NWB_CRASH_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

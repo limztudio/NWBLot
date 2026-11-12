@@ -4,411 +4,741 @@
 
 #include "value_widget_scenes.adhd"
 
-native{
-NWB_BEGIN
-namespace Tests::Smoke{
 
-class UiTextAreaSmokeScene : NoCopy{
-public:
-    UiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
-    ~UiTextAreaSmokeScene()noexcept;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-
-
-private:
-    void resetModel();
-    void longDocument();
-    [[nodiscard]] b8 seedClipboard();
-    [[nodiscard]] b8 drainClipboard();
-    [[nodiscard]] b8 observeState(Impl::UiPaintContext& context);
-    void paintMarkers(Impl::UiPaintContext& context)const;
-
-
-private:
-    Core::IClipboardService& m_clipboard;
-    AString<Core::Alloc::GlobalArena> m_longText;
-    Impl::Ui::EditModel m_model;
-    Impl::Ui::TextAreaState m_state;
-    Impl::Ui::EditBoxView m_observed;
-    Core::ClipboardCompletion m_completion;
-    Core::ClipboardRequestToken m_clipboardToken;
-    UiTextAreaSnapshot m_snapshot;
-    u32 m_submits = 0u;
-    u32 m_cancels = 0u;
-    u32 m_blurs = 0u;
-    u32 m_abandons = 0u;
-    u32 m_outside = 0u;
-    u32 m_clipboardSeeds = 0u;
-    b8 m_enabled = true;
-    b8 m_readOnly = false;
-    b8 m_compact = false;
-    b8 m_longDocument = false;
-};
-
-using SharedUiTextAreaSmokeScene = RefCountPtr< RefCounter<UiTextAreaSmokeScene>, ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
+const StringView s_UiTextAreaSmokeTag = "UiTextAreaSmoke";
+const StringView s_UiTextureImageSmokeTag = "UiTextureImageSmoke";
+const StringView s_UiWindowSmokeTag = "UiWindowSmoke";
+const StringView s_UiWindowSmokeIncreaseKey = "increase";
+const StringView s_UiWindowSmokeLockedKey = "locked";
+const f32 s_UiWindowSmokeLabelHeight = 18.0f;
+const f32 s_UiWindowSmokeSeparatorHeight = 1.0f;
+const f32 s_UiWindowSmokeControlHeight = 26.0f;
+const f32 s_UiWindowSmokeControlWidth = 80.0f;
+const f32 s_UiWindowSmokeGap = 4.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiTextSmokeSamples : NoCopy{
-public:
-    explicit UiTextSmokeSamples(Core::Alloc::GlobalArena& arena);
+class UiTextAreaSmokeScene{
+    private SmokeClipboardRef m_clipboard;
+    private String m_longText = "";
+    private EditModel m_model;
+    private TextAreaState m_state = TextAreaState();
+    private EditBoxView m_observed;
+    private ClipboardCompletion m_completion;
+    private ClipboardRequestToken m_clipboardToken = ClipboardRequestToken();
+    private UiTextAreaSnapshot m_snapshot = UiTextAreaSnapshot();
+    private u32 m_submits = 0u;
+    private u32 m_cancels = 0u;
+    private u32 m_blurs = 0u;
+    private u32 m_abandons = 0u;
+    private u32 m_outside = 0u;
+    private u32 m_clipboardSeeds = 0u;
+    private b8 m_enabled = true;
+    private b8 m_readOnly = false;
+    private b8 m_compact = false;
+    private b8 m_longDocument = false;
+
+    public UiTextAreaSmokeScene(mut GlobalArena arena, mut IClipboardService clipboard);
+    public ~UiTextAreaSmokeScene();
+
+    public b8 paint(mut UiPaintContext context);
+
+    private void resetModel();
+    private void longDocument();
+    private b8 seedClipboard();
+    private b8 drainClipboard();
+    private b8 observeState(mut UiPaintContext context);
+    private void paintMarkers(mut UiPaintContext context)const;
+}
 
 
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+class UiTextSmokeSamples{
+    private Label m_latin;
+    private Label m_korean;
+    private Label m_clipped;
+    private SharedGlyphPage m_coverage = SharedGlyphPage();
+    private Array<SharedSdfAtlasPage, 4u> m_sdf;
 
+    public UiTextSmokeSamples(mut GlobalArena arena);
 
-private:
-    Impl::Ui::Label m_latin;
-    Impl::Ui::Label m_korean;
-    Impl::Ui::Label m_clipped;
-    Impl::Ui::SharedGlyphPage m_coverage;
-    Array<Impl::Ui::SharedSdfAtlasPage, 4u> m_sdf;
-};
-
-using SharedUiTextSmokeSamples = RefCountPtr< RefCounter<UiTextSmokeSamples>, ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiTextSmokeSamples CreateUiTextSmokeSamples(Core::Alloc::GlobalArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public b8 paint(mut UiPaintContext context);
+}
 
 
 // Scene fixture for primitive and Builder texture image declarations.
-class UiTextureImageSmokeScene : public Core::IInputEventHandler, NoCopy{
-public:
-    UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets);
-    virtual ~UiTextureImageSmokeScene()noexcept override;
+class UiTextureImageSmokeScene{
+    private SmokeArenaRef m_arena;
+    private SharedImageSource m_default = SharedImageSource();
+    private SharedImageSource m_alternate = SharedImageSource();
+    private SharedImageSource m_replacement = SharedImageSource();
+    private PopupState m_parent = PopupState();
+    private PopupState m_child = PopupState();
+    private UiTextureImageSnapshot m_declared = UiTextureImageSnapshot();
+    private UiTextureImageSnapshot m_snapshot = UiTextureImageSnapshot();
+    private u32 m_beforeClicks = 0u;
+    private u32 m_afterClicks = 0u;
+    private u32 m_replacementCount = 0u;
+    private u32 m_evictionRemaining = 0u;
+    private u32 m_evictionCompleted = 0u;
+    private b8 m_phase = false;
+    private b8 m_replacementAlternate = false;
+    private b8 m_sourcesValid = false;
 
+    public UiTextureImageSmokeScene(mut GlobalArena arena, mut AssetManager assets);
 
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-    [[nodiscard]] virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    public b8 paint(mut UiPaintContext context);
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
 
-
-private:
-    [[nodiscard]] b8 replaceVersion();
-    [[nodiscard]] b8 paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] b8 paintImages(Impl::UiPaintContext& context, f32 width, f32 right, f32 otherWidth);
-    [[nodiscard]] b8 paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] b8 paintPopups(Impl::UiPaintContext& context, f32 right);
-    void observeState(Impl::UiPaintContext& context);
-    void paintMarkers(Impl::UiPaintContext& context)const;
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::InputDispatcher& m_input;
-    Impl::Ui::SharedImageSource m_default;
-    Impl::Ui::SharedImageSource m_alternate;
-    Impl::Ui::SharedImageSource m_replacement;
-    Impl::Ui::PopupState m_parent;
-    Impl::Ui::PopupState m_child;
-    UiTextureImageSnapshot m_declared;
-    UiTextureImageSnapshot m_snapshot;
-    u32 m_beforeClicks = 0u;
-    u32 m_afterClicks = 0u;
-    u32 m_replacementCount = 0u;
-    u32 m_evictionRemaining = 0u;
-    u32 m_evictionCompleted = 0u;
-    b8 m_phase = false;
-    b8 m_replacementAlternate = false;
-    b8 m_sourcesValid = false;
-};
-
-using SharedUiTextureImageSmokeScene = RefCountPtr< RefCounter<UiTextureImageSmokeScene>, ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets);
-
-class UiWindowSmokeScene : NoCopy{
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-
-
-private:
-    void observeState(const Impl::Ui::WindowMetrics& metrics);
-    void logAction(TStringView action);
-    void paintMarkers(Impl::UiPaintContext& context, const Impl::Ui::WindowMetrics& metrics)const;
-
-
-private:
-    Impl::Ui::WindowState m_window;
-    Impl::Ui::WindowState m_lastWindow;
-    Impl::Ui::DisplayMetrics m_lastDisplay;
-    u32 m_count = 0u;
-    u32 m_lastCount = 0u;
-    u32 m_actions = 0u;
-    u32 m_sequence = 0u;
-    b8 m_locked = false;
-    b8 m_lastLocked = false;
-    b8 m_displayChanged = false;
-};
-
-using SharedUiWindowSmokeScene = RefCountPtr< RefCounter<UiWindowSmokeScene>, ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiWindowSmokeScene CreateUiWindowSmokeScene(Core::Alloc::GlobalArena& arena);
-
-UiTextAreaSmokeScene::UiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard)
-    : m_clipboard(clipboard)
-    , m_longText(arena)
-    , m_model(arena, {}, Impl::Ui::EditTextMode::Multiline)
-    , m_observed(arena)
-    , m_completion(arena)
-{
-    m_longText.reserve(1044u);
-    for(u32 line = 0u; line < 16u; ++line)
-        m_longText.append("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl\n");
-    m_longText.append("tail");
-    resetModel();
+    private b8 replaceVersion();
+    private b8 paintControls(mut Builder ui, in Rect bounds);
+    private b8 paintImages(mut UiPaintContext context, in f32 width, in f32 right, in f32 otherWidth);
+    private b8 paintBuilderImages(mut Builder ui, in Rect bounds);
+    private b8 paintPopups(mut UiPaintContext context, in f32 right);
+    private void observeState(mut UiPaintContext context);
+    private void paintMarkers(mut UiPaintContext context)const;
 }
 
-UiTextAreaSmokeScene::~UiTextAreaSmokeScene()noexcept{
-    if(m_clipboardToken.valid() && !m_clipboard.cancel(m_clipboardToken))
+
+class UiWindowSmokeScene{
+    private WindowState m_window = WindowState();
+    private WindowState m_lastWindow = WindowState();
+    private DisplayMetrics m_lastDisplay = DisplayMetrics();
+    private u32 m_count = 0u;
+    private u32 m_lastCount = 0u;
+    private u32 m_actions = 0u;
+    private u32 m_sequence = 0u;
+    private b8 m_locked = false;
+    private b8 m_lastLocked = false;
+    private b8 m_displayChanged = false;
+
+    public b8 paint(mut UiPaintContext context);
+
+    private void observeState(in WindowMetrics metrics);
+    private void logAction(in StringView action);
+    private void paintMarkers(mut UiPaintContext context, in WindowMetrics metrics)const;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView UiTextAreaSmokeRectName(in usize index){
+    switch(index){
+    case 0u:
+        return "bounds";
+    case 1u:
+        return "content";
+    case 2u:
+        return "clip";
+    case 3u:
+        return "caret";
+    case 4u:
+        return "reset";
+    case 5u:
+        return "long";
+    case 6u:
+        return "readonly";
+    case 7u:
+        return "enabled";
+    case 8u:
+        return "viewport";
+    case 9u:
+        return "clipboard";
+    case 10u:
+        return "outside";
+    case 11u:
+        return "x_track";
+    case 12u:
+        return "x_thumb";
+    case 13u:
+        return "y_track";
+    case 14u:
+        return "y_thumb";
+    case 15u:
+        return "corner";
+    default:
+        return "";
+    }
+}
+
+StringView UiTextureImageSmokeRectName(in usize index){
+    switch(index){
+    case 0u:
+        return "before";
+    case 1u:
+        return "after";
+    case 2u:
+        return "default_tile";
+    case 3u:
+        return "alternate_tile";
+    case 4u:
+        return "tinted";
+    case 5u:
+        return "zero_alpha";
+    case 6u:
+        return "frozen";
+    case 7u:
+        return "external";
+    case 8u:
+        return "external_clip";
+    case 9u:
+        return "default_atlas";
+    case 10u:
+        return "alternate_atlas";
+    case 11u:
+        return "skin_fill";
+    case 12u:
+        return "parent_image";
+    case 13u:
+        return "child_image";
+    case 14u:
+        return "parent";
+    case 15u:
+        return "child";
+    case 16u:
+        return "builder_image";
+    default:
+        return "";
+    }
+}
+
+void CancelSmokeClipboardTokenOnExit(in SmokeClipboardRef clipRef, in ClipboardRequestToken token){
+    if(token.valid() && !clipRef.cancel(token))
         TerminateInvariant();
 }
 
-b8 UiTextAreaSmokeScene::paint(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    if(!drainClipboard())
+b8 RequestSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestToken token){
+    if(!clipRef.valid())
         return false;
-    Builder& ui = context.ui;
-    ui.style().fontSize = 16.0f;
-    ui.style().gap = 8.0f;
-    if(!ui.beginPanel("text_area_fixture", { 24.0f, 24.0f, 480.0f, 380.0f }))
+    if(token.valid() && !clipRef.cancel(token))
         return false;
-    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
-    const WidgetOptions controller{ { LayoutSizePolicy::Fixed, 112.0f }, { LayoutSizePolicy::Fixed, 30.0f } };
-    if(!ui.label("title", "Multiline plain text", title) || !ui.beginRow("document_actions"))
+    token = ClipboardRequestToken();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> request = clipRef.requestWriteText(ClipboardChannel::Clipboard, "ab\r\ncdef\r\nxy");
+    if(!request.has_value() || !request.value().valid())
         return false;
-    if(ui.button("reset", "Reset", controller))
-        resetModel();
-    if(ui.button("long", "Long document", controller))
-        longDocument();
-    if(ui.button("readonly", m_readOnly ? "Editable" : "Read only", controller))
-        m_readOnly = !m_readOnly;
-    if(!ui.endContainer() || !ui.beginRow("viewport_actions"))
+    token = request.value();
+    return true;
+}
+
+b8 PollSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestToken token, mut ClipboardCompletion completion, mut b8 outSeeded){
+    outSeeded = false;
+    if(!token.valid())
+        return true;
+    if(!clipRef.valid())
         return false;
-    if(ui.button("enabled", m_enabled ? "Disable" : "Enable", controller))
-        m_enabled = !m_enabled;
-    if(ui.button("viewport", m_compact ? "Large viewport" : "Small viewport", controller))
-        m_compact = !m_compact;
-    if(ui.button("clipboard", "Seed CRLF", controller) && !seedClipboard())
+    const ClipboardPollResultEnum status = clipRef.poll(token, completion);
+    if(status == ClipboardPollResult::Pending)
+        return true;
+    if(
+        status == ClipboardPollResult::Completed
+        && completion.token == token
+        && completion.operation == ClipboardOperation::WriteText
+        && completion.channel == ClipboardChannel::Clipboard
+        && completion.status == ClipboardStatus::Success
+    ){
+        token = ClipboardRequestToken();
+        outSeeded = true;
+        return true;
+    }
+    return false;
+}
+
+b8 ExtractTextAreaSmokeCaretGeometry(
+    in EditCaretGeometry geometry,
+    in usize displayCaret,
+    in EditBoxRange selectionRange,
+    in EditBoxPlacement placement,
+    mut UiTextAreaSnapshot current,
+    mut Rect outLocalCaret,
+    mut u64 outLineCount
+){
+    const Expected<Rect> localCaret = geometry.caretRect(displayCaret);
+    const usize lineCount = geometry.lines().size();
+    if(!localCaret.has_value() || lineCount > 32u)
         return false;
-    if(!ui.endContainer())
+    outLocalCaret = localCaret.value();
+    outLineCount = cast<u64>(lineCount);
+    for(usize index = 0u; index < lineCount; ++index){
+        const Expected<Rect> rectangle = geometry.rangeOnLine(selectionRange, cast<u32>(index), placement.caret.width);
+        if(!rectangle.has_value())
+            return false;
+        Rect selected = rectangle.value();
+        if(selected.width == 0.0f)
+            continue;
+        selected.x += placement.textOrigin.x;
+        selected.y += placement.textOrigin.y;
+        current.selections[current.selectionCount] = selected;
+        ++current.selectionCount;
+    }
+    return true;
+}
+
+b8 ShapeAndExtractTextAreaSmokeGeometry(
+    mut EditBoxView observed,
+    in EditModel model,
+    mut TextService text,
+    in DisplayMetrics display,
+    in EditBoxPlacement placement,
+    mut UiTextAreaSnapshot current,
+    mut Rect outLocalCaret,
+    mut u64 outLineCount
+){
+    if(!observed.snapshot(model))
         return false;
-    TextAreaOptions options;
-    options.width = { LayoutSizePolicy::Fixed, m_compact ? 120.0f : 380.0f };
-    options.height = { LayoutSizePolicy::Fixed, m_compact ? 72.0f : 160.0f };
-    options.enabled = m_enabled;
-    options.readOnly = m_readOnly;
-    const EditBoxResult result = ui.textArea("document", m_model, m_state, options);
+    ShapeRequest request();
+    request.fontSize = 16.0f;
+    if(observed.shape(text, request) != TextLayoutStatus::Success || !observed.measure(text, display))
+        return false;
+    return ExtractTextAreaSmokeCaretGeometry(
+        observed.caretGeometry(),
+        observed.displayCaret(),
+        observed.selectionRange(),
+        placement,
+        current,
+        outLocalCaret,
+        outLineCount
+    );
+}
+
+u8 SmokeStepRampUnorm8(in u32 x){
+    if(x < 4u)
+        return 0u;
+    if(x < 8u)
+        return 128u;
+    return 255u;
+}
+
+u8 SmokeChannelUnorm8(in u32 channel, in u32 x){
+    if(channel == 3u)
+        return SmokeStepRampUnorm8(x);
+    if(channel == 0u)
+        return 0u;
+    if(channel == 1u)
+        return 128u;
+    return 255u;
+}
+
+b8 InitUiTextSmokeSamples(
+    mut GlobalArena arena,
+    mut Label latin,
+    mut Label korean,
+    mut Label clipped,
+    mut SharedGlyphPage coverage,
+    mut Array<SharedSdfAtlasPage, 4u> sdf
+){
+    Array<u8, 48u> coveragePixels;
+    for(u32 y = 0u; y < 4u; ++y){
+        for(u32 x = 0u; x < 12u; ++x)
+            coveragePixels[y * 12u + x] = SmokeStepRampUnorm8(x);
+    }
+
+    Array<Array<u8, 192u>, 4u> sdfPixels;
+    for(u32 channels = 1u; channels <= 4u; ++channels){
+        for(u32 y = 0u; y < 4u; ++y){
+            for(u32 x = 0u; x < 12u; ++x){
+                const usize offset = cast<usize>((y * 12u + x) * channels);
+                for(u32 channel = 0u; channel < channels; ++channel)
+                    sdfPixels[channels - 1u][offset + cast<usize>(channel)] = SmokeChannelUnorm8(channel, x);
+            }
+        }
+    }
+
+    const b8 atlasesCreated = CreateSmokeTextAtlasPages(arena, coveragePixels, sdfPixels, coverage, sdf);
+
+    ShapeRequest latinRequest();
+    latinRequest.text = "office ffi e\xCC\x81 gqyp";
+    latinRequest.fontSize = 22.0f;
+
+    ShapeRequest clippedRequest();
+    clippedRequest.text = "Clipped coverage label";
+    clippedRequest.fontSize = 22.0f;
+
+    ShapeRequest koreanRequest();
+    koreanRequest.text = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
+    koreanRequest.language = "ko";
+    koreanRequest.fontSize = 22.0f;
+    koreanRequest.scriptTag = PackFourCharTag('H', 'a', 'n', 'g');
+
+    const b8 configured = latin.setText(latinRequest) == TextLayoutStatus::Success
+        && clipped.setText(clippedRequest) == TextLayoutStatus::Success
+        && korean.setText(koreanRequest) == TextLayoutStatus::Success;
+    return configured && atlasesCreated;
+}
+
+Rect TextureSmokeUv(in f32 x, in f32 y, in f32 width){
+    const VectorSingle uv = VectorSingle(x, y, width, 24.0f) * VectorSingle(1.0f / 256.0f);
+    return Rect(uv.x, uv.y, uv.z, uv.w);
+}
+
+Rect TextureSmokeUv24(in f32 x, in f32 y){
+    return TextureSmokeUv(x, y, 24.0f);
+}
+
+void InitUiTextureImageSmokeSources(
+    mut GlobalArena arena,
+    mut AssetManager assets,
+    mut SharedImageSource defaultSource,
+    mut SharedImageSource alternateSource,
+    mut SharedImageSource replacementSource,
+    mut b8 sourcesValid
+){
+    LoadSmokeSkinImageSources(arena, assets, s_SmokeNameAlternateSkin, defaultSource, alternateSource);
+    replacementSource = defaultSource;
+    sourcesValid = SmokeImageSourceValid(defaultSource)
+        && SmokeImageSourceValid(alternateSource)
+        && SmokeImageSourceWidth(defaultSource) == 256u
+        && SmokeImageSourceHeight(defaultSource) == 256u
+        && SmokeImageSourceWidth(alternateSource) == 256u
+        && SmokeImageSourceHeight(alternateSource) == 256u
+        && SmokeImageSourceGeneration(defaultSource) != SmokeImageSourceGeneration(alternateSource);
+}
+
+b8 ReplaceUiTextureImageSmokeSource(
+    in SmokeArenaRef arenaRef,
+    in b8 replacementAlternate,
+    in SharedImageSource defaultSource,
+    in SharedImageSource alternateSource,
+    mut SharedImageSource replacementSource
+){
+    if(!SmokeImageSourceValid(defaultSource) || !SmokeImageSourceValid(alternateSource) || !SmokeImageSourceValid(replacementSource))
+        return false;
+    SharedImageSource payloadSource = alternateSource;
+    if(replacementAlternate)
+        payloadSource = defaultSource;
+    const SharedImageSource next = CloneSmokeImageSourcePayload(arenaRef, defaultSource, payloadSource);
+    if(!SmokeImageSourceValid(next))
+        return false;
+    const u64 nextGeneration = SmokeImageSourceGeneration(next);
+    if(
+        nextGeneration == SmokeImageSourceGeneration(replacementSource)
+        || nextGeneration == SmokeImageSourceGeneration(defaultSource)
+        || nextGeneration == SmokeImageSourceGeneration(alternateSource)
+        || SmokeImageSourceIdentityName(next) != SmokeImageSourceIdentityName(defaultSource)
+    )
+        return false;
+    replacementSource = next;
+    return true;
+}
+
+u64 ResetAndCheckNullSmokeImageSource(mut SharedImageSource source){
+    ResetSmokeImageSource(source);
+    if(!SmokeImageSourceValid(source))
+        return 1u;
+    return 0u;
+}
+
+void ReadSmokeTextureGenerations(
+    in SharedImageSource defaultSource,
+    in SharedImageSource alternateSource,
+    in SharedImageSource replacementSource,
+    mut Array<u64, 3u> generations,
+    mut u32 outSameIdentity
+){
+    generations[0u] = SmokeImageSourceGeneration(defaultSource);
+    generations[1u] = SmokeImageSourceGeneration(alternateSource);
+    generations[2u] = SmokeImageSourceGeneration(replacementSource);
+    outSameIdentity = 0u;
+    if(SmokeImageSourceIdentityName(replacementSource) == SmokeImageSourceIdentityName(defaultSource))
+        outSameIdentity = 1u;
+}
+
+Rect ResolveSmokeWindowButtonRect(in WindowState state, in WindowMetrics metrics){
+    const Rect content = ResolveWindowContentBounds(state, metrics);
+    const f32 originX = content.x + metrics.contentPadding.left;
+    const f32 originY = content.y + metrics.contentPadding.top;
+    const f32 buttonY = originY + s_UiWindowSmokeLabelHeight + s_UiWindowSmokeSeparatorHeight + 2.0f * s_UiWindowSmokeGap;
+    return Rect(originX, buttonY, s_UiWindowSmokeControlWidth, s_UiWindowSmokeControlHeight);
+}
+
+
+UiTextAreaSmokeScene::UiTextAreaSmokeScene(mut GlobalArena arena, mut IClipboardService clipboard){
+    this.m_clipboard = SmokeClipboardRef(clipboard);
+    this.m_model = EditModel(arena, EditLimits(), EditTextMode::Multiline);
+    this.m_observed = EditBoxView(arena);
+    this.m_completion = ClipboardCompletion(arena);
+    this.m_longText.reserve(1044u);
+    for(u32 line = 0u; line < 16u; ++line)
+        this.m_longText.append("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl\n");
+    this.m_longText.append("tail");
+    this.resetModel();
+}
+
+UiTextAreaSmokeScene::~UiTextAreaSmokeScene(){
+    CancelSmokeClipboardTokenOnExit(this.m_clipboard, this.m_clipboardToken);
+}
+
+b8 UiTextAreaSmokeScene::paint(mut UiPaintContext context){
+    if(!this.drainClipboard())
+        return false;
+    context.ui.style().fontSize = 16.0f;
+    context.ui.style().gap = 8.0f;
+    if(!context.ui.beginPanel("text_area_fixture", Rect(24.0f, 24.0f, 480.0f, 380.0f)))
+        return false;
+    const WidgetOptions title = MakeFixedHeightSmokeWidget(24.0f);
+    const WidgetOptions controller = MakeFixedSmokeWidget(112.0f, 30.0f);
+    if(!context.ui.label("title", "Multiline plain text", title) || !context.ui.beginRow("document_actions"))
+        return false;
+    if(context.ui.button("reset", "Reset", controller))
+        this.resetModel();
+    if(context.ui.button("long", "Long document", controller))
+        this.longDocument();
+    StringView readOnlyLabel = "Read only";
+    if(this.m_readOnly)
+        readOnlyLabel = "Editable";
+    if(context.ui.button("readonly", readOnlyLabel, controller))
+        this.m_readOnly = !this.m_readOnly;
+    if(!context.ui.endContainer() || !context.ui.beginRow("viewport_actions"))
+        return false;
+    StringView enabledLabel = "Enable";
+    if(this.m_enabled)
+        enabledLabel = "Disable";
+    if(context.ui.button("enabled", enabledLabel, controller))
+        this.m_enabled = !this.m_enabled;
+    StringView viewportLabel = "Small viewport";
+    if(this.m_compact)
+        viewportLabel = "Large viewport";
+    if(context.ui.button("viewport", viewportLabel, controller))
+        this.m_compact = !this.m_compact;
+    if(context.ui.button("clipboard", "Seed CRLF", controller) && !this.seedClipboard())
+        return false;
+    if(!context.ui.endContainer())
+        return false;
+    TextAreaOptions options();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 380.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 160.0f;
+    if(this.m_compact){
+        options.width.value = 120.0f;
+        options.height.value = 72.0f;
+    }
+    options.enabled = this.m_enabled;
+    options.readOnly = this.m_readOnly;
+    const EditBoxResult result = context.ui.textArea("document", this.m_model, this.m_state, options);
     if(!result.valid)
         return false;
-    m_submits += result.submitted ? 1u : 0u;
-    m_cancels += result.cancelled ? 1u : 0u;
-    m_blurs += result.blurred ? 1u : 0u;
-    m_abandons += result.abandoned ? 1u : 0u;
-    const WidgetOptions outside{ { LayoutSizePolicy::Fixed, 160.0f }, { LayoutSizePolicy::Fixed, 30.0f } };
-    if(ui.button("outside", "Outside focus", outside))
-        ++m_outside;
-    if(!ui.label("hint", "Enter: LF / Ctrl+Enter: submit") || !ui.endPanel())
+    if(result.submitted)
+        ++this.m_submits;
+    if(result.cancelled)
+        ++this.m_cancels;
+    if(result.blurred)
+        ++this.m_blurs;
+    if(result.abandoned)
+        ++this.m_abandons;
+    const WidgetOptions outside = MakeFixedSmokeWidget(160.0f, 30.0f);
+    if(context.ui.button("outside", "Outside focus", outside))
+        ++this.m_outside;
+    if(!context.ui.label("hint", "Enter: LF / Ctrl+Enter: submit") || !context.ui.endPanel())
         return false;
-    if(!observeState(context))
+    if(!this.observeState(context))
         return false;
-    paintMarkers(context);
+    this.paintMarkers(context);
     return true;
 }
 
 void UiTextAreaSmokeScene::resetModel(){
-    const b8 initialized = m_model.setText("abcdef\nx\nabcdef\n한국어") && m_model.setSelection(5u, 5u);
-    FOUNDATION_FATAL_ASSERT(initialized);
-    m_state.reset();
-    m_enabled = true;
-    m_readOnly = false;
-    m_compact = false;
-    m_longDocument = false;
+    const b8 initialized = this.m_model.setText("abcdef\nx\nabcdef\n한국어") && this.m_model.setSelection(5u, 5u);
+    [essential] assert(initialized, "UI text area smoke model reset must succeed");
+    this.m_state.reset();
+    this.m_enabled = true;
+    this.m_readOnly = false;
+    this.m_compact = false;
+    this.m_longDocument = false;
 }
 
 void UiTextAreaSmokeScene::longDocument(){
-    const b8 replaced = m_model.setText(m_longText) && m_model.setSelection(1039u, 1039u);
-    FOUNDATION_FATAL_ASSERT(replaced);
-    m_longDocument = true;
+    const b8 replaced = this.m_model.setText(StringView(this.m_longText)) && this.m_model.setSelection(1039u, 1039u);
+    [essential] assert(replaced, "UI text area smoke long document must succeed");
+    this.m_longDocument = true;
 }
 
 b8 UiTextAreaSmokeScene::seedClipboard(){
-    if(m_clipboardToken.valid() && !m_clipboard.cancel(m_clipboardToken))
-        return false;
-    m_clipboardToken = {};
-    const auto request = m_clipboard.requestWriteText(Core::ClipboardChannel::Clipboard, "ab\r\ncdef\r\nxy");
-    if(!request || !request->valid())
-        return false;
-    m_clipboardToken = *request;
-    return true;
+    return RequestSmokeClipboardSeed(this.m_clipboard, this.m_clipboardToken);
 }
 
 b8 UiTextAreaSmokeScene::drainClipboard(){
-    if(!m_clipboardToken.valid())
-        return true;
-    const auto status = m_clipboard.poll(m_clipboardToken, m_completion);
-    if(status == Core::ClipboardPollResult::Pending)
-        return true;
-    if(
-        status != Core::ClipboardPollResult::Completed || m_completion.token != m_clipboardToken
-        || m_completion.operation != Core::ClipboardOperation::WriteText
-        || m_completion.channel != Core::ClipboardChannel::Clipboard || m_completion.status != Core::ClipboardStatus::Success
-    )
+    b8 seeded = false;
+    if(!PollSmokeClipboardSeed(this.m_clipboard, this.m_clipboardToken, this.m_completion, seeded))
         return false;
-    m_clipboardToken = {};
-    ++m_clipboardSeeds;
+    if(seeded)
+        ++this.m_clipboardSeeds;
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard){
-    return SharedUiTextAreaSmokeScene(NewArenaObject<RefCounter<UiTextAreaSmokeScene>>(arena, arena, clipboard), ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_snapshot{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Array<TStringView, 16> s_RectNames = { FOUNDATION_TEXT("bounds"), FOUNDATION_TEXT("content"), FOUNDATION_TEXT("clip"), FOUNDATION_TEXT("caret"),
-    FOUNDATION_TEXT("reset"), FOUNDATION_TEXT("long"), FOUNDATION_TEXT("readonly"), FOUNDATION_TEXT("enabled"), FOUNDATION_TEXT("viewport"),
-    FOUNDATION_TEXT("clipboard"), FOUNDATION_TEXT("outside"), FOUNDATION_TEXT("x_track"), FOUNDATION_TEXT("x_thumb"), FOUNDATION_TEXT("y_track"),
-    FOUNDATION_TEXT("y_thumb"), FOUNDATION_TEXT("corner") };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    using namespace __hidden_ui_text_area_snapshot;
-    if(!m_observed.snapshot(m_model) || m_observed.shape(context.text, { .fontSize = 16.0f }) != TextLayoutStatus::Success)
+b8 UiTextAreaSmokeScene::observeState(mut UiPaintContext context){
+    const EditBoxPlacement placement = this.m_state.placement();
+    const ScrollViewportPlacement scrollbars = this.m_state.scrollbars();
+    UiTextAreaSnapshot current();
+    Rect localCaret();
+    u64 lineCount = 0u;
+    if(!ShapeAndExtractTextAreaSmokeGeometry(this.m_observed, this.m_model, context.text, context.display, placement, current, localCaret, lineCount))
         return false;
-    if(!m_observed.measure(context.text, context.display))
-        return false;
-    const EditBoxPlacement& placement = m_state.placement();
-    const ScrollViewportPlacement& scrollbars = m_state.scrollbars();
-    const auto& geometry = m_observed.caretGeometry();
-    const auto localCaret = geometry.caretRect(m_observed.displayCaret());
-    if(!localCaret || geometry.lines().size() > 32u)
-        return false;
-    UiTextAreaSnapshot current;
     current.display = context.display;
-    current.scroll = m_state.scroll();
-    // Scroll maxima use the measured visual envelope, including glyph overhang.
-    const Rect& visualBounds = m_observed.visualBounds();
-    current.measure = { visualBounds.width, visualBounds.height };
-    current.maximum = { static_cast<f32>(scrollbars.horizontal.maximum), static_cast<f32>(scrollbars.vertical.maximum) };
-    current.lineHeight = localCaret->height;
+    current.scroll = this.m_state.scroll();
+    const Rect visualBounds = this.m_observed.visualBounds();
+    current.measure = MakeSmokePoint(visualBounds.width, visualBounds.height);
+    current.maximum = MakeSmokePoint(cast<f32>(scrollbars.horizontal.maximum), cast<f32>(scrollbars.vertical.maximum));
+    current.lineHeight = localCaret.height;
     current.rectangles[0u] = placement.bounds;
     current.rectangles[1u] = placement.content;
     current.rectangles[2u] = placement.clip;
     current.rectangles[3u] = placement.caret;
-    const SIMDVectorSingle labelOrigin = VectorSet(placement.bounds.x, placement.bounds.y, 112.0f, 30.0f);
+    const VectorSingle labelOrigin(placement.bounds.x, placement.bounds.y, 112.0f, 30.0f);
     for(u32 index = 0u; index < 6u; ++index){
-        // Lanes are column step and row offset.
-        const SIMDVectorSingle lifted = VectorSubtract(labelOrigin, VectorSet(0.0f, index < 3u ? 76.0f : 38.0f, 0.0f, 0.0f));
-        current.rectangles[4u + index] = { VectorGetX(labelOrigin) + static_cast<f32>(index % 3u) * 120.0f, VectorGetY(lifted), VectorGetZ(lifted), VectorGetW(lifted) };
+        f32 liftY = 38.0f;
+        if(index < 3u)
+            liftY = 76.0f;
+        const VectorSingle lifted = labelOrigin - VectorSingle(0.0f, liftY, 0.0f, 0.0f);
+        current.rectangles[4u + cast<usize>(index)] = Rect(labelOrigin.x + cast<f32>(index % 3u) * 120.0f, lifted.y, lifted.z, lifted.w);
     }
-    current.rectangles[10u] = { placement.bounds.x, placement.bounds.y + placement.bounds.height + 8.0f, 160.0f, 30.0f };
+    current.rectangles[10u] = Rect(placement.bounds.x, placement.bounds.y + placement.bounds.height + 8.0f, 160.0f, 30.0f);
     current.rectangles[11u] = scrollbars.horizontal.track;
     current.rectangles[12u] = scrollbars.horizontal.thumb;
     current.rectangles[13u] = scrollbars.vertical.track;
     current.rectangles[14u] = scrollbars.vertical.thumb;
     current.rectangles[15u] = scrollbars.corner;
-    for(u32 index = 0u; index < geometry.lines().size(); ++index){
-        auto rectangle = geometry.rangeOnLine(m_observed.selectionRange(), index, placement.caret.width);
-        if(!rectangle)
-            return false;
-        if(rectangle->width == 0.0f)
-            continue;
-        rectangle->x += placement.textOrigin.x;
-        rectangle->y += placement.textOrigin.y;
-        current.selections[current.selectionCount++] = *rectangle;
-    }
-    const f32 caretErrorX = Abs((placement.caret.x - placement.textOrigin.x) - localCaret->x);
-    const f32 caretErrorY = Abs((placement.caret.y - placement.textOrigin.y) - localCaret->y);
+
+    const f32 caretErrorX = Abs((placement.caret.x - placement.textOrigin.x) - localCaret.x);
+    const f32 caretErrorY = Abs((placement.caret.y - placement.textOrigin.y) - localCaret.y);
     const b8 coherent = caretErrorX < 0.02f
         && caretErrorY < 0.02f
-        && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
-        && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
-        && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;
-    const auto& navigation = m_state.navigation();
-    current.values = { static_cast<u64>(m_model.text().size()), ComputeFnv32TextHash(m_model.text()), static_cast<u64>(m_model.anchor()),
-        static_cast<u64>(m_model.caret()), static_cast<u64>(m_state.focused()), static_cast<u64>(m_enabled),
-        static_cast<u64>(m_readOnly), static_cast<u64>(m_compact), static_cast<u64>(m_longDocument),
-        static_cast<u64>(navigation.hasPreferredX()), BitCast<u32>(navigation.preferredX()), m_submits, m_cancels, m_blurs,
-        m_abandons, m_outside, m_clipboardSeeds, static_cast<u64>(m_clipboardToken.valid()), m_model.revision(),
-        m_model.externalRevision(), m_model.selectionGeneration(), static_cast<u64>(coherent), geometry.lines().size(),
-        static_cast<u64>(m_model.canUndo()), static_cast<u64>(m_model.canRedo()) };
-    b8 changed = current.values != m_snapshot.values || current.selectionCount != m_snapshot.selectionCount
-        || current.scroll.x != m_snapshot.scroll.x || current.scroll.y != m_snapshot.scroll.y
-        || current.maximum.x != m_snapshot.maximum.x || current.maximum.y != m_snapshot.maximum.y
-        || current.measure.x != m_snapshot.measure.x || current.measure.y != m_snapshot.measure.y || current.lineHeight != m_snapshot.lineHeight;
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
-    for(usize index = 0u; index < current.selections.size(); ++index)
-        changed |= !SameSmokeRect(current.selections[index], m_snapshot.selections[index]);
-    const auto& previous = m_snapshot.display;
-    const b8 displayChanged = context.display.logicalWidth != previous.logicalWidth || context.display.logicalHeight != previous.logicalHeight || context.display.pixelScaleX != previous.pixelScaleX || context.display.pixelScaleY != previous.pixelScaleY;
-    if(m_snapshot.sequence != 0u && !changed && !displayChanged)
+        && current.scroll.x == placement.scroll
+        && current.scroll.y == placement.scrollY
+        && SameSmokeRect(placement.content, scrollbars.viewport)
+        && SameSmokeRect(placement.clip, scrollbars.contentClip)
+        && current.scroll.x == scrollbars.horizontal.offset
+        && current.scroll.y == scrollbars.vertical.offset;
+
+    current.values[0u] = cast<u64>(this.m_model.text().size());
+    current.values[1u] = cast<u64>(ComputeFnv32TextHash(this.m_model.text()));
+    current.values[2u] = cast<u64>(this.m_model.anchor());
+    current.values[3u] = cast<u64>(this.m_model.caret());
+    current.values[4u] = cast<u64>(this.m_state.focused());
+    current.values[5u] = cast<u64>(this.m_enabled);
+    current.values[6u] = cast<u64>(this.m_readOnly);
+    current.values[7u] = cast<u64>(this.m_compact);
+    current.values[8u] = cast<u64>(this.m_longDocument);
+    current.values[9u] = cast<u64>(this.m_state.navigation().hasPreferredX());
+    current.values[10u] = cast<u64>(bit_cast<u32>(this.m_state.navigation().preferredX()));
+    current.values[11u] = cast<u64>(this.m_submits);
+    current.values[12u] = cast<u64>(this.m_cancels);
+    current.values[13u] = cast<u64>(this.m_blurs);
+    current.values[14u] = cast<u64>(this.m_abandons);
+    current.values[15u] = cast<u64>(this.m_outside);
+    current.values[16u] = cast<u64>(this.m_clipboardSeeds);
+    current.values[17u] = cast<u64>(this.m_clipboardToken.valid());
+    current.values[18u] = this.m_model.revision();
+    current.values[19u] = this.m_model.externalRevision();
+    current.values[20u] = this.m_model.selectionGeneration();
+    current.values[21u] = cast<u64>(coherent);
+    current.values[22u] = lineCount;
+    current.values[23u] = cast<u64>(this.m_model.canUndo());
+    current.values[24u] = cast<u64>(this.m_model.canRedo());
+
+    const b8 changed = !SameSmokeU64Span(current.values, this.m_snapshot.values)
+        || current.selectionCount != this.m_snapshot.selectionCount
+        || current.scroll.x != this.m_snapshot.scroll.x
+        || current.scroll.y != this.m_snapshot.scroll.y
+        || current.maximum.x != this.m_snapshot.maximum.x
+        || current.maximum.y != this.m_snapshot.maximum.y
+        || current.measure.x != this.m_snapshot.measure.x
+        || current.measure.y != this.m_snapshot.measure.y
+        || current.lineHeight != this.m_snapshot.lineHeight
+        || !SameSmokeRectSpan(current.rectangles, this.m_snapshot.rectangles)
+        || !SameSmokeRectSpan(current.selections, this.m_snapshot.selections);
+    const DisplayMetrics previous = this.m_snapshot.display;
+    const b8 displayChanged = context.display.logicalWidth != previous.logicalWidth
+        || context.display.logicalHeight != previous.logicalHeight
+        || context.display.pixelScaleX != previous.pixelScaleX
+        || context.display.pixelScaleY != previous.pixelScaleY;
+    if(this.m_snapshot.sequence != 0u && !changed && !displayChanged)
         return true;
-    current.sequence = m_snapshot.sequence + 1u;
-    m_snapshot = current;
+    current.sequence = this.m_snapshot.sequence + 1u;
+    this.m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
+        [essential] info(
+            "UiTextAreaSmoke: display logical={}x{} scale={}x{}"
+            , current.display.logicalWidth
+            , current.display.logicalHeight
+            , current.display.pixelScaleX
+            , current.display.pixelScaleY
+        );
     }
-    const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
-        , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]
-        , value[10], value[11], value[12], value[13], value[14], value[15], value[16], value[17], value[18], value[19]
-        , value[20], value[21], value[22], value[23], value[24]
+    [essential] info(
+        "UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
+        , current.sequence
+        , current.values[0u]
+        , current.values[1u]
+        , current.values[2u]
+        , current.values[3u]
+        , current.values[4u]
+        , current.values[5u]
+        , current.values[6u]
+        , current.values[7u]
+        , current.values[8u]
+        , current.values[9u]
+        , current.values[10u]
+        , current.values[11u]
+        , current.values[12u]
+        , current.values[13u]
+        , current.values[14u]
+        , current.values[15u]
+        , current.values[16u]
+        , current.values[17u]
+        , current.values[18u]
+        , current.values[19u]
+        , current.values[20u]
+        , current.values[21u]
+        , current.values[22u]
+        , current.values[23u]
+        , current.values[24u]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}")
-        , current.sequence, current.scroll.x, current.scroll.y, current.measure.x, current.measure.y
-        , current.lineHeight, current.selectionCount, current.maximum.x, current.maximum.y
+    [essential] info(
+        "UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}"
+        , current.sequence
+        , current.scroll.x
+        , current.scroll.y
+        , current.measure.x
+        , current.measure.y
+        , current.lineHeight
+        , current.selectionCount
+        , current.maximum.x
+        , current.maximum.y
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(FOUNDATION_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(s_UiTextAreaSmokeTag, current.sequence, UiTextAreaSmokeRectName(index), current.rectangles[index]);
     for(u32 index = 0u; index < current.selectionCount; ++index){
-        const Rect& rectangle = current.selections[index];
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}"), current.sequence, index, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+        const Rect rectangle = current.selections[index];
+        [essential] info(
+            "UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}"
+            , current.sequence
+            , index
+            , rectangle.x
+            , rectangle.y
+            , rectangle.width
+            , rectangle.height
+        );
     }
     return true;
 }
 
-void UiTextAreaSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
+void UiTextAreaSmokeScene::paintMarkers(mut UiPaintContext context)const{
     const f32 y = context.display.logicalHeight - 18.0f;
     usize marker = 0u;
-    for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
-        const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
-        const u32 parts = index == 1u || index == 10u || (index >= 18u && index <= 20u) ? 3u : 2u;
+    for(usize index = 0u; index <= this.m_snapshot.values.size(); ++index){
+        u64 value = cast<u64>(this.m_snapshot.sequence);
+        if(index < this.m_snapshot.values.size())
+            value = this.m_snapshot.values[index];
+        u32 parts = 2u;
+        if(index == 1u || index == 10u || (index >= 18u && index <= 20u))
+            parts = 3u;
         for(u32 part = 0u; part < parts; ++part){
-            context.paint.fillRect({ static_cast<f32>(marker) * 8.0f + 8.0f, y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect(Rect(cast<f32>(marker) * 8.0f + 8.0f, y, 6.0f, 10.0f), EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }
@@ -418,117 +748,35 @@ void UiTextAreaSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_text_samples{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
-static constexpr StringView s_Korean = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
-static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<Impl::Ui::SharedGlyphPage> MakeCoveragePage(Core::Alloc::GlobalArena& arena){
-    const Impl::Ui::GlyphPageBinding binding{
-        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_samples::s_LatinFontPath),
-        .fontGeneration = 1u,
-        .atlasIdentity = s_CoverageAtlasIdentity,
-        .generation = 1u,
-        .index = static_cast<u32>(Impl::Ui::s_GlyphAtlasMaxPages - 1u),
-        .width = 12u,
-        .height = 4u
-    };
-    Impl::Ui::GlyphPage::Pixels pixels(arena);
-    pixels.resize(48u);
-    for(u32 y = 0u; y < binding.height; ++y){
-        for(u32 x = 0u; x < binding.width; ++x)
-            pixels[y * binding.width + x] = x < 4u ? 0u : (x < 8u ? 128u : 255u);
-    }
-    return Impl::Ui::CreateGlyphPage(arena, binding, Move(pixels));
+UiTextSmokeSamples::UiTextSmokeSamples(mut GlobalArena arena){
+    this.m_latin = Label(arena);
+    this.m_korean = Label(arena);
+    this.m_clipped = Label(arena);
+    const b8 ok = InitUiTextSmokeSamples(arena, this.m_latin, this.m_korean, this.m_clipped, this.m_coverage, this.m_sdf);
+    [essential] assert(ok, "UI smoke text, coverage, and compact SDF fixtures must be valid");
 }
 
-[[nodiscard]] static Expected<Impl::Ui::SharedSdfAtlasPage> MakeSdfPage(Core::Alloc::GlobalArena& arena, const u32 channelCount){
-    const Impl::Ui::SdfAtlasPageBinding binding{
-        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_samples::s_LatinFontPath),
-        .fontSha256 = {},
-        .pixelsSha256 = {},
-        .fontGeneration = 1u,
-        .atlasIdentity = s_CoverageAtlasIdentity,
-        .generation = 1u,
-        .index = channelCount - 1u,
-        .width = 12u,
-        .height = 4u,
-        .channelCount = channelCount,
-        .spreadPixels = 8u
-    };
-    Impl::Ui::SdfAtlasPage::Pixels pixels(arena);
-    pixels.resize(12u * 4u * channelCount);
-    for(u32 y = 0u; y < binding.height; ++y){
-        for(u32 x = 0u; x < binding.width; ++x){
-            const usize offset = (y * binding.width + x) * channelCount;
-            for(u32 channel = 0u; channel < channelCount; ++channel)
-                pixels[offset + channel] = channel == 3u ? (x < 4u ? 0u : (x < 8u ? 128u : 255u)) : (channel == 0u ? 0u : (channel == 1u ? 128u : 255u));
-        }
-    }
-    return Impl::Ui::CreateSdfAtlasPage(arena, binding, Move(pixels));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
-    : m_latin(arena)
-    , m_korean(arena)
-    , m_clipped(arena)
-{
-    auto coverageResult = __hidden_ui_text_samples::MakeCoveragePage(arena);
-    if(coverageResult)
-        m_coverage = Move(*coverageResult);
-    for(u32 channels = 1u; channels <= 4u; ++channels){
-        auto pageResult = __hidden_ui_text_samples::MakeSdfPage(arena, channels);
-        if(pageResult)
-            m_sdf[channels - 1u] = Move(*pageResult);
-    }
-    const b8 configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
-        && m_korean.setText({ .text = __hidden_ui_text_samples::s_Korean, .language = "ko", .fontSize = 22.0f, .scriptTag = ::PackFourCharTag('H', 'a', 'n', 'g') }) == Impl::Ui::TextLayoutStatus::Success;
-    FOUNDATION_FATAL_ASSERT_MSG(configured && m_coverage, FOUNDATION_TEXT("UI smoke text and coverage fixture must be valid"));
-    for(const Impl::Ui::SharedSdfAtlasPage& page : m_sdf)
-        FOUNDATION_FATAL_ASSERT_MSG(page, FOUNDATION_TEXT("UI smoke compact SDF fixtures must be valid"));
-}
-
-b8 UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
-    Impl::Ui::PaintBuilder& paint = context.paint;
-    // Lanes are width, height, width and height of the display.
-    const SIMDVectorSingle extent = VectorSet(context.display.logicalWidth, context.display.logicalHeight, context.display.logicalWidth, context.display.logicalHeight);
-    if(!m_latin.paint(context.text, paint, Impl::Ui::StoreRect(VectorMultiply(extent, VectorSet(0.04f, 0.80f, 0.28f, 0.075f)))) || !m_korean.paint(context.text, paint, Impl::Ui::StoreRect(VectorMultiply(extent, VectorSet(0.04f, 0.875f, 0.28f, 0.075f)))))
+b8 UiTextSmokeSamples::paint(mut UiPaintContext context){
+    const VectorSingle extent(context.display.logicalWidth, context.display.logicalHeight, context.display.logicalWidth, context.display.logicalHeight);
+    if(
+        !this.m_latin.paint(context.text, context.paint, StoreRect(extent * VectorSingle(0.04f, 0.80f, 0.28f, 0.075f)))
+        || !this.m_korean.paint(context.text, context.paint, StoreRect(extent * VectorSingle(0.04f, 0.875f, 0.28f, 0.075f)))
+        || !this.m_clipped.paint(context.text, context.paint, StoreRect(extent * VectorSingle(0.34f, 0.82f, 0.21f, 0.08f)))
+    )
         return false;
 
-    if(!m_clipped.paint(context.text, paint, Impl::Ui::StoreRect(VectorMultiply(extent, VectorSet(0.34f, 0.82f, 0.21f, 0.08f)))))
-        return false;
-
-    const Impl::Ui::Color tint{ 1.0f, 0.2f, 0.6f, 0.5f };
+    const Color tint(1.0f, 0.2f, 0.6f, 0.5f);
     for(u32 i = 0u; i < 3u; ++i){
-        const SIMDVectorSingle factors = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(i), 0.0f, 0.0f, 0.0f), VectorSet(0.08f, 0.0f, 0.0f, 0.0f), VectorSet(0.64f, 0.84f, 0.05f, 0.06f));
-        const Impl::Ui::Rect rectangle = Impl::Ui::StoreRect(VectorMultiply(extent, factors));
-        const Impl::Ui::Rect uv{ static_cast<f32>(i) / 3.0f, 0.0f, 1.0f / 3.0f, 1.0f };
-        if(!paint.drawGlyph(m_coverage, rectangle, uv, tint))
+        const VectorSingle factors = VectorSingle(cast<f32>(i), 0.0f, 0.0f, 0.0f) * VectorSingle(0.08f, 0.0f, 0.0f, 0.0f) + VectorSingle(0.64f, 0.84f, 0.05f, 0.06f);
+        const Rect rectangle = StoreRect(extent * factors);
+        const Rect uv(cast<f32>(i) / 3.0f, 0.0f, 1.0f / 3.0f, 1.0f);
+        if(!context.paint.drawGlyph(this.m_coverage, rectangle, uv, tint))
             return false;
     }
     for(u32 channel = 0u; channel < 4u; ++channel){
-        const SIMDVectorSingle factors = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(channel), 0.0f, 0.0f, 0.0f), VectorSet(0.08f, 0.0f, 0.0f, 0.0f), VectorSet(0.64f, 0.94f, 0.05f, 0.045f));
-        const Impl::Ui::Rect rectangle = Impl::Ui::StoreRect(VectorMultiply(extent, factors));
-        if(!paint.drawSdfGlyph(m_sdf[channel], channel, rectangle, { 0.f, 0.f, 1.f, 1.f }, { 0.2f, 1.f, 0.4f, 0.5f }))
+        const VectorSingle factors = VectorSingle(cast<f32>(channel), 0.0f, 0.0f, 0.0f) * VectorSingle(0.08f, 0.0f, 0.0f, 0.0f) + VectorSingle(0.64f, 0.94f, 0.05f, 0.045f);
+        const Rect rectangle = StoreRect(extent * factors);
+        if(!context.paint.drawSdfGlyph(this.m_sdf[channel], channel, rectangle, Rect(0.0f, 0.0f, 1.0f, 1.0f), Color(0.2f, 1.0f, 0.4f, 0.5f)))
             return false;
     }
     return true;
@@ -538,538 +786,471 @@ b8 UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedUiTextSmokeSamples CreateUiTextSmokeSamples(Core::Alloc::GlobalArena& arena){
-    return SharedUiTextSmokeSamples(NewArenaObject<RefCounter<UiTextSmokeSamples>>(arena, arena), ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+UiTextureImageSmokeScene::UiTextureImageSmokeScene(mut GlobalArena arena, mut AssetManager assets){
+    this.m_arena = SmokeArenaRef(arena);
+    InitUiTextureImageSmokeSources(arena, assets, this.m_default, this.m_alternate, this.m_replacement, this.m_sourcesValid);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_texture_image_scene{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_AlternateSkinNickname = NWB::Tests::Smoke::s_SmokeNameAlternateSkin;
-inline constexpr TStringView s_OwnerName = FOUNDATION_TEXT("UiTextureImageSmokeScene");
-static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<Impl::Ui::SharedImageSource> LoadSkinImageSource(
-    Core::Alloc::GlobalArena& arena,
-    Core::Assets::AssetManager& assets,
-    const Core::Assets::AssetRef<Impl::UiSkin>& skinRef
-){
-    if(!skinRef.valid())
-        return MakeUnexpected(Failure{});
-    const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), s_OwnerName);
-    if(!skin || !*skin || !(*skin)->texture().valid())
-        return MakeUnexpected(Failure{});
-    return Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
-}
-
-[[nodiscard]] static Impl::Ui::Rect TextureUv(const f32 x, const f32 y, const f32 width = 24.0f)noexcept{
-    const SIMDVectorSingle uv = VectorScale(VectorSet(x, y, width, 24.0f), 1.0f / 256.0f);
-    return { VectorGetX(uv), VectorGetY(uv), VectorGetZ(uv), VectorGetW(uv) };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets)
-    : m_arena(arena)
-    , m_input(input)
-{
-    using namespace __hidden_ui_texture_image_scene;
-    Impl::ActiveSceneSubsystems sceneSubsystems(arena);
-    if(sceneSubsystems.loadProjectStartScene(assets)){
-        if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
-            auto defaultSource = LoadSkinImageSource(arena, assets, uiSubsystem->basicSkin);
-            if(defaultSource)
-                m_default = Move(*defaultSource);
-        }
-        auto alternateSource = LoadSkinImageSource(arena, assets, sceneSubsystems.findSceneAsset<Impl::UiSkin>(s_AlternateSkinNickname));
-        if(alternateSource)
-            m_alternate = Move(*alternateSource);
-    }
-    m_replacement = m_default;
-    m_sourcesValid = m_default && m_alternate && m_default->texture().width() == 256u
-        && m_default->texture().height() == 256u && m_alternate->texture().width() == 256u
-        && m_alternate->texture().height() == 256u && m_default->generation() != m_alternate->generation();
-    m_input.addHandlerToBack(*this);
-}
-
-UiTextureImageSmokeScene::~UiTextureImageSmokeScene()noexcept{
-    m_input.removeHandler(*this);
-}
-
-b8 UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
-    if(!m_sourcesValid)
+b8 UiTextureImageSmokeScene::paint(mut UiPaintContext context){
+    if(!this.m_sourcesValid)
         return false;
-    if(m_evictionRemaining != 0u){
-        if(!replaceVersion()){
-            m_sourcesValid = false;
+    if(this.m_evictionRemaining != 0u){
+        if(!this.replaceVersion()){
+            this.m_sourcesValid = false;
             return false;
         }
-        --m_evictionRemaining;
-        ++m_evictionCompleted;
+        --this.m_evictionRemaining;
+        ++this.m_evictionCompleted;
     }
-    auto& ui = context.ui;
-    ui.style().fontSize = 14.0f;
-    ui.style().gap = 8.0f;
-    m_declared = {};
+    context.ui.style().fontSize = 14.0f;
+    context.ui.style().gap = 8.0f;
+    this.m_declared = UiTextureImageSnapshot();
     const PassiveSmokeColumns columns = ResolvePassiveSmokeColumns(context.display);
     const f32 width = columns.mainWidth;
     const f32 right = columns.rightColumn;
     const f32 otherWidth = columns.rightWidth;
-    if(!paintControls(ui, { 24.0f, 24.0f, width, 112.0f }) || !paintImages(context, width, right, otherWidth) || !paintBuilderImages(ui, { right, 24.0f, otherWidth, 112.0f }) || !paintPopups(context, right) || ui.failed())
+    if(
+        !this.paintControls(context.ui, Rect(24.0f, 24.0f, width, 112.0f))
+        || !this.paintImages(context, width, right, otherWidth)
+        || !this.paintBuilderImages(context.ui, Rect(right, 24.0f, otherWidth, 112.0f))
+        || !this.paintPopups(context, right)
+        || context.ui.failed()
+    )
         return false;
-    observeState(context);
-    paintMarkers(context);
+    this.observeState(context);
+    this.paintMarkers(context);
     return true;
 }
 
-::NWB::Core::KeyboardInputResult UiTextureImageSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
-    if(key != Core::Key::F4 && key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
+b8 UiTextureImageSmokeScene::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
+    if(key != s_SmokeKeyF4 && key != s_SmokeKeyF5 && key != s_SmokeKeyF6 && key != s_SmokeKeyF7)
         return false;
-    if(action != Core::InputAction::Press)
+    if(action != s_SmokeActionPress)
         return true;
-    if(key == Core::Key::F4)
-        m_phase = !m_phase;
-    else if(key == Core::Key::F6)
-        m_sourcesValid = replaceVersion();
-    else if(key == Core::Key::F7){
-        m_evictionRemaining = 72u;
-        m_evictionCompleted = 0u;
+    if(key == s_SmokeKeyF4){
+        this.m_phase = !this.m_phase;
     }
-    else if(m_parent.isOpen()){
-        m_child.close();
-        m_parent.close();
+    else if(key == s_SmokeKeyF6){
+        this.m_sourcesValid = this.replaceVersion();
+    }
+    else if(key == s_SmokeKeyF7){
+        this.m_evictionRemaining = 72u;
+        this.m_evictionCompleted = 0u;
+    }
+    else if(this.m_parent.isOpen()){
+        this.m_child.close();
+        this.m_parent.close();
     }
     else{
-        m_parent.open();
-        m_child.open();
+        this.m_parent.open();
+        this.m_child.open();
     }
     return true;
 }
 
 b8 UiTextureImageSmokeScene::replaceVersion(){
-    if(!m_default || !m_alternate || !m_replacement)
+    if(!ReplaceUiTextureImageSmokeSource(this.m_arena, this.m_replacementAlternate, this.m_default, this.m_alternate, this.m_replacement))
         return false;
-    const Impl::Texture& payload = m_replacementAlternate ? m_default->texture() : m_alternate->texture();
-    Impl::Texture replacement(m_arena, m_default->identity().name());
-    Impl::Texture::MipLevelVector mipLevels(m_arena);
-    mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
-    Core::Assets::AssetBytes bytes(m_arena);
-    bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
-    replacement.setPayload(payload.width(), payload.height(), Move(mipLevels), Move(bytes), payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8());
-    auto nextSource = Impl::Ui::MakeImageSource(m_arena, replacement);
-    if(!nextSource)
-        return false;
-    Impl::Ui::SharedImageSource next = Move(*nextSource);
-    if(!next || next->generation() == m_replacement->generation() || next->generation() == m_default->generation() || next->generation() == m_alternate->generation() || next->identity().name() != m_default->identity().name())
-        return false;
-    m_replacement = Move(next);
-    ++m_replacementCount;
-    m_replacementAlternate = !m_replacementAlternate;
+    ++this.m_replacementCount;
+    this.m_replacementAlternate = !this.m_replacementAlternate;
     return true;
 }
 
-b8 UiTextureImageSmokeScene::paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
-    using namespace Impl::Ui;
+b8 UiTextureImageSmokeScene::paintControls(mut Builder ui, in Rect bounds){
     if(!ui.beginPanel("texture_image_controls", bounds))
         return false;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
+    const WidgetOptions caption = MakeFixedHeightSmokeWidget(16.0f);
+    const WidgetOptions button = MakeStretchWidthSmokeWidget(28.0f);
     if(!ui.label("title", "Owned engine textures / mixed images and skin", caption))
         return false;
     if(ui.button("before", "Before passive engine images", button))
-        ++m_beforeClicks;
+        ++this.m_beforeClicks;
     if(ui.button("after", "After passive engine images", button))
-        ++m_afterClicks;
+        ++this.m_afterClicks;
     return ui.endPanel();
 }
 
-b8 UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const f32 width, const f32 right, const f32 otherWidth){
-    using namespace Impl::Ui;
-    using namespace __hidden_ui_texture_image_scene;
-    auto& paint = context.paint;
-    paint.fillRect({ 24.0f, 152.0f, width, 288.0f }, s_Backdrop);
-    paint.fillRect({ right, 152.0f, otherWidth, 288.0f }, s_Backdrop);
-    auto& rectangles = m_declared.rectangles;
-    rectangles[2u] = { 32.0f, 168.0f, 96.0f, 64.0f };
-    rectangles[3u] = { 140.0f, 168.0f, 96.0f, 64.0f };
-    rectangles[4u] = { 248.0f, 168.0f, 96.0f, 64.0f };
-    rectangles[5u] = { 32.0f, 240.0f, 96.0f, 32.0f };
-    // Lanes are column x, column width and half column width.
-    const SIMDVectorSingle column = VectorMultiply(VectorAdd(VectorSet(right, otherWidth, otherWidth, 0.0f), VectorSet(8.0f, -16.0f, -16.0f, 0.0f)), VectorSet(1.0f, 1.0f, 0.5f, 1.0f));
-    const f32 columnX = VectorGetX(column);
-    const f32 columnWidth = VectorGetY(column);
-    rectangles[6u] = { columnX, 168.0f, columnWidth, 64.0f };
-    rectangles[7u] = { columnX, 240.0f, columnWidth, 32.0f };
-    rectangles[8u] = { columnX, 240.0f, VectorGetZ(column), 32.0f };
-    rectangles[9u] = { 32.0f, 280.0f, 256.0f, 128.0f };
-    rectangles[10u] = { columnX, 280.0f, 256.0f, 128.0f };
-    rectangles[11u] = { columnX, 416.0f, columnWidth, 24.0f };
+b8 UiTextureImageSmokeScene::paintImages(mut UiPaintContext context, in f32 width, in f32 right, in f32 otherWidth){
+    const Color backdrop(0.07f, 0.13f, 0.2f, 1.0f);
+    context.paint.fillRect(Rect(24.0f, 152.0f, width, 288.0f), backdrop);
+    context.paint.fillRect(Rect(right, 152.0f, otherWidth, 288.0f), backdrop);
+    this.m_declared.rectangles[2u] = Rect(32.0f, 168.0f, 96.0f, 64.0f);
+    this.m_declared.rectangles[3u] = Rect(140.0f, 168.0f, 96.0f, 64.0f);
+    this.m_declared.rectangles[4u] = Rect(248.0f, 168.0f, 96.0f, 64.0f);
+    this.m_declared.rectangles[5u] = Rect(32.0f, 240.0f, 96.0f, 32.0f);
+    const VectorSingle column = (VectorSingle(right, otherWidth, otherWidth, 0.0f) + VectorSingle(8.0f, -16.0f, -16.0f, 0.0f)) * VectorSingle(1.0f, 1.0f, 0.5f, 1.0f);
+    const f32 columnX = column.x;
+    const f32 columnWidth = column.y;
+    this.m_declared.rectangles[6u] = Rect(columnX, 168.0f, columnWidth, 64.0f);
+    this.m_declared.rectangles[7u] = Rect(columnX, 240.0f, columnWidth, 32.0f);
+    this.m_declared.rectangles[8u] = Rect(columnX, 240.0f, column.z, 32.0f);
+    this.m_declared.rectangles[9u] = Rect(32.0f, 280.0f, 256.0f, 128.0f);
+    this.m_declared.rectangles[10u] = Rect(columnX, 280.0f, 256.0f, 128.0f);
+    this.m_declared.rectangles[11u] = Rect(columnX, 416.0f, columnWidth, 24.0f);
     if(
-        !paint.drawImage(m_default, rectangles[2u], TextureUv(4.0f, 4.0f))
-        || !paint.drawImage(m_alternate, rectangles[3u], TextureUv(196.0f, 100.0f))
-        || !paint.drawImage(m_default, rectangles[4u], TextureUv(4.0f, 132.0f), { 0.4f, 0.7f, 0.9f, 0.5f })
-        || !paint.drawImage(m_default, rectangles[5u], TextureUv(4.0f, 4.0f), { 1.0f, 1.0f, 1.0f, 0.0f })
+        !context.paint.drawImage(this.m_default, this.m_declared.rectangles[2u], TextureSmokeUv24(4.0f, 4.0f))
+        || !context.paint.drawImage(this.m_alternate, this.m_declared.rectangles[3u], TextureSmokeUv24(196.0f, 100.0f))
+        || !context.paint.drawImage(this.m_default, this.m_declared.rectangles[4u], TextureSmokeUv24(4.0f, 132.0f), Color(0.4f, 0.7f, 0.9f, 0.5f))
+        || !context.paint.drawImage(this.m_default, this.m_declared.rectangles[5u], TextureSmokeUv24(4.0f, 4.0f), Color(1.0f, 1.0f, 1.0f, 0.0f))
     )
         return false;
-    SharedImageSource declaredSource = m_phase ? m_alternate : m_replacement;
-    Rect rectangle = rectangles[6u];
-    Rect uv = m_phase ? TextureUv(196.0f, 100.0f) : TextureUv(4.0f, 4.0f);
-    Color tint = m_phase ? Color{ 0.5f, 0.75f, 1.0f, 0.5f } : Color{};
-    m_declared.values[8u] = m_phase ? 2u : 1u;
-    if(!paint.drawImage(declaredSource, rectangle, uv, tint))
+    SharedImageSource declaredSource = this.m_replacement;
+    Rect rectangle = this.m_declared.rectangles[6u];
+    Rect uv = TextureSmokeUv24(4.0f, 4.0f);
+    Color tint();
+    u64 declaredCode = 1u;
+    if(this.m_phase){
+        declaredSource = this.m_alternate;
+        uv = TextureSmokeUv24(196.0f, 100.0f);
+        tint = Color(0.5f, 0.75f, 1.0f, 0.5f);
+        declaredCode = 2u;
+    }
+    this.m_declared.values[8u] = declaredCode;
+    if(!context.paint.drawImage(declaredSource, rectangle, uv, tint))
         return false;
-    declaredSource = m_phase ? m_default : m_alternate;
-    declaredSource.reset();
-    rectangle = { 0.0f, 0.0f, 1.0f, 1.0f };
-    uv = { 0.0f, 0.0f, 1.0f, 1.0f };
-    tint = { 0.0f, 0.0f, 0.0f, 1.0f };
-    m_declared.values[9u] = static_cast<u64>(!declaredSource);
-    paint.pushClip(rectangles[8u]);
-    const b8 clipped = paint.drawImage(m_default, rectangles[7u], TextureUv(16.0f, 4.0f, 12.0f));
-    const b8 popped = paint.popClip();
+    if(this.m_phase)
+        declaredSource = this.m_default;
+    else
+        declaredSource = this.m_alternate;
+    const u64 clearedNull = ResetAndCheckNullSmokeImageSource(declaredSource);
+    rectangle = Rect(0.0f, 0.0f, 1.0f, 1.0f);
+    uv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
+    tint = Color(0.0f, 0.0f, 0.0f, 1.0f);
+    this.m_declared.values[9u] = clearedNull;
+    context.paint.pushClip(this.m_declared.rectangles[8u]);
+    const b8 clipped = context.paint.drawImage(this.m_default, this.m_declared.rectangles[7u], TextureSmokeUv(16.0f, 4.0f, 12.0f));
+    const b8 popped = context.paint.popClip();
     if(!clipped || !popped)
         return false;
-    return paint.drawImage(m_default, rectangles[9u]) && paint.drawImage(m_alternate, rectangles[10u]) && paint.drawRegion(Name(s_UiSmokeNameProgressFill), rectangles[11u]);
+    return context.paint.drawImage(this.m_default, this.m_declared.rectangles[9u])
+        && context.paint.drawImage(this.m_alternate, this.m_declared.rectangles[10u])
+        && context.paint.drawRegion(s_UiSmokeNameProgressFill, this.m_declared.rectangles[11u]);
 }
 
-b8 UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
-    using namespace Impl::Ui;
+b8 UiTextureImageSmokeScene::paintBuilderImages(mut Builder ui, in Rect bounds){
     if(!ui.beginPanel("texture_image_builder", bounds))
         return false;
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 80.0f };
-    options.tint = m_phase ? Color{ 0.5f, 0.75f, 1.0f, 0.5f } : Color{};
-    SharedImageSource source = m_phase ? m_alternate : m_replacement;
-    const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 80.0f));
-    m_declared.rectangles[16u] = { VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) };
-    m_declared.values[14u] = m_phase ? 2u : 1u;
+    ImageOptions options();
+    options.width.policy = LayoutSizePolicy::Stretch;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 80.0f;
+    options.tint = Color();
+    SharedImageSource source = this.m_replacement;
+    u64 builderCode = 1u;
+    if(this.m_phase){
+        options.tint = Color(0.5f, 0.75f, 1.0f, 0.5f);
+        source = this.m_alternate;
+        builderCode = 2u;
+    }
+    const VectorSingle content = VectorSingle(bounds.x, bounds.y, bounds.width, 0.0f) + VectorSingle(8.0f, 8.0f, -16.0f, 80.0f);
+    this.m_declared.rectangles[16u] = Rect(content.x, content.y, content.z, content.w);
+    this.m_declared.values[14u] = builderCode;
     if(!ui.image("owned_source", source, options))
         return false;
-    source = m_phase ? m_default : m_alternate;
-    source.reset();
-    options.width = { LayoutSizePolicy::Fixed, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 1.0f };
-    options.tint = { 0.0f, 0.0f, 0.0f, 1.0f };
-    m_declared.values[15u] = static_cast<u64>(!source);
+    if(this.m_phase)
+        source = this.m_default;
+    else
+        source = this.m_alternate;
+    const u64 clearedNull = ResetAndCheckNullSmokeImageSource(source);
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 1.0f;
+    options.tint = Color(0.0f, 0.0f, 0.0f, 1.0f);
+    this.m_declared.values[15u] = clearedNull;
     return ui.endPanel();
 }
 
-b8 UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const f32 right){
-    using namespace Impl::Ui;
-    auto& ui = context.ui;
-    PopupOptions parent;
-    parent.anchor = { right, 300.0f, 8.0f, 24.0f };
-    parent.size = { 280.0f, 128.0f };
-    if(!ui.beginPopup("texture_image_parent", m_parent, parent))
-        return !ui.failed();
-    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    if(ui.button("parent_action", "Parent action", button))
-        m_parent.close();
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 64.0f };
-    SharedImageSource source = m_alternate;
-    if(!ui.image("parent_source", source, options))
+b8 UiTextureImageSmokeScene::paintPopups(mut UiPaintContext context, in f32 right){
+    PopupOptions parent();
+    parent.anchor = Rect(right, 300.0f, 8.0f, 24.0f);
+    parent.size = MakeSmokePoint(280.0f, 128.0f);
+    if(!context.ui.beginPopup("texture_image_parent", this.m_parent, parent))
+        return !context.ui.failed();
+    const WidgetOptions button = MakeStretchWidthSmokeWidget(28.0f);
+    if(context.ui.button("parent_action", "Parent action", button))
+        this.m_parent.close();
+    ImageOptions options();
+    options.width.policy = LayoutSizePolicy::Stretch;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 64.0f;
+    SharedImageSource source = this.m_alternate;
+    if(!context.ui.image("parent_source", source, options))
         return false;
-    source.reset();
-    PopupOptions child;
-    child.anchor = { right + 100.0f, 370.0f, 8.0f, 16.0f };
-    child.size = { 240.0f, 128.0f };
-    if(ui.beginPopup("texture_image_child", m_child, child)){
-        source = m_default;
-        options.tint = { 0.5f, 1.0f, 0.5f, 0.75f };
-        if(!ui.image("child_source", source, options))
+    const u64 ignoredParentReset = ResetAndCheckNullSmokeImageSource(source);
+    PopupOptions child();
+    child.anchor = Rect(right + 100.0f, 370.0f, 8.0f, 16.0f);
+    child.size = MakeSmokePoint(240.0f, 128.0f);
+    if(context.ui.beginPopup("texture_image_child", this.m_child, child)){
+        source = this.m_default;
+        options.tint = Color(0.5f, 1.0f, 0.5f, 0.75f);
+        if(!context.ui.image("child_source", source, options))
             return false;
-        source.reset();
-        if(ui.button("child_action", "Child action", button))
-            m_child.close();
-        if(!ui.endPopup())
+        const u64 ignoredChildReset = ResetAndCheckNullSmokeImageSource(source);
+        if(context.ui.button("child_action", "Child action", button))
+            this.m_child.close();
+        if(!context.ui.endPopup())
             return false;
+        [essential] assert(ignoredChildReset == 1u, "Child popup image source reset must clear local handle");
     }
-    options.width = { LayoutSizePolicy::Fixed, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 1.0f };
-    options.tint = { 0.0f, 0.0f, 0.0f, 1.0f };
-    if(ui.failed() || !ui.endPopup())
+    [essential] assert(ignoredParentReset == 1u, "Parent popup image source reset must clear local handle");
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 1.0f;
+    options.tint = Color(0.0f, 0.0f, 0.0f, 1.0f);
+    if(context.ui.failed() || !context.ui.endPopup())
         return false;
-    m_declared.rectangles[14u] = m_parent.placement().bounds;
-    const Rect& parentBounds = m_declared.rectangles[14u];
-    const SIMDVectorSingle parentRow = VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 64.0f));
-    m_declared.rectangles[12u] = { VectorGetX(parentRow), VectorGetY(parentRow), VectorGetZ(parentRow), VectorGetW(parentRow) };
-    if(m_child.isOpen()){
-        m_declared.rectangles[15u] = m_child.placement().bounds;
-        const Rect& childBounds = m_declared.rectangles[15u];
-        const SIMDVectorSingle childRow = VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 64.0f));
-        m_declared.rectangles[13u] = { VectorGetX(childRow), VectorGetY(childRow), VectorGetZ(childRow), VectorGetW(childRow) };
+    this.m_declared.rectangles[14u] = this.m_parent.placement().bounds;
+    const Rect parentBounds = this.m_declared.rectangles[14u];
+    const VectorSingle parentRow = VectorSingle(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f) + VectorSingle(8.0f, 44.0f, -16.0f, 64.0f);
+    this.m_declared.rectangles[12u] = Rect(parentRow.x, parentRow.y, parentRow.z, parentRow.w);
+    if(this.m_child.isOpen()){
+        this.m_declared.rectangles[15u] = this.m_child.placement().bounds;
+        const Rect childBounds = this.m_declared.rectangles[15u];
+        const VectorSingle childRow = VectorSingle(childBounds.x, childBounds.y, childBounds.width, 0.0f) + VectorSingle(8.0f, 8.0f, -16.0f, 64.0f);
+        this.m_declared.rectangles[13u] = Rect(childRow.x, childRow.y, childRow.z, childRow.w);
     }
     // Both late base commands must remain beneath the actual deferred Builder popup chrome and source images.
-    context.paint.fillRect(m_declared.rectangles[12u], { 0.8f, 0.0f, 0.0f, 1.0f });
-    if(m_child.isOpen())
-        context.paint.fillRect(m_declared.rectangles[13u], { 0.0f, 0.0f, 0.8f, 1.0f });
+    context.paint.fillRect(this.m_declared.rectangles[12u], Color(0.8f, 0.0f, 0.0f, 1.0f));
+    if(this.m_child.isOpen())
+        context.paint.fillRect(this.m_declared.rectangles[13u], Color(0.0f, 0.0f, 0.8f, 1.0f));
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets){
-    return SharedUiTextureImageSmokeScene(NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets), ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_texture_image_snapshot{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Array<TStringView, 17u> s_RectNames{
-    FOUNDATION_TEXT("before"), FOUNDATION_TEXT("after"), FOUNDATION_TEXT("default_tile"), FOUNDATION_TEXT("alternate_tile"), FOUNDATION_TEXT("tinted"),
-    FOUNDATION_TEXT("zero_alpha"), FOUNDATION_TEXT("frozen"), FOUNDATION_TEXT("external"), FOUNDATION_TEXT("external_clip"),
-    FOUNDATION_TEXT("default_atlas"), FOUNDATION_TEXT("alternate_atlas"), FOUNDATION_TEXT("skin_fill"), FOUNDATION_TEXT("parent_image"),
-    FOUNDATION_TEXT("child_image"), FOUNDATION_TEXT("parent"), FOUNDATION_TEXT("child"), FOUNDATION_TEXT("builder_image")
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    using namespace __hidden_ui_texture_image_snapshot;
-    UiTextureImageSnapshot current = m_declared;
+void UiTextureImageSmokeScene::observeState(mut UiPaintContext context){
+    UiTextureImageSnapshot current = this.m_declared;
     current.display = context.display;
-    const InputRouter& input = context.ui.input();
-    const auto observation = ObservePassiveSmokeTargets(
-        input, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(),
-        [](const usize index)noexcept{ return index != 8u && index != 14u && index != 15u; }, current.rectangles
+    const PassiveSmokeTargetObservation observation = ObservePassiveSmokeTargets(
+        context.ui.input(),
+        this.m_parent.instanceGeneration(),
+        this.m_child.instanceGeneration(),
+        2u,
+        current.rectangles.size(),
+        8u,
+        14u,
+        15u,
+        current.rectangles
     );
-    const u32 focusCode = observation.focusCode;
-    const u32 imageTargets = observation.passiveTargets;
-    current.values[0u] = static_cast<u64>(m_phase);
-    current.values[1u] = focusCode;
-    current.values[2u] = m_beforeClicks;
-    current.values[3u] = m_afterClicks;
-    current.values[4u] = static_cast<u64>(m_parent.isOpen());
-    current.values[5u] = static_cast<u64>(m_child.isOpen());
-    current.values[6u] = input.popupCount();
-    current.values[7u] = imageTargets;
-    current.values[10u] = m_replacementCount;
-    current.values[11u] = static_cast<u64>(m_replacementAlternate);
-    current.values[12u] = m_evictionRemaining;
-    current.values[13u] = m_evictionCompleted;
-    current.generations = { m_default->generation(), m_alternate->generation(), m_replacement->generation() };
-    const auto update = PublishPassiveSmokeSnapshot([&]()noexcept{ return current.values != m_snapshot.values || current.generations != m_snapshot.generations; }, current, m_snapshot);
+    current.values[0u] = cast<u64>(this.m_phase);
+    current.values[1u] = cast<u64>(observation.focusCode);
+    current.values[2u] = cast<u64>(this.m_beforeClicks);
+    current.values[3u] = cast<u64>(this.m_afterClicks);
+    current.values[4u] = cast<u64>(this.m_parent.isOpen());
+    current.values[5u] = cast<u64>(this.m_child.isOpen());
+    current.values[6u] = context.ui.input().popupCount();
+    current.values[7u] = cast<u64>(observation.passiveTargets);
+    current.values[10u] = cast<u64>(this.m_replacementCount);
+    current.values[11u] = cast<u64>(this.m_replacementAlternate);
+    current.values[12u] = cast<u64>(this.m_evictionRemaining);
+    current.values[13u] = cast<u64>(this.m_evictionCompleted);
+    u32 sameIdentity = 0u;
+    ReadSmokeTextureGenerations(this.m_default, this.m_alternate, this.m_replacement, current.generations, sameIdentity);
+
+    const b8 stateChanged = !SameSmokeU64Span(current.values, this.m_snapshot.values)
+        || !SameSmokeU64Span(current.generations, this.m_snapshot.generations);
+    const PassiveSmokeSnapshotUpdate update = PublishPassiveSmokeSnapshot(stateChanged, current, this.m_snapshot);
     if(!update.published)
         return;
     if(update.displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
+        [essential] info(
+            "UiTextureImageSmoke: display logical={}x{} scale={}x{}"
+            , current.display.logicalWidth
+            , current.display.logicalHeight
+            , current.display.pixelScaleX
+            , current.display.pixelScaleY
+        );
     }
-    const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},") FOUNDATION_TEXT("{},{},{},{},{},{},{},{},{}")
-        , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5]
-        , value[6], value[7], value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
+    [essential] info(
+        "UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
+        , current.sequence
+        , current.values[0u]
+        , current.values[1u]
+        , current.values[2u]
+        , current.values[3u]
+        , current.values[4u]
+        , current.values[5u]
+        , current.values[6u]
+        , current.values[7u]
+        , current.values[8u]
+        , current.values[9u]
+        , current.values[10u]
+        , current.values[11u]
+        , current.values[12u]
+        , current.values[13u]
+        , current.values[14u]
+        , current.values[15u]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}")
-        , current.sequence, current.generations[0], current.generations[1], current.generations[2]
-        , static_cast<u32>(m_replacement->identity().name() == m_default->identity().name())
+    [essential] info(
+        "UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}"
+        , current.sequence
+        , current.generations[0u]
+        , current.generations[1u]
+        , current.generations[2u]
+        , sameIdentity
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(FOUNDATION_TEXT("UiTextureImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(s_UiTextureImageSmokeTag, current.sequence, UiTextureImageSmokeRectName(index), current.rectangles[index]);
 }
 
-void UiTextureImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    PaintPassiveSmokeValueMarkers(m_snapshot.values, m_snapshot.sequence, context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_window_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr TStringView s_IncreaseLabel = FOUNDATION_TEXT("increase");
-constexpr AStringView s_IncreaseKey = "increase";
-constexpr TStringView s_LockedLabel = FOUNDATION_TEXT("locked");
-constexpr AStringView s_LockedKey = "locked";
-static constexpr Impl::Ui::Color s_TitleAnchor{ 0.70f, 0.02f, 0.35f, 1.0f };
-static constexpr Impl::Ui::Color s_ContentAnchor{ 0.02f, 0.30f, 0.75f, 1.0f };
-static constexpr f32 s_LabelHeight = 18.0f;
-static constexpr f32 s_SeparatorHeight = 1.0f;
-static constexpr f32 s_ControlHeight = 26.0f;
-static constexpr f32 s_ControlWidth = 80.0f;
-static constexpr f32 s_Gap = 4.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics)noexcept{
-    const Impl::Ui::Rect content = Impl::Ui::ResolveWindowContentBounds(state, metrics);
-    const f32 originX = content.x + metrics.contentPadding.left;
-    const f32 originY = content.y + metrics.contentPadding.top;
-    const f32 buttonY = originY + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap;
-    return { originX, buttonY, s_ControlWidth, s_ControlHeight };
+void UiTextureImageSmokeScene::paintMarkers(mut UiPaintContext context)const{
+    PaintPassiveSmokeValueMarkers(this.m_snapshot.values, this.m_snapshot.sequence, context);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    ObserveSmokeDisplay(FOUNDATION_TEXT("UiWindowSmoke"), context.display, m_lastDisplay, m_displayChanged);
-    Builder& ui = context.ui;
-    ui.style().gap = __hidden_ui_window_smoke::s_Gap;
-    ui.style().fontSize = 12.0f;
-    WindowOptions options;
-    options.initialBounds = { 40.0f, 40.0f, 300.0f, 180.0f };
-    options.minimumSize = { 180.0f, 110.0f };
-    options.movable = !m_locked;
-    options.resizable = !m_locked;
-    const b8 contentVisible = ui.beginWindow("window", "Window", m_window, options);
-    const WindowMetrics metrics = ui.windowMetrics();
+b8 UiWindowSmokeScene::paint(mut UiPaintContext context){
+    ObserveSmokeDisplay(s_UiWindowSmokeTag, context.display, this.m_lastDisplay, this.m_displayChanged);
+    context.ui.style().gap = s_UiWindowSmokeGap;
+    context.ui.style().fontSize = 12.0f;
+    WindowOptions options();
+    options.initialBounds = Rect(40.0f, 40.0f, 300.0f, 180.0f);
+    options.minimumSize = MakeSmokePoint(180.0f, 110.0f);
+    options.movable = !this.m_locked;
+    options.resizable = !this.m_locked;
+    const b8 contentVisible = context.ui.beginWindow("window", "Window", this.m_window, options);
+    const WindowMetrics metrics = context.ui.windowMetrics();
     if(contentVisible){
-        const WidgetOptions label{ {}, { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_LabelHeight } };
-        if(!ui.label("caption", "Drag, resize or collapse", label))
+        const WidgetOptions label = MakeFixedHeightSmokeWidget(s_UiWindowSmokeLabelHeight);
+        if(!context.ui.label("caption", "Drag, resize or collapse", label))
             return false;
-        SeparatorOptions separator;
-        separator.thickness = __hidden_ui_window_smoke::s_SeparatorHeight;
-        if(!ui.separator("separator", separator))
+        SeparatorOptions separator();
+        separator.thickness = s_UiWindowSmokeSeparatorHeight;
+        if(!context.ui.separator("separator", separator))
             return false;
-        ContainerOptions row;
-        row.height = { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlHeight };
-        row.gap = __hidden_ui_window_smoke::s_Gap;
-        if(!ui.beginRow("actions", row))
+        ContainerOptions row();
+        row.height.policy = LayoutSizePolicy::Fixed;
+        row.height.value = s_UiWindowSmokeControlHeight;
+        row.gap = s_UiWindowSmokeGap;
+        if(!context.ui.beginRow("actions", row))
             return false;
-        const WidgetOptions control{ { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlWidth }, { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlHeight } };
-        if(ui.button(__hidden_ui_window_smoke::s_IncreaseKey, "Increase", control)){
-            ++m_count;
-            logAction(__hidden_ui_window_smoke::s_IncreaseLabel);
+        const WidgetOptions control = MakeFixedSmokeWidget(s_UiWindowSmokeControlWidth, s_UiWindowSmokeControlHeight);
+        if(context.ui.button(s_UiWindowSmokeIncreaseKey, "Increase", control)){
+            ++this.m_count;
+            this.logAction(s_UiWindowSmokeIncreaseKey);
         }
-        if(ui.checkbox(__hidden_ui_window_smoke::s_LockedKey, "Lock", m_locked, control))
-            logAction(__hidden_ui_window_smoke::s_LockedLabel);
-        if(!ui.endContainer())
+        if(context.ui.checkbox(s_UiWindowSmokeLockedKey, "Lock", this.m_locked, control))
+            this.logAction(s_UiWindowSmokeLockedKey);
+        if(!context.ui.endContainer())
             return false;
     }
-    if(!ui.endWindow())
+    if(!context.ui.endWindow())
         return false;
-    observeState(metrics);
-    paintMarkers(context, metrics);
+    this.observeState(metrics);
+    this.paintMarkers(context, metrics);
     return true;
 }
 
-void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
-    using namespace Impl::Ui;
-    const Rect& bounds = m_window.bounds;
-    const Rect& previous = m_lastWindow.bounds;
+void UiWindowSmokeScene::observeState(in WindowMetrics metrics){
+    const Rect bounds = this.m_window.bounds;
+    const Rect previous = this.m_lastWindow.bounds;
     if(
-        m_sequence != 0u && !m_displayChanged && bounds.x == previous.x && bounds.y == previous.y
-        && bounds.width == previous.width && bounds.height == previous.height && m_window.collapsed == m_lastWindow.collapsed
-        && m_count == m_lastCount && m_locked == m_lastLocked
+        this.m_sequence != 0u
+        && !this.m_displayChanged
+        && bounds.x == previous.x
+        && bounds.y == previous.y
+        && bounds.width == previous.width
+        && bounds.height == previous.height
+        && this.m_window.collapsed == this.m_lastWindow.collapsed
+        && this.m_count == this.m_lastCount
+        && this.m_locked == this.m_lastLocked
     )
         return;
-    ++m_sequence;
-    m_lastWindow = m_window;
-    m_lastCount = m_count;
-    m_lastLocked = m_locked;
-    m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: state sequence={} bounds={},{},{},{} collapsed={} locked={} count={}")
-        , m_sequence, bounds.x, bounds.y, bounds.width, bounds.height
-        , static_cast<u32>(m_window.collapsed), static_cast<u32>(m_locked), m_count
+    ++this.m_sequence;
+    this.m_lastWindow = this.m_window;
+    this.m_lastCount = this.m_count;
+    this.m_lastLocked = this.m_locked;
+    this.m_displayChanged = false;
+    [essential] info(
+        "UiWindowSmoke: state sequence={} bounds={},{},{},{} collapsed={} locked={} count={}"
+        , this.m_sequence
+        , bounds.x
+        , bounds.y
+        , bounds.width
+        , bounds.height
+        , cast<u32>(this.m_window.collapsed)
+        , cast<u32>(this.m_locked)
+        , this.m_count
     );
-    const Rect title{ bounds.x, bounds.y, bounds.width, metrics.titleHeight };
-    const Rect collapse = ResolveWindowCollapseBounds(m_window, metrics);
-    const Rect resize = ResolveWindowResizeBounds(m_window, metrics);
-    const Rect button = __hidden_ui_window_smoke::Button(m_window, metrics);
-    const Rect content = ResolveWindowContentBounds(m_window, metrics);
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
-        , m_sequence, title.x, title.y, title.width, title.height
-        , collapse.x, collapse.y, collapse.width, collapse.height
-        , resize.x, resize.y, resize.width, resize.height
+    const Rect title(bounds.x, bounds.y, bounds.width, metrics.titleHeight);
+    const Rect collapse = ResolveWindowCollapseBounds(this.m_window, metrics);
+    const Rect resize = ResolveWindowResizeBounds(this.m_window, metrics);
+    const Rect button = ResolveSmokeWindowButtonRect(this.m_window, metrics);
+    const Rect content = ResolveWindowContentBounds(this.m_window, metrics);
+    [essential] info(
+        "UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}"
+        , this.m_sequence
+        , title.x
+        , title.y
+        , title.width
+        , title.height
+        , collapse.x
+        , collapse.y
+        , collapse.width
+        , collapse.height
+        , resize.x
+        , resize.y
+        , resize.width
+        , resize.height
     );
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}")
-        , m_sequence, button.x, button.y, button.width, button.height
-        , button.x + button.width + __hidden_ui_window_smoke::s_Gap, button.y, button.width, button.height
-        , content.x, content.y, content.width, content.height, metrics.minimumSize.x, metrics.minimumSize.y
+    [essential] info(
+        "UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}"
+        , this.m_sequence
+        , button.x
+        , button.y
+        , button.width
+        , button.height
+        , button.x + button.width + s_UiWindowSmokeGap
+        , button.y
+        , button.width
+        , button.height
+        , content.x
+        , content.y
+        , content.width
+        , content.height
+        , metrics.minimumSize.x
+        , metrics.minimumSize.y
     );
 }
 
-void UiWindowSmokeScene::logAction(const TStringView action){
-    ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}"), action, m_count, static_cast<u32>(m_locked), m_actions);
+void UiWindowSmokeScene::logAction(in StringView action){
+    ++this.m_actions;
+    [essential] info(
+        "UiWindowSmoke: action={} count={} locked={} actions={}"
+        , action
+        , this.m_count
+        , cast<u32>(this.m_locked)
+        , this.m_actions
+    );
 }
 
-void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl::Ui::WindowMetrics& metrics)const{
-    using namespace Impl::Ui;
-    const Rect& bounds = m_window.bounds;
-    const Array<f32, 8> values = { bounds.x, bounds.y, bounds.width, bounds.height, static_cast<f32>(m_count), static_cast<f32>(m_window.collapsed), static_cast<f32>(m_locked), static_cast<f32>(m_sequence) };
+void UiWindowSmokeScene::paintMarkers(mut UiPaintContext context, in WindowMetrics metrics)const{
+    const Rect bounds = this.m_window.bounds;
+    Array<f32, 8u> values;
+    values[0u] = bounds.x;
+    values[1u] = bounds.y;
+    values[2u] = bounds.width;
+    values[3u] = bounds.height;
+    values[4u] = cast<f32>(this.m_count);
+    values[5u] = cast<f32>(cast<u32>(this.m_window.collapsed));
+    values[6u] = cast<f32>(cast<u32>(this.m_locked));
+    values[7u] = cast<f32>(this.m_sequence);
     const f32 markerY = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index < values.size(); ++index)
-        context.paint.fillRect({ static_cast<f32>(index) * 20.0f + 12.0f, markerY, 14.0f, 12.0f }, EncodeSmokeColor(values[index]));
-    // Lanes are anchor x, title anchor y and content anchor y.
-    const SIMDVectorSingle anchors = VectorAdd(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.y, 0.0f), VectorSet(bounds.width, 4.0f, metrics.titleHeight, 0.0f)), VectorSet(-14.0f, 0.0f, 4.0f, 0.0f));
-    context.paint.pushClip(ResolveVisibleWindowBounds(m_window, metrics));
-    context.paint.fillRect({ VectorGetX(anchors), VectorGetY(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_TitleAnchor);
-    if(!m_window.collapsed)
-        context.paint.fillRect({ VectorGetX(anchors), VectorGetZ(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_ContentAnchor);
+        context.paint.fillRect(Rect(cast<f32>(index) * 20.0f + 12.0f, markerY, 14.0f, 12.0f), EncodeSmokeColor(values[index]));
+    const VectorSingle anchors = VectorSingle(bounds.x, bounds.y, bounds.y, 0.0f) + VectorSingle(bounds.width, 4.0f, metrics.titleHeight, 0.0f) + VectorSingle(-14.0f, 0.0f, 4.0f, 0.0f);
+    context.paint.pushClip(ResolveVisibleWindowBounds(this.m_window, metrics));
+    context.paint.fillRect(Rect(anchors.x, anchors.y, 10.0f, 10.0f), Color(0.70f, 0.02f, 0.35f, 1.0f));
+    if(!this.m_window.collapsed)
+        context.paint.fillRect(Rect(anchors.x, anchors.z, 10.0f, 10.0f), Color(0.02f, 0.30f, 0.75f, 1.0f));
     const b8 popped = context.paint.popClip();
-    FOUNDATION_FATAL_ASSERT(popped);
+    [essential] assert(popped, "UI window smoke marker clip pop must succeed");
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-SharedUiWindowSmokeScene CreateUiWindowSmokeScene(Core::Alloc::GlobalArena& arena){
-    return SharedUiWindowSmokeScene(NewArenaObject<RefCounter<UiWindowSmokeScene>>(arena), ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-};
-NWB_END
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

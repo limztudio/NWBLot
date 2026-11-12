@@ -13,6 +13,48 @@ const usize s_SceneLightGpuDataBytes = 80u;
 const usize s_SceneLightGpuBufferBytes = 1280u;
 
 
+void EncodeF32LittleEndian(in f32 value, in usize baseOffset, mut Array<u8, 16u> outBytes){
+    const u32 word = BitCast<u32>(value);
+    outBytes[baseOffset + 0u] = cast<u8>(word & 0xffu);
+    outBytes[baseOffset + 1u] = cast<u8>((word >> 8u) & 0xffu);
+    outBytes[baseOffset + 2u] = cast<u8>((word >> 16u) & 0xffu);
+    outBytes[baseOffset + 3u] = cast<u8>((word >> 24u) & 0xffu);
+}
+
+Array<u8, 16u> EncodeF32x4LittleEndian(in f32 x, in f32 y, in f32 z, in f32 w){
+    Array<u8, 16u> bytes;
+    EncodeF32LittleEndian(x, 0u, bytes);
+    EncodeF32LittleEndian(y, 4u, bytes);
+    EncodeF32LittleEndian(z, 8u, bytes);
+    EncodeF32LittleEndian(w, 12u, bytes);
+    return bytes;
+}
+
+b8 MatchesF32x4LittleEndian(in Span<u8> storedBytes, in usize baseOffset, in f32 x, in f32 y, in f32 z, in f32 w){
+    const Array<u8, 16u> expected = EncodeF32x4LittleEndian(x, y, z, w);
+    for(usize byteIndex = 0u; byteIndex < 16u; ++byteIndex){
+        if(storedBytes[baseOffset + byteIndex] != expected[byteIndex])
+            return false;
+    }
+    return true;
+}
+
+b8 MatchesSceneLightGpuDataLittleEndian(in Span<u8> storedBytes, in usize baseOffset, in SceneLightGpuData light){
+    return MatchesF32x4LittleEndian(storedBytes, baseOffset + 0u, light.position.x, light.position.y, light.position.z, light.position.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 16u, light.direction.x, light.direction.y, light.direction.z, light.direction.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 32u, light.colorIntensity.x, light.colorIntensity.y, light.colorIntensity.z, light.colorIntensity.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 48u, light.params.x, light.params.y, light.params.z, light.params.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 64u, light.params2.x, light.params2.y, light.params2.z, light.params2.w)
+    ;
+}
+
+void WriteLightF32x4LittleEndian(in f32 x, in f32 y, in f32 z, in f32 w, in usize baseOffset, mut Array<u8, 5120u> inOutLightGpuData){
+    const Array<u8, 16u> encoded = EncodeF32x4LittleEndian(x, y, z, w);
+    for(usize byteIndex = 0u; byteIndex < 16u; ++byteIndex)
+        inOutLightGpuData[baseOffset + byteIndex] = encoded[byteIndex];
+}
+
+
 class SceneShadingUploadTracker{
     public b8 lightUploadRequired(
         in b8 valid,
@@ -25,11 +67,11 @@ class SceneShadingUploadTracker{
         assert(lightByteCount <= storedLightBytes.size());
         b8 lightDataUnchanged = false;
         if(valid && storedLightCount == lightCount){
-            if(lightByteCount == 0u)
-                lightDataUnchanged = true;
-            else{
-                native(in storedLightBytes, in lights, in lightByteCount, mut lightDataUnchanged){
-                    lightDataUnchanged = FOUNDATION_MEMCMP(storedLightBytes.data(), lights.data(), lightByteCount) == 0;
+            lightDataUnchanged = true;
+            for(usize lightIndex = 0u; lightIndex < lights.size(); ++lightIndex){
+                if(!MatchesSceneLightGpuDataLittleEndian(storedLightBytes, lightIndex * s_SceneLightGpuDataBytes, lights[lightIndex])){
+                    lightDataUnchanged = false;
+                    break;
                 }
             }
         }
@@ -43,11 +85,14 @@ class SceneShadingUploadTracker{
     )const{
         if(!valid || storedShadingBytes.size() != s_SceneShadingGpuDataBytes)
             return true;
-        b8 matches = false;
-        native(in storedShadingBytes, in sceneShadingState, mut matches){
-            matches = FOUNDATION_MEMCMP(storedShadingBytes.data(), &sceneShadingState, sizeof(sceneShadingState)) == 0;
-        }
-        return !matches;
+        return !MatchesF32x4LittleEndian(
+            storedShadingBytes,
+            0u,
+            sceneShadingState.cameraPositionLightCount.x,
+            sceneShadingState.cameraPositionLightCount.y,
+            sceneShadingState.cameraPositionLightCount.z,
+            sceneShadingState.cameraPositionLightCount.w
+        );
     }
 
     public void confirm(
@@ -65,17 +110,26 @@ class SceneShadingUploadTracker{
         const usize lightByteCount = lights.size() * s_SceneLightGpuDataBytes;
         if(lightUploadRequired || lightCount == 0u){
             if(lightByteCount != 0u){
-                native(in lights, in lightByteCount, mut inOutLightGpuData){
-                    FOUNDATION_MEMCPY(inOutLightGpuData.data(), inOutLightGpuData.size(), lights.data(), lightByteCount);
+                for(usize lightIndex = 0u; lightIndex < lights.size(); ++lightIndex){
+                    const usize baseOffset = lightIndex * s_SceneLightGpuDataBytes;
+                    const SceneLightGpuData light = lights[lightIndex];
+                    WriteLightF32x4LittleEndian(light.position.x, light.position.y, light.position.z, light.position.w, baseOffset + 0u, inOutLightGpuData);
+                    WriteLightF32x4LittleEndian(light.direction.x, light.direction.y, light.direction.z, light.direction.w, baseOffset + 16u, inOutLightGpuData);
+                    WriteLightF32x4LittleEndian(light.colorIntensity.x, light.colorIntensity.y, light.colorIntensity.z, light.colorIntensity.w, baseOffset + 32u, inOutLightGpuData);
+                    WriteLightF32x4LittleEndian(light.params.x, light.params.y, light.params.z, light.params.w, baseOffset + 48u, inOutLightGpuData);
+                    WriteLightF32x4LittleEndian(light.params2.x, light.params2.y, light.params2.z, light.params2.w, baseOffset + 64u, inOutLightGpuData);
                 }
             }
             inOutLightGpuDataCount = lightCount;
             inOutLightGpuDataValid = true;
         }
         if(sceneShadingUploadRequired){
-            native(in sceneShadingState, mut inOutSceneShadingGpuData){
-                FOUNDATION_MEMCPY(inOutSceneShadingGpuData.data(), inOutSceneShadingGpuData.size(), &sceneShadingState, sizeof(sceneShadingState));
-            }
+            inOutSceneShadingGpuData = EncodeF32x4LittleEndian(
+                sceneShadingState.cameraPositionLightCount.x,
+                sceneShadingState.cameraPositionLightCount.y,
+                sceneShadingState.cameraPositionLightCount.z,
+                sceneShadingState.cameraPositionLightCount.w
+            );
             inOutSceneShadingGpuDataValid = true;
         }
     }
@@ -83,3 +137,4 @@ class SceneShadingUploadTracker{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

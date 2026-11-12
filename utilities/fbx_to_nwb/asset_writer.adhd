@@ -1,0 +1,78 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/asset_writer_format.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasSkinnedModelStreams(in b8 hasMeshSkin, in b8 hasSkeletonJoints, in b8 hasInverseBindMatrices){
+    return hasMeshSkin || hasSkeletonJoints || hasInverseBindMatrices;
+}
+
+StringView ResolveEffectiveVirtualRoot(in StringView trimmedVirtualRoot){
+    if(trimmedVirtualRoot.empty())
+        return s_DefaultVirtualRootText;
+    return trimmedVirtualRoot;
+}
+
+String BuildFbxVirtualBasePath(in StringView genericNoExtPath, in StringView filenameNoExt, in StringView virtualRoot){
+    const StringView trimmedVirtualRoot = TrimView(virtualRoot);
+    String relativeText;
+    relativeText.reserve(genericNoExtPath.size());
+
+    b8 foundAssets = false;
+    usize cursor = 0u;
+    while(cursor < genericNoExtPath.size()){
+        while(cursor < genericNoExtPath.size() && (genericNoExtPath[cursor] == s_AsciiSlashByte || genericNoExtPath[cursor] == s_AsciiBackslashByte))
+            ++cursor;
+        if(cursor >= genericNoExtPath.size())
+            break;
+        const usize start = cursor;
+        while(cursor < genericNoExtPath.size() && genericNoExtPath[cursor] != s_AsciiSlashByte && genericNoExtPath[cursor] != s_AsciiBackslashByte)
+            ++cursor;
+        const StringView partText = genericNoExtPath.substr(start, cursor - start);
+        if(partText == ".")
+            continue;
+        if(EqualsAsciiIgnoreCase(partText, s_AssetsDirectoryLabel)){
+            foundAssets = true;
+            relativeText.clear();
+            continue;
+        }
+        if(foundAssets){
+            if(!relativeText.empty())
+                relativeText.append("/");
+            relativeText.append(partText);
+        }
+    }
+
+    if(relativeText.empty())
+        relativeText.assign(filenameNoExt);
+
+    StringView relView = relativeText;
+    while(!relView.empty() && (relView[0u] == s_AsciiSlashByte || relView[0u] == s_AsciiBackslashByte))
+        relView = relView.substr(1u, relView.size() - 1u);
+
+    const StringView rootView = ResolveEffectiveVirtualRoot(trimmedVirtualRoot);
+    String virtualPath;
+    virtualPath.reserve(rootView.size() + 1u + relView.size());
+    virtualPath.assign(rootView);
+    if(!virtualPath.empty() && virtualPath.back() != s_AsciiSlashByte)
+        virtualPath.append("/");
+    virtualPath.append(relView);
+    return virtualPath;
+}
+
+String BuildFbxSplitAssetName(in StringView virtualBase, in StringView suffix){
+    String name;
+    name.reserve(virtualBase.size() + suffix.size());
+    name.assign(virtualBase);
+    name.append(suffix);
+    return name;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

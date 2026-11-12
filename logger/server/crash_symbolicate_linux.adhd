@@ -1,0 +1,62 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_LinuxCallstackCapturedHeader = "status=callstack_captured\nresolver=linux_client_callstack\n";
+const StringView s_LinuxNotDecodedHeader = "status=not_decoded\nresolver=elf_dwarf_core\n";
+const StringView s_LinuxCorePresentLine = "core_artifact=present\n";
+const StringView s_LinuxCoreMissingLine = "core_artifact=missing\n";
+const StringView s_LinuxCoreInspectFailedLine = "core_artifact=inspect_failed\n";
+const StringView s_LinuxProcMapsPresentLine = "proc_maps=present\n";
+const StringView s_LinuxProcMapsMissingLine = "proc_maps=missing\n";
+const StringView s_LinuxClientCallstackDetail = "\ndetail=client callstack captured; module frames are symbolized with DWARF when symbols are reachable\n";
+const StringView s_LinuxModuleRelativeDetail = "\ndetail=module-relative crash address captured; full Linux callstack requires a Linux core artifact and DWARF resolver\n";
+
+usize CountTextNewlinesPlusOne(in StringView text){
+    usize count = 1u;
+    for(usize i = 0u; i < text.size(); ++i){
+        if(cast<u8>(text[i]) == 10u)
+            ++count;
+    }
+    return count;
+}
+
+StringView SelectLinuxModuleDisplayPath(in StringView rawPath){
+    if(rawPath.empty())
+        return s_CrashSymbolicateLinuxAnonymousModulePath;
+    return rawPath;
+}
+
+StringView SelectLinuxResolverStatusHeader(in b8 clientCallstackPresent){
+    if(clientCallstackPresent)
+        return s_LinuxCallstackCapturedHeader;
+    return s_LinuxNotDecodedHeader;
+}
+
+StringView SelectLinuxCoreArtifactStatusLine(in b8 corePresent){
+    if(corePresent)
+        return s_LinuxCorePresentLine;
+    return s_LinuxCoreMissingLine;
+}
+
+StringView SelectLinuxProcMapsStatusLine(in b8 procMapsPresent){
+    if(procMapsPresent)
+        return s_LinuxProcMapsPresentLine;
+    return s_LinuxProcMapsMissingLine;
+}
+
+StringView SelectLinuxResolvedIpDetailLine(in b8 clientCallstackPresent){
+    if(clientCallstackPresent)
+        return s_LinuxClientCallstackDetail;
+    return s_LinuxModuleRelativeDetail;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

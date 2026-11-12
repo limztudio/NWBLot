@@ -2,63 +2,70 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#if defined(NWB_COOK)
+const StringView s_ShaderOptionalBoolMetaPrefix = "Meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_shader/cook.adhd.h>
+usize ComputeCompilerDefineFixedArgumentBytes(in usize prefixBytes, in b8 hasValue){
+    if(hasValue)
+        return prefixBytes + 1u;
+    return prefixBytes;
+}
 
+b8 IsPlannedMacroIncludeDefine(in b8 compilerInputsHaveBom, in Span<StringView> externallyPlannedMacroIncludes, in StringView defineName){
+    if(!compilerInputsHaveBom)
+        return false;
+    for(in StringView plannedName : externallyPlannedMacroIncludes){
+        if(plannedName == defineName)
+            return true;
+    }
+    return false;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+String FormatCompilerDefineArgument(
+    in StringView definePrefix,
+    in StringView defineName,
+    in StringView defineValue,
+    in b8 hasOverlayIncludePath,
+    in StringView overlayIncludePathText
+){
+    if(defineValue.empty())
+        return StringFormat("{}{}", definePrefix, defineName);
+    if(hasOverlayIncludePath)
+        return StringFormat("{}{}=\"{}\"", definePrefix, defineName, overlayIncludePathText);
+    return StringFormat("{}{}={}", definePrefix, defineName, defineValue);
+}
 
+b8 ValidateUnexpectedCompilerDiagnosticsEmpty(
+    in StringView shaderName,
+    in StringView variantName,
+    in StringView diagnostics
+){
+    if(diagnostics.empty())
+        return true;
 
-NWB_IMPL_BEGIN
+    error("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}", shaderName, variantName, diagnostics);
+    return false;
+}
 
+b8 ValidateCompiledShaderStageName(in StringView shaderName, in StringView variantName, in b8 validStageName){
+    if(validStageName)
+        return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("Shader compile failed for '{}' (variant '{}'): shader stage contains an embedded null", shaderName, variantName);
+    return false;
+}
 
+b8 ValidateCompiledSpirvEntryPoint(in StringView shaderName, in StringView variantName, in b8 resolvedEntryPoint){
+    if(resolvedEntryPoint)
+        return true;
 
-namespace SlangShaderCompiler{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<u64> ComputeCompilerFingerprint(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("Shader compile failed for '{}' (variant '{}'): malformed SPIR-V or wrong physical stage/entry point", shaderName, variantName);
+    return false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplAssetsShaderSlangCompilerAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

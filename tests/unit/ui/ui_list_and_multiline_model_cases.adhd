@@ -1,687 +1,30 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiListAndMultilineModelCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/multiline_fixture.adhd>
+#include <tests/unit/ui/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+
+#include <global/limit.h>
 #include <global/simdmath.h>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_list_builder_selection_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-using namespace NWB::UiListTests;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesToVisibleLastKey){
-    m_state.select(50000u);
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(m_state.selectedKey(), 50000u);
-    ASSERT_NE(target(row(50000u)), nullptr);
-    press(Core::Key::Tab);
-    press(Core::Key::End);
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_EQ(m_state.selectedKey(), 100000u);
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), m_state.placement().maxOffset);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_NE(target(row(100000u)), nullptr);
-    EXPECT_LE(m_source.textCalls, 12u);
-}
-
-TEST_F(UiListBuilderTests, UnseenTallCursorIsMeasuredBeforeRevealAndFailedRevisionRefreshRetainsTheRequest){
-    m_source.specialIndex = m_source.count - 1u;
-    m_state.select(1u);
-    ListOptions options = Options();
-    options.selectOnNavigate = false;
-    ASSERT_TRUE(accept(1u, options));
-    ASSERT_NE(target(row(1u)), nullptr);
-    const f32 initialHeight = target(row(1u))->rectangle.height;
-    press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
-    press(Core::Key::End);
-    m_source.textCalls = 0u;
-    ASSERT_TRUE(accept(2u, options));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_state.cursorKey(), m_source.count);
-    const HitTarget* cursor = target(row(m_source.count));
-    ASSERT_NE(cursor, nullptr);
-    EXPECT_GT(cursor->rectangle.height, initialHeight);
-    EXPECT_GE(cursor->rectangle.y, cursor->clip.y);
-    const SIMDVectorSingle cursorBottom = VectorAdd(VectorSet(cursor->rectangle.y, cursor->clip.y, 0.0f, 0.0f), VectorSet(cursor->rectangle.height, cursor->clip.height, 0.0f, 0.0f));
-    EXPECT_LE(VectorGetX(cursorBottom), VectorGetY(cursorBottom));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), m_state.placement().maxOffset);
-    EXPECT_LE(m_source.textCalls, 8u);
-    ASSERT_TRUE(m_state.scrollTo(0.0));
-    ASSERT_TRUE(accept(3u, options));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 0.0);
-    EXPECT_EQ(m_state.cursorKey(), m_source.count);
-    EXPECT_EQ(target(row(m_source.count)), nullptr);
-    ++m_source.contentRevision;
-    const f32 fontSize = m_builder.style().fontSize;
-    m_builder.style().fontSize = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(prepare(4u, options));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_state.cursorKey(), m_source.count);
-    m_context.abandonFrame();
-    m_builder.reset();
-    m_builder.style().fontSize = fontSize;
-    ASSERT_TRUE(accept(5u, options));
-    cursor = target(row(m_source.count));
-    ASSERT_NE(cursor, nullptr);
-    EXPECT_GE(cursor->rectangle.y, cursor->clip.y);
-    const SIMDVectorSingle restoredBottom = VectorAdd(VectorSet(cursor->rectangle.y, cursor->clip.y, 0.0f, 0.0f), VectorSet(cursor->rectangle.height, cursor->clip.height, 0.0f, 0.0f));
-    EXPECT_LE(VectorGetX(restoredBottom), VectorGetY(restoredBottom));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), m_state.placement().maxOffset);
-}
-
-TEST_F(UiListBuilderTests, ReorderPreservesSelectionByKeyAndRemovalClearsIt){
-    m_state.select(50000u);
-    ASSERT_TRUE(accept(1u));
-    m_source.reverse = true;
-    ++m_source.contentRevision;
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_EQ(m_state.selectedKey(), 50000u);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_NE(target(row(50000u)), nullptr);
-    m_source.removed = 50000u;
-    --m_source.count;
-    ++m_source.contentRevision;
-    ASSERT_TRUE(prepare(3u));
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_EQ(m_state.cursorKey(), 0u);
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_EQ(target(row(50000u)), nullptr);
-}
-
-TEST_F(UiListBuilderTests, ProgrammaticSameSelectionFencesQueuedActivationAndWheel){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    click(Center(target(row(2u))->rectangle));
-    ASSERT_TRUE(wheel());
-    const u64 inputGeneration = m_state.inputGeneration();
-    m_state.select(1u);
-    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 0.0);
-    EXPECT_TRUE(m_context.input().controlActions().empty());
-    EXPECT_FALSE(m_context.input().focus().valid());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
-}
-
-TEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance){
-    ASSERT_TRUE(accept(1u));
-    const Point point = Center(target(row(1u))->rectangle);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    ++m_source.contentRevision;
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    EXPECT_TRUE(m_context.input().controlActions().empty());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
-    ASSERT_TRUE(prepare(3u));
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-}
-
-TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmission){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    const Point point = Center(target(row(2u))->rectangle);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_FALSE(m_result.activated);
-    press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-    press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
-    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_FALSE(m_result.activated);
-    press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
-    ASSERT_TRUE(accept(5u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_FALSE(m_result.activated);
-    press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
-    press(Core::Key::Enter);
-    ASSERT_TRUE(accept(6u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_TRUE(m_result.activated);
-}
-
-TEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRelease){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
-    ++m_source.contentRevision;
-    ASSERT_TRUE(accept(2u));
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_FALSE(m_result.activated);
-    press(Core::Key::Enter);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_TRUE(m_result.activated);
-}
-
-TEST_F(UiListBuilderTests, HeldNavigationCannotMutateAnAcceptedReorderedDataset){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    InputEvent event;
-    event.type = InputEventType::KeyDown;
-    event.key = Core::Key::Down;
-    EXPECT_TRUE(send(event).commandConsumed);
-    m_source.reverse = true;
-    ++m_source.contentRevision;
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    event.repeat = true;
-    EXPECT_TRUE(send(event).commandConsumed);
-    ASSERT_TRUE(prepare(3u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    event.type = InputEventType::KeyUp;
-    EXPECT_TRUE(send(event).commandConsumed);
-}
-
-TEST_F(UiListBuilderTests, ReplacementSourceResetsSelectionAndScroll){
-    m_state.select(60000u);
-    ASSERT_TRUE(accept(1u));
-    ASSERT_GT(m_state.scrollOffset(), 0.0);
-    ++m_source.generation;
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_EQ(m_state.cursorKey(), 0u);
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 0.0);
-    EXPECT_TRUE(m_result.selectionChanged);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_NE(target(row(1u)), nullptr);
-}
-
-TEST_F(UiListBuilderTests, ReplacementStateRejectsOldActivationEvenForTheSameSourceAndHost){
-    ASSERT_TRUE(accept(1u));
-    click(Center(target(row(2u))->rectangle));
-    ListState replacement;
-    ASSERT_TRUE(prepareSource(2u, m_source, replacement));
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_EQ(replacement.selectedKey(), 0u);
-    EXPECT_TRUE(m_context.input().controlActions().empty());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(target(id(s_ListKey, s_PanelKey))->control.instanceGeneration, replacement.inputGeneration());
-}
-
-TEST_F(UiListBuilderTests, DisabledAndOmittedListsRetirePartsWithoutBorrowingQueuedActions){
-    ASSERT_TRUE(accept(1u));
-    click(Center(target(row(2u))->rectangle));
-    ListOptions disabled = Options();
-    disabled.enabled = false;
-    ASSERT_TRUE(prepare(2u, disabled));
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_TRUE(m_context.input().controlActions().empty());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().targets().size(), 2u);
-    EXPECT_FALSE(target(id(s_ListKey, s_PanelKey))->enabled);
-    ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    ASSERT_TRUE(finishPanel());
-    EXPECT_EQ(target(id(s_ListKey, s_PanelKey)), nullptr);
-    EXPECT_EQ(m_context.states().entries().size(), 1u);
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_EQ(m_context.input().targets().size(), 1u);
-}
-
-TEST_F(UiListBuilderTests, SourceRevisionChangedDuringScopeRejectsTheDeferredLoan){
-    ASSERT_TRUE(accept(1u));
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    const ListResult result = m_builder.virtualList(s_ListKey, m_source, m_state, Options());
-    ASSERT_TRUE(result.valid);
-    ++m_source.contentRevision;
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_FALSE(m_context.ready());
-}
-
-TEST_F(UiListBuilderTests, ContentPreflightRowsCannotHideAChangedSourceBeforePaint){
-    ListOptions options = Options();
-    options.height = { LayoutSizePolicy::Content, 0.0f };
-    ASSERT_TRUE(accept(1u, options));
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    m_source.textCalls = 0u;
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_source, m_state, options).valid);
-    ASSERT_GT(m_source.textCalls, 0u);
-    ++m_source.contentRevision;
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_FALSE(m_context.ready());
-}
-
-TEST_F(UiListBuilderTests, DuplicateOrMalformedVisibleKeysRejectTheFrame){
-    m_source.duplicate = true;
-    EXPECT_FALSE(prepare(1u));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_TRUE(m_context.input().targets().empty());
-    m_context.abandonFrame();
-    m_builder.reset();
-    m_source.duplicate = false;
-    m_source.malformedLookup = true;
-    EXPECT_FALSE(prepare(2u));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_TRUE(m_context.input().targets().empty());
-}
-
-TEST_F(UiListBuilderTests, EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardStop){
-    m_source.count = 0u;
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(m_source.textCalls, 0u);
-    EXPECT_EQ(m_context.input().targets().size(), 2u);
-    EXPECT_FALSE(m_state.placement().scrollbarVisible);
-    press(Core::Key::Tab);
-    press(Core::Key::Down);
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_FALSE(m_result.selectionChanged);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <global/simdmath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_list_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-using namespace NWB::UiListTests;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
-    m_source.count = 0u;
-    ListState secondState;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    m_builder.listStyle().background = Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal);
-    ASSERT_TRUE(m_builder.virtualList("first", m_source, m_state, Options()).valid);
-    m_builder.listStyle().background = Name(NWB::Tests::UiCases::s_UiCaseButtonHover);
-    ASSERT_TRUE(m_builder.virtualList("second", m_source, secondState, Options()).valid);
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    const auto first = skinQuad(snapshot, 6u);
-    ASSERT_TRUE(first);
-    const auto second = skinQuad(snapshot, 7u);
-    ASSERT_TRUE(second);
-    EXPECT_LT(first->y, second->y);
-}
-
-TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor){
-    m_source.specialIndex = 50000u;
-    ASSERT_TRUE(accept(1u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    const f32 initialHeight = target(row(1u))->rectangle.height;
-    const f64 within = static_cast<f64>(initialHeight) * 0.25;
-    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(m_source.specialIndex) * static_cast<f64>(initialHeight) + within));
-    m_source.textCalls = 0u;
-    m_source.keyCalls = 0u;
-    m_source.lookupCalls = 0u;
-    ASSERT_TRUE(accept(2u));
-    const ScrollPlacement& placement = m_state.placement();
-    ASSERT_EQ(placement.firstRow, m_source.specialIndex);
-    const HitTarget* tall = target(row(m_source.specialIndex + 1u));
-    ASSERT_NE(tall, nullptr);
-    const f32 grownHeight = tall->rectangle.height;
-    EXPECT_GT(grownHeight, initialHeight);
-    const f64 grown = static_cast<f64>(grownHeight);
-    EXPECT_NEAR(tall->rectangle.y, static_cast<f64>(placement.viewport.y) - within, 0.0001);
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), static_cast<f64>(m_source.specialIndex) * grown + within);
-    EXPECT_DOUBLE_EQ(placement.contentHeight, static_cast<f64>(m_source.count) * grown);
-    const auto metrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
-    const auto layout = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
-    ASSERT_TRUE(metrics);
-    ASSERT_TRUE(layout);
-    const auto visual = m_text.measure(*layout, m_paint.displayMetrics());
-    ASSERT_TRUE(visual);
-    EXPECT_GE(grownHeight + 0.0001f, visual->height + metrics->padding.top + metrics->padding.bottom);
-    const u64 provisionalBound = static_cast<u64>(Ceil(placement.viewport.height / initialHeight)) + 1u;
-    EXPECT_LE(m_source.textCalls, provisionalBound);
-    EXPECT_LE(m_source.keyCalls, provisionalBound * 2u + 2u);
-    EXPECT_LE(m_source.lookupCalls, provisionalBound + 2u);
-    EXPECT_LT(m_context.input().targets().size(), 16u);
-    ASSERT_TRUE(m_state.scrollTo(0.0));
-    ASSERT_TRUE(accept(3u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, grownHeight);
-    ++m_source.contentRevision;
-    ASSERT_TRUE(accept(4u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, initialHeight);
-}
-
-TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry){
-    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-    const SelectableStyle originalStyle = m_builder.listStyle().row;
-    u64 generation = 1u;
-    for(u32 change = 0u; change < 7u; ++change){
-        SCOPED_TRACE(testing::Message() << "change=" << change);
-        m_builder.style().fontSize = 16.0f;
-        m_builder.listStyle().row = originalStyle;
-        ASSERT_TRUE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
-        ListState state;
-        ArithmeticSource source;
-        source.specialIndex = 50000u;
-        DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
-        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        ASSERT_NE(target(row(1u)), nullptr);
-        const f32 seed = target(row(1u))->rectangle.height;
-        ASSERT_TRUE(state.scrollTo(static_cast<f64>(source.specialIndex) * static_cast<f64>(seed)));
-        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        ASSERT_NE(target(row(source.specialIndex + 1u)), nullptr);
-        const f32 grown = target(row(source.specialIndex + 1u))->rectangle.height;
-        ASSERT_GT(grown, seed);
-        ASSERT_TRUE(state.scrollTo(0.0));
-        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        ASSERT_NE(target(row(1u)), nullptr);
-        ASSERT_FLOAT_EQ(target(row(1u))->rectangle.height, grown);
-        switch(change){
-        case 0u: ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text)); break;
-        case 1u: m_builder.style().fontSize = 12.0f; break;
-        case 2u: display.pixelScaleX = 1.25f; display.pixelScaleY = 1.5f; break;
-        case 3u: ASSERT_TRUE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko")); break;
-        case 4u: m_builder.listStyle().row.padding.bottom = m_builder.listStyle().row.padding.bottom + 2.0f; break;
-        case 5u: ++source.generation; break;
-        case 6u: --source.count; break;
-        }
-        source.textCalls = 0u;
-        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        ASSERT_NE(target(row(1u)), nullptr);
-        const f32 refreshed = target(row(1u))->rectangle.height;
-        EXPECT_LT(refreshed, grown);
-        const auto metrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
-        ASSERT_TRUE(metrics);
-        f32 expected = metrics->minimum.y;
-        const StringView language = change == 3u ? "ko" : "en";
-        for(const StringView label : { StringView{}, StringView{ s_FirstRowText } }){
-            const auto layout = m_text.layout({ .text = label, .language = language, .fontSize = m_builder.style().fontSize });
-            ASSERT_TRUE(layout);
-            const auto visual = m_text.measure(*layout, display);
-            ASSERT_TRUE(visual);
-            expected = Max(expected, visual->height + metrics->padding.top + metrics->padding.bottom);
-        }
-        EXPECT_FLOAT_EQ(refreshed, expected);
-        EXPECT_LE(source.textCalls, 8u);
-    }
-}
-
-TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum){
-    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-    m_source.specialIndex = 50000u;
-    ASSERT_TRUE(accept(1u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    const f32 seed = target(row(1u))->rectangle.height;
-    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(m_source.specialIndex) * static_cast<f64>(seed)));
-    ASSERT_TRUE(accept(2u));
-    ASSERT_NE(target(row(m_source.specialIndex + 1u)), nullptr);
-    const f32 grown = target(row(m_source.specialIndex + 1u))->rectangle.height;
-    ASSERT_GT(grown, seed);
-    ASSERT_TRUE(m_state.scrollTo(0.0));
-    ASSERT_TRUE(accept(3u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    ASSERT_FLOAT_EQ(target(row(1u))->rectangle.height, grown);
-    TextService replacement(m_arena);
-    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, replacement));
-    ASSERT_EQ(replacement.generation(), m_text.generation());
-    ASSERT_NE(replacement.identity(), m_text.identity());
-    Builder builder(m_arena, m_context, m_paint, replacement);
-    builder.setSkin(m_skin);
-    builder.style() = m_builder.style();
-    builder.listStyle() = m_builder.listStyle();
-    ASSERT_TRUE(begin(4u));
-    ASSERT_TRUE(builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    ASSERT_TRUE(builder.virtualList(s_ListKey, m_source, m_state, Options()).valid);
-    ASSERT_TRUE(builder.endPanel());
-    ASSERT_TRUE(m_context.endRoot());
-    ASSERT_TRUE(m_context.finishFrame());
-    ASSERT_TRUE(m_context.commitFrame(4u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, seed);
-}
-
-TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutContaminatingDifferentMetrics){
-    u64 generation = 1u;
-    for(const b8 differentMetrics : { false, true }){
-        SCOPED_TRACE(testing::Message() << "differentMetrics=" << differentMetrics);
-        ArithmeticSource source;
-        source.specialIndex = 2u;
-        ListState state;
-        ASSERT_TRUE(begin(generation));
-        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-        m_builder.style().fontSize = 22.0f;
-        ASSERT_TRUE(m_builder.virtualList(s_ListKey, source, state, Options()).valid);
-        if(differentMetrics)
-            m_builder.style().fontSize = 12.0f;
-        ListOptions small = Options();
-        small.height.value = 40.0f;
-        ASSERT_TRUE(m_builder.virtualList("second", source, state, small).valid);
-        ASSERT_TRUE(finishPanel());
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        ASSERT_NE(target(row(1u)), nullptr);
-        const f32 firstHeight = target(row(1u))->rectangle.height;
-        const WidgetId secondRow = UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id("second", s_PanelKey), s_RowsKey), 1u);
-        ASSERT_NE(target(secondRow), nullptr);
-        const f32 secondHeight = target(secondRow)->rectangle.height;
-        ASSERT_GT(firstHeight, secondHeight);
-        ASSERT_TRUE(state.scrollTo(0.0));
-        ASSERT_TRUE(prepareSource(generation, source, state, small));
-        ASSERT_TRUE(m_context.commitFrame(generation++));
-        ASSERT_NE(target(row(1u)), nullptr);
-        EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, differentMetrics ? secondHeight : firstHeight);
-    }
-}
-
-TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInheritedClipAcrossFrames){
-    m_builder.style().fontSize = 12.0f;
-    m_source.specialIndex = 16u;
-    ASSERT_TRUE(accept(1u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    const f32 naturalHeight = target(row(1u))->rectangle.height;
-    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(naturalHeight) * 10.25));
-    const WidgetId earlier = UiTestSupport::RequireWidgetId(id("clipped", s_PanelKey), "earlier");
-    const WidgetId earlierRows = UiTestSupport::RequireWidgetId(earlier, s_RowsKey);
-    Rect previousRow;
-    Rect previousClip;
-    for(u64 generation = 2u; generation <= 3u; ++generation){
-        ASSERT_TRUE(begin(generation));
-        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-        ContainerOptions clipped;
-        clipped.height = { LayoutSizePolicy::Fixed, 20.0f };
-        ASSERT_TRUE(m_builder.beginColumn("clipped", clipped));
-        m_builder.style().fontSize = 12.0f;
-        ListOptions content = Options();
-        content.height = { LayoutSizePolicy::Content, 0.0f };
-        ASSERT_TRUE(m_builder.virtualList("earlier", m_source, m_state, content).valid);
-        ASSERT_TRUE(m_builder.endContainer());
-        m_builder.style().fontSize = 22.0f;
-        ASSERT_TRUE(m_builder.virtualList("later", m_source, m_state, Options()).valid);
-        ASSERT_TRUE(finishPanel());
-        ASSERT_TRUE(m_context.commitFrame(generation));
-        const HitTarget* hostTarget = target(earlier);
-        const HitTarget* first = target(UiTestSupport::RequireWidgetPartId(earlierRows, 11u));
-        ASSERT_NE(hostTarget, nullptr);
-        ASSERT_NE(first, nullptr);
-        EXPECT_EQ(target(UiTestSupport::RequireWidgetPartId(earlierRows, 10u)), nullptr);
-        EXPECT_EQ(target(UiTestSupport::RequireWidgetPartId(earlierRows, 17u)), nullptr);
-        EXPECT_FLOAT_EQ(first->rectangle.height, naturalHeight);
-        EXPECT_FLOAT_EQ(hostTarget->clip.height, clipped.height.value);
-        EXPECT_GT(hostTarget->rectangle.height, hostTarget->clip.height);
-        EXPECT_GT(first->clip.height, 0.0f);
-        EXPECT_LT(first->clip.height, first->rectangle.height);
-        const SIMDVectorSingle clipBottom = VectorAdd(VectorSet(first->clip.y, hostTarget->clip.y, 0.0f, 0.0f), VectorSet(first->clip.height, hostTarget->clip.height, 0.0f, 0.0f));
-        EXPECT_FLOAT_EQ(VectorGetX(clipBottom), VectorGetY(clipBottom));
-        EXPECT_NEAR((first->clip.y - (first->rectangle.y)) / (first->rectangle.height), 0.25f, 0.00001f);
-        if(generation != 2u){
-            UiPaintAssertions::ExpectRect(first->rectangle, previousRow);
-            UiPaintAssertions::ExpectRect(first->clip, previousClip);
-        }
-        previousRow = first->rectangle;
-        previousClip = first->clip;
-    }
-}
-
-TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScrollBeforeParentLayout){
-    m_source.count = 8u;
-    m_source.specialIndex = 1u;
-    ListOptions options = Options();
-    options.height = { LayoutSizePolicy::Content, 0.0f };
-    const auto metrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
-    const auto ordinary = m_text.layout({ .text = s_FirstRowText, .fontSize = m_builder.style().fontSize });
-    const auto tall = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
-    ASSERT_TRUE(metrics);
-    ASSERT_TRUE(ordinary);
-    ASSERT_TRUE(tall);
-    const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
-    const auto ordinaryVisual = m_text.measure(*ordinary, display);
-    const auto tallVisual = m_text.measure(*tall, display);
-    ASSERT_TRUE(ordinaryVisual);
-    ASSERT_TRUE(tallVisual);
-    // Lanes are the ordinary row and the tall row.
-    const SIMDVectorSingle contentHeight = VectorAdd(VectorAdd(VectorSet(ordinaryVisual->height, tallVisual->height, 0.0f, 0.0f), VectorReplicate(metrics->padding.top)), VectorReplicate(metrics->padding.bottom));
-    const SIMDVectorSingle rowHeight = VectorMax(VectorReplicate(metrics->minimum.y), contentHeight);
-    const f32 initialHeight = VectorGetX(rowHeight);
-    const f32 finalHeight = VectorGetY(rowHeight);
-    ASSERT_GT(finalHeight, initialHeight);
-    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(initialHeight) * 0.25));
-    ASSERT_TRUE(begin(1u, display));
-    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_source, m_state, options).valid);
-    EXPECT_FALSE(m_builder.button("after", ""));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(id(s_ListKey, s_PanelKey)), nullptr);
-    ASSERT_NE(target(row(1u)), nullptr);
-    ASSERT_NE(target(row(2u)), nullptr);
-    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, finalHeight);
-    EXPECT_FLOAT_EQ(target(row(2u))->rectangle.height, finalHeight);
-    EXPECT_GE(m_state.placement().viewport.height + 0.0001f, finalHeight);
-    const HitTarget* after = target(id("after", s_PanelKey));
-    ASSERT_NE(after, nullptr);
-    EXPECT_FLOAT_EQ(after->rectangle.y, target(id(s_ListKey, s_PanelKey))->rectangle.y + target(id(s_ListKey, s_PanelKey))->rectangle.height + m_builder.style().gap);
-    EXPECT_EQ(m_source.textCalls, 2u);
-    EXPECT_EQ(m_source.textCallsByIndex[0u], 1u);
-    EXPECT_EQ(m_source.textCallsByIndex[1u], 1u);
-}
-
-TEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted){
-    ASSERT_TRUE(accept(1u));
-    ASSERT_NE(target(row(1u)), nullptr);
-    const Rect oldBounds = target(row(1u))->rectangle;
-    const f64 acceptedStep = target(id(s_ListKey, s_PanelKey))->scrollStep;
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), acceptedStep);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    ASSERT_NE(target(row(1u)), nullptr);
-    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.y, oldBounds.y);
-    EXPECT_EQ(m_context.states().entries().size(), 2u);
-    const Point oldRow = Center(oldBounds);
-    EXPECT_EQ(m_context.input().hitTest(oldRow), row(1u));
-    EXPECT_FALSE(m_context.commitFrame(3u));
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(target(row(1u)), nullptr);
-    ASSERT_NE(target(row(4u)), nullptr);
-    EXPECT_EQ(m_context.input().hitTest(oldRow), row(4u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -797,7 +140,7 @@ public:
     {}
 
 
-protected:
+public:
     [[nodiscard]] b8 declareList(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
@@ -815,12 +158,18 @@ protected:
         return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), "rows"), 1u);
     }
 
+    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
+        if(const HitTarget* found = target(widget))
+            return *found;
+        return {};
+    }
+
     [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
 
     void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
 
 
-protected:
+public:
     ListState m_state;
     CallbackSource m_source;
 };
@@ -829,74 +178,992 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiListLoanTests, TextCallbackSelectionRejectsDeferredPaintWithoutReplacingAcceptedTargets){
-    ASSERT_TRUE(acceptFirst());
-    const AcceptedState displayed = accepted();
-    ASSERT_TRUE(declareList(2u));
-    const u64 inputGeneration = m_state.inputGeneration();
-    m_source.arm(MutationKind::TextSelect, 8u);
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.ready());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_source.mutations(), 1u);
-    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
-    EXPECT_EQ(m_state.selectedKey(), 8u);
-    expectAccepted(displayed);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_multiline_command_tests{
+using MultilineCommandTests = ::NWB::UiMultilineTests::MultilineFixture;
+};
+
+namespace __hidden_ui_multiline_composition_tests{
+using MultilineCompositionTests = ::NWB::UiMultilineTests::MultilineFixture;
+};
+
+namespace __hidden_ui_multiline_model_tests{
+using MultilineModelTests = ::NWB::UiMultilineTests::MultilineFixture;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_glyph_sdf_tests{
+using UiListBuilderTests = ::NWB::UiListTests::UiListBuilderTests;
+using UiListArithmeticSource = ::NWB::UiListTests::ArithmeticSource;
+using UiListLoanTests = __hidden_ui_list_loan_tests::UiListLoanTests;
+using UiListLoanCallbackSource = __hidden_ui_list_loan_tests::CallbackSource;
+using UiListLoanAcceptedState = __hidden_ui_list_loan_tests::AcceptedState;
+namespace UiListLoanMutationKind = __hidden_ui_list_loan_tests::MutationKind;
+using UiListLoanMutationKindEnum = __hidden_ui_list_loan_tests::MutationKind::Enum;
+using UiListReconcileRangeSource = ::UiListBehaviorTestSupport::RangeSource;
+using MultilineCommandTests = __hidden_ui_multiline_command_tests::MultilineCommandTests;
+using MultilineCompositionTests = __hidden_ui_multiline_composition_tests::MultilineCompositionTests;
+using MultilineModelTests = __hidden_ui_multiline_model_tests::MultilineModelTests;
+using MultilineSnapshot = ::NWB::UiMultilineTests::MultilineSnapshot;
+using ScopedTestTrace = ::NWB::Tests::ScopedTestTrace;
+
+using Builder = ::NWB::Impl::Ui::Builder;
+using ContainerOptions = ::NWB::Impl::Ui::ContainerOptions;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+using ControlToken = ::NWB::Impl::Ui::ControlToken;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using DrawSnapshot = ::NWB::Impl::Ui::DrawSnapshot;
+using EditCommandRequest = ::NWB::Impl::Ui::EditCommandRequest;
+using EditCommandResult = ::NWB::Impl::Ui::EditCommandResult;
+using EditCompositionView = ::NWB::Impl::Ui::EditCompositionView;
+using EditLimits = ::NWB::Impl::Ui::EditLimits;
+using EditModel = ::NWB::Impl::Ui::EditModel;
+using Font = ::NWB::Impl::Font;
+using HitTarget = ::NWB::Impl::Ui::HitTarget;
+using InputCommandIntent = ::NWB::Impl::Ui::InputCommandIntent;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
+using ListOptions = ::NWB::Impl::Ui::ListOptions;
+using ListResult = ::NWB::Impl::Ui::ListResult;
+using ListState = ::NWB::Impl::Ui::ListState;
+using Point = ::NWB::Impl::Ui::Point;
+using Rect = ::NWB::Impl::Ui::Rect;
+using ScrollPlacement = ::NWB::Impl::Ui::ScrollPlacement;
+using SelectableMetrics = ::NWB::Impl::Ui::SelectableMetrics;
+using SelectableStyle = ::NWB::Impl::Ui::SelectableStyle;
+using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
+using TextLayout = ::NWB::Impl::Ui::TextLayout;
+using TextService = ::NWB::Impl::Ui::TextService;
+using WidgetId = ::NWB::Impl::Ui::WidgetId;
+
+namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
+using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
+namespace EditClipboardAction = ::NWB::Impl::Ui::EditClipboardAction;
+using EditClipboardActionEnum = ::NWB::Impl::Ui::EditClipboardAction::Enum;
+namespace EditCommand = ::NWB::Impl::Ui::EditCommand;
+using EditCommandEnum = ::NWB::Impl::Ui::EditCommand::Enum;
+namespace EditMove = ::NWB::Impl::Ui::EditMove;
+using EditMoveEnum = ::NWB::Impl::Ui::EditMove::Enum;
+namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
+using EditTextModeEnum = ::NWB::Impl::Ui::EditTextMode::Enum;
+namespace InputCommand = ::NWB::Impl::Ui::InputCommand;
+using InputCommandEnum = ::NWB::Impl::Ui::InputCommand::Enum;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+namespace LayoutSizePolicy = ::NWB::Impl::Ui::LayoutSizePolicy;
+using LayoutSizePolicyEnum = ::NWB::Impl::Ui::LayoutSizePolicy::Enum;
+using TextLayoutStatusEnum = ::NWB::Impl::Ui::TextLayoutStatus::Enum;
+namespace CoreKey = ::NWB::Core::Key;
+using CoreKeyEnum = ::NWB::Core::Key::Enum;
+
+using ::NWB::Impl::Ui::ApplyEditCommand;
+using ::NWB::Impl::Ui::MeasureSelectable;
+using ::NWB::Impl::Ui::TranslateEditCommand;
+using ::NWB::Tests::UiCases::s_UiCaseButtonHover;
+using ::NWB::Tests::UiCases::s_UiCaseNameButtonNormal;
+
+[[nodiscard]] NWB_INLINE f32 UiListMultilineQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
+
+[[nodiscard]] NWB_INLINE ListOptions MakeUiListBuilderDefaultOptions()noexcept{
+    return ::NWB::UiListTests::Options();
 }
 
-TEST_F(UiListLoanTests, SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureStaysUnchanged){
-    ASSERT_TRUE(acceptFirst());
-    const HitTarget* row = target(firstRow());
-    ASSERT_NE(row, nullptr);
-    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(row->rectangle.x, row->rectangle.y, 0.0f, 0.0f), VectorSet(10.0f, 12.0f, 0.0f, 0.0f));
-    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    ASSERT_EQ(m_context.input().capture(), firstRow());
-    const AcceptedState displayed = accepted();
-    ASSERT_TRUE(declareList(2u));
-    const u64 inputGeneration = m_state.inputGeneration();
-    m_source.arm(MutationKind::KeySelect, 0u);
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
-    expectAccepted(displayed);
+[[nodiscard]] NWB_INLINE Point UiListBuilderCenter(const Rect& bounds)noexcept{
+    return ::NWB::UiWidgetTests::Center(bounds);
 }
 
-TEST_F(UiListLoanTests, EnabledCallbackScrollIsPreservedWhenEnsureCursorRejectsTheChangedEpoch){
-    m_state.select(5u);
-    ASSERT_TRUE(acceptFirst());
+NWB_INLINE void ExpectUiListBuilderRect(const Rect& actual, const Rect& expected){
+    ::NWB::UiPaintAssertions::ExpectRect(actual, expected);
+}
+
+[[nodiscard]] NWB_INLINE WidgetId UiListBuilderRequireWidgetId(const WidgetId parent, const StringView stableKey){
+    return ::UiTestSupport::RequireWidgetId(parent, stableKey);
+}
+
+[[nodiscard]] NWB_INLINE WidgetId UiListBuilderRequireWidgetPartId(const WidgetId parent, const u64 partKey){
+    return ::UiTestSupport::RequireWidgetPartId(parent, partKey);
+}
+
+[[nodiscard]] NWB_INLINE Optional<HitTarget> FindUiListBuilderTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
+    if(const HitTarget* found = self.target(widget))
+        return *found;
+    return {};
+}
+
+[[nodiscard]] NWB_INLINE u32 MakeUiListLatnScriptTag()noexcept{
+    return ::PackFourCharTag('L', 'a', 't', 'n');
+}
+
+[[nodiscard]] NWB_INLINE b8 UiListInstallLatinFont(::NWB::Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
+    ::NWB::Core::Alloc::ScratchArena scratchArena(::NWB::UiWidgetTests::s_FontScratchArenaName);
+    return ::NWB::UiWidgetTests::InstallLatinFixtureFont(scratchArena, arena, font, text);
+}
+
+NWB_INLINE void CopyUiListBuilderStyles(Builder& source, Builder& destination)noexcept{
+    destination.style() = source.style();
+    destination.listStyle() = source.listStyle();
+}
+
+NWB_INLINE void SetUiListBuilderRowStyle(Builder& builder, const SelectableStyle& row)noexcept{
+    builder.listStyle().row = row;
+}
+
+[[nodiscard]] NWB_INLINE b8 UiListReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+    return ::NWB::Impl::Ui::ListBehavior::Reconcile(state, source);
+}
+
+[[nodiscard]] NWB_INLINE b8 UiListReconcileApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
+    return ::NWB::Impl::Ui::ListBehavior::Apply(source, options, action, state, result);
+}
+
+[[nodiscard]] NWB_INLINE ControlAction MakeUiListReconcileAction(const ListState& state, const UiListReconcileRangeSource& source, const ControlActionKindEnum kind)noexcept{
+    return ::UiListBehaviorTestSupport::Action(state, source, kind);
+}
+
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineEmbeddedNulXY()noexcept{ return ::AStringView("x\0y", 3u); }
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineEmbeddedNulAB()noexcept{ return ::AStringView("a\0b", 3u); }
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineSingleNul()noexcept{ return ::AStringView("\0", 1u); }
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineByteView(const Span<const u8> bytes)noexcept{
+    return ::AStringView(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_UiListCasePanelKey = "panel";
+const StringView s_UiListCaseListKey = "list";
+const StringView s_UiListCaseRowsKey = "rows";
+const StringView s_UiListCaseFirstRowText = "Ax";
+const StringView s_UiMultilineLineSeparator = "\xE2\x80\xA8";
+const StringView s_UiMultilineParagraphSeparator = "\xE2\x80\xA9";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+InputEvent MakeUiListPointerAt(in InputEventTypeEnum type, in Point position){
+    InputEvent event = InputEvent();
+    event.type = type;
+    event.position = position;
+    return event;
+}
+
+InputEvent MakeUiListKeyEvent(in InputEventTypeEnum type, in CoreKeyEnum key){
+    InputEvent event = InputEvent();
+    event.type = type;
+    event.key = key;
+    return event;
+}
+
+ShapeRequest MakeUiListShapeRequest(in StringView text, in f32 fontSize){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.fontSize = fontSize;
+    return request;
+}
+
+ShapeRequest MakeUiListLanguageShapeRequest(in StringView text, in StringView language, in f32 fontSize){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.language = language;
+    request.fontSize = fontSize;
+    return request;
+}
+
+InputCommandIntent MakeUiMultilineIntent(in InputCommandEnum command, in b8 extend, in b8 edit){
+    InputCommandIntent intent = InputCommandIntent();
+    intent.command = command;
+    intent.extend = extend;
+    intent.edit = edit;
+    return intent;
+}
+
+EditCommandRequest MakeUiMultilineCommand(in EditCommandEnum command){
+    EditCommandRequest request = EditCommandRequest();
+    request.command = command;
+    return request;
+}
+
+EditLimits MakeUiMultilineLimits(in usize maxBytes, in usize maxHistoryRecords, in usize maxHistoryBytes){
+    EditLimits limits = EditLimits();
+    limits.maxBytes = maxBytes;
+    limits.maxHistoryRecords = maxHistoryRecords;
+    limits.maxHistoryBytes = maxHistoryBytes;
+    return limits;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiListBuilderSelectionTests_InitialProgrammaticSelectionSurvivesAndEndNavigatesToVisibleLastKey(mut UiListBuilderTests self){
+    self.m_state.select(50000u);
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_EQ(self.m_state.selectedKey(), 50000u);
+    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(50000u)).has_value());
+    self.press(CoreKey::Tab);
+    self.press(CoreKey::End);
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 100000u);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), self.m_state.placement().maxOffset);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(100000u)).has_value());
+    EXPECT_LE(self.m_source.textCalls, 12u);
+}
+
+void VerifyUiListBuilderSelectionTests_UnseenTallCursorIsMeasuredBeforeRevealAndFailedRevisionRefreshRetainsTheRequest(mut UiListBuilderTests self){
+    self.m_source.specialIndex = self.m_source.count - 1u;
+    self.m_state.select(1u);
+    ListOptions options = MakeUiListBuilderDefaultOptions();
+    options.selectOnNavigate = false;
+    ASSERT_TRUE(self.accept(1u, options));
+    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(firstRowOpt.has_value());
+    const f32 initialHeight = firstRowOpt.value().rectangle.height;
+    self.press(CoreKey::Tab);
+    ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    self.press(CoreKey::End);
+    self.m_source.textCalls = 0u;
+    ASSERT_TRUE(self.accept(2u, options));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_EQ(self.m_state.cursorKey(), self.m_source.count);
+    Optional<HitTarget> cursorOpt = FindUiListBuilderTarget(self, self.row(self.m_source.count));
+    ASSERT_TRUE(cursorOpt.has_value());
+    HitTarget cursor = cursorOpt.value();
+    EXPECT_GT(cursor.rectangle.height, initialHeight);
+    EXPECT_GE(cursor.rectangle.y, cursor.clip.y);
+    const VectorSingle cursorBottom = VectorSingle(cursor.rectangle.y, cursor.clip.y, 0.0f, 0.0f) + VectorSingle(cursor.rectangle.height, cursor.clip.height, 0.0f, 0.0f);
+    EXPECT_LE(cursorBottom.x, cursorBottom.y);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), self.m_state.placement().maxOffset);
+    EXPECT_LE(self.m_source.textCalls, 8u);
+    ASSERT_TRUE(self.m_state.scrollTo(0.0));
+    ASSERT_TRUE(self.accept(3u, options));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 0.0);
+    EXPECT_EQ(self.m_state.cursorKey(), self.m_source.count);
+    EXPECT_FALSE(FindUiListBuilderTarget(self, self.row(self.m_source.count)).has_value());
+    ++self.m_source.contentRevision;
+    const f32 fontSize = self.m_builder.style().fontSize;
+    self.m_builder.style().fontSize = UiListMultilineQuietNaNF32();
+    EXPECT_FALSE(self.prepare(4u, options));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_EQ(self.m_state.cursorKey(), self.m_source.count);
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+    self.m_builder.style().fontSize = fontSize;
+    ASSERT_TRUE(self.accept(5u, options));
+    cursorOpt = FindUiListBuilderTarget(self, self.row(self.m_source.count));
+    ASSERT_TRUE(cursorOpt.has_value());
+    cursor = cursorOpt.value();
+    EXPECT_GE(cursor.rectangle.y, cursor.clip.y);
+    const VectorSingle restoredBottom = VectorSingle(cursor.rectangle.y, cursor.clip.y, 0.0f, 0.0f) + VectorSingle(cursor.rectangle.height, cursor.clip.height, 0.0f, 0.0f);
+    EXPECT_LE(restoredBottom.x, restoredBottom.y);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), self.m_state.placement().maxOffset);
+}
+
+void VerifyUiListBuilderSelectionTests_ReorderPreservesSelectionByKeyAndRemovalClearsIt(mut UiListBuilderTests self){
+    self.m_state.select(50000u);
+    ASSERT_TRUE(self.accept(1u));
+    self.m_source.reverse = true;
+    ++self.m_source.contentRevision;
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    EXPECT_EQ(self.m_state.selectedKey(), 50000u);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(50000u)).has_value());
+    self.m_source.removed = 50000u;
+    --self.m_source.count;
+    ++self.m_source.contentRevision;
+    ASSERT_TRUE(self.prepare(3u));
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_EQ(self.m_state.cursorKey(), 0u);
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_FALSE(FindUiListBuilderTarget(self, self.row(50000u)).has_value());
+}
+
+void VerifyUiListBuilderSelectionTests_ProgrammaticSameSelectionFencesQueuedActivationAndWheel(mut UiListBuilderTests self){
+    self.m_state.select(1u);
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    ASSERT_TRUE(secondRowOpt.has_value());
+    self.click(UiListBuilderCenter(secondRowOpt.value().rectangle));
+    ASSERT_TRUE(self.wheel());
+    const u64 inputGeneration = self.m_state.inputGeneration();
+    self.m_state.select(1u);
+    EXPECT_NE(self.m_state.inputGeneration(), inputGeneration);
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 0.0);
+    EXPECT_TRUE(self.m_context.input().controlActions().empty());
+    EXPECT_FALSE(self.m_context.input().focus().valid());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+}
+
+void VerifyUiListBuilderSelectionTests_SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance(mut UiListBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(firstRowOpt.has_value());
+    const Point point = UiListBuilderCenter(firstRowOpt.value().rectangle);
+    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
+    ++self.m_source.contentRevision;
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+    EXPECT_FALSE(self.m_context.input().focus().valid());
+    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.m_context.input().controlActions().empty());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    ASSERT_TRUE(self.prepare(3u));
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+}
+
+void VerifyUiListBuilderSelectionTests_EscapeBeforeReleaseCancelsRowSelectionAndHostSubmission(mut UiListBuilderTests self){
+    self.m_state.select(1u);
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    ASSERT_TRUE(secondRowOpt.has_value());
+    const Point point = UiListBuilderCenter(secondRowOpt.value().rectangle);
+    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_FALSE(self.m_result.activated);
+    self.press(CoreKey::Escape);
+    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryUp, point)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    self.press(CoreKey::Tab);
+    ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_FALSE(self.m_result.activated);
+    self.press(CoreKey::Escape);
+    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    ASSERT_TRUE(self.accept(5u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_FALSE(self.m_result.activated);
+    self.press(CoreKey::Tab);
+    ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    self.press(CoreKey::Enter);
+    ASSERT_TRUE(self.accept(6u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_TRUE(self.m_result.activated);
+}
+
+void VerifyUiListBuilderSelectionTests_DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRelease(mut UiListBuilderTests self){
+    self.m_state.select(1u);
+    ASSERT_TRUE(self.accept(1u));
+    self.press(CoreKey::Tab);
+    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    ++self.m_source.contentRevision;
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_FALSE(self.m_result.activated);
+    self.press(CoreKey::Enter);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_TRUE(self.m_result.activated);
+}
+
+void VerifyUiListBuilderSelectionTests_HeldNavigationCannotMutateAnAcceptedReorderedDataset(mut UiListBuilderTests self){
+    self.m_state.select(1u);
+    ASSERT_TRUE(self.accept(1u));
+    self.press(CoreKey::Tab);
+    InputEvent event = InputEvent();
+    event.type = InputEventType::KeyDown;
+    event.key = CoreKey::Down;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+    self.m_source.reverse = true;
+    ++self.m_source.contentRevision;
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    event.repeat = true;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+    ASSERT_TRUE(self.prepare(3u));
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    event.type = InputEventType::KeyUp;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+}
+
+void VerifyUiListBuilderSelectionTests_ReplacementSourceResetsSelectionAndScroll(mut UiListBuilderTests self){
+    self.m_state.select(60000u);
+    ASSERT_TRUE(self.accept(1u));
+    ASSERT_GT(self.m_state.scrollOffset(), 0.0);
+    ++self.m_source.generation;
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_EQ(self.m_state.cursorKey(), 0u);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 0.0);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_TRUE(FindUiListBuilderTarget(self, self.row(1u)).has_value());
+}
+
+void VerifyUiListBuilderSelectionTests_ReplacementStateRejectsOldActivationEvenForTheSameSourceAndHost(mut UiListBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    ASSERT_TRUE(secondRowOpt.has_value());
+    self.click(UiListBuilderCenter(secondRowOpt.value().rectangle));
+    ListState replacement = ListState();
+    ASSERT_TRUE(self.prepareSource(2u, self.m_source, replacement));
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_EQ(replacement.selectedKey(), 0u);
+    EXPECT_TRUE(self.m_context.input().controlActions().empty());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    const Optional<HitTarget> hostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    ASSERT_TRUE(hostOpt.has_value());
+    EXPECT_EQ(hostOpt.value().control.instanceGeneration, replacement.inputGeneration());
+}
+
+void VerifyUiListBuilderSelectionTests_DisabledAndOmittedListsRetirePartsWithoutBorrowingQueuedActions(mut UiListBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    ASSERT_TRUE(secondRowOpt.has_value());
+    self.click(UiListBuilderCenter(secondRowOpt.value().rectangle));
+    ListOptions disabled = MakeUiListBuilderDefaultOptions();
+    disabled.enabled = false;
+    ASSERT_TRUE(self.prepare(2u, disabled));
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_FALSE(self.m_context.input().focus().valid());
+    EXPECT_TRUE(self.m_context.input().controlActions().empty());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_context.input().targets().size(), 2u);
+    const Optional<HitTarget> hostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    ASSERT_TRUE(hostOpt.has_value());
+    EXPECT_FALSE(hostOpt.value().enabled);
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    ASSERT_TRUE(self.finishPanel());
+    EXPECT_FALSE(FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey)).has_value());
+    EXPECT_EQ(self.m_context.states().entries().size(), 1u);
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_EQ(self.m_context.input().targets().size(), 1u);
+}
+
+void VerifyUiListBuilderSelectionTests_SourceRevisionChangedDuringScopeRejectsTheDeferredLoan(mut UiListBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    const ListResult result = self.m_builder.virtualList(s_UiListCaseListKey, self.m_source, self.m_state, MakeUiListBuilderDefaultOptions());
+    ASSERT_TRUE(result.valid);
+    ++self.m_source.contentRevision;
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+    EXPECT_FALSE(self.m_context.ready());
+}
+
+void VerifyUiListBuilderSelectionTests_ContentPreflightRowsCannotHideAChangedSourceBeforePaint(mut UiListBuilderTests self){
+    ListOptions options = MakeUiListBuilderDefaultOptions();
+    options.height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    ASSERT_TRUE(self.accept(1u, options));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_source.textCalls = 0u;
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiListCaseListKey, self.m_source, self.m_state, options).valid);
+    ASSERT_GT(self.m_source.textCalls, 0u);
+    ++self.m_source.contentRevision;
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+    EXPECT_FALSE(self.m_context.ready());
+}
+
+void VerifyUiListBuilderSelectionTests_DuplicateOrMalformedVisibleKeysRejectTheFrame(mut UiListBuilderTests self){
+    self.m_source.duplicate = true;
+    EXPECT_FALSE(self.prepare(1u));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_TRUE(self.m_context.input().targets().empty());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+    self.m_source.duplicate = false;
+    self.m_source.malformedLookup = true;
+    EXPECT_FALSE(self.prepare(2u));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_TRUE(self.m_context.input().targets().empty());
+}
+
+void VerifyUiListBuilderSelectionTests_EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardStop(mut UiListBuilderTests self){
+    self.m_source.count = 0u;
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_EQ(self.m_source.textCalls, 0u);
+    EXPECT_EQ(self.m_context.input().targets().size(), 2u);
+    EXPECT_FALSE(self.m_state.placement().scrollbarVisible);
+    self.press(CoreKey::Tab);
+    self.press(CoreKey::Down);
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_FALSE(self.m_result.selectionChanged);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiListBuilderTests_SiblingListsPaintTheirOwnDeferredBackgroundStyles(mut UiListBuilderTests self){
+    self.m_source.count = 0u;
+    ListState secondState = ListState();
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_builder.listStyle().background = Name(s_UiCaseNameButtonNormal);
+    ASSERT_TRUE(self.m_builder.virtualList("first", self.m_source, self.m_state, MakeUiListBuilderDefaultOptions()).valid);
+    self.m_builder.listStyle().background = Name(s_UiCaseButtonHover);
+    ASSERT_TRUE(self.m_builder.virtualList("second", self.m_source, secondState, MakeUiListBuilderDefaultOptions()).valid);
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const Expected<Rect> first = self.skinQuad(snapshot, 6u);
+    ASSERT_TRUE(first.has_value());
+    const Expected<Rect> second = self.skinQuad(snapshot, 7u);
+    ASSERT_TRUE(second.has_value());
+    EXPECT_LT(first.value().y, second.value().y);
+}
+
+void VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor(mut UiListBuilderTests self){
+    self.m_source.specialIndex = 50000u;
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(firstRowOpt.has_value());
+    const f32 initialHeight = firstRowOpt.value().rectangle.height;
+    const f64 within = cast<f64>(initialHeight) * 0.25;
+    ASSERT_TRUE(self.m_state.scrollTo(cast<f64>(self.m_source.specialIndex) * cast<f64>(initialHeight) + within));
+    self.m_source.textCalls = 0u;
+    self.m_source.keyCalls = 0u;
+    self.m_source.lookupCalls = 0u;
+    ASSERT_TRUE(self.accept(2u));
+    const ScrollPlacement placement = self.m_state.placement();
+    ASSERT_EQ(placement.firstRow, self.m_source.specialIndex);
+    const Optional<HitTarget> tallOpt = FindUiListBuilderTarget(self, self.row(self.m_source.specialIndex + 1u));
+    ASSERT_TRUE(tallOpt.has_value());
+    const HitTarget tall = tallOpt.value();
+    const f32 grownHeight = tall.rectangle.height;
+    EXPECT_GT(grownHeight, initialHeight);
+    const f64 grown = cast<f64>(grownHeight);
+    EXPECT_NEAR(cast<f64>(tall.rectangle.y), cast<f64>(placement.viewport.y) - within, 0.0001);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), cast<f64>(self.m_source.specialIndex) * grown + within);
+    EXPECT_DOUBLE_EQ(placement.contentHeight, cast<f64>(self.m_source.count) * grown);
+    const Expected<SelectableMetrics> metrics = MeasureSelectable(self.m_skin, self.m_builder.listStyle().row);
+    const Expected<TextLayout, TextLayoutStatusEnum> layout = self.m_text.layout(MakeUiListShapeRequest(self.m_source.specialText, self.m_builder.style().fontSize));
+    ASSERT_TRUE(metrics.has_value());
+    ASSERT_TRUE(layout.has_value());
+    const Expected<Rect> visual = self.m_text.measure(layout.value(), self.m_paint.displayMetrics());
+    ASSERT_TRUE(visual.has_value());
+    EXPECT_GE(grownHeight + 0.0001f, visual.value().height + metrics.value().padding.top + metrics.value().padding.bottom);
+    const u64 provisionalBound = cast<u64>(Ceil(placement.viewport.height / initialHeight)) + 1u;
+    EXPECT_LE(self.m_source.textCalls, provisionalBound);
+    EXPECT_LE(self.m_source.keyCalls, provisionalBound * 2u + 2u);
+    EXPECT_LE(self.m_source.lookupCalls, provisionalBound + 2u);
+    EXPECT_LT(self.m_context.input().targets().size(), 16u);
+    ASSERT_TRUE(self.m_state.scrollTo(0.0));
+    ASSERT_TRUE(self.accept(3u));
+    const Optional<HitTarget> rowAfterScroll = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(rowAfterScroll.has_value());
+    EXPECT_FLOAT_EQ(rowAfterScroll.value().rectangle.height, grownHeight);
+    ++self.m_source.contentRevision;
+    ASSERT_TRUE(self.accept(4u));
+    const Optional<HitTarget> rowAfterRevision = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(rowAfterRevision.has_value());
+    EXPECT_FLOAT_EQ(rowAfterRevision.value().rectangle.height, initialHeight);
+}
+
+void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry(mut UiListBuilderTests self){
+    const SelectableStyle originalStyle = self.m_builder.listStyle().row;
+    u64 generation = 1u;
+    for(u32 change = 0u; change < 7u; ++change){
+        const ScopedTestTrace trace = ScopedTestTrace(change);
+        self.m_builder.style().fontSize = 16.0f;
+        SetUiListBuilderRowStyle(self.m_builder, originalStyle);
+        ASSERT_TRUE(self.m_builder.setTextShaping(MakeUiListLatnScriptTag(), "en"));
+        ListState state = ListState();
+        UiListArithmeticSource source = UiListArithmeticSource();
+        source.specialIndex = 50000u;
+        DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f);
+        ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const Optional<HitTarget> seedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        ASSERT_TRUE(seedOpt.has_value());
+        const f32 seed = seedOpt.value().rectangle.height;
+        ASSERT_TRUE(state.scrollTo(cast<f64>(source.specialIndex) * cast<f64>(seed)));
+        ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const Optional<HitTarget> grownOpt = FindUiListBuilderTarget(self, self.row(source.specialIndex + 1u));
+        ASSERT_TRUE(grownOpt.has_value());
+        const f32 grown = grownOpt.value().rectangle.height;
+        ASSERT_GT(grown, seed);
+        ASSERT_TRUE(state.scrollTo(0.0));
+        ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const Optional<HitTarget> cachedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        ASSERT_TRUE(cachedOpt.has_value());
+        ASSERT_FLOAT_EQ(cachedOpt.value().rectangle.height, grown);
+        switch(change){
+        case 0u:
+            ASSERT_TRUE(UiListInstallLatinFont(self.m_arena, self.m_font, self.m_text));
+            break;
+        case 1u:
+            self.m_builder.style().fontSize = 12.0f;
+            break;
+        case 2u:
+            display.pixelScaleX = 1.25f;
+            display.pixelScaleY = 1.5f;
+            break;
+        case 3u:
+            ASSERT_TRUE(self.m_builder.setTextShaping(MakeUiListLatnScriptTag(), "ko"));
+            break;
+        case 4u:
+            self.m_builder.listStyle().row.padding.bottom = self.m_builder.listStyle().row.padding.bottom + 2.0f;
+            break;
+        case 5u:
+            ++source.generation;
+            break;
+        case 6u:
+            --source.count;
+            break;
+        default:
+            break;
+        }
+        source.textCalls = 0u;
+        ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const Optional<HitTarget> refreshedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        ASSERT_TRUE(refreshedOpt.has_value());
+        const f32 refreshed = refreshedOpt.value().rectangle.height;
+        EXPECT_LT(refreshed, grown);
+        const Expected<SelectableMetrics> metrics = MeasureSelectable(self.m_skin, self.m_builder.listStyle().row);
+        ASSERT_TRUE(metrics.has_value());
+        f32 expected = metrics.value().minimum.y;
+        StringView language = "en";
+        if(change == 3u){
+            language = "ko";
+        }
+        Array<StringView, 2u> labels = Array<StringView, 2u>();
+        labels[0u] = "";
+        labels[1u] = s_UiListCaseFirstRowText;
+        for(in StringView label : labels){
+            const Expected<TextLayout, TextLayoutStatusEnum> layout = self.m_text.layout(MakeUiListLanguageShapeRequest(label, language, self.m_builder.style().fontSize));
+            ASSERT_TRUE(layout.has_value());
+            const Expected<Rect> visual = self.m_text.measure(layout.value(), display);
+            ASSERT_TRUE(visual.has_value());
+            expected = Max(expected, visual.value().height + metrics.value().padding.top + metrics.value().padding.bottom);
+        }
+        EXPECT_FLOAT_EQ(refreshed, expected);
+        EXPECT_LE(source.textCalls, 8u);
+    }
+}
+
+void VerifyUiListBuilderTests_ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum(mut UiListBuilderTests self){
+    self.m_source.specialIndex = 50000u;
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> seedOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(seedOpt.has_value());
+    const f32 seed = seedOpt.value().rectangle.height;
+    ASSERT_TRUE(self.m_state.scrollTo(cast<f64>(self.m_source.specialIndex) * cast<f64>(seed)));
+    ASSERT_TRUE(self.accept(2u));
+    const Optional<HitTarget> grownOpt = FindUiListBuilderTarget(self, self.row(self.m_source.specialIndex + 1u));
+    ASSERT_TRUE(grownOpt.has_value());
+    const f32 grown = grownOpt.value().rectangle.height;
+    ASSERT_GT(grown, seed);
+    ASSERT_TRUE(self.m_state.scrollTo(0.0));
+    ASSERT_TRUE(self.accept(3u));
+    const Optional<HitTarget> cachedOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(cachedOpt.has_value());
+    ASSERT_FLOAT_EQ(cachedOpt.value().rectangle.height, grown);
+    TextService replacement = TextService(self.m_arena);
+    ASSERT_TRUE(UiListInstallLatinFont(self.m_arena, self.m_font, replacement));
+    ASSERT_EQ(replacement.generation(), self.m_text.generation());
+    ASSERT_NE(replacement.identity(), self.m_text.identity());
+    Builder builder = Builder(self.m_arena, self.m_context, self.m_paint, replacement);
+    builder.setSkin(self.m_skin);
+    CopyUiListBuilderStyles(self.m_builder, builder);
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    ASSERT_TRUE(builder.virtualList(s_UiListCaseListKey, self.m_source, self.m_state, MakeUiListBuilderDefaultOptions()).valid);
+    ASSERT_TRUE(builder.endPanel());
+    ASSERT_TRUE(self.m_context.endRoot());
+    ASSERT_TRUE(self.m_context.finishFrame());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    const Optional<HitTarget> finalOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(finalOpt.has_value());
+    EXPECT_FLOAT_EQ(finalOpt.value().rectangle.height, seed);
+    EXPECT_EQ(replacement.generation(), self.m_text.generation());
+}
+
+void VerifyUiListBuilderTests_SharedStateDeclarationsMergeSameMetricMaximaWithoutContaminatingDifferentMetrics(mut UiListBuilderTests self){
+    u64 generation = 1u;
+    Array<b8, 2u> metricModes = Array<b8, 2u>();
+    metricModes[0u] = false;
+    metricModes[1u] = true;
+    for(in b8 differentMetrics : metricModes){
+        const ScopedTestTrace trace = ScopedTestTrace(differentMetrics);
+        UiListArithmeticSource source = UiListArithmeticSource();
+        source.specialIndex = 2u;
+        ListState state = ListState();
+        ASSERT_TRUE(self.begin(generation));
+        ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+        self.m_builder.style().fontSize = 22.0f;
+        ASSERT_TRUE(self.m_builder.virtualList(s_UiListCaseListKey, source, state, MakeUiListBuilderDefaultOptions()).valid);
+        if(differentMetrics){
+            self.m_builder.style().fontSize = 12.0f;
+        }
+        ListOptions small = MakeUiListBuilderDefaultOptions();
+        small.height.value = 40.0f;
+        ASSERT_TRUE(self.m_builder.virtualList("second", source, state, small).valid);
+        ASSERT_TRUE(self.finishPanel());
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const Optional<HitTarget> firstOpt = FindUiListBuilderTarget(self, self.row(1u));
+        ASSERT_TRUE(firstOpt.has_value());
+        const f32 firstHeight = firstOpt.value().rectangle.height;
+        const WidgetId secondRow = UiListBuilderRequireWidgetPartId(UiListBuilderRequireWidgetId(self.id("second", s_UiListCasePanelKey), s_UiListCaseRowsKey), 1u);
+        const Optional<HitTarget> secondOpt = FindUiListBuilderTarget(self, secondRow);
+        ASSERT_TRUE(secondOpt.has_value());
+        const f32 secondHeight = secondOpt.value().rectangle.height;
+        ASSERT_GT(firstHeight, secondHeight);
+        ASSERT_TRUE(state.scrollTo(0.0));
+        ASSERT_TRUE(self.prepareSource(generation, source, state, small));
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        ++generation;
+        const Optional<HitTarget> mergedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        ASSERT_TRUE(mergedOpt.has_value());
+        if(differentMetrics){
+            EXPECT_FLOAT_EQ(mergedOpt.value().rectangle.height, secondHeight);
+        }
+        else{
+            EXPECT_FLOAT_EQ(mergedOpt.value().rectangle.height, firstHeight);
+        }
+    }
+}
+
+void VerifyUiListBuilderTests_SharedStyledContentKeepsItsFractionalFirstRowAndInheritedClipAcrossFrames(mut UiListBuilderTests self){
+    self.m_builder.style().fontSize = 12.0f;
+    self.m_source.specialIndex = 16u;
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> naturalOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(naturalOpt.has_value());
+    const f32 naturalHeight = naturalOpt.value().rectangle.height;
+    ASSERT_TRUE(self.m_state.scrollTo(cast<f64>(naturalHeight) * 10.25));
+    const WidgetId earlier = UiListBuilderRequireWidgetId(self.id("clipped", s_UiListCasePanelKey), "earlier");
+    const WidgetId earlierRows = UiListBuilderRequireWidgetId(earlier, s_UiListCaseRowsKey);
+    Rect previousRow = Rect();
+    Rect previousClip = Rect();
+    for(u64 generation = 2u; generation <= 3u; ++generation){
+        ASSERT_TRUE(self.begin(generation));
+        ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+        ContainerOptions clipped = ContainerOptions();
+        clipped.height = LayoutSize(LayoutSizePolicy::Fixed, 20.0f);
+        ASSERT_TRUE(self.m_builder.beginColumn("clipped", clipped));
+        self.m_builder.style().fontSize = 12.0f;
+        ListOptions content = MakeUiListBuilderDefaultOptions();
+        content.height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+        ASSERT_TRUE(self.m_builder.virtualList("earlier", self.m_source, self.m_state, content).valid);
+        ASSERT_TRUE(self.m_builder.endContainer());
+        self.m_builder.style().fontSize = 22.0f;
+        ASSERT_TRUE(self.m_builder.virtualList("later", self.m_source, self.m_state, MakeUiListBuilderDefaultOptions()).valid);
+        ASSERT_TRUE(self.finishPanel());
+        ASSERT_TRUE(self.m_context.commitFrame(generation));
+        const Optional<HitTarget> hostTargetOpt = FindUiListBuilderTarget(self, earlier);
+        const Optional<HitTarget> firstOpt = FindUiListBuilderTarget(self, UiListBuilderRequireWidgetPartId(earlierRows, 11u));
+        ASSERT_TRUE(hostTargetOpt.has_value());
+        ASSERT_TRUE(firstOpt.has_value());
+        const HitTarget hostTarget = hostTargetOpt.value();
+        const HitTarget first = firstOpt.value();
+        EXPECT_FALSE(FindUiListBuilderTarget(self, UiListBuilderRequireWidgetPartId(earlierRows, 10u)).has_value());
+        EXPECT_FALSE(FindUiListBuilderTarget(self, UiListBuilderRequireWidgetPartId(earlierRows, 17u)).has_value());
+        EXPECT_FLOAT_EQ(first.rectangle.height, naturalHeight);
+        EXPECT_FLOAT_EQ(hostTarget.clip.height, clipped.height.value);
+        EXPECT_GT(hostTarget.rectangle.height, hostTarget.clip.height);
+        EXPECT_GT(first.clip.height, 0.0f);
+        EXPECT_LT(first.clip.height, first.rectangle.height);
+        const VectorSingle clipBottom = VectorSingle(first.clip.y, hostTarget.clip.y, 0.0f, 0.0f) + VectorSingle(first.clip.height, hostTarget.clip.height, 0.0f, 0.0f);
+        EXPECT_FLOAT_EQ(clipBottom.x, clipBottom.y);
+        EXPECT_NEAR((first.clip.y - first.rectangle.y) / first.rectangle.height, 0.25f, 0.00001f);
+        if(generation != 2u){
+            ExpectUiListBuilderRect(first.rectangle, previousRow);
+            ExpectUiListBuilderRect(first.clip, previousClip);
+        }
+        previousRow = first.rectangle;
+        previousClip = first.clip;
+    }
+}
+
+void VerifyUiListBuilderTests_ContentViewportPreflightsTallSecondRowAtFractionalScrollBeforeParentLayout(mut UiListBuilderTests self){
+    self.m_source.count = 8u;
+    self.m_source.specialIndex = 1u;
+    ListOptions options = MakeUiListBuilderDefaultOptions();
+    options.height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    const Expected<SelectableMetrics> metrics = MeasureSelectable(self.m_skin, self.m_builder.listStyle().row);
+    const Expected<TextLayout, TextLayoutStatusEnum> ordinary = self.m_text.layout(MakeUiListShapeRequest(s_UiListCaseFirstRowText, self.m_builder.style().fontSize));
+    const Expected<TextLayout, TextLayoutStatusEnum> tall = self.m_text.layout(MakeUiListShapeRequest(self.m_source.specialText, self.m_builder.style().fontSize));
+    ASSERT_TRUE(metrics.has_value());
+    ASSERT_TRUE(ordinary.has_value());
+    ASSERT_TRUE(tall.has_value());
+    const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f);
+    const Expected<Rect> ordinaryVisual = self.m_text.measure(ordinary.value(), display);
+    const Expected<Rect> tallVisual = self.m_text.measure(tall.value(), display);
+    ASSERT_TRUE(ordinaryVisual.has_value());
+    ASSERT_TRUE(tallVisual.has_value());
+    // Lanes are the ordinary row and the tall row.
+    const f32 padTop = metrics.value().padding.top;
+    const f32 padBottom = metrics.value().padding.bottom;
+    const f32 minY = metrics.value().minimum.y;
+    const VectorSingle contentHeight = (VectorSingle(ordinaryVisual.value().height, tallVisual.value().height, 0.0f, 0.0f) + VectorSingle(padTop, padTop, padTop, padTop)) + VectorSingle(padBottom, padBottom, padBottom, padBottom);
+    const VectorSingle rowHeight = Max(VectorSingle(minY, minY, minY, minY), contentHeight);
+    const f32 initialHeight = rowHeight.x;
+    const f32 finalHeight = rowHeight.y;
+    ASSERT_GT(finalHeight, initialHeight);
+    ASSERT_TRUE(self.m_state.scrollTo(cast<f64>(initialHeight) * 0.25));
+    ASSERT_TRUE(self.begin(1u, display));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiListCaseListKey, self.m_source, self.m_state, options).valid);
+    EXPECT_FALSE(self.m_builder.button("after", ""));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const Optional<HitTarget> listHostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    const Optional<HitTarget> row1Opt = FindUiListBuilderTarget(self, self.row(1u));
+    const Optional<HitTarget> row2Opt = FindUiListBuilderTarget(self, self.row(2u));
+    ASSERT_TRUE(listHostOpt.has_value());
+    ASSERT_TRUE(row1Opt.has_value());
+    ASSERT_TRUE(row2Opt.has_value());
+    EXPECT_FLOAT_EQ(row1Opt.value().rectangle.height, finalHeight);
+    EXPECT_FLOAT_EQ(row2Opt.value().rectangle.height, finalHeight);
+    EXPECT_GE(self.m_state.placement().viewport.height + 0.0001f, finalHeight);
+    const Optional<HitTarget> afterOpt = FindUiListBuilderTarget(self, self.id("after", s_UiListCasePanelKey));
+    ASSERT_TRUE(afterOpt.has_value());
+    EXPECT_FLOAT_EQ(afterOpt.value().rectangle.y, listHostOpt.value().rectangle.y + listHostOpt.value().rectangle.height + self.m_builder.style().gap);
+    EXPECT_EQ(self.m_source.textCalls, 2u);
+    EXPECT_EQ(self.m_source.textCallsByIndex[0u], 1u);
+    EXPECT_EQ(self.m_source.textCallsByIndex[1u], 1u);
+}
+
+void VerifyUiListBuilderTests_ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted(mut UiListBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Optional<HitTarget> hostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    ASSERT_TRUE(firstRowOpt.has_value());
+    ASSERT_TRUE(hostOpt.has_value());
+    const Rect oldBounds = firstRowOpt.value().rectangle;
+    const f64 acceptedStep = hostOpt.value().scrollStep;
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.prepare(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), acceptedStep);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+    const Optional<HitTarget> stillDisplayedOpt = FindUiListBuilderTarget(self, self.row(1u));
+    ASSERT_TRUE(stillDisplayedOpt.has_value());
+    EXPECT_FLOAT_EQ(stillDisplayedOpt.value().rectangle.y, oldBounds.y);
+    EXPECT_EQ(self.m_context.states().entries().size(), 2u);
+    const Point oldRow = UiListBuilderCenter(oldBounds);
+    EXPECT_EQ(self.m_context.input().hitTest(oldRow), self.row(1u));
+    EXPECT_FALSE(self.m_context.commitFrame(3u));
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FALSE(FindUiListBuilderTarget(self, self.row(1u)).has_value());
+    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(4u)).has_value());
+    EXPECT_EQ(self.m_context.input().hitTest(oldRow), self.row(4u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiListLoanTests_TextCallbackSelectionRejectsDeferredPaintWithoutReplacingAcceptedTargets(mut UiListLoanTests self){
+    ASSERT_TRUE(self.acceptFirst());
+    const UiListLoanAcceptedState displayed = self.accepted();
+    ASSERT_TRUE(self.declareList(2u));
+    const u64 inputGeneration = self.m_state.inputGeneration();
+    self.m_source.arm(UiListLoanMutationKind::TextSelect, 8u);
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.ready());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_source.mutations(), 1u);
+    EXPECT_NE(self.m_state.inputGeneration(), inputGeneration);
+    EXPECT_EQ(self.m_state.selectedKey(), 8u);
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiListLoanTests_SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureStaysUnchanged(mut UiListLoanTests self){
+    ASSERT_TRUE(self.acceptFirst());
+    const Optional<HitTarget> rowOpt = self.findTarget(self.firstRow());
+    ASSERT_TRUE(rowOpt.has_value());
+    const HitTarget row = rowOpt.value();
+    const VectorSingle pointValue = VectorSingle(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f) + VectorSingle(10.0f, 12.0f, 0.0f, 0.0f);
+    const Point point = Point(pointValue.x, pointValue.y);
+    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
+    ASSERT_EQ(self.m_context.input().capture(), self.firstRow());
+    const UiListLoanAcceptedState displayed = self.accepted();
+    ASSERT_TRUE(self.declareList(2u));
+    const u64 inputGeneration = self.m_state.inputGeneration();
+    self.m_source.arm(UiListLoanMutationKind::KeySelect, 0u);
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+    EXPECT_NE(self.m_state.inputGeneration(), inputGeneration);
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiListLoanTests_EnabledCallbackScrollIsPreservedWhenEnsureCursorRejectsTheChangedEpoch(mut UiListLoanTests self){
+    self.m_state.select(5u);
+    ASSERT_TRUE(self.acceptFirst());
     // Same-value application selection requests cursor visibility and fences the previous input token before painting.
-    m_state.select(5u);
-    ASSERT_TRUE(declareList(2u));
-    const AcceptedState displayed = accepted();
-    const u64 inputGeneration = m_state.inputGeneration();
-    m_source.arm(MutationKind::EnabledScroll);
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    EXPECT_NE(m_state.inputGeneration(), inputGeneration);
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 64.0);
-    expectAccepted(displayed);
+    self.m_state.select(5u);
+    ASSERT_TRUE(self.declareList(2u));
+    const UiListLoanAcceptedState displayed = self.accepted();
+    const u64 inputGeneration = self.m_state.inputGeneration();
+    self.m_source.arm(UiListLoanMutationKind::EnabledScroll);
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    EXPECT_NE(self.m_state.inputGeneration(), inputGeneration);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 64.0);
+    self.expectAccepted(displayed);
 }
 
-TEST(UiListLoanBehaviorTests, ReconcileAndApplyPreserveExplicitChangesMadeBySourceCallbacks){
-    ListState state;
-    CallbackSource source(state);
+void VerifyUiListLoanBehaviorTests_ReconcileAndApplyPreserveExplicitChangesMadeBySourceCallbacks(){
+    ListState state = ListState();
+    UiListLoanCallbackSource source = UiListLoanCallbackSource(state);
     state.select(2u);
-    source.arm(MutationKind::KeySelect, 8u);
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    source.arm(UiListLoanMutationKind::KeySelect, 8u);
+    EXPECT_FALSE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 8u);
     EXPECT_EQ(state.cursorKey(), 8u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ControlAction action;
-    action.control = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
+    ASSERT_TRUE(UiListReconcile(state, source));
+    ControlAction action = ControlAction();
+    action.control = ControlToken(state.inputGeneration(), source.instanceGeneration(), source.revision());
     action.kind = ControlActionKind::Down;
-    source.arm(MutationKind::KeySelect, 3u);
-    ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    source.arm(UiListLoanMutationKind::KeySelect, 3u);
+    ListResult result = ListResult();
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.selectedKey(), 3u);
     EXPECT_EQ(state.cursorKey(), 3u);
     EXPECT_FALSE(result.valid);
@@ -906,8 +1173,8 @@ TEST(UiListLoanBehaviorTests, ReconcileAndApplyPreserveExplicitChangesMadeBySour
     action.delta = -1.0;
     action.step = 24.0;
     action.maximum = 300.0;
-    source.arm(MutationKind::RevisionScroll);
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    source.arm(UiListLoanMutationKind::RevisionScroll);
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), action, state, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 64.0);
     EXPECT_FALSE(result.valid);
 }
@@ -916,165 +1183,144 @@ TEST(UiListLoanBehaviorTests, ReconcileAndApplyPreserveExplicitChangesMadeBySour
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_list_reconciliation_tests{
-
-
-using namespace UiListBehaviorTestSupport;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeys){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_ReorderingRetainsStableSelectionAndCursorKeys(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListOptions options;
+    ASSERT_TRUE(UiListReconcile(state, source));
+    ListOptions options = ListOptions();
     options.selectOnNavigate = false;
-    ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(source, options, Action(state, source, ControlActionKind::Down), state, result));
+    ListResult result = ListResult();
+    ASSERT_TRUE(UiListReconcileApply(source, options, MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
     ASSERT_EQ(state.cursorKey(), 6u);
     source.reversed = true;
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 6u);
 }
 
-TEST(UiListBehaviorTests, RemovedCursorClearsIndependentlyOfSurvivingSelection){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_RemovedCursorClearsIndependentlyOfSurvivingSelection(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListOptions options;
+    ASSERT_TRUE(UiListReconcile(state, source));
+    ListOptions options = ListOptions();
     options.selectOnNavigate = false;
-    ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(source, options, Action(state, source, ControlActionKind::Down), state, result));
+    ListResult result = ListResult();
+    ASSERT_TRUE(UiListReconcileApply(source, options, MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
     source.count = 5u;
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 0u);
 }
 
-TEST(UiListBehaviorTests, DisabledSelectionClearsIndependentlyOfEnabledCursor){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_DisabledSelectionClearsIndependentlyOfEnabledCursor(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListOptions options;
+    ASSERT_TRUE(UiListReconcile(state, source));
+    ListOptions options = ListOptions();
     options.selectOnNavigate = false;
-    ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(source, options, Action(state, source, ControlActionKind::Down), state, result));
+    ListResult result = ListResult();
+    ASSERT_TRUE(UiListReconcileApply(source, options, MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
     source.disabledBegin = 4u;
     source.disabledEnd = 5u;
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 6u);
 }
 
-TEST(UiListBehaviorTests, ReplacingAnEstablishedSourceClearsSelectionCursorAndOffset){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_ReplacingAnEstablishedSourceClearsSelectionCursorAndOffset(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(5u);
     ASSERT_TRUE(state.scrollTo(90.0));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
     const u64 inputGeneration = state.inputGeneration();
     ++source.generation;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
     EXPECT_EQ(state.inputGeneration(), inputGeneration);
 }
 
-TEST(UiListBehaviorTests, InvalidSourceIdentitiesAndMalformedLookupFailWithoutPartialMutation){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_InvalidSourceIdentitiesAndMalformedLookupFailWithoutPartialMutation(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(5u);
     ASSERT_TRUE(state.scrollTo(90.0));
     source.generation = 0u;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(UiListReconcile(state, source));
     source.generation = 41u;
     source.revisionValue = 0u;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(UiListReconcile(state, source));
     source.revisionValue = 1u;
     source.badLookup = true;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(UiListReconcile(state, source));
     source.badLookup = false;
     source.wrongLookup = true;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 5u);
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 90.0);
     source.wrongLookup = false;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
 }
 
-TEST(UiListBehaviorTests, SourceRevisionChangingDuringLookupFailsAtomically){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_SourceRevisionChangingDuringLookupFailsAtomically(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(5u);
     source.changeRevisionOnLookup = true;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(UiListReconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 5u);
-    ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    ListResult result = ListResult();
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
     EXPECT_FALSE(result.valid);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(UiListReconcile(state, source));
 }
 
-TEST(UiListBehaviorTests, InputSourceAndRevisionTokensRejectStaleActions){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_InputSourceAndRevisionTokensRejectStaleActions(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListResult result;
-    const ControlAction valid = Action(state, source, ControlActionKind::Down);
+    ASSERT_TRUE(UiListReconcile(state, source));
+    ListResult result = ListResult();
+    const ControlAction valid = MakeUiListReconcileAction(state, source, ControlActionKind::Down);
     ControlAction action = valid;
     ++action.control.instanceGeneration;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), action, state, result));
     action = valid;
     ++action.control.contentGeneration;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), action, state, result));
     action = valid;
     ++action.control.contentRevision;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), action, state, result));
     ++source.revisionValue;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, valid, state, result));
-    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(UiListReconcile(state, source));
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), valid, state, result));
+    ASSERT_TRUE(UiListReconcileApply(source, ListOptions(), MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
     EXPECT_EQ(state.selectedKey(), 3u);
 }
 
-TEST(UiListBehaviorTests, ApplicationChangesFenceEvenAnUnchangedSelectionValue){
-    RangeSource source;
-    ListState state;
+void VerifyUiListReconciliationTests_ApplicationChangesFenceEvenAnUnchangedSelectionValue(){
+    UiListReconcileRangeSource source = UiListReconcileRangeSource();
+    ListState state = ListState();
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    const ControlAction action = Action(state, source, ControlActionKind::Down);
+    ASSERT_TRUE(UiListReconcile(state, source));
+    const ControlAction action = MakeUiListReconcileAction(state, source, ControlActionKind::Down);
     state.select(2u);
-    ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(source, {}, action, state, result));
+    ListResult result = ListResult();
+    EXPECT_FALSE(UiListReconcileApply(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.cursorKey(), 2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::Apply(source, {}, Action(state, source, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(UiListReconcile(state, source));
+    ASSERT_TRUE(UiListReconcileApply(source, ListOptions(), MakeUiListReconcileAction(state, source, ControlActionKind::Down), state, result));
     EXPECT_EQ(state.cursorKey(), 3u);
 }
 
@@ -1082,476 +1328,459 @@ TEST(UiListBehaviorTests, ApplicationChangesFenceEvenAnUnchangedSelectionValue){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/multiline_fixture.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_command_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiMultilineTests;
-using MultilineCommandTests = MultilineFixture;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(MultilineCommandTests, InvalidTextModeAndNonEditingAcceptAreRejected){
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept, false, false }, false, EditTextMode::Multiline).command, EditCommand::None);
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept }, false, static_cast<EditTextMode::Enum>(255u)).command, EditCommand::None);
+void VerifyMultilineCommandTests_InvalidTextModeAndNonEditingAcceptAreRejected(in MultilineCommandTests self){
+    EXPECT_EQ(TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, false), false, EditTextMode::Multiline).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, true), false, bit_cast<EditTextModeEnum>(u8(255u))).command, EditCommand::None);
 }
 
-TEST_F(MultilineCommandTests, RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting){
-    ASSERT_TRUE(m_model.setText("ab"));
-    ASSERT_TRUE(m_model.setSelection(1u, 1u));
-    const EditCommandResult inserted = ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Accept }, false, m_model.textMode()));
+void VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting(mut MultilineCommandTests self){
+    ASSERT_TRUE(self.m_model.setText("ab"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
+    const EditCommandResult inserted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, true), false, self.m_model.textMode()));
     EXPECT_TRUE(inserted.handled);
     EXPECT_TRUE(inserted.textChanged);
     EXPECT_TRUE(inserted.selectionChanged);
     EXPECT_FALSE(inserted.submitted);
-    EXPECT_EQ(m_model.text(), "a\nb");
-    const EditCommandResult repeated = ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Accept }, true, m_model.textMode()));
+    EXPECT_EQ(self.m_model.text(), "a\nb");
+    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, true), true, self.m_model.textMode()));
     EXPECT_TRUE(repeated.textChanged);
     EXPECT_FALSE(repeated.submitted);
-    EXPECT_EQ(m_model.text(), "a\n\nb");
+    EXPECT_EQ(self.m_model.text(), "a\n\nb");
 }
 
-TEST_F(MultilineCommandTests, SubmitIntentReportsWithoutEditingAndSuppressesRepeats){
-    ASSERT_TRUE(m_model.setText("a\nb"));
-    const MultilineSnapshot before(m_arena, m_model);
-    const EditCommandResult submitted = ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Submit }, false, m_model.textMode()));
+void VerifyMultilineCommandTests_SubmitIntentReportsWithoutEditingAndSuppressesRepeats(mut MultilineCommandTests self){
+    ASSERT_TRUE(self.m_model.setText("a\nb"));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const EditCommandResult submitted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Submit, false, true), false, self.m_model.textMode()));
     EXPECT_TRUE(submitted.handled);
     EXPECT_TRUE(submitted.submitted);
     EXPECT_FALSE(submitted.textChanged);
     EXPECT_FALSE(submitted.selectionChanged);
-    before.expectUnchanged(m_model);
-    const EditCommandResult repeated = ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Submit }, true, m_model.textMode()));
+    before.expectUnchanged(self.m_model);
+    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Submit, false, true), true, self.m_model.textMode()));
     EXPECT_TRUE(repeated.handled);
     EXPECT_FALSE(repeated.submitted);
-    before.expectUnchanged(m_model);
+    before.expectUnchanged(self.m_model);
 }
 
-TEST_F(MultilineCommandTests, ReadOnlyRejectsNewlineAndMutationsWhileAllowingCopy){
-    ASSERT_TRUE(m_model.setText("ab\ncd"));
-    ASSERT_TRUE(m_model.setSelection(1u, 4u));
-    const MultilineSnapshot before(m_arena, m_model);
-    const Array<EditCommand::Enum, 9> mutations{ EditCommand::Newline, EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace, EditCommand::WordDelete, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Redo };
-    for(const EditCommand::Enum command : mutations){
-        const EditCommandResult result = ApplyEditCommand(m_model, { command }, true);
+void VerifyMultilineCommandTests_ReadOnlyRejectsNewlineAndMutationsWhileAllowingCopy(mut MultilineCommandTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\ncd"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    Array<EditCommandEnum, 9u> mutations = Array<EditCommandEnum, 9u>();
+    mutations[0u] = EditCommand::Newline;
+    mutations[1u] = EditCommand::Backspace;
+    mutations[2u] = EditCommand::Delete;
+    mutations[3u] = EditCommand::WordBackspace;
+    mutations[4u] = EditCommand::WordDelete;
+    mutations[5u] = EditCommand::Cut;
+    mutations[6u] = EditCommand::Paste;
+    mutations[7u] = EditCommand::Undo;
+    mutations[8u] = EditCommand::Redo;
+    for(in EditCommandEnum command : mutations){
+        const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(command), true);
         EXPECT_TRUE(result.handled);
         EXPECT_FALSE(result.textChanged);
         EXPECT_FALSE(result.selectionChanged);
         EXPECT_EQ(result.clipboard, EditClipboardAction::None);
-        before.expectUnchanged(m_model);
+        before.expectUnchanged(self.m_model);
     }
-    EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Copy }, true).clipboard, EditClipboardAction::Copy);
+    EXPECT_EQ(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Copy), true).clipboard, EditClipboardAction::Copy);
 }
 
-TEST_F(MultilineCommandTests, PreeditOwnsNewlineDocumentMovementAndSubmitUntilFirstEscape){
-    ASSERT_TRUE(m_model.setText("ab\ncd"));
-    ASSERT_TRUE(m_model.setSelection(1u, 4u));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("q\nr", 1u, 3u));
-    const MultilineSnapshot before(m_arena, m_model);
-    const Array<EditCommand::Enum, 8> nativeOwned{ EditCommand::Newline, EditCommand::Home, EditCommand::End, EditCommand::DocumentHome, EditCommand::DocumentEnd, EditCommand::Submit, EditCommand::Backspace, EditCommand::Copy };
-    for(const EditCommand::Enum command : nativeOwned){
-        const EditCommandResult result = ApplyEditCommand(m_model, { command });
+void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUntilFirstEscape(mut MultilineCommandTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\ncd"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("q\nr", 1u, 3u));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    Array<EditCommandEnum, 8u> nativeOwned = Array<EditCommandEnum, 8u>();
+    nativeOwned[0u] = EditCommand::Newline;
+    nativeOwned[1u] = EditCommand::Home;
+    nativeOwned[2u] = EditCommand::End;
+    nativeOwned[3u] = EditCommand::DocumentHome;
+    nativeOwned[4u] = EditCommand::DocumentEnd;
+    nativeOwned[5u] = EditCommand::Submit;
+    nativeOwned[6u] = EditCommand::Backspace;
+    nativeOwned[7u] = EditCommand::Copy;
+    for(in EditCommandEnum command : nativeOwned){
+        const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(command));
         EXPECT_TRUE(result.handled);
         EXPECT_FALSE(result.textChanged);
         EXPECT_FALSE(result.selectionChanged);
         EXPECT_FALSE(result.submitted);
         EXPECT_EQ(result.clipboard, EditClipboardAction::None);
-        before.expectUnchanged(m_model);
+        before.expectUnchanged(self.m_model);
     }
-    const u64 selection = m_model.selectionGeneration();
-    const EditCommandResult firstEscape = ApplyEditCommand(m_model, { EditCommand::Cancel });
+    const u64 selection = self.m_model.selectionGeneration();
+    const EditCommandResult firstEscape = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Cancel));
     EXPECT_TRUE(firstEscape.compositionChanged);
     EXPECT_FALSE(firstEscape.cancelled);
-    EXPECT_FALSE(m_model.composition().active);
-    EXPECT_EQ(m_model.text(), "ab\ncd");
-    EXPECT_EQ(m_model.selectionGeneration(), selection);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Cancel }).cancelled);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Newline }).textChanged);
-    EXPECT_EQ(m_model.text(), "a\nd");
+    EXPECT_FALSE(self.m_model.composition().active);
+    EXPECT_EQ(self.m_model.text(), "ab\ncd");
+    EXPECT_EQ(self.m_model.selectionGeneration(), selection);
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Cancel)).cancelled);
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Newline)).textChanged);
+    EXPECT_EQ(self.m_model.text(), "a\nd");
 }
 
-TEST_F(MultilineCommandTests, NewlineCapacityAndSingleLineRejectionPreserveAllState){
-    EditModel limited(m_arena, { 3u, 8u, 128u }, EditTextMode::Multiline);
+void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAllState(mut MultilineCommandTests self){
+    EditModel limited = EditModel(self.m_arena, MakeUiMultilineLimits(3u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
-    const MultilineSnapshot before(m_arena, limited);
-    const EditCommandResult rejected = ApplyEditCommand(limited, { EditCommand::Newline });
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
+    const EditCommandResult rejected = ApplyEditCommand(limited, MakeUiMultilineCommand(EditCommand::Newline));
     EXPECT_TRUE(rejected.handled);
     EXPECT_FALSE(rejected.textChanged);
     EXPECT_FALSE(rejected.selectionChanged);
     before.expectUnchanged(limited);
-    EditModel single(m_arena);
+    EditModel single = EditModel(self.m_arena);
     ASSERT_TRUE(single.setText("abc"));
-    const MultilineSnapshot singleBefore(m_arena, single);
-    EXPECT_FALSE(ApplyEditCommand(single, { EditCommand::Newline }).textChanged);
+    const MultilineSnapshot singleBefore = MultilineSnapshot(self.m_arena, single);
+    EXPECT_FALSE(ApplyEditCommand(single, MakeUiMultilineCommand(EditCommand::Newline)).textChanged);
     singleBefore.expectUnchanged(single);
 }
 
-TEST_F(MultilineCommandTests, WordDeletionAcrossNewlineRestoresEachOriginalSelectionOnUndo){
-    ASSERT_TRUE(m_model.setText("one\ntwo"));
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::WordBackspace }).textChanged);
-    EXPECT_EQ(m_model.text(), "one\n");
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::WordBackspace }).textChanged);
-    EXPECT_TRUE(m_model.text().empty());
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "one\n");
-    EXPECT_EQ(m_model.anchor(), 4u);
-    EXPECT_EQ(m_model.caret(), 4u);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "one\ntwo");
-    EXPECT_EQ(m_model.anchor(), 7u);
-    EXPECT_EQ(m_model.caret(), 7u);
+void VerifyMultilineCommandTests_WordDeletionAcrossNewlineRestoresEachOriginalSelectionOnUndo(mut MultilineCommandTests self){
+    ASSERT_TRUE(self.m_model.setText("one\ntwo"));
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::WordBackspace)).textChanged);
+    EXPECT_EQ(self.m_model.text(), "one\n");
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::WordBackspace)).textChanged);
+    EXPECT_TRUE(self.m_model.text().empty());
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "one\n");
+    EXPECT_EQ(self.m_model.anchor(), 4u);
+    EXPECT_EQ(self.m_model.caret(), 4u);
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "one\ntwo");
+    EXPECT_EQ(self.m_model.anchor(), 7u);
+    EXPECT_EQ(self.m_model.caret(), 7u);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/multiline_fixture.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_composition_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiMultilineTests;
-using MultilineCompositionTests = MultilineFixture;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(MultilineCompositionTests, PreeditKeepsOriginalByteOffsetsAcrossLinesAndCombiningScalars){
-    ASSERT_TRUE(m_model.setText("ab\ncd\nef"));
-    ASSERT_TRUE(m_model.setSelection(5u, 1u));
-    const u64 revision = m_model.revision();
-    const u64 selection = m_model.selectionGeneration();
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1", 1u, 7u));
-    const EditCompositionView composition = m_model.composition();
+void VerifyMultilineCompositionTests_PreeditKeepsOriginalByteOffsetsAcrossLinesAndCombiningScalars(mut MultilineCompositionTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\ncd\nef"));
+    ASSERT_TRUE(self.m_model.setSelection(5u, 1u));
+    const u64 revision = self.m_model.revision();
+    const u64 selection = self.m_model.selectionGeneration();
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1", 1u, 7u));
+    const EditCompositionView composition = self.m_model.composition();
     EXPECT_EQ(composition.text, "a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1");
     EXPECT_EQ(composition.anchor, 1u);
     EXPECT_EQ(composition.caret, 7u);
     EXPECT_EQ(composition.replacementStart, 1u);
     EXPECT_EQ(composition.replacementEnd, 5u);
-    EXPECT_EQ(m_model.text(), "ab\ncd\nef");
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.caret(), 1u);
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_EQ(m_model.selectionGeneration(), selection);
-    EXPECT_FALSE(m_model.canUndo());
+    EXPECT_EQ(self.m_model.text(), "ab\ncd\nef");
+    EXPECT_EQ(self.m_model.anchor(), 5u);
+    EXPECT_EQ(self.m_model.caret(), 1u);
+    EXPECT_EQ(self.m_model.revision(), revision);
+    EXPECT_EQ(self.m_model.selectionGeneration(), selection);
+    EXPECT_FALSE(self.m_model.canUndo());
 }
 
-TEST_F(MultilineCompositionTests, PreeditAndCommitRejectNoncanonicalBytesWithoutNormalizingOffsets){
-    ASSERT_TRUE(m_model.setText("a\nb"));
-    ASSERT_TRUE(m_model.setSelection(1u, 2u));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("x\ny", 2u, 3u));
-    const MultilineSnapshot before(m_arena, m_model);
-    const Array<AStringView, 7> invalid{ "x\r\ny", "x\ty", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9", "\xED\xA0\x80", AStringView("x\0y", 3u) };
-    for(const AStringView text : invalid){
-        EXPECT_FALSE(m_model.updateComposition(text, 0u, text.size()));
-        EXPECT_FALSE(m_model.commitComposition(text));
-        before.expectUnchanged(m_model);
+void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWithoutNormalizingOffsets(mut MultilineCompositionTests self){
+    ASSERT_TRUE(self.m_model.setText("a\nb"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 2u, 3u));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    Array<StringView, 7u> invalid = Array<StringView, 7u>();
+    invalid[0u] = "x\r\ny";
+    invalid[1u] = "x\ty";
+    invalid[2u] = "\xC2\x85";
+    invalid[3u] = "\xE2\x80\xA8";
+    invalid[4u] = "\xE2\x80\xA9";
+    invalid[5u] = "\xED\xA0\x80";
+    invalid[6u] = MakeUiMultilineEmbeddedNulXY();
+    for(in StringView text : invalid){
+        EXPECT_FALSE(self.m_model.updateComposition(text, 0u, text.size()));
+        EXPECT_FALSE(self.m_model.commitComposition(text));
+        before.expectUnchanged(self.m_model);
     }
-    EXPECT_FALSE(m_model.updateComposition("a\xCC\x81\nz", 2u, 5u));
-    before.expectUnchanged(m_model);
+    EXPECT_FALSE(self.m_model.updateComposition("a\xCC\x81\nz", 2u, 5u));
+    before.expectUnchanged(self.m_model);
 }
 
-TEST_F(MultilineCompositionTests, OverCapacityPreeditAndCommitPreserveEveryModelField){
-    EditModel limited(m_arena, { 6u, 8u, 128u }, EditTextMode::Multiline);
+void VerifyMultilineCompositionTests_OverCapacityPreeditAndCommitPreserveEveryModelField(mut MultilineCompositionTests self){
+    EditModel limited = EditModel(self.m_arena, MakeUiMultilineLimits(6u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.setSelection(1u, 2u));
     ASSERT_TRUE(limited.beginComposition());
     ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
-    const MultilineSnapshot before(m_arena, limited);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
     EXPECT_FALSE(limited.updateComposition("12\n34", 0u, 5u));
     EXPECT_FALSE(limited.commitComposition("12\n34"));
     before.expectUnchanged(limited);
 }
 
-TEST_F(MultilineCompositionTests, CancellationPreservesCommittedSelectionEpochTextAndHistory){
-    ASSERT_TRUE(m_model.setText("a\nb"));
-    ASSERT_TRUE(m_model.replaceSelection("c"));
-    ASSERT_TRUE(m_model.setSelection(1u, 3u));
-    const u64 selection = m_model.selectionGeneration();
-    const u64 revision = m_model.revision();
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("x\ny", 0u, 3u));
-    const u64 composition = m_model.compositionGeneration();
-    m_model.cancelComposition();
-    EXPECT_GT(m_model.compositionGeneration(), composition);
-    EXPECT_EQ(m_model.selectionGeneration(), selection);
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_EQ(m_model.text(), "a\nbc");
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 3u);
-    EXPECT_FALSE(m_model.composition().active);
-    EXPECT_TRUE(m_model.canUndo());
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "a\nb");
+void VerifyMultilineCompositionTests_CancellationPreservesCommittedSelectionEpochTextAndHistory(mut MultilineCompositionTests self){
+    ASSERT_TRUE(self.m_model.setText("a\nb"));
+    ASSERT_TRUE(self.m_model.replaceSelection("c"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 3u));
+    const u64 selection = self.m_model.selectionGeneration();
+    const u64 revision = self.m_model.revision();
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u));
+    const u64 composition = self.m_model.compositionGeneration();
+    self.m_model.cancelComposition();
+    EXPECT_GT(self.m_model.compositionGeneration(), composition);
+    EXPECT_EQ(self.m_model.selectionGeneration(), selection);
+    EXPECT_EQ(self.m_model.revision(), revision);
+    EXPECT_EQ(self.m_model.text(), "a\nbc");
+    EXPECT_EQ(self.m_model.anchor(), 1u);
+    EXPECT_EQ(self.m_model.caret(), 3u);
+    EXPECT_FALSE(self.m_model.composition().active);
+    EXPECT_TRUE(self.m_model.canUndo());
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "a\nb");
 }
 
-TEST_F(MultilineCompositionTests, AliasedCompositionCommitOwnsBytesBeforeRetiringPreedit){
-    ASSERT_TRUE(m_model.setText("a\nb"));
-    ASSERT_TRUE(m_model.selectAll());
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("a\xCC\x81\nz", 1u, 5u));
-    ASSERT_TRUE(m_model.commitComposition(m_model.composition().text));
-    EXPECT_EQ(m_model.text(), "a\xCC\x81\nz");
-    EXPECT_EQ(m_model.caret(), 5u);
-    EXPECT_FALSE(m_model.setSelection(1u, 1u));
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "a\nb");
-    EXPECT_EQ(m_model.anchor(), 0u);
-    EXPECT_EQ(m_model.caret(), 3u);
+void VerifyMultilineCompositionTests_AliasedCompositionCommitOwnsBytesBeforeRetiringPreedit(mut MultilineCompositionTests self){
+    ASSERT_TRUE(self.m_model.setText("a\nb"));
+    ASSERT_TRUE(self.m_model.selectAll());
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("a\xCC\x81\nz", 1u, 5u));
+    ASSERT_TRUE(self.m_model.commitComposition(self.m_model.composition().text));
+    EXPECT_EQ(self.m_model.text(), "a\xCC\x81\nz");
+    EXPECT_EQ(self.m_model.caret(), 5u);
+    EXPECT_FALSE(self.m_model.setSelection(1u, 1u));
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "a\nb");
+    EXPECT_EQ(self.m_model.anchor(), 0u);
+    EXPECT_EQ(self.m_model.caret(), 3u);
 }
 
-TEST_F(MultilineCompositionTests, EmptyPreeditRetainsTheOriginalCrossLineReplacementRange){
-    ASSERT_TRUE(m_model.setText("ab\ncd"));
-    ASSERT_TRUE(m_model.setSelection(1u, 4u));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("x\ny", 0u, 3u));
-    ASSERT_TRUE(m_model.updateComposition({}, 0u, 0u));
-    EXPECT_TRUE(m_model.composition().active);
-    EXPECT_EQ(m_model.composition().replacementStart, 1u);
-    EXPECT_EQ(m_model.composition().replacementEnd, 4u);
-    ASSERT_TRUE(m_model.commitComposition("\n"));
-    EXPECT_EQ(m_model.text(), "a\nd");
+void VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineReplacementRange(mut MultilineCompositionTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\ncd"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("", 0u, 0u));
+    EXPECT_TRUE(self.m_model.composition().active);
+    EXPECT_EQ(self.m_model.composition().replacementStart, 1u);
+    EXPECT_EQ(self.m_model.composition().replacementEnd, 4u);
+    ASSERT_TRUE(self.m_model.commitComposition("\n"));
+    EXPECT_EQ(self.m_model.text(), "a\nd");
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/multiline_fixture.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_model_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiMultilineTests;
-using MultilineModelTests = MultilineFixture;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_LineSeparator = "\xE2\x80\xA8";
-constexpr AStringView s_ParagraphSeparator = "\xE2\x80\xA9";
-
-TEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingModel){
-    EditModel single(m_arena);
-    ASSERT_TRUE(single.setText("a\t\x01\x7F\xC2\x85" "b"));
-    const MultilineSnapshot before(m_arena, single);
-    for(const AStringView rejected : { AStringView("\n"), AStringView("\r"), s_LineSeparator, s_ParagraphSeparator, AStringView("\0", 1u) }){
+void VerifyMultilineModelTests_SingleLineRejectsHardBreaksAndNulWithoutChangingModel(mut MultilineModelTests self){
+    EditModel single = EditModel(self.m_arena);
+    ASSERT_TRUE(single.setText("a\t\x01\x7F\302\205b"));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, single);
+    Array<StringView, 5u> rejectedList = Array<StringView, 5u>();
+    rejectedList[0u] = "\n";
+    rejectedList[1u] = "\r";
+    rejectedList[2u] = s_UiMultilineLineSeparator;
+    rejectedList[3u] = s_UiMultilineParagraphSeparator;
+    rejectedList[4u] = MakeUiMultilineSingleNul();
+    for(in StringView rejected : rejectedList){
         EXPECT_FALSE(single.setText(rejected));
         before.expectUnchanged(single);
     }
 }
 
-TEST_F(MultilineModelTests, CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine){
-    ASSERT_TRUE(m_model.setText("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1\n\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\n"));
-    const Array<usize, 7> expected{ 0u, 3u, 4u, 10u, 11u, 19u, 20u };
-    ASSERT_EQ(m_model.graphemeBoundaries().size(), 7u);
-    for(usize index = 0u; index < 7u; ++index)
-        EXPECT_EQ(m_model.graphemeBoundaries()[index], expected[index]);
-    EXPECT_EQ(m_model.caret(), 20u);
-    EXPECT_FALSE(m_model.setSelection(1u, 1u));
-    EXPECT_FALSE(m_model.setSelection(7u, 7u));
-    ASSERT_TRUE(m_model.move(EditMove::Home));
-    EXPECT_EQ(m_model.caret(), 20u);
-    ASSERT_TRUE(m_model.move(EditMove::End));
-    EXPECT_EQ(m_model.caret(), 20u);
+void VerifyMultilineModelTests_CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1\n\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\n"));
+    Array<usize, 7u> expected = Array<usize, 7u>();
+    expected[0u] = 0u;
+    expected[1u] = 3u;
+    expected[2u] = 4u;
+    expected[3u] = 10u;
+    expected[4u] = 11u;
+    expected[5u] = 19u;
+    expected[6u] = 20u;
+    ASSERT_EQ(self.m_model.graphemeBoundaries().size(), 7u);
+    for(usize index = 0u; index < 7u; ++index){
+        EXPECT_EQ(self.m_model.graphemeBoundaries()[index], expected[index]);
+    }
+    EXPECT_EQ(self.m_model.caret(), 20u);
+    EXPECT_FALSE(self.m_model.setSelection(1u, 1u));
+    EXPECT_FALSE(self.m_model.setSelection(7u, 7u));
+    ASSERT_TRUE(self.m_model.move(EditMove::Home));
+    EXPECT_EQ(self.m_model.caret(), 20u);
+    ASSERT_TRUE(self.m_model.move(EditMove::End));
+    EXPECT_EQ(self.m_model.caret(), 20u);
 }
 
-TEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelectionAndComposition){
-    ASSERT_TRUE(m_model.setText("a\nb"));
-    ASSERT_TRUE(m_model.replaceSelection("x"));
-    ASSERT_TRUE(m_model.replaceSelection("y"));
-    ASSERT_TRUE(m_model.undo());
-    ASSERT_TRUE(m_model.setSelection(1u, 3u));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("q\nr", 0u, 3u));
-    const MultilineSnapshot before(m_arena, m_model);
-    const Array<AStringView, 8> invalid{ "\r\n", "\t", "\xC2\x85", s_LineSeparator, s_ParagraphSeparator, "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
-    for(const AStringView value : invalid){
-        SCOPED_TRACE(value);
-        EXPECT_FALSE(m_model.setText(value));
-        EXPECT_FALSE(m_model.replaceSelection(value));
-        before.expectUnchanged(m_model);
+void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelectionAndComposition(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("a\nb"));
+    ASSERT_TRUE(self.m_model.replaceSelection("x"));
+    ASSERT_TRUE(self.m_model.replaceSelection("y"));
+    ASSERT_TRUE(self.m_model.undo());
+    ASSERT_TRUE(self.m_model.setSelection(1u, 3u));
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("q\nr", 0u, 3u));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    Array<StringView, 8u> invalid = Array<StringView, 8u>();
+    invalid[0u] = "\r\n";
+    invalid[1u] = "\t";
+    invalid[2u] = "\xC2\x85";
+    invalid[3u] = s_UiMultilineLineSeparator;
+    invalid[4u] = s_UiMultilineParagraphSeparator;
+    invalid[5u] = "\xC0\xAF";
+    invalid[6u] = "\xED\xA0\x80";
+    invalid[7u] = MakeUiMultilineEmbeddedNulAB();
+    for(in StringView value : invalid){
+        const ScopedTestTrace trace = ScopedTestTrace(value);
+        EXPECT_FALSE(self.m_model.setText(value));
+        EXPECT_FALSE(self.m_model.replaceSelection(value));
+        before.expectUnchanged(self.m_model);
     }
     for(u32 scalar = 0u; scalar < 32u; ++scalar){
-        if(scalar == '\n')
+        if(scalar == 10u){
             continue;
-        const Array<char, 1> bytes{ static_cast<char>(scalar) };
-        EXPECT_FALSE(m_model.setText({ bytes.data(), 1u }));
-        EXPECT_FALSE(m_model.replaceSelection({ bytes.data(), 1u }));
-        before.expectUnchanged(m_model);
+        }
+        Array<u8, 1u> bytes = Array<u8, 1u>();
+        bytes[0u] = cast<u8>(scalar);
+        const StringView view = MakeUiMultilineByteView(bytes);
+        EXPECT_FALSE(self.m_model.setText(view));
+        EXPECT_FALSE(self.m_model.replaceSelection(view));
+        before.expectUnchanged(self.m_model);
     }
     for(u32 scalar = 0x80u; scalar <= 0x9Fu; ++scalar){
-        const Array<char, 2> bytes{ static_cast<char>(0xC2u), static_cast<char>(scalar) };
-        EXPECT_FALSE(m_model.setText({ bytes.data(), 2u }));
-        EXPECT_FALSE(m_model.replaceSelection({ bytes.data(), 2u }));
-        before.expectUnchanged(m_model);
+        Array<u8, 2u> bytes = Array<u8, 2u>();
+        bytes[0u] = 0xC2u;
+        bytes[1u] = cast<u8>(scalar);
+        const StringView view = MakeUiMultilineByteView(bytes);
+        EXPECT_FALSE(self.m_model.setText(view));
+        EXPECT_FALSE(self.m_model.replaceSelection(view));
+        before.expectUnchanged(self.m_model);
     }
-    m_model.cancelComposition();
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "a\nb");
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "a\nbx");
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "a\nbxy");
+    self.m_model.cancelComposition();
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "a\nb");
+    ASSERT_TRUE(self.m_model.redo());
+    EXPECT_EQ(self.m_model.text(), "a\nbx");
+    ASSERT_TRUE(self.m_model.redo());
+    EXPECT_EQ(self.m_model.text(), "a\nbxy");
 }
 
-TEST_F(MultilineModelTests, CapacityFailureKeepsTheExactBorrowedModelState){
-    EditModel limited(m_arena, { 6u, 8u, 128u }, EditTextMode::Multiline);
+void VerifyMultilineModelTests_CapacityFailureKeepsTheExactBorrowedModelState(mut MultilineModelTests self){
+    EditModel limited = EditModel(self.m_arena, MakeUiMultilineLimits(6u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.replaceSelection("d"));
     ASSERT_TRUE(limited.setSelection(0u, 1u));
     ASSERT_TRUE(limited.beginComposition());
     ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
-    const MultilineSnapshot before(m_arena, limited);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
     EXPECT_FALSE(limited.setText("abcdef\n"));
     EXPECT_FALSE(limited.replaceSelection("x\nyz"));
     before.expectUnchanged(limited);
 }
 
-TEST_F(MultilineModelTests, AliasedInsertionAndExternalSameTextReplacementOwnTheirBytes){
-    ASSERT_TRUE(m_model.setText("ab\ncd"));
-    ASSERT_TRUE(m_model.setSelection(1u, 4u));
-    ASSERT_TRUE(m_model.replaceSelection(m_model.text()));
-    EXPECT_EQ(m_model.text(), "aab\ncdd");
-    EXPECT_EQ(m_model.caret(), 6u);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "ab\ncd");
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 4u);
-    ASSERT_TRUE(m_model.redo());
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("x", 0u, 1u));
-    const u64 external = m_model.externalRevision();
-    const u64 selection = m_model.selectionGeneration();
-    const u64 revision = m_model.revision();
-    ASSERT_TRUE(m_model.setText(m_model.text()));
-    EXPECT_EQ(m_model.text(), "aab\ncdd");
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_GT(m_model.externalRevision(), external);
-    EXPECT_GT(m_model.selectionGeneration(), selection);
-    EXPECT_FALSE(m_model.canUndo());
-    EXPECT_FALSE(m_model.composition().active);
+void VerifyMultilineModelTests_AliasedInsertionAndExternalSameTextReplacementOwnTheirBytes(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\ncd"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
+    ASSERT_TRUE(self.m_model.replaceSelection(self.m_model.text()));
+    EXPECT_EQ(self.m_model.text(), "aab\ncdd");
+    EXPECT_EQ(self.m_model.caret(), 6u);
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "ab\ncd");
+    EXPECT_EQ(self.m_model.anchor(), 1u);
+    EXPECT_EQ(self.m_model.caret(), 4u);
+    ASSERT_TRUE(self.m_model.redo());
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("x", 0u, 1u));
+    const u64 external = self.m_model.externalRevision();
+    const u64 selection = self.m_model.selectionGeneration();
+    const u64 revision = self.m_model.revision();
+    ASSERT_TRUE(self.m_model.setText(self.m_model.text()));
+    EXPECT_EQ(self.m_model.text(), "aab\ncdd");
+    EXPECT_EQ(self.m_model.revision(), revision);
+    EXPECT_GT(self.m_model.externalRevision(), external);
+    EXPECT_GT(self.m_model.selectionGeneration(), selection);
+    EXPECT_FALSE(self.m_model.canUndo());
+    EXPECT_FALSE(self.m_model.composition().active);
 }
 
-TEST_F(MultilineModelTests, DeletingLineBreaksJoinsLinesWithoutSplittingGraphemes){
-    ASSERT_TRUE(m_model.setText("a\xCC\x81\nz"));
-    ASSERT_TRUE(m_model.setSelection(4u, 4u));
-    ASSERT_TRUE(m_model.backspace());
-    EXPECT_EQ(m_model.text(), "a\xCC\x81z");
-    EXPECT_EQ(m_model.caret(), 3u);
-    ASSERT_TRUE(m_model.undo());
-    ASSERT_TRUE(m_model.setSelection(3u, 3u));
-    ASSERT_TRUE(m_model.eraseForward());
-    EXPECT_EQ(m_model.text(), "a\xCC\x81z");
-    ASSERT_TRUE(m_model.undo());
-    ASSERT_TRUE(m_model.setSelection(3u, 3u));
-    ASSERT_TRUE(m_model.backspace());
-    EXPECT_EQ(m_model.text(), "\nz");
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "a\xCC\x81\nz");
-    EXPECT_EQ(m_model.caret(), 3u);
+void VerifyMultilineModelTests_DeletingLineBreaksJoinsLinesWithoutSplittingGraphemes(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("a\xCC\x81\nz"));
+    ASSERT_TRUE(self.m_model.setSelection(4u, 4u));
+    ASSERT_TRUE(self.m_model.backspace());
+    EXPECT_EQ(self.m_model.text(), "a\xCC\x81z");
+    EXPECT_EQ(self.m_model.caret(), 3u);
+    ASSERT_TRUE(self.m_model.undo());
+    ASSERT_TRUE(self.m_model.setSelection(3u, 3u));
+    ASSERT_TRUE(self.m_model.eraseForward());
+    EXPECT_EQ(self.m_model.text(), "a\xCC\x81z");
+    ASSERT_TRUE(self.m_model.undo());
+    ASSERT_TRUE(self.m_model.setSelection(3u, 3u));
+    ASSERT_TRUE(self.m_model.backspace());
+    EXPECT_EQ(self.m_model.text(), "\nz");
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "a\xCC\x81\nz");
+    EXPECT_EQ(self.m_model.caret(), 3u);
 }
 
-TEST_F(MultilineModelTests, SurroundingDeletionAcrossLinesRemainsBoundaryCheckedAndUndoable){
-    ASSERT_TRUE(m_model.setText("a\xCC\x81\nz"));
-    ASSERT_TRUE(m_model.setSelection(4u, 4u));
-    const MultilineSnapshot before(m_arena, m_model);
-    EXPECT_FALSE(m_model.eraseSurrounding(2u, 0u));
-    before.expectUnchanged(m_model);
-    ASSERT_TRUE(m_model.eraseSurrounding(1u, 1u));
-    EXPECT_EQ(m_model.text(), "a\xCC\x81");
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "a\xCC\x81\nz");
-    EXPECT_EQ(m_model.anchor(), 4u);
-    EXPECT_EQ(m_model.caret(), 4u);
+void VerifyMultilineModelTests_SurroundingDeletionAcrossLinesRemainsBoundaryCheckedAndUndoable(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("a\xCC\x81\nz"));
+    ASSERT_TRUE(self.m_model.setSelection(4u, 4u));
+    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    EXPECT_FALSE(self.m_model.eraseSurrounding(2u, 0u));
+    before.expectUnchanged(self.m_model);
+    ASSERT_TRUE(self.m_model.eraseSurrounding(1u, 1u));
+    EXPECT_EQ(self.m_model.text(), "a\xCC\x81");
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), "a\xCC\x81\nz");
+    EXPECT_EQ(self.m_model.anchor(), 4u);
+    EXPECT_EQ(self.m_model.caret(), 4u);
 }
 
-TEST_F(MultilineModelTests, HomeEndAddressCurrentHardLineIncludingEmptyAndTrailingLines){
-    ASSERT_TRUE(m_model.setText("ab\n\ncde\n"));
-    const Array<usize, 9> homes{ 0u, 0u, 0u, 3u, 4u, 4u, 4u, 4u, 8u };
-    const Array<usize, 9> ends{ 2u, 2u, 2u, 3u, 7u, 7u, 7u, 7u, 8u };
-    const Array<usize, 5> boundaries{ 2u, 3u, 4u, 7u, 8u };
-    for(const usize caret : boundaries){
-        ASSERT_TRUE(m_model.setSelection(caret, caret));
-        ASSERT_TRUE(m_model.move(EditMove::Home));
-        EXPECT_EQ(m_model.caret(), homes[caret]);
-        ASSERT_TRUE(m_model.setSelection(caret, caret));
-        ASSERT_TRUE(m_model.move(EditMove::End));
-        EXPECT_EQ(m_model.caret(), ends[caret]);
+void VerifyMultilineModelTests_HomeEndAddressCurrentHardLineIncludingEmptyAndTrailingLines(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\n\ncde\n"));
+    Array<usize, 9u> homes = Array<usize, 9u>();
+    homes[0u] = 0u;
+    homes[1u] = 0u;
+    homes[2u] = 0u;
+    homes[3u] = 3u;
+    homes[4u] = 4u;
+    homes[5u] = 4u;
+    homes[6u] = 4u;
+    homes[7u] = 4u;
+    homes[8u] = 8u;
+    Array<usize, 9u> ends = Array<usize, 9u>();
+    ends[0u] = 2u;
+    ends[1u] = 2u;
+    ends[2u] = 2u;
+    ends[3u] = 3u;
+    ends[4u] = 7u;
+    ends[5u] = 7u;
+    ends[6u] = 7u;
+    ends[7u] = 7u;
+    ends[8u] = 8u;
+    Array<usize, 5u> boundaries = Array<usize, 5u>();
+    boundaries[0u] = 2u;
+    boundaries[1u] = 3u;
+    boundaries[2u] = 4u;
+    boundaries[3u] = 7u;
+    boundaries[4u] = 8u;
+    for(in usize caret : boundaries){
+        ASSERT_TRUE(self.m_model.setSelection(caret, caret));
+        ASSERT_TRUE(self.m_model.move(EditMove::Home));
+        EXPECT_EQ(self.m_model.caret(), homes[caret]);
+        ASSERT_TRUE(self.m_model.setSelection(caret, caret));
+        ASSERT_TRUE(self.m_model.move(EditMove::End));
+        EXPECT_EQ(self.m_model.caret(), ends[caret]);
     }
-    ASSERT_TRUE(m_model.setText({}));
-    ASSERT_TRUE(m_model.move(EditMove::Home));
-    ASSERT_TRUE(m_model.move(EditMove::End));
-    EXPECT_EQ(m_model.caret(), 0u);
+    ASSERT_TRUE(self.m_model.setText(""));
+    ASSERT_TRUE(self.m_model.move(EditMove::Home));
+    ASSERT_TRUE(self.m_model.move(EditMove::End));
+    EXPECT_EQ(self.m_model.caret(), 0u);
 }
 
-TEST_F(MultilineModelTests, AcceptedNoopSelectionAndMovementAdvanceTheSelectionEpochInBothModes){
-    for(const EditTextMode::Enum mode : { EditTextMode::SingleLine, EditTextMode::Multiline }){
-        EditModel model(m_arena, {}, mode);
+void VerifyMultilineModelTests_AcceptedNoopSelectionAndMovementAdvanceTheSelectionEpochInBothModes(mut MultilineModelTests self){
+    Array<EditTextModeEnum, 2u> modes = Array<EditTextModeEnum, 2u>();
+    modes[0u] = EditTextMode::SingleLine;
+    modes[1u] = EditTextMode::Multiline;
+    for(in EditTextModeEnum mode : modes){
+        EditModel model = EditModel(self.m_arena, EditLimits(), mode);
         ASSERT_TRUE(model.setText("a\xCC\x81z"));
         const u64 revision = model.revision();
         const u64 external = model.externalRevision();
@@ -1569,16 +1798,19 @@ TEST_F(MultilineModelTests, AcceptedNoopSelectionAndMovementAdvanceTheSelectionE
         EXPECT_GT(model.selectionGeneration(), selection);
         EXPECT_EQ(model.revision(), revision);
         EXPECT_EQ(model.externalRevision(), external);
-        const MultilineSnapshot before(m_arena, model);
+        const MultilineSnapshot before = MultilineSnapshot(self.m_arena, model);
         EXPECT_FALSE(model.setSelection(1u, 1u));
-        EXPECT_FALSE(model.move(static_cast<EditMove::Enum>(255u)));
+        EXPECT_FALSE(model.move(bit_cast<EditMoveEnum>(u8(255u))));
         before.expectUnchanged(model);
     }
 }
 
-TEST_F(MultilineModelTests, SelectionAwayAndBackCannotReviveAnOldLoanEpoch){
-    for(const EditTextMode::Enum mode : { EditTextMode::SingleLine, EditTextMode::Multiline }){
-        EditModel model(m_arena, {}, mode);
+void VerifyMultilineModelTests_SelectionAwayAndBackCannotReviveAnOldLoanEpoch(mut MultilineModelTests self){
+    Array<EditTextModeEnum, 2u> modes = Array<EditTextModeEnum, 2u>();
+    modes[0u] = EditTextMode::SingleLine;
+    modes[1u] = EditTextMode::Multiline;
+    for(in EditTextModeEnum mode : modes){
+        EditModel model = EditModel(self.m_arena, EditLimits(), mode);
         ASSERT_TRUE(model.setText("ab"));
         const u64 revision = model.revision();
         const u64 external = model.externalRevision();
@@ -1593,29 +1825,89 @@ TEST_F(MultilineModelTests, SelectionAwayAndBackCannotReviveAnOldLoanEpoch){
     }
 }
 
-TEST_F(MultilineModelTests, AliasedSameTextAndEmptyReplacementRetireSelectionButZeroErasePreservesIt){
-    ASSERT_TRUE(m_model.setText("a\nb"));
-    u64 selection = m_model.selectionGeneration();
-    ASSERT_TRUE(m_model.setText(m_model.text()));
-    EXPECT_GT(m_model.selectionGeneration(), selection);
-    selection = m_model.selectionGeneration();
-    ASSERT_TRUE(m_model.replaceSelection({}));
-    EXPECT_GT(m_model.selectionGeneration(), selection);
-    selection = m_model.selectionGeneration();
-    ASSERT_TRUE(m_model.eraseSurrounding(0u, 0u));
-    EXPECT_EQ(m_model.selectionGeneration(), selection);
+void VerifyMultilineModelTests_AliasedSameTextAndEmptyReplacementRetireSelectionButZeroErasePreservesIt(mut MultilineModelTests self){
+    ASSERT_TRUE(self.m_model.setText("a\nb"));
+    u64 selection = self.m_model.selectionGeneration();
+    ASSERT_TRUE(self.m_model.setText(self.m_model.text()));
+    EXPECT_GT(self.m_model.selectionGeneration(), selection);
+    selection = self.m_model.selectionGeneration();
+    ASSERT_TRUE(self.m_model.replaceSelection(""));
+    EXPECT_GT(self.m_model.selectionGeneration(), selection);
+    selection = self.m_model.selectionGeneration();
+    ASSERT_TRUE(self.m_model.eraseSurrounding(0u, 0u));
+    EXPECT_EQ(self.m_model.selectionGeneration(), selection);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesToVisibleLastKey, VerifyUiListBuilderSelectionTests_InitialProgrammaticSelectionSurvivesAndEndNavigatesToVisibleLastKey)
+NWB_ADHD_GTEST_F(UiListBuilderTests, UnseenTallCursorIsMeasuredBeforeRevealAndFailedRevisionRefreshRetainsTheRequest, VerifyUiListBuilderSelectionTests_UnseenTallCursorIsMeasuredBeforeRevealAndFailedRevisionRefreshRetainsTheRequest)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ReorderPreservesSelectionByKeyAndRemovalClearsIt, VerifyUiListBuilderSelectionTests_ReorderPreservesSelectionByKeyAndRemovalClearsIt)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ProgrammaticSameSelectionFencesQueuedActivationAndWheel, VerifyUiListBuilderSelectionTests_ProgrammaticSameSelectionFencesQueuedActivationAndWheel)
+NWB_ADHD_GTEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance, VerifyUiListBuilderSelectionTests_SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance)
+NWB_ADHD_GTEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmission, VerifyUiListBuilderSelectionTests_EscapeBeforeReleaseCancelsRowSelectionAndHostSubmission)
+NWB_ADHD_GTEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRelease, VerifyUiListBuilderSelectionTests_DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRelease)
+NWB_ADHD_GTEST_F(UiListBuilderTests, HeldNavigationCannotMutateAnAcceptedReorderedDataset, VerifyUiListBuilderSelectionTests_HeldNavigationCannotMutateAnAcceptedReorderedDataset)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ReplacementSourceResetsSelectionAndScroll, VerifyUiListBuilderSelectionTests_ReplacementSourceResetsSelectionAndScroll)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ReplacementStateRejectsOldActivationEvenForTheSameSourceAndHost, VerifyUiListBuilderSelectionTests_ReplacementStateRejectsOldActivationEvenForTheSameSourceAndHost)
+NWB_ADHD_GTEST_F(UiListBuilderTests, DisabledAndOmittedListsRetirePartsWithoutBorrowingQueuedActions, VerifyUiListBuilderSelectionTests_DisabledAndOmittedListsRetirePartsWithoutBorrowingQueuedActions)
+NWB_ADHD_GTEST_F(UiListBuilderTests, SourceRevisionChangedDuringScopeRejectsTheDeferredLoan, VerifyUiListBuilderSelectionTests_SourceRevisionChangedDuringScopeRejectsTheDeferredLoan)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ContentPreflightRowsCannotHideAChangedSourceBeforePaint, VerifyUiListBuilderSelectionTests_ContentPreflightRowsCannotHideAChangedSourceBeforePaint)
+NWB_ADHD_GTEST_F(UiListBuilderTests, DuplicateOrMalformedVisibleKeysRejectTheFrame, VerifyUiListBuilderSelectionTests_DuplicateOrMalformedVisibleKeysRejectTheFrame)
+NWB_ADHD_GTEST_F(UiListBuilderTests, EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardStop, VerifyUiListBuilderSelectionTests_EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardStop)
+
+NWB_ADHD_GTEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles, VerifyUiListBuilderTests_SiblingListsPaintTheirOwnDeferredBackgroundStyles)
+NWB_ADHD_GTEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor, VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor)
+NWB_ADHD_GTEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry, VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum, VerifyUiListBuilderTests_ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum)
+NWB_ADHD_GTEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutContaminatingDifferentMetrics, VerifyUiListBuilderTests_SharedStateDeclarationsMergeSameMetricMaximaWithoutContaminatingDifferentMetrics)
+NWB_ADHD_GTEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInheritedClipAcrossFrames, VerifyUiListBuilderTests_SharedStyledContentKeepsItsFractionalFirstRowAndInheritedClipAcrossFrames)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScrollBeforeParentLayout, VerifyUiListBuilderTests_ContentViewportPreflightsTallSecondRowAtFractionalScrollBeforeParentLayout)
+NWB_ADHD_GTEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted, VerifyUiListBuilderTests_ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted)
+
+NWB_ADHD_GTEST_F(UiListLoanTests, TextCallbackSelectionRejectsDeferredPaintWithoutReplacingAcceptedTargets, VerifyUiListLoanTests_TextCallbackSelectionRejectsDeferredPaintWithoutReplacingAcceptedTargets)
+NWB_ADHD_GTEST_F(UiListLoanTests, SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureStaysUnchanged, VerifyUiListLoanTests_SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureStaysUnchanged)
+NWB_ADHD_GTEST_F(UiListLoanTests, EnabledCallbackScrollIsPreservedWhenEnsureCursorRejectsTheChangedEpoch, VerifyUiListLoanTests_EnabledCallbackScrollIsPreservedWhenEnsureCursorRejectsTheChangedEpoch)
+NWB_ADHD_GTEST(UiListLoanBehaviorTests, ReconcileAndApplyPreserveExplicitChangesMadeBySourceCallbacks, VerifyUiListLoanBehaviorTests_ReconcileAndApplyPreserveExplicitChangesMadeBySourceCallbacks)
+
+NWB_ADHD_GTEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeys, VerifyUiListReconciliationTests_ReorderingRetainsStableSelectionAndCursorKeys)
+NWB_ADHD_GTEST(UiListBehaviorTests, RemovedCursorClearsIndependentlyOfSurvivingSelection, VerifyUiListReconciliationTests_RemovedCursorClearsIndependentlyOfSurvivingSelection)
+NWB_ADHD_GTEST(UiListBehaviorTests, DisabledSelectionClearsIndependentlyOfEnabledCursor, VerifyUiListReconciliationTests_DisabledSelectionClearsIndependentlyOfEnabledCursor)
+NWB_ADHD_GTEST(UiListBehaviorTests, ReplacingAnEstablishedSourceClearsSelectionCursorAndOffset, VerifyUiListReconciliationTests_ReplacingAnEstablishedSourceClearsSelectionCursorAndOffset)
+NWB_ADHD_GTEST(UiListBehaviorTests, InvalidSourceIdentitiesAndMalformedLookupFailWithoutPartialMutation, VerifyUiListReconciliationTests_InvalidSourceIdentitiesAndMalformedLookupFailWithoutPartialMutation)
+NWB_ADHD_GTEST(UiListBehaviorTests, SourceRevisionChangingDuringLookupFailsAtomically, VerifyUiListReconciliationTests_SourceRevisionChangingDuringLookupFailsAtomically)
+NWB_ADHD_GTEST(UiListBehaviorTests, InputSourceAndRevisionTokensRejectStaleActions, VerifyUiListReconciliationTests_InputSourceAndRevisionTokensRejectStaleActions)
+NWB_ADHD_GTEST(UiListBehaviorTests, ApplicationChangesFenceEvenAnUnchangedSelectionValue, VerifyUiListReconciliationTests_ApplicationChangesFenceEvenAnUnchangedSelectionValue)
+
+NWB_ADHD_GTEST_F(MultilineCommandTests, InvalidTextModeAndNonEditingAcceptAreRejected, VerifyMultilineCommandTests_InvalidTextModeAndNonEditingAcceptAreRejected)
+NWB_ADHD_GTEST_F(MultilineCommandTests, RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting, VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting)
+NWB_ADHD_GTEST_F(MultilineCommandTests, SubmitIntentReportsWithoutEditingAndSuppressesRepeats, VerifyMultilineCommandTests_SubmitIntentReportsWithoutEditingAndSuppressesRepeats)
+NWB_ADHD_GTEST_F(MultilineCommandTests, ReadOnlyRejectsNewlineAndMutationsWhileAllowingCopy, VerifyMultilineCommandTests_ReadOnlyRejectsNewlineAndMutationsWhileAllowingCopy)
+NWB_ADHD_GTEST_F(MultilineCommandTests, PreeditOwnsNewlineDocumentMovementAndSubmitUntilFirstEscape, VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUntilFirstEscape)
+NWB_ADHD_GTEST_F(MultilineCommandTests, NewlineCapacityAndSingleLineRejectionPreserveAllState, VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAllState)
+NWB_ADHD_GTEST_F(MultilineCommandTests, WordDeletionAcrossNewlineRestoresEachOriginalSelectionOnUndo, VerifyMultilineCommandTests_WordDeletionAcrossNewlineRestoresEachOriginalSelectionOnUndo)
+
+NWB_ADHD_GTEST_F(MultilineCompositionTests, PreeditKeepsOriginalByteOffsetsAcrossLinesAndCombiningScalars, VerifyMultilineCompositionTests_PreeditKeepsOriginalByteOffsetsAcrossLinesAndCombiningScalars)
+NWB_ADHD_GTEST_F(MultilineCompositionTests, PreeditAndCommitRejectNoncanonicalBytesWithoutNormalizingOffsets, VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWithoutNormalizingOffsets)
+NWB_ADHD_GTEST_F(MultilineCompositionTests, OverCapacityPreeditAndCommitPreserveEveryModelField, VerifyMultilineCompositionTests_OverCapacityPreeditAndCommitPreserveEveryModelField)
+NWB_ADHD_GTEST_F(MultilineCompositionTests, CancellationPreservesCommittedSelectionEpochTextAndHistory, VerifyMultilineCompositionTests_CancellationPreservesCommittedSelectionEpochTextAndHistory)
+NWB_ADHD_GTEST_F(MultilineCompositionTests, AliasedCompositionCommitOwnsBytesBeforeRetiringPreedit, VerifyMultilineCompositionTests_AliasedCompositionCommitOwnsBytesBeforeRetiringPreedit)
+NWB_ADHD_GTEST_F(MultilineCompositionTests, EmptyPreeditRetainsTheOriginalCrossLineReplacementRange, VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineReplacementRange)
+
+NWB_ADHD_GTEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingModel, VerifyMultilineModelTests_SingleLineRejectsHardBreaksAndNulWithoutChangingModel)
+NWB_ADHD_GTEST_F(MultilineModelTests, CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine, VerifyMultilineModelTests_CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine)
+NWB_ADHD_GTEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelectionAndComposition, VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelectionAndComposition)
+NWB_ADHD_GTEST_F(MultilineModelTests, CapacityFailureKeepsTheExactBorrowedModelState, VerifyMultilineModelTests_CapacityFailureKeepsTheExactBorrowedModelState)
+NWB_ADHD_GTEST_F(MultilineModelTests, AliasedInsertionAndExternalSameTextReplacementOwnTheirBytes, VerifyMultilineModelTests_AliasedInsertionAndExternalSameTextReplacementOwnTheirBytes)
+NWB_ADHD_GTEST_F(MultilineModelTests, DeletingLineBreaksJoinsLinesWithoutSplittingGraphemes, VerifyMultilineModelTests_DeletingLineBreaksJoinsLinesWithoutSplittingGraphemes)
+NWB_ADHD_GTEST_F(MultilineModelTests, SurroundingDeletionAcrossLinesRemainsBoundaryCheckedAndUndoable, VerifyMultilineModelTests_SurroundingDeletionAcrossLinesRemainsBoundaryCheckedAndUndoable)
+NWB_ADHD_GTEST_F(MultilineModelTests, HomeEndAddressCurrentHardLineIncludingEmptyAndTrailingLines, VerifyMultilineModelTests_HomeEndAddressCurrentHardLineIncludingEmptyAndTrailingLines)
+NWB_ADHD_GTEST_F(MultilineModelTests, AcceptedNoopSelectionAndMovementAdvanceTheSelectionEpochInBothModes, VerifyMultilineModelTests_AcceptedNoopSelectionAndMovementAdvanceTheSelectionEpochInBothModes)
+NWB_ADHD_GTEST_F(MultilineModelTests, SelectionAwayAndBackCannotReviveAnOldLoanEpoch, VerifyMultilineModelTests_SelectionAwayAndBackCannotReviveAnOldLoanEpoch)
+NWB_ADHD_GTEST_F(MultilineModelTests, AliasedSameTextAndEmptyReplacementRetireSelectionButZeroErasePreservesIt, VerifyMultilineModelTests_AliasedSameTextAndEmptyReplacementRetireSelectionButZeroErasePreservesIt)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

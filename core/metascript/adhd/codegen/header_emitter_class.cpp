@@ -9,6 +9,7 @@
 #include "reflection_emitter.h"
 #include "simd_constructor_emitter.h"
 
+#include <core/metascript/adhd/ast/operator_semantics.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
 
@@ -81,20 +82,26 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     }
     out.append("{\r\n");
 
-    emitClassMethodsCpp(out, decl, decl.orderedFields, !decl.templateParams.empty());
+    const ClassDecl* prevOwnerClass = m_sourceEmitter.activeOwnerClass();
+    const b8 prevOwnerNeedsArena = m_sourceEmitter.activeOwnerNeedsArena();
+    m_sourceEmitter.setActiveOwnerClassContext(&decl, decl.needsClassArena);
+
+    emitClassMethodsCpp(out, decl, decl.orderedFields, !decl.templateParams.empty(), decl.needsClassArena);
 
     if(!decl.orderedFields.empty())
         out.append("\r\n");
 
-    emitClassFieldsCpp(out, decl.orderedFields);
+    emitClassFieldsCpp(out, decl, decl.orderedFields);
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("\r\n");
         if(decl.templateParams.empty())
             reflectionEmitter.emitClassReflectionDeclarations(out, decl);
         else
-            reflectionEmitter.emitInlineClassReflection(out, decl, decl.orderedFields);
+            reflectionEmitter.emitInlineClassReflection(out, decl, decl.orderedFields, decl.needsClassArena);
     }
+
+    m_sourceEmitter.setActiveOwnerClassContext(prevOwnerClass, prevOwnerNeedsArena);
 
     out.append("};\r\n");
 
@@ -161,17 +168,28 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         out.append("\r\n");
     }
 
-    emitClassMethodsCpp(out, decl, inst.orderedFields, true);
+    const ClassDecl* prevOwnerClass = m_sourceEmitter.activeOwnerClass();
+    const b8 prevOwnerNeedsArena = m_sourceEmitter.activeOwnerNeedsArena();
+    const Span<const TemplateParamDecl> prevTemplateParams = m_sourceEmitter.activeTemplateParams();
+    const Span<const TypeArg> prevTemplateArgs = m_sourceEmitter.activeTemplateArgs();
+    const Span<const FieldDecl* const> prevOrderedFields = m_sourceEmitter.activeOrderedFields();
+    m_sourceEmitter.setActiveOwnerClassContext(&decl, inst.needsClassArena);
+    m_sourceEmitter.setActiveTemplateContext(decl.templateParams, inst.templateArgs, inst.orderedFields);
+
+    emitClassMethodsCpp(out, decl, inst.orderedFields, true, inst.needsClassArena);
 
     if(!inst.orderedFields.empty() && !decl.methods.empty())
         out.append("\r\n");
 
-    emitClassFieldsCpp(out, inst.orderedFields);
+    emitClassFieldsCpp(out, decl, inst.orderedFields);
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("\r\n");
-        reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
+        reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields, inst.needsClassArena);
     }
+
+    m_sourceEmitter.setActiveTemplateContext(prevTemplateParams, prevTemplateArgs, prevOrderedFields);
+    m_sourceEmitter.setActiveOwnerClassContext(prevOwnerClass, prevOwnerNeedsArena);
 
     out.append("};\r\n");
     if(packClass)
@@ -179,12 +197,168 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     out.append("\r\n");
 }
 
-void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields, const b8 forceInlineBody)const{
-    if(decl.needsClassArena){
+void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields, const b8 forceInlineBody, const b8 classNeedsArena)const{
+    const b8 hasMotherArenaMember = !decl.isArenaOwner && !decl.isSerialize && decl.subsystemTypeName.empty() && decl.componentAssetTypeName.empty() && classNeedsArena;
+    if(decl.isArenaOwner){
         out.append("private:\r\n");
         out.append("    inline static ::NWB::Core::Alloc::GlobalArena s_ClassArena{::Name(\"");
         out.append(decl.name.data(), decl.name.size());
         out.append("\")};\r\n\r\n");
+    }
+    else if(hasMotherArenaMember){
+        out.append("public:\r\n");
+        out.append("    using uses_leading_arena_t = ::ArenaBase;\r\n\r\n");
+        out.append("private:\r\n");
+        out.append("    ::NotNull<::ArenaBase*> __adhd_arena;\r\n\r\n");
+
+        b8 hasUserConstructor = false;
+        b8 hasUserArenaCopyCtor = false;
+        b8 hasUserAssignOp = false;
+        for(const MethodDecl* m : decl.methods){
+            if(!m)
+                continue;
+            if(m->isConstructor){
+                hasUserConstructor = true;
+                if(m->params.size() == 1u && m->params[0].type && m->params[0].mode == ParamPassingMode::In && m_symbols.resolveBaseTypeName(m->params[0].type->name) == decl.name)
+                    hasUserArenaCopyCtor = true;
+            }
+            if(m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
+                hasUserAssignOp = true;
+        }
+
+        const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+        const b8 canCopy = layoutAnalyzer.isClassCopyConstructible(decl, orderedFields);
+        const b8 canMove = layoutAnalyzer.isClassMoveConstructible(decl, orderedFields);
+        const b8 canCopyAssign = canCopy && layoutAnalyzer.isClassCopyAssignable(decl, orderedFields);
+        const b8 canMoveAssign = canMove && layoutAnalyzer.isClassMoveAssignable(decl, orderedFields);
+
+        if(!hasUserConstructor || canCopy || canMove || ((canCopyAssign || canMoveAssign) && !hasUserAssignOp)){
+            out.append("public:\r\n");
+            if(!hasUserConstructor){
+                out.append("    explicit ");
+                out.append(decl.name.data(), decl.name.size());
+                out.append("(::ArenaBase& __adhd_mother_arena)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena)){}\r\n");
+            }
+            if(canCopy || canMove){
+                out.append("    ");
+                out.append(decl.name.data(), decl.name.size());
+                out.append("(const ");
+                out.append(decl.name.data(), decl.name.size());
+                out.append(canCopy ? "&) = default;\r\n" : "&) = delete;\r\n");
+
+                if(canMove){
+                    out.append("    ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("(");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("&&)noexcept = default;\r\n");
+                }
+
+                const auto emitRebindCtor = [&](const b8 isMove){
+                    out.append("    ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("(::ArenaBase& __adhd_mother_arena, ");
+                    if(!isMove)
+                        out.append("const ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append(isMove ? "&& __adhd_rhs)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))" : "& __adhd_rhs)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
+                    for(const FieldDecl* field : orderedFields){
+                        if(!field || !field->type)
+                            continue;
+                        out.append(", ");
+                        out.append(field->name.data(), field->name.size());
+                        if(m_symbols.resolveRefMode(field->type) != ParamPassingMode::None){
+                            out.append("(__adhd_rhs.");
+                            out.append(field->name.data(), field->name.size());
+                            out.push_back(')');
+                        }
+                        else{
+                            out.append("(::AdhdRebindConstruct<");
+                            m_typeEmitter.emitTypeCpp(out, *field->type);
+                            out.append(">(__adhd_mother_arena, ");
+                            if(isMove)
+                                out.append("::Move(");
+                            out.append("__adhd_rhs.");
+                            out.append(field->name.data(), field->name.size());
+                            if(isMove)
+                                out.push_back(')');
+                            out.append("))");
+                        }
+                    }
+                    out.append("{}\r\n");
+                };
+
+                if(canCopy && !hasUserArenaCopyCtor)
+                    emitRebindCtor(false);
+                if(canMove)
+                    emitRebindCtor(true);
+            }
+            if((canCopyAssign || canMoveAssign) && !hasUserAssignOp){
+                const auto emitAssignOp = [&](const b8 isMove){
+                    out.append("    ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("& operator=(");
+                    if(!isMove)
+                        out.append("const ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append(isMove ? "&& __adhd_rhs)noexcept{\r\n" : "& __adhd_rhs)noexcept{\r\n");
+                    if(!orderedFields.empty()){
+                        out.append("        if(this != &__adhd_rhs){\r\n");
+                        for(const FieldDecl* field : orderedFields){
+                            if(!field || !field->type)
+                                continue;
+                            if(m_symbols.resolveRefMode(field->type) != ParamPassingMode::None){
+                                out.append("            this->");
+                                out.append(field->name.data(), field->name.size());
+                                out.append(" = __adhd_rhs.");
+                                out.append(field->name.data(), field->name.size());
+                                out.append(";\r\n");
+                                continue;
+                            }
+                            const TypeRef* unwrappedField = m_symbols.unwrapTypeAlias(field->type);
+                            const b8 isOptionalArenaField = unwrappedField
+                                && unwrappedField->refMode == ParamPassingMode::None
+                                && IsOptionalContainerType(unwrappedField->name)
+                                && !unwrappedField->templateArgs.empty()
+                                && unwrappedField->templateArgs[0].type
+                                && layoutAnalyzer.requiresMotherArena(*unwrappedField->templateArgs[0].type);
+                            if(isOptionalArenaField)
+                                out.append("            ::AdhdAssignOptional((*this->__adhd_arena), this->");
+                            else
+                                out.append("            ::AdhdAssign(this->");
+                            out.append(field->name.data(), field->name.size());
+                            out.append(", ");
+                            if(isMove)
+                                out.append("::Move(");
+                            out.append("__adhd_rhs.");
+                            out.append(field->name.data(), field->name.size());
+                            if(isMove)
+                                out.push_back(')');
+                            out.append(");\r\n");
+                        }
+                        out.append("        }\r\n");
+                    }
+                    else{
+                        out.append("        (void)__adhd_rhs;\r\n");
+                    }
+                    out.append("        return *this;\r\n    }\r\n");
+                };
+                if(canCopyAssign){
+                    emitAssignOp(false);
+                }
+                else{
+                    out.append("    ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("& operator=(const ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("&) = delete;\r\n");
+                }
+                if(canMoveAssign)
+                    emitAssignOp(true);
+            }
+            if(!decl.methods.empty())
+                out.append("\r\n");
+        }
     }
 
     for(const MethodDecl* method : decl.methods){
@@ -192,12 +366,13 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
             continue;
         __hidden_adhd_header_emitter_class::EmitAccessSpecifier(out, method->access, false);
 
-        if(!method->templateParams.empty()){
-            m_typeEmitter.emitTemplateHeaderCpp(out, method->templateParams);
+        if(!method->templateParams.empty() || method->hasSynthesizedArenaParams){
+            m_typeEmitter.emitCallableTemplateHeaderCpp(out, *method, true);
             out.append("    ");
         }
-        const b8 emitInlineBody = forceInlineBody || method->isInline || !method->templateParams.empty();
-        m_typeEmitter.emitMethodSignature(out, &decl, *method, true);
+        const b8 deferSynthesizedToOutOfClass = decl.templateParams.empty() && !forceInlineBody && method->hasSynthesizedArenaParams;
+        const b8 emitInlineBody = !deferSynthesizedToOutOfClass && (forceInlineBody || method->isInline || !method->templateParams.empty());
+        m_typeEmitter.emitMethodSignature(out, &decl, *method, true, classNeedsArena);
         if(emitInlineBody && method->hasBody){
             if(method->isConstructor)
                 m_sourceEmitter.emitConstructorNotNullInitializers(out, orderedFields, *method);
@@ -211,7 +386,13 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
     }
 }
 
-void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl* const> orderedFields)const{
+void HeaderEmitter::emitClassFieldsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields)const{
+    const b8 prevInFieldInit = m_sourceEmitter.inFieldInitializer();
+    m_sourceEmitter.setInFieldInitializer(true);
+    const MStringView arenaExpr = decl.isArenaOwner
+        ? MStringView("static_cast<::ArenaBase&>(s_ClassArena)")
+        : MStringView("(*this->__adhd_arena)");
+    const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
@@ -228,9 +409,20 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
                 out.append("))");
             }
             else if(field->usesClassArena && field->defaultExpr->kind == ExprKind::StringLiteral){
-                out.push_back('{');
-                m_sourceEmitter.emitExpr(out, *field->defaultExpr);
-                out.append(", s_ClassArena}");
+                if(field->arenaFirstDefaultInit){
+                    out.push_back('{');
+                    out.append(arenaExpr.data(), arenaExpr.size());
+                    out.append(", ");
+                    m_sourceEmitter.emitExpr(out, *field->defaultExpr);
+                    out.push_back('}');
+                }
+                else{
+                    out.push_back('{');
+                    m_sourceEmitter.emitExpr(out, *field->defaultExpr);
+                    out.append(", ");
+                    out.append(arenaExpr.data(), arenaExpr.size());
+                    out.push_back('}');
+                }
             }
             else{
                 out.append(" = ");
@@ -244,11 +436,22 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
                 SimdConstructorEmitter(m_sourceEmitter, out, baseFieldType, field->ctorArgs).emit();
             }
             else{
-                ConstructorArgumentEmitter(m_sourceEmitter).emit(out, baseFieldType, field->ctorArgs, field->usesClassArena ? MStringView("s_ClassArena") : MStringView{}, true, true);
+                ConstructorArgumentEmitter(m_sourceEmitter).emit(out, baseFieldType, field->ctorArgs, field->usesClassArena ? arenaExpr : MStringView{}, true, true);
             }
         }
-        else if(field->usesClassArena){
-            out.append("{s_ClassArena}");
+        else if(field->usesClassArena && m_symbols.isSelfDefaultedType(field->type->name, &decl)){
+            if(layoutAnalyzer.isFixedArrayNeedingArenaDefaultInit(*field->type)){
+                out.append(" = ::AdhdDefaultConstructInArena<");
+                m_typeEmitter.emitTypeCpp(out, *field->type);
+                out.append(">(");
+                out.append(arenaExpr.data(), arenaExpr.size());
+                out.push_back(')');
+            }
+            else{
+                out.push_back('{');
+                out.append(arenaExpr.data(), arenaExpr.size());
+                out.push_back('}');
+            }
         }
         else if(fieldRefMode == ParamPassingMode::None){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
@@ -257,12 +460,14 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
                 || SymbolTable::IsSimdType(baseFieldType)
                 || SymbolTable::IsUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
+                || FindBuiltinEnum(baseFieldType) != nullptr
                 || (m_symbols.findClass(baseFieldType) != nullptr && m_symbols.isSelfDefaultedType(baseFieldType))
             )
                 out.append("{}");
         }
         out.append(";\r\n");
     }
+    m_sourceEmitter.setInFieldInitializer(prevInFieldInit);
 }
 
 

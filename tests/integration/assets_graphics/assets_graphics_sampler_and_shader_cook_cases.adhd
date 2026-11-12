@@ -1,1092 +1,842 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 AssetsGraphicsSamplerAndShaderCookCasesReady(in u64 value){
-    return value != 0u;
+#include "suite.adhd"
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_ReductionAssignmentPrefix = "asset.reduction";
+const StringView s_UnsupportedSamplerMetadataCase = "sampler_unsupported_metadata";
+const StringView s_SamplersDirectory = "samplers";
+const StringView s_LinearClampMetadataFilename = "linear_clamp.nwb";
+const StringView s_SamplerTestMetadata = "sampler asset;\n\nasset.min_filter = \"nearest\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"nearest\";\nasset.address_u = \"wrap\";\nasset.address_v = \"mirror\";\nasset.address_w = \"border\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 4.0;\nasset.mip_bias = -0.25;\n";
+
+const StringView s_CompilerProbeIncludeFilename = "bom_compiler_probe_include.slangi";
+const StringView s_ShaderStageCs = "cs";
+const StringView s_ExactEntryPointShaderPath = "project/shaders/exact_entry_point_ps";
+const StringView s_ProjectShadersStandalonePs = "project/shaders/standalone_ps";
+const StringView s_ShaderMainCase = "MainCase";
+const StringView s_ShaderAssetHead = "pixel_shader asset;\n\n";
+const StringView s_AssetEntryMain = "asset.entry_point = \"main\";\n";
+
+
+b8 WriteStandaloneShaderProbe(in GraphicsTestPath assetRoot){
+    TestAString shaderMetadata = TestAString();
+    AppendTestMeta(s_ShaderAssetHead, shaderMetadata);
+    AppendTestMeta(s_AssetEntryMain, shaderMetadata);
+    if(!WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "standalone_ps.nwb"), ViewTestString(shaderMetadata)))
+        return false;
+    return WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "standalone_ps.slang"), s_StandaloneShaderProbeSource);
 }
 
-native{
-#include <tests/integration/assets_graphics/suite.adhd.h>
+b8 WriteBomCompilerProbe(in GraphicsTestPath assetRoot){
+    TestAString shaderMetadata = TestAString();
+    AppendTestMeta(s_ShaderAssetHead, shaderMetadata);
+    AppendTestMeta(s_AssetEntryMain, shaderMetadata);
+    if(!WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.nwb"), ViewTestString(shaderMetadata)))
+        return false;
+    if(!WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, s_CompilerProbeIncludeFilename), s_BomCompilerProbeIncludeSource))
+        return false;
+    return WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.slang"), s_BomCompilerProbeSource);
+}
+
+b8 WriteExactEntryPointShaderProbe(in GraphicsTestPath assetRoot){
+    TestAString shaderMetadata = TestAString();
+    AppendTestMeta(s_ShaderAssetHead, shaderMetadata);
+    AppendTestMeta("asset.entry_point = \"MainCase\";\n", shaderMetadata);
+    if(!WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "exact_entry_point_ps.nwb"), ViewTestString(shaderMetadata)))
+        return false;
+    return WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "exact_entry_point_ps.slang"), s_ExactEntryPointShaderProbeSource);
+}
 
 
+void VerifyAssetsGraphics_SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        NWB::Impl::Sampler sampler(testArena.arena, Name(s_AssetCaseProjectSamplersBinaryAdmission));
+        NWB::Core::SamplerDesc description;
+        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+        description.addressW = NWB::Core::SamplerAddressMode::Border;
+        sampler.setDescription(description);
 
-#include <tests/integration/assets_graphics/case_types.adhd.h>
+        NWB::Impl::SamplerAssetCodec codec;
+        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+        ASSERT_TRUE(codec.serialize(sampler, binary));
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
+        const NWB::Core::Assets::AssetBytes validBinary(binary);
 
-#include <gtest/gtest.h>
+        for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
+            binary = validBinary;
+            const u32 reductionValue = static_cast<u32>(reduction);
+            NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
+            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
 
+            description.reductionType = reduction;
+            sampler.setDescription(description);
+            EXPECT_FALSE(codec.serialize(sampler, binary));
+        }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        for(const usize borderOffset : {
+            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorR),
+            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorG),
+            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorB),
+            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorA)
+        }){
+            binary = validBinary;
+            const f32 nonblack = 1.0f;
+            NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
+            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
+        }
 
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_sampler_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_ReductionAssignmentPrefix = "asset.reduction";
-constexpr AStringView s_UnsupportedMetadataCase = "sampler_unsupported_metadata";
-constexpr AStringView s_AssetsDirectory = "assets";
-constexpr AStringView s_SamplersDirectory = "samplers";
-constexpr AStringView s_LinearClampMetadataFilename = "linear_clamp.nwb";
-
-using AString = TestAString;
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_SamplerTestMetadata =
-    "sampler asset;\n\n"
-    "asset.min_filter = \"nearest\";\n"
-    "asset.mag_filter = \"linear\";\n"
-    "asset.mip_filter = \"nearest\";\n"
-    "asset.address_u = \"wrap\";\n"
-    "asset.address_v = \"mirror\";\n"
-    "asset.address_w = \"border\";\n"
-    "asset.reduction = \"standard\";\n"
-    "asset.max_anisotropy = 4.0;\n"
-    "asset.mip_bias = -0.25;\n"
-;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-
-    TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSamplersBinaryAdmission));
-    NWB::Core::SamplerDesc description;
-    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-    description.addressW = NWB::Core::SamplerAddressMode::Border;
-    sampler.setDescription(description);
-
-    NWB::Impl::SamplerAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    ASSERT_TRUE(codec.serialize(sampler, binary));
-    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
-    const NWB::Core::Assets::AssetBytes validBinary(binary);
-
-    for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
-        binary = validBinary;
-        const u32 reductionValue = static_cast<u32>(reduction);
-        FOUNDATION_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
-        EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
-
-        description.reductionType = reduction;
+        description.reductionType = NWB::Core::SamplerReductionType::Standard;
+        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 1.0f);
         sampler.setDescription(description);
         EXPECT_FALSE(codec.serialize(sampler, binary));
+
+        description.reductionType = NWB::Core::SamplerReductionType::Standard;
+        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+        sampler.setDescription(description);
+        ASSERT_TRUE(codec.serialize(sampler, binary));
+        UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
+        auto recoveredResult = codec.deserialize(sampler.virtualPath(), binary, testArena.arena);
+        ASSERT_TRUE(recoveredResult);
+        recoveredAsset = Move(*recoveredResult);
+        ASSERT_NE(recoveredAsset.get(), nullptr);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
     }
-
-    for(const usize borderOffset : {
-        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorR),
-        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorG),
-        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorB),
-        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorA)
-    }){
-        binary = validBinary;
-        const f32 nonblack = 1.0f;
-        FOUNDATION_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
-        EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
-    }
-
-    description.reductionType = NWB::Core::SamplerReductionType::Standard;
-    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 1.0f);
-    sampler.setDescription(description);
-    EXPECT_FALSE(codec.serialize(sampler, binary));
-
-    description.reductionType = NWB::Core::SamplerReductionType::Standard;
-    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-    sampler.setDescription(description);
-    ASSERT_TRUE(codec.serialize(sampler, binary));
-    UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
-    auto recoveredResult = codec.deserialize(sampler.virtualPath(), binary, testArena.arena);
-    ASSERT_TRUE(recoveredResult);
-    recoveredAsset = Move(*recoveredResult);
-    ASSERT_NE(recoveredAsset.get(), nullptr);
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("sampler description is invalid")));
 }
 
-TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSamplersReloadAdmission));
-    NWB::Core::SamplerDesc description;
-    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-    description.maxAnisotropy = 4.0f;
-    description.mipBias = -0.25f;
-    description.minFilter = false;
-    description.addressW = NWB::Core::SamplerAddressMode::Border;
-    sampler.setDescription(description);
-    NWB::Impl::SamplerAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(codec.serialize(sampler, binary));
-    ASSERT_TRUE(sampler.loadBinary(binary));
-    for(usize prefix = 0u; prefix < binary.size(); ++prefix){
-        NWB::Core::Assets::AssetBytes malformed(binary);
-        malformed.resize(prefix);
-        EXPECT_FALSE(sampler.loadBinary(malformed)) << prefix;
-        NWB::Core::Assets::AssetBytes retained(testArena.arena);
-        ASSERT_TRUE(codec.serialize(sampler, retained));
-        EXPECT_EQ(retained, binary) << prefix;
-    }
-    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-        NWB::Impl::SamplerBinaryHeader header;
-        FOUNDATION_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
-        switch(invalidCase){
-        case 0u: header.magic = 0u; break;
-        case 1u: ++header.version; break;
-        case 2u: header.reserved = 1u; break;
-        case 3u: header.minFilter = 2u; break;
-        case 4u: header.addressU = Limit<u32>::s_Max; break;
-        case 5u: header.mipBias = BitCast<f32>(0x7fc00000u); break;
-        }
-        NWB::Core::Assets::AssetBytes malformed(testArena.arena);
-        AppendPOD(malformed, header);
-        if(invalidCase == 6u)
-            malformed.push_back(0u);
-        EXPECT_FALSE(sampler.loadBinary(malformed)) << invalidCase;
-        NWB::Core::Assets::AssetBytes retained(testArena.arena);
-        ASSERT_TRUE(codec.serialize(sampler, retained));
-        EXPECT_EQ(retained, binary) << invalidCase;
-    }
-    EXPECT_EQ(logger.errorCount(), binary.size() + 7u);
-}
-
-TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSamplersWideEnumAdmission));
-    NWB::Core::SamplerDesc description;
-    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-    description.addressU = NWB::Core::SamplerAddressMode::MirrorOnce;
-    description.addressV = NWB::Core::SamplerAddressMode::MirrorOnce;
-    description.addressW = NWB::Core::SamplerAddressMode::MirrorOnce;
-    description.reductionType = NWB::Core::SamplerReductionType::Comparison;
-    sampler.setDescription(description);
-    NWB::Impl::SamplerAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(codec.serialize(sampler, binary));
-    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
-
-    for(const usize offset : {
-        offsetof(NWB::Impl::SamplerBinaryHeader, addressU),
-        offsetof(NWB::Impl::SamplerBinaryHeader, addressV),
-        offsetof(NWB::Impl::SamplerBinaryHeader, addressW),
-        offsetof(NWB::Impl::SamplerBinaryHeader, reductionType)
-    }){
-        for(const u32 rawValue : { 0x100u, 0x101u }){
+void VerifyAssetsGraphics_SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        NWB::Impl::Sampler sampler(testArena.arena, Name(s_AssetCaseProjectSamplersReloadAdmission));
+        NWB::Core::SamplerDesc description;
+        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+        description.maxAnisotropy = 4.0f;
+        description.mipBias = -0.25f;
+        description.minFilter = false;
+        description.addressW = NWB::Core::SamplerAddressMode::Border;
+        sampler.setDescription(description);
+        NWB::Impl::SamplerAssetCodec codec;
+        NWB::Core::Assets::AssetBytes binary(testArena.arena);
+        ASSERT_TRUE(codec.serialize(sampler, binary));
+        ASSERT_TRUE(sampler.loadBinary(binary));
+        for(usize prefix = 0u; prefix < binary.size(); ++prefix){
             NWB::Core::Assets::AssetBytes malformed(binary);
-            FOUNDATION_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
-            EXPECT_FALSE(sampler.loadBinary(malformed)) << offset << ":" << rawValue;
+            malformed.resize(prefix);
+            EXPECT_FALSE(sampler.loadBinary(malformed)) << prefix;
             NWB::Core::Assets::AssetBytes retained(testArena.arena);
             ASSERT_TRUE(codec.serialize(sampler, retained));
-            EXPECT_EQ(retained, binary) << offset << ":" << rawValue;
-            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), malformed, testArena.arena)) << offset << ":" << rawValue;
+            EXPECT_EQ(retained, binary) << prefix;
         }
+        for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+            NWB::Impl::SamplerBinaryHeader header;
+            NWB_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
+            switch(invalidCase){
+            case 0u: header.magic = 0u; break;
+            case 1u: ++header.version; break;
+            case 2u: header.reserved = 1u; break;
+            case 3u: header.minFilter = 2u; break;
+            case 4u: header.addressU = Limit<u32>::s_Max; break;
+            case 5u: header.mipBias = BitCast<f32>(0x7fc00000u); break;
+            }
+            NWB::Core::Assets::AssetBytes malformed(testArena.arena);
+            AppendPOD(malformed, header);
+            if(invalidCase == 6u)
+                malformed.push_back(0u);
+            EXPECT_FALSE(sampler.loadBinary(malformed)) << invalidCase;
+            NWB::Core::Assets::AssetBytes retained(testArena.arena);
+            ASSERT_TRUE(codec.serialize(sampler, retained));
+            EXPECT_EQ(retained, binary) << invalidCase;
+        }
+        EXPECT_EQ(logger.errorCount(), binary.size() + 7u);
     }
-    EXPECT_EQ(logger.errorCount(), 16u);
 }
 
-TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    TestArena testArena;
-    NWB::Core::Metascript::Document document(testArena.arena);
+void VerifyAssetsGraphics_SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    native(in logger, mut testArena){
+        NWB::Impl::Sampler sampler(testArena.arena, Name(s_AssetCaseProjectSamplersWideEnumAdmission));
+        NWB::Core::SamplerDesc description;
+        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+        description.addressU = NWB::Core::SamplerAddressMode::MirrorOnce;
+        description.addressV = NWB::Core::SamplerAddressMode::MirrorOnce;
+        description.addressW = NWB::Core::SamplerAddressMode::MirrorOnce;
+        description.reductionType = NWB::Core::SamplerReductionType::Comparison;
+        sampler.setDescription(description);
+        NWB::Impl::SamplerAssetCodec codec;
+        NWB::Core::Assets::AssetBytes binary(testArena.arena);
+        ASSERT_TRUE(codec.serialize(sampler, binary));
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
+
+        for(const usize offset : {
+            offsetof(NWB::Impl::SamplerBinaryHeader, addressU),
+            offsetof(NWB::Impl::SamplerBinaryHeader, addressV),
+            offsetof(NWB::Impl::SamplerBinaryHeader, addressW),
+            offsetof(NWB::Impl::SamplerBinaryHeader, reductionType)
+        }){
+            for(const u32 rawValue : { 0x100u, 0x101u }){
+                NWB::Core::Assets::AssetBytes malformed(binary);
+                NWB_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
+                EXPECT_FALSE(sampler.loadBinary(malformed)) << offset << ":" << rawValue;
+                NWB::Core::Assets::AssetBytes retained(testArena.arena);
+                ASSERT_TRUE(codec.serialize(sampler, retained));
+                EXPECT_EQ(retained, binary) << offset << ":" << rawValue;
+                EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), malformed, testArena.arena)) << offset << ":" << rawValue;
+            }
+        }
+        EXPECT_EQ(logger.errorCount(), 16u);
+    }
+}
+
+void VerifyAssetsGraphics_SamplerCookerRequiresTheAssetField(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_CodecScratchArena);
+    MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse("sampler configuration; configuration.mip_bias = 2.0;"));
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
-    const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("missing asset declaration 'asset'")));
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase), s_AssetsDirectory);
+    const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_SamplersDirectory, s_LinearClampMetadataFilename);
+    EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena));
+    EXPECT_TRUE(SawCapturedError(logger, "missing asset declaration 'asset'"));
 }
 
-TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
-    static constexpr Array<AStringView, 3u> s_UnsupportedAssignments = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n" };
+u32 PackSpirvAsciiWord(in u8 a, in u8 b, in u8 c, in u8 d){
+    return cast<u32>(a) | (cast<u32>(b) << 8u) | (cast<u32>(c) << 16u) | (cast<u32>(d) << 24u);
+}
 
-    for(const AStringView assignment : s_UnsupportedAssignments){
-        CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-        TestArena testArena;
-        AString metadata(s_SamplerTestMetadata);
-        const AStringView reductionAssignment = "asset.reduction = \"standard\";\n";
+void VerifyAssetsGraphics_SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata(){
+    Vector<StringView> unsupportedAssignments = Vector<StringView>();
+    unsupportedAssignments.reserve(3u);
+    unsupportedAssignments.push_back("asset.border_color = [0.0, 0.0, 0.0, 0.0];\n");
+    unsupportedAssignments.push_back("asset.reduction = \"minimum\";\n");
+    unsupportedAssignments.push_back("asset.reduction = \"maximum\";\n");
+
+    const StringView reductionAssignment = "asset.reduction = \"standard\";\n";
+    for(in StringView assignment : unsupportedAssignments){
+        const ScopedTestTrace trace(assignment);
+        CapturingLogger logger = CapturingLogger();
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+        TestArena testArena = TestArena();
+        String metadata(s_SamplerTestMetadata);
         if(assignment.starts_with(s_ReductionAssignmentPrefix)){
             const usize reductionPosition = metadata.find(reductionAssignment);
-            ASSERT_NE(reductionPosition, AString::npos);
-            metadata.replace(reductionPosition, reductionAssignment.size(), assignment);
+            ASSERT_LT(reductionPosition, metadata.size());
+            String updated(metadata.substr(0u, reductionPosition));
+            updated.append(assignment);
+            updated.append(metadata.substr(reductionPosition + reductionAssignment.size()));
+            metadata = updated;
         }
         else
-            metadata += assignment;
+            metadata.append(assignment);
 
-        NWB::Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(AStringView(metadata)));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
-        const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << assignment;
-        const TStringView expectedDiagnostic = assignment.starts_with(s_ReductionAssignmentPrefix) ? FOUNDATION_TEXT("unsupported reduction type") : FOUNDATION_TEXT("unsupported asset field 'border_color'");
-        EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
+        ScratchArena scratchArena(s_CodecScratchArena);
+        MetaDocument document(testArena.arena);
+        ASSERT_TRUE(document.parse(StringView(metadata)));
+        const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase), s_AssetsDirectory);
+        const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_SamplersDirectory, s_LinearClampMetadataFilename);
+        EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena));
+        StringView expectedDiagnostic = "unsupported asset field 'border_color'";
+        if(assignment.starts_with(s_ReductionAssignmentPrefix))
+            expectedDiagnostic = "unsupported reduction type";
+        EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
     }
 }
 
-TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
-#if defined(NWB_FINAL)
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+void VerifyAssetsGraphics_SamplerCookerRejectsDeprecatedVersionMetadata(){
+    if(AssetsGraphicsTestConfigurationName() != "fin")
+        return;
 
-    TestArena testArena;
-    AString metadata(s_SamplerTestMetadata);
-    const usize firstFieldPosition = metadata.find("asset.min_filter");
-    ASSERT_NE(firstFieldPosition, AString::npos);
-    metadata.replace(firstFieldPosition, 0u, "asset.version = 1;\n");
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    TestArena testArena = TestArena();
+    const String baseMetadata(s_SamplerTestMetadata);
+    const usize firstFieldPosition = baseMetadata.find("asset.min_filter");
+    ASSERT_LT(firstFieldPosition, baseMetadata.size());
+    String metadata(baseMetadata.substr(0u, firstFieldPosition));
+    metadata.append("asset.version = 1;\n");
+    metadata.append(baseMetadata.substr(firstFieldPosition));
 
-    NWB::Core::Metascript::Document document(testArena.arena);
-    ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
-
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
-    const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("unsupported asset field 'version'")));
-#endif
+    ScratchArena scratchArena(s_CodecScratchArena);
+    MetaDocument document(testArena.arena);
+    ASSERT_TRUE(document.parse(StringView(metadata)));
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase), s_AssetsDirectory);
+    const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_SamplersDirectory, s_LinearClampMetadataFilename);
+    EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena));
+    EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'version'"));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_shader_archive_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_Ps = AssetsGraphicsFixture::s_ShaderStagePs;
-static constexpr AStringView s_ProjectShadersTestShader = AssetsGraphicsFixture::s_ProjectShadersTestShader;
-static constexpr AStringView s_Main = AssetsGraphicsFixture::s_ShaderEntryMain;
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
-    TestArena testArena;
-    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-    NWB::Core::ShaderArchive::Record defaultRecord(testArena.arena);
+void VerifyAssetsGraphics_ShaderArchiveVariantLookupIsExact(){
+    TestArena testArena = TestArena();
+    ShaderArchiveRecordVector records(testArena.arena);
+    ShaderArchiveRecord defaultRecord(testArena.arena);
     defaultRecord.shaderName = Name(s_ProjectShadersTestShader);
-    defaultRecord.variantName.assign(NWB::Core::ShaderArchive::s_DefaultVariant);
-    defaultRecord.stage = Name(s_Ps);
-    defaultRecord.virtualPathHash = Name(AssetsGraphicsFixture::s_AssetCaseShaderTestShaderDefaultPs).hash();
-    records.push_back(Move(defaultRecord));
+    defaultRecord.variantName.assign(s_DefaultVariant);
+    defaultRecord.stage = Name(s_ShaderStagePs);
+    defaultRecord.virtualPathHash = Name(s_AssetCaseShaderTestShaderDefaultPs).hash();
+    records.push_back(defaultRecord);
 
-    Name virtualPath = s_NameNone;
-    const auto virtualPathResult1 = NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_ProjectShadersTestShader), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-    ASSERT_TRUE(virtualPathResult1);
-    virtualPath = *virtualPathResult1;
-    EXPECT_EQ(virtualPath, Name(records[0].virtualPathHash));
-    EXPECT_FALSE(NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_ProjectShadersTestShader), "", Name(s_Ps)));
-
-    EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_ProjectShadersTestShader), "NWB_FEATURE=1", Name(s_Ps)));
-
-    EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_ProjectShadersTestShader), "", Name(s_Ps)));
+    const Expected<Name> virtualPathResult = FindTestShaderVirtualPath(records, Name(s_ProjectShadersTestShader), s_DefaultVariant, Name(s_ShaderStagePs));
+    ASSERT_TRUE(virtualPathResult.has_value());
+    EXPECT_EQ(virtualPathResult.value(), Name(records[0u].virtualPathHash));
+    EXPECT_FALSE(BuildVirtualPathName(Name(s_ProjectShadersTestShader), "", Name(s_ShaderStagePs)).has_value());
+    EXPECT_FALSE(FindTestShaderVirtualPath(records, Name(s_ProjectShadersTestShader), "NWB_FEATURE=1", Name(s_ShaderStagePs)).has_value());
+    EXPECT_FALSE(FindTestShaderVirtualPath(records, Name(s_ProjectShadersTestShader), "", Name(s_ShaderStagePs)).has_value());
 }
 
-TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords){
-    TestArena testArena;
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::GraphicsVector<Core::ShaderArchive::Record> records(testArena.arena);
-    Core::ShaderArchive::Record record(testArena.arena);
-    record.shaderName = Name(s_ProjectShadersTestShader);
-    record.variantName.assign(Core::ShaderArchive::s_DefaultVariant);
-    record.stage = Name(s_Ps);
-    record.virtualPathHash = Name(AssetsGraphicsFixture::s_AssetCaseShaderUnalignedDefaultPs).hash();
-    record.sourceChecksum = 0x12345678u;
-    records.push_back(Move(record));
-    Core::Alloc::ScratchArena scratchArena{Name(AssetsGraphicsFixture::s_AssetCaseTestsAssetsGraphicsArchiveAdmission)};
-    const auto encoded = Core::ShaderArchive::SerializeIndex(records, testArena.arena, scratchArena);
-    ASSERT_TRUE(encoded);
+void VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords(){
+    TestArena testArena = TestArena();
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    ScratchArena scratchArena(s_AssetCaseTestsAssetsGraphicsArchiveAdmission);
+    native(in logger, mut testArena, mut scratchArena){
+        Core::GraphicsVector<Core::ShaderArchive::Record> records(testArena.arena);
+        Core::ShaderArchive::Record record(testArena.arena);
+        record.shaderName = Name(s_ProjectShadersTestShader);
+        record.variantName.assign(Core::ShaderArchive::s_DefaultVariant);
+        record.stage = Name(s_ShaderStagePs);
+        record.virtualPathHash = Name(s_AssetCaseShaderUnalignedDefaultPs).hash();
+        record.sourceChecksum = 0x12345678u;
+        records.push_back(Move(record));
+        const auto encoded = Core::ShaderArchive::SerializeIndex(records, testArena.arena, scratchArena);
+        ASSERT_TRUE(encoded);
 
-    alignas(u32) Array<u8, 2048u> unalignedStorage = {};
-    ASSERT_LT(encoded->size(), unalignedStorage.size());
-    u8* const unalignedBytes = unalignedStorage.data() + 1u;
-    FOUNDATION_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
-    const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
-    ASSERT_TRUE(admitted);
-    ASSERT_EQ(admitted->size(), 1u);
-    EXPECT_EQ(admitted->front().shaderName, records.front().shaderName);
-    EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
-    EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { nullptr, encoded->size() }));
-    EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() - 1u }));
-    EXPECT_EQ(logger.errorCount(), 2u);
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("nonempty byte view has no data")));
-    EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
+        alignas(u32) Array<u8, 2048u> unalignedStorage = {};
+        ASSERT_LT(encoded->size(), unalignedStorage.size());
+        u8* const unalignedBytes = unalignedStorage.data() + 1u;
+        NWB_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
+        const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
+        ASSERT_TRUE(admitted);
+        ASSERT_EQ(admitted->size(), 1u);
+        EXPECT_EQ(admitted->front().shaderName, records.front().shaderName);
+        EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
+        EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { nullptr, encoded->size() }));
+        EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() - 1u }));
+        EXPECT_EQ(logger.errorCount(), 2u);
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("nonempty byte view has no data")));
+        EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
+    }
 }
 
-static constexpr u32 PackSpirvStringWord(const char a, const char b, const char c, const char d)noexcept{
-    return static_cast<u32>(static_cast<u8>(a)) | (static_cast<u32>(static_cast<u8>(b)) << 8u) | (static_cast<u32>(static_cast<u8>(c)) << 16u) | (static_cast<u32>(static_cast<u8>(d)) << 24u);
+void VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected(){
+    const u32 mainWord = PackSpirvAsciiWord(109u, 97u, 105u, 110u);
+    Array<u32, 10u> words = Array<u32, 10u>();
+    words[0u] = 0x07230203u;
+    words[1u] = 0x00010500u;
+    words[3u] = 16u;
+    words[5u] = (5u << 16u) | 15u;
+    words[6u] = 4u;
+    words[7u] = 1u;
+    words[8u] = mainWord;
+
+    EXPECT_TRUE(IsValidSpirvModuleWords(words));
+    const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_TRUE(entryPointResult1.has_value());
+
+    const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_ComputeStage);
+    ASSERT_FALSE(entryPointResult2.has_value());
+    EXPECT_EQ(entryPointResult2.error(), s_SpirvNotFound);
+
+    Array<u32, 9u> invalidWords = Array<u32, 9u>();
+    invalidWords[0u] = 0x07230203u;
+    invalidWords[1u] = 0x00010500u;
+    invalidWords[3u] = 16u;
+    invalidWords[5u] = (5u << 16u) | 15u;
+    invalidWords[6u] = 4u;
+    invalidWords[7u] = 1u;
+    invalidWords[8u] = mainWord;
+
+    const Expected<StringView, SpirvLookupError> entryPointResult3 = ResolveSpirvEntryPointName(invalidWords, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_FALSE(entryPointResult3.has_value());
+    EXPECT_EQ(entryPointResult3.error(), s_SpirvInvalid);
+    EXPECT_FALSE(IsValidSpirvModuleWords(invalidWords));
+
+    Array<u32, 9u> malformedOtherStageEntryWords = Array<u32, 9u>();
+    malformedOtherStageEntryWords[0u] = 0x07230203u;
+    malformedOtherStageEntryWords[1u] = 0x00010500u;
+    malformedOtherStageEntryWords[3u] = 16u;
+    malformedOtherStageEntryWords[5u] = (4u << 16u) | 15u;
+    malformedOtherStageEntryWords[7u] = 1u;
+    malformedOtherStageEntryWords[8u] = mainWord;
+
+    EXPECT_FALSE(IsValidSpirvModuleWords(malformedOtherStageEntryWords));
+    const Expected<StringView, SpirvLookupError> entryPointResult4 = ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_FALSE(entryPointResult4.has_value());
+    EXPECT_EQ(entryPointResult4.error(), s_SpirvInvalid);
 }
 
-TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
-    const Array<u32, 10u> words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
+void VerifyAssetsGraphics_SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown(){
+    Vector<SpirvModelStageCase> models = Vector<SpirvModelStageCase>();
+    models.reserve(4u);
+    SpirvModelStageCase model0 = SpirvModelStageCase();
+    model0.stage = s_AmplificationStage;
+    model0.model = 5267u;
+    models.push_back(model0);
+    SpirvModelStageCase model1 = SpirvModelStageCase();
+    model1.stage = s_MeshStage;
+    model1.model = 5268u;
+    models.push_back(model1);
+    SpirvModelStageCase model2 = SpirvModelStageCase();
+    model2.stage = s_AmplificationStage;
+    model2.model = 5364u;
+    models.push_back(model2);
+    SpirvModelStageCase model3 = SpirvModelStageCase();
+    model3.stage = s_MeshStage;
+    model3.model = 5365u;
+    models.push_back(model3);
 
-    EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words));
-    const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, s_Main, NWB::Core::ShaderType::Pixel);
-    ASSERT_TRUE(entryPointResult1);
-
-    const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, s_Main, NWB::Core::ShaderType::Compute);
-    ASSERT_FALSE(entryPointResult2);
-    EXPECT_EQ(entryPointResult2.error(), NWB::Core::SpirvEntryPointLookupResult::NotFound);
-
-    const Array<u32, 9u> invalidWords = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
-
-    const auto entryPointResult3 = NWB::Core::ResolveSpirvEntryPointName(invalidWords, s_Main, NWB::Core::ShaderType::Pixel);
-    ASSERT_FALSE(entryPointResult3);
-    EXPECT_EQ(entryPointResult3.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
-    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(invalidWords));
-
-    const Array<u32, 9u> malformedOtherStageEntryWords = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (4u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
-
-    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(malformedOtherStageEntryWords));
-    const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_Main, NWB::Core::ShaderType::Pixel);
-    ASSERT_FALSE(entryPointResult4);
-    EXPECT_EQ(entryPointResult4.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
-}
-
-TEST(AssetsGraphics, SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown){
-    constexpr Array<AssetsGraphicsFixture::SpirvModelStageCase, 4u> s_Models = {{
-        { .stage = Core::ShaderType::Amplification, .model = 5267u }, { .stage = Core::ShaderType::Mesh, .model = 5268u },
-        { .stage = Core::ShaderType::Amplification, .model = 5364u }, { .stage = Core::ShaderType::Mesh, .model = 5365u },
-    }};
-    Array<u32, 10u> words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
-    for(const AssetsGraphicsFixture::SpirvModelStageCase& model : s_Models){
+    Array<u32, 10u> words = Array<u32, 10u>();
+    words[0u] = 0x07230203u;
+    words[1u] = 0x00010500u;
+    words[3u] = 16u;
+    words[5u] = (5u << 16u) | 15u;
+    words[7u] = 1u;
+    words[8u] = PackSpirvAsciiWord(109u, 97u, 105u, 110u);
+    for(in SpirvModelStageCase model : models){
+        const ScopedTestTrace trace(model.model);
         words[6u] = model.model;
-        const auto entry = Core::ResolveSpirvEntryPointName(words, s_Main, model.stage);
-        ASSERT_TRUE(entry) << model.model;
-        EXPECT_EQ(*entry, s_Main);
+        const Expected<StringView, SpirvLookupError> entry = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, model.stage);
+        ASSERT_TRUE(entry.has_value());
+        EXPECT_EQ(entry.value(), s_ShaderEntryMain);
     }
-    words[6u] = Limit<u32>::s_Max;
-    const auto unknown = Core::ResolveSpirvEntryPointName(words, s_Main, Core::ShaderType::Pixel);
-    ASSERT_FALSE(unknown);
-    EXPECT_EQ(unknown.error(), Core::SpirvEntryPointLookupResult::NotFound);
+    words[6u] = u32.max;
+    const Expected<StringView, SpirvLookupError> unknown = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_FALSE(unknown.has_value());
+    EXPECT_EQ(unknown.error(), s_SpirvNotFound);
 }
 
-TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches){
-    TestArena testArena;
-    constexpr Array<u32, 10u> s_Words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
-    constexpr Array<char, 5u> s_RequestedName = { 'm', 'a', 'i', 'n', 'X' };
-    const AStringView requestedName(s_RequestedName.data(), 4u);
-    NWB::Core::GraphicsVector<u32> copiedWords(testArena.arena);
-    AStringView copiedEntryPoint;
-    {
-        NWB::Core::GraphicsVector<u32> sourceWords(s_Words.begin(), s_Words.end(), testArena.arena);
-        AStringView sourceEntryPoint;
-        const auto entryPointResult5 = NWB::Core::ResolveSpirvEntryPointName(sourceWords, requestedName, NWB::Core::ShaderType::Pixel);
-        ASSERT_TRUE(entryPointResult5);
-        sourceEntryPoint = *entryPointResult5;
-        EXPECT_EQ(sourceEntryPoint.data(), reinterpret_cast<const char*>(sourceWords.data() + 8u));
-        copiedWords = sourceWords;
-        const auto entryPointResult6 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
-        ASSERT_TRUE(entryPointResult6);
-        copiedEntryPoint = *entryPointResult6;
-        EXPECT_EQ(copiedEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(copiedWords.data() + 8u)));
-        EXPECT_NE(copiedEntryPoint.data(), sourceEntryPoint.data());
+void VerifyAssetsGraphics_SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches(){
+    TestArena testArena = TestArena();
+    native(mut testArena){
+        constexpr Array<u32, 10u> s_Words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
+        constexpr Array<char, 5u> s_RequestedName = { 'm', 'a', 'i', 'n', 'X' };
+        const AStringView requestedName(s_RequestedName.data(), 4u);
+        NWB::Core::GraphicsVector<u32> copiedWords(testArena.arena);
+        AStringView copiedEntryPoint;
+        {
+            NWB::Core::GraphicsVector<u32> sourceWords(s_Words.begin(), s_Words.end(), testArena.arena);
+            AStringView sourceEntryPoint;
+            const auto entryPointResult5 = NWB::Core::ResolveSpirvEntryPointName(sourceWords, requestedName, NWB::Core::ShaderType::Pixel);
+            ASSERT_TRUE(entryPointResult5);
+            sourceEntryPoint = *entryPointResult5;
+            EXPECT_EQ(sourceEntryPoint.data(), reinterpret_cast<const char*>(sourceWords.data() + 8u));
+            copiedWords = sourceWords;
+            const auto entryPointResult6 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
+            ASSERT_TRUE(entryPointResult6);
+            copiedEntryPoint = *entryPointResult6;
+            EXPECT_EQ(copiedEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(copiedWords.data() + 8u)));
+            EXPECT_NE(copiedEntryPoint.data(), sourceEntryPoint.data());
+        }
+        // Specializations retain their own bytecode, so their entry-name view must survive the original module.
+        EXPECT_EQ(copiedEntryPoint, s_ShaderEntryMain);
+        EXPECT_EQ(copiedEntryPoint.data()[copiedEntryPoint.size()], '\0');
+
+        Core::Assets::AssetBytes unalignedBytes(testArena.arena);
+        unalignedBytes.resize(1u + copiedWords.size() * sizeof(u32));
+        NWB_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
+        const BinaryByteView unalignedModule{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u };
+        AStringView byteEntryPoint;
+        const auto entryPointResult7 = Core::ResolveSpirvEntryPointName(unalignedModule, requestedName, Core::ShaderType::Pixel);
+        ASSERT_TRUE(entryPointResult7);
+        byteEntryPoint = *entryPointResult7;
+        EXPECT_EQ(byteEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(unalignedBytes.data() + 1u + 8u * sizeof(u32))));
+        EXPECT_EQ(byteEntryPoint, s_ShaderEntryMain);
+        const auto entryPointResult8 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedModule.data(), unalignedModule.size() - 1u }, requestedName, Core::ShaderType::Pixel);
+        ASSERT_FALSE(entryPointResult8);
+        EXPECT_EQ(entryPointResult8.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
+        AppendPOD(unalignedBytes, 0u);
+        const auto entryPointResult9 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u }, requestedName, Core::ShaderType::Pixel);
+        ASSERT_FALSE(entryPointResult9);
+        EXPECT_EQ(entryPointResult9.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
+
+        copiedWords.push_back(0u);
+        const auto entryPointResult10 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
+        ASSERT_FALSE(entryPointResult10);
+        EXPECT_EQ(entryPointResult10.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
     }
-    // Specializations retain their own bytecode, so their entry-name view must survive the original module.
-    EXPECT_EQ(copiedEntryPoint, s_Main);
-    EXPECT_EQ(copiedEntryPoint.data()[copiedEntryPoint.size()], '\0');
-
-    Core::Assets::AssetBytes unalignedBytes(testArena.arena);
-    unalignedBytes.resize(1u + copiedWords.size() * sizeof(u32));
-    FOUNDATION_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
-    const BinaryByteView unalignedModule{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u };
-    AStringView byteEntryPoint;
-    const auto entryPointResult7 = Core::ResolveSpirvEntryPointName(unalignedModule, requestedName, Core::ShaderType::Pixel);
-    ASSERT_TRUE(entryPointResult7);
-    byteEntryPoint = *entryPointResult7;
-    EXPECT_EQ(byteEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(unalignedBytes.data() + 1u + 8u * sizeof(u32))));
-    EXPECT_EQ(byteEntryPoint, s_Main);
-    const auto entryPointResult8 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedModule.data(), unalignedModule.size() - 1u }, requestedName, Core::ShaderType::Pixel);
-    ASSERT_FALSE(entryPointResult8);
-    EXPECT_EQ(entryPointResult8.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
-    AppendPOD(unalignedBytes, 0u);
-    const auto entryPointResult9 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u }, requestedName, Core::ShaderType::Pixel);
-    ASSERT_FALSE(entryPointResult9);
-    EXPECT_EQ(entryPointResult9.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
-
-    copiedWords.push_back(0u);
-    const auto entryPointResult10 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
-    ASSERT_FALSE(entryPointResult10);
-    EXPECT_EQ(entryPointResult10.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <global/limit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_shader_cook_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_ShadersDirectory = "shaders";
-constexpr AStringView s_CompilerProbeIncludeFilename = "bom_compiler_probe_include.slangi";
-constexpr AStringView s_AssetsDirectory = "assets";
-constexpr AStringView s_ComputeStage = "cs";
-constexpr AStringView s_ExactEntryPointShaderPath = "project/shaders/exact_entry_point_ps";
-constexpr AStringView s_CacheDirectory = "__asset_cache";
-
-static constexpr AStringView s_Ps = "ps";
-static constexpr AStringView s_ProjectShadersStandalonePs = "project/shaders/standalone_ps";
-static constexpr AStringView s_MainCase = "MainCase";
-static constexpr AStringView s_ShaderAssetHead = "pixel_shader asset;\n\n";
-static constexpr AStringView s_AssetEntryMain = "asset.entry_point = \"main\";\n";
-static constexpr AStringView s_Main = "main";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Self-contained pixel shader without generated material bind includes.
-static constexpr AStringView s_StandaloneShaderProbeSource = R"NWB_SLANG(struct NwbStandalonePixelOutput{
-    float4 color : SV_Target0;
-};
-
-NwbStandalonePixelOutput main(){
-    NwbStandalonePixelOutput output;
-    output.color = float4(1.0, 1.0, 1.0, 1.0);
-    return output;
+void VerifyAssetsGraphics_CompilerPathTextCapacityChecksWideOverflow(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    const usize limit = usize.max;
+    const usize wideUnits = limit / s_MaxEncodedPathBytesPerWideUnit;
+    const Expected<usize> wideCapacity = TryComputeCompilerPathTextCapacity(wideUnits, false);
+    ASSERT_TRUE(wideCapacity.has_value());
+    EXPECT_EQ(wideCapacity.value(), wideUnits * s_MaxEncodedPathBytesPerWideUnit);
+    EXPECT_FALSE(TryComputeCompilerPathTextCapacity(wideUnits + 1u, false).has_value());
+    EXPECT_TRUE(SawCapturedError(logger, "compiler path text exceeds representable size"));
+    const Expected<usize> narrowCapacity = TryComputeCompilerPathTextCapacity(limit, true);
+    ASSERT_TRUE(narrowCapacity.has_value());
+    EXPECT_EQ(narrowCapacity.value(), limit);
 }
 
-)NWB_SLANG";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 WriteStandaloneShaderProbe(const Path& assetRoot){
-    const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_ShaderAssetHead, s_AssetEntryMain);
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "standalone_ps.nwb", shaderMetadata))
-        return false;
-
-    return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "standalone_ps.slang", s_StandaloneShaderProbeSource);
-}
-
-// Start both files with a UTF-8 BOM to test compiler input normalization.
-static constexpr AStringView s_BomCompilerProbeIncludeSource = "\xEF\xBB\xBF" R"NWB_SLANG(float4 nwbBomCompilerProbeColor(){
-    return float4(0.1, 0.2, 0.3, 1.0);
-}
-
-)NWB_SLANG";
-
-static constexpr AStringView s_BomCompilerProbeSource = "\xEF\xBB\xBF" R"NWB_SLANG(#include "bom_compiler_probe_include.slangi"
-
-struct NwbBomCompilerProbeOutput{
-    float4 color : SV_Target0;
-};
-
-NwbBomCompilerProbeOutput main(){
-    NwbBomCompilerProbeOutput output;
-    output.color = nwbBomCompilerProbeColor();
-    return output;
-}
-
-)NWB_SLANG";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 WriteBomCompilerProbe(const Path& assetRoot){
-    const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_ShaderAssetHead, s_AssetEntryMain);
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.nwb", shaderMetadata))
-        return false;
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / s_CompilerProbeIncludeFilename, s_BomCompilerProbeIncludeSource))
-        return false;
-
-    return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource);
-}
-
-static constexpr AStringView s_ExactEntryPointShaderProbeSource = R"NWB_SLANG(struct NwbExactEntryPointPixelOutput{
-    float4 color : SV_Target0;
-};
-
-NwbExactEntryPointPixelOutput MainCase(){
-    NwbExactEntryPointPixelOutput output;
-    output.color = float4(1.0, 1.0, 1.0, 1.0);
-    return output;
-}
-
-)NWB_SLANG";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 WriteExactEntryPointShaderProbe(const Path& assetRoot){
-    const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_ShaderAssetHead, "asset.entry_point = \"MainCase\";\n");
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "exact_entry_point_ps.nwb", shaderMetadata))
-        return false;
-
-    return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
-}
-
-
-TEST(AssetsGraphics, CompilerPathTextCapacityChecksWideOverflow){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    const usize limit = Limit<usize>::s_Max;
-    const usize wideUnits = limit / Impl::ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit;
-    const auto wideCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(wideUnits, false);
-    ASSERT_TRUE(wideCapacity);
-    EXPECT_EQ(*wideCapacity, wideUnits * Impl::ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(wideUnits + 1u, false));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("compiler path text exceeds representable size")));
-    const auto narrowCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(limit, true);
-    ASSERT_TRUE(narrowCapacity);
-    EXPECT_EQ(*narrowCapacity, limit);
-}
-
-TEST(AssetsGraphics, CompilerArgumentCapacitiesRejectOverflow){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    const usize limit = Limit<usize>::s_Max;
-    const usize prefixBytes = Impl::ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix.size();
+void VerifyAssetsGraphics_CompilerArgumentCapacitiesRejectOverflow(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    const usize limit = usize.max;
+    const usize prefixBytes = s_SlangWorkspaceRootKeyPrefix.size();
     const usize rootBytes = (limit - prefixBytes) / 2u;
-    const auto rootCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerOverlayRootKeyCapacity(rootBytes);
-    ASSERT_TRUE(rootCapacity);
-    EXPECT_EQ(*rootCapacity, prefixBytes + rootBytes * 2u);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerOverlayRootKeyCapacity(rootBytes + 1u));
-    const auto defineCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(2u, limit - 3u, 1u);
-    ASSERT_TRUE(defineCapacity);
-    EXPECT_EQ(*defineCapacity, limit);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(2u, limit - 1u, 0u));
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(2u, limit - 3u, 2u));
-    const auto quotedCapacity = Impl::ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(limit - 2u);
-    ASSERT_TRUE(quotedCapacity);
-    EXPECT_EQ(*quotedCapacity, limit);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(limit - 1u));
-    const auto includeCapacity = Impl::ShaderBinaryPayload::TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u);
-    ASSERT_TRUE(includeCapacity);
-    EXPECT_EQ(*includeCapacity, (limit / 2u) * 2u);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u + 1u));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("too many include directories")));
-    const auto replacementBytes = Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 2u);
-    ASSERT_TRUE(replacementBytes);
-    EXPECT_EQ(*replacementBytes, limit);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 1u));
-    const auto wrappedRemoval = Impl::ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(0u, 1u, 0u);
-    ASSERT_TRUE(wrappedRemoval);
-    EXPECT_EQ(*wrappedRemoval, limit);
+    const Expected<usize> rootCapacity = TryComputeCompilerOverlayRootKeyCapacity(rootBytes);
+    ASSERT_TRUE(rootCapacity.has_value());
+    EXPECT_EQ(rootCapacity.value(), prefixBytes + rootBytes * 2u);
+    EXPECT_FALSE(TryComputeCompilerOverlayRootKeyCapacity(rootBytes + 1u).has_value());
+    const Expected<usize> defineCapacity = TryComputeCompilerDefineArgumentCapacity(2u, limit - 3u, 1u);
+    ASSERT_TRUE(defineCapacity.has_value());
+    EXPECT_EQ(defineCapacity.value(), limit);
+    EXPECT_FALSE(TryComputeCompilerDefineArgumentCapacity(2u, limit - 1u, 0u).has_value());
+    EXPECT_FALSE(TryComputeCompilerDefineArgumentCapacity(2u, limit - 3u, 2u).has_value());
+    const Expected<usize> quotedCapacity = TryComputeQuotedCompilerPathCapacity(limit - 2u);
+    ASSERT_TRUE(quotedCapacity.has_value());
+    EXPECT_EQ(quotedCapacity.value(), limit);
+    EXPECT_FALSE(TryComputeQuotedCompilerPathCapacity(limit - 1u).has_value());
+    const Expected<usize> includeCapacity = TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u);
+    ASSERT_TRUE(includeCapacity.has_value());
+    EXPECT_EQ(includeCapacity.value(), (limit / 2u) * 2u);
+    EXPECT_FALSE(TryComputeCompilerIncludeDirectoryCapacity("test", limit / 2u + 1u).has_value());
+    EXPECT_TRUE(SawCapturedError(logger, "too many include directories"));
+    const Expected<usize> replacementBytes = TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 2u);
+    ASSERT_TRUE(replacementBytes.has_value());
+    EXPECT_EQ(replacementBytes.value(), limit);
+    EXPECT_FALSE(TryComputeCompilerReplacementOutputBytes(5u, 3u, limit - 1u).has_value());
+    const Expected<usize> wrappedRemoval = TryComputeCompilerReplacementOutputBytes(0u, 1u, 0u);
+    ASSERT_TRUE(wrappedRemoval.has_value());
+    EXPECT_EQ(wrappedRemoval.value(), limit);
 }
 
-TEST(AssetsGraphics, ShaderCombinationCountsPreserveStateOnOverflow){
-    usize reserveCount = Limit<usize>::s_Max - 1u;
-    EXPECT_TRUE(Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount));
-    EXPECT_EQ(reserveCount, Limit<usize>::s_Max);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount));
-    EXPECT_EQ(reserveCount, Limit<usize>::s_Max);
-    const auto expanded = Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max / 2u, 2u);
-    ASSERT_TRUE(expanded);
-    EXPECT_EQ(*expanded, (Limit<usize>::s_Max / 2u) * 2u);
-    EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max / 2u + 1u, 2u));
-    const auto empty = Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max, 0u);
-    ASSERT_TRUE(empty);
-    EXPECT_EQ(*empty, 0u);
+void VerifyAssetsGraphics_ShaderCombinationCountsPreserveStateOnOverflow(){
+    usize reserveCount = usize.max - 1u;
+    EXPECT_TRUE(AccumulateInheritedShaderDefineReserve(1u, reserveCount));
+    EXPECT_EQ(reserveCount, usize.max);
+
+    EXPECT_FALSE(AccumulateInheritedShaderDefineReserve(1u, reserveCount));
+    EXPECT_EQ(reserveCount, usize.max);
+
+    const Expected<usize> expanded = TryComputeShaderExpandedCombinationCount(usize.max / 2u, 2u);
+    ASSERT_TRUE(expanded.has_value());
+    EXPECT_EQ(expanded.value(), (usize.max / 2u) * 2u);
+    EXPECT_FALSE(TryComputeShaderExpandedCombinationCount(usize.max / 2u + 1u, 2u).has_value());
+    const Expected<usize> empty = TryComputeShaderExpandedCombinationCount(usize.max, 0u);
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_EQ(empty.value(), 0u);
 }
 
-TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "concrete_shader_stage_admission");
-    ASSERT_TRUE(cookCase);
-    Path& root = cookCase->root;
-    Path& outputDirectory = cookCase->outputDirectory;
+void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "concrete_shader_stage_admission");
+    ASSERT_TRUE(cookCaseResult.has_value());
+    const CookCase cookCase = cookCaseResult.value();
+    const GraphicsTestPath root = cookCase.root;
+    const GraphicsTestPath outputDirectory = cookCase.outputDirectory;
 
-    const Path assetRoot = root / s_AssetsDirectory;
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     ASSERT_TRUE(WriteStandaloneShaderProbe(assetRoot));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"MainC\";\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "stage_cs.slang", "[numthreads(1, 1, 1)] void MainC(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_ProjectShadersStandalonePs), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name(AssetsGraphicsFixture::s_AssetCaseProjectShadersStageCs), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
-    ASSERT_TRUE(pixelPathResult);
-    ASSERT_TRUE(computePathResult);
-    const Name& pixelPath = *pixelPathResult;
-    const Name& computePath = *computePathResult;
-    UniquePtr<Core::Assets::IAsset> pixelAsset;
-    UniquePtr<Core::Assets::IAsset> computeAsset;
-    auto pixelAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, pixelPath, 3u, testArena);
-    ASSERT_TRUE(pixelAssetLoadResult);
-    pixelAsset = Move(*pixelAssetLoadResult);
-    auto computeAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(outputDirectory, computePath, 3u, testArena);
-    ASSERT_TRUE(computeAssetLoadResult);
-    computeAsset = Move(*computeAssetLoadResult);
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "stage_cs.nwb"), "compute_shader asset;\nasset.entry_point = \"MainC\";\n"));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "stage_cs.slang"), "[numthreads(1, 1, 1)] void MainC(){}\n"));
+    ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
+    const Expected<Name> pixelPathResult = BuildVirtualPathName(Name(s_ProjectShadersStandalonePs), s_DefaultVariant, Name(s_ShaderStagePs));
+    const Expected<Name> computePathResult = BuildVirtualPathName(Name(s_AssetCaseProjectShadersStageCs), s_DefaultVariant, Name(s_ShaderStageCs));
+    ASSERT_TRUE(pixelPathResult.has_value());
+    ASSERT_TRUE(computePathResult.has_value());
+    const Name pixelPath = pixelPathResult.value();
+    const Name computePath = computePathResult.value();
+    const Expected<PixelShaderAsset> cookedPixelResult = LoadCookedPixelShader(testArena, outputDirectory, pixelPath, 3u);
+    ASSERT_TRUE(cookedPixelResult.has_value());
+    const PixelShaderAsset cookedPixel = cookedPixelResult.value();
+    const Expected<ComputeShaderAsset> cookedComputeResult = LoadCookedComputeShader(testArena, outputDirectory, computePath, 3u);
+    ASSERT_TRUE(cookedComputeResult.has_value());
+    const ComputeShaderAsset cookedCompute = cookedComputeResult.value();
     EXPECT_EQ(logger.errorCount(), 0u);
-    const Impl::PixelShader& cookedPixel = static_cast<const Impl::PixelShader&>(*pixelAsset);
-    const Impl::ComputeShader& cookedCompute = static_cast<const Impl::ComputeShader&>(*computeAsset);
-    Core::Assets::AssetBytes pixelBinary(testArena.arena);
-    Core::Assets::AssetBytes computeBinary(testArena.arena);
-    ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(AStringView(cookedPixel.entryPoint()), cookedPixel.bytecode(), pixelBinary), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
-    ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(AStringView(cookedCompute.entryPoint()), cookedCompute.bytecode(), computeBinary), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
 
-    const Impl::PixelShaderAssetCodec pixelCodec;
-    const Impl::ComputeShaderAssetCodec computeCodec;
-    EXPECT_FALSE(pixelCodec.deserialize(pixelPath, computeBinary, testArena.arena));
-    EXPECT_FALSE(computeCodec.deserialize(computePath, pixelBinary, testArena.arena));
+    AssetBytes pixelBinary(testArena.arena);
+    AssetBytes computeBinary(testArena.arena);
+    ASSERT_EQ(EncodeTestShaderPayload(ViewArenaString(cookedPixel.entryPoint()), cookedPixel.bytecode(), pixelBinary), s_ShaderPayloadEncodeNone);
+    ASSERT_EQ(EncodeTestShaderPayload(ViewArenaString(cookedCompute.entryPoint()), cookedCompute.bytecode(), computeBinary), s_ShaderPayloadEncodeNone);
 
-    Impl::PixelShader pixel(testArena.arena, pixelPath);
-    Impl::ComputeShader compute(testArena.arena, computePath);
+    const PixelShaderAssetCodec pixelCodec = PixelShaderAssetCodec();
+    const ComputeShaderAssetCodec computeCodec = ComputeShaderAssetCodec();
+    CheckCodecRejectsBinary(pixelCodec, pixelPath, computeBinary, testArena);
+    CheckCodecRejectsBinary(computeCodec, computePath, pixelBinary, testArena);
+
+    PixelShaderAsset pixel(testArena.arena, pixelPath);
+    ComputeShaderAsset compute(testArena.arena, computePath);
     ASSERT_TRUE(pixel.loadBinary(pixelBinary));
     // A five-byte entry point puts SPIR-V at an unaligned payload offset.
     ASSERT_TRUE(compute.loadBinary(computeBinary));
-    const u8* const pixelBytes = pixel.bytecode().data();
-    const u8* const computeBytes = compute.bytecode().data();
-    const char* const pixelEntry = pixel.entryPoint().data();
-    const char* const computeEntry = compute.entryPoint().data();
+    const usize pixelBytesAddr = ByteBufferAddress(pixel.bytecode());
+    const usize computeBytesAddr = ByteBufferAddress(compute.bytecode());
+    const usize pixelEntryAddr = StringDataAddress(pixel.entryPoint());
+    const usize computeEntryAddr = StringDataAddress(compute.entryPoint());
     EXPECT_FALSE(pixel.loadBinary(computeBinary));
     EXPECT_FALSE(compute.loadBinary(pixelBinary));
-    Core::Assets::AssetBytes malformedPixelBinary = pixelBinary;
-    AppendPOD(malformedPixelBinary, 0u);
+    AssetBytes malformedPixelBinary = pixelBinary;
+    AppendZeroU32ToAssetBytes(malformedPixelBinary);
     EXPECT_FALSE(pixel.loadBinary(malformedPixelBinary));
-    Core::Assets::AssetBytes missingEntryBinary(testArena.arena);
-    ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload("absent", cookedCompute.bytecode(), missingEntryBinary), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
+    AssetBytes missingEntryBinary(testArena.arena);
+    ASSERT_EQ(EncodeTestShaderPayload("absent", cookedCompute.bytecode(), missingEntryBinary), s_ShaderPayloadEncodeNone);
     EXPECT_FALSE(compute.loadBinary(missingEntryBinary));
-    EXPECT_EQ(pixel.bytecode().data(), pixelBytes);
-    EXPECT_EQ(compute.bytecode().data(), computeBytes);
-    EXPECT_EQ(pixel.entryPoint().data(), pixelEntry);
-    EXPECT_EQ(compute.entryPoint().data(), computeEntry);
+    EXPECT_EQ(ByteBufferAddress(pixel.bytecode()), pixelBytesAddr);
+    EXPECT_EQ(ByteBufferAddress(compute.bytecode()), computeBytesAddr);
+    EXPECT_EQ(StringDataAddress(pixel.entryPoint()), pixelEntryAddr);
+    EXPECT_EQ(StringDataAddress(compute.entryPoint()), computeEntryAddr);
     EXPECT_EQ(pixel.bytecode(), cookedPixel.bytecode());
     EXPECT_EQ(compute.bytecode(), cookedCompute.bytecode());
-    EXPECT_EQ(AStringView(pixel.entryPoint()), AStringView(cookedPixel.entryPoint()));
-    EXPECT_EQ(AStringView(compute.entryPoint()), AStringView(cookedCompute.entryPoint()));
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
+    EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
+void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    ScratchArena scratchArena(s_GatherScratchArena);
+    const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "gather_independent_shaders");
+    ASSERT_TRUE(rootResult.has_value());
+    const GraphicsTestPath root = rootResult.value();
 
-TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-
-    TestArena testArena;
-    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "gather_independent_shaders");
-    ASSERT_TRUE(rootResult);
-    Path root = Move(*rootResult);
-
-    const Path firstAssetRoot = root / "first" / s_AssetsDirectory;
-    const Path secondAssetRoot = root / "second" / s_AssetsDirectory;
-    const Path firstBuilt = root / "first_built";
-    const Path secondBuilt = root / "second_built";
-    const Path conflictingBuilt = root / "conflicting_built";
-    const Path outputDirectory = root / "gathered";
+    const GraphicsTestPath firstAssetRoot = JoinGraphicsPath2(root, "first", s_AssetsDirectory);
+    const GraphicsTestPath secondAssetRoot = JoinGraphicsPath2(root, "second", s_AssetsDirectory);
+    const GraphicsTestPath firstBuilt = JoinGraphicsPath(root, "first_built");
+    const GraphicsTestPath secondBuilt = JoinGraphicsPath(root, "second_built");
+    const GraphicsTestPath conflictingBuilt = JoinGraphicsPath(root, "conflicting_built");
+    const GraphicsTestPath outputDirectory = JoinGraphicsPath(root, "gathered");
     ASSERT_TRUE(WriteStandaloneShaderProbe(firstAssetRoot));
     ASSERT_TRUE(WriteExactEntryPointShaderProbe(secondAssetRoot));
-    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, firstBuilt, { firstAssetRoot }));
-    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, secondBuilt, { secondAssetRoot }));
+    ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, firstBuilt, firstAssetRoot));
+    ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, secondBuilt, secondAssetRoot));
 
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(firstAssetRoot / s_ShadersDirectory / "standalone_ps.slang", "float4 main() : SV_Target0{ return float4(0.0, 1.0, 0.0, 1.0); }\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, conflictingBuilt, { firstAssetRoot }));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(firstAssetRoot, s_ShadersDirectory, "standalone_ps.slang"), "float4 main() : SV_Target0{ return float4(0.0, 1.0, 0.0, 1.0); }\n"));
+    ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, conflictingBuilt, firstAssetRoot));
 
-    ASSERT_TRUE(RemoveAllIfExists(firstAssetRoot));
-    ASSERT_TRUE(RemoveAllIfExists(secondAssetRoot));
+    ASSERT_TRUE(RemoveAllIfExists(firstAssetRoot).has_value());
+    ASSERT_TRUE(RemoveAllIfExists(secondAssetRoot).has_value());
 
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_GatherScratchArena);
-    NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
-    options.inputs.emplace_back(PathToString(testArena.arena, firstBuilt));
-    options.inputs.emplace_back(PathToString(testArena.arena, secondBuilt));
-    options.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    AssetGatherOptions options(testArena.arena);
+    AppendGatherInputPath(testArena, firstBuilt, options);
+    AppendGatherInputPath(testArena, secondBuilt, options);
+    SetGatherOutputPath(testArena, outputDirectory, options);
     options.configuration = "tests";
-    options.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
-    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
+    EnableGraphicsGatherMerge(options);
+    ASSERT_TRUE(GatherGraphicsAssets(options, scratchArena));
 
-    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-    auto recordsLoadResult = AssetsGraphicsFixture::ShaderArchiveFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
-    ASSERT_TRUE(recordsLoadResult);
-    records = Move(*recordsLoadResult);
+    const Expected<ShaderArchiveRecordVector> recordsResult = LoadShaderArchiveRecords(testArena, outputDirectory);
+    ASSERT_TRUE(recordsResult.has_value());
+    const ShaderArchiveRecordVector records = recordsResult.value();
     ASSERT_EQ(records.size(), 2u);
-    const Array<Name, 2u> shaderNames = { Name(s_ProjectShadersStandalonePs), Name(s_ExactEntryPointShaderPath) };
-    for(const Name& shaderName : shaderNames){
-        Name virtualPath;
-        const auto virtualPathResult4 = NWB::Core::ShaderArchive::FindVirtualPath(records, shaderName, NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-        ASSERT_TRUE(virtualPathResult4);
-        virtualPath = *virtualPathResult4;
-        UniquePtr<NWB::Core::Assets::IAsset> shader;
-        auto shaderLoadResult = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(outputDirectory, virtualPath, 3u, testArena);
-        ASSERT_TRUE(shaderLoadResult);
-        shader = Move(*shaderLoadResult);
-        EXPECT_FALSE(static_cast<const NWB::Impl::PixelShader&>(*shader).bytecode().empty());
+    Array<Name, 2u> shaderNames = Array<Name, 2u>();
+    shaderNames[0u] = Name(s_ProjectShadersStandalonePs);
+    shaderNames[1u] = Name(s_ExactEntryPointShaderPath);
+    for(in Name shaderName : shaderNames){
+        const Expected<Name> virtualPathResult = FindTestShaderVirtualPath(records, shaderName, s_DefaultVariant, Name(s_ShaderStagePs));
+        ASSERT_TRUE(virtualPathResult.has_value());
+        const Expected<PixelShaderAsset> shaderResult = LoadCookedPixelShader(testArena, outputDirectory, virtualPathResult.value(), 3u);
+        ASSERT_TRUE(shaderResult.has_value());
+        EXPECT_FALSE(shaderResult.value().bytecode().empty());
     }
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    u64 originalChecksum = 0u;
-    auto originalChecksumLoadResult = AssetsGraphicsFixture::ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
-    ASSERT_TRUE(originalChecksumLoadResult);
-    originalChecksum = *originalChecksumLoadResult;
-    options.inputs.emplace_back(PathToString(testArena.arena, conflictingBuilt));
-    EXPECT_FALSE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
+    const Expected<u64> originalChecksumResult = FindTestShaderSourceChecksum(records, shaderNames[0u], Name(s_ShaderStagePs));
+    ASSERT_TRUE(originalChecksumResult.has_value());
+    const u64 originalChecksum = originalChecksumResult.value();
+    AppendGatherInputPath(testArena, conflictingBuilt, options);
+    EXPECT_FALSE(GatherGraphicsAssets(options, scratchArena));
     EXPECT_GT(logger.errorCount(), 0u);
-    records.clear();
-    auto recordsLoadResult2 = AssetsGraphicsFixture::ShaderArchiveFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
-    ASSERT_TRUE(recordsLoadResult2);
-    records = Move(*recordsLoadResult2);
-    ASSERT_EQ(records.size(), 2u);
-    u64 preservedChecksum = 0u;
-    auto preservedChecksumLoadResult = AssetsGraphicsFixture::ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
-    ASSERT_TRUE(preservedChecksumLoadResult);
-    preservedChecksum = *preservedChecksumLoadResult;
-    EXPECT_EQ(preservedChecksum, originalChecksum);
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    const Expected<ShaderArchiveRecordVector> recordsResult2 = LoadShaderArchiveRecords(testArena, outputDirectory);
+    ASSERT_TRUE(recordsResult2.has_value());
+    const ShaderArchiveRecordVector records2 = recordsResult2.value();
+    ASSERT_EQ(records2.size(), 2u);
+    const Expected<u64> preservedChecksumResult = FindTestShaderSourceChecksum(records2, shaderNames[0u], Name(s_ShaderStagePs));
+    ASSERT_TRUE(preservedChecksumResult.has_value());
+    EXPECT_EQ(preservedChecksumResult.value(), originalChecksum);
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
+void VerifyAssetsGraphics_ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCleansFailedInvocation(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "shader_cook_bom_compiler_inputs");
+    ASSERT_TRUE(cookCaseResult.has_value());
+    const CookCase cookCase = cookCaseResult.value();
+    const GraphicsTestPath root = cookCase.root;
+    const GraphicsTestPath outputDirectory = cookCase.outputDirectory;
 
-static void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory){
-    const auto entries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
-    ASSERT_TRUE(entries);
-    for(const auto& entry : *entries){
-        const auto filename = PathToString(cacheDirectory.arena(), entry.path().filenameView());
-        EXPECT_FALSE(AStringView(filename).starts_with(".nwb_shader_")) << filename;
-    }
-}
-
-TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCleansFailedInvocation){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "shader_cook_bom_compiler_inputs");
-    ASSERT_TRUE(cookCase);
-    Path& root = cookCase->root;
-    Path& outputDirectory = cookCase->outputDirectory;
-
-    const Path assetRoot = root / s_AssetsDirectory;
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     ASSERT_TRUE(WriteBomCompilerProbe(assetRoot));
-    const Path externalIncludeRoot = root / "external" / "includes";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(externalIncludeRoot / s_CompilerProbeIncludeFilename, s_BomCompilerProbeIncludeSource));
-    const auto removedInclude = RemoveFile(assetRoot / s_ShadersDirectory / s_CompilerProbeIncludeFilename);
-    ASSERT_TRUE(removedInclude);
-    ASSERT_TRUE(*removedInclude);
-    const auto externalIncludeRootText = PathToString(testArena.arena, externalIncludeRoot);
-    const auto shaderMetadata = StringFormat(testArena.arena, "{}{}asset.include_roots = [\"{}\"];\n", s_ShaderAssetHead, s_AssetEntryMain, externalIncludeRootText);
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.nwb", shaderMetadata));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    const GraphicsTestPath externalIncludeRoot = JoinGraphicsPath2(root, "external", "includes");
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(externalIncludeRoot, s_CompilerProbeIncludeFilename), s_BomCompilerProbeIncludeSource));
+    const Expected<b8, ErrorCode> removedInclude = RemoveFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, s_CompilerProbeIncludeFilename));
+    ASSERT_TRUE(removedInclude.has_value());
+    ASSERT_TRUE(removedInclude.value());
+    const AssetString shaderMetadata = FormatShaderIncludeRootsMetadata(testArena, s_ShaderAssetHead, s_AssetEntryMain, externalIncludeRoot);
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.nwb"), ViewArenaString(shaderMetadata)));
+    ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
     EXPECT_EQ(logger.errorCount(), 0u);
-    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
-    const Expected<Name> shaderPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(AssetsGraphicsFixture::s_AssetCaseProjectShadersBomCompilerProbePs), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-    ASSERT_TRUE(shaderPathResult);
-    const Name& shaderPath = *shaderPathResult;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, shaderPath, 2u, testArena));
+    ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
+    const Expected<Name> shaderPathResult = BuildVirtualPathName(Name(s_AssetCaseProjectShadersBomCompilerProbePs), s_DefaultVariant, Name(s_ShaderStagePs));
+    ASSERT_TRUE(shaderPathResult.has_value());
+    ASSERT_TRUE(LoadCookedPixelShader(testArena, outputDirectory, shaderPathResult.value(), 2u).has_value());
 
-    const auto absoluteInclude = PathToGenericString(testArena.arena, externalIncludeRoot / s_CompilerProbeIncludeFilename);
-    const usize includeLineEnd = s_BomCompilerProbeSource.find('\n');
-    ASSERT_NE(includeLineEnd, AStringView::npos);
-    const auto absoluteSource = StringFormat(testArena.arena, "\xEF\xBB\xBF#include \"{}\"{}", absoluteInclude, s_BomCompilerProbeSource.substr(includeLineEnd));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", absoluteSource));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    const AssetString absoluteSource = FormatBomAbsoluteIncludeSource(testArena, JoinGraphicsPath(externalIncludeRoot, s_CompilerProbeIncludeFilename));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.slang"), ViewArenaString(absoluteSource)));
+    ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
     EXPECT_EQ(logger.errorCount(), 0u);
-    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
+    ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
 
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", "\xEF\xBB\xBF#error BOM_CLEANUP_REGRESSION\n"));
-    EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("BOM_CLEANUP_REGRESSION")));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("compiler exit code")));
-    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.slang"), s_BomCleanupRegressionSource));
+    EXPECT_FALSE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
+    EXPECT_TRUE(SawCapturedError(logger, "BOM_CLEANUP_REGRESSION"));
+    EXPECT_TRUE(SawCapturedError(logger, "compiler exit code"));
+    ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
     const usize failureErrors = logger.errorCount();
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource));
-    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.slang"), s_BomCompilerProbeSource));
+    EXPECT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
     EXPECT_EQ(logger.errorCount(), failureErrors);
-    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
+void VerifyAssetsGraphics_ShaderCookPreservesExactEntryPoint(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "shader_cook_exact_entry_point");
+    ASSERT_TRUE(cookCaseResult.has_value());
+    const CookCase cookCase = cookCaseResult.value();
+    const GraphicsTestPath root = cookCase.root;
+    const GraphicsTestPath outputDirectory = cookCase.outputDirectory;
 
-TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "shader_cook_exact_entry_point");
-    ASSERT_TRUE(cookCase);
-    Path& root = cookCase->root;
-    Path& outputDirectory = cookCase->outputDirectory;
-
-
-    const Path assetRoot = root / s_AssetsDirectory;
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     EXPECT_TRUE(WriteExactEntryPointShaderProbe(assetRoot));
 
-    const b8 cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
+    const b8 cooked = CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot);
     EXPECT_TRUE(cooked);
     if(cooked){
-        const Expected<Name> shaderVirtualPathResult = NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_ExactEntryPointShaderPath), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-        ASSERT_TRUE(shaderVirtualPathResult);
-        const Name& shaderVirtualPath = *shaderVirtualPathResult;
-        UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
-        auto loadedShaderLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(outputDirectory, shaderVirtualPath, 2u, testArena);
-        ASSERT_TRUE(loadedShaderLoadResult2);
-        loadedShader = Move(*loadedShaderLoadResult2);
-        if(loadedShader){
-            const NWB::Impl::PixelShader& shader = static_cast<const NWB::Impl::PixelShader&>(*loadedShader);
-            EXPECT_EQ(AStringView(shader.entryPoint()), s_MainCase);
+        const Expected<Name> shaderVirtualPathResult = BuildVirtualPathName(Name(s_ExactEntryPointShaderPath), s_DefaultVariant, Name(s_ShaderStagePs));
+        ASSERT_TRUE(shaderVirtualPathResult.has_value());
+        const Expected<PixelShaderAsset> loadedShader = LoadCookedPixelShader(testArena, outputDirectory, shaderVirtualPathResult.value(), 2u);
+        ASSERT_TRUE(loadedShader.has_value());
+        const PixelShaderAsset shader = loadedShader.value();
+        EXPECT_EQ(ViewArenaString(shader.entryPoint()), s_ShaderMainCase);
 
-            AStringView resolvedEntryPoint;
-            NWB::Core::GraphicsVector<u32> words(testArena.arena);
-            words.resize(shader.bytecode().size() / sizeof(u32));
-            FOUNDATION_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
-            const auto entryPointResult11 = NWB::Core::ResolveSpirvEntryPointName(words, AStringView(shader.entryPoint()), NWB::Core::ShaderType::Pixel);
-            ASSERT_TRUE(entryPointResult11);
-            resolvedEntryPoint = *entryPointResult11;
-            EXPECT_EQ(resolvedEntryPoint, s_MainCase);
-            const auto entryPointResult12 = NWB::Core::ResolveSpirvEntryPointName(words, s_Main, NWB::Core::ShaderType::Pixel);
-            ASSERT_FALSE(entryPointResult12);
-            EXPECT_EQ(entryPointResult12.error(), NWB::Core::SpirvEntryPointLookupResult::NotFound);
-
-        }
+        const GraphicsWordVector words = CopyBytecodeToWords(testArena, shader.bytecode());
+        const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvWordsEntryPoint(words, ViewArenaString(shader.entryPoint()), s_PixelStage);
+        ASSERT_TRUE(entryPointResult1.has_value());
+        EXPECT_EQ(entryPointResult1.value(), s_ShaderMainCase);
+        const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvWordsEntryPoint(words, s_ShaderEntryMain, s_PixelStage);
+        ASSERT_FALSE(entryPointResult2.has_value());
+        EXPECT_EQ(entryPointResult2.error(), s_SpirvNotFound);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
-[[nodiscard]] static Expected<Path> FindSingleShaderBytecodeCachePath(const Path& cacheDirectory, TestArena& testArena){
-    Path path(testArena.arena);
+void VerifyAssetsGraphics_ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCaches(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
+    const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "shader_cook_invalid_bytecode_cache");
+    ASSERT_TRUE(cookCaseResult.has_value());
+    const CookCase cookCase = cookCaseResult.value();
+    const GraphicsTestPath root = cookCase.root;
+    const GraphicsTestPath outputDirectory = cookCase.outputDirectory;
 
-    const auto cacheEntries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
-    EXPECT_TRUE(cacheEntries);
-    if(!cacheEntries)
-        return MakeUnexpected(Failure{});
-
-    usize foundCount = 0u;
-    for(const auto& entry : *cacheEntries){
-        const auto isRegularFile = entry.isRegularFile();
-        EXPECT_TRUE(isRegularFile);
-        if(!isRegularFile)
-            return MakeUnexpected(Failure{});
-        if(!*isRegularFile)
-            continue;
-
-        const auto extension = PathToString(testArena.arena, entry.path().extensionView());
-        if(extension != ".spv")
-            continue;
-
-        path = entry.path();
-        ++foundCount;
-    }
-
-    EXPECT_EQ(foundCount, 1u);
-    if(foundCount != 1u)
-        return MakeUnexpected(Failure{});
-    return path;
-}
-
-TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCaches){
-    CapturingLogger logger;
-    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "shader_cook_invalid_bytecode_cache");
-    ASSERT_TRUE(cookCase);
-    Path& root = cookCase->root;
-    Path& outputDirectory = cookCase->outputDirectory;
-
-    const Path assetRoot = root / s_AssetsDirectory;
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     ASSERT_TRUE(WriteStandaloneShaderProbe(assetRoot));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    const auto bytecodeCachePath = FindSingleShaderBytecodeCachePath(root / s_CacheDirectory, testArena);
-    ASSERT_TRUE(bytecodeCachePath);
-    Core::Assets::AssetBytes originalBytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(*bytecodeCachePath, originalBytes));
-    ASSERT_GT(originalBytes.size(), sizeof(u32));
+    ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
+    const Expected<GraphicsTestPath> bytecodeCachePathResult = FindSingleBytecodeCachePath(JoinGraphicsPath(root, s_CacheDirectory), testArena);
+    ASSERT_TRUE(bytecodeCachePathResult.has_value());
+    const GraphicsTestPath bytecodeCachePath = bytecodeCachePathResult.value();
+    AssetBytes originalBytes(testArena.arena);
+    ASSERT_TRUE(ReadTestBinaryFile(bytecodeCachePath, originalBytes));
+    ASSERT_GT(originalBytes.size(), 4u);
 
-    const Path computeRoot = root / "compute_probe";
-    const Path computeAssets = computeRoot / s_AssetsDirectory;
-    const Path computeOutput = computeRoot / "cooked";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / s_ShadersDirectory / "cache_stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"main\";\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / s_ShadersDirectory / "cache_stage_cs.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, computeRoot, computeOutput, { computeAssets }));
-    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name(AssetsGraphicsFixture::s_AssetCaseProjectShadersCacheStageCs), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
-    ASSERT_TRUE(computePathResult);
-    const Name& computePath = *computePathResult;
-    UniquePtr<Core::Assets::IAsset> computeAsset;
-    auto computeAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(computeOutput, computePath, 2u, testArena);
-    ASSERT_TRUE(computeAssetLoadResult2);
-    computeAsset = Move(*computeAssetLoadResult2);
-    const auto& compute = static_cast<const Impl::ComputeShader&>(*computeAsset);
-    const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_ProjectShadersStandalonePs), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
-    ASSERT_TRUE(pixelPathResult);
-    const Name& pixelPath = *pixelPathResult;
-    static constexpr Array<AStringView, 4u> s_CorruptionNames = { "magic", "truncated", "malformed tail", "wrong physical stage" };
-    Core::Assets::AssetBytes corrupted(testArena.arena);
-    Core::Assets::AssetBytes repaired(testArena.arena);
-    for(usize corruption = 0u; corruption < s_CorruptionNames.size(); ++corruption){
-        SCOPED_TRACE(s_CorruptionNames[corruption]);
-        corrupted.assign(originalBytes.begin(), originalBytes.end());
-        switch(corruption){
-        case 0u:
-            corrupted.assign({ 'B', 'A', 'D', '!' });
-            break;
-        case 1u:
+    const GraphicsTestPath computeRoot = JoinGraphicsPath(root, "compute_probe");
+    const GraphicsTestPath computeAssets = JoinGraphicsPath(computeRoot, s_AssetsDirectory);
+    const GraphicsTestPath computeOutput = JoinGraphicsPath(computeRoot, "cooked");
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(computeAssets, s_ShadersDirectory, "cache_stage_cs.nwb"), "compute_shader asset;\nasset.entry_point = \"main\";\n"));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(computeAssets, s_ShadersDirectory, "cache_stage_cs.slang"), "[numthreads(1, 1, 1)] void main(){}\n"));
+    ASSERT_TRUE(CookSingleAssetRoot(testArena, computeRoot, computeOutput, computeAssets));
+    const Expected<Name> computePathResult = BuildVirtualPathName(Name(s_AssetCaseProjectShadersCacheStageCs), s_DefaultVariant, Name(s_ShaderStageCs));
+    ASSERT_TRUE(computePathResult.has_value());
+    const Expected<ComputeShaderAsset> computeAssetResult = LoadCookedComputeShader(testArena, computeOutput, computePathResult.value(), 2u);
+    ASSERT_TRUE(computeAssetResult.has_value());
+    const ComputeShaderAsset compute = computeAssetResult.value();
+    const Expected<Name> pixelPathResult = BuildVirtualPathName(Name(s_ProjectShadersStandalonePs), s_DefaultVariant, Name(s_ShaderStagePs));
+    ASSERT_TRUE(pixelPathResult.has_value());
+    const Name pixelPath = pixelPathResult.value();
+
+    Array<StringView, 4u> corruptionNames = Array<StringView, 4u>();
+    corruptionNames[0u] = "magic";
+    corruptionNames[1u] = "truncated";
+    corruptionNames[2u] = "malformed tail";
+    corruptionNames[3u] = "wrong physical stage";
+    AssetBytes corrupted(testArena.arena);
+    AssetBytes repaired(testArena.arena);
+    for(usize corruption = 0u; corruption < corruptionNames.size(); ++corruption){
+        const ScopedTestTrace trace(corruptionNames[corruption]);
+        CopyAssetBytes(originalBytes, corrupted);
+        if(corruption == 0u)
+            CorruptBytecodeMagic(corrupted);
+        else if(corruption == 1u)
             corrupted.pop_back();
-            break;
-        case 2u:
-            corrupted.resize(originalBytes.size() + sizeof(u32), 0u);
-            break;
-        case 3u:
-            corrupted.assign(compute.bytecode().begin(), compute.bytecode().end());
-            break;
-        }
-        ASSERT_TRUE(WriteBinaryFile(*bytecodeCachePath, corrupted));
-        ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-        ASSERT_TRUE(ReadBinaryFile(*bytecodeCachePath, repaired));
-        AStringView resolvedEntryPoint;
-        const auto entryPointResult13 = Core::ResolveSpirvEntryPointName({ repaired.data(), repaired.size() }, s_Main, Core::ShaderType::Pixel);
-        ASSERT_TRUE(entryPointResult13);
-        resolvedEntryPoint = *entryPointResult13;
-        EXPECT_EQ(resolvedEntryPoint, s_Main);
-        UniquePtr<Core::Assets::IAsset> pixelAsset;
-        auto pixelAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, pixelPath, 2u, testArena);
-        ASSERT_TRUE(pixelAssetLoadResult2);
-        pixelAsset = Move(*pixelAssetLoadResult2);
-        const auto& pixel = static_cast<const Impl::PixelShader&>(*pixelAsset);
-        EXPECT_EQ(AStringView(pixel.entryPoint()), s_Main);
+        else if(corruption == 2u)
+            CorruptBytecodeTailZeroWords(originalBytes, corrupted);
+        else if(corruption == 3u)
+            CopyAssetBytes(compute.bytecode(), corrupted);
+
+        ASSERT_TRUE(WriteTestBinaryFile(bytecodeCachePath, corrupted));
+        ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
+        ASSERT_TRUE(ReadTestBinaryFile(bytecodeCachePath, repaired));
+        const Expected<StringView, SpirvLookupError> resolvedEntryPoint = ResolveSpirvBytesEntryPoint(repaired, s_ShaderEntryMain, s_PixelStage);
+        ASSERT_TRUE(resolvedEntryPoint.has_value());
+        EXPECT_EQ(resolvedEntryPoint.value(), s_ShaderEntryMain);
+        const Expected<PixelShaderAsset> pixelAssetResult = LoadCookedPixelShader(testArena, outputDirectory, pixelPath, 2u);
+        ASSERT_TRUE(pixelAssetResult.has_value());
+        EXPECT_EQ(ViewArenaString(pixelAssetResult.value().entryPoint()), s_ShaderEntryMain);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor, VerifyAssetsGraphics_SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
+NWB_ADHD_GTEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary, VerifyAssetsGraphics_SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary)
+NWB_ADHD_GTEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload, VerifyAssetsGraphics_SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload)
+NWB_ADHD_GTEST(AssetsGraphics, SamplerCookerRequiresTheAssetField, VerifyAssetsGraphics_SamplerCookerRequiresTheAssetField)
+NWB_ADHD_GTEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata, VerifyAssetsGraphics_SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata)
+NWB_ADHD_GTEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata, VerifyAssetsGraphics_SamplerCookerRejectsDeprecatedVersionMetadata)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact, VerifyAssetsGraphics_ShaderArchiveVariantLookupIsExact)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords, VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords)
+NWB_ADHD_GTEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected, VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected)
+NWB_ADHD_GTEST(AssetsGraphics, SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown, VerifyAssetsGraphics_SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown)
+NWB_ADHD_GTEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches, VerifyAssetsGraphics_SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches)
+NWB_ADHD_GTEST(AssetsGraphics, CompilerPathTextCapacityChecksWideOverflow, VerifyAssetsGraphics_CompilerPathTextCapacityChecksWideOverflow)
+NWB_ADHD_GTEST(AssetsGraphics, CompilerArgumentCapacitiesRejectOverflow, VerifyAssetsGraphics_CompilerArgumentCapacitiesRejectOverflow)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderCombinationCountsPreserveStateOnOverflow, VerifyAssetsGraphics_ShaderCombinationCountsPreserveStateOnOverflow)
+NWB_ADHD_GTEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState, VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState)
+NWB_ADHD_GTEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources, VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCleansFailedInvocation, VerifyAssetsGraphics_ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCleansFailedInvocation)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint, VerifyAssetsGraphics_ShaderCookPreservesExactEntryPoint)
+NWB_ADHD_GTEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCaches, VerifyAssetsGraphics_ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCaches)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

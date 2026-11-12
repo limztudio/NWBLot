@@ -2,15 +2,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSubsystemRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+b8 ValidateSubsystemHasDeclaredFields(in usize fieldCount){
+    if(fieldCount > 0u)
+        return true;
+
+    error("ISubsystem::validatePayload failed: subsystem must declare at least one asset field");
+    return false;
+}
+
+b8 ValidateNonEmptySubsystemAssetRefName(in Name assetName){
+    if(assetName != s_NameNone)
+        return true;
+
+    error("ISubsystem::loadBinary failed: asset reference must not be empty");
+    return false;
+}
+
+b8 ValidateSubsystemPayloadStoreCapacity(in b8 canStore, in StringView payloadLabel){
+    if(canStore)
+        return true;
+
+    error("ISubsystem::loadBinary failed: malformed '{}' payload", payloadLabel);
+    return false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_subsystem/asset.adhd.h>
 #include <core/assets/polymorphic_asset_codec.h>
 
@@ -61,7 +87,7 @@ namespace SubsystemAssetRuntime{
 
 
 b8 ValidatePayload(const ISubsystem& subsystem){
-    if(!subsystem.checkVirtualPath(FOUNDATION_TEXT("ISubsystem::validatePayload")))
+    if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
         return false;
 
     for(usize i = 0u; i < subsystem.subsystems.size(); ++i){
@@ -71,10 +97,8 @@ b8 ValidatePayload(const ISubsystem& subsystem){
     }
 
     const usize count = subsystem.fieldCount();
-    if(count == 0u){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one asset field"));
+    if(!ValidateSubsystemHasDeclaredFields(count))
         return false;
-    }
 
     for(usize i = 0u; i < count; ++i){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
@@ -105,13 +129,29 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    if(!SubsystemBinaryCodec().read(
+    usize cursor = 0u;
+    usize subsystemCount = 0u;
+    usize fieldCount = 0u;
+    usize assetCount = 0u;
+    const SubsystemBinaryCodec codec;
+    if(!codec.readCounts(binary, outSubsystem.assetType(), expectedFieldCount, cursor, subsystemCount, fieldCount, assetCount))
+        return false;
+    if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(subsystemHashes, subsystemCount), "subsystems"))
+        return false;
+    if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(fieldCounts, fieldCount), "field counts"))
+        return false;
+    if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(assetHashes, assetCount), "assets"))
+        return false;
+    subsystemHashes.resize(subsystemCount);
+    fieldCounts.resize(fieldCount);
+    assetHashes.resize(assetCount);
+    if(!codec.readPayloads(
         binary,
-        outSubsystem.assetType(),
-        expectedFieldCount,
-        subsystemHashes,
-        fieldCounts,
-        assetHashes
+        cursor,
+        static_cast<u64>(assetCount),
+        Span<NameHash>(subsystemHashes),
+        Span<u64>(fieldCounts),
+        Span<NameHash>(assetHashes)
     ) || !UnpackSubsystemRefHashes(Span<const NameHash>(subsystemHashes), outSubsystem.subsystems))
         return false;
 
@@ -124,10 +164,8 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
         outSubsystem.clearFieldValues(i);
         for(u64 elementIndex = 0u; elementIndex < elementCount; ++elementIndex){
             const Name assetName(assetHashes[hashOffset++]);
-            if(!assetName){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("ISubsystem::loadBinary failed: asset reference must not be empty"));
+            if(!ValidateNonEmptySubsystemAssetRefName(assetName))
                 return false;
-            }
             outSubsystem.appendFieldValue(i, assetName);
         }
     }
@@ -152,7 +190,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const
         s_SubsystemMagic,
         s_SubsystemLoadBinaryContext,
         s_SubsystemAssetKindLabel,
-        FOUNDATION_TEXT("SubsystemAssetCodec::deserialize"),
+        NWB_TEXT("SubsystemAssetCodec::deserialize"),
         arena
     );
 }
@@ -165,7 +203,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

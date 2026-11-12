@@ -2,85 +2,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "light_space_plan.adhd"
+#include <impl/ecs_render/shadow/rt_shadow_prepare_internal_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <core/task/gpu/task_graph.h>
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
-#include <core/alloc/scratch.h>
-#include <impl/ecs_render/raytrace/prepared_builds.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.adhd.h>
-#include <core/graphics/gpu_timing.h>
-#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
-#include <core/graphics/rhi/foundation.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <global/algorithm.h>
-#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
-#include <impl/ecs_render/shadow/light_space_resource_set.adhd.h>
-#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>
+#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_float_clear_tasks.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd.h>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.adhd.h>
 #include <impl/ecs_render/shadow/light_space_capture_identity_builder.adhd.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <global/hash_utils.h>
-#include <global/limit.h>
 #include <impl/ecs_render/shadow/light_space_csg.adhd.h>
 #include <impl/ecs_render/shadow/light_space_csg_context_packer.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/assets_graphics/shadow_subsystem.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
-#include <core/graphics/shader_archive.h>
+#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
+#include <impl/ecs_render/shadow/light_space_resource_set.adhd.h>
 #include <impl/ecs_render/shadow/light_space_scene_gather.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
-#include <impl/ecs_render/raytrace/rt_swbvh_helpers.adhd.h>
-#include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_scheduling.adhd.h>
-#include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_render/shadow/shadow_prepare_graph_coordinator.adhd.h>
-#include <impl/ecs_render/raytrace/software_scene_refit.adhd.h>
-#include <core/task/gpu/capture/command_ir.h>
-#include <global/timer.h>
-#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/shadow/shadow_trace_geometry.adhd.h>
-#include <global/overflow.h>
-#include <impl/ecs_render/shadow/shadow_material_context_preparer.adhd.h>
-#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
-#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-#include <impl/ecs_render/shadow/slot_selection.adhd.h>
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
+#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
+#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd.h>
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
+#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd.h>
 #include <impl/ecs_render/shadow/shadow_visibility_graph_coordinator.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_float_clear_tasks.adhd.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
 #include <impl/ecs_render/shadow/shadow_visibility_target_builder.adhd.h>
 #include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd.h>
-#include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd.h>
-#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd.h>
-#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd.h>
 #include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
-#include <global/range_algorithms.h>
-#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.adhd.h>
-#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd.h>
-#include <impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>
-#include <impl/ecs_render/shadow/shadow_occluder_material_gather.adhd.h>
-#include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd.h>
-#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
+#include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -155,355 +113,6 @@ public:
 private:
     Core::GpuTaskGraph& m_graph;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowPrepareGeometryInputs{
-    Span<const PreparedMeshBlasBuild> blasBuilds{};
-    Span<const Core::GpuGraphResourceId> traceResources{};
-    b8 blasBuildsGraphOwned = false;
-};
-
-// One declaration owns selection and scratch; inputs stay frozen, phases run once.
-class ShadowPrepareGeometryResources final : NoCopy{
-public:
-    using ResourceVector = Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>;
-
-
-private:
-    struct BufferRequest{
-        const Core::BufferHandle* source = nullptr;
-        Core::GpuGraphResourceId resource;
-        b8 listedForTrace = false;
-        b8 selected = false;
-    };
-    struct InlineRequest{
-        Core::Buffer* buffer = nullptr;
-        BufferRequest request;
-    };
-
-
-private:
-    using RequestIndex = HashMap<NotNull<Core::Buffer*>, BufferRequest, Core::Alloc::ScratchArena>;
-    using ResourceIndex = HashMap<u32, NotNull<BufferRequest*>, Core::Alloc::ScratchArena>;
-    using NameReference = NotNull<const NameHash*>;
-
-
-private:
-    struct NameReferenceHash{
-        [[nodiscard]] usize operator()(const NameReference& identity)const noexcept{
-            return Hasher<NameHash>{}(*identity);
-        }
-    };
-    struct NameReferenceEqual{
-        [[nodiscard]] b8 operator()(const NameReference& lhs, const NameReference& rhs)const noexcept{
-            return *lhs == *rhs;
-        }
-    };
-
-
-private:
-    using NameIndex = HashSet<NameReference, Core::Alloc::ScratchArena, NameReferenceHash, NameReferenceEqual>;
-
-
-public:
-    ShadowPrepareGeometryResources(const ShadowPrepareGeometryInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept
-        : m_blasBuildInputs(scratchArena)
-        , m_remainingTraceGeometry(scratchArena)
-        , m_inputs(inputs)
-        , m_scratchArena(scratchArena)
-    {}
-
-
-public:
-    // Collect identities without reading graph state; size outputs from distinct buffers.
-    void prepareStorage(b8 blasInputStatesGraphOwned);
-    [[nodiscard]] b8 gatherBuildInputs(const Core::GpuTaskGraph& graph);
-    [[nodiscard]] b8 gatherRemainingTraceResources()noexcept;
-    [[nodiscard]] b8 isPreparedMeshBlasBuild(const Name& meshName)const;
-
-
-private:
-    void addRequest(const Core::BufferHandle& buffer);
-    [[nodiscard]] BufferRequest* findRequest(Core::Buffer* buffer)noexcept;
-    void promoteRequests();
-    [[nodiscard]] b8 resolveRequests(const Core::GpuTaskGraph& graph);
-    [[nodiscard]] BufferRequest* findResolvedRequest(Core::GpuGraphResourceId resource)noexcept;
-    [[nodiscard]] b8 appendBuildInput(const Core::BufferHandle& buffer)noexcept;
-    void clearBuildInputs()noexcept;
-    void prepareNames()const;
-
-
-public:
-    ResourceVector m_blasBuildInputs;
-    ResourceVector m_remainingTraceGeometry;
-
-
-private:
-    const ShadowPrepareGeometryInputs m_inputs;
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Array<InlineRequest, s_SmallInlineIndexCapacity> m_inlineRequests = {};
-    usize m_inlineRequestCount = 0u;
-    Optional<RequestIndex> m_requests;
-    // Request storage is complete before the index retains pointers; it never grows after.
-    Optional<ResourceIndex> m_resources;
-    u64 m_graphGeneration = 0u;
-    // Prepared build names stay frozen and outlive this operation; membership borrows them.
-    mutable Array<const NameHash*, s_SmallInlineIndexCapacity> m_inlineNames = {};
-    mutable usize m_inlineNameCount = 0u;
-    mutable Optional<NameIndex> m_names;
-    b8 m_preparedBlasPolicy = false;
-    b8 m_storagePrepared = false;
-    b8 m_inputsGathered = false;
-    mutable b8 m_namesPrepared = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowPrepareUploadInputs{
-    const DeferredFrameTargets& targets;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId materialContextSlots;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Frozen selector, context, targets, constants, and scene-BVH uploads precede Shadow Preparation, in that order.
-// Tasks declared before a failure stay in `chain`.
-class ShadowPrepareUploadChainBuilder final : NoCopy{
-public:
-    ShadowPrepareUploadChainBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_graphics(graphics)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declare(const ShadowPrepareUploadInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ShadowPrepareUploadChain& chain){
-        return declareSelectorAndContextUploads(inputs, scratchArena, chain) && declareSurfelFrameConstantsUpload(inputs, chain) && declareShadowMaterialContextUploads(inputs, chain) && declareSceneBvhUploads(inputs, chain);
-    }
-
-
-private:
-    [[nodiscard]] b8 declareSelectorAndContextUploads(const ShadowPrepareUploadInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ShadowPrepareUploadChain& chain);
-    [[nodiscard]] b8 declareSurfelFrameConstantsUpload(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
-    [[nodiscard]] b8 declareShadowMaterialContextUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
-    [[nodiscard]] b8 declareSceneBvhUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    Core::GraphicsRuntime& m_graphics;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-class RendererMeshSystem;
-struct RayTracingShadowPreparationResourceSnapshot;
-class ShadowPrepareUploadChain;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowPrepareResourceInputs{
-    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources;
-    const ShadowPrepareUploadChain& uploads;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId materialContextSlots;
-    Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources;
-    Span<const Core::GpuGraphResourceId> softwareBvhBuildStateResources;
-    Span<const PreparedMeshBlasBuild> preparedMeshBlasBuilds;
-    b8 sceneTlasBuildGraphOwned;
-    b8 meshBlasBuildsGraphOwned;
-    b8 meshBlasGeometryBuildInputStatesGraphOwned;
-};
-
-struct ShadowPrepareResourcePlan{
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses;
-    Array<Core::GpuTaskResourceSetUse, s_ShadowPrepareResourceSetUseCapacity> resourceSetUses = {};
-    usize resourceSetUseCount = 0u;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses;
-    Core::GpuGraphResourceId sceneTlas;
-
-
-public:
-    explicit ShadowPrepareResourcePlan(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : resourceUses(scratchArena)
-        , accelStructFinalizeResourceUses(scratchArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShadowPrepareResourcePlanner final : NoCopy{
-public:
-    ShadowPrepareResourcePlanner(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem, RendererMeshSystem& meshSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-        , m_meshSystem(meshSystem)
-    {}
-
-
-public:
-    [[nodiscard]] b8 prepare(const ShadowPrepareResourceInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ShadowPrepareResourcePlan& result);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-    RendererMeshSystem& m_meshSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShadowSoftwareBvhBuildChain final : NoCopy{
-public:
-    ShadowSoftwareBvhBuildChain(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declare(
-        Span<const PreparedMeshSwBvhGraphResources> pureSoftwareMeshSwBvhGraphResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Core::GpuTaskId& shadowPrepareDependency,
-        Core::GpuTaskId& firstTask,
-        Core::GpuTaskId& lastTask
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShadowAccelerationFinalizeBuilder final : NoCopy{
-public:
-    explicit ShadowAccelerationFinalizeBuilder(Core::GpuTaskGraph& graph)noexcept
-        : m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declare(
-        Core::Alloc::ScratchArena& scratchArena,
-        b8 sceneTlasBuildGraphOwned,
-        Core::GpuGraphResourceId sceneTlas,
-        usize preparedMeshBlasBuildCount,
-        Span<const Core::GpuTaskResourceUse> accelStructFinalizeResourceUses,
-        const Core::GpuTaskId& prepareTask,
-        Core::GpuTaskId& outTask
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowPrepareGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
-
-
-public:
-    // All bindings required: the prepare task always preflights this frame's shadow resources.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        ShadowPreparationOutcome& outcome;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        b8 deferredBindlessSlotsWereUploaded = false;
-        b8 currentBindlessSlotsGraphOwned = false;
-        b8 shadowMaterialContextBatchGraphOwned = false;
-        b8 sceneBvhBatchGraphOwned = false;
-        b8 sceneTlasBuildGraphOwned = false;
-        b8 meshBlasBuildsGraphOwned = false;
-        b8 meshBlasGeometryBuildInputStatesGraphOwned = false;
-        b8 meshSwBvhBuildsGraphOwned = false;
-        b8 preparedMeshSwBvhBuildsRecordedByGraph = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload)noexcept;
-};
-
-
-// Software preparation shares scratch across frozen mesh builds. Keep each sentinel by its callback so meshes never clear each other.
-struct ShadowPrepareSoftwareBvhBuildGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // The raytracing system and the timing ticket are required: every enqueued software BVH build records against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        PreparedMeshSwBvhBuild build;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -595,17 +204,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererRayTracingSystem;
-struct DeferredFrameTargets;
-struct RayTracingShadowPreparationResourceSnapshot;
-struct RayTracingDeferredGraphResourceSnapshot;
-struct RayTracingShadowVisibilityGraphPlanSnapshot;
-struct RayTracingSceneGraphReads;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct ShadowVisibilityResourceInputs{
     const DeferredFrameTargets& deferredTargets;
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources;
@@ -669,13 +267,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererRayTracingState;
-struct DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct ShadowReprojectMergeHeapResources{
     Core::Texture* softTrace = nullptr;
     Core::Texture* historyIn = nullptr;
@@ -719,25 +310,10 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GraphOwnedAdaptiveShadowPlan;
-class RendererRayTracingState;
-struct DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SoftwareAdaptiveShadowRecorder final{
 public:
     static void Record(const GraphOwnedAdaptiveShadowPlan* plan, const RendererRayTracingState& state, Core::CommandList& commandList, DeferredFrameTargets& targets, Core::GpuDescriptorHeap& heap);
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingState;
-struct DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -760,7 +336,7 @@ namespace RayTracingShadowVisibilityTaskDetail{
 
 // Both opaque resolve callbacks share one all-lit fallback: clear visibility, realign UAV state, retire timing.
 template<typename PayloadT>
-inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
+NWB_INLINE void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
     payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
     // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
     commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -779,7 +355,7 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
 }
 
 template<typename PayloadT>
-inline void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
+NWB_INLINE void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
     payload.opaqueProduced = false;
     Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     Core::DiscardGpuTimingMeasure(&payload.shadowVisibilityTiming);
@@ -787,7 +363,7 @@ inline void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
 }
 
 template<typename PayloadT>
-inline void DiscardTransparentSoftShadowResolve(PayloadT& payload)noexcept{
+NWB_INLINE void DiscardTransparentSoftShadowResolve(PayloadT& payload)noexcept{
     payload.transparentTraceProduced = false;
     Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
 }
@@ -894,7 +470,7 @@ public:
 // The prepared path keeps trace and resolve apart so the graph lowers transparent output from UAV to shader-read.
 struct ShadowTransparentSoftTraceGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer };
 
 
 public:
@@ -1014,7 +590,7 @@ public:
 // Shadow visibility owns its graph task; pipeline composes the caustics successor.
 struct ShadowVisibilityGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer };
 
 
 public:
@@ -1047,23 +623,43 @@ public:
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u32> ImplEcsRenderShadowRtShadowInternalTypesDrawCount(in Span<LightSpaceShadowCaster> casters){
-    u64 drawCount = 0u;
-    for(usize i = 0u; i < casters.size(); ++i){
-        drawCount += LightSpaceCasterDrawCount(casters[i].meshletCount);
-        if(drawCount > u32.max)
-            return MakeUnexpected(Failure());
-    }
-    return cast<u32>(drawCount);
+usize ResolveShadowTraceGeometryReserveCount(in usize baseCapacity, in b8 traceGeometryStatesGraphOwned, in usize traceGeometryCount){
+    if(traceGeometryStatesGraphOwned)
+        return baseCapacity;
+    return baseCapacity + traceGeometryCount;
+}
+
+u32 EncodeShadowHistoryValidFlag(in b8 historyReadable){
+    if(historyReadable)
+        return 1u;
+    return 0u;
+}
+
+b8 CanUseSoftwareTransparentSamplingHistory(
+    in SoftwareTransparentShadowTraceInputs inputs,
+    in b8 softTransparentTemporalReady,
+    in b8 samplingHistoryUsable
+){
+    return inputs.temporalHistoryReadable && softTransparentTemporalReady && samplingHistoryUsable;
+}
+
+usize SelectSoftwareTransparentSamplingPipelineIndex(in b8 samplingHistoryUsable){
+    if(samplingHistoryUsable)
+        return 1u;
+    return 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

@@ -1,0 +1,65 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DependencyQueueState{
+    public Vector<u8> included;
+    public Vector<u8> processed;
+    public Vector<usize> fileQueue;
+
+    public void initialize(in usize fileCount, in Span<u8> initialSelected, in Span<usize> initialOrder){
+        this.included.clear();
+        this.included.reserve(initialSelected.size());
+        for(usize i = 0u; i < initialSelected.size(); ++i)
+            this.included.push_back(initialSelected[i]);
+
+        this.processed.clear();
+        this.processed.resize(fileCount, 0u);
+
+        this.fileQueue.clear();
+        this.fileQueue.reserve(fileCount);
+        for(usize i = 0u; i < initialOrder.size(); ++i)
+            this.fileQueue.push_back(initialOrder[i]);
+    }
+
+    public b8 claimIncluded(in usize providerIndex){
+        if(this.included[providerIndex] != 0u)
+            return false;
+        this.included[providerIndex] = 1u;
+        return true;
+    }
+
+    public void enqueueIfUnprocessed(in usize providerIndex){
+        if(this.processed[providerIndex] == 0u)
+            this.fileQueue.push_back(providerIndex);
+    }
+
+    public b8 claimProcessed(in usize fileIndex){
+        if(this.processed[fileIndex] != 0u)
+            return false;
+        this.processed[fileIndex] = 1u;
+        return true;
+    }
+}
+
+b8 ValidateSingleProviderAssetDeclaration(in usize declarationCount, in StringView providerPathText){
+    if(declarationCount != 1u){
+        error("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch", providerPathText);
+        return false;
+    }
+    return true;
+}
+
+void LogMissingMetadataAssetDeclaration(in StringView providerPathText){
+    error("DependencyComputer: meta '{}' is missing asset declaration 'asset'", providerPathText);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

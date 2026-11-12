@@ -5,7 +5,14 @@
 #include "simd_lane_operation_emitter.h"
 #include "simd_binary_emitter.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 b8 SimdLaneOperationEmitter::tryEmit()const{
@@ -361,22 +368,7 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
                                 break;
                             }
                         }
-                        const b8 zeroPreservingFn = callee == "Abs"
-                            || callee == "Sqrt"
-                            || callee == "Floor"
-                            || callee == "Ceil"
-                            || callee == "Round"
-                            || callee == "trunc"
-                            || callee == "frac"
-                            || callee == "Saturate"
-                            || callee == "Sin"
-                            || callee == "Tan"
-                            || callee == "asin"
-                            || callee == "atan"
-                            || callee == "Min"
-                            || callee == "Max"
-                            || callee == "Clamp"
-                            || callee == "Lerp";
+                        const b8 zeroPreservingFn = IsSimdZeroPreservingCall(callee);
                         const b8 alreadyZeroedAbove = (activeLanes == 4u) || (zeroPreservingFn && allParamsZeroedAtActive);
                         const u8 activeMask = static_cast<u8>((1u << activeLanes) - 1u);
                         const MStringView maskConst = !alreadyZeroedAbove ? SimdInPlaceLaneMaskConstant(activeMask, isDouble) : MStringView{};
@@ -407,7 +399,12 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
     return false;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

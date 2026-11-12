@@ -8,7 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class UiLayerSmokeProject : IProjectEntryCallbacks{
+    private NotNullUniquePtr<World> m_world;
+    private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();
+    private mut ProjectRuntimeContext m_context;
+    private UiLayerResizeRenderPass m_resizeRenderPass;
+    private b8 m_resizeRenderPassRegistered = false;
+    private b8 m_resizePresentationReported = false;
+    private u64 m_resizePresentationBaseline = 0u;
+
     public UiLayerSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_world = TakeUiLayerSmokeWorld(world);
         this.m_context = context;
@@ -64,17 +73,19 @@ class UiLayerSmokeProject : IProjectEntryCallbacks{
         }
         StopUiLayerSmokeCaptureAndClearWorld(this.m_context, this.m_world, this.m_framebufferCapture);
     }
-
-    private NotNullUniquePtr<World> m_world;
-    private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();
-    private mut ProjectRuntimeContext m_context;
-    private UiLayerResizeRenderPass m_resizeRenderPass;
-    private b8 m_resizeRenderPassRegistered = false;
-    private b8 m_resizePresentationReported = false;
-    private u64 m_resizePresentationBaseline = 0u;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 960u, 540u };
 }
@@ -84,7 +95,9 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 }
 
 b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
-    return context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && context.graphics.setHDR10OutputEnabled(false) && context.graphics.setSwapChainReadbackEnabled(true);
+    return context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+        && context.graphics.setHDR10OutputEnabled(false)
+        && context.graphics.setSwapChainReadbackEnabled(true);
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(ProjectRuntimeContext& context){
@@ -93,7 +106,13 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(ProjectR
         return nullptr;
     return MakeUnique<Tests::Smoke::UiLayerSmokeProject>(*world, context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

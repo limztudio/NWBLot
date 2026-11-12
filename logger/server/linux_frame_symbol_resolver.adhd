@@ -1,0 +1,65 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsUnknownLinuxSymbolLine(in StringView line){
+    const StringView trimmed = TrimView(line);
+    if(trimmed.empty())
+        return true;
+    if(trimmed == s_CrashSymbolicateLinuxLinuxUnknownSymbolText)
+        return true;
+    return trimmed.starts_with(s_CrashSymbolicateLinuxLinuxUnknownLocationPrefix);
+}
+
+b8 IsRejectedLinuxModulePath(in StringView modulePathText){
+    if(modulePathText.empty())
+        return true;
+    return modulePathText == s_CrashSymbolicateLinuxAnonymousModulePath;
+}
+
+Expected<String> ExtractLinuxSymbolizerResult(in StringView outputText){
+    String outSymbol;
+    outSymbol.reserve(outputText.size());
+
+    usize cursor = 0u;
+    while(true){
+        const Expected<StringView> functionLine = NextTrimmedTextLine(outputText, cursor);
+        if(!functionLine.has_value())
+            break;
+        const Expected<StringView> locationLine = NextTrimmedTextLine(outputText, cursor);
+
+        const b8 hasFunction = !IsUnknownLinuxSymbolLine(functionLine.value());
+        const b8 hasLocation = locationLine.has_value() && !IsUnknownLinuxSymbolLine(locationLine.value());
+        if(!hasFunction && !hasLocation)
+            continue;
+
+        if(!outSymbol.empty())
+            outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolFrameSeparator);
+        b8 wroteFrame = false;
+        if(hasFunction){
+            outSymbol.append(functionLine.value());
+            wroteFrame = true;
+        }
+        if(hasLocation){
+            if(wroteFrame)
+                outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolLocationSeparator);
+            else
+                outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolLocationBarePrefix);
+            outSymbol.append(locationLine.value());
+        }
+    }
+
+    if(outSymbol.empty())
+        return MakeUnexpected(Failure());
+    return outSymbol;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

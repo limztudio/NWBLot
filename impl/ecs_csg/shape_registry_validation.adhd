@@ -12,6 +12,10 @@ void LogCsgShapeInvalidParameterSize(in Name name){
     error("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI", name.resolvedText());
 }
 
+void LogCsgShapeAlreadyRegistered(in Name name){
+    error("CsgShapeRegistry: shape type '{}' is already registered", name.resolvedText());
+}
+
 b8 ValidateCsgShaderModuleInclude(in Name name, in Name shaderModule, in StringView shaderModuleInclude){
     if(shaderModule == s_NameNone)
         return true;
@@ -137,15 +141,7 @@ Expected<CsgShapeLocalBounds> TryTransformCsgShapeLocalBounds(
     const VectorSingle localMax(localBounds.maxBounds, s_CsgShapeBoundsW);
     VectorSingle worldMin(0.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle worldMax(0.0f, 0.0f, 0.0f, 0.0f);
-    b8 validTransform = false;
-    native(in shapeToWorld, in localMin, in localMax, mut worldMin, mut worldMax, mut validTransform){
-        if(const auto transformed = ::AabbTests::Transform(shapeToWorld, localMin, localMax)){
-            worldMin = transformed->minBounds;
-            worldMax = transformed->maxBounds;
-            validTransform = true;
-        }
-    }
-    if(!validTransform)
+    if(!TryTransformAabb(shapeToWorld, localMin, localMax, worldMin, worldMax))
         return MakeUnexpected(Failure());
     return MakeCsgLocalBounds(worldMin, worldMax);
 }
@@ -173,3 +169,4 @@ b8 CanSelectCsgShaderModuleInclude(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

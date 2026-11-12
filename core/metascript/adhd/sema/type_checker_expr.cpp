@@ -41,9 +41,14 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     }
     case ExprKind::Identifier:{
         const ScopedVarInfo* local = FindScopedVar(scope, expr.text);
-        expr.isBuiltinConstant = !local && !m_symbols.findGlobalConstant(expr.text)
-            && !HasConstValueTemplateParam(ownerClass, &method, expr.text)
-            && FindBuiltinGlobalConstant(expr.text);
+        const BuiltinGlobalConstantInfo* builtinConst = (!local && !m_symbols.findGlobalConstant(expr.text) && !HasConstValueTemplateParam(ownerClass, &method, expr.text))
+            ? FindBuiltinGlobalConstant(expr.text)
+            : nullptr;
+        expr.isBuiltinConstant = (builtinConst != nullptr);
+        if(builtinConst){
+            recordRequiredHeader(builtinConst->requiredHeader);
+            recordBuiltinTypeHeader(builtinConst->adhdTypeName);
+        }
         if(local){
             const ParamPassingMode::Enum resolvedLocalRefMode = m_symbols.resolveRefMode(local->type);
             if((!local->isParam && local->mode != ParamPassingMode::None) || resolvedLocalRefMode != ParamPassingMode::None)
@@ -174,6 +179,54 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     }
                 }
             }
+            else if(!m_symbols.hasTypeSymbol(expr.scopeChain[0]) && FindBuiltinEnum(expr.scopeChain[0]) != nullptr){
+                const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(expr.scopeChain[0]);
+                recordRequiredHeader(builtinEnum->requiredHeader);
+                if(expr.scopeChain.size() != 2u){
+                    reportError(errors, expr.span, "invalid enum/flag scope access; expected 'TypeName::Entry'");
+                    ok = false;
+                }
+                else if(!HasBuiltinEnumEntry(builtinEnum->adhdName, expr.scopeChain[1])){
+                    if(const BuiltinGlobalConstantInfo* scopedConst = FindBuiltinScopedConstant(builtinEnum->adhdName, expr.scopeChain[1])){
+                        expr.isBuiltinConstant = true;
+                        recordRequiredHeader(scopedConst->requiredHeader);
+                        recordBuiltinTypeHeader(scopedConst->adhdTypeName);
+                    }
+                    else if(const BuiltinFunctionInfo* scopedFn = FindBuiltinScopedFunction(builtinEnum->adhdName, expr.scopeChain[1])){
+                        recordRequiredHeader(scopedFn->requiredHeader);
+                    }
+                    else{
+                        reportError(errors, expr.span, "unknown enumerator in enum/flag scope access");
+                        ok = false;
+                    }
+                }
+            }
+            else if(
+                !hadVarOrMemberLhs
+                && expr.scopeChain.size() == 2u
+                && FindScopedVar(scope, expr.scopeChain[0]) == nullptr
+                && m_symbols.findGlobalConstant(expr.scopeChain[0]) == nullptr
+                && !m_symbols.hasTypeSymbol(expr.scopeChain[0])
+                && FindBuiltinScopedConstant(expr.scopeChain[0], expr.scopeChain[1]) != nullptr
+            ){
+                const BuiltinGlobalConstantInfo* scopedConst = FindBuiltinScopedConstant(expr.scopeChain[0], expr.scopeChain[1]);
+                expr.isBuiltinConstant = true;
+                recordBuiltinTypeHeader(expr.scopeChain[0]);
+                recordRequiredHeader(scopedConst->requiredHeader);
+                recordBuiltinTypeHeader(scopedConst->adhdTypeName);
+            }
+            else if(
+                !hadVarOrMemberLhs
+                && expr.scopeChain.size() == 2u
+                && FindScopedVar(scope, expr.scopeChain[0]) == nullptr
+                && m_symbols.findGlobalConstant(expr.scopeChain[0]) == nullptr
+                && !m_symbols.hasTypeSymbol(expr.scopeChain[0])
+                && FindBuiltinScopedFunction(expr.scopeChain[0], expr.scopeChain[1]) != nullptr
+            ){
+                const BuiltinFunctionInfo* scopedFn = FindBuiltinScopedFunction(expr.scopeChain[0], expr.scopeChain[1]);
+                recordBuiltinTypeHeader(expr.scopeChain[0]);
+                recordRequiredHeader(scopedFn->requiredHeader);
+            }
             else if(
                 !m_hasTopLevelNativeBlocks
                 || hadVarOrMemberLhs
@@ -183,13 +236,16 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 || m_symbols.findClass(expr.scopeChain[0]) != nullptr
                 || m_symbols.findInterface(expr.scopeChain[0]) != nullptr
                 || BuiltinTypeSemantics::IsScalarType(expr.scopeChain[0])
-                || FindBuiltinObjectType(expr.scopeChain[0]) != nullptr
+                || IsStringLikeType(expr.scopeChain[0])
                 || FindBuiltinGenericType(expr.scopeChain[0]) != nullptr
                 || SymbolTable::IsSimdType(expr.scopeChain[0])
                 || SymbolTable::IsUnalignedVectorType(expr.scopeChain[0])
             ){
                 reportError(errors, expr.span, "invalid scope resolution '::'; only 'enum' and 'flag' types and variables support '::' access in adhd");
                 ok = false;
+            }
+            else if(FindBuiltinObjectType(expr.scopeChain[0]) != nullptr){
+                recordBuiltinTypeHeader(expr.scopeChain[0]);
             }
         }
         break;
@@ -286,6 +342,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     }
                 }
             }
+            else if(!m_symbols.hasTypeSymbol(baseType)){
+                if(const BuiltinFieldInfo* bf = FindBuiltinField(baseType, expr.text)){
+                    recordBuiltinTypeHeader(bf->fieldTypeName);
+                    recordBuiltinTypeHeader(bf->elemTypeName);
+                }
+            }
         }
         break;
     }
@@ -297,7 +359,10 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const MStringView lhsBaseType = expr.lhs
             ? inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &containerTypeRef)
             : MStringView{};
-        const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsBaseType);
+        const BuiltinGenericTypeInfo* genericInfo = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinGenericType(lhsBaseType);
+        const BuiltinReceiverMethodInfo* builtinOpIdx = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinReceiverMethod(lhsBaseType, "[]");
+        if(builtinOpIdx)
+            recordBuiltinTypeHeader(builtinOpIdx->returnTypeName);
         if(!(genericInfo && genericInfo->isReflectedMap && genericInfo->isNonThreadSafeContainer))
             m_parallelDepth = 0u;
         u32 vecIdxLanes = 0u;
@@ -322,10 +387,13 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 ok = false;
             }
             else if(!lhsBaseType.empty() && ConcreteTypeAnalyzer(m_symbols).isKnownConcreteTypeName(lhsBaseType)){
-                const b8 isBuiltinIndexable = (genericInfo && (genericInfo->isIndexableSequence || genericInfo->isReflectedMap))
+                const b8 isBuiltinIndexable = builtinOpIdx != nullptr
+                    || (genericInfo && (genericInfo->isIndexableSequence || genericInfo->isReflectedMap))
                     || IsStringLikeType(lhsBaseType)
                     || SymbolTable::IsSimdType(lhsBaseType)
                     || SymbolTable::IsUnalignedVectorType(lhsBaseType);
+                if(builtinOpIdx && builtinOpIdx->isMutating)
+                    lhsNeedsMut = true;
                 if(!isBuiltinIndexable){
                     reportError(errors, expr.span, "type does not support subscripting with 'operator[]'");
                     ok = false;
@@ -351,6 +419,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
         if(elemRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
+        if(!customOpIdx && genericInfo && genericInfo->isReflectedMap && !recvIsConst)
+            expr.useAdhdMapIndex = true;
         if(!customOpIdx && IsStringLikeType(lhsBaseType)){
             if(isMutationTarget){
                 if(!HasMutableStringElements(lhsBaseType)){
@@ -370,7 +440,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
                 ok = false;
             }
-            else if(customOpIdx && customOpIdx->returnType && elemRefMode == ParamPassingMode::None){
+            else if((customOpIdx && customOpIdx->returnType && elemRefMode == ParamPassingMode::None) || (builtinOpIdx && !builtinOpIdx->isMutating)){
                 reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
                 ok = false;
             }
@@ -400,6 +470,16 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     ok = false;
                 }
             }
+            else if(const BuiltinEnumInfo* lhsBuiltinEnum = FindBuiltinEnum(lhsType)){
+                if(expr.op == TokenType::Tilde && !lhsBuiltinEnum->isFlag){
+                    reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
+                    ok = false;
+                }
+                else if(OperatorSemantics::IsIncrementOrDecrementOperatorToken(expr.op)){
+                    reportError(errors, expr.span, "increment and decrement operators are not supported on 'enum' or 'flag' types");
+                    ok = false;
+                }
+            }
             if(!opMethod){
                 if(opDeclCls || m_symbols.findInterface(lhsType) || FindTemplateParam(ownerClass, &method, lhsType)){
                     reportError(errors, expr.span, "unary operator is not defined on operand type");
@@ -417,7 +497,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     reportError(errors, expr.span, "increment and decrement operators require a numeric scalar operand");
                     ok = false;
                 }
-                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !BuiltinTypeSemantics::IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdRegisterVectorType(lhsType) && ConcreteTypeAnalyzer(m_symbols).isKnownConcreteTypeName(lhsType)){
+                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !FindBuiltinEnum(lhsType) && !BuiltinTypeSemantics::IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdRegisterVectorType(lhsType) && ConcreteTypeAnalyzer(m_symbols).isKnownConcreteTypeName(lhsType)){
                     reportError(errors, expr.span, "bitwise '~' requires an integer, SIMD, or 'flag' operand");
                     ok = false;
                 }
@@ -481,7 +561,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     return BuiltinTypeSemantics::IsScalarType(baseName)
                         || SymbolTable::IsSimdType(baseName)
                         || SymbolTable::IsUnalignedVectorType(baseName)
-                        || m_symbols.findEnum(baseName) != nullptr;
+                        || m_symbols.findEnum(baseName) != nullptr
+                        || FindBuiltinEnum(baseName) != nullptr;
                 };
                 if(m_symbols.resolveRefMode(expr.targetType) == ParamPassingMode::None && hasKnownFixedLayout(dstType) && hasKnownFixedLayout(srcType)){
                     TypeRef srcTypeRef(m_arena);

@@ -6,7 +6,6 @@ class PublicationPositionComponent{
     public i32 x = 0;
 }
 
-
 class PublicationVelocityComponent{
     public i32 x = 0;
 }

@@ -14,7 +14,12 @@
 template<typename ArenaT>
 class ExecutablePaths final{
 public:
+    using uses_leading_arena_t = ArenaT;
+
     explicit ExecutablePaths(ArenaT& arena)noexcept
+        : m_arena(arena)
+    {}
+    explicit ExecutablePaths(ArenaT& arena, const ExecutablePaths&)noexcept
         : m_arena(arena)
     {}
 

@@ -62,6 +62,54 @@ class OpaqueEmulationMergeValidationResult{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsShadowPrepareStateCandidatePrepared(in b8 candidateBuilt, in b8 candidateValid, in b8 candidateEmpty, in b8 candidateRequired){
+    if(!candidateBuilt)
+        return false;
+    if(candidateValid && !candidateEmpty)
+        return true;
+    return !candidateRequired;
+}
+
+b8 CanCommitShadowPrepareStateCandidate(in b8 candidateValid, in b8 candidateEmpty, in b8 candidateRequired){
+    if(!candidateValid)
+        return false;
+    if(candidateEmpty && candidateRequired)
+        return false;
+    return true;
+}
+
+b8 AreDualPersistentStateSubsetsReady(in b8 firstReady, in b8 secondReady){
+    return firstReady && secondReady;
+}
+
+b8 AreTriplePersistentStateSubsetsReady(in b8 firstReady, in b8 secondReady, in b8 thirdReady){
+    return firstReady && secondReady && thirdReady;
+}
+
+b8 ShouldAcceptLightSpaceShadowCaptureOnVisibility(in b8 stateReady, in b8 hasLightSpacePreparedFlag){
+    return stateReady && hasLightSpacePreparedFlag;
+}
+
+b8 ShouldBuildDirectDeferredLightingReturnStates(in b8 usesLaggedHistory){
+    return !usesLaggedHistory;
+}
+
+usize SelectShadowPrepareFixedStateBufferCapacity(in b8 hasCsgTraceContextBuffer){
+    if(hasCsgTraceContextBuffer)
+        return s_ShadowPrepareCsgStateBufferCapacity;
+    return s_ShadowPrepareFixedStateBufferCapacity;
+}
+
+b8 HasExpectedGraphicsPrefixTimingTaskCount(in usize taskCount){
+    return taskCount == s_GraphicsPrefixTimingTaskCount;
+}
+
+b8 MatchesBoundGraphicsPrefixPacketCount(in usize ticketCount, in usize uniquePacketCount){
+    return ticketCount == 1u + uniquePacketCount;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

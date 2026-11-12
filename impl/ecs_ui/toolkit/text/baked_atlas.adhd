@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/text/sdf_page.adhd.h>
 
 #include <impl/assets_font_atlas/asset.adhd.h>
@@ -74,7 +80,7 @@ private:
 
 using SharedBakedFontAtlas = RefCountPtr<RefCounter<BakedFontAtlas>, ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] inline Expected<SharedBakedFontAtlas> CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration){
+[[nodiscard]] NWB_INLINE Expected<SharedBakedFontAtlas> CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration){
     auto* const atlasObject = NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration);
     if(!atlasObject)
         return MakeUnexpected(Failure{});
@@ -92,15 +98,10 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsUiToolkitTextBakedAtlasAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

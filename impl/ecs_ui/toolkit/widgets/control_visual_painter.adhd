@@ -11,12 +11,9 @@
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
-
-native{
-#include <impl/assets_ui_skin/asset.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
-}
+#include <impl/assets_ui_skin/asset.adhd>
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/text/service.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -395,5 +392,4 @@ class ControlVisualPainter{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

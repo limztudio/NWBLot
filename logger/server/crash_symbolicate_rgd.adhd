@@ -1,0 +1,38 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RgdInspectFailedStatusLine = "status=inspect_failed\n";
+
+b8 NeedsTrailingReportNewline(in StringView text){
+    if(text.empty())
+        return true;
+    return text.back() != 10u;
+}
+
+void AppendDecodedRgdReport(in b8 decodedOk, in StringView textOrError, mut String outReport){
+    outReport.append(s_CrashSymbolicateRgdGpuDetectiveSectionHeader);
+    if(!decodedOk){
+        outReport.append(s_CrashSymbolicateRgdGpuDetectiveDecodeFailedStatus);
+        if(!textOrError.empty()){
+            outReport.append(s_CrashSymbolicateRgdReportDetailPrefix);
+            outReport.append(textOrError);
+            outReport.append("\n");
+        }
+        return;
+    }
+
+    outReport.append(textOrError);
+    if(NeedsTrailingReportNewline(textOrError))
+        outReport.append("\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

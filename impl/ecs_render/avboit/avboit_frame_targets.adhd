@@ -2,8 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
+#include <impl/ecs_render/avboit/types.adhd.h>
+#include <impl/assets/graphics/avboit/constants.h>
 
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -13,6 +21,16 @@ native{
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(RendererAvboitPushConstants) == NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE, "RendererAvboitPushConstants layout must stay stable");
+static_assert(offsetof(RendererAvboitPushConstants, frame) == sizeof(u32) * NWB_AVBOIT_PUSH_FRAME_WORD_OFFSET, "RendererAvboit frame push offset drifted");
+static_assert(offsetof(RendererAvboitPushConstants, volume) == sizeof(u32) * NWB_AVBOIT_PUSH_VOLUME_WORD_OFFSET, "RendererAvboit volume push offset drifted");
+static_assert(offsetof(RendererAvboitPushConstants, params) == sizeof(u32) * NWB_AVBOIT_PUSH_PARAMS_WORD_OFFSET, "RendererAvboit params push offset drifted");
+static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET, "RendererAvboit heap-slot push offset drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,6 +87,20 @@ public:
 };
 static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle) + 2u * sizeof(Core::BufferHandle) + 2u * sizeof(Core::GpuDescriptorHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
 
+NWB_INLINE void ValidateAvboitPushConstantTargets(const AvboitFrameTargets& targets)noexcept{
+    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
+    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+}
+
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsFullWidth(const AvboitFrameTargets& targets)noexcept{ return targets.fullWidth; }
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsFullHeight(const AvboitFrameTargets& targets)noexcept{ return targets.fullHeight; }
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsLowWidth(const AvboitFrameTargets& targets)noexcept{ return targets.lowWidth; }
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsLowHeight(const AvboitFrameTargets& targets)noexcept{ return targets.lowHeight; }
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsVirtualSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.virtualSliceCount; }
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsPhysicalSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.physicalSliceCount; }
+[[nodiscard]] NWB_INLINE b8 AvboitTargetsHasRefractionFramebuffer(const AvboitFrameTargets& targets)noexcept{ return targets.refractionFramebuffer != nullptr; }
+[[nodiscard]] NWB_INLINE u32 AvboitTargetsDeferredSlotsBufferSlot(const AvboitFrameTargets& targets)noexcept{ return targets.deferredSlotsBufferDescriptor.slot(); }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,15 +109,30 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitAvboitFrameTargetsAdhdModule(in u64 value){
-    return value != 0u;
+b8 AreAvboitTargetDimensionsValid(
+    in u32 fullWidth,
+    in u32 fullHeight,
+    in u32 lowWidth,
+    in u32 lowHeight,
+    in u32 virtualSliceCount,
+    in u32 physicalSliceCount
+){
+    return fullWidth > 0u
+        && fullHeight > 0u
+        && lowWidth > 0u
+        && lowHeight > 0u
+        && virtualSliceCount > 0u
+        && physicalSliceCount > 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

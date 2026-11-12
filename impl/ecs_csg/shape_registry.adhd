@@ -2,11 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_csg/shape_registry_validation.adhd.h>
 #include <impl/assets_csg/shape_id.adhd.h>
-#include <core/common/log.h>
 
 #include <global/scope_exit.h>
 #include <global/span.h>
@@ -32,7 +37,7 @@ static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)noexcept;
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept;
 
-[[nodiscard]] inline Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
+[[nodiscard]] NWB_INLINE Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
     const Expected<CsgShapeLocalBounds> worldBounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
     if(!worldBounds)
         return MakeUnexpected(Failure{});
@@ -171,13 +176,13 @@ public:
         const auto found = m_shapeTypeIds.find(desc.name);
         if(found != m_shapeTypeIds.end()){
             if(!replaceExisting){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), ConvertString(desc.name.resolvedText()));
+                LogCsgShapeAlreadyRegistered(desc.name);
                 return MakeUnexpected(Failure{});
             }
 
             const CsgShapeTypeId existingId = found.value();
             const auto foundIndex = m_shapeTypeIndices.find(existingId);
-            FOUNDATION_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
+            NWB_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
 
             CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
             shapeType.desc = desc;
@@ -199,12 +204,12 @@ public:
         ScopeExit discardShapeType([&]()noexcept{ m_shapeTypes.pop_back(); });
         const auto [nameEntry, nameInserted] = m_shapeTypeIds.emplace(desc.name, id);
         if(!nameInserted){
-            FOUNDATION_ASSERT(false);
+            NWB_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         ScopeExit discardNameEntry([&]()noexcept{ m_shapeTypeIds.erase(nameEntry); });
         if(!m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u).second){
-            FOUNDATION_ASSERT(false);
+            NWB_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         discardNameEntry.release();
@@ -347,7 +352,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
+NWB_INLINE b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     b8 result = true;
 
     result = static_cast<b8>(registry.registerShape<CsgBoxShape>(true)) && result;
@@ -366,15 +371,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsCsgShapeRegistryAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

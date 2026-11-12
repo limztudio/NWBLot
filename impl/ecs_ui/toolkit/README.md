@@ -17,7 +17,7 @@ every push must have a matching `popClip()` before `freeze()`. A pop at the init
 This example belongs in the owning UI caller after loading `skin` and `skinRef`:
 
 ```cpp
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
+#include <impl/ecs_ui/toolkit/paint.h>
 
 using namespace NWB;
 using namespace NWB::Impl;
@@ -30,7 +30,7 @@ paint.pushClip({ 20.0f, 20.0f, 300.0f, 180.0f });
 if(!paint.drawRegion(Name("panel.normal"), { 20.0f, 20.0f, 300.0f, 180.0f }))
  paint.fillRect({ 20.0f, 20.0f, 300.0f, 180.0f }, { 0.1f, 0.1f, 0.1f, 1.0f });
 if(!paint.popClip())
- FOUNDATION_FATAL_ASSERT_MSG(false, FOUNDATION_TEXT("The panel clip must be present"));
+ NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("The panel clip must be present"));
 Ui::DrawSnapshot snapshot = paint.freeze();
 // Keep uiArena alive while snapshot or any submitted consumer remains alive.
 ```

@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/http_connection_upload.adhd>
+#include <logger/server/server_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_HttpMethodGet = "GET";
+const StringView s_HttpMethodPost = "POST";
+const StringView s_HttpReadinessEndpoint = "/ready";
+const StringView s_HttpAuthorizationHeaderName = "Authorization";
+
+b8 IsReadinessProbeRequest(in StringView method, in StringView url, in StringView readinessToken){
+    if(readinessToken.empty())
+        return false;
+    return method == s_HttpMethodGet && url == s_HttpReadinessEndpoint;
+}
+
+b8 ExceedsServerUploadBudget(in usize currentSize, in usize chunkSize, in usize limitBytes){
+    if(chunkSize > limitBytes)
+        return true;
+    return currentSize > limitBytes - chunkSize;
+}
+
+ServerUploadKind SelectServerUploadKind(in b8 isCrashUpload, in b8 isTelemetryUpload){
+    if(isCrashUpload)
+        return ServerUploadKind::Crash;
+    if(isTelemetryUpload)
+        return ServerUploadKind::Telemetry;
+    return ServerUploadKind::LogMessage;
+}
+
+usize SelectServerUploadSizeLimit(in ServerUploadKind uploadKind, in usize maxTelemetryUploadBytes, in usize maxLogMessageUploadBytes){
+    if(uploadKind == ServerUploadKind::Crash)
+        return s_LogServerValueModuleMaxCrashPackageUploadBytes;
+    if(uploadKind == ServerUploadKind::Telemetry)
+        return maxTelemetryUploadBytes;
+    return maxLogMessageUploadBytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

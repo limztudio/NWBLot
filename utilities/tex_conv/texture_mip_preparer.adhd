@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/tex_conv/global.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ComputeVolumeMipTargetDepth(in u32 sourceDepth){
+    return sourceDepth >> 1u;
+}
+
+VectorSingle ComputeVolumeMipInverseDepth(in u32 sourceDepth){
+    const f32 inv = 1.0f / cast<f32>(sourceDepth);
+    return VectorSingle(inv, inv, inv, inv);
+}
+
+void LogTexConvMipChainFailure(in u8 failureKind, in u32 mipIndex){
+    if(failureKind == 1u)
+        error("tex_conv: dimensions cannot form a complete mip chain.");
+    else if(failureKind == 3u)
+        error("tex_conv: mip {} block grid exceeds runtime limits.", mipIndex);
+    else if(failureKind == 4u)
+        error("tex_conv: mip {} has an invalid slice count.", mipIndex);
+    else if(failureKind == 6u)
+        error("tex_conv: mip {} byte size overflows.", mipIndex);
+    else
+        error("tex_conv: mip payload offsets overflow.");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

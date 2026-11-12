@@ -1,0 +1,841 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/math/suite.adhd>
+#include "case_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/compile.h>
+#include <global/process.h>
+
+#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::MathLaneReductionDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept;
+
+template<b8 Integer, u32 Dimension>
+NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if constexpr(Integer){
+        if constexpr(Dimension == 3u)
+            return VectorDouble3EqualInt(left, right);
+        else
+            return VectorDouble4EqualInt(left, right);
+    }
+    else{
+        if constexpr(Dimension == 3u)
+            return VectorDouble3Equal(left, right);
+        else
+            return VectorDouble4Equal(left, right);
+    }
+}
+
+template<b8 Integer>
+NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if constexpr(Integer)
+        return Vector4EqualInt(left, right);
+    else
+        return Vector4Equal(left, right);
+}
+
+NWB_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept;
+
+namespace Reduction{
+enum Enum : u32{
+    Dot2 = 0u,
+    Dot3 = 1u,
+    Dot4 = 2u,
+    Sum = 3u
+};
+};
+
+template<Reduction::Enum Kind>
+NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if constexpr(Kind == Reduction::Dot2){
+        lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY);
+        rhs = VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY);
+    }
+    else if constexpr(Kind == Reduction::Dot3){
+        lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMask3);
+        rhs = VectorDoubleAndInt(rhs, s_DoubleSIMDMask3);
+    }
+    const SIMDVectorDouble values = Kind == Reduction::Sum ? lhs : VectorDoubleMultiply(lhs, rhs);
+    SIMDVectorDouble result = VectorDoubleAdd(VectorDoubleSplatX(values), VectorDoubleSplatY(values));
+    if constexpr(Kind == Reduction::Dot2)
+        return result;
+    result = VectorDoubleAdd(result, VectorDoubleSplatZ(values));
+    if constexpr(Kind == Reduction::Dot3)
+        return result;
+    return VectorDoubleAdd(result, VectorDoubleSplatW(values));
+}
+
+template<Reduction::Enum Kind>
+NWB_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if constexpr(Kind == Reduction::Dot2)
+        return VectorDouble2Dot(lhs, rhs);
+    else if constexpr(Kind == Reduction::Dot3)
+        return VectorDouble3Dot(lhs, rhs);
+    else if constexpr(Kind == Reduction::Dot4)
+        return VectorDouble4Dot(lhs, rhs);
+    else
+        return VectorDoubleSum(lhs);
+}
+
+template<Reduction::Enum Kind>
+[[nodiscard]] b8 ObserveReductionKind(SIMDVectorDouble input, SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    outExpected = OriginalReduction<Kind>(input, multiplier);
+    outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    outActual = CurrentReduction<Kind>(input, multiplier);
+    outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    return true;
+}
+
+[[nodiscard]] NWB_INLINE b8 ObserveReductionByIndex(const u32 kindIndex, const SIMDVectorDouble input, const SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
+    switch(kindIndex){
+    case 0u: return ObserveReductionKind<Reduction::Dot2>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
+    case 1u: return ObserveReductionKind<Reduction::Dot3>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
+    case 2u: return ObserveReductionKind<Reduction::Dot4>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
+    default: return ObserveReductionKind<Reduction::Sum>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
+    }
+}
+
+template<u32 Dimension>
+NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if constexpr(Dimension == 2u)
+        return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
+    else if constexpr(Dimension == 3u)
+        return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(value));
+    else
+        return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(value));
+}
+
+template<u32 Dimension, b8 Estimate>
+NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if constexpr(Dimension == 2u){
+        if constexpr(Estimate)
+            return VectorDouble2ReciprocalLengthEst(value);
+        else
+            return VectorDouble2ReciprocalLength(value);
+    }
+    else if constexpr(Dimension == 3u){
+        if constexpr(Estimate)
+            return VectorDouble3ReciprocalLengthEst(value);
+        else
+            return VectorDouble3ReciprocalLength(value);
+    }
+    else{
+        if constexpr(Estimate)
+            return VectorDouble4ReciprocalLengthEst(value);
+        else
+            return VectorDouble4ReciprocalLength(value);
+    }
+}
+
+template<u32 Dimension>
+[[nodiscard]] b8 ObserveReciprocalLengthDim(SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    outExpected = OriginalReciprocalLength<Dimension>(input);
+    outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    outActual = CurrentReciprocalLength<Dimension, false>(input);
+    outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return false;
+    outEstimate = CurrentReciprocalLength<Dimension, true>(input);
+    outEstimateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    return true;
+}
+
+[[nodiscard]] NWB_INLINE b8 ObserveReciprocalLengthByDim(const u32 dimension, const SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
+    switch(dimension){
+    case 2u: return ObserveReciprocalLengthDim<2u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
+    case 3u: return ObserveReciprocalLengthDim<3u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
+    default: return ObserveReciprocalLengthDim<4u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
+    }
+}
+
+struct PackedDot3ForkResult{
+    i32 childPid = -1;
+    i32 waitedPid = -1;
+    b8 exitedNormally = false;
+    i32 exitStatus = -1;
+};
+
+#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+void TrapPriorityHandler(i32 signalNumber, siginfo_t* information, void* context)noexcept;
+#endif
+
+[[nodiscard]] PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+namespace NWB::Tests::MathCases{
+using MathLaneReductionDetail::BaselineCompareDouble3;
+using MathLaneReductionDetail::CompareDouble;
+using MathLaneReductionDetail::CompareSingle;
+using MathLaneReductionDetail::ExtractMask;
+using MathLaneReductionDetail::ObserveReductionByIndex;
+using MathLaneReductionDetail::ObserveReciprocalLengthByDim;
+using MathLaneReductionDetail::PackedDot3ForkResult;
+using MathLaneReductionDetail::RunPackedDot3InvalidPriorityForkChild;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorDouble EvalLaneVectorDoubleEqual(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleEqual(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDoubleGreater(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleGreater(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDoubleSelect(in VectorDouble first, in VectorDouble second, in VectorDouble control){
+    return VectorDoubleSelect(first, second, control);
+}
+
+VectorDouble EvalLaneVectorDoubleAddInt(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleAddInt(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDouble2Dot(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDouble2Dot(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDouble3Dot(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDouble3Dot(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDouble2Cross(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDouble2Cross(lhs, rhs);
+}
+
+VectorSingle EvalLaneVector2Dot(in VectorSingle lhs, in VectorSingle rhs){
+    return Vector2Dot(lhs, rhs);
+}
+
+VectorSingle EvalLaneVector3Dot(in VectorSingle lhs, in VectorSingle rhs){
+    return Vector3Dot(lhs, rhs);
+}
+
+VectorSingle EvalLaneVector2Cross(in VectorSingle lhs, in VectorSingle rhs){
+    return Vector2Cross(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDoubleTanH(in VectorDouble vec){
+    return VectorDoubleTanH(vec);
+}
+
+VectorSingle EvalLaneVectorSetIntByIndex(in VectorSingle vec, in u32 value, in usize lane){
+    return VectorSetIntByIndex(vec, value, lane);
+}
+
+VectorDouble EvalLaneVectorDoubleSetIntByIndex(in VectorDouble vec, in u64 value, in usize lane){
+    return VectorDoubleSetIntByIndex(vec, value, lane);
+}
+
+void VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering(){
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
+    const f64 pow40 = 1099511627776.0;
+    const VectorDouble lhs = VectorDouble(bit_cast<f64>(cast<u64>(0x3ff0000000000001u)), -0.0, qnan, pow40);
+    const VectorDouble rhs = VectorDouble(1.0, 0.0, qnan, pow40 + 1.0);
+
+    const VectorDouble equalVec = EvalLaneVectorDoubleEqual(lhs, rhs);
+    const VectorDouble greaterVec = EvalLaneVectorDoubleGreater(lhs, rhs);
+
+    const Array<u64, 4> equalBits = MakeU64Array4(0u, u64.max, 0u, 0u);
+    const Array<u64, 4> greaterBits = MakeU64Array4(u64.max, 0u, 0u, 0u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        EXPECT_EQ(GetDoubleLaneBits(equalVec, lane), equalBits[lane]);
+        EXPECT_EQ(GetDoubleLaneBits(greaterVec, lane), greaterBits[lane]);
+    }
+
+    const VectorDouble first = MakeVolatileDoubleBits(0x0123456789abcdefu, 0x8000000000000000u, 0x7ff8000000001234u, 1u);
+    const VectorDouble second = MakeVolatileDoubleBits(0xfedcba9876543210u, 0u, 0x7ff800009abcdef0u, u64.max);
+    const VectorDouble control = MakeVolatileDoubleBits(0xffffffff00000000u, 0x8000000000000000u, 0x00000000ffffffffu, 0u);
+    const VectorDouble selected = EvalLaneVectorDoubleSelect(first, second, control);
+    const Array<u64, 4> selectedBits = MakeU64Array4(0xfedcba9889abcdefu, 0u, 0x7ff800009abcdef0u, 1u);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneBits(selected, lane), selectedBits[lane]);
+}
+
+void VerifyMath_DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries(){
+    const VectorDouble lhs = MakeVolatileDoubleBits(u64.max, 0xffffffffu, 0x8000000000000000u, 0xfffffffffffffffeu);
+    const VectorDouble rhs = MakeVolatileDoubleBits(1u, 1u, 0x8000000000000000u, 3u);
+    const VectorDouble sum = EvalLaneVectorDoubleAddInt(lhs, rhs);
+    const Array<u64, 4> expected = MakeU64Array4(0u, 0x100000000u, 0u, 1u);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneBits(sum, lane), expected[lane]);
+}
+
+void VerifyMath_DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision(){
+    const f64 pow40 = 1099511627776.0;
+    const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+
+    const VectorDouble dotLhs = VectorDouble(pow40 + 1.0, -pow40, 0.0, qnan);
+    const VectorDouble dotRhs = VectorDouble(1.0, 1.0, 1.0, posInf);
+    const VectorDouble dot = EvalLaneVectorDouble3Dot(dotLhs, dotRhs);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneFloat(dot, lane), 1.0);
+
+    const VectorDouble cross = Cross(VectorDouble(1.0, 1.0 + powNeg40, 0.0, qnan), VectorDouble(1.0, 1.0, 0.0, posInf));
+    EXPECT_EQ(cross.z, -powNeg40);
+    EXPECT_EQ(bit_cast<u64>(cross.w), 0u);
+}
+
+void VerifyMath_SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const Array<u32, 4> leftInactive = MakeU32Array4(0x7f800000u, 0u, 0x7fc01234u, 0x7f800001u);
+    const Array<u32, 4> rightInactive = MakeU32Array4(0u, 0x7f800000u, 0u, 0u);
+
+    for(usize index = 0u; index < 4u; ++index){
+        ScopedTestTrace trace(index);
+        const VectorSingle lhs2 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, leftInactive[index], leftInactive[index]);
+        const VectorSingle rhs2 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, rightInactive[index], rightInactive[index]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorSingle dot2 = EvalLaneVector2Dot(lhs2, rhs2);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetSingleLaneFloat(dot2, lane), 31.0f);
+
+        const VectorSingle lhs3 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, 0x40800000u, leftInactive[index]);
+        const VectorSingle rhs3 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, 0x41300000u, rightInactive[index]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorSingle dot3 = EvalLaneVector3Dot(lhs3, rhs3);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetSingleLaneFloat(dot3, lane), 75.0f);
+    }
+}
+
+void VerifyMath_SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    Array<u32, 6> leftInactive = Array<u32, 6>();
+    leftInactive[0u] = 0x7f800000u; leftInactive[1u] = 0u; leftInactive[2u] = 0x7fc01234u;
+    leftInactive[3u] = 0x7f800001u; leftInactive[4u] = 0u; leftInactive[5u] = 0x7f7fffffu;
+
+    Array<u32, 6> rightInactive = Array<u32, 6>();
+    rightInactive[0u] = 0u; rightInactive[1u] = 0x7f800000u; rightInactive[2u] = 0u;
+    rightInactive[3u] = 0u; rightInactive[4u] = 0x7f800001u; rightInactive[5u] = 0x7f7fffffu;
+
+    for(usize index = 0u; index < 6u; ++index){
+        ScopedTestTrace trace(index);
+        const VectorSingle lhs2 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, leftInactive[index], leftInactive[index]);
+        const VectorSingle rhs2 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, rightInactive[index], rightInactive[index]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorSingle cross2 = EvalLaneVector2Cross(lhs2, rhs2);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid | s_FeOverflow), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetSingleLaneFloat(cross2, lane), -1.0f);
+
+        const VectorSingle lhs3 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, 0x40800000u, leftInactive[index]);
+        const VectorSingle rhs3 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, 0x41300000u, rightInactive[index]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorSingle cross3 = Cross(lhs3, rhs3);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid | s_FeOverflow), 0);
+        EXPECT_EQ(cross3.x, 5.0f);
+        EXPECT_EQ(cross3.y, -2.0f);
+        EXPECT_EQ(cross3.z, -1.0f);
+        EXPECT_EQ(GetSingleLaneBits(cross3, 3u), 0u);
+    }
+
+    const f32 posInf = bit_cast<f32>(s_F32InfinityBits);
+    const VectorSingle lhs = VectorSingle(2.0f, 3.0f, 0.0f, 0.0f);
+    const VectorSingle rhs = VectorSingle(posInf, 7.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+    const VectorSingle cross = EvalLaneVector2Cross(lhs, rhs);
+    EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid | s_FeOverflow), 0);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetSingleLaneFloat(cross, lane), -posInf);
+}
+
+void VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
+    const Array<f64, 4> lhsInactive = MakeF64Array4(posInf, 0.0, qnan, qnan);
+    const Array<f64, 4> rhsInactive = MakeF64Array4(0.0, posInf, 0.0, qnan);
+    const Array<f64, 4> cross3Expected = MakeF64Array4(5.0, -2.0, -1.0, 0.0);
+
+    for(usize index = 0u; index < 4u; ++index){
+        ScopedTestTrace trace(index);
+        const VectorDouble lhs2 = VectorDouble(2.0, 3.0, lhsInactive[index], lhsInactive[index]);
+        const VectorDouble rhs2 = VectorDouble(5.0, 7.0, rhsInactive[index], rhsInactive[index]);
+
+        EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorDouble dot2 = EvalLaneVectorDouble2Dot(lhs2, rhs2);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetDoubleLaneFloat(dot2, lane), 31.0);
+
+        EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorDouble cross2 = EvalLaneVectorDouble2Cross(lhs2, rhs2);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetDoubleLaneFloat(cross2, lane), -1.0);
+
+        const VectorDouble lhs3 = VectorDouble(2.0, 3.0, 4.0, lhsInactive[index]);
+        const VectorDouble rhs3 = VectorDouble(5.0, 7.0, 11.0, rhsInactive[index]);
+        EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorDouble dot3 = EvalLaneVectorDouble3Dot(lhs3, rhs3);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetDoubleLaneFloat(dot3, lane), 75.0);
+
+        EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        const VectorDouble cross3 = Cross(lhs3, rhs3);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(GetDoubleLaneFloat(cross3, lane), cross3Expected[lane]);
+    }
+}
+
+void VerifyMath_SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains(){
+    for(u32 bitIndex = 0u; bitIndex < 23u; ++bitIndex){
+        const VectorSingle input = MakeVolatileSingleBits(1u << bitIndex, 0x007fffffu, 0x00800000u, 0x3f800000u);
+        const VectorSingle logarithm = Log2(input);
+        EXPECT_EQ(logarithm.x, cast<f32>(cast<i32>(bitIndex) - 149));
+        EXPECT_NEAR(logarithm.y, -126.0f, 0.00004f);
+        EXPECT_EQ(logarithm.z, -126.0f);
+        EXPECT_EQ(logarithm.w, 0.0f);
+    }
+
+    const VectorSingle specialIn = MakeVolatileSingleBits(0x80000000u, 0x7f800000u, 0xbf800000u, 0x7fc01234u);
+    const VectorSingle special = Log2(specialIn);
+    EXPECT_EQ(GetSingleLaneBits(special, 0u), 0xff800000u);
+    EXPECT_EQ(GetSingleLaneBits(special, 1u), 0x7f800000u);
+    EXPECT_TRUE(IsNaN(special.z));
+    EXPECT_TRUE(IsNaN(special.w));
+}
+
+void VerifyMath_DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero(){
+    const f64 pow40 = 1099511627776.0;
+    const f64 negPow100 = bit_cast<f64>(cast<u64>(0xc630000000000000u));
+    const f64 pow900 = bit_cast<f64>(cast<u64>(0x7830000000000000u));
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 negInf = bit_cast<f64>(cast<u64>(s_F64NegInfinityBits));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
+    const f64 subMin = bit_cast<f64>(cast<u64>(1u));
+
+    const VectorDouble angles = VectorDouble(pow40, negPow100, pow900, -0.0);
+    VectorDouble sine = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble cosine = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDoubleSinCos(sine, cosine, angles);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const f64 angleLane = GetDoubleLaneFloat(angles, lane);
+        EXPECT_NEAR(GetDoubleLaneFloat(sine, lane), Sin(angleLane), 2.0e-15);
+        EXPECT_NEAR(GetDoubleLaneFloat(cosine, lane), Cos(angleLane), 2.0e-15);
+    }
+    EXPECT_TRUE(SignBit(sine.w));
+
+    const VectorDouble invalidSine = Sin(VectorDouble(posInf, negInf, qnan, -0.0));
+    EXPECT_TRUE(IsNaN(invalidSine.x));
+    EXPECT_TRUE(IsNaN(invalidSine.y));
+    EXPECT_TRUE(IsNaN(invalidSine.z));
+    EXPECT_TRUE(SignBit(invalidSine.w));
+
+    const VectorDouble logIn = VectorDouble(-1.0, 0.0, subMin, posInf);
+    const VectorDouble expIn = VectorDouble(1024.0, -1074.0, -1075.0, qnan);
+    const VectorDouble tanhIn = VectorDouble(posInf, negInf, -0.0, 0.0);
+    const VectorDouble logarithm = Log2(logIn);
+    const VectorDouble exponential = Exp2(expIn);
+    const VectorDouble tangent = EvalLaneVectorDoubleTanH(tanhIn);
+    EXPECT_TRUE(IsNaN(logarithm.x));
+    EXPECT_EQ(logarithm.y, negInf);
+    EXPECT_EQ(logarithm.z, -1074.0);
+    EXPECT_EQ(logarithm.w, posInf);
+
+    EXPECT_EQ(exponential.x, posInf);
+    EXPECT_EQ(bit_cast<u64>(exponential.y), 1u);
+    EXPECT_EQ(bit_cast<u64>(exponential.z), 0u);
+    EXPECT_TRUE(IsNaN(exponential.w));
+
+    EXPECT_EQ(tangent.x, 1.0);
+    EXPECT_EQ(tangent.y, -1.0);
+    EXPECT_TRUE(SignBit(tangent.z));
+    EXPECT_FALSE(SignBit(tangent.w));
+}
+
+void VerifyMath_HyperbolicTangentSaturatesAndPreservesSignedZero(){
+    const f32 infinity = bit_cast<f32>(s_F32InfinityBits);
+    EXPECT_TRUE(NearlyEqual4(EvalVectorTanH(VectorSingle(50.0f, -50.0f, infinity, -infinity)), 1.0f, -1.0f, 1.0f, -1.0f));
+
+    const VectorSingle signedZeroTanH = EvalVectorTanH(VectorSingle(-0.0f, 0.0f, -0.0f, 0.0f));
+    EXPECT_TRUE(SignBit(signedZeroTanH.x));
+    EXPECT_FALSE(SignBit(signedZeroTanH.y));
+}
+
+void VerifyMath_RefractCriticalAngle(){
+    const VectorSingle normal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle criticalIncident = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+    const VectorSingle totalInternalIncident = VectorSingle(0.866025404f, -0.5f, 0.0f, 0.0f);
+
+    EXPECT_TRUE(NearlyEqual4(EvalVector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(EvalVector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(EvalVector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(EvalVector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
+}
+
+void VerifyMath_NormalizeOrUsesFallbackForZeroAndNonfiniteInput(){
+    const VectorSingle fallback = VectorSingle(0.0f, 1.0f, 0.0f, 1.0f);
+    const f32 infinity = bit_cast<f32>(s_F32InfinityBits);
+
+    EXPECT_TRUE(NearlyEqual3(EvalVector3NormalizeOr(VectorSingle(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(EvalVector4NormalizeOr(VectorSingle(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f));
+}
+
+void VerifyMathNativeMask_RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const Array<u64, 4> magnitudes = MakeU64Array4(0x0000000080000000u, 0x0000000000000001u, 0x7FF0000080000001u, 0x7FF8123476543210u);
+    for(u32 expected = 0u; expected < 16u; ++expected){
+        const VectorDouble value = MakeVolatileDoubleBits(
+            magnitudes[0u] | (cast<u64>(expected & 1u) << 63u),
+            magnitudes[1u] | (cast<u64>((expected >> 1u) & 1u) << 63u),
+            magnitudes[2u] | (cast<u64>((expected >> 2u) & 1u) << 63u),
+            magnitudes[3u] | (cast<u64>((expected >> 3u) & 1u) << 63u)
+        );
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_EQ(ExtractMask(value), expected);
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
+    }
+}
+
+void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptions(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const VectorSingle referenceSingle = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);
+    const VectorDouble referenceDouble = VectorDouble(1.0, 1.0, 1.0, 1.0);
+
+    for(in i32 roundingMode : s_FloatingPointRoundingModes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
+        for(usize poisonLane = 0u; poisonLane < 4u; ++poisonLane){
+            const VectorSingle single = EvalLaneVectorSetIntByIndex(referenceSingle, 0x7F801234u, poisonLane);
+            const VectorDouble value = EvalLaneVectorDoubleSetIntByIndex(referenceDouble, cast<u64>(0x7FF0000000001234u), poisonLane);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 cmpSingleFloat = CompareSingle<false>(single, referenceSingle);
+            EXPECT_FALSE(cmpSingleFloat);
+            EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), s_FeInvalid);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 cmpSingleInt = CompareSingle<true>(single, single);
+            EXPECT_TRUE(cmpSingleInt);
+            EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 baselinePartial = BaselineCompareDouble3(value, referenceDouble);
+            const i32 baselinePartialFlags = TestFloatingPointExceptions(s_FeAllExcept);
+            EXPECT_EQ(baselinePartial, poisonLane == 3u);
+            if(poisonLane != 3u)
+                EXPECT_EQ(baselinePartialFlags, s_FeInvalid);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 cmpDouble3Float = CompareDouble<false, 3u>(value, referenceDouble);
+            const i32 actualPartialFlags = TestFloatingPointExceptions(s_FeAllExcept);
+            EXPECT_EQ(cmpDouble3Float, baselinePartial);
+            EXPECT_EQ(actualPartialFlags, baselinePartialFlags);
+            if(poisonLane != 3u)
+                EXPECT_EQ(actualPartialFlags, s_FeInvalid);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 cmpDouble4Float = CompareDouble<false, 4u>(value, referenceDouble);
+            EXPECT_FALSE(cmpDouble4Float);
+            EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), s_FeInvalid);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 cmpDouble3Int = CompareDouble<true, 3u>(value, value);
+            EXPECT_TRUE(cmpDouble3Int);
+            EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
+
+            ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+            const b8 cmpDouble4Int = CompareDouble<true, 4u>(value, value);
+            EXPECT_TRUE(cmpDouble4Int);
+            EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
+        }
+    }
+}
+
+void VerifyMathNativeReduction_MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    Array<Array<u64, 4>, 8> inputLhs = Array<Array<u64, 4>, 8>();
+    inputLhs[0u] = MakeU64Array4(0x7ff8000000000123u, 0xfff8000000000124u, 0x7ff8000000000125u, 0xfff8000000000126u);
+    inputLhs[1u] = MakeU64Array4(0x4000000000000000u, 0x4008000000000000u, 0x7ff0000000000125u, 0xfff0000000000126u);
+    inputLhs[2u] = MakeU64Array4(0x4000000000000000u, 0x4008000000000000u, 0x4010000000000000u, 0xfff0000000000126u);
+    inputLhs[3u] = MakeU64Array4(0x43b0000000000000u, 0x3ff0000000000000u, 0xc3b0000000000000u, 0x3ff0000000000000u);
+    inputLhs[4u] = MakeU64Array4(0x7fefffffffffffffu, 0x7fefffffffffffffu, 0xffefffffffffffffu, 0xffefffffffffffffu);
+    inputLhs[5u] = MakeU64Array4(1u, 0x8000000000000001u, 0x8000000000000000u, 0u);
+    inputLhs[6u] = MakeU64Array4(0x7ff8000000000123u, 0xfff0000000000124u, 0x7ff8000000000125u, 0xfff0000000000126u);
+    inputLhs[7u] = MakeU64Array4(0x7ff0000000000123u, 0xfff8000000000124u, 0x7ff0000000000000u, 0xfff0000000000000u);
+
+    const Array<u64, 4> unitRhs = MakeU64Array4(0x3ff0000000000000u, 0x3ff0000000000000u, 0x3ff0000000000000u, 0x3ff0000000000000u);
+    Array<Array<u64, 4>, 8> inputRhs = Array<Array<u64, 4>, 8>();
+    inputRhs[0u] = unitRhs;
+    inputRhs[1u] = unitRhs;
+    inputRhs[2u] = unitRhs;
+    inputRhs[3u] = unitRhs;
+    inputRhs[4u] = unitRhs;
+    inputRhs[5u] = MakeU64Array4(0xbff0000000000000u, 0xbff0000000000000u, 0x3ff0000000000000u, 0x3ff0000000000000u);
+    inputRhs[6u] = MakeU64Array4(0xfff8000000000233u, 0x7ff0000000000234u, 0xfff0000000000235u, 0x7ff8000000000236u);
+    inputRhs[7u] = MakeU64Array4(0xfff0000000000233u, 0x7ff8000000000234u, 0u, 0x7ff0000000000000u);
+
+    for(in i32 roundingMode : s_FloatingPointRoundingModes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
+        for(usize index = 0u; index < 8u; ++index){
+            const VectorDouble input = MakeVolatileDoubleBits(inputLhs[index][0u], inputLhs[index][1u], inputLhs[index][2u], inputLhs[index][3u]);
+            const VectorDouble multiplier = MakeVolatileDoubleBits(inputRhs[index][0u], inputRhs[index][1u], inputRhs[index][2u], inputRhs[index][3u]);
+            for(u32 kind = 0u; kind < 4u; ++kind){
+                VectorDouble expected = VectorDouble(0.0, 0.0, 0.0, 0.0);
+                i32 expectedFlags = 0;
+                VectorDouble actual = VectorDouble(0.0, 0.0, 0.0, 0.0);
+                i32 actualFlags = 0;
+                ASSERT_TRUE(ObserveReductionByIndex(kind, input, multiplier, expected, expectedFlags, actual, actualFlags));
+                EXPECT_EQ(actualFlags, expectedFlags);
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(GetDoubleLaneBits(actual, lane), GetDoubleLaneBits(expected, lane));
+            }
+        }
+    }
+}
+
+void VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes(){
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    Array<Array<u64, 4>, 6> cases = Array<Array<u64, 4>, 6>();
+    cases[0u] = MakeU64Array4(0u, 0x8000000000000000u, 0u, 0x8000000000000000u);
+    cases[1u] = MakeU64Array4(0x1e60000000000000u, 0u, 0u, 0u);
+    cases[2u] = MakeU64Array4(0x7ff0000000000000u, 0u, 0u, 0u);
+    cases[3u] = MakeU64Array4(0x4000000000000000u, 0x4008000000000000u, 0x7ff0000000000123u, 0xfff0000000000124u);
+    cases[4u] = MakeU64Array4(0x4000000000000000u, 0x4008000000000000u, 0x4010000000000000u, 0xfff0000000000124u);
+    cases[5u] = MakeU64Array4(0x7ff8000000000123u, 0xfff8000000000124u, 0x7ff8000000000125u, 0xfff0000000000126u);
+
+    for(in i32 roundingMode : s_FloatingPointRoundingModes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
+        for(usize caseIdx = 0u; caseIdx < 6u; ++caseIdx){
+            const VectorDouble input = MakeVolatileDoubleBits(cases[caseIdx][0u], cases[caseIdx][1u], cases[caseIdx][2u], cases[caseIdx][3u]);
+            for(u32 dim = 2u; dim <= 4u; ++dim){
+                VectorDouble expected = VectorDouble(0.0, 0.0, 0.0, 0.0);
+                i32 expectedFlags = 0;
+                VectorDouble actual = VectorDouble(0.0, 0.0, 0.0, 0.0);
+                i32 actualFlags = 0;
+                VectorDouble estimate = VectorDouble(0.0, 0.0, 0.0, 0.0);
+                i32 estimateFlags = 0;
+                ASSERT_TRUE(ObserveReciprocalLengthByDim(dim, input, expected, expectedFlags, actual, actualFlags, estimate, estimateFlags));
+                EXPECT_EQ(actualFlags, expectedFlags);
+                EXPECT_EQ(estimateFlags, expectedFlags);
+                for(usize lane = 0u; lane < 4u; ++lane){
+                    EXPECT_EQ(GetDoubleLaneBits(actual, lane), GetDoubleLaneBits(expected, lane));
+                    EXPECT_EQ(GetDoubleLaneBits(estimate, lane), GetDoubleLaneBits(expected, lane));
+                }
+            }
+        }
+    }
+}
+
+void VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(){
+    const PackedDot3ForkResult res = RunPackedDot3InvalidPriorityForkChild();
+    ASSERT_GE(res.childPid, 0);
+    ASSERT_EQ(res.waitedPid, res.childPid);
+    ASSERT_TRUE(res.exitedNormally);
+    EXPECT_EQ(res.exitStatus, 0);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::MathLaneReductionDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_NOINLINE b8 BaselineCompareDouble3(const SIMDVectorDouble left, const SIMDVectorDouble right)noexcept{
+#pragma STDC FENV_ACCESS ON
+    const SIMDVectorDouble comparison = VectorDoubleEqual(left, right);
+#if defined(NWB_HAS_NEON64)
+    const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(comparison), 63u);
+    const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(comparison), 63u);
+    const u32 mask = static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
+#else
+    const u32 mask = VectorDoubleMoveMask(comparison);
+#endif
+    return (mask & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
+}
+
+NWB_NOINLINE u32 ExtractMask(const SIMDVectorDouble value)noexcept{
+#pragma STDC FENV_ACCESS ON
+    return VectorDoubleMoveMask(value);
+}
+
+#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+void TrapPriorityHandler(const i32, siginfo_t* const information, void*)noexcept{
+    _exit(information != nullptr && information->si_code == FPE_FLTINV ? 0 : 1);
+}
+#endif
+
+PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept{
+    PackedDot3ForkResult out{};
+#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+    const pid_t child = fork();
+    out.childPid = static_cast<i32>(child);
+    if(child < 0)
+        return out;
+    if(child == 0){
+        struct sigaction action{};
+        action.sa_sigaction = TrapPriorityHandler;
+        action.sa_flags = SA_SIGINFO;
+        if(sigemptyset(&action.sa_mask) != 0 || sigaction(SIGFPE, &action, nullptr) != 0)
+            _exit(3);
+        if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || feenableexcept(FE_INVALID | FE_OVERFLOW) == -1)
+            _exit(4);
+        volatile u64 maximumBits = 0x7fefffffffffffffull;
+        const SIMDVectorDouble lhs = VectorDoubleSetInt(maximumBits, 0x3ff0000000000000ull, 0u, 0u);
+        const SIMDVectorDouble rhs = VectorDoubleSet(2.0, 1.0, Limit<f64>::s_Infinity, 0.0);
+        volatile SIMDVectorDouble result = VectorDouble3Dot(lhs, rhs);
+        _exit(VectorDoubleMoveMask(result) != 0u ? 2 : 5);
+    }
+    i32 status = 0;
+    out.waitedPid = static_cast<i32>(waitpid(child, &status, 0));
+    out.exitedNormally = WIFEXITED(status) != 0;
+    if(out.exitedNormally)
+        out.exitStatus = WEXITSTATUS(status);
+#endif
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows){ NWB::Tests::MathCases::VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering, VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering)
+NWB_ADHD_GTEST(Math, DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries, VerifyMath_DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries)
+NWB_ADHD_GTEST(Math, DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision, VerifyMath_DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision)
+NWB_ADHD_GTEST(Math, SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions, VerifyMath_SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions)
+NWB_ADHD_GTEST(Math, SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes, VerifyMath_SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes)
+NWB_ADHD_GTEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions, VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions)
+NWB_ADHD_GTEST(Math, SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains, VerifyMath_SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains)
+NWB_ADHD_GTEST(Math, DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero, VerifyMath_DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero)
+NWB_ADHD_GTEST(Math, HyperbolicTangentSaturatesAndPreservesSignedZero, VerifyMath_HyperbolicTangentSaturatesAndPreservesSignedZero)
+NWB_ADHD_GTEST(Math, RefractCriticalAngle, VerifyMath_RefractCriticalAngle)
+NWB_ADHD_GTEST(Math, NormalizeOrUsesFallbackForZeroAndNonfiniteInput, VerifyMath_NormalizeOrUsesFallbackForZeroAndNonfiniteInput)
+NWB_ADHD_GTEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads, VerifyMathNativeMask_RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads)
+NWB_ADHD_GTEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions, VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptions)
+NWB_ADHD_GTEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions, VerifyMathNativeReduction_MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions)
+NWB_ADHD_GTEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes, VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

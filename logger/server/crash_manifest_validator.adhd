@@ -1,0 +1,137 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_ManifestJsonTrueLiteral = "true";
+const StringView s_ManifestJsonFalseLiteral = "false";
+const StringView s_ManifestJsonQuote = "\"";
+const StringView s_ManifestJsonKeySuffix = "\": ";
+
+Expected<usize> FindGeneratedCrashJsonValueCursor(in StringView manifest, in StringView key){
+    String needle;
+    needle.reserve(key.size() + s_CrashIngestGeneratedJsonNeedleReserveSlack);
+    needle.append(s_ManifestJsonQuote);
+    needle.append(key);
+    needle.append(s_ManifestJsonKeySuffix);
+
+    const usize cursor = manifest.find(needle);
+    if(cursor >= manifest.size())
+        return MakeUnexpected(Failure());
+    return cursor + needle.size();
+}
+
+Expected<String> FindGeneratedCrashJsonStringValue(in StringView manifest, in StringView key){
+    const Expected<usize> valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor.has_value())
+        return MakeUnexpected(Failure());
+    usize cursor = valueCursor.value();
+    if(cursor >= manifest.size() || cast<u8>(manifest[cursor]) != 34u)
+        return MakeUnexpected(Failure());
+    ++cursor;
+
+    usize reserveEnd = cursor;
+    while(reserveEnd < manifest.size()){
+        if(cast<u8>(manifest[reserveEnd]) == 92u && reserveEnd + 1u < manifest.size()){
+            reserveEnd += 2u;
+            continue;
+        }
+        if(cast<u8>(manifest[reserveEnd]) == 34u)
+            break;
+        ++reserveEnd;
+    }
+
+    String parsedValue;
+    parsedValue.reserve(reserveEnd - cursor);
+    usize chunkBegin = cursor;
+    while(cursor < manifest.size()){
+        const u8 ch = cast<u8>(manifest[cursor]);
+        if(ch == 34u){
+            if(cursor > chunkBegin)
+                parsedValue.append(manifest.substr(chunkBegin, cursor - chunkBegin));
+            return parsedValue;
+        }
+
+        if(ch != 92u){
+            ++cursor;
+            continue;
+        }
+
+        if(cursor > chunkBegin)
+            parsedValue.append(manifest.substr(chunkBegin, cursor - chunkBegin));
+
+        ++cursor;
+        if(cursor >= manifest.size())
+            return MakeUnexpected(Failure());
+
+        const u8 esc = cast<u8>(manifest[cursor]);
+        if(esc == 34u)
+            parsedValue.append("\"");
+        else if(esc == 92u)
+            parsedValue.append("\\");
+        else if(esc == 110u)
+            parsedValue.append("\n");
+        else if(esc == 114u)
+            parsedValue.append("\r");
+        else if(esc == 116u)
+            parsedValue.append("\t");
+        else
+            return MakeUnexpected(Failure());
+
+        ++cursor;
+        chunkBegin = cursor;
+    }
+
+    return MakeUnexpected(Failure());
+}
+
+Expected<u64> FindGeneratedCrashJsonUnsignedValue(in StringView manifest, in StringView key){
+    const Expected<usize> valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor.has_value())
+        return MakeUnexpected(Failure());
+
+    usize cursor = valueCursor.value();
+    const usize begin = cursor;
+    while(cursor < manifest.size()){
+        const u8 ch = cast<u8>(manifest[cursor]);
+        if(ch < 48u || ch > 57u)
+            break;
+        ++cursor;
+    }
+    if(cursor == begin)
+        return MakeUnexpected(Failure());
+
+    return ParseU64(manifest.substr(begin, cursor - begin));
+}
+
+Expected<b8> FindGeneratedCrashJsonBoolValue(in StringView manifest, in StringView key){
+    const Expected<usize> valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor.has_value())
+        return MakeUnexpected(Failure());
+
+    const StringView tail = manifest.substr(valueCursor.value());
+    if(tail.starts_with(s_ManifestJsonTrueLiteral))
+        return true;
+    if(tail.starts_with(s_ManifestJsonFalseLiteral))
+        return false;
+    return MakeUnexpected(Failure());
+}
+
+b8 HasNonEmptyRequiredManifestSummary(
+    in StringView crashId,
+    in StringView platform,
+    in StringView reasonKind,
+    in StringView artifactStrategy,
+    in StringView event
+){
+    return !crashId.empty() && !platform.empty() && !reasonKind.empty() && !artifactStrategy.empty() && !event.empty();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

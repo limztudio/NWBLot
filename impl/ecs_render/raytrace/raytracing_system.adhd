@@ -2,87 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "raytracing_core_and_state.adhd"
-#include "raytracing_software_bvh.adhd"
-#include "raytracing_scene_acceleration.adhd"
+#include <impl/ecs_render/raytrace/raytracing_system_foundation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/refraction/refraction_renderer.adhd.h>
-#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
-#include <impl/ecs_render/caustic/settings.adhd.h>
-#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
-#include <impl/ecs_render/shadow/shadow_trace_geometry.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_builds.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd.h>
-#include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd.h>
-#include <impl/ecs_render/raytrace/software_scene_refit.adhd.h>
-#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/simdmath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-namespace ECS{
-    class World;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComputeShader;
-class ShadowSubsystem;
-class ShadowMaterialSampledTextureCollector;
-class RendererShaderSystem;
-class RendererMeshSystem;
-class RendererMaterialSystem;
-class RendererOpticalVolumeSelection;
-class CsgShapeRegistry;
-struct MaterialSurfaceInfo;
-
-namespace ECSRenderDetail{
-    struct MeshRayTracingResourceSnapshot;
-    struct MeshViewBufferSnapshot;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,15 +31,9 @@ private:
 
 public:
     RendererRayTracingSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::ECS::World& world,
-        Core::GraphicsRuntime& graphics,
-        RendererShaderSystem& shaderSystem,
-        RendererMeshSystem& meshSystem,
-        RendererMaterialSystem& materialSystem,
-        RendererRayTracingState& rayTracingState,
-        const RendererOpticalVolumeSelection& opticalVolumes,
-        const CsgShapeRegistry& csgShapeRegistry
+        Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics,
+        RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem, RendererMaterialSystem& materialSystem,
+        RendererRayTracingState& rayTracingState, const RendererOpticalVolumeSelection& opticalVolumes, const CsgShapeRegistry& csgShapeRegistry
     )noexcept
         : m_arena(arena)
         , m_world(world)
@@ -163,7 +90,7 @@ public:
     [[nodiscard]] b8 setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
     [[nodiscard]] b8 setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
     [[nodiscard]] b8 setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
-    [[nodiscard]] u32 requestedShadowReceiverFactor()const noexcept{ return static_cast<u32>(m_shadowQualitySettings.receiverResolution); }
+    [[nodiscard]] u32 requestedShadowReceiverFactor()const noexcept{ return RequestedShadowReceiverResolutionFactor(m_shadowQualitySettings.receiverResolution); }
     [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const noexcept;
     void acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, b8 prepared);
     void invalidateLightSpaceShadowCapture()noexcept{ m_lightSpaceShadow.m_captureHistory.invalidate(); }
@@ -177,18 +104,15 @@ public:
     // Identity freezes in the shared graph. Select/grow trace resources before compile; the prep packet works only on that set.
     [[nodiscard]] b8 preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<b8> recordPreflightShadowVisibilityResources(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        b8 sceneTlasBuildGraphOwned,
-        b8 meshBlasBuildsGraphOwned,
-        b8 meshBlasGeometryBuildInputStatesGraphOwned,
-        b8 meshSwBvhBuildsGraphOwned,
-        b8 preparedMeshSwBvhBuildsRecordedByGraph
+        Core::CommandList& commandList, DeferredFrameTargets& targets, b8 sceneTlasBuildGraphOwned, b8 meshBlasBuildsGraphOwned,
+        b8 meshBlasGeometryBuildInputStatesGraphOwned, b8 meshSwBvhBuildsGraphOwned, b8 preparedMeshSwBvhBuildsRecordedByGraph
     );
     [[nodiscard]] b8 shadowVisibilityResourcesPreflighted()const noexcept{ return m_shadowVisibilityResourcesPreflighted; }
 
     [[nodiscard]] b8 shadowVisibilityHardwareSupported()const noexcept{ return m_shadowVisibilityHardwareSupported; }
-    [[nodiscard]] b8 shadowVisibilitySoftwareResourcesPreflighted()const noexcept{ return m_shadowVisibilityTraceResourcesPreflighted && !m_shadowVisibilityHardwareSupported; }
+    [[nodiscard]] b8 shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
+        return IsShadowVisibilitySoftwareResourcesPreflighted(m_shadowVisibilityTraceResourcesPreflighted, m_shadowVisibilityHardwareSupported);
+    }
     void discardPreflightShadowVisibilityResources()noexcept;
     // Retained handles for the frozen plan. The graph imports each buffer once and shares IDs across staging packets.
     [[nodiscard]] b8 freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena);
@@ -249,208 +173,103 @@ public:
     void releaseSurfelGiHeapHandles();
     // The deferred graph declares hardware trace entry resources before recording.
     [[nodiscard]] Expected<u32> renderShadowVisibility(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        b8 splitSoftTransparentFold = false,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates = false,
-        b8 splitOpaqueSoftResolve = false,
-        const LightSpaceShadowSnapshot* lightSpace = nullptr
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        b8 splitSoftTransparentFold = false, b8 graphOwnsOpaqueTemporalMergeEntryStates = false, b8 splitOpaqueSoftResolve = false, const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const b8& prepared,
-        b8 hardwareShadowSupported,
-        GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const b8& prepared, b8 hardwareShadowSupported, GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket
     );
     // A soft-transparent frame splits opaque visibility and transparent fold in one packet. The opaque task opens timing scopes.
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const b8& prepared,
-        b8 hardwareShadowSupported,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        const LightSpaceShadowSnapshot* lightSpace,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming,
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
-        b8& opaqueProduced,
-        u32& opaqueFrameIndex
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const b8& prepared, b8 hardwareShadowSupported, b8 graphOwnsOpaqueTemporalMergeEntryStates, const LightSpaceShadowSnapshot* lightSpace,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming,
+        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming, b8& opaqueProduced, u32& opaqueFrameIndex
     );
     // The prepared opaque producer records the trace and geometry downsample first.
     // This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet.
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueFirstWaveletTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const u32& opaqueFrameIndex,
-        b8 hardwareShadowSupported,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        b8 deferUpsample,
-        b8 deferWavelet,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming,
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
-        Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
-        b8& opaqueProduced
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const u32& opaqueFrameIndex, b8 hardwareShadowSupported, b8 graphOwnsOpaqueTemporalMergeEntryStates, b8 deferUpsample, b8 deferWavelet,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming,
+        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming, Optional<Core::GpuTimingMeasure>& opaqueResolveTiming, b8& opaqueProduced
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueResolveTailTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const u32& opaqueFrameIndex,
-        b8 hardwareShadowSupported,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming,
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
-        Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
-        b8& opaqueProduced
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const u32& opaqueFrameIndex, b8 hardwareShadowSupported, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>& asyncTiming, Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming, Optional<Core::GpuTimingMeasure>& opaqueResolveTiming, b8& opaqueProduced
     );
     // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve timing interval.
     // Its output reaches the first wavelet through the compiler-owned task handoff.
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftTemporalMergeTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const b8& opaqueProduced,
-        const u32& opaqueFrameIndex,
-        b8 graphOwnsTransparentTemporalMergeEntryStates,
-        b8 combinedTemporal,
-        b8 hardwareShadowSupported,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-        b8& transparentTraceProduced
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const b8& opaqueProduced, const u32& opaqueFrameIndex, b8 graphOwnsTransparentTemporalMergeEntryStates, b8 combinedTemporal, b8 hardwareShadowSupported,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& transparentResolveTiming, b8& transparentTraceProduced
     );
     // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output states.
     // The terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftFirstWaveletTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const b8& opaqueProduced,
-        const u32& opaqueFrameIndex,
-        b8 graphOwnsTransparentWaveletInputBoundary,
-        b8 startsTransparentResolveTiming,
-        b8 combinedWavelet,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-        b8& transparentTraceProduced
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const b8& opaqueProduced, const u32& opaqueFrameIndex, b8 graphOwnsTransparentWaveletInputBoundary, b8 startsTransparentResolveTiming, b8 combinedWavelet,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& transparentResolveTiming, b8& transparentTraceProduced
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftFoldTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const b8& opaqueProduced,
-        const u32& opaqueFrameIndex,
-        b8 combinedUpsample,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming,
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-        b8& transparentTraceProduced
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const b8& opaqueProduced, const u32& opaqueFrameIndex, b8 combinedUpsample, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>& asyncTiming, Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming, Optional<Core::GpuTimingMeasure>& transparentResolveTiming, b8& transparentTraceProduced
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftTraceTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const b8& opaqueProduced,
-        const u32& opaqueFrameIndex,
-        const LightSpaceShadowSnapshot* lightSpace,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        b8& transparentTraceProduced
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const b8& opaqueProduced, const u32& opaqueFrameIndex, const LightSpaceShadowSnapshot* lightSpace,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, b8& transparentTraceProduced
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear()noexcept{ m_rayTracingState.m_causticAccumulatorInitialized = true; }
     // A warm accumulator decays in its own task before the photon producer, sharing its packet; the compiler owns the UAV handoff.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticAccumulatorDecayTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
-        const b8& shadowVisibilityPrepared,
-        b8 hardwareCaustics,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+        const b8& shadowVisibilityPrepared, b8 hardwareCaustics, DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticPhotonTiming
     );
     // Record the decay dispatch itself. Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler.
     [[nodiscard]] b8 dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Software visibility consumes graph-declared traversal inputs for opaque shadows and transparent transmittance.
     [[nodiscard]] Expected<u32> renderGpuBvhShadowVisibility(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        b8 splitSoftTransparentFold = false,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates = false,
-        b8 splitOpaqueSoftResolve = false,
-        const GraphOwnedAdaptiveShadowPlan* graphOwnedAdaptivePlan = nullptr,
-        const LightSpaceShadowSnapshot* lightSpace = nullptr
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        b8 splitSoftTransparentFold = false, b8 graphOwnsOpaqueTemporalMergeEntryStates = false, b8 splitOpaqueSoftResolve = false,
+        const GraphOwnedAdaptiveShadowPlan* graphOwnedAdaptivePlan = nullptr, const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] b8 prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareSoftwareCausticsTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
-        const b8& shadowVisibilityPrepared,
-        b8 graphOwnsAccumulatorBootstrapClear,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-        b8& causticProducerDispatched
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView, const b8& shadowVisibilityPrepared, b8 graphOwnsAccumulatorBootstrapClear,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticPhotonTiming, b8& causticProducerDispatched
     );
     [[nodiscard]] b8 hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] b8 renderGpuBvhCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
     [[nodiscard]] b8 prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareHardwareCausticsTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
-        const b8& shadowVisibilityPrepared,
-        b8 graphOwnsAccumulatorBootstrapClear,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-        b8& causticProducerDispatched
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView, const b8& shadowVisibilityPrepared, b8 graphOwnsAccumulatorBootstrapClear,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticPhotonTiming, b8& causticProducerDispatched
     );
     [[nodiscard]] b8 renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
     // Records downsample, resolve prepare, wavelets, upsample after the photon producer. Uses own the UAV-to-SRV handoffs.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticGeometryDownsampleTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const b8& causticProducerDispatched,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticResolveTiming
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched,
+        DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] CausticResolveActivitySnapshot causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const noexcept;
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        const b8& causticProducerDispatched,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticResolveTiming
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched,
+        Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolvePrepareTask(const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched, Core::GpuTaskGraph& graph, DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveWaveletTask(
-        const Core::GpuTaskDesc& desc,
-        u32 passIndex,
-        const b8& causticProducerDispatched,
-        Core::GpuTaskGraph& graph,
-        DeferredFrameTargets& targets
+        const Core::GpuTaskDesc& desc, u32 passIndex, const b8& causticProducerDispatched, Core::GpuTaskGraph& graph, DeferredFrameTargets& targets
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveUpsampleTask(const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched, Core::GpuTaskGraph& graph, DeferredFrameTargets& targets);
     // Typed stages own immutable inputs and each ping-pong handoff.
@@ -461,7 +280,9 @@ public:
     [[nodiscard]] b8 hasHwCausticWork()const noexcept;
     [[nodiscard]] b8 hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] b8 hasSurfelWork()const noexcept{ return m_rayTracingState.m_surfelEnabled; }
-    [[nodiscard]] b8 needsSurfelResourceInitialization()const noexcept{ return hasSurfelWork() && m_rayTracingState.m_surfelResourcesNeedClear; }
+    [[nodiscard]] b8 needsSurfelResourceInitialization()const noexcept{
+        return RequiresSurfelResourceInitialization(hasSurfelWork(), m_rayTracingState.m_surfelResourcesNeedClear);
+    }
     // Typed clear primitives own the buffer writes. This task only records and publishes CPU lifecycle after the producer packet accepts.
     [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc);
     [[nodiscard]] b8 recordSurfelResourceInitializationLifecycle()noexcept;
@@ -478,52 +299,29 @@ public:
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept;
     void discardSoftShadowTemporalHistory()noexcept;
     [[nodiscard]] b8 renderSurfelGiPhases(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        b8 dispatchAgeFree,
-        b8 dispatchHashBuild,
-        b8 dispatchSpawn,
-        b8 dispatchTraceBuildArgs,
-        b8 dispatchTrace,
-        b8 dispatchResolve,
-        b8 dispatchRemaining
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        b8 dispatchAgeFree, b8 dispatchHashBuild, b8 dispatchSpawn, b8 dispatchTraceBuildArgs, b8 dispatchTrace, b8 dispatchResolve, b8 dispatchRemaining
     );
     [[nodiscard]] b8 renderSoftShadowCombinedTemporalMerge(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] b8 renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] b8 renderSoftShadowTerminalUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, b8 transparentReady);
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to the shared deferred graph.
     [[nodiscard]] Expected<u32> renderShadowVisibilityOpaque(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        const LightSpaceShadowSnapshot* lightSpace
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        b8 graphOwnsOpaqueTemporalMergeEntryStates, const LightSpaceShadowSnapshot* lightSpace
     );
     [[nodiscard]] b8 renderSoftOpaqueShadowResolvePhase(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        u32 frameIndex,
-        b8 hardwareShadowSupported,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        SoftShadowOpaqueResolvePhase::Enum phase
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        u32 frameIndex, b8 hardwareShadowSupported, b8 graphOwnsOpaqueTemporalMergeEntryStates, SoftShadowOpaqueResolvePhase::Enum phase
     );
     [[nodiscard]] b8 renderSoftOpaqueShadowResolveTail(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, u32 frameIndex, b8 hardwareShadowSupported);
     [[nodiscard]] Expected<u32> renderGpuBvhShadowVisibilityOpaque(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        const LightSpaceShadowSnapshot* lightSpace = nullptr
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        b8 graphOwnsOpaqueTemporalMergeEntryStates, const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] b8 renderSoftTransparentShadowTrace(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        u32 frameIndex,
-        b8 graphOwnsOpaqueToTransparentBoundary,
-        const LightSpaceShadowSnapshot* lightSpace = nullptr
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        u32 frameIndex, b8 graphOwnsOpaqueToTransparentBoundary, const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] b8 renderSoftTransparentShadowTemporalMerge(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, u32 frameIndex, b8 graphOwnsTransparentTemporalMergeEntryStates);
     [[nodiscard]] b8 renderSoftTransparentShadowFirstWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, u32 frameIndex, b8 graphOwnsTransparentWaveletInputBoundary);
@@ -536,15 +334,11 @@ private:
     [[nodiscard]] b8 prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] b8 prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] b8 capturePreparedShadowMaterialContext(
-        PreparedShadowMaterialContextRoute::Enum route,
-        b8 staticScene,
-        u64 hash,
-        Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
-        Span<const InstanceGpuData> instances,
-        Span<const u8> materialTypedBytes
+        PreparedShadowMaterialContextRoute::Enum route, b8 staticScene, u64 hash,
+        Span<const NwbRtInstanceMaterialGpu> instanceMaterials, Span<const InstanceGpuData> instances, Span<const u8> materialTypedBytes
     );
     [[nodiscard]] b8 preparedTraversalStorageMatchesCurrent()const noexcept{
-        return m_preparedSceneBvh.storageMatches(m_rayTracingState) && m_preparedShadowMaterialContext.storageMatches(m_rayTracingState);
+        return PreparedTraversalStorageMatchesCurrent(m_preparedSceneBvh.storageMatches(m_rayTracingState), m_preparedShadowMaterialContext.storageMatches(m_rayTracingState));
     }
     [[nodiscard]] b8 capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clearPreparedShadowMaterialContext()noexcept;
@@ -568,51 +362,24 @@ private:
     void dispatchHardwareTransparentShadow(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex);
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        u32 slotStart,
-        u32 slotCount,
-        const SoftShadowResolveDispatch& dispatch,
-        b8 dispatchFirstWavelet = true,
-        b8 dispatchTail = true
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch, b8 dispatchFirstWavelet = true, b8 dispatchTail = true
     );
     void enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void dispatchPrimarySoftShadowResolve(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        u32 frameIndex,
-        u32 softGroupsX,
-        u32 softGroupsY,
-        b8 splitOpaqueSoftResolve,
-        b8 splitSoftTransparentFold,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        u32 frameIndex, u32 softGroupsX, u32 softGroupsY, b8 splitOpaqueSoftResolve, b8 splitSoftTransparentFold, b8 graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
     // The shared graph gives first downsample states and key handoffs; later transitions stay local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        u32 frameIndex,
-        u32 softGroupsX,
-        u32 softGroupsY,
-        b8 dispatchOpaqueGeometry = true,
-        b8 dispatchOpaqueResolve = true,
-        b8 dispatchTransparentTrace = true,
-        b8 dispatchTransparentResolve = true,
-        b8 graphOwnsOpaqueGeometryToResolveBoundary = false,
-        b8 graphOwnsOpaqueToTransparentBoundary = false,
-        b8 graphOwnsTransparentTraceToResolveBoundary = false,
-        b8 graphOwnsOpaqueTemporalMergeEntryStates = false,
-        b8 graphOwnsTransparentTemporalMergeEntryStates = false,
-        b8 dispatchOpaqueResolveTail = true,
-        b8 graphOwnsOpaqueTraceToFirstWaveletBoundary = false,
-        b8 dispatchTransparentResolveTail = false,
-        b8 splitTransparentResolve = false,
-        b8 dispatchTransparentTemporalMerge = false,
-        SoftShadowOpaqueResolvePhase::Enum opaquePhase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet
+        Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources,
+        u32 frameIndex, u32 softGroupsX, u32 softGroupsY,
+        b8 dispatchOpaqueGeometry = true, b8 dispatchOpaqueResolve = true, b8 dispatchTransparentTrace = true, b8 dispatchTransparentResolve = true,
+        b8 graphOwnsOpaqueGeometryToResolveBoundary = false, b8 graphOwnsOpaqueToTransparentBoundary = false, b8 graphOwnsTransparentTraceToResolveBoundary = false,
+        b8 graphOwnsOpaqueTemporalMergeEntryStates = false, b8 graphOwnsTransparentTemporalMergeEntryStates = false, b8 dispatchOpaqueResolveTail = true,
+        b8 graphOwnsOpaqueTraceToFirstWaveletBoundary = false, b8 dispatchTransparentResolveTail = false, b8 splitTransparentResolve = false,
+        b8 dispatchTransparentTemporalMerge = false, SoftShadowOpaqueResolvePhase::Enum opaquePhase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet
     );
     void reportSoftwareShadowTraversal(const DeferredFrameTargets& targets);
     // Temporal merge precedes soft resolve and swaps history at frame end.
@@ -648,7 +415,7 @@ private:
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
-    PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;
+    Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_preparedShadowTraceMaterialSampledTextures;
     // Retain packed NwbCausticEmissionTargetGpu bytes across declaration and recording without regathering state.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
     // Transient HW fallback keeps material context only (Shadow Prep already froze the TLAS/BLAS plan).
@@ -657,14 +424,14 @@ private:
     PreparedSceneTlasBuild m_preparedSceneTlas;
     // Fresh uploads and static-cache reuse both freeze the traversal table. Recording never rebuilds scene data; ECS versions reject stale plans.
     PreparedSceneSwBvhTraversal m_preparedSceneSwBvhTraversal;
-    PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
+    Vector<PreparedMeshBlasBuild, Core::Alloc::GlobalArena> m_preparedMeshBlasBuilds;
     // Per-frame BLAS actions keyed by dirty reason.
     u64 m_blasLedgerStaticSkipped = 0u;
     u64 m_blasLedgerFirstBuilds = 0u;
     u64 m_blasLedgerRefits = 0u;
     u64 m_blasLedgerRebuilds = 0u;
     u64 m_blasLedgerUploadedBytes = 0u;
-    PreparedMeshSwBvhBuildVector m_preparedMeshSwBvhBuilds;
+    Vector<PreparedMeshSwBvhBuild, Core::Alloc::GlobalArena> m_preparedMeshSwBvhBuilds;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     RayTracingSceneContentStamp m_preparedSceneContentStamp;
     CausticQualitySettings m_causticQualitySettings;
@@ -696,16 +463,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRaytraceRaytracingSystemAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

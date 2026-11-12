@@ -1,503 +1,745 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 LoggerServerProtocolAndTelemetryCasesReady(in u64 value){
-    return value != 0u;
-}
-
-native{
-#include <tests/integration/logger_server/suite.adhd.h>
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <logger/message_payload_codec.h>
-#include <tests/common/test_context.adhd.h>
-
-#include <core/common/log.h>
-
-#include <logger/common.h>
-#include <logger/server/crash_auth.adhd.h>
-#include <tests/integration/logger_server/name_cases.adhd.h>
-
-#include <gtest/gtest.h>
+#include "suite.adhd"
+#include <tests/common/gtest_macros.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logger_protocol_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = NWB::Tests::TestArena<>;
-static constexpr AStringView s_SecretToken = NWB::Tests::LoggerCrashCases::s_LoggerProtocolSecretToken;
-
-
-class LoggerProtocolTests : public ::testing::Test{
-public:
-    LoggerProtocolTests()
-        : m_loggerRegistration(m_logger)
-    {}
-
-
-private:
-    NWB::Tests::CapturingLogger m_logger;
-    NWB::Core::Common::LoggerRegistrationGuard m_loggerRegistration;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(LoggerProtocolTests, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls){
-    TestArena testArena;
-    constexpr Array<tchar, 3u> s_Message = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
-    const TStringView message(s_Message.data(), s_Message.size());
-    const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Core::Common::LogType::Warning, NWB::Log::LogString(message, testArena.arena));
-    NWB::Log::LogBytes payload(testArena.arena);
-    ASSERT_TRUE(NWB::Log::MessagePayloadCodec::Build(source, payload));
-
-    constexpr usize s_PrefixBytes = sizeof(tchar);
-    NWB::Log::LogBytes shifted(testArena.arena);
-    shifted.resize(s_PrefixBytes + payload.size());
-    FOUNDATION_MEMCPY(shifted.data() + s_PrefixBytes, payload.size(), payload.data(), payload.size());
-    const auto parsed = NWB::Log::MessagePayloadCodec::Parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
-    ASSERT_TRUE(parsed);
-    EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
-
-    shifted.back() = 1u;
-    const auto malformed = NWB::Log::MessagePayloadCodec::Parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
-    ASSERT_FALSE(malformed);
-    EXPECT_FALSE(malformed.error().empty());
-    EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
-}
-
-TEST_F(LoggerProtocolTests, CrashUploadAuthorizationMatchesBearerToken){
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), AStringView()));
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, AStringView()));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, s_SecretToken));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer wrong"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token "));
-
-    constexpr AStringView s_HeaderBytes = NWB::Tests::LoggerCrashCases::s_LoggerProtocolHeaderBytes;
-    const AStringView header(s_HeaderBytes.data(), LengthOf("Bearer secret-token") - 1u);
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header.substr(0u, header.size() - 1u)));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/filesystem_helpers.adhd.h>
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-#include <core/common/log.h>
-
-#include <global/filesystem/executable_paths.h>
-#include <global/atomic.h>
-#include <global/environment.h>
-#include <global/filesystem/exclusive_publication.h>
-#include <global/filesystem/operations.h>
-#include <global/process.h>
-#include <global/sync.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_logserver_telemetry_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = NWB::Tests::TestArena<>;
-
-
-class LoggerTelemetryPublication : public ::testing::Test{
-public:
-    LoggerTelemetryPublication()
-        : m_loggerRegistration(m_logger)
-    {}
-
-
-private:
-    NWB::Tests::CapturingLogger m_logger;
-    NWB::Core::Common::LoggerRegistrationGuard m_loggerRegistration;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static ::Path<NWB::Core::Alloc::GlobalArena> MakeTelemetryPublicationTestDirectory(TestArena& testArena){
-    ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena);
-    const auto executableDirectory = ExecutablePaths(testArena.arena).directory();
-    if(!executableDirectory)
-        return root;
-    for(u32 attempt = 0u; attempt < 128u; ++attempt){
-        const auto name = StringFormat(testArena.arena, "telemetry_publication_test_{}_{}", CurrentProcessId(), attempt);
-        root = *executableDirectory / name;
-        const auto created = CreateDirectories(root);
-        if(!created)
-            return ::Path<NWB::Core::Alloc::GlobalArena>(testArena.arena);
-        if(*created)
-            return root;
+Path MakeTelemetryPublicationTestDirectory(){
+    Path root = Path();
+    const Expected<Path, ErrorCode> executableDirectory = ExecutablePaths().directory();
+    if(executableDirectory.has_value()){
+        for(u32 attempt = 0u; attempt < 128u; ++attempt){
+            const String name = StringFormat("telemetry_publication_test_{}_{}", CurrentProcessId(), attempt);
+            const Path candidate = executableDirectory.value() / StringView(name);
+            const Expected<b8, ErrorCode> created = CreateDirectories(candidate);
+            if(!created.has_value())
+                break;
+            if(created.value()){
+                root = candidate;
+                break;
+            }
+        }
     }
-    return ::Path<NWB::Core::Alloc::GlobalArena>(testArena.arena);
+    return root;
 }
 
-TEST_F(LoggerTelemetryPublication, TelemetryPublicationDoesNotReplaceExistingFinalFile){
-    TestArena testArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(testArena);
-    ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    constexpr Array<u8, 3u> s_Existing = { 1u, 2u, 3u };
-    constexpr Array<u8, 3u> s_New = { 4u, 5u, 6u };
-    ASSERT_TRUE(WriteBinaryFile(destination, s_Existing));
 
-    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_New.data(), s_New.size() });
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyLoggerProtocolTests_MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls(mut LoggerProtocolTests self){
+    LoggerTestArena testArena = LoggerTestArena();
+    native(mut testArena){
+        constexpr Array<tchar, 3u> s_Message = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
+        const TStringView message(s_Message.data(), s_Message.size());
+        const Log::MessageType source = MakeTuple(Timer{}, Core::Common::LogType::Warning, Log::LogString(message, testArena.arena));
+        LogBytes payload(testArena.arena);
+        ASSERT_TRUE(Log::MessagePayloadCodec::Build(source, payload));
+
+        constexpr usize s_PrefixBytes = sizeof(tchar);
+        LogBytes shifted(testArena.arena);
+        shifted.resize(s_PrefixBytes + payload.size());
+        NWB_MEMCPY(shifted.data() + s_PrefixBytes, payload.size(), payload.data(), payload.size());
+        const auto parsed = Log::MessagePayloadCodec::Parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
+
+        shifted.back() = 1u;
+        const auto malformed = Log::MessagePayloadCodec::Parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
+        ASSERT_FALSE(malformed);
+        EXPECT_FALSE(malformed.error().empty());
+        EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
+    }
+}
+
+void VerifyLoggerProtocolTests_CrashUploadAuthorizationMatchesBearerToken(mut LoggerProtocolTests self){
+    EXPECT_TRUE(CrashUploadAuthorizationMatches("", ""));
+    EXPECT_TRUE(CrashUploadAuthorizationMatches("", "bad"));
+    EXPECT_FALSE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, ""));
+    EXPECT_FALSE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, s_LoggerProtocolSecretToken));
+    EXPECT_FALSE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, "Bearer wrong"));
+    EXPECT_FALSE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, "Bearer secret-token "));
+
+    const StringView prefix = "Bearer secret-token";
+    const StringView header = StringView(s_LoggerProtocolHeaderBytes.data(), prefix.size());
+    EXPECT_TRUE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, header));
+    EXPECT_FALSE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, header.substr(0u, header.size() - 1u)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExistingFinalFile(mut LoggerTelemetryPublication self){
+    const Path root = MakeTelemetryPublicationTestDirectory();
+    ASSERT_FALSE(root.empty());
+    const Path destination = root / "payload.nwbs";
+    const Path staging = root / "payload.nwbs.partial";
+
+    Array<u8, 3> existingBytes = Array<u8, 3>();
+    existingBytes[0] = 1u;
+    existingBytes[1] = 2u;
+    existingBytes[2] = 3u;
+    Array<u8, 3> newBytes = Array<u8, 3>();
+    newBytes[0] = 4u;
+    newBytes[1] = 5u;
+    newBytes[2] = 6u;
+    ASSERT_TRUE(WriteBinaryFile(destination, Span<u8>(existingBytes)));
+
+    const FilePublicationResult result = PublishDurableBytes(destination, Span<u8>(newBytes));
     EXPECT_FALSE(result.published);
     EXPECT_TRUE(result.stagingRetained);
     EXPECT_TRUE(result.error);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, bytes));
-    ASSERT_EQ(bytes.size(), s_Existing.size());
-    EXPECT_EQ(FOUNDATION_MEMCMP(bytes.data(), s_Existing.data(), s_Existing.size()), 0);
-    auto staging = destination;
-    staging += ".partial";
-    ASSERT_TRUE(ReadBinaryFile(staging, bytes));
-    ASSERT_EQ(bytes.size(), s_New.size());
-    EXPECT_EQ(FOUNDATION_MEMCMP(bytes.data(), s_New.data(), s_New.size()), 0);
+
+    Vector<u8> bytes = Vector<u8>();
+    ASSERT_TRUE(ReadBinaryFile(destination, bytes).has_value());
+    EXPECT_TRUE(BytesMatch(Span<u8>(bytes), Span<u8>(existingBytes)));
+    ASSERT_TRUE(ReadBinaryFile(staging, bytes).has_value());
+    EXPECT_TRUE(BytesMatch(Span<u8>(bytes), Span<u8>(newBytes)));
 }
 
-TEST_F(LoggerTelemetryPublication, TelemetryPublicationDoesNotReplaceExistingStagingFile){
-    TestArena testArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(testArena);
+void VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExistingStagingFile(mut LoggerTelemetryPublication self){
+    const Path root = MakeTelemetryPublicationTestDirectory();
     ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    auto staging = destination;
-    staging += ".partial";
-    constexpr Array<u8, 2u> s_Existing = { 7u, 8u };
-    constexpr Array<u8, 2u> s_New = { 9u, 10u };
-    ASSERT_TRUE(WriteBinaryFile(staging, s_Existing));
+    const Path destination = root / "payload.nwbs";
+    const Path staging = root / "payload.nwbs.partial";
 
-    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_New.data(), s_New.size() });
+    Array<u8, 2> existingBytes = Array<u8, 2>();
+    existingBytes[0] = 7u;
+    existingBytes[1] = 8u;
+    Array<u8, 2> newBytes = Array<u8, 2>();
+    newBytes[0] = 9u;
+    newBytes[1] = 10u;
+    ASSERT_TRUE(WriteBinaryFile(staging, Span<u8>(existingBytes)));
+
+    const FilePublicationResult result = PublishDurableBytes(destination, Span<u8>(newBytes));
     EXPECT_FALSE(result.published);
     EXPECT_FALSE(result.stagingRetained);
     EXPECT_TRUE(result.error);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(staging, bytes));
-    ASSERT_EQ(bytes.size(), s_Existing.size());
-    EXPECT_EQ(FOUNDATION_MEMCMP(bytes.data(), s_Existing.data(), s_Existing.size()), 0);
-    const auto finalExists = FileExists(destination);
-    ASSERT_TRUE(finalExists);
-    EXPECT_FALSE(*finalExists);
+
+    Vector<u8> bytes = Vector<u8>();
+    ASSERT_TRUE(ReadBinaryFile(staging, bytes).has_value());
+    EXPECT_TRUE(BytesMatch(Span<u8>(bytes), Span<u8>(existingBytes)));
+    const Expected<b8, ErrorCode> finalExists = FileExists(destination);
+    ASSERT_TRUE(finalExists.has_value());
+    EXPECT_FALSE(finalExists.value());
 }
 
-TEST_F(LoggerTelemetryPublication, ConcurrentTelemetryPublishersCannotReplaceEachOther){
-    TestArena rootArena;
-    TestArena firstArena;
-    TestArena secondArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(rootArena);
+void VerifyLoggerTelemetryPublication_ConcurrentTelemetryPublishersCannotReplaceEachOther(mut LoggerTelemetryPublication self){
+    LoggerTestArena firstArena = LoggerTestArena();
+    LoggerTestArena secondArena = LoggerTestArena();
+    const Path root = MakeTelemetryPublicationTestDirectory();
     ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    const ::Path<NWB::Core::Alloc::GlobalArena> firstPath(firstArena.arena, destination);
-    const ::Path<NWB::Core::Alloc::GlobalArena> secondPath(secondArena.arena, destination);
-    constexpr Array<u8, 2u> s_First = { 21u, 22u };
-    constexpr Array<u8, 2u> s_Second = { 31u, 32u };
-    FilePublicationResult firstResult;
-    FilePublicationResult secondResult;
-    Atomic<b8> start = false;
-    Thread first([&](){
-        while(!start.load(MemoryOrder::acquire))
-            YieldThread();
-        firstResult = PublishNewFileDurable(firstPath, BinaryByteView{ s_First.data(), s_First.size() });
-    });
-    Thread second([&](){
-        while(!start.load(MemoryOrder::acquire))
-            YieldThread();
-        secondResult = PublishNewFileDurable(secondPath, BinaryByteView{ s_Second.data(), s_Second.size() });
-    });
-    start.store(true, MemoryOrder::release);
-    first.join();
-    second.join();
-    EXPECT_NE(firstResult.published, secondResult.published);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(rootArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, bytes));
-    ASSERT_EQ(bytes.size(), s_First.size());
-    const auto& winner = firstResult.published ? s_First : s_Second;
-    EXPECT_EQ(FOUNDATION_MEMCMP(bytes.data(), winner.data(), winner.size()), 0);
+    const Path destination = root / "payload.nwbs";
+    Array<u8, 2> firstBytes = Array<u8, 2>();
+    firstBytes[0] = 21u;
+    firstBytes[1] = 22u;
+    Array<u8, 2> secondBytes = Array<u8, 2>();
+    secondBytes[0] = 31u;
+    secondBytes[1] = 32u;
+    b8 firstPublished = false;
+    b8 secondPublished = false;
+    native(mut firstArena, mut secondArena, in destination, in firstBytes, in secondBytes, mut firstPublished, mut secondPublished){
+        const CrashTestPath firstPath(firstArena.arena, destination.native());
+        const CrashTestPath secondPath(secondArena.arena, destination.native());
+        FilePublicationResult firstResult;
+        FilePublicationResult secondResult;
+        Atomic<b8> start = false;
+        Thread first([&](){
+            while(!start.load(MemoryOrder::acquire))
+                YieldThread();
+            firstResult = PublishNewFileDurable(firstPath, BinaryByteView{ firstBytes.data(), firstBytes.size() });
+        });
+        Thread second([&](){
+            while(!start.load(MemoryOrder::acquire))
+                YieldThread();
+            secondResult = PublishNewFileDurable(secondPath, BinaryByteView{ secondBytes.data(), secondBytes.size() });
+        });
+        start.store(true, MemoryOrder::release);
+        first.join();
+        second.join();
+        firstPublished = firstResult.published;
+        secondPublished = secondResult.published;
+    }
+    EXPECT_NE(firstPublished, secondPublished);
+    Vector<u8> bytes = Vector<u8>();
+    ASSERT_TRUE(ReadBinaryFile(destination, bytes).has_value());
+    if(firstPublished)
+        EXPECT_TRUE(BytesMatch(Span<u8>(bytes), Span<u8>(firstBytes)));
+    else
+        EXPECT_TRUE(BytesMatch(Span<u8>(bytes), Span<u8>(secondBytes)));
 }
 
-TEST_F(LoggerTelemetryPublication, TelemetryPublicationMovesCompletedBytesToNewFinalFile){
-    TestArena testArena;
-    const auto root = MakeTelemetryPublicationTestDirectory(testArena);
+void VerifyLoggerTelemetryPublication_TelemetryPublicationMovesCompletedBytesToNewFinalFile(mut LoggerTelemetryPublication self){
+    const Path root = MakeTelemetryPublicationTestDirectory();
     ASSERT_FALSE(root.empty());
-    const auto destination = root / "payload.nwbs";
-    constexpr Array<u8, 3u> s_Data = { 11u, 12u, 13u };
-    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_Data.data(), s_Data.size() });
+    const Path destination = root / "payload.nwbs";
+    const Path staging = root / "payload.nwbs.partial";
+
+    Array<u8, 3> data = Array<u8, 3>();
+    data[0] = 11u;
+    data[1] = 12u;
+    data[2] = 13u;
+    const FilePublicationResult result = PublishDurableBytes(destination, Span<u8>(data));
     EXPECT_TRUE(result.published);
     EXPECT_FALSE(result.stagingRetained);
     EXPECT_FALSE(result.error);
-    Vector<u8, NWB::Core::Alloc::GlobalArena> bytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, bytes));
-    ASSERT_EQ(bytes.size(), s_Data.size());
-    EXPECT_EQ(FOUNDATION_MEMCMP(bytes.data(), s_Data.data(), s_Data.size()), 0);
-    auto staging = destination;
-    staging += ".partial";
-    const auto stagingExists = FileExists(staging);
-    ASSERT_TRUE(stagingExists);
-    EXPECT_FALSE(*stagingExists);
+
+    Vector<u8> bytes = Vector<u8>();
+    ASSERT_TRUE(ReadBinaryFile(destination, bytes).has_value());
+    EXPECT_TRUE(BytesMatch(Span<u8>(bytes), Span<u8>(data)));
+    const Expected<b8, ErrorCode> stagingExists = FileExists(staging);
+    ASSERT_TRUE(stagingExists.has_value());
+    EXPECT_FALSE(stagingExists.value());
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <logger/message_payload_codec.h>
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/integration/logger_server/name_cases.adhd.h>
-
-#include <logger/common.h>
-#include <logger/processed_message_file.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_logger_producer_contract_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Tests::CrashTestPaths;
-using namespace NWB::Tests::LoggerServerCrash;
-using TestArena = NWB::Tests::TestArena<>;
-
-class LoggerProducerContracts : public testing::Test{
-public:
-    LoggerProducerContracts()
-        : m_registration(m_logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly)
-    {}
-
-
-private:
-    NWB::Tests::CapturingLogger m_logger;
-    NWB::Core::Common::LoggerRegistrationGuard m_registration;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(LoggerProducerContracts, MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes){
-    TestArena testArena;
-    NWB::Log::LogBytes payload(testArena.arena);
+void VerifyLoggerProducerContracts_MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes(mut LoggerProducerContracts self){
+    LoggerTestArena testArena = LoggerTestArena();
+    LogBytes payload = LogBytes(testArena.arena);
     payload.push_back(42u);
-    const NWB::Log::MessageType source = MakeTuple(Timer{}, static_cast<NWB::Core::Common::LogType::Enum>(255u), NWB::Log::LogString(FOUNDATION_TEXT("invalid"), testArena.arena));
-    const auto built = NWB::Log::MessagePayloadCodec::Build(source, payload);
-    ASSERT_FALSE(built);
-    EXPECT_EQ(built.error(), NWB::Log::MessagePayloadError::InvalidType);
+    native(mut testArena, mut payload){
+        const Log::MessageType source = MakeTuple(Timer{}, static_cast<Core::Common::LogType::Enum>(255u), Log::LogString(NWB_TEXT("invalid"), testArena.arena));
+        const auto built = Log::MessagePayloadCodec::Build(source, payload);
+        ASSERT_FALSE(built);
+        EXPECT_EQ(built.error(), Log::MessagePayloadError::InvalidType);
+    }
     EXPECT_TRUE(payload.empty());
 }
 
-TEST_F(LoggerProducerContracts, SimultaneousProcessedFilesKeepIndependentRecords){
-    TestArena testArena;
-    NWB::Log::ProcessedMessageFile first(testArena.arena);
-    NWB::Log::ProcessedMessageFile second(testArena.arena);
-    ASSERT_TRUE(first.open(FOUNDATION_TEXT("processed_file_isolation")));
-    ASSERT_TRUE(second.open(FOUNDATION_TEXT("processed_file_isolation")));
+void VerifyLoggerProducerContracts_SimultaneousProcessedFilesKeepIndependentRecords(mut LoggerProducerContracts self){
+    LoggerTestArena testArena = LoggerTestArena();
+    ProcessedMessageFile first = ProcessedMessageFile(testArena.arena);
+    ProcessedMessageFile second = ProcessedMessageFile(testArena.arena);
+    native(mut first, mut second){
+        ASSERT_TRUE(first.open(NWB_TEXT("processed_file_isolation")));
+        ASSERT_TRUE(second.open(NWB_TEXT("processed_file_isolation")));
+        ASSERT_TRUE(first.writeLine(NWB_TEXT("first record")));
+        ASSERT_TRUE(second.writeLine(NWB_TEXT("second record")));
+    }
     EXPECT_NE(first.path(), second.path());
-    ASSERT_TRUE(first.writeLine(FOUNDATION_TEXT("first record")));
-    ASSERT_TRUE(second.writeLine(FOUNDATION_TEXT("second record")));
     first.close();
     second.close();
-    AString<NWB::Log::LogArena> firstText(testArena.arena);
-    AString<NWB::Log::LogArena> secondText(testArena.arena);
-    ASSERT_TRUE(ReadTextFile(first.path(), firstText));
-    ASSERT_TRUE(ReadTextFile(second.path(), secondText));
-    EXPECT_TRUE(Contains(firstText, "first record"));
-    EXPECT_FALSE(Contains(firstText, "second record"));
-    EXPECT_TRUE(Contains(secondText, "second record"));
-    EXPECT_FALSE(Contains(secondText, "first record"));
+    String firstText = "";
+    String secondText = "";
+    ASSERT_TRUE(ReadTextFile(first.path(), firstText).has_value());
+    ASSERT_TRUE(ReadTextFile(second.path(), secondText).has_value());
+    EXPECT_TRUE(Contains(StringView(firstText), "first record"));
+    EXPECT_FALSE(Contains(StringView(firstText), "second record"));
+    EXPECT_TRUE(Contains(StringView(secondText), "second record"));
+    EXPECT_FALSE(Contains(StringView(secondText), "first record"));
 }
 
-TEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRejection){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("logger_server_missing_archive_native_error_test");
-    constexpr AStringView s_Stem("missing_archive_001");
-    RemoveTestArtifacts(arena, s_Group);
-    const auto config = MakeIngestConfig(arena, s_Group);
-    const auto path = ArchivePath(arena, s_Group, s_Stem);
-    const auto missing = FileSize(path);
-    ASSERT_FALSE(missing);
-    const auto result = NWB::Log::ProcessCrashUpload(arena, path, config);
+void VerifyLoggerProducerContracts_MissingArchiveRetainsNativeReadFailureInOwningRejection(mut LoggerProducerContracts self){
+    LoggerTestArena testArena = LoggerTestArena();
+    const StringView group = "logger_server_missing_archive_native_error_test";
+    const StringView stem = "missing_archive_001";
+    RemoveTestArtifacts(group);
+    const CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
+    const Path path = ArchivePath(group, stem);
+    const Expected<u64, ErrorCode> missing = FileSize(path);
+    ASSERT_FALSE(missing.has_value());
+    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, path, config);
     EXPECT_FALSE(result.accepted);
-    EXPECT_TRUE(Contains(result.message, FOUNDATION_TEXT("failed to read crash archive")));
-    const auto native = MakeDiagnosticEventText("native_category='{}'; native_code={}", missing.error().category().name(), missing.error().value());
-    constexpr Name s_FailureTextScratchName = NWB::Tests::LoggerCrashCases::s_LoggerCrashTestNameTestsIntegrationLoggerServerProducerContractsScratch;
-    NWB::Core::Alloc::ScratchArena scratchArena(s_FailureTextScratchName);
-    const auto nativeText = ConvertString(scratchArena, native.view());
-    EXPECT_TRUE(Contains(result.message, nativeText));
-    RemoveTestArtifacts(arena, s_Group);
+    EXPECT_TRUE(CrashIngestMessageContains(result, "failed to read crash archive"));
+    const String nativeText = StringFormat("native_category='{}'; native_code={}", ErrorCodeCategoryName(missing.error()), missing.error().value());
+    EXPECT_TRUE(CrashIngestMessageContains(result, StringView(nativeText)));
+    RemoveTestArtifacts(group);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+void VerifyLogRowPainter_EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext(){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-
-#include <tests/common/test_context.adhd.h>
-#include <logger/server/log_row_painter.h>
-#include <global/scope_exit.h>
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_log_row_painter_tests{
-using namespace NWB;
-
-TEST(LogRowPainter, EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext){
-    Tests::TestArena<> arena;
-    const HDC dc = CreateCompatibleDC(nullptr);
-    ASSERT_NE(dc, nullptr);
-    ScopeExit releaseDc([&]()noexcept{ DeleteDC(dc); });
-    BITMAPINFO info{};
-    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = 4;
-    info.bmiHeader.biHeight = -4;
-    info.bmiHeader.biPlanes = 1;
-    info.bmiHeader.biBitCount = 32;
-    info.bmiHeader.biCompression = BI_RGB;
-    void* pixels = nullptr;
-    const HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0u);
-    ASSERT_NE(bitmap, nullptr);
-    ScopeExit releaseBitmap([&]()noexcept{ DeleteObject(bitmap); });
-    const HGDIOBJ previous = SelectObject(dc, bitmap);
-    ASSERT_TRUE(previous && previous != HGDI_ERROR);
-    ScopeExit restoreBitmap([&]()noexcept{ SelectObject(dc, previous); });
-    ASSERT_NE(pixels, nullptr);
-    ASSERT_NE(SetTextColor(dc, RGB(3, 4, 5)), CLR_INVALID);
-    ASSERT_NE(SetBkMode(dc, OPAQUE), 0);
-    Log::FrameDetail::MessageItem message(Log::LogString(FOUNDATION_TEXT(""), arena.arena), Core::Common::LogType::Error);
-    DRAWITEMSTRUCT item{};
-    item.hDC = dc;
-    item.rcItem = RECT{ 0, 0, 4, 4 };
-    Log::FrameDetail::LogRowPainter::Draw(item, message);
-    EXPECT_EQ(GetPixel(dc, 1, 1), RGB(170, 0, 0));
-    item.itemID = 1u;
-    Log::FrameDetail::LogRowPainter::Draw(item, message);
-    EXPECT_EQ(GetPixel(dc, 1, 1), RGB(200, 0, 0));
-    EXPECT_EQ(GetTextColor(dc), RGB(3, 4, 5));
-    EXPECT_EQ(GetBkMode(dc), OPAQUE);
-}
-
-
-TEST(LogRowPainter, LongTextWrapsWithinHiddenParentClientWidth){
-    Tests::TestArena<> arena;
-    const HWND parent = CreateWindowEx(0, FOUNDATION_TEXT("STATIC"), FOUNDATION_TEXT(""), WS_POPUP, 0, 0, 60, 100, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
-    ASSERT_NE(parent, nullptr);
-    ScopeExit destroyParent([&]()noexcept{ DestroyWindow(parent); });
-    const HWND child = CreateWindowEx(0, FOUNDATION_TEXT("STATIC"), FOUNDATION_TEXT(""), WS_CHILD, 0, 0, 60, 100, parent, nullptr, GetModuleHandle(nullptr), nullptr);
-    ASSERT_NE(child, nullptr);
-    SendMessage(child, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), FALSE);
-    Log::FrameDetail::MessageItem message(Log::LogString(FOUNDATION_TEXT("A long message that must wrap across several narrow rows of the hidden logger window."), arena.arena), Core::Common::LogType::Info);
-    MEASUREITEMSTRUCT item{};
-    Log::FrameDetail::LogRowPainter::Measure(parent, child, item, message);
-    EXPECT_GT(item.itemHeight, static_cast<UINT>(Log::FrameDetail::LogRowPainter::s_FontHeight));
-}
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+    LoggerTestArena testArena = LoggerTestArena();
+    u32 firstPixel = 0u;
+    u32 secondPixel = 0u;
+    u32 restoredTextColor = 0u;
+    i32 restoredBkMode = 0;
+    u32 expectedFirstPixel = 0u;
+    u32 expectedSecondPixel = 0u;
+    u32 expectedTextColor = 0u;
+    i32 expectedBkMode = 0;
+    native(mut testArena, mut firstPixel, mut secondPixel, mut restoredTextColor, mut restoredBkMode, mut expectedFirstPixel, mut expectedSecondPixel, mut expectedTextColor, mut expectedBkMode){
+#if defined(NWB_PLATFORM_WINDOWS)
+        const HDC dc = CreateCompatibleDC(nullptr);
+        ASSERT_NE(dc, nullptr);
+        ScopeExit releaseDc([&]()noexcept{ DeleteDC(dc); });
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = 4;
+        info.bmiHeader.biHeight = -4;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        void* pixels = nullptr;
+        const HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0u);
+        ASSERT_NE(bitmap, nullptr);
+        ScopeExit releaseBitmap([&]()noexcept{ DeleteObject(bitmap); });
+        const HGDIOBJ previous = SelectObject(dc, bitmap);
+        ASSERT_TRUE(previous && previous != HGDI_ERROR);
+        ScopeExit restoreBitmap([&]()noexcept{ SelectObject(dc, previous); });
+        ASSERT_NE(pixels, nullptr);
+        ASSERT_NE(SetTextColor(dc, RGB(3, 4, 5)), CLR_INVALID);
+        ASSERT_NE(SetBkMode(dc, OPAQUE), 0);
+        Log::FrameDetail::MessageItem message(Log::LogString(NWB_TEXT(""), testArena.arena), Core::Common::LogType::Error);
+        DRAWITEMSTRUCT item{};
+        item.hDC = dc;
+        item.rcItem = RECT{ 0, 0, 4, 4 };
+        Log::FrameDetail::LogRowPainter::Draw(item, message);
+        firstPixel = static_cast<u32>(GetPixel(dc, 1, 1));
+        item.itemID = 1u;
+        Log::FrameDetail::LogRowPainter::Draw(item, message);
+        secondPixel = static_cast<u32>(GetPixel(dc, 1, 1));
+        restoredTextColor = static_cast<u32>(GetTextColor(dc));
+        restoredBkMode = GetBkMode(dc);
+        expectedFirstPixel = static_cast<u32>(RGB(170, 0, 0));
+        expectedSecondPixel = static_cast<u32>(RGB(200, 0, 0));
+        expectedTextColor = static_cast<u32>(RGB(3, 4, 5));
+        expectedBkMode = OPAQUE;
 #endif
-
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/integration/logger_server/name_cases.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/crash/package_names.h>
-
-#include <global/filesystem/operations.h>
-#include <global/filesystem/utility.h>
-
-#include <logger/server/crash_symbolicate.h>
-
-#include <gtest/gtest.h>
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <windows.h>
-#include <dbghelp.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_minidump_boundary_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_WindowsPlatform = "windows";
-
-using namespace NWB;
-using DumpBytes = Vector<u8, Core::Alloc::GlobalArena>;
-
-template<typename T>
-void StoreDumpRecord(const usize offset, const T& record, const Span<u8> bytes)noexcept{
-    FOUNDATION_ASSERT(offset <= bytes.size() && sizeof(T) <= bytes.size() - offset);
-    FOUNDATION_MEMCPY(bytes.data() + offset, bytes.size() - offset, &record, sizeof(T));
+    }
+    EXPECT_EQ(firstPixel, expectedFirstPixel);
+    EXPECT_EQ(secondPixel, expectedSecondPixel);
+    EXPECT_EQ(restoredTextColor, expectedTextColor);
+    EXPECT_EQ(restoredBkMode, expectedBkMode);
 }
 
-[[nodiscard]] DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, const MINIDUMP_STREAM_TYPE secondStream, const ULONG secondStreamBytes){
+void VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth(){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    LoggerTestArena testArena = LoggerTestArena();
+    u32 measuredHeight = 0u;
+    u32 singleRowHeight = 0u;
+    native(mut testArena, mut measuredHeight, mut singleRowHeight){
+#if defined(NWB_PLATFORM_WINDOWS)
+        const HWND parent = CreateWindowEx(0, NWB_TEXT("STATIC"), NWB_TEXT(""), WS_POPUP, 0, 0, 60, 100, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+        ASSERT_NE(parent, nullptr);
+        ScopeExit destroyParent([&]()noexcept{ DestroyWindow(parent); });
+        const HWND child = CreateWindowEx(0, NWB_TEXT("STATIC"), NWB_TEXT(""), WS_CHILD, 0, 0, 60, 100, parent, nullptr, GetModuleHandle(nullptr), nullptr);
+        ASSERT_NE(child, nullptr);
+        SendMessage(child, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), FALSE);
+        Log::FrameDetail::MessageItem message(Log::LogString(NWB_TEXT("A long message that must wrap across several narrow rows of the hidden logger window."), testArena.arena), Core::Common::LogType::Info);
+        MEASUREITEMSTRUCT item{};
+        Log::FrameDetail::LogRowPainter::Measure(parent, child, item, message);
+        measuredHeight = static_cast<u32>(item.itemHeight);
+        singleRowHeight = static_cast<u32>(Log::FrameDetail::LogRowPainter::s_FontHeight);
+#endif
+    }
+    EXPECT_GT(measuredHeight, singleRowHeight);
+}
+
+void VerifyMinidumpBoundaryTests_MissingDumpRetainsNativeReadFailureInReturnedReport(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    String actualReport = String();
+    String expectedNativeDiagnostic = String();
+    native(mut self, mut actualReport, mut expectedNativeDiagnostic){
+#if defined(NWB_PLATFORM_WINDOWS)
+        const auto missing = FileSize(self.m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName);
+        ASSERT_FALSE(missing);
+        Log::CrashPackageSummary summary(self.m_testArena.arena);
+        summary.platform = "windows";
+        Log::CrashSymbolicationConfig config(self.m_testArena.arena);
+        const Log::CrashScratchPath scratchDirectory(self.m_scratchArena, self.m_directory);
+        const auto actual = Log::BuildCrashSymbolicationReport(scratchDirectory, summary, config, self.m_testArena.arena, self.m_scratchArena);
+        actualReport.assign(actual.data(), actual.size());
+        const auto nativeText = MakeDiagnosticEventText("native_category={}\nnative_code={}\n", missing.error().category().name(), missing.error().value());
+        expectedNativeDiagnostic.assign(nativeText.view().data(), nativeText.view().size());
+#endif
+    }
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=not_decoded"));
+    EXPECT_TRUE(Contains(StringView(actualReport), StringView(expectedNativeDiagnostic)));
+}
+
+void VerifyMinidumpBoundaryTests_TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    u32 notDecodedCount = 0u;
+    native(mut self, mut notDecodedCount){
+#if defined(NWB_PLATFORM_WINDOWS)
+        DumpBytes bytes(self.m_testArena.arena);
+        bytes.resize(sizeof(MINIDUMP_HEADER), 0u);
+        for(const usize size : Array<usize, 3u>{ 1u, sizeof(MINIDUMP_HEADER) - 1u, sizeof(MINIDUMP_HEADER) }){
+            bytes.resize(size, 0u);
+            const auto actual = self.report(bytes);
+            ASSERT_TRUE(actual);
+            if(actual->find("status=not_decoded") != Log::CrashReportText::npos)
+                ++notDecodedCount;
+        }
+        bytes.resize(sizeof(MINIDUMP_HEADER), 0u);
+        MINIDUMP_HEADER header{};
+        header.Signature = MINIDUMP_SIGNATURE;
+        header.Version = MINIDUMP_VERSION;
+        header.StreamDirectoryRva = sizeof(MINIDUMP_HEADER);
+        for(const ULONG count : Array<ULONG, 2u>{ 1u, Limit<ULONG>::s_Max }){
+            header.NumberOfStreams = count;
+            StoreDumpRecord(0u, header, bytes);
+            const auto actual = self.report(bytes);
+            ASSERT_TRUE(actual);
+            if(actual->find("status=not_decoded") != Log::CrashReportText::npos)
+                ++notDecodedCount;
+        }
+        header.NumberOfStreams = 1u;
+        header.StreamDirectoryRva = Limit<RVA>::s_Max;
+        StoreDumpRecord(0u, header, bytes);
+        const auto actual = self.report(bytes);
+        ASSERT_TRUE(actual);
+        if(actual->find("status=not_decoded") != Log::CrashReportText::npos)
+            ++notDecodedCount;
+#endif
+    }
+    EXPECT_EQ(notDecodedCount, 6u);
+}
+
+void VerifyMinidumpBoundaryTests_TruncatedThreadListCountCannotReadBeyondItsAdmittedStream(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    String actualReport = String();
+    native(mut self, mut actualReport){
+#if defined(NWB_PLATFORM_WINDOWS)
+        auto bytes = ExceptionDump(self.m_testArena.arena, ThreadListStream, sizeof(ULONG));
+        const ULONG count = Limit<ULONG>::s_Max;
+        StoreDumpRecord(bytes.size() - sizeof(ULONG), count, bytes);
+        const auto actual = self.report(bytes);
+        ASSERT_TRUE(actual);
+        actualReport.assign(actual->data(), actual->size());
+#endif
+    }
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=not_decoded"));
+}
+
+void VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFileBytes(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    String actualReport = String();
+    native(mut self, mut actualReport){
+#if defined(NWB_PLATFORM_WINDOWS)
+        auto bytes = ExceptionDump(self.m_testArena.arena, UnusedStream, 0u);
+        constexpr usize s_ExceptionOffset = sizeof(MINIDUMP_HEADER) + 2u * sizeof(MINIDUMP_DIRECTORY);
+        MINIDUMP_EXCEPTION_STREAM exception{};
+        exception.ThreadId = 1u;
+        exception.ThreadContext.DataSize = sizeof(CONTEXT) - 1u;
+        exception.ThreadContext.Rva = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM);
+        StoreDumpRecord(s_ExceptionOffset, exception, bytes);
+        const auto actual = self.report(bytes);
+        ASSERT_TRUE(actual);
+        actualReport.assign(actual->data(), actual->size());
+#endif
+    }
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=not_decoded"));
+    EXPECT_TRUE(Contains(StringView(actualReport), "no usable thread context"));
+}
+
+void VerifyMinidumpBoundaryTests_Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    u32 notDecodedReports = 0u;
+    u32 invalidRangeReports = 0u;
+    native(mut self, mut notDecodedReports, mut invalidRangeReports){
+#if defined(NWB_PLATFORM_WINDOWS)
+        for(const b8 oversizedOffset : Array<b8, 2u>{ false, true }){
+            constexpr usize s_StreamSize = offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges) + sizeof(MINIDUMP_MEMORY_DESCRIPTOR64);
+            auto bytes = ExceptionDump(self.m_testArena.arena, Memory64ListStream, s_StreamSize);
+            const usize streamOffset = bytes.size() - s_StreamSize;
+            const ULONG64 count = 1u;
+            const RVA64 baseRva = oversizedOffset ? (u64(1u) << 32u) + bytes.size() - 1u : bytes.size() - 1u;
+            MINIDUMP_MEMORY_DESCRIPTOR64 memory{};
+            memory.StartOfMemoryRange = 0x1000u;
+            memory.DataSize = oversizedOffset ? 1u : (u64(1u) << 32u) + 1u;
+            StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, NumberOfMemoryRanges), count, bytes);
+            StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, BaseRva), baseRva, bytes);
+            StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), memory, bytes);
+            const auto actual = self.report(bytes);
+            ASSERT_TRUE(actual);
+            if(actual->find("status=not_decoded") != Log::CrashReportText::npos)
+                ++notDecodedReports;
+            if(actual->find("minidump contains invalid memory ranges") != Log::CrashReportText::npos)
+                ++invalidRangeReports;
+        }
+#endif
+    }
+    EXPECT_EQ(notDecodedReports, 2u);
+    EXPECT_EQ(invalidRangeReports, 2u);
+}
+
+void VerifyMinidumpBoundaryTests_TruncatedModuleListCannotReadBeyondItsAdmittedStream(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    String actualReport = String();
+    native(mut self, mut actualReport){
+#if defined(NWB_PLATFORM_WINDOWS)
+        auto bytes = ExceptionDump(self.m_testArena.arena, ModuleListStream, sizeof(ULONG));
+        const ULONG count = Limit<ULONG>::s_Max;
+        StoreDumpRecord(bytes.size() - sizeof(ULONG), count, bytes);
+        const auto actual = self.report(bytes);
+        ASSERT_TRUE(actual);
+        actualReport.assign(actual->data(), actual->size());
+#endif
+    }
+    EXPECT_TRUE(Contains(StringView(actualReport), "module_load=invalid_module_list"));
+}
+
+void VerifyMinidumpBoundaryTests_InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    u32 invalidModuleReports = 0u;
+    native(mut self, mut invalidModuleReports){
+#if defined(NWB_PLATFORM_WINDOWS)
+        struct InvalidName{
+            ULONG byteCount;
+            b8 terminated;
+            b8 includeTerminator;
+        };
+        for(const auto& invalid : Array<InvalidName, 4u>{ InvalidName{ 1u, true, true }, InvalidName{ Limit<ULONG>::s_Max - 1u, true, true }, InvalidName{ sizeof(wchar), false, true }, InvalidName{ sizeof(wchar), false, false } }){
+            constexpr usize s_StreamSize = offsetof(MINIDUMP_MODULE_LIST, Modules) + sizeof(MINIDUMP_MODULE);
+            auto bytes = ExceptionDump(self.m_testArena.arena, ModuleListStream, s_StreamSize);
+            const usize streamOffset = bytes.size() - s_StreamSize;
+            const ULONG count = 1u;
+            const RVA nameOffset = static_cast<RVA>(bytes.size());
+            MINIDUMP_MODULE module{};
+            module.ModuleNameRva = nameOffset;
+            StoreDumpRecord(streamOffset, count, bytes);
+            StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MODULE_LIST, Modules), module, bytes);
+            bytes.resize(bytes.size() + sizeof(ULONG) + sizeof(wchar) * (invalid.includeTerminator ? 2u : 1u), 0u);
+            StoreDumpRecord(nameOffset, invalid.byteCount, bytes);
+            const wchar character = L'a';
+            StoreDumpRecord(nameOffset + sizeof(ULONG), character, bytes);
+            if(invalid.includeTerminator){
+                const wchar terminator = invalid.terminated ? L'\0' : L'x';
+                StoreDumpRecord(nameOffset + sizeof(ULONG) + sizeof(wchar), terminator, bytes);
+            }
+            const auto actual = self.report(bytes);
+            ASSERT_TRUE(actual);
+            if(actual->find("module_load=invalid_module_list") != Log::CrashReportText::npos)
+                ++invalidModuleReports;
+        }
+#endif
+    }
+    EXPECT_EQ(invalidModuleReports, 4u);
+}
+
+void VerifyMinidumpBoundaryTests_UnalignedExceptionAndContextRecordsKeepTheirBoundedValues(mut MinidumpBoundaryTests self){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    String actualReport = String();
+    native(mut self, mut actualReport){
+#if defined(NWB_PLATFORM_WINDOWS)
+        const auto original = ExceptionDump(self.m_testArena.arena, UnusedStream, 0u);
+        constexpr usize s_ExceptionOffset = sizeof(MINIDUMP_HEADER) + 2u * sizeof(MINIDUMP_DIRECTORY);
+        DumpBytes bytes(self.m_testArena.arena);
+        bytes.resize(original.size() + 1u, 0u);
+        NWB_MEMCPY(bytes.data(), bytes.size(), original.data(), s_ExceptionOffset);
+        NWB_MEMCPY(bytes.data() + s_ExceptionOffset + 1u, bytes.size() - s_ExceptionOffset - 1u, original.data() + s_ExceptionOffset, original.size() - s_ExceptionOffset);
+        MINIDUMP_DIRECTORY directory{};
+        directory.StreamType = ExceptionStream;
+        directory.Location.DataSize = sizeof(MINIDUMP_EXCEPTION_STREAM);
+        directory.Location.Rva = s_ExceptionOffset + 1u;
+        StoreDumpRecord(sizeof(MINIDUMP_HEADER), directory, bytes);
+        MINIDUMP_EXCEPTION_STREAM exception{};
+        exception.ThreadId = 1u;
+        exception.ThreadContext.DataSize = sizeof(CONTEXT);
+        exception.ThreadContext.Rva = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM) + 1u;
+        StoreDumpRecord(s_ExceptionOffset + 1u, exception, bytes);
+        const auto actual = self.report(bytes);
+        ASSERT_TRUE(actual);
+        actualReport.assign(actual->data(), actual->size());
+#endif
+    }
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=decoded"));
+    EXPECT_FALSE(Contains(StringView(actualReport), "status=not_decoded"));
+}
+
+void VerifyLoggerClipboardText_EmptyInputOwnsOneTerminatedNativeString(){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    LoggerTestArena testArena = LoggerTestArena();
+    usize allocatedBytes = 0u;
+    usize minimumBytes = 1u;
+    b8 firstCharIsNull = false;
+    b8 unlockedCleanly = false;
+    native(mut testArena, mut allocatedBytes, mut minimumBytes, mut firstCharIsNull, mut unlockedCleanly){
+#if defined(NWB_PLATFORM_WINDOWS)
+        Log::FrameDetail::MessageDeque messages(testArena.arena);
+        auto memory = Log::FrameDetail::BuildClipboardText(messages);
+        ASSERT_TRUE(memory);
+        allocatedBytes = static_cast<usize>(GlobalSize(memory->native()));
+        minimumBytes = sizeof(tchar);
+        const auto* const text = static_cast<const tchar*>(GlobalLock(memory->native()));
+        ASSERT_NE(text, nullptr);
+        firstCharIsNull = text[0] == tchar{};
+        SetLastError(NO_ERROR);
+        unlockedCleanly = GlobalUnlock(memory->native()) || GetLastError() == NO_ERROR;
+#endif
+    }
+    EXPECT_GE(allocatedBytes, minimumBytes);
+    EXPECT_TRUE(firstCharIsNull);
+    EXPECT_TRUE(unlockedCleanly);
+}
+
+void VerifyLoggerClipboardText_MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator(){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    LoggerTestArena testArena = LoggerTestArena();
+    usize allocatedBytes = 0u;
+    usize minimumBytes = 1u;
+    b8 contentMatches = false;
+    b8 nullTerminated = false;
+    b8 unlockedCleanly = false;
+    native(mut testArena, mut allocatedBytes, mut minimumBytes, mut contentMatches, mut nullTerminated, mut unlockedCleanly){
+#if defined(NWB_PLATFORM_WINDOWS)
+        Log::FrameDetail::MessageDeque messages(testArena.arena);
+        messages.emplace_back(Log::LogString(NWB_TEXT("first"), testArena.arena), Core::Common::LogType::Info);
+        messages.emplace_back(Log::LogString(NWB_TEXT("\uD55C\uAE00 \u03A9"), testArena.arena), Core::Common::LogType::Warning);
+        auto memory = Log::FrameDetail::BuildClipboardText(messages);
+        ASSERT_TRUE(memory);
+        constexpr TStringView s_Expected = NWB_TEXT("first\r\n\uD55C\uAE00 \u03A9\r\n");
+        allocatedBytes = static_cast<usize>(GlobalSize(memory->native()));
+        minimumBytes = (s_Expected.size() + 1u) * sizeof(tchar);
+        const auto* const text = static_cast<const tchar*>(GlobalLock(memory->native()));
+        ASSERT_NE(text, nullptr);
+        contentMatches = TStringView(text, s_Expected.size()) == s_Expected;
+        nullTerminated = text[s_Expected.size()] == tchar{};
+        SetLastError(NO_ERROR);
+        unlockedCleanly = GlobalUnlock(memory->native()) || GetLastError() == NO_ERROR;
+#endif
+    }
+    EXPECT_GE(allocatedBytes, minimumBytes);
+    EXPECT_TRUE(contentMatches);
+    EXPECT_TRUE(nullTerminated);
+    EXPECT_TRUE(unlockedCleanly);
+}
+
+void VerifyLoggerClipboardText_NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory(){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    LoggerTestArena testArena = LoggerTestArena();
+    b8 untransferredInvalidated = false;
+    b8 transferredRemainsValid = false;
+    usize transferredBytes = 0u;
+    native(mut testArena, mut untransferredInvalidated, mut transferredRemainsValid, mut transferredBytes){
+#if defined(NWB_PLATFORM_WINDOWS)
+        Log::FrameDetail::MessageDeque messages(testArena.arena);
+        HGLOBAL freed = nullptr;
+        {
+            auto memory = Log::FrameDetail::BuildClipboardText(messages);
+            ASSERT_TRUE(memory);
+            freed = memory->native();
+        }
+        untransferredInvalidated = GlobalFlags(freed) == GMEM_INVALID_HANDLE;
+        HGLOBAL transferred = nullptr;
+        {
+            auto memory = Log::FrameDetail::BuildClipboardText(messages);
+            ASSERT_TRUE(memory);
+            transferred = memory->native();
+            memory->release();
+        }
+        ScopeExit cleanup([&]()noexcept{
+            if(transferred && GlobalFree(transferred))
+                TerminateInvariant();
+        });
+        transferredRemainsValid = GlobalFlags(transferred) != GMEM_INVALID_HANDLE;
+        transferredBytes = static_cast<usize>(GlobalSize(transferred));
+#endif
+    }
+    EXPECT_TRUE(untransferredInvalidated);
+    EXPECT_TRUE(transferredRemainsValid);
+    EXPECT_NE(transferredBytes, 0u);
+}
+
+void VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation(){
+    if(!IsWindowsLoggerCrashPlatform())
+        return;
+
+    usize tcharBytes = 1u;
+    usize emptyBytes = 0u;
+    usize maxCharacters = 0u;
+    usize boundaryBytes = 0u;
+    b8 overflowRejected = false;
+    b8 overflowValueTooLarge = false;
+    native(mut tcharBytes, mut emptyBytes, mut maxCharacters, mut boundaryBytes, mut overflowRejected, mut overflowValueTooLarge){
+#if defined(NWB_PLATFORM_WINDOWS)
+        tcharBytes = sizeof(tchar);
+        const auto empty = Log::FrameDetail::ClipboardByteCount(0u);
+        ASSERT_TRUE(empty);
+        emptyBytes = *empty;
+        constexpr usize s_MaxCharacters = (Limit<usize>::s_Max / sizeof(tchar)) - 1u;
+        maxCharacters = s_MaxCharacters;
+        const auto boundary = Log::FrameDetail::ClipboardByteCount(s_MaxCharacters);
+        ASSERT_TRUE(boundary);
+        boundaryBytes = *boundary;
+        const auto overflow = Log::FrameDetail::ClipboardByteCount(s_MaxCharacters + 1u);
+        overflowRejected = !overflow.has_value();
+        if(!overflow)
+            overflowValueTooLarge = overflow.error() == MakeErrorCode(ErrorCondition::value_too_large);
+#endif
+    }
+    EXPECT_EQ(emptyBytes, tcharBytes);
+    EXPECT_EQ(boundaryBytes, (maxCharacters + 1u) * tcharBytes);
+    EXPECT_TRUE(overflowRejected);
+    EXPECT_TRUE(overflowValueTooLarge);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(LoggerProtocolTests, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls, VerifyLoggerProtocolTests_MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls)
+NWB_ADHD_GTEST_F(LoggerProtocolTests, CrashUploadAuthorizationMatchesBearerToken, VerifyLoggerProtocolTests_CrashUploadAuthorizationMatchesBearerToken)
+
+NWB_ADHD_GTEST_F(LoggerTelemetryPublication, TelemetryPublicationDoesNotReplaceExistingFinalFile, VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExistingFinalFile)
+NWB_ADHD_GTEST_F(LoggerTelemetryPublication, TelemetryPublicationDoesNotReplaceExistingStagingFile, VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExistingStagingFile)
+NWB_ADHD_GTEST_F(LoggerTelemetryPublication, ConcurrentTelemetryPublishersCannotReplaceEachOther, VerifyLoggerTelemetryPublication_ConcurrentTelemetryPublishersCannotReplaceEachOther)
+NWB_ADHD_GTEST_F(LoggerTelemetryPublication, TelemetryPublicationMovesCompletedBytesToNewFinalFile, VerifyLoggerTelemetryPublication_TelemetryPublicationMovesCompletedBytesToNewFinalFile)
+
+NWB_ADHD_GTEST_F(LoggerProducerContracts, MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes, VerifyLoggerProducerContracts_MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes)
+NWB_ADHD_GTEST_F(LoggerProducerContracts, SimultaneousProcessedFilesKeepIndependentRecords, VerifyLoggerProducerContracts_SimultaneousProcessedFilesKeepIndependentRecords)
+NWB_ADHD_GTEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRejection, VerifyLoggerProducerContracts_MissingArchiveRetainsNativeReadFailureInOwningRejection)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::LoggerCrashCases{
+
+DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, const MINIDUMP_STREAM_TYPE secondStream, const ULONG secondStreamBytes){
     constexpr usize s_DirectoryCount = 2u;
     constexpr usize s_ExceptionOffset = sizeof(MINIDUMP_HEADER) + s_DirectoryCount * sizeof(MINIDUMP_DIRECTORY);
     constexpr usize s_ContextOffset = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM);
@@ -528,196 +770,24 @@ void StoreDumpRecord(const usize offset, const T& record, const Span<u8> bytes)n
     return bytes;
 }
 
-class MinidumpBoundaryTests : public testing::Test{
-public:
-    MinidumpBoundaryTests()
-        : m_directory(m_testArena.arena, "logserver_minidump_boundary_tests")
-        , m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::ReportOnly)
-    {}
-
-
-protected:
-    virtual void SetUp()override{
-        ASSERT_TRUE(EnsureEmptyDirectory(m_directory));
-    }
-
-    virtual void TearDown()override{
-        EXPECT_TRUE(RemoveAllIfExists(m_directory));
-    }
-
-    [[nodiscard]] Expected<Log::CrashReportText> report(const Span<const u8> bytes){
-        if(!WriteBinaryFile(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName, bytes))
-            return MakeUnexpected(Failure{});
-        Log::CrashPackageSummary summary(m_testArena.arena);
-        summary.platform = s_WindowsPlatform;
-        summary.threadId = 1u;
-        Log::CrashSymbolicationConfig config(m_testArena.arena);
-        const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
-        return Log::BuildCrashSymbolicationReport(scratchDirectory, summary, config, m_testArena.arena, m_scratchArena);
-    }
-
-
-protected:
-    Tests::TestArena<> m_testArena;
-    Core::Alloc::ScratchArena m_scratchArena{ Name(NWB::Tests::LoggerCrashCases::s_LoggerCrashFixtureNameTestsMinidumpBoundaryScratch) };
-    ::Path<Core::Alloc::GlobalArena> m_directory;
-    Tests::CapturingLogger m_logger;
-    Core::Common::LoggerRegistrationGuard m_loggerGuard;
 };
 
-TEST_F(MinidumpBoundaryTests, MissingDumpRetainsNativeReadFailureInReturnedReport){
-    const auto missing = FileSize(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName);
-    ASSERT_FALSE(missing);
-    Log::CrashPackageSummary summary(m_testArena.arena);
-    summary.platform = s_WindowsPlatform;
-    Log::CrashSymbolicationConfig config(m_testArena.arena);
-    const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
-    const auto actual = Log::BuildCrashSymbolicationReport(scratchDirectory, summary, config, m_testArena.arena, m_scratchArena);
-    EXPECT_NE(actual.find("status=not_decoded"), Log::CrashReportText::npos);
-    const auto native = MakeDiagnosticEventText("native_category={}\nnative_code={}\n", missing.error().category().name(), missing.error().value());
-    EXPECT_NE(actual.find(native.view()), Log::CrashReportText::npos);
-}
+TEST(LogRowPainter, EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext){ VerifyLogRowPainter_EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext(); }
+TEST(LogRowPainter, LongTextWrapsWithinHiddenParentClientWidth){ VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth(); }
 
-TEST_F(MinidumpBoundaryTests, TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode){
-    DumpBytes bytes(m_testArena.arena);
-    bytes.resize(sizeof(MINIDUMP_HEADER), 0u);
-    for(const usize size : Array<usize, 3u>{ 1u, sizeof(MINIDUMP_HEADER) - 1u, sizeof(MINIDUMP_HEADER) }){
-        bytes.resize(size, 0u);
-        const auto actual = report(bytes);
-        ASSERT_TRUE(actual);
-        EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-    }
-    bytes.resize(sizeof(MINIDUMP_HEADER), 0u);
-    MINIDUMP_HEADER header{};
-    header.Signature = MINIDUMP_SIGNATURE;
-    header.Version = MINIDUMP_VERSION;
-    header.StreamDirectoryRva = sizeof(MINIDUMP_HEADER);
-    for(const ULONG count : Array<ULONG, 2u>{ 1u, Limit<ULONG>::s_Max }){
-        header.NumberOfStreams = count;
-        StoreDumpRecord(0u, header, bytes);
-        const auto actual = report(bytes);
-        ASSERT_TRUE(actual);
-        EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-    }
-    header.NumberOfStreams = 1u;
-    header.StreamDirectoryRva = Limit<RVA>::s_Max;
-    StoreDumpRecord(0u, header, bytes);
-    const auto actual = report(bytes);
-    ASSERT_TRUE(actual);
-    EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-}
+TEST_F(MinidumpBoundaryTests, MissingDumpRetainsNativeReadFailureInReturnedReport){ VerifyMinidumpBoundaryTests_MissingDumpRetainsNativeReadFailureInReturnedReport(*this); }
+TEST_F(MinidumpBoundaryTests, TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode){ VerifyMinidumpBoundaryTests_TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode(*this); }
+TEST_F(MinidumpBoundaryTests, TruncatedThreadListCountCannotReadBeyondItsAdmittedStream){ VerifyMinidumpBoundaryTests_TruncatedThreadListCountCannotReadBeyondItsAdmittedStream(*this); }
+TEST_F(MinidumpBoundaryTests, ShortExceptionContextCannotBorrowSurroundingFileBytes){ VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFileBytes(*this); }
+TEST_F(MinidumpBoundaryTests, Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile){ VerifyMinidumpBoundaryTests_Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile(*this); }
+TEST_F(MinidumpBoundaryTests, TruncatedModuleListCannotReadBeyondItsAdmittedStream){ VerifyMinidumpBoundaryTests_TruncatedModuleListCannotReadBeyondItsAdmittedStream(*this); }
+TEST_F(MinidumpBoundaryTests, InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes){ VerifyMinidumpBoundaryTests_InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes(*this); }
+TEST_F(MinidumpBoundaryTests, UnalignedExceptionAndContextRecordsKeepTheirBoundedValues){ VerifyMinidumpBoundaryTests_UnalignedExceptionAndContextRecordsKeepTheirBoundedValues(*this); }
 
-TEST_F(MinidumpBoundaryTests, TruncatedThreadListCountCannotReadBeyondItsAdmittedStream){
-    auto bytes = ExceptionDump(m_testArena.arena, ThreadListStream, sizeof(ULONG));
-    const ULONG count = Limit<ULONG>::s_Max;
-    StoreDumpRecord(bytes.size() - sizeof(ULONG), count, bytes);
-    const auto actual = report(bytes);
-    ASSERT_TRUE(actual);
-    EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-}
-
-TEST_F(MinidumpBoundaryTests, ShortExceptionContextCannotBorrowSurroundingFileBytes){
-    auto bytes = ExceptionDump(m_testArena.arena, UnusedStream, 0u);
-    constexpr usize s_ExceptionOffset = sizeof(MINIDUMP_HEADER) + 2u * sizeof(MINIDUMP_DIRECTORY);
-    MINIDUMP_EXCEPTION_STREAM exception{};
-    exception.ThreadId = 1u;
-    exception.ThreadContext.DataSize = sizeof(CONTEXT) - 1u;
-    exception.ThreadContext.Rva = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM);
-    StoreDumpRecord(s_ExceptionOffset, exception, bytes);
-    const auto actual = report(bytes);
-    ASSERT_TRUE(actual);
-    EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-    EXPECT_NE(actual->find("no usable thread context"), Log::CrashReportText::npos);
-}
-
-TEST_F(MinidumpBoundaryTests, Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile){
-    for(const b8 oversizedOffset : Array<b8, 2u>{ false, true }){
-        constexpr usize s_StreamSize = offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges) + sizeof(MINIDUMP_MEMORY_DESCRIPTOR64);
-        auto bytes = ExceptionDump(m_testArena.arena, Memory64ListStream, s_StreamSize);
-        const usize streamOffset = bytes.size() - s_StreamSize;
-        const ULONG64 count = 1u;
-        const RVA64 baseRva = oversizedOffset ? (u64(1u) << 32u) + bytes.size() - 1u : bytes.size() - 1u;
-        MINIDUMP_MEMORY_DESCRIPTOR64 memory{};
-        memory.StartOfMemoryRange = 0x1000u;
-        memory.DataSize = oversizedOffset ? 1u : (u64(1u) << 32u) + 1u;
-        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, NumberOfMemoryRanges), count, bytes);
-        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, BaseRva), baseRva, bytes);
-        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), memory, bytes);
-        const auto actual = report(bytes);
-        ASSERT_TRUE(actual);
-        EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-        EXPECT_NE(actual->find("minidump contains invalid memory ranges"), Log::CrashReportText::npos);
-    }
-}
-
-TEST_F(MinidumpBoundaryTests, TruncatedModuleListCannotReadBeyondItsAdmittedStream){
-    auto bytes = ExceptionDump(m_testArena.arena, ModuleListStream, sizeof(ULONG));
-    const ULONG count = Limit<ULONG>::s_Max;
-    StoreDumpRecord(bytes.size() - sizeof(ULONG), count, bytes);
-    const auto actual = report(bytes);
-    ASSERT_TRUE(actual);
-    EXPECT_NE(actual->find("module_load=invalid_module_list"), Log::CrashReportText::npos);
-}
-
-
-TEST_F(MinidumpBoundaryTests, InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes){
-    struct InvalidName{
-        ULONG byteCount;
-        b8 terminated;
-        b8 includeTerminator;
-    };
-    for(const auto& invalid : Array<InvalidName, 4u>{ InvalidName{ 1u, true, true }, InvalidName{ Limit<ULONG>::s_Max - 1u, true, true }, InvalidName{ sizeof(wchar), false, true }, InvalidName{ sizeof(wchar), false, false } }){
-        constexpr usize s_StreamSize = offsetof(MINIDUMP_MODULE_LIST, Modules) + sizeof(MINIDUMP_MODULE);
-        auto bytes = ExceptionDump(m_testArena.arena, ModuleListStream, s_StreamSize);
-        const usize streamOffset = bytes.size() - s_StreamSize;
-        const ULONG count = 1u;
-        const RVA nameOffset = static_cast<RVA>(bytes.size());
-        MINIDUMP_MODULE module{};
-        module.ModuleNameRva = nameOffset;
-        StoreDumpRecord(streamOffset, count, bytes);
-        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MODULE_LIST, Modules), module, bytes);
-        bytes.resize(bytes.size() + sizeof(ULONG) + sizeof(wchar) * (invalid.includeTerminator ? 2u : 1u), 0u);
-        StoreDumpRecord(nameOffset, invalid.byteCount, bytes);
-        const wchar character = L'a';
-        StoreDumpRecord(nameOffset + sizeof(ULONG), character, bytes);
-        if(invalid.includeTerminator){
-            const wchar terminator = invalid.terminated ? L'\0' : L'x';
-            StoreDumpRecord(nameOffset + sizeof(ULONG) + sizeof(wchar), terminator, bytes);
-        }
-        const auto actual = report(bytes);
-        ASSERT_TRUE(actual);
-        EXPECT_NE(actual->find("module_load=invalid_module_list"), Log::CrashReportText::npos);
-    }
-}
-
-TEST_F(MinidumpBoundaryTests, UnalignedExceptionAndContextRecordsKeepTheirBoundedValues){
-    const auto original = ExceptionDump(m_testArena.arena, UnusedStream, 0u);
-    constexpr usize s_ExceptionOffset = sizeof(MINIDUMP_HEADER) + 2u * sizeof(MINIDUMP_DIRECTORY);
-    DumpBytes bytes(m_testArena.arena);
-    bytes.resize(original.size() + 1u, 0u);
-    FOUNDATION_MEMCPY(bytes.data(), bytes.size(), original.data(), s_ExceptionOffset);
-    FOUNDATION_MEMCPY(bytes.data() + s_ExceptionOffset + 1u, bytes.size() - s_ExceptionOffset - 1u, original.data() + s_ExceptionOffset, original.size() - s_ExceptionOffset);
-    MINIDUMP_DIRECTORY directory{};
-    directory.StreamType = ExceptionStream;
-    directory.Location.DataSize = sizeof(MINIDUMP_EXCEPTION_STREAM);
-    directory.Location.Rva = s_ExceptionOffset + 1u;
-    StoreDumpRecord(sizeof(MINIDUMP_HEADER), directory, bytes);
-    MINIDUMP_EXCEPTION_STREAM exception{};
-    exception.ThreadId = 1u;
-    exception.ThreadContext.DataSize = sizeof(CONTEXT);
-    exception.ThreadContext.Rva = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM) + 1u;
-    StoreDumpRecord(s_ExceptionOffset + 1u, exception, bytes);
-    const auto actual = report(bytes);
-    ASSERT_TRUE(actual);
-    EXPECT_NE(actual->find("status=decoded"), Log::CrashReportText::npos);
-    EXPECT_EQ(actual->find("status=not_decoded"), Log::CrashReportText::npos);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
+TEST(LoggerClipboardText, EmptyInputOwnsOneTerminatedNativeString){ VerifyLoggerClipboardText_EmptyInputOwnsOneTerminatedNativeString(); }
+TEST(LoggerClipboardText, MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator){ VerifyLoggerClipboardText_MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator(); }
+TEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory){ VerifyLoggerClipboardText_NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory(); }
+TEST(LoggerClipboardText, ByteCountRejectsOverflowBeforeNativeAllocation){ VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -728,111 +798,9 @@ TEST_F(MinidumpBoundaryTests, UnalignedExceptionAndContextRecordsKeepTheirBounde
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#endif
 
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-
-#include <tests/common/test_context.adhd.h>
-
-#include <global/scope_exit.h>
-#include <global/termination.h>
-
-#include <logger/server/clipboard_text_internal.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_logger_server_clipboard_text_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-
-TEST(LoggerClipboardText, EmptyInputOwnsOneTerminatedNativeString){
-    Tests::TestArena<> testArena;
-    Log::FrameDetail::MessageDeque messages(testArena.arena);
-    auto memory = Log::FrameDetail::BuildClipboardText(messages);
-    ASSERT_TRUE(memory);
-    EXPECT_GE(GlobalSize(memory->native()), sizeof(tchar));
-    const auto* const text = static_cast<const tchar*>(GlobalLock(memory->native()));
-    ASSERT_NE(text, nullptr);
-    EXPECT_EQ(text[0], tchar{});
-    SetLastError(NO_ERROR);
-    EXPECT_TRUE(GlobalUnlock(memory->native()) || GetLastError() == NO_ERROR);
-}
-
-TEST(LoggerClipboardText, MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator){
-    Tests::TestArena<> testArena;
-    Log::FrameDetail::MessageDeque messages(testArena.arena);
-    messages.emplace_back(Log::LogString(FOUNDATION_TEXT("first"), testArena.arena), Core::Common::LogType::Info);
-    messages.emplace_back(Log::LogString(FOUNDATION_TEXT("\uD55C\uAE00 \u03A9"), testArena.arena), Core::Common::LogType::Warning);
-    auto memory = Log::FrameDetail::BuildClipboardText(messages);
-    ASSERT_TRUE(memory);
-    constexpr TStringView s_Expected = FOUNDATION_TEXT("first\r\n\uD55C\uAE00 \u03A9\r\n");
-    EXPECT_GE(GlobalSize(memory->native()), (s_Expected.size() + 1u) * sizeof(tchar));
-    const auto* const text = static_cast<const tchar*>(GlobalLock(memory->native()));
-    ASSERT_NE(text, nullptr);
-    EXPECT_EQ(TStringView(text, s_Expected.size()), s_Expected);
-    EXPECT_EQ(text[s_Expected.size()], tchar{});
-    SetLastError(NO_ERROR);
-    EXPECT_TRUE(GlobalUnlock(memory->native()) || GetLastError() == NO_ERROR);
-}
-
-TEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory){
-    Tests::TestArena<> testArena;
-    Log::FrameDetail::MessageDeque messages(testArena.arena);
-    HGLOBAL freed = nullptr;
-    {
-        auto memory = Log::FrameDetail::BuildClipboardText(messages);
-        ASSERT_TRUE(memory);
-        freed = memory->native();
-    }
-    EXPECT_EQ(GlobalFlags(freed), GMEM_INVALID_HANDLE);
-    HGLOBAL transferred = nullptr;
-    {
-        auto memory = Log::FrameDetail::BuildClipboardText(messages);
-        ASSERT_TRUE(memory);
-        transferred = memory->native();
-        memory->release();
-    }
-    ScopeExit cleanup([&]()noexcept{
-        if(transferred && GlobalFree(transferred))
-            TerminateInvariant();
-    });
-    EXPECT_NE(GlobalFlags(transferred), GMEM_INVALID_HANDLE);
-    EXPECT_NE(GlobalSize(transferred), 0u);
-}
-
-TEST(LoggerClipboardText, ByteCountRejectsOverflowBeforeNativeAllocation){
-    const auto empty = Log::FrameDetail::ClipboardByteCount(0u);
-    ASSERT_TRUE(empty);
-    EXPECT_EQ(*empty, sizeof(tchar));
-    constexpr usize s_MaxCharacters = (Limit<usize>::s_Max / sizeof(tchar)) - 1u;
-    const auto boundary = Log::FrameDetail::ClipboardByteCount(s_MaxCharacters);
-    ASSERT_TRUE(boundary);
-    EXPECT_EQ(*boundary, (s_MaxCharacters + 1u) * sizeof(tchar));
-    const auto overflow = Log::FrameDetail::ClipboardByteCount(s_MaxCharacters + 1u);
-    ASSERT_FALSE(overflow);
-    EXPECT_EQ(overflow.error(), MakeErrorCode(ErrorCondition::value_too_large));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#endif
-
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

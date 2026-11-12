@@ -1,0 +1,1168 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include "ui_core_and_list_fixtures.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiRadioGroupTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_RadioPanelKey = "panel";
+inline constexpr AStringView s_RadioGroupKey = "radio";
+
+namespace RadioCallbackSite{
+    enum Enum : u8{ None, Instance, Revision, Count, Key, Text, Enabled };
+};
+
+namespace RadioMutation = ::__hidden_ui_glyph_sdf_tests::UiFixtureRadioMutation;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Radio group source with expiring label views and reentrant callback hooks.
+class RadioSource final : public IListDataSource{
+public:
+    virtual ~RadioSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const override{ callback(RadioCallbackSite::Instance); return m_generation; }
+    [[nodiscard]] virtual u64 revision()const override{ callback(RadioCallbackSite::Revision); return m_contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const override{ callback(RadioCallbackSite::Count); return rawCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const override{ callback(RadioCallbackSite::Key); return rawKey(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
+        callback(RadioCallbackSite::Enabled);
+        return index < rawCount() && !m_allDisabled && rawKey(index) != m_disabled;
+    }
+    void resetCounters()const noexcept;
+    void armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const b8 awayAndBack = false)noexcept{
+        m_state = &state;
+        m_selected = keyValue;
+        m_site = site;
+        m_mutation = awayAndBack ? RadioMutation::SelectAwayBack : RadioMutation::Select;
+    }
+    void armSource(const RadioCallbackSite::Enum site, const b8 replacement = false)noexcept{
+        m_site = site;
+        m_mutation = replacement ? RadioMutation::Replacement : RadioMutation::Revision;
+    }
+    void armReentry(Builder& builder, const RadioCallbackSite::Enum site, const b8 panel = false)noexcept{
+        m_builder = &builder;
+        m_site = site;
+        m_mutation = panel ? RadioMutation::PanelBuilder : RadioMutation::ResetBuilder;
+    }
+    void armClose(PopupState& popup, const RadioCallbackSite::Enum site)noexcept{
+        m_popup = &popup;
+        m_site = site;
+        m_mutation = RadioMutation::ClosePopup;
+    }
+
+
+private:
+    [[nodiscard]] u64 rawCount()const noexcept;
+    [[nodiscard]] u64 rawKey(u64 index)const noexcept;
+    void callback(RadioCallbackSite::Enum site)const;
+
+
+public:
+    mutable u64 m_generation = 1801u;
+    mutable u64 m_contentRevision = 1u;
+    u64 m_count = 5u;
+    u64 m_removed = 0u;
+    u64 m_disabled = 30u;
+    mutable u64 m_calls = 0u;
+    mutable u64 m_textCalls = 0u;
+    mutable u64 m_mutations = 0u;
+    mutable u64 m_callbacksAfterMutation = 0u;
+    b8 m_reverse = false;
+    b8 m_duplicate = false;
+    b8 m_allDisabled = false;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
+    u64 m_selected = 0u;
+    mutable Array<char, 4u> m_label{};
+
+
+private:
+    RadioGroupState* m_state = nullptr;
+    Builder* m_builder = nullptr;
+    PopupState* m_popup = nullptr;
+    mutable RadioCallbackSite::Enum m_site = RadioCallbackSite::None;
+    RadioMutation::Enum m_mutation = RadioMutation::None;
+};
+
+class RadioGroupFixture : public WidgetFixture{
+public:
+    using WidgetFixture::press;
+
+
+public:
+    void setUpWidgetBase(){ WidgetFixture::SetUp(); }
+    virtual void SetUp()override;
+    void configureRadioSkin(const b8 fallbackOnly = false){
+        configureSkin();
+        UiSkin::RegionVector regions(m_arena);
+        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
+        constexpr Array<StringView, 6> s_Names{ "radio.normal", "radio.checked", "radio.mark", "checkbox.normal", "checkbox.checked", "checkbox.mark" };
+        for(u32 index = 0u; index < 6u; ++index){
+            if(fallbackOnly && index < 3u)
+                continue;
+            UiSkinRegion region;
+            const auto regionName = Name::FromText(s_Names[index]);
+            ASSERT_TRUE(regionName);
+            region.name = *regionName;
+            region.rectangle = { 88u + index * 8u, 0u, 8u, 8u };
+            if(index % 3u != 2u){
+                region.minimumWidth = 24.0f;
+                region.minimumHeight = 24.0f;
+            }
+            regions.push_back(Move(region));
+        }
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 144u, 16u, 1.0f, Move(regions));
+    }
+    [[nodiscard]] b8 declare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] b8 declareSource(u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] b8 prepare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] b8 accept(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
+    [[nodiscard]] WidgetId host()const;
+    [[nodiscard]] const RadioGroupChoicePlacement* choice(const u64 keyValue, const RadioGroupState& state)const noexcept{
+        const RadioGroupPlacement& placement = state.placement();
+        for(u32 index = 0u; index < placement.count; ++index){
+            if(placement.rows[index].key == keyValue)
+                return &placement.rows[index];
+        }
+        return nullptr;
+    }
+    [[nodiscard]] b8 hasChoice(const u64 keyValue, const RadioGroupState& state)const noexcept{ return choice(keyValue, state) != nullptr; }
+    [[nodiscard]] Expected<RadioGroupChoicePlacement> tryChoice(u64 keyValue, const RadioGroupState& state)const noexcept;
+    [[nodiscard]] Point choicePoint(u64 keyValue)const noexcept;
+    [[nodiscard]] AcceptedInputState<128u> accepted()const noexcept{ return CaptureAcceptedInput<128u>(m_context.input()); }
+    void expectAccepted(const AcceptedInputState<128u>& saved, const b8 focus = true, const b8 popupScopes = true)const{
+        ExpectAcceptedInput(m_context.input(), saved, false, focus, popupScopes, true);
+    }
+    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept;
+
+
+public:
+    RadioSource m_source;
+    RadioGroupState m_state;
+    RadioGroupResult m_result;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiSearchComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiComboTests;
+
+inline constexpr AStringView s_CallbackQuery = "callback";
+inline constexpr AStringView s_EmptyResultQuery = "None";
+inline constexpr AStringView s_SecondHalfQuery = "Second";
+inline constexpr AStringView s_PreeditText = "preedit";
+
+namespace FilterMode = ::__hidden_ui_glyph_sdf_tests::UiFixtureSearchFilterMode;
+
+class FilterView final : public IListDataSource{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const override{
+        return UiWidgetTests::FindSingleDisabledFixtureRowByKey(rowCount(), start, reverse, key(start), full->disabled);
+    }
+    [[nodiscard]] virtual StringView text(const u64 index)const override{
+        if(textMutation){
+            EditModel& query = *MakeNotNull(Exchange(textMutation, nullptr));
+            if(!query.setText(s_CallbackQuery))
+                ADD_FAILURE() << "callback query change failed";
+        }
+        return full->text(key(index) - 1u);
+    }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
+        if(enabledMutation){
+            EditModel& query = *MakeNotNull(Exchange(enabledMutation, nullptr));
+            if(!query.setText(s_EmptyResultQuery))
+                ADD_FAILURE() << "enabled callback query change failed";
+        }
+        return index < rowCount() && full->enabled(key(index) - 1u);
+    }
+    void armTextMutation(EditModel& model)noexcept{ textMutation = &model; }
+    void armEnabledMutation(EditModel& model)noexcept{ enabledMutation = &model; }
+
+
+public:
+    const ComboSource* full = nullptr;
+    u64 generation = 1701u;
+    u64 contentRevision = 1u;
+    mutable EditModel* textMutation = nullptr;
+    mutable EditModel* enabledMutation = nullptr;
+    FilterMode::Enum mode = FilterMode::All;
+};
+
+class SearchSource final : public ISearchableListDataSource{
+public:
+    explicit SearchSource(Core::Alloc::GlobalArena& arena)noexcept
+        : m_query(arena)
+    {
+        view.full = &full;
+        alternate.full = &full;
+    }
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return full.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return full.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return full.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return full.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return full.findEnabled(start, reverse); }
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
+        if(fullMutation){
+            EditModel& query = *MakeNotNull(Exchange(fullMutation, nullptr));
+            if(!query.setText(s_EmptyResultQuery))
+                ADD_FAILURE() << "full source callback query change failed";
+        }
+        return full.enabled(index);
+    }
+    [[nodiscard]] virtual b8 filter(AStringView query)override;
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return alternateView ? alternate : view; }
+    void armFilterMutation(EditModel& model)noexcept{ filterMutation = &model; }
+    void armFullMutation(EditModel& model)noexcept{ fullMutation = &model; }
+
+
+public:
+    ComboSource full;
+    FilterView view;
+    FilterView alternate;
+    EditModel* filterMutation = nullptr;
+    mutable EditModel* fullMutation = nullptr;
+    u64 filterCalls = 0u;
+    b8 alternateView = false;
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_query;
+};
+
+class SearchEditHost final : public IEditBoxHost{
+public:
+    explicit SearchEditHost(Context& context)noexcept : m_context(context){}
+
+
+public:
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
+        ++contextScopedLoans;
+        return {};
+    }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)override;
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
+        ++publications;
+        publishContextPopup = m_context.popupToken();
+        publishedComposing = view.composing();
+        if(publishMutation){
+            EditModel& query = *MakeNotNull(Exchange(publishMutation, nullptr));
+            return query.setText("published");
+        }
+        return true;
+    }
+    void text(AStringView value)noexcept;
+    void armPublishMutation(EditModel& model)noexcept{ publishMutation = &model; }
+
+
+public:
+    PopupToken lastPopup;
+    PopupToken loanContextPopup;
+    PopupToken publishContextPopup;
+    EditModel* publishMutation = nullptr;
+    u64 loans = 0u;
+    u64 contextScopedLoans = 0u;
+    u64 publications = 0u;
+    b8 submitted = false;
+    b8 cancelled = false;
+    b8 preedit = false;
+    b8 publishedComposing = false;
+    Context& m_context;
+    AStringView m_nextText;
+    b8 m_changeText = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SearchFixture : public ComboFixture{
+public:
+    [[nodiscard]] static SearchComboOptions Options()noexcept;
+
+
+public:
+    SearchFixture()
+        : m_searchSource(m_arena)
+        , m_search(m_arena)
+        , m_host(m_context)
+    {}
+
+
+public:
+    void setUpWidgetBase(){ WidgetFixture::SetUp(); }
+    virtual void SetUp()override;
+    [[nodiscard]] b8 declareSearch(u64 generation);
+    [[nodiscard]] b8 prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
+    [[nodiscard]] b8 acceptSearch(const u64 generation){ return prepareSearch(generation) && m_context.commitFrame(generation); }
+    [[nodiscard]] WidgetId query(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "query"); }
+    [[nodiscard]] b8 openSearch(u64 generation);
+
+
+public:
+    SearchSource m_searchSource;
+    SearchComboState m_search;
+    SearchEditHost m_host;
+    SearchComboResult m_searchResult;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiSliderTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_SliderPanelKey = "panel";
+inline constexpr AStringView s_SliderKey = "slider";
+inline constexpr AStringView s_LaterCallbackText = "Later callback";
+
+namespace SliderCallbackMutation = ::__hidden_ui_glyph_sdf_tests::UiFixtureSliderCallbackMutation;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A later deferred list label can mutate an earlier slider loan or try to reenter its finalizing Builder.
+class SliderCallbackSource final : public UiComboTests::ComboSource{
+public:
+    SliderCallbackSource()noexcept{
+        count = 1u;
+        generation = 2501u;
+    }
+
+
+public:
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    void arm(const SliderCallbackMutation::Enum mutation, SliderState* state = nullptr, Builder* builder = nullptr, PopupState* popup = nullptr)noexcept{
+        m_mutation = mutation;
+        m_state = state;
+        m_builder = builder;
+        m_popup = popup;
+        clearCounters();
+    }
+    void armState(const SliderCallbackMutation::Enum mutation, SliderState& state)noexcept{ arm(mutation, &state, nullptr, nullptr); }
+    void armBuilder(const SliderCallbackMutation::Enum mutation, Builder& builder)noexcept{ arm(mutation, nullptr, &builder, nullptr); }
+    void armPopup(const SliderCallbackMutation::Enum mutation, PopupState& popup)noexcept{ arm(mutation, nullptr, nullptr, &popup); }
+    void clearCounters()const noexcept;
+
+
+public:
+    mutable u32 m_calls = 0u;
+    mutable u32 m_mutations = 0u;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
+
+
+private:
+    SliderState* m_state = nullptr;
+    Builder* m_builder = nullptr;
+    PopupState* m_popup = nullptr;
+    mutable SliderCallbackMutation::Enum m_mutation = SliderCallbackMutation::None;
+};
+
+class SliderFixture : public WidgetFixture{
+public:
+    using WidgetFixture::press;
+
+
+public:
+    [[nodiscard]] static SliderOptions Options()noexcept;
+    [[nodiscard]] static ListOptions SiblingOptions()noexcept;
+
+
+public:
+    void setUpWidgetBase(){ WidgetFixture::SetUp(); }
+    virtual void SetUp()override;
+    void configureSliderSkin(){
+        configureSkin();
+        UiSkin::RegionVector regions(m_arena);
+        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
+        constexpr Array<StringView, 3> s_Names{ "slider.track", "slider.thumb.normal", "slider.thumb.hover" };
+        for(u32 index = 0u; index < 3u; ++index){
+            UiSkinRegion region;
+            const auto regionName = Name::FromText(s_Names[index]);
+            ASSERT_TRUE(regionName);
+            region.name = *regionName;
+            region.rectangle = { 96u + index * 32u, 0u, 24u, 24u };
+            region.drawMode = UiSkinDrawMode::NineSlice;
+            region.sliceInsets = { 6u, 6u, 6u, 6u };
+            region.minimumWidth = 12.0f;
+            region.minimumHeight = 12.0f;
+            regions.push_back(Move(region));
+        }
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 192u, 32u, 1.0f, Move(regions));
+    }
+    [[nodiscard]] b8 declare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 sibling(AStringView key = "later");
+    [[nodiscard]] WidgetId host()const;
+    [[nodiscard]] WidgetId track()const;
+    [[nodiscard]] WidgetId thumb()const;
+    [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const noexcept;
+    [[nodiscard]] Point thumbPoint()const noexcept;
+    [[nodiscard]] AcceptedInputState<64u> accepted()const noexcept{ return CaptureAcceptedInput<64u>(m_context.input()); }
+    void expectAccepted(const AcceptedInputState<64u>& saved, const b8 popupFocus = true)const{
+        ExpectAcceptedInput(m_context.input(), saved, false, popupFocus, popupFocus, true);
+    }
+
+
+public:
+    SliderState m_state;
+    SliderCallbackSource m_laterSource;
+    ListState m_laterState;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiTextAreaTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiComboTests;
+
+inline constexpr AStringView s_TextAreaPanelKey = "panel";
+inline constexpr AStringView s_TextAreaKey = "area";
+
+namespace AreaEventKind = ::__hidden_ui_glyph_sdf_tests::UiFixtureAreaEventKind;
+
+struct AreaEvent{
+    AString<Core::Alloc::GlobalArena> text;
+    usize anchor = 0u;
+    usize caret = 0u;
+    InputCommandIntent intent;
+    EditAction::Enum action = EditAction::Submit;
+    AreaEventKind::Enum kind = AreaEventKind::Text;
+
+
+public:
+    explicit AreaEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+struct AreaPublication{
+    AString<Core::Alloc::GlobalArena> text;
+    EditBoxPlacement placement;
+    PopupToken popup;
+
+
+public:
+    explicit AreaPublication(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+struct AreaResolution{
+    AString<Core::Alloc::GlobalArena> text;
+    EditNavigationSnapshot preferred;
+    Expected<EditNavigationResult> result = MakeUnexpected(Failure{});
+    usize caret = 0u;
+
+
+public:
+    explicit AreaResolution(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+class TextAreaHost final : public IEditBoxHost{
+public:
+    TextAreaHost(Core::Alloc::GlobalArena& arena, const Context& context)
+        : publications(arena)
+        , resolutions(arena)
+        , actionTexts(arena)
+        , m_arena(arena)
+        , m_context(context)
+        , m_events(arena)
+        , m_bindings(arena)
+    {}
+    virtual ~TextAreaHost()noexcept override = default;
+
+
+public:
+    void text(const AStringView value){
+        AreaEvent event(m_arena);
+        event.text.assign(value.data(), value.size());
+        m_events.push_back(Move(event));
+    }
+    void key(const i32 value, const b8 control = false, const b8 shift = false){
+        AreaEvent event(m_arena);
+        event.kind = AreaEventKind::Key;
+        const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0);
+        event.intent = m_bindings.resolve(value, modifiers);
+        m_events.push_back(Move(event));
+    }
+    void selection(const usize anchor, const usize caret){
+        AreaEvent event(m_arena);
+        event.kind = AreaEventKind::Selection;
+        event.anchor = anchor;
+        event.caret = caret;
+        m_events.push_back(Move(event));
+    }
+    void action(const EditAction::Enum value){
+        AreaEvent event(m_arena);
+        event.kind = AreaEventKind::Action;
+        event.action = value;
+        m_events.push_back(Move(event));
+    }
+
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
+        ++ordinaryLoans;
+        return {};
+    }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{
+        ++actionLoans;
+        return {};
+    }
+    [[nodiscard]] virtual EditBoxResult editNavigated(
+        const WidgetState& widget,
+        const EditBoxOptions& options,
+        const PopupToken& popup,
+        EditModel& model,
+        EditNavigationState& navigation,
+        IEditNavigationResolver& resolver,
+        IEditActionSink& sink
+    )override;
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions&)override{
+        ++publishes;
+        publications.emplace_back(m_arena);
+        AreaPublication& record = publications.back();
+        record.text.assign(view.displayText().data(), view.displayText().size());
+        record.placement = placement;
+        record.popup = m_context.popupToken();
+        viewportHeight = placement.content.height;
+        if(publishHook && (!publishHookWidget.valid() || publishHookWidget == widget.id)){
+            Function<void()> hook = Move(publishHook);
+            publishHook = {};
+            hook();
+        }
+        return true;
+    }
+
+
+private:
+    [[nodiscard]] b8 applyAction(EditAction::Enum action, b8 readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result);
+
+
+public:
+    PaintVector<AreaPublication> publications;
+    PaintVector<AreaResolution> resolutions;
+    PaintVector<AString<Core::Alloc::GlobalArena>> actionTexts;
+    Function<void()> loanHook;
+    Function<void()> publishHook;
+    WidgetId loanHookWidget;
+    WidgetId publishHookWidget;
+    PopupToken lastPopup;
+    usize loans = 0u;
+    usize ordinaryLoans = 0u;
+    usize actionLoans = 0u;
+    usize publishes = 0u;
+    f32 viewportHeight = 80.0f;
+    f32 seededColumn = 0.0f;
+    b8 seedColumn = false;
+    b8 focused = true;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    const Context& m_context;
+    PaintVector<AreaEvent> m_events;
+    InputBindings m_bindings;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextAreaFixture : public WidgetFixture{
+public:
+    TextAreaFixture()
+        : m_model(m_arena, {}, EditTextMode::Multiline)
+        , m_host(m_arena, m_context)
+    {}
+
+
+public:
+    [[nodiscard]] b8 beginArea(const u64 generation, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+        return begin(generation) && m_builder.beginPanel(s_TextAreaPanelKey, bounds);
+    }
+    [[nodiscard]] b8 acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
+    [[nodiscard]] b8 frameArea(u64 generation, const TextAreaOptions& options = {}, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f });
+    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
+
+
+public:
+    EditModel m_model;
+    TextAreaState m_state;
+    TextAreaHost m_host;
+    EditBoxResult m_result;
+};
+
+class TextAreaLoanFixture : public TextAreaFixture{
+public:
+    [[nodiscard]] static TextAreaOptions AreaOptions()noexcept;
+
+
+public:
+    [[nodiscard]] b8 acceptBaseline();
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::LargeLoanParentOptions());
+    }
+    [[nodiscard]] b8 finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
+    [[nodiscard]] UiWidgetTests::AcceptedInputState<16u> accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
+    void expectRejected(const UiWidgetTests::AcceptedInputState<16u>& frame){
+        EXPECT_TRUE(m_builder.failed());
+        EXPECT_TRUE(m_context.failed());
+        EXPECT_FALSE(m_context.ready());
+        EXPECT_FALSE(m_context.commitFrame(2u));
+        UiWidgetTests::ExpectAcceptedInput(m_context.input(), frame, true, false, true, false);
+    }
+
+
+public:
+    PopupState m_parent;
+    PopupState m_child;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+namespace __hidden_ui_glyph_sdf_tests{
+using RadioGroupOptions = ::NWB::Impl::Ui::RadioGroupOptions;
+using RadioGroupState = ::NWB::Impl::Ui::RadioGroupState;
+using RadioGroupPlacement = ::NWB::Impl::Ui::RadioGroupPlacement;
+using RadioGroupChoicePlacement = ::NWB::Impl::Ui::RadioGroupChoicePlacement;
+using SliderState = ::NWB::Impl::Ui::SliderState;
+using EditNavigationState = ::NWB::Impl::Ui::EditNavigationState;
+using EditActionEnum = ::NWB::Impl::Ui::EditAction::Enum;
+using RadioSource = ::NWB::UiRadioGroupTests::RadioSource;
+using RadioGroupFixture = ::NWB::UiRadioGroupTests::RadioGroupFixture;
+using SearchEditHost = ::NWB::UiSearchComboTests::SearchEditHost;
+using SearchFixture = ::NWB::UiSearchComboTests::SearchFixture;
+using SliderCallbackSource = ::NWB::UiSliderTests::SliderCallbackSource;
+using SliderFixture = ::NWB::UiSliderTests::SliderFixture;
+using TextAreaFixture = ::NWB::UiTextAreaTests::TextAreaFixture;
+using TextAreaLoanFixture = ::NWB::UiTextAreaTests::TextAreaLoanFixture;
+using ::NWB::UiRadioGroupTests::s_RadioPanelKey;
+using ::NWB::UiRadioGroupTests::s_RadioGroupKey;
+using ::NWB::UiSearchComboTests::s_PreeditText;
+using ::NWB::UiSliderTests::s_SliderPanelKey;
+using ::NWB::UiSliderTests::s_SliderKey;
+using ::NWB::UiTextAreaTests::s_TextAreaKey;
+
+SliderOptions MakeSliderFixtureOptions()noexcept;
+ListOptions MakeSliderSiblingListOptions()noexcept;
+Point ComputeSliderTrackPoint(const SliderPlacement& placement, f64 normalized)noexcept;
+SearchComboOptions MakeSearchComboFixtureOptions()noexcept;
+u64 ComputeRadioFixtureRawCount(u64 count, u64 removed)noexcept;
+u64 ComputeRadioFixtureRawKey(u64 count, u64 removed, b8 reverse, b8 duplicate, u64 index)noexcept;
+u64 ComputeSearchFilterRowCount(UiFixtureSearchFilterMode::Enum mode, u64 fullCount)noexcept;
+u64 ComputeSearchFilterRowKey(UiFixtureSearchFilterMode::Enum mode, u64 index)noexcept;
+Expected<u64> FindSearchFilterRowIndex(UiFixtureSearchFilterMode::Enum mode, u64 fullCount, u64 value)noexcept;
+
+UiFixtureSearchFilterMode::Enum ResolveSearchFilterMode(AStringView query, AStringView secondHalfQuery, AStringView emptyResultQuery)noexcept;
+Expected<u64> FindRadioFixtureIndexOf(u64 count, u64 removed, b8 reverseFlag, b8 duplicate, u64 value)noexcept;
+Expected<u64> FindRadioFixtureEnabledIndex(u64 count, u64 removed, b8 reverseFlag, b8 duplicate, b8 allDisabled, u64 disabledKey, u64 start, b8 backwards)noexcept;
+void ResetRadioSourceCounters(RadioSource& self)noexcept;
+StringView FormatRadioSourceLabel(RadioSource& self, u64 index)noexcept;
+void ApplyRadioSourceStateMutation(UiFixtureRadioMutation::Enum mutation, u64 selected, RadioGroupState& state)noexcept;
+void ApplyRadioSourceBuilderMutation(UiFixtureRadioMutation::Enum mutation, RadioSource& self, Builder& builder)noexcept;
+void SetUpRadioGroupFixture(RadioGroupFixture& self)noexcept;
+b8 DeclareRadioGroupFixture(RadioGroupFixture& self, u64 generation, const RadioGroupOptions& options, const Rect& bounds)noexcept;
+b8 DeclareRadioGroupFixtureSource(RadioGroupFixture& self, u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds)noexcept;
+b8 PrepareRadioGroupFixture(RadioGroupFixture& self, u64 generation, const RadioGroupOptions& options, const Rect& bounds)noexcept;
+b8 AcceptRadioGroupFixture(RadioGroupFixture& self, u64 generation, const RadioGroupOptions& options, const Rect& bounds)noexcept;
+WidgetId RadioGroupFixtureHost(const RadioGroupFixture& self)noexcept;
+Expected<RadioGroupChoicePlacement> TryFindRadioGroupChoice(u64 keyValue, const RadioGroupState& state)noexcept;
+Point ComputeRadioGroupChoicePoint(u64 keyValue, const RadioGroupState& state)noexcept;
+EditBoxResult EditSearchHostInPopup(SearchEditHost& self, const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)noexcept;
+void SetSearchHostNextText(SearchEditHost& self, AStringView value)noexcept;
+void SetUpSearchFixture(SearchFixture& self)noexcept;
+b8 DeclareSearchFixture(SearchFixture& self, u64 generation)noexcept;
+b8 OpenSearchFixture(SearchFixture& self, u64 generation)noexcept;
+
+TextAreaOptions MakeTextAreaLoanFixtureOptions()noexcept;
+void ClearSliderCallbackCounters(SliderCallbackSource& self)noexcept;
+void ApplySliderCallbackStateMutation(UiFixtureSliderCallbackMutation::Enum mutation, SliderState& state)noexcept;
+void ApplySliderCallbackBuilderMutation(UiFixtureSliderCallbackMutation::Enum mutation, SliderCallbackSource& self, Builder& builder)noexcept;
+void SetUpSliderFixture(SliderFixture& self)noexcept;
+b8 DeclareSliderFixture(SliderFixture& self, u64 generation, const SliderOptions& settings, const Rect& bounds)noexcept;
+b8 PrepareSliderFixture(SliderFixture& self, u64 generation, const SliderOptions& settings, const Rect& bounds)noexcept;
+b8 AcceptSliderFixture(SliderFixture& self, u64 generation, const SliderOptions& settings, const Rect& bounds)noexcept;
+b8 DeclareSliderSibling(SliderFixture& self, AStringView key)noexcept;
+WidgetId SliderFixtureHost(const SliderFixture& self)noexcept;
+WidgetId SliderFixtureTrack(const SliderFixture& self)noexcept;
+WidgetId SliderFixtureThumb(const SliderFixture& self)noexcept;
+Point ComputeSliderFixtureThumbPoint(const SliderFixture& self)noexcept;
+void ApplyTextAreaHostActionFlags(const EditActionEnum& action, EditNavigationState& navigation, EditBoxResult& result)noexcept;
+b8 FrameTextAreaFixture(TextAreaFixture& self, u64 generation, const TextAreaOptions& options, const Rect& bounds)noexcept;
+b8 AcceptTextAreaLoanBaseline(TextAreaLoanFixture& self)noexcept;
+};
+
+NWB_BEGIN
+namespace UiRadioGroupTests{
+NWB_INLINE Expected<u64> RadioSource::indexOf(const u64 value)const noexcept{
+    callback(RadioCallbackSite::None);
+    return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureIndexOf(m_count, m_removed, m_reverse, m_duplicate, value);
+}
+NWB_INLINE Expected<u64> RadioSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    callback(RadioCallbackSite::None);
+    return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureEnabledIndex(m_count, m_removed, m_reverse, m_duplicate, m_allDisabled, m_disabled, start, reverse);
+}
+NWB_INLINE StringView RadioSource::text(const u64 index)const{
+    callback(RadioCallbackSite::Text);
+    return ::__hidden_ui_glyph_sdf_tests::FormatRadioSourceLabel(const_cast<RadioSource&>(*this), index);
+}
+NWB_INLINE void RadioSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetRadioSourceCounters(const_cast<RadioSource&>(*this)); }
+NWB_INLINE u64 RadioSource::rawCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawCount(m_count, m_removed); }
+NWB_INLINE u64 RadioSource::rawKey(const u64 index)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawKey(m_count, m_removed, m_reverse, m_duplicate, index);
+}
+NWB_INLINE void RadioSource::callback(const RadioCallbackSite::Enum site)const{
+    ++m_calls;
+    m_label.fill('?');
+    if(m_mutations != 0u)
+        ++m_callbacksAfterMutation;
+    if(m_site == RadioCallbackSite::None || m_site != site)
+        return;
+    m_site = RadioCallbackSite::None;
+    ++m_mutations;
+    if(m_mutation == RadioMutation::Select || m_mutation == RadioMutation::SelectAwayBack)
+        ::__hidden_ui_glyph_sdf_tests::ApplyRadioSourceStateMutation(m_mutation, m_selected, *m_state);
+    else if(m_mutation == RadioMutation::Revision)
+        ++m_contentRevision;
+    else if(m_mutation == RadioMutation::Replacement)
+        ++m_generation;
+    else if(m_mutation == RadioMutation::ResetBuilder || m_mutation == RadioMutation::PanelBuilder)
+        ::__hidden_ui_glyph_sdf_tests::ApplyRadioSourceBuilderMutation(m_mutation, const_cast<RadioSource&>(*this), *m_builder);
+    else if(m_mutation == RadioMutation::ClosePopup)
+        m_popup->close();
+}
+NWB_INLINE void RadioGroupFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpRadioGroupFixture(*this); }
+NWB_INLINE b8 RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareRadioGroupFixture(*this, generation, options, bounds);
+}
+NWB_INLINE b8 RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareRadioGroupFixtureSource(*this, generation, source, state, options, bounds);
+}
+NWB_INLINE b8 RadioGroupFixture::prepare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareRadioGroupFixture(*this, generation, options, bounds);
+}
+NWB_INLINE b8 RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptRadioGroupFixture(*this, generation, options, bounds);
+}
+NWB_INLINE WidgetId RadioGroupFixture::host()const{ return ::__hidden_ui_glyph_sdf_tests::RadioGroupFixtureHost(*this); }
+NWB_INLINE Expected<RadioGroupChoicePlacement> RadioGroupFixture::tryChoice(const u64 keyValue, const RadioGroupState& state)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::TryFindRadioGroupChoice(keyValue, state);
+}
+NWB_INLINE Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeRadioGroupChoicePoint(keyValue, m_state);
+}
+NWB_INLINE usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
+    const UiSkinRegion* region = m_skin.findRegion(name);
+    return region ? ::__hidden_ui_glyph_sdf_tests::CountUiSkinRegionQuads(*region, m_skin.atlasWidth(), snapshot) : 0u;
+}
+};
+namespace UiSearchComboTests{
+NWB_INLINE u64 FilterView::rowCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowCount(mode, full->count); }
+NWB_INLINE u64 FilterView::key(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowKey(mode, index); }
+NWB_INLINE Expected<u64> FilterView::indexOf(const u64 value)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FindSearchFilterRowIndex(mode, full->count, value); }
+NWB_INLINE b8 SearchSource::filter(const AStringView query){
+    ++filterCalls;
+    if(filterMutation){
+        EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
+        if(!model.setText(s_CallbackQuery))
+            return false;
+    }
+    const AStringView previous{ m_query.data(), m_query.size() };
+    if(previous != query){
+        m_query.assign(query.data(), query.size());
+        ++view.contentRevision;
+    }
+    view.mode = ::__hidden_ui_glyph_sdf_tests::ResolveSearchFilterMode(query, s_SecondHalfQuery, s_EmptyResultQuery);
+    return true;
+}
+NWB_INLINE EditBoxResult SearchEditHost::editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model){
+    return ::__hidden_ui_glyph_sdf_tests::EditSearchHostInPopup(*this, widget, options, popup, model);
+}
+NWB_INLINE void SearchEditHost::text(const AStringView value)noexcept{ ::__hidden_ui_glyph_sdf_tests::SetSearchHostNextText(*this, value); }
+NWB_INLINE SearchComboOptions SearchFixture::Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSearchComboFixtureOptions(); }
+NWB_INLINE void SearchFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpSearchFixture(*this); }
+NWB_INLINE b8 SearchFixture::declareSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::DeclareSearchFixture(*this, generation); }
+NWB_INLINE b8 SearchFixture::openSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenSearchFixture(*this, generation); }
+};
+namespace UiSliderTests{
+NWB_INLINE StringView SliderCallbackSource::text(const u64)const{
+    ++m_calls;
+    if(m_mutation == SliderCallbackMutation::None)
+        return s_LaterCallbackText;
+    const SliderCallbackMutation::Enum mutation = m_mutation;
+    m_mutation = SliderCallbackMutation::None;
+    ++m_mutations;
+    if(mutation == SliderCallbackMutation::SameValue || mutation == SliderCallbackMutation::AwayAndBack || mutation == SliderCallbackMutation::SetValue)
+        ::__hidden_ui_glyph_sdf_tests::ApplySliderCallbackStateMutation(mutation, *m_state);
+    else if(mutation == SliderCallbackMutation::ResetBuilder || mutation == SliderCallbackMutation::PanelBuilder)
+        ::__hidden_ui_glyph_sdf_tests::ApplySliderCallbackBuilderMutation(mutation, const_cast<SliderCallbackSource&>(*this), *m_builder);
+    else if(mutation == SliderCallbackMutation::ClosePopup)
+        m_popup->close();
+    return s_LaterCallbackText;
+}
+NWB_INLINE void SliderCallbackSource::clearCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ClearSliderCallbackCounters(const_cast<SliderCallbackSource&>(*this)); }
+NWB_INLINE SliderOptions SliderFixture::Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSliderFixtureOptions(); }
+NWB_INLINE ListOptions SliderFixture::SiblingOptions()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSliderSiblingListOptions(); }
+NWB_INLINE void SliderFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpSliderFixture(*this); }
+NWB_INLINE b8 SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareSliderFixture(*this, generation, settings, bounds);
+}
+NWB_INLINE b8 SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareSliderFixture(*this, generation, settings, bounds);
+}
+NWB_INLINE b8 SliderFixture::accept(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptSliderFixture(*this, generation, settings, bounds);
+}
+NWB_INLINE b8 SliderFixture::sibling(const AStringView key){ return ::__hidden_ui_glyph_sdf_tests::DeclareSliderSibling(*this, key); }
+NWB_INLINE WidgetId SliderFixture::host()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureHost(*this); }
+NWB_INLINE WidgetId SliderFixture::track()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureTrack(*this); }
+NWB_INLINE WidgetId SliderFixture::thumb()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureThumb(*this); }
+NWB_INLINE Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeSliderTrackPoint(state.placement(), normalized);
+}
+NWB_INLINE Point SliderFixture::thumbPoint()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSliderFixtureThumbPoint(*this); }
+};
+namespace UiTextAreaTests{
+NWB_INLINE EditBoxResult TextAreaHost::editNavigated(
+    const WidgetState& widget,
+    const EditBoxOptions& options,
+    const PopupToken& popup,
+    EditModel& model,
+    EditNavigationState& navigation,
+    IEditNavigationResolver& resolver,
+    IEditActionSink& sink
+){
+    ++loans;
+    lastPopup = popup;
+    EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && focused;
+    const u64 revision = model.revision();
+    const usize anchor = model.anchor();
+    const usize caret = model.caret();
+    if(seedColumn)
+        result.valid = navigation.setPreferredX(seededColumn);
+    seedColumn = false;
+    for(const auto& event : m_events){
+        if(!result.valid)
+            break;
+        const u64 beforeRevision = model.revision();
+        const u64 beforeSelection = model.selectionGeneration();
+        const u64 beforeComposition = model.compositionGeneration();
+        b8 vertical = false;
+        if(event.kind == AreaEventKind::Action)
+            result.valid = applyAction(event.action, options.readOnly, model, navigation, sink, result);
+        else if(options.enabled && event.kind == AreaEventKind::Text && !options.readOnly)
+            result.valid = model.replaceSelection(event.text);
+        else if(options.enabled && event.kind == AreaEventKind::Selection)
+            result.valid = model.setSelection(event.anchor, event.caret);
+        else if(options.enabled && event.kind == AreaEventKind::Key){
+            const auto direction = TryTranslateEditNavigation(event.intent);
+            vertical = direction.has_value();
+            if(direction && !model.composition().active){
+                resolutions.emplace_back(m_arena);
+                AreaResolution& call = resolutions.back();
+                call.text.assign(model.text().data(), model.text().size());
+                call.caret = model.caret();
+                call.preferred = navigation.snapshot();
+                call.result = resolver.resolve(model, *direction, call.preferred, viewportHeight);
+                if(call.result){
+                    const usize targetAnchor = event.intent.extend ? model.anchor() : call.result->committedByte;
+                    result.valid = model.setSelection(targetAnchor, call.result->committedByte) && navigation.setPreferredX(call.result->preferredX);
+                }
+                else
+                    result.valid = false;
+            }
+            else if(!vertical){
+                const EditCommandRequest request = TranslateEditCommand(event.intent, false, model.textMode());
+                const auto command = ApplyEditCommand(model, request, options.readOnly);
+                if(command.submitted || command.cancelled){
+                    const auto action = command.submitted ? EditAction::Submit : EditAction::Cancel;
+                    result.valid = applyAction(action, options.readOnly, model, navigation, sink, result);
+                }
+            }
+        }
+        if(!vertical && (model.revision() != beforeRevision || model.selectionGeneration() != beforeSelection || model.compositionGeneration() != beforeComposition))
+            navigation.reset();
+    }
+    m_events.clear();
+    if(loanHook && (!loanHookWidget.valid() || loanHookWidget == widget.id)){
+        Function<void()> hook = Move(loanHook);
+        loanHook = {};
+        hook();
+    }
+    result.textChanged = model.revision() != revision;
+    result.selectionChanged = model.anchor() != anchor || model.caret() != caret;
+    return result;
+}
+NWB_INLINE b8 TextAreaHost::applyAction(const EditAction::Enum action, const b8 readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result){
+    actionTexts.emplace_back(m_arena);
+    actionTexts.back().assign(model.text().data(), model.text().size());
+    if(!sink.apply(model, action, readOnly))
+        return false;
+    ::__hidden_ui_glyph_sdf_tests::ApplyTextAreaHostActionFlags(action, navigation, result);
+    return !m_context.failed();
+}
+NWB_INLINE b8 TextAreaFixture::frameArea(const u64 generation, const TextAreaOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::FrameTextAreaFixture(*this, generation, options, bounds);
+}
+NWB_INLINE TextAreaOptions TextAreaLoanFixture::AreaOptions()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeTextAreaLoanFixtureOptions(); }
+NWB_INLINE b8 TextAreaLoanFixture::acceptBaseline(){ return ::__hidden_ui_glyph_sdf_tests::AcceptTextAreaLoanBaseline(*this); }
+};
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SliderOptions MakeSliderFixtureOptions(){
+    SliderOptions settings = SliderOptions();
+    settings.width.policy = LayoutSizePolicy::Fixed;
+    settings.width.value = 280.0f;
+    settings.keyStep = 0.125;
+    return settings;
+}
+
+ListOptions MakeSliderSiblingListOptions(){
+    ListOptions settings = ListOptions();
+    settings.width.policy = LayoutSizePolicy::Fixed;
+    settings.width.value = 280.0f;
+    settings.height.policy = LayoutSizePolicy::Fixed;
+    settings.height.value = 48.0f;
+    return settings;
+}
+
+Point ComputeSliderTrackPoint(in SliderPlacement placement, in f64 normalized){
+    Point point = Point();
+    point.x = placement.centerTravel.x + (cast<f32>(normalized) * placement.centerTravel.width);
+    point.y = placement.track.y + (placement.track.height * 0.5f);
+    return point;
+}
+
+SearchComboOptions MakeSearchComboFixtureOptions(){
+    SearchComboOptions value = SearchComboOptions();
+    value.combo = MakeComboFixtureOptions();
+    value.combo.popupHeight = 220.0f;
+    return value;
+}
+
+u64 ComputeRadioFixtureRawCount(in u64 count, in u64 removed){
+    if(removed != 0u)
+        return count - 1u;
+    return count;
+}
+
+u64 ComputeRadioFixtureRawKey(in u64 count, in u64 removed, in b8 reverse, in b8 duplicate, in u64 index){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    if(index >= activeCount)
+        return 0u;
+    if(duplicate)
+        return 10u;
+    u64 forward = index;
+    if(reverse)
+        forward = activeCount - 1u - index;
+    const u64 value = (forward + 1u) * 10u;
+    if(removed != 0u && value >= removed)
+        return value + 10u;
+    return value;
+}
+
+u64 ComputeSearchFilterRowCount(in UiFixtureSearchFilterMode mode, in u64 fullCount){
+    if(mode == UiFixtureSearchFilterMode::Empty)
+        return 0u;
+    if(mode == UiFixtureSearchFilterMode::Second)
+        return fullCount / 2u;
+    return fullCount;
+}
+
+u64 ComputeSearchFilterRowKey(in UiFixtureSearchFilterMode mode, in u64 index){
+    if(mode == UiFixtureSearchFilterMode::Second)
+        return index * 2u + 2u;
+    return index + 1u;
+}
+
+Expected<u64> FindSearchFilterRowIndex(in UiFixtureSearchFilterMode mode, in u64 fullCount, in u64 value){
+    if(value == 0u || value > fullCount || mode == UiFixtureSearchFilterMode::Empty)
+        return MakeUnexpected(Failure());
+    if(mode == UiFixtureSearchFilterMode::Second){
+        if(value % 2u != 0u)
+            return MakeUnexpected(Failure());
+        return value / 2u - 1u;
+    }
+    return value - 1u;
+}
+
+UiFixtureSearchFilterMode ResolveSearchFilterMode(in StringView query, in StringView secondHalfQuery, in StringView emptyResultQuery){
+    if(query == secondHalfQuery)
+        return UiFixtureSearchFilterMode::Second;
+    if(query == emptyResultQuery)
+        return UiFixtureSearchFilterMode::Empty;
+    return UiFixtureSearchFilterMode::All;
+}
+
+b8 DeclareRadioGroupFixture(mut RadioGroupFixture self, in u64 generation, in RadioGroupOptions options, in Rect bounds){
+    return self.declareSource(generation, self.m_source, self.m_state, options, bounds);
+}
+
+b8 PrepareRadioGroupFixture(mut RadioGroupFixture self, in u64 generation, in RadioGroupOptions options, in Rect bounds){
+    return self.declare(generation, options, bounds) && self.finishPanel();
+}
+
+b8 AcceptRadioGroupFixture(mut RadioGroupFixture self, in u64 generation, in RadioGroupOptions options, in Rect bounds){
+    return self.prepare(generation, options, bounds) && self.m_context.commitFrame(generation);
+}
+
+WidgetId RadioGroupFixtureHost(in RadioGroupFixture self){
+    return self.id(s_RadioGroupKey, s_RadioPanelKey);
+}
+
+b8 DeclareSliderFixture(mut SliderFixture self, in u64 generation, in SliderOptions settings, in Rect bounds){
+    return self.begin(generation) && self.m_builder.beginPanel(s_SliderPanelKey, bounds) && self.m_builder.slider(s_SliderKey, self.m_state, settings);
+}
+
+b8 PrepareSliderFixture(mut SliderFixture self, in u64 generation, in SliderOptions settings, in Rect bounds){
+    return self.declare(generation, settings, bounds) && self.finishPanel();
+}
+
+b8 AcceptSliderFixture(mut SliderFixture self, in u64 generation, in SliderOptions settings, in Rect bounds){
+    return self.prepare(generation, settings, bounds) && self.m_context.commitFrame(generation);
+}
+
+b8 DeclareSliderSibling(mut SliderFixture self, in StringView key){
+    return self.m_builder.virtualList(key, self.m_laterSource, self.m_laterState, MakeSliderSiblingListOptions()).valid;
+}
+
+WidgetId SliderFixtureHost(in SliderFixture self){
+    return self.id(s_SliderKey, s_SliderPanelKey);
+}
+
+WidgetId SliderFixtureTrack(in SliderFixture self){
+    return RequireUiWidgetId(SliderFixtureHost(self), "track");
+}
+
+WidgetId SliderFixtureThumb(in SliderFixture self){
+    return RequireUiWidgetId(SliderFixtureHost(self), "thumb");
+}
+
+Point ComputeSliderFixtureThumbPoint(in SliderFixture self){
+    return CenterUiRect(self.m_state.placement().thumb);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

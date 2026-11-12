@@ -116,31 +116,25 @@ usize ExpectedMeshletSolidTriangleWordCount(in u32 meshletPrimitiveIndexCount){
 }
 
 Name DeriveRuntimeResourceName(in Name sourceName, in u64 ownerId, in u32 editRevision, in StringView label){
-    Name outName = s_NameNone;
     if(sourceName == s_NameNone || label.empty())
-        return outName;
-    native(in sourceName, in ownerId, in editRevision, in label, mut outName){
-        Array<char, s_DecimalTextBufferBytes> ownerBuffer;
-        Array<char, s_DecimalTextBufferBytes> revisionBuffer;
-        const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
-        const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
-        if(!ownerText.empty() && !revisionText.empty()){
-            if(auto derivedHash = BeginDerivedNameHash(sourceName)){
-                if(
-                    UpdateDerivedNameHashText(*derivedHash, s_RuntimePrefix)
-                    && UpdateDerivedNameHashText(*derivedHash, ownerText)
-                    && UpdateDerivedNameHashText(*derivedHash, s_RevisionSeparator)
-                    && UpdateDerivedNameHashText(*derivedHash, revisionText)
-                    && UpdateDerivedNameHashText(*derivedHash, s_OwnerSeparator)
-                    && UpdateDerivedNameHashText(*derivedHash, label)
-                ){
-                    if(const auto finished = FinishDerivedNameHash(*derivedHash))
-                        outName = *finished;
-                }
-            }
-        }
-    }
-    return outName;
+        return s_NameNone;
+    const Expected<NameHash> derivedHashResult = BeginDerivedNameHash(sourceName);
+    if(!derivedHashResult.has_value())
+        return s_NameNone;
+    NameHash derivedHash = derivedHashResult.value();
+    if(
+        !UpdateDerivedNameHashText(derivedHash, s_RuntimePrefix)
+        || !UpdateDerivedNameHashDecimal(derivedHash, ownerId)
+        || !UpdateDerivedNameHashText(derivedHash, s_RevisionSeparator)
+        || !UpdateDerivedNameHashDecimal(derivedHash, editRevision)
+        || !UpdateDerivedNameHashText(derivedHash, s_OwnerSeparator)
+        || !UpdateDerivedNameHashText(derivedHash, label)
+    )
+        return s_NameNone;
+    const Expected<Name> finished = FinishDerivedNameHash(derivedHash);
+    if(!finished.has_value())
+        return s_NameNone;
+    return finished.value();
 }
 
 Name DeriveNamedRuntimeBufferName(
@@ -198,10 +192,7 @@ void ReportMeshBufferSetupFailure(in BufferSetupFailure failure, in Name meshNam
 }
 
 Expected<Name> DeriveMeshBufferName(in Name meshName, in StringView suffix, in StringView label){
-    Expected<Name> derived = MakeUnexpected(Failure());
-    native(in meshName, in suffix, mut derived){
-        derived = DeriveName(meshName, suffix);
-    }
+    const Expected<Name> derived = DeriveName(meshName, suffix);
     if(!derived.has_value()){
         error("RendererSystem: failed to derive {} buffer name for mesh '{}'", label, meshName.resolvedText());
         return MakeUnexpected(Failure());

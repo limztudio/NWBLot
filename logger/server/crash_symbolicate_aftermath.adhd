@@ -1,0 +1,51 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_AftermathInspectFailedReport = "\n[aftermath]\nstatus=inspect_failed\n";
+const StringView s_AftermathReadFailedReport = "\n[aftermath]\nstatus=read_failed\n";
+const StringView s_AftermathSkippedSectionReport = "\n[aftermath]\nstatus=skipped\n";
+const StringView s_AftermathDecodeFailedSectionReport = "\n[aftermath]\nstatus=decode_failed\n";
+const StringView s_AftermathAdmissionFailedDetail = "detail=Aftermath runtime admission failed\n";
+const StringView s_AftermathDetailTruncatedTrueSuffix = "\nnative_detail_truncated=true\n";
+const StringView s_AftermathDetailTruncatedFalseSuffix = "\nnative_detail_truncated=false\n";
+
+usize ComputeAftermathBoundedJsonLength(in u32 jsonSize){
+    usize jsonLength = 0u;
+    if(jsonSize > 0u)
+        jsonLength = cast<usize>(jsonSize) - 1u;
+    if(jsonLength > s_CrashSymbolicateAftermathAftermathMaxJsonBytes)
+        return s_CrashSymbolicateAftermathAftermathMaxJsonBytes;
+    return jsonLength;
+}
+
+StringView SelectAftermathLoadFailureHeader(in StringView operation){
+    if(operation == s_CrashSymbolicateAftermathAftermathLoadRuntimeOperation)
+        return s_AftermathSkippedSectionReport;
+    return s_AftermathDecodeFailedSectionReport;
+}
+
+StringView SelectAftermathDetailTruncatedSuffix(in b8 truncated){
+    if(truncated)
+        return s_AftermathDetailTruncatedTrueSuffix;
+    return s_AftermathDetailTruncatedFalseSuffix;
+}
+
+void AppendBoundedAftermathJson(in StringView jsonText, in u32 jsonSize, mut String outReport){
+    const usize boundedLength = Min(jsonText.size(), ComputeAftermathBoundedJsonLength(jsonSize));
+    const StringView boundedJson = jsonText.substr(0u, boundedLength);
+    outReport.append(s_CrashSymbolicateAftermathAftermathSectionHeader);
+    outReport.append(boundedJson);
+    if(boundedJson.empty() || boundedJson.back() != 10u)
+        outReport.append("\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

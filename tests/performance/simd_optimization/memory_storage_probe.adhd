@@ -2,8 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
-// limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -21,22 +23,30 @@ native{
 #include <global/text_utils.h>
 #include <global/timer.h>
 
-#if defined(FOUNDATION_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 #include <sys/wait.h>
 #endif
 
+namespace SimdOptimizationBenchmark{
+using NWB::Tests::PatternByte;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_INLINE void WriteProbeStdout(const AStringView text){
+    NWB_COUT << text;
+}
 
+NWB_INLINE void WriteProbeStdoutFlush(const AStringView text){
+    NWB_COUT << text;
+    NWB_COUT.flush();
+}
 
-namespace __hidden_memory_storage_probe{
+NWB_INLINE void WriteProbeStderr(const AStringView text){
+    NWB_CERR << text;
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+namespace MemoryProbeKernels{
 
 using NWB::Tests::ExitOnAbort;
-#if defined(FOUNDATION_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 using NWB::Tests::GuardedBytes;
 #endif
 using NWB::Tests::PatternByte;
@@ -44,28 +54,12 @@ using NWB::Tests::s_SIMDMemoryAbortExitCode;
 using NWB::Tests::s_SIMDMemoryHandlerFailureExitCode;
 using NWB::Tests::s_SIMDMemoryReturnedExitCode;
 
-constexpr AStringView s_QualifyOption = "--qualify";
-constexpr AStringView s_BenchCopyOption = "--bench-copy";
-constexpr AStringView s_BenchEqualityFirstWordOption = "--bench-equality-first-word";
-
 inline constexpr usize s_Alignment = 64u;
-inline constexpr usize s_StreamingBytes = 64u * 1024u * 1024u;
-inline constexpr u8 s_Poison = 0xA5u;
-inline constexpr Array<usize, 36> s_QualifyLengths = {
-    0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u, 31u, 32u, 33u, 47u, 48u, 49u, 63u, 64u,
-    65u, 127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 5120u, 8191u, 8192u, 8193u, 16384u,
-};
-inline constexpr Array<usize, 15> s_BenchLengths = { 16u, 31u, 32u, 33u, 64u, 128u, 129u, 256u, 512u, 1024u, 2048u, 4096u, 5120u, 8191u, 8192u };
-volatile u64 g_Checksum = 0u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+NWB_INLINE volatile u64 g_Checksum = 0u;
 
 struct AlignedBytes final{
     NotNull<void*> storage;
     NotNull<u8*> data;
-
 
 public:
     explicit AlignedBytes(const usize count)
@@ -77,13 +71,9 @@ public:
     AlignedBytes& operator=(const AlignedBytes&) = delete;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Candidate changes only the internal AVX alignment choice.
-FOUNDATION_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
-#if defined(FOUNDATION_HAS_AVX)
+NWB_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
+#if defined(NWB_HAS_AVX)
     if(count == 0u)
         return;
     if(count > capacity || destination == nullptr || source == nullptr)
@@ -151,8 +141,8 @@ FOUNDATION_INLINE void CandidateCopy(const void* source, usize count, const usiz
 #endif
 }
 
-FOUNDATION_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
-#if defined(FOUNDATION_HAS_AVX)
+NWB_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+#if defined(NWB_HAS_AVX)
     const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs.get()));
     const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
     const __m256 difference = _mm256_xor_ps(_mm256_castsi256_ps(left), _mm256_castsi256_ps(right));
@@ -165,63 +155,14 @@ FOUNDATION_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull
 }
 
 // Preserve an inexpensive first-word rejection before the full-width exact-bit reduction.
-FOUNDATION_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
     if(lhs.get()[0] != rhs.get()[0])
         return false;
     return CandidateEqual(lhs, rhs);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 CheckRange(const Span<const u8> bytes, const usize start, const usize count, const usize sourceStart)noexcept{
-    for(usize index = 0u; index < bytes.size(); ++index){
-        const u8 expected = index >= start && index - start < count ? PatternByte(sourceStart + index - start) : s_Poison;
-        if(bytes[index] != expected)
-            return false;
-    }
-    return true;
-}
-
-[[nodiscard]] b8 QualifyCopyBytes(){
-    constexpr usize s_Bytes = 16640u;
-    AlignedBytes source(s_Bytes), destination(s_Bytes);
-    for(usize index = 0u; index < s_Bytes; ++index)
-        source.data.get()[index] = PatternByte(index);
-    for(const usize count : s_QualifyLengths){
-        for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += 16u){
-            for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += 16u){
-                FOUNDATION_MEMSET(destination.data.get(), s_Poison, s_Bytes);
-                CandidateCopy(source.data.get() + sourceOffset, count, count, destination.data.get() + destinationOffset);
-                if(!CheckRange(Span<const u8>(destination.data.get(), s_Bytes), destinationOffset, count, sourceOffset))
-                    return false;
-            }
-        }
-    }
-    for(usize index = 0u; index < s_Bytes; ++index){
-        if(source.data.get()[index] != PatternByte(index))
-            return false;
-    }
-    for(const usize count : { 16u, 32u, 48u, 64u, 128u, 4096u }){
-        for(const b8 destinationFirst : { false, true }){
-            for(usize index = 0u; index < s_Bytes; ++index)
-                destination.data.get()[index] = PatternByte(index);
-            const usize destinationStart = destinationFirst ? 0u : count, sourceStart = destinationFirst ? count : 0u;
-            CandidateCopy(destination.data.get() + sourceStart, count, count, destination.data.get() + destinationStart);
-            for(usize index = 0u; index < count; ++index){
-                if(destination.data.get()[destinationStart + index] != PatternByte(sourceStart + index))
-                    return false;
-            }
-        }
-    }
-    CandidateCopy(nullptr, 0u, 0u, nullptr);
-    CandidateCopy(source.data.get() + 3u, 0u, 0u, destination.data.get() + 1u);
-    return true;
-}
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-[[nodiscard]] b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
+#if defined(NWB_PLATFORM_LINUX)
+[[nodiscard]] NWB_INLINE b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return false;
@@ -234,110 +175,11 @@ FOUNDATION_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, cons
     int status = 0;
     return waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == s_SIMDMemoryAbortExitCode;
 }
-
-[[nodiscard]] b8 QualifyProtectedRanges()noexcept{
-    GuardedBytes source, destination;
-    if(source.data == nullptr || destination.data == nullptr)
-        return false;
-    if(source.accessibleBytes < s_QualifyLengths[s_QualifyLengths.size() - 1u])
-        return false;
-    for(usize index = 0u; index < source.accessibleBytes; ++index)
-        source.data[index] = PatternByte(index);
-    for(const usize count : s_QualifyLengths){
-        for(const b8 sourceAtEnd : { false, true }){
-            for(const b8 destinationAtEnd : { false, true }){
-                FOUNDATION_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
-                const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
-                const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
-                CandidateCopy(source.data + sourceStart, count, count, destination.data + destinationStart);
-                if(!CheckRange(Span<const u8>(destination.data, destination.accessibleBytes), destinationStart, count, sourceStart))
-                    return false;
-            }
-        }
-    }
-    for(const b8 sourceAtEnd : { false, true }){
-        for(const b8 destinationAtEnd : { false, true }){
-            const auto left = MakeNotNull(::new(sourceAtEnd ? source.upperGuard - 32u : source.data) u64[4u]);
-            const auto right = MakeNotNull(::new(destinationAtEnd ? destination.upperGuard - 32u : destination.data) u64[4u]);
-            for(usize lane = 0u; lane < 4u; ++lane)
-                left.get()[lane] = right.get()[lane] = 0x7FF0000000000001ull + lane;
-            if(!CandidateEqual(left, right) || !CandidateEqualFirstWord(left, right))
-                return false;
-            right.get()[3u] ^= 1u;
-            if(CandidateEqual(left, right) || CandidateEqualFirstWord(left, right))
-                return false;
-        }
-    }
-    CandidateCopy(destination.upperGuard, 0u, 0u, source.lowerGuard);
-    if(
-        !RejectedBeforeAccess(source.upperGuard, 16u, 15u, destination.lowerGuard)
-        || !RejectedBeforeAccess(source.upperGuard, 16u, 16u, nullptr)
-        || !RejectedBeforeAccess(nullptr, 16u, 16u, destination.lowerGuard)
-        || !RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard)
-        || !RejectedBeforeAccess(destination.lowerGuard + 16u, 32u, 32u, destination.lowerGuard)
-        || !RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard + 16u)
-    )
-        return false;
-    for(usize offset = 1u; offset < 16u; ++offset){
-        if(!RejectedBeforeAccess(source.upperGuard, 16u, 16u, destination.lowerGuard + offset) || !RejectedBeforeAccess(source.upperGuard + offset, 16u, 16u, destination.lowerGuard))
-            return false;
-    }
-    return true;
-}
 #endif
-
-[[nodiscard]] b8 QualifyEquality()noexcept{
-#pragma STDC FENV_ACCESS ON
-    const auto original = HoldFloatingPointExceptions();
-    if(!original)
-        return false;
-    alignas(64) Array<u64, 8> lhs = {};
-    alignas(64) Array<u64, 8> rhs = {};
-    b8 valid = true;
-    constexpr Array<u64, 6> s_Patterns = { 0u, ~u64{ 0u }, 0x8000000000000000ull, 0x7FF0000000000001ull, 0x0000000000000001ull, 0x0123456789ABCDEFull };
-    for(const u64 pattern : s_Patterns){
-        for(usize offset = 0u; offset < 4u; ++offset){
-            for(usize lane = 0u; lane < 4u; ++lane)
-                lhs[offset + lane] = rhs[offset + lane] = pattern ^ static_cast<u64>(lane);
-            if(!CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)) || !CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)))
-                valid = false;
-            for(usize lane = 0u; lane < 4u; ++lane){
-                for(u32 bit = 0u; bit < 64u; ++bit){
-                    rhs[offset + lane] ^= u64{ 1u } << bit;
-                    if(
-                        CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
-                        || CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
-                        || MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
-                    )
-                        valid = false;
-                    rhs[offset + lane] ^= u64{ 1u } << bit;
-                }
-            }
-        }
-    }
-    if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO))
-        valid = false;
-    // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
-    b8(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqual;
-    b8(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqualFirstWord;
-    const b8 wideEqual = wideFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
-    const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    const b8 firstWordEqual = firstWordFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
-    const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
-        valid = false;
-    if(!SetFloatingPointEnvironment(*original))
-        valid = false;
-    return valid;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Hot operations inline into the batch so per-call vzeroupper/ABI overhead does not substitute for the production callsite behavior.
 template<b8 Candidate, usize FixedCount = 0u>
-FOUNDATION_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
+NWB_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
     usize slot = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         AtomicSignalFence(MemoryOrder::seq_cst);
@@ -352,7 +194,7 @@ FOUNDATION_NOINLINE void CopyBatch(const u8* source, const usize slots, const us
 }
 
 template<b8 Candidate, b8 FirstWord = false>
-FOUNDATION_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
+NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     usize slot = 0u;
     u64 total = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
@@ -374,7 +216,7 @@ FOUNDATION_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usiz
 using CopyBatchFunction = void(*)(const u8*, usize, usize, usize, usize, u8*)noexcept;
 using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize)noexcept;
 
-[[nodiscard]] f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<const u8*> source, const usize slots, const usize stride, const usize bytes, const usize iterations, const NotNull<u8*> destination)noexcept{
+[[nodiscard]] NWB_INLINE f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<const u8*> source, const usize slots, const usize stride, const usize bytes, const usize iterations, const NotNull<u8*> destination)noexcept{
     const Timer start = TimerNow();
     function.get()(source.get(), slots, stride, bytes, iterations, destination.get());
     const Timer end = TimerNow();
@@ -382,7 +224,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
 }
 
-[[nodiscard]] f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
+[[nodiscard]] NWB_INLINE f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     const Timer start = TimerNow();
     const u64 result = function.get()(lhs, rhs, slots, stride, iterations);
     const Timer end = TimerNow();
@@ -390,97 +232,255 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
 }
 
-void BenchCopy(const usize samples){
-    FOUNDATION_COUT << "kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
-    for(const b8 streaming : { false, true }){
-        for(const usize bytes : s_BenchLengths){
-            const usize stride = (bytes + 127u) & ~usize{ 63u };
-            const usize slots = streaming ? s_StreamingBytes / stride : 1u;
-            AlignedBytes source(slots * stride + 128u), destination(slots * stride + 128u);
-            for(usize index = 0u; index < slots * stride + 128u; ++index)
-                source.data.get()[index] = PatternByte(index);
-            FOUNDATION_MEMSET(destination.data.get(), s_Poison, slots * stride + 128u);
-            usize iterations = s_StreamingBytes / bytes;
-            if(iterations < 65536u)
-                iterations = 65536u;
-            const auto baseline = MakeNotNull<CopyBatchFunction>(bytes == 5120u ? CopyBatch<false, 5120u> : CopyBatch<false>);
-            const auto candidate = MakeNotNull<CopyBatchFunction>(bytes == 5120u ? CopyBatch<true, 5120u> : CopyBatch<true>);
-            for(const usize sourceOffset : { 16u, 32u }){
-                for(const usize destinationOffset : { 16u, 32u }){
-                    baseline.get()(source.data.get() + sourceOffset, slots, stride, bytes, 1024u, destination.data.get() + destinationOffset);
-                    candidate.get()(source.data.get() + sourceOffset, slots, stride, bytes, 1024u, destination.data.get() + destinationOffset);
-                    for(usize sample = 0u; sample < samples; ++sample){
-                        f64 baselineNs, candidateNs;
-                        if((sample & 1u) == 0u){
-                            baselineNs = TimeCopy(baseline, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
-                            candidateNs = TimeCopy(candidate, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
-                        }
-                        else{
-                            candidateNs = TimeCopy(candidate, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
-                            baselineNs = TimeCopy(baseline, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
-                        }
-                        const f64 candidateOverBaseline = candidateNs / baselineNs;
-                        FOUNDATION_COUT << (bytes == 5120u ? "copy_fixed" : "copy_dynamic") << ',' << (streaming ? "streaming" : "warm") << ',' << bytes << ',' << sourceOffset << ',' << destinationOffset << ',' << sample << ',';
-                        FOUNDATION_COUT << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
-                        FOUNDATION_COUT.flush();
-                    }
+[[nodiscard]] NWB_INLINE b8 VerifyCopiedBytes(const Span<const u8> bytes, const usize start, const usize count, const usize sourceStart, const u8 poisonByte)noexcept{
+    for(usize index = 0u; index < bytes.size(); ++index){
+        const u8 expected = (index >= start && index - start < count) ? PatternByte(sourceStart + index - start) : poisonByte;
+        if(bytes[index] != expected)
+            return false;
+    }
+    return true;
+}
+
+}
+
+[[nodiscard]] NWB_INLINE b8 QualifyCopyBytesKernel(const Span<const usize> lengths, const u8 poisonByte)noexcept{
+    constexpr usize s_Bytes = 16640u;
+    MemoryProbeKernels::AlignedBytes source(s_Bytes), destination(s_Bytes);
+    for(usize index = 0u; index < s_Bytes; ++index)
+        source.data.get()[index] = MemoryProbeKernels::PatternByte(index);
+    b8 valid = true;
+    for(usize lenIndex = 0u; lenIndex < lengths.size() && valid; ++lenIndex){
+        const usize count = lengths[lenIndex];
+        for(usize sourceOffset = 0u; sourceOffset < 128u && valid; sourceOffset += 16u){
+            for(usize destinationOffset = 0u; destinationOffset < 128u && valid; destinationOffset += 16u){
+                NWB_MEMSET(destination.data.get(), poisonByte, s_Bytes);
+                MemoryProbeKernels::CandidateCopy(source.data.get() + sourceOffset, count, count, destination.data.get() + destinationOffset);
+                if(!MemoryProbeKernels::VerifyCopiedBytes(Span<const u8>(destination.data.get(), s_Bytes), destinationOffset, count, sourceOffset, poisonByte))
+                    valid = false;
+            }
+        }
+    }
+    for(usize index = 0u; index < s_Bytes && valid; ++index){
+        if(source.data.get()[index] != MemoryProbeKernels::PatternByte(index))
+            valid = false;
+    }
+    for(const usize count : { 16u, 32u, 48u, 64u, 128u, 4096u }){
+        for(const b8 destinationFirst : { false, true }){
+            if(!valid)
+                break;
+            for(usize index = 0u; index < s_Bytes; ++index)
+                destination.data.get()[index] = MemoryProbeKernels::PatternByte(index);
+            const usize destinationStart = destinationFirst ? 0u : count, sourceStart = destinationFirst ? count : 0u;
+            MemoryProbeKernels::CandidateCopy(destination.data.get() + sourceStart, count, count, destination.data.get() + destinationStart);
+            for(usize index = 0u; index < count; ++index){
+                if(destination.data.get()[destinationStart + index] != MemoryProbeKernels::PatternByte(sourceStart + index))
+                    valid = false;
+            }
+        }
+    }
+    if(valid){
+        MemoryProbeKernels::CandidateCopy(nullptr, 0u, 0u, nullptr);
+        MemoryProbeKernels::CandidateCopy(source.data.get() + 3u, 0u, 0u, destination.data.get() + 1u);
+    }
+    return valid;
+}
+
+[[nodiscard]] NWB_INLINE b8 QualifyProtectedRangesKernel([[maybe_unused]] const Span<const usize> lengths, [[maybe_unused]] const u8 poisonByte)noexcept{
+    b8 valid = true;
+#if defined(NWB_PLATFORM_LINUX)
+    MemoryProbeKernels::GuardedBytes source, destination;
+    if(source.data == nullptr || destination.data == nullptr || lengths.empty() || source.accessibleBytes < lengths[lengths.size() - 1u]){
+        valid = false;
+    }
+    else{
+        for(usize index = 0u; index < source.accessibleBytes; ++index)
+            source.data[index] = MemoryProbeKernels::PatternByte(index);
+        for(usize lenIndex = 0u; lenIndex < lengths.size() && valid; ++lenIndex){
+            const usize count = lengths[lenIndex];
+            for(const b8 sourceAtEnd : { false, true }){
+                for(const b8 destinationAtEnd : { false, true }){
+                    NWB_MEMSET(destination.data, poisonByte, destination.accessibleBytes);
+                    const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
+                    const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
+                    MemoryProbeKernels::CandidateCopy(source.data + sourceStart, count, count, destination.data + destinationStart);
+                    if(!MemoryProbeKernels::VerifyCopiedBytes(Span<const u8>(destination.data, destination.accessibleBytes), destinationStart, count, sourceStart, poisonByte))
+                        valid = false;
+                }
+            }
+        }
+        for(const b8 sourceAtEnd : { false, true }){
+            for(const b8 destinationAtEnd : { false, true }){
+                if(!valid)
+                    break;
+                const auto left = MakeNotNull(::new(sourceAtEnd ? source.upperGuard - 32u : source.data) u64[4u]);
+                const auto right = MakeNotNull(::new(destinationAtEnd ? destination.upperGuard - 32u : destination.data) u64[4u]);
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    left.get()[lane] = right.get()[lane] = 0x7FF0000000000001ull + lane;
+                if(!MemoryProbeKernels::CandidateEqual(left, right) || !MemoryProbeKernels::CandidateEqualFirstWord(left, right))
+                    valid = false;
+                right.get()[3u] ^= 1u;
+                if(MemoryProbeKernels::CandidateEqual(left, right) || MemoryProbeKernels::CandidateEqualFirstWord(left, right))
+                    valid = false;
+            }
+        }
+        if(valid){
+            MemoryProbeKernels::CandidateCopy(destination.upperGuard, 0u, 0u, source.lowerGuard);
+            if(
+                !MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard, 16u, 15u, destination.lowerGuard)
+                || !MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard, 16u, 16u, nullptr)
+                || !MemoryProbeKernels::RejectedBeforeAccess(nullptr, 16u, 16u, destination.lowerGuard)
+                || !MemoryProbeKernels::RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard)
+                || !MemoryProbeKernels::RejectedBeforeAccess(destination.lowerGuard + 16u, 32u, 32u, destination.lowerGuard)
+                || !MemoryProbeKernels::RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard + 16u)
+            )
+                valid = false;
+            for(usize offset = 1u; offset < 16u && valid; ++offset){
+                if(!MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard, 16u, 16u, destination.lowerGuard + offset) || !MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard + offset, 16u, 16u, destination.lowerGuard))
+                    valid = false;
+            }
+        }
+    }
+#endif
+    return valid;
+}
+
+[[nodiscard]] NWB_INLINE b8 QualifyEqualityKernel()noexcept{
+#pragma STDC FENV_ACCESS ON
+    const auto original = HoldFloatingPointExceptions();
+    if(!original)
+        return false;
+    b8 valid = true;
+    alignas(64) Array<u64, 8> lhs = {};
+    alignas(64) Array<u64, 8> rhs = {};
+    constexpr Array<u64, 6> s_Patterns = { 0u, ~u64{ 0u }, 0x8000000000000000ull, 0x7FF0000000000001ull, 0x0000000000000001ull, 0x0123456789ABCDEFull };
+    for(const u64 pattern : s_Patterns){
+        for(usize offset = 0u; offset < 4u; ++offset){
+            for(usize lane = 0u; lane < 4u; ++lane)
+                lhs[offset + lane] = rhs[offset + lane] = pattern ^ static_cast<u64>(lane);
+            if(!MemoryProbeKernels::CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)) || !MemoryProbeKernels::CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)))
+                valid = false;
+            for(usize lane = 0u; lane < 4u; ++lane){
+                for(u32 bit = 0u; bit < 64u; ++bit){
+                    rhs[offset + lane] ^= u64{ 1u } << bit;
+                    if(
+                        MemoryProbeKernels::CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
+                        || MemoryProbeKernels::CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
+                        || MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
+                    )
+                        valid = false;
+                    rhs[offset + lane] ^= u64{ 1u } << bit;
                 }
             }
         }
     }
+    if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO))
+        valid = false;
+    // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
+    b8(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = MemoryProbeKernels::CandidateEqual;
+    b8(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = MemoryProbeKernels::CandidateEqualFirstWord;
+    const b8 wideEqual = wideFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
+    const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    const b8 firstWordEqual = firstWordFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
+    const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
+        valid = false;
+    if(!SetFloatingPointEnvironment(*original))
+        valid = false;
+    return valid;
 }
 
-void BenchEquality(const usize samples, const b8 firstWord){
-    const auto candidate = MakeNotNull<EqualityBatchFunction>(firstWord ? EqualityBatch<true, true> : EqualityBatch<true>);
-    FOUNDATION_COUT << "kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
-    for(const b8 streaming : { false, true }){
-        const usize slots = streaming ? s_StreamingBytes / 64u : 1u;
-        AlignedBytes left(slots * 64u + 64u), right(slots * 64u + 64u);
-        const auto lhs = MakeNotNull(::new(left.data.get()) u64[slots * 8u + 8u]);
-        const auto rhs = MakeNotNull(::new(right.data.get()) u64[slots * 8u + 8u]);
-        for(usize comparisonCase = 0u; comparisonCase < (firstWord ? 5u : 3u); ++comparisonCase){
-            for(const usize offset : { 0u, 1u, 2u, 3u }){
-                for(usize slot = 0u; slot < slots; ++slot){
-                    for(usize lane = 0u; lane < 4u; ++lane)
-                        lhs.get()[slot * 8u + offset + lane] = rhs.get()[slot * 8u + offset + lane] = static_cast<u64>(slot) * 0x0123456789ABCDEFull + lane;
-                    if(comparisonCase != 0u)
-                        rhs.get()[slot * 8u + offset + (firstWord ? comparisonCase - 1u : comparisonCase == 1u ? 0u : 3u)] ^= 1u;
-                }
-                constexpr usize s_Iterations = 4u * 1024u * 1024u;
-                constexpr u32 s_EqualityWarmupIterations = 1024u;
-                const u64 baselineWarmup = EqualityBatch<false>(lhs.get() + offset, rhs.get() + offset, slots, 8u, s_EqualityWarmupIterations);
-                const u64 candidateWarmup = candidate.get()(lhs.get() + offset, rhs.get() + offset, slots, 8u, s_EqualityWarmupIterations);
-                const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
-                if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
-                    FOUNDATION_CERR << "equality warm-up produced an incorrect result\n";
-                    ::abort();
-                }
-                g_Checksum = g_Checksum + baselineWarmup + candidateWarmup;
-                for(usize sample = 0u; sample < samples; ++sample){
-                    f64 baselineNs, candidateNs;
-                    if((sample & 1u) == 0u){
-                        baselineNs = TimeEquality(MakeNotNull<EqualityBatchFunction>(EqualityBatch<false>), lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
-                        candidateNs = TimeEquality(candidate, lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
-                    }
-                    else{
-                        candidateNs = TimeEquality(candidate, lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
-                        baselineNs = TimeEquality(MakeNotNull<EqualityBatchFunction>(EqualityBatch<false>), lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
-                    }
-                    constexpr Array<StringView, 5> s_FirstWordCases = { "equal", "word0_mismatch", "word1_mismatch", "word2_mismatch", "word3_mismatch" };
-                    const StringView caseName = firstWord ? s_FirstWordCases[comparisonCase] : comparisonCase == 0u ? "equal" : comparisonCase == 1u ? "early_mismatch" : "late_mismatch";
-                    const f64 candidateOverBaseline = candidateNs / baselineNs;
-                    FOUNDATION_COUT << "equality," << (streaming ? "streaming" : "warm") << ',' << caseName << ',' << offset * sizeof(u64) << ',' << sample << ',' << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
-                    FOUNDATION_COUT.flush();
-                }
-            }
-        }
+class MemoryCopyBenchmarkBuffers final{
+public:
+    MemoryCopyBenchmarkBuffers(const usize slots, const usize stride, const u8 poisonByte)
+        : m_slots(slots)
+        , m_stride(stride)
+        , m_source(slots * stride + 128u)
+        , m_destination(slots * stride + 128u)
+    {
+        const usize totalBytes = slots * stride + 128u;
+        for(usize index = 0u; index < totalBytes; ++index)
+            m_source.data.get()[index] = MemoryProbeKernels::PatternByte(index);
+        NWB_MEMSET(m_destination.data.get(), poisonByte, totalBytes);
     }
-}
 
+public:
+    void warmup(const usize bytes, const usize sourceOffset, const usize destinationOffset)noexcept{
+        const auto baseline = MakeNotNull<MemoryProbeKernels::CopyBatchFunction>(bytes == 5120u ? MemoryProbeKernels::CopyBatch<false, 5120u> : MemoryProbeKernels::CopyBatch<false>);
+        const auto candidate = MakeNotNull<MemoryProbeKernels::CopyBatchFunction>(bytes == 5120u ? MemoryProbeKernels::CopyBatch<true, 5120u> : MemoryProbeKernels::CopyBatch<true>);
+        baseline.get()(m_source.data.get() + sourceOffset, m_slots, m_stride, bytes, 1024u, m_destination.data.get() + destinationOffset);
+        candidate.get()(m_source.data.get() + sourceOffset, m_slots, m_stride, bytes, 1024u, m_destination.data.get() + destinationOffset);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [[nodiscard]] f64 timeSample(const b8 useCandidate, const usize bytes, const usize sourceOffset, const usize destinationOffset, const usize iterations)noexcept{
+        const auto fn = MakeNotNull<MemoryProbeKernels::CopyBatchFunction>(
+            useCandidate
+                ? (bytes == 5120u ? MemoryProbeKernels::CopyBatch<true, 5120u> : MemoryProbeKernels::CopyBatch<true>)
+                : (bytes == 5120u ? MemoryProbeKernels::CopyBatch<false, 5120u> : MemoryProbeKernels::CopyBatch<false>)
+        );
+        return MemoryProbeKernels::TimeCopy(
+            fn,
+            MakeNotNull(m_source.data.get() + sourceOffset),
+            m_slots,
+            m_stride,
+            bytes,
+            iterations,
+            MakeNotNull(m_destination.data.get() + destinationOffset)
+        );
+    }
 
+private:
+    usize m_slots;
+    usize m_stride;
+    MemoryProbeKernels::AlignedBytes m_source;
+    MemoryProbeKernels::AlignedBytes m_destination;
+};
 
+class MemoryEqualityBenchmarkBuffers final{
+public:
+    explicit MemoryEqualityBenchmarkBuffers(const usize slots)
+        : m_slots(slots)
+        , m_left(slots * 64u + 64u)
+        , m_right(slots * 64u + 64u)
+        , m_lhs(MakeNotNull(::new(m_left.data.get()) u64[slots * 8u + 8u]))
+        , m_rhs(MakeNotNull(::new(m_right.data.get()) u64[slots * 8u + 8u]))
+    {}
+
+public:
+    void prepareAndWarmup(const b8 firstWord, const usize comparisonCase, const usize offset)noexcept{
+        for(usize slot = 0u; slot < m_slots; ++slot){
+            for(usize lane = 0u; lane < 4u; ++lane)
+                m_lhs.get()[slot * 8u + offset + lane] = m_rhs.get()[slot * 8u + offset + lane] = static_cast<u64>(slot) * 0x0123456789ABCDEFull + lane;
+            if(comparisonCase != 0u)
+                m_rhs.get()[slot * 8u + offset + (firstWord ? comparisonCase - 1u : comparisonCase == 1u ? 0u : 3u)] ^= 1u;
+        }
+        constexpr u32 s_EqualityWarmupIterations = 1024u;
+        const auto candidate = MakeNotNull<MemoryProbeKernels::EqualityBatchFunction>(firstWord ? MemoryProbeKernels::EqualityBatch<true, true> : MemoryProbeKernels::EqualityBatch<true>);
+        const u64 baselineWarmup = MemoryProbeKernels::EqualityBatch<false>(m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, s_EqualityWarmupIterations);
+        const u64 candidateWarmup = candidate.get()(m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, s_EqualityWarmupIterations);
+        const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
+        if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
+            NWB_CERR << "equality warm-up produced an incorrect result\n";
+            ::abort();
+        }
+        MemoryProbeKernels::g_Checksum = MemoryProbeKernels::g_Checksum + baselineWarmup + candidateWarmup;
+    }
+
+    [[nodiscard]] f64 timeSample(const b8 useCandidate, const b8 firstWord, const usize offset, const usize iterations)noexcept{
+        const auto fn = MakeNotNull<MemoryProbeKernels::EqualityBatchFunction>(
+            useCandidate
+                ? (firstWord ? MemoryProbeKernels::EqualityBatch<true, true> : MemoryProbeKernels::EqualityBatch<true>)
+                : MemoryProbeKernels::EqualityBatch<false>
+        );
+        return MemoryProbeKernels::TimeEquality(fn, m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, iterations);
+    }
+
+private:
+    usize m_slots;
+    MemoryProbeKernels::AlignedBytes m_left;
+    MemoryProbeKernels::AlignedBytes m_right;
+    NotNull<u64*> m_lhs;
+    NotNull<u64*> m_rhs;
+};
 };
 
 
@@ -489,43 +489,281 @@ void BenchEquality(const usize samples, const b8 firstWord){
 
 }
 
-b8 MemoryStorageProbeSupported(){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_QualifyOption = "--qualify";
+const StringView s_BenchCopyOption = "--bench-copy";
+const StringView s_BenchEqualityOption = "--bench-equality";
+const StringView s_BenchEqualityFirstWordOption = "--bench-equality-first-word";
+const usize s_StreamingBytes = 67108864u;
+const u8 s_PoisonByte = 0xA5u;
+const usize s_QualifyLengthCount = 36u;
+const usize s_BenchLengthCount = 15u;
+const usize s_EqualityIterations = 4194304u;
+const usize s_U64ByteSize = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize QualifyLengthAt(in usize index){
+    switch(index){
+    case 0u: return 0u;
+    case 1u: return 1u;
+    case 2u: return 2u;
+    case 3u: return 3u;
+    case 4u: return 7u;
+    case 5u: return 8u;
+    case 6u: return 9u;
+    case 7u: return 15u;
+    case 8u: return 16u;
+    case 9u: return 17u;
+    case 10u: return 31u;
+    case 11u: return 32u;
+    case 12u: return 33u;
+    case 13u: return 47u;
+    case 14u: return 48u;
+    case 15u: return 49u;
+    case 16u: return 63u;
+    case 17u: return 64u;
+    case 18u: return 65u;
+    case 19u: return 127u;
+    case 20u: return 128u;
+    case 21u: return 129u;
+    case 22u: return 255u;
+    case 23u: return 256u;
+    case 24u: return 257u;
+    case 25u: return 511u;
+    case 26u: return 512u;
+    case 27u: return 513u;
+    case 28u: return 4095u;
+    case 29u: return 4096u;
+    case 30u: return 4097u;
+    case 31u: return 5120u;
+    case 32u: return 8191u;
+    case 33u: return 8192u;
+    case 34u: return 8193u;
+    default: return 16384u;
+    }
+}
+
+usize BenchLengthAt(in usize index){
+    switch(index){
+    case 0u: return 16u;
+    case 1u: return 31u;
+    case 2u: return 32u;
+    case 3u: return 33u;
+    case 4u: return 64u;
+    case 5u: return 128u;
+    case 6u: return 129u;
+    case 7u: return 256u;
+    case 8u: return 512u;
+    case 9u: return 1024u;
+    case 10u: return 2048u;
+    case 11u: return 4096u;
+    case 12u: return 5120u;
+    case 13u: return 8191u;
+    default: return 8192u;
+    }
+}
+
+StringView ResolveEqualityCaseName(in b8 firstWord, in usize comparisonCase){
+    if(firstWord){
+        switch(comparisonCase){
+        case 0u: return "equal";
+        case 1u: return "word0_mismatch";
+        case 2u: return "word1_mismatch";
+        case 3u: return "word2_mismatch";
+        default: return "word3_mismatch";
+        }
+    }
+    if(comparisonCase == 0u)
+        return "equal";
+    if(comparisonCase == 1u)
+        return "early_mismatch";
+    return "late_mismatch";
+}
+
+u8 ComputeMemoryPatternByte(in usize index){
+    return PatternByte(index);
+}
+
+b8 CheckCopiedRange(in Span<u8> bytes, in usize start, in usize count, in usize sourceStart){
+    for(usize index = 0u; index < bytes.size(); ++index){
+        u8 expected = s_PoisonByte;
+        if(index >= start && index - start < count)
+            expected = ComputeMemoryPatternByte(sourceStart + index - start);
+        if(bytes[index] != expected)
+            return false;
+    }
     return true;
 }
 
-native{
-int main(int argc, char** argv){
-    using namespace __hidden_memory_storage_probe;
-    const StringView option = argc >= 2 ? StringView(argv[1]) : StringView{};
-    if(option != s_QualifyOption && option != s_BenchCopyOption && option != "--bench-equality" && option != s_BenchEqualityFirstWordOption){
-        FOUNDATION_CERR << "usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n";
+void FillQualifyLengths(mut Array<usize, s_QualifyLengthCount> lengths){
+    for(usize index = 0u; index < s_QualifyLengthCount; ++index)
+        lengths[index] = QualifyLengthAt(index);
+}
+
+b8 QualifyCopyBytes(){
+    Array<usize, s_QualifyLengthCount> lengths;
+    FillQualifyLengths(lengths);
+    return QualifyCopyBytesKernel(lengths, s_PoisonByte);
+}
+
+b8 QualifyProtectedRanges(){
+    Array<usize, s_QualifyLengthCount> lengths;
+    FillQualifyLengths(lengths);
+    return QualifyProtectedRangesKernel(lengths, s_PoisonByte);
+}
+
+b8 QualifyEquality(){
+    return QualifyEqualityKernel();
+}
+
+void BenchMemoryCopy(in usize samples){
+    WriteProbeStdout("kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n");
+    Array<b8, 2> streamingModes;
+    streamingModes[0] = false;
+    streamingModes[1] = true;
+    Array<usize, 2> offsets;
+    offsets[0] = 16u;
+    offsets[1] = 32u;
+    for(usize modeIndex = 0u; modeIndex < streamingModes.size(); ++modeIndex){
+        const b8 streaming = streamingModes[modeIndex];
+        StringView cacheLabel = "warm";
+        if(streaming)
+            cacheLabel = "streaming";
+        for(usize lenIndex = 0u; lenIndex < s_BenchLengthCount; ++lenIndex){
+            const usize bytes = BenchLengthAt(lenIndex);
+            const usize stride = (bytes + 127u) & ~cast<usize>(63u);
+            usize slots = 1u;
+            if(streaming)
+                slots = s_StreamingBytes / stride;
+            usize iterations = s_StreamingBytes / bytes;
+            if(iterations < 65536u)
+                iterations = 65536u;
+            StringView kindLabel = "copy_dynamic";
+            if(bytes == 5120u)
+                kindLabel = "copy_fixed";
+            MemoryCopyBenchmarkBuffers buffers = MemoryCopyBenchmarkBuffers(slots, stride, s_PoisonByte);
+            for(usize srcIdx = 0u; srcIdx < offsets.size(); ++srcIdx){
+                const usize sourceOffset = offsets[srcIdx];
+                for(usize dstIdx = 0u; dstIdx < offsets.size(); ++dstIdx){
+                    const usize destinationOffset = offsets[dstIdx];
+                    buffers.warmup(bytes, sourceOffset, destinationOffset);
+                    for(usize sample = 0u; sample < samples; ++sample){
+                        f64 baselineNs = 0.0;
+                        f64 candidateNs = 0.0;
+                        if((sample & 1u) == 0u){
+                            baselineNs = buffers.timeSample(false, bytes, sourceOffset, destinationOffset, iterations);
+                            candidateNs = buffers.timeSample(true, bytes, sourceOffset, destinationOffset, iterations);
+                        }
+                        else{
+                            candidateNs = buffers.timeSample(true, bytes, sourceOffset, destinationOffset, iterations);
+                            baselineNs = buffers.timeSample(false, bytes, sourceOffset, destinationOffset, iterations);
+                        }
+                        const f64 candidateOverBaseline = candidateNs / baselineNs;
+                        WriteProbeStdoutFlush(StringFormat(
+                            "{},{},{},{},{},{},{},{},{}\n",
+                            kindLabel,
+                            cacheLabel,
+                            bytes,
+                            sourceOffset,
+                            destinationOffset,
+                            sample,
+                            baselineNs,
+                            candidateNs,
+                            candidateOverBaseline
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+void BenchMemoryEquality(in usize samples, in b8 firstWord){
+    WriteProbeStdout("kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n");
+    usize caseCount = 3u;
+    if(firstWord)
+        caseCount = 5u;
+    Array<b8, 2> streamingModes;
+    streamingModes[0] = false;
+    streamingModes[1] = true;
+    for(usize modeIndex = 0u; modeIndex < streamingModes.size(); ++modeIndex){
+        const b8 streaming = streamingModes[modeIndex];
+        usize slots = 1u;
+        if(streaming)
+            slots = s_StreamingBytes / 64u;
+        StringView cacheLabel = "warm";
+        if(streaming)
+            cacheLabel = "streaming";
+        MemoryEqualityBenchmarkBuffers buffers = MemoryEqualityBenchmarkBuffers(slots);
+        for(usize comparisonCase = 0u; comparisonCase < caseCount; ++comparisonCase){
+            const StringView caseName = ResolveEqualityCaseName(firstWord, comparisonCase);
+            for(usize offset = 0u; offset < 4u; ++offset){
+                buffers.prepareAndWarmup(firstWord, comparisonCase, offset);
+                for(usize sample = 0u; sample < samples; ++sample){
+                    f64 baselineNs = 0.0;
+                    f64 candidateNs = 0.0;
+                    if((sample & 1u) == 0u){
+                        baselineNs = buffers.timeSample(false, firstWord, offset, s_EqualityIterations);
+                        candidateNs = buffers.timeSample(true, firstWord, offset, s_EqualityIterations);
+                    }
+                    else{
+                        candidateNs = buffers.timeSample(true, firstWord, offset, s_EqualityIterations);
+                        baselineNs = buffers.timeSample(false, firstWord, offset, s_EqualityIterations);
+                    }
+                    const f64 candidateOverBaseline = candidateNs / baselineNs;
+                    WriteProbeStdoutFlush(StringFormat(
+                        "equality,{},{},{},{},{},{},{}\n",
+                        cacheLabel,
+                        caseName,
+                        offset * s_U64ByteSize,
+                        sample,
+                        baselineNs,
+                        candidateNs,
+                        candidateOverBaseline
+                    ));
+                }
+            }
+        }
+    }
+}
+
+i32 RunMemoryStorageProbeCli(in Span<StringView> args){
+    StringView option = "";
+    if(args.size() >= 2u)
+        option = args[1];
+    if(option != s_QualifyOption && option != s_BenchCopyOption && option != s_BenchEqualityOption && option != s_BenchEqualityFirstWordOption){
+        WriteProbeStderr("usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n");
         return 2;
     }
     if(!QualifyCopyBytes() || !QualifyEquality()){
-        FOUNDATION_CERR << "byte/equality qualification failed\n";
+        WriteProbeStderr("byte/equality qualification failed\n");
         return 1;
     }
-#if defined(FOUNDATION_PLATFORM_LINUX)
     if(!QualifyProtectedRanges()){
-        FOUNDATION_CERR << "protected-range qualification failed\n";
+        WriteProbeStderr("protected-range qualification failed\n");
         return 1;
     }
-#endif
     if(option == s_QualifyOption){
-        FOUNDATION_COUT << "qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n";
+        WriteProbeStdout("qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n");
         return 0;
     }
     usize samples = 7u;
-    if(argc >= 3){
-        const auto parsedSamples = ParseU64(AStringView(argv[2]));
-        if(!parsedSamples || *parsedSamples == 0u || *parsedSamples > 100u)
+    if(args.size() >= 3u){
+        const Expected<u64> parsedSamples = ParseU64(args[2]);
+        if(!parsedSamples.has_value() || parsedSamples.value() == 0u || parsedSamples.value() > 100u)
             return 2;
-        samples = static_cast<usize>(*parsedSamples);
+        samples = cast<usize>(parsedSamples.value());
     }
     if(option == s_BenchCopyOption)
-        BenchCopy(samples);
+        BenchMemoryCopy(samples);
     else
-        BenchEquality(samples, option == s_BenchEqualityFirstWordOption);
+        BenchMemoryEquality(samples, option == s_BenchEqualityFirstWordOption);
     return 0;
 }
 
@@ -533,7 +771,29 @@ int main(int argc, char** argv){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+int main(int argc, char** argv){
+    if(argc <= 0)
+        return 2;
+    Array<StringView, 4> args{};
+    const usize count = Min(static_cast<usize>(argc), args.size());
+    for(usize index = 0u; index < count; ++index)
+        args[index] = StringView(argv[index]);
+    return SimdOptimizationBenchmark::RunMemoryStorageProbeCli(Span<const StringView>(args.data(), count));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/global.adhd>
+#include <utilities/tex_conv/uastc_encode_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsSupportedTexConvInputPath(in Path path){
+    Array<StringView, 8u> extensions;
+    extensions[0u] = s_PngExtension;
+    extensions[1u] = s_JpgExtension;
+    extensions[2u] = s_JpegExtension;
+    extensions[3u] = s_JfifExtension;
+    extensions[4u] = s_TgaExtension;
+    extensions[5u] = s_QoiExtension;
+    extensions[6u] = s_ExrExtension;
+    extensions[7u] = s_HdrExtension;
+    return PathHasListedExtension(path, extensions);
+}
+
+b8 IsHdrTexConvInputPath(in Path path){
+    Array<StringView, 2u> extensions;
+    extensions[0u] = s_ExrExtension;
+    extensions[1u] = s_HdrExtension;
+    return PathHasListedExtension(path, extensions);
+}
+
+b8 IsNwbTexConvOutputPath(in Path path){
+    Array<StringView, 1u> extensions;
+    extensions[0u] = s_NwbOutputExtension;
+    return PathHasListedExtension(path, extensions);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

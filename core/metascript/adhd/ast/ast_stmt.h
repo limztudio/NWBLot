@@ -111,6 +111,7 @@ struct Stmt{
     b8 isEssential = false;
     b8 lowerSwitchToIfChain = false;
     b8 usesScratchArena = false;
+    b8 arenaFirstInit = false;
     b8 wrapReturnNotNull = false;
     b8 isImported = false;
 

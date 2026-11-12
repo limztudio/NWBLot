@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.adhd.h>
@@ -37,7 +43,7 @@ void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(han
     handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
 }
 
-[[nodiscard]] inline b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
+[[nodiscard]] NWB_INLINE b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
     b8 ready = true;
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
         const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
@@ -130,15 +136,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderMeshRendererMeshTypesAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

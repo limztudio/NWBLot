@@ -2,19 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/gtest_macros.adhd>
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 
-native{
-#include <tests/smoke/test_environment.h>
-#include <cstdlib>
-#include <gtest/gtest.h>
-}
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-#define ASSERT_TRUE(...) native{ ASSERT_TRUE(...) }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <cstdlib>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,9 +32,11 @@ native{
 void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 hasValue){
     String nameCopy = String(name);
     String valueCopy = String(value);
-    native(in nameCopy, in valueCopy, in hasValue){
-        ASSERT_EQ(SetSmokeTestEnvironment(nameCopy.c_str(), hasValue ? valueCopy.c_str() : nullptr), 0);
+    i32 status = -1;
+    native(in nameCopy, in valueCopy, in hasValue, mut status){
+        status = hasValue ? ::setenv(nameCopy.c_str(), valueCopy.c_str(), 1) : ::unsetenv(nameCopy.c_str());
     }
+    ASSERT_EQ(status, 0);
 }
 
 void VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations(){
@@ -41,7 +52,7 @@ void VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations(){
     CsgShadowMode open = CsgShadowMode();
     ASSERT_TRUE(open.read(false));
     EXPECT_EQ(open.openCase, CsgShadowOpenCase::Boundary64);
-    EXPECT_EQ(open.openCaseName(), "boundary64");
+    EXPECT_EQ(open.openCaseName(), StringView("boundary64"));
     CsgShadowMode openCaustic = CsgShadowMode();
     EXPECT_FALSE(openCaustic.read(true));
 
@@ -69,11 +80,8 @@ void VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations(){
     EXPECT_FALSE(analyticInvalid.read(false));
 }
 
-native{
-TEST(CsgShadowMode, RejectsIncompatibleAtlasCombinations){
-    VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations();
-}
-}
+NWB_ADHD_GTEST(CsgShadowMode, RejectsIncompatibleAtlasCombinations, VerifyCsgShadowModeRejectsIncompatibleAtlasCombinations)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

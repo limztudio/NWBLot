@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class DepthWarpProbeProject : IProjectEntryCallbacks{
     public DepthWarpProbeProject(mut ProjectRuntimeContext context){
         this.m_sceneSubsystems = ActiveSceneSubsystems(context.objectArena);
@@ -67,10 +68,6 @@ class DepthWarpProbeProject : IProjectEntryCallbacks{
         [essential] info("AvboitDepthWarpProbe: shutdown completed={}", completedVal);
     }
 
-    private b8 compareBatch(in ProbeBatchTaskPayload payload){
-        return CompareDepthWarpProbeBatch(this.m_context, this.m_readback, payload);
-    }
-
     private ActiveSceneSubsystems m_sceneSubsystems;
     private DescriptorHandleArray4 m_descriptors = DescriptorHandleArray4();
     private GlobalProbeCaseVector m_cases;
@@ -88,7 +85,17 @@ class DepthWarpProbeProject : IProjectEntryCallbacks{
     private b8 m_completed = false;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 320u, 240u };
 }
@@ -100,7 +107,13 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::DepthWarpProbeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

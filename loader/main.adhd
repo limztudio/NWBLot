@@ -1,0 +1,427 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/callback_shutdown.adhd>
+#include <loader/project_entry.adhd>
+#include "runtime_constants.adhd"
+#include "crash_reporting.adhd"
+#include "resource_mount_resolver.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LoaderRuntimeFlags{
+    public b8 enableGpuDebug = false;
+    public b8 forceSdrOutput = false;
+    public b8 disableHardwareRayTracing = false;
+    public b8 useStandaloneLogger = false;
+}
+
+b8 ShouldUseStandaloneLogger(in StringView address, in u16 port){
+    return address.empty() || port == s_StandaloneLoggerPort;
+}
+
+b8 ValidateProjectFrameClientSize(in ProjectFrameClientSize size){
+    if(size.width == s_EmptyFrameClientExtent || size.height == s_EmptyFrameClientExtent){
+        [essential] error("Invalid project frame client size: {}x{}", size.width, size.height);
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/client/module.h>
+
+#include <core/alloc/module.h>
+#include <core/common/application_entry.h>
+#include <core/crash/module.h>
+#include <core/crash/package_names.h>
+#include <core/frame/module.h>
+#include <core/assets/registry.h>
+#include <core/assets/manager.h>
+#include <core/assets/auto_registration.h>
+#include <core/graphics/rhi/gpu_crash_diagnostics.h>
+#include <core/graphics/shader_archive.h>
+#include <core/filesystem/volume_naming.h>
+
+#include <global/filesystem/executable_paths.h>
+#include <global/command_line.h>
+#include <global/terminal_entry.h>
+#include <global/filesystem.h>
+
+#include <CLI.hpp>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_loader{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::LoaderDetail;
+using CrashArena = NWB::Core::Alloc::PersistentArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 InstallCrashReporting(CrashArena& crashArena){
+    auto executableDirectory = ExecutablePaths(crashArena).directory();
+    if(!executableDirectory)
+        executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
+
+    auto executableName = ExecutablePaths(crashArena).name();
+    if(!executableName)
+        executableName = ::Path<CrashArena>(crashArena, s_FallbackExecutableName);
+
+    AString<CrashArena> applicationName = PathToString<char>(crashArena, *executableName);
+
+    NWB::Core::Crash::CrashConfig crashConfig(crashArena);
+    crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
+    crashConfig.buildId = s_UnknownBuildLabel;
+    crashConfig.version = s_UnknownBuildLabel;
+    crashConfig.spoolDirectory = *executableDirectory / NWB::Core::Crash::PackageNames::s_DefaultRootDirectoryName;
+    crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
+
+    if(!NWB::Core::Crash::InstallCrashHandler(crashConfig))
+        return false;
+
+    NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
+        const AStringView binaryDump = report.binaryDump ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize) : AStringView();
+        const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
+        const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
+        if(ShouldWarnOnGpuCrashDumpCapture(dumpResult.requestAccepted(), dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed))
+            NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
+    }, nullptr);
+    return true;
+}
+
+struct UpdateCallbackContext{
+    NWB::IProjectEntryCallbacks& callbacks;
+};
+
+struct LoaderOptions{
+    AString<NWB::Core::Alloc::ScratchArena> logAddress;
+    AString<NWB::Core::Alloc::ScratchArena> crashUploadToken;
+    LoaderRuntimeFlags flags;
+
+
+public:
+    explicit LoaderOptions(NWB::Core::Alloc::ScratchArena& arena)noexcept(noexcept(AString<NWB::Core::Alloc::ScratchArena>(arena)))
+        : logAddress(arena)
+        , crashUploadToken(arena)
+    {}
+};
+
+b8 ProjectTickCallback(void* userData, const f32 delta){
+    NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
+    auto& updateContext = *MakeNotNull(static_cast<UpdateCallbackContext*>(userData));
+    return updateContext.callbacks.onUpdate(delta);
+}
+
+class FilesystemAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
+public:
+    explicit FilesystemAssetBinarySource(NWB::Core::Filesystem::IFilesystem& filesystem)noexcept
+        : m_filesystem(filesystem)
+    {}
+
+
+public:
+    virtual b8 readAssetBinary(const Name& virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
+        return m_filesystem.readFile(virtualPath, outBinary);
+    }
+
+
+private:
+    NWB::Core::Filesystem::IFilesystem& m_filesystem;
+};
+
+Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShaderArchiveRecords(NWB::Core::GraphicsArena& arena, const NWB::Core::Assets::IAssetBinarySource& assetBinarySource){
+    NWB::Core::Assets::AssetBytes indexBinary{arena};
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::s_IndexVirtualPathName, indexBinary))
+        return MakeUnexpected(Failure{});
+    return NWB::Core::ShaderArchive::DeserializeIndex(arena, { indexBinary.data(), indexBinary.size() });
+}
+
+b8 ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderRuntimeFlags& flags){
+    if(flags.disableHardwareRayTracing){
+        if(!graphics.setHardwareRayTracingPolicy(NWB::Core::HardwareRayTracingPolicy::Disabled)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: hardware ray tracing policy must be selected before graphics initialization"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: hardware ray tracing disabled before device creation"));
+    }
+
+    if(flags.forceSdrOutput){
+        if(!graphics.setHDR10OutputEnabled(false)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: SDR output must be selected before graphics initialization"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: forcing SDR presentation"));
+    }
+
+    if(flags.enableGpuDebug){
+        if(!graphics.setDebugRuntimeEnabled(true)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation enabled"));
+    }
+
+    return true;
+}
+
+b8 UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
+    auto* logger = static_cast<NWB::Log::Client*>(userData);
+    return logger && logger->enqueueTelemetry(bytes, byteCount);
+}
+
+int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions& options, void* inst, NWB::Log::Client* telemetryClient){
+    {
+        const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
+        if(!ValidateProjectFrameClientSize(frameClientSize))
+            return s_LoaderExitFailure;
+
+        const TStringView projectWindowTitle = NWB::QueryProjectWindowTitle();
+        if(projectWindowTitle.empty()){
+            NWB_LOGGER_FATAL(NWB_TEXT("Invalid project window title"));
+            return s_LoaderExitFailure;
+        }
+
+        NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+        if(telemetryClient)
+            frame.setTelemetryUploadCallback(&UploadTelemetry, telemetryClient);
+        frame.graphics().setWindowTitle(projectWindowTitle);
+        auto resourceDirectoryResult = ResolveResourceMountDirectory(scratchArena, [](const ::Path<::ArenaBase>& directory, const AStringView volumeName) -> Expected<b8, ErrorCode>{
+            return NWB::Core::Filesystem::VolumeSegmentExists(directory, volumeName);
+        });
+        if(resourceDirectoryResult)
+            frame.graphics().setPipelineCacheDirectory(*resourceDirectoryResult);
+        NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
+        if(!NWB::ConfigureProjectRuntime(startupContext)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: project runtime configuration failed before device initialization"));
+            return s_LoaderExitFailure;
+        }
+        if(!resourceDirectoryResult){
+            const auto& error = resourceDirectoryResult.error();
+            if(!startupContext.filesystemFactory){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to inspect {} '{}': {}"), ConvertString(error.stage), PathToString<tchar>(error.path), ConvertString(error.code.message()));
+                return s_LoaderExitFailure;
+            }
+            NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to inspect {} '{}': {}; continuing with custom filesystem factory"), ConvertString(error.stage), PathToString<tchar>(error.path), ConvertString(error.code.message()));
+        }
+        const NWB::Path resourceMountDirectory = resourceDirectoryResult ? NWB::Path(frame.projectObjectArena(), *resourceDirectoryResult) : NWB::Path(frame.projectObjectArena(), s_ResourceDirectoryName);
+        if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
+            return s_LoaderExitFailure;
+        if(!ApplyGraphicsOptions(frame.graphics(), options.flags))
+            return s_LoaderExitFailure;
+
+        if(!frame.init())
+            return s_LoaderExitFailure;
+        i32 initializedFrameWidth = s_UninitializedFrameExtent;
+        i32 initializedFrameHeight = s_UninitializedFrameExtent;
+        frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
+
+        NWB::Core::Filesystem::VolumeMountDesc graphicsMount(frame.projectObjectArena());
+        if(!graphicsMount.volumeName.assign(s_GraphicsVolumeName))
+            return s_LoaderExitFailure;
+        graphicsMount.mountDirectory = resourceMountDirectory;
+        auto graphicsFilesystemResult = NWB::Core::Filesystem::CreateFilesystem(frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory);
+        if(!graphicsFilesystemResult)
+            return s_LoaderExitFailure;
+        UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = Move(*graphicsFilesystemResult);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
+
+        {
+            FilesystemAssetBinarySource assetBinarySource(*graphicsFilesystem);
+
+            NWB::Core::Assets::AssetRegistry assetRegistry(frame.projectObjectArena());
+            NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
+
+            NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
+
+            auto archiveRecords = LoadShaderArchiveRecords(frame.projectObjectArena(), assetBinarySource);
+            if(!archiveRecords){
+                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'"), ConvertString(NWB::Core::ShaderArchive::s_IndexVirtualPath));
+                return s_LoaderExitFailure;
+            }
+
+            const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& shaderArchiveRecords = *archiveRecords;
+            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks(), frame.cpuTasks().registerProfileLabel(s_ProjectTaskProfileName));
+            NWB::ProjectRuntimeContext context = {
+                frame.graphics(),
+                frame.input(),
+                frame.clipboard(),
+                frame.textInput(),
+                frame.projectObjectArena(),
+                frame.cpuTasks(),
+                frame.gpuTasks(),
+                projectTasks,
+                assetManager,
+                *graphicsFilesystem,
+                frame.frameGraphRegistry(),
+                frame.perfSession(),
+                {},
+                {},
+                {},
+                {},
+                {},
+            };
+            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName){
+                return NWB::Core::ShaderArchive::FindVirtualPath(shaderArchiveRecords, shaderName, variantName, stageName);
+            };
+            context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& captureOptions){
+                frame.setTelemetryCapture(captureOptions);
+            };
+            context.telemetryUploadFlush = [&frame](const b8 clearAfterUpload){
+                return frame.flushTelemetryUpload(clearAfterUpload);
+            };
+            context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& captureOptions){
+                frame.setPerfCapture(captureOptions);
+            };
+            context.requestQuit = [&frame]()noexcept{
+                frame.requestQuit();
+            };
+
+            auto callbacks = NWB::CreateProjectEntryCallbacks(context);
+            if(!callbacks){
+                NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
+                return s_LoaderExitFailure;
+            }
+            CallbackShutdownGuard callbackShutdownGuard{ *callbacks, projectTasks };
+            UpdateCallbackContext updateCallbackContext{ *callbacks };
+
+            callbackShutdownGuard.activate();
+            if(!callbacks->onStartup()){
+                NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
+                return s_LoaderExitFailure;
+            }
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
+            frame.setProjectUpdateCallback(&ProjectTickCallback, &updateCallbackContext);
+
+            if(!frame.showFrame()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
+                return s_LoaderExitFailure;
+            }
+
+            if(!frame.mainLoop()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
+                return s_LoaderExitFailure;
+            }
+        }
+        if(!graphicsFilesystem->unmount()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to unmount project filesystem"));
+            return s_LoaderExitFailure;
+        }
+    }
+
+    return s_LoaderExitSuccess;
+}
+
+int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions& options, void* inst, const b8 crashReportingInstalled){
+    const AStringView logAddressView(options.logAddress.data(), options.logAddress.size());
+    const AStringView crashTokenView(options.crashUploadToken.data(), options.crashUploadToken.size());
+    const auto setUploadDestination = [](const AStringView url, const AStringView token) -> b8{
+        return NWB::Core::Crash::SetCrashUploadDestination(url, token);
+    };
+    const auto setCrashMetadata = [](const AStringView key, const AStringView value) -> b8{
+        return NWB::Core::Crash::SetCrashMetadata(key, value);
+    };
+    if(options.flags.useStandaloneLogger){
+        NWB::Log::ClientStandalone logger;
+        if(!logger.init())
+            return s_LoaderExitFailure;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
+        ConfigureCrashReporting(crashReportingInstalled, options.flags.useStandaloneLogger, logAddressView, crashTokenView, options.flags.enableGpuDebug, setUploadDestination, setCrashMetadata);
+
+        return RunProjectRuntime(scratchArena, options, inst, nullptr);
+    }
+
+    NWB::Log::Client logger;
+    if(!logger.init(logAddressView))
+        return s_LoaderExitFailure;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), ConvertString(options.logAddress));
+    ConfigureCrashReporting(crashReportingInstalled, options.flags.useStandaloneLogger, logAddressView, crashTokenView, options.flags.enableGpuDebug, setUploadDestination, setCrashMetadata);
+
+    return RunProjectRuntime(scratchArena, options, inst, &logger);
+}
+
+template<typename CharT>
+int EntryPoint(const isize argc, CharT** argv, void* inst){
+    // Capture early startup failures; configure uploads after CLI and logger setup.
+    const usize crashArenaReserveSize = CrashArena::StructureAlignedSize(s_CrashArenaPayloadSize);
+    CrashArena crashArena(s_CrashReportingArena, crashArenaReserveSize);
+    const b8 crashReportingInstalled = InstallCrashReporting(crashArena);
+    ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{
+        if(crashReportingInstalled){
+            NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);
+            NWB::Core::Crash::UninstallCrashHandler();
+        }
+    });
+
+    NWB::Core::Alloc::ScratchArena commandLineArena(s_CommandLineArena);
+    LoaderOptions options(commandLineArena);
+    CLI::App app{ s_LoaderAppName.data() };
+
+    AInteropString address(Get<static_cast<usize>(NWB::Log::ArgCommand::LogAddress)>(NWB::Log::s_ArgDefault));
+    u16 port = Get<static_cast<usize>(NWB::Log::ArgCommand::LogPort)>(NWB::Log::s_ArgDefault);
+    NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogAddress>(app, address);
+    NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogPort>(app, port);
+    app.add_option(NWB::Log::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
+    app.add_flag(s_ForceSdrOutputFlag.data(), options.flags.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
+    app.add_flag(s_DisableHardwareRayTracingFlag.data(), options.flags.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
+#if !defined(NWB_FINAL)
+    app.add_flag("--gpudbg", options.flags.enableGpuDebug, "Enable graphics backend validation layer (dbg/opt builds only)");
+#endif
+
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
+        CommandLineParseApp(app, argc, argv);
+
+        const AStringView addressView(address.data(), address.size());
+        options.flags.useStandaloneLogger = ShouldUseStandaloneLogger(addressView, port);
+        if(!options.flags.useStandaloneLogger)
+            options.logAddress = StringFormat(commandLineArena, "{}:{}", addressView, port);
+
+        return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
+    }, [&](const CLI::ParseError& parseError){ return app.exit(parseError, NWB_COUT, NWB_CERR); }, []()noexcept{ return s_LoaderExitFailure; });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(__hidden_loader::EntryPoint)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

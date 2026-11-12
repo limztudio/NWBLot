@@ -23,7 +23,7 @@ public:
         : m_symbols(symbols)
     {}
 
-    void emitDeserializeNwbMethod(MString& out, Span<const FieldDecl* const> fields)const;
+    void emitDeserializeNwbMethod(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> fields, b8 classNeedsArena)const;
     void emitExtractNwbAssetDependenciesMethod(MString& out, Span<const FieldDecl* const> fields)const;
 
 

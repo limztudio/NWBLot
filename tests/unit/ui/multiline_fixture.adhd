@@ -2,12 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "name_cases.adhd"
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/name_cases.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <gtest/gtest.h>
 
@@ -16,74 +26,9 @@ NWB_BEGIN
 namespace UiMultilineTests{
 
 using namespace Impl::Ui;
-
-class MultilineSnapshot final{
-public:
-    MultilineSnapshot(Core::Alloc::GlobalArena& arena, const EditModel& model)
-        : m_text(arena)
-        , m_preedit(arena)
-        , m_boundaries(arena)
-    {
-        if(!model.text().empty())
-            m_text.assign(model.text().data(), model.text().size());
-        m_boundaries.assign(model.graphemeBoundaries().begin(), model.graphemeBoundaries().end());
-        m_generation = model.instanceGeneration();
-        m_revision = model.revision();
-        m_external = model.externalRevision();
-        m_compositionGeneration = model.compositionGeneration();
-        m_selectionGeneration = model.selectionGeneration();
-        m_anchor = model.anchor();
-        m_caret = model.caret();
-        m_undo = model.canUndo();
-        m_redo = model.canRedo();
-        m_mode = model.textMode();
-        m_composition = model.composition();
-        if(!m_composition.text.empty())
-            m_preedit.assign(m_composition.text.data(), m_composition.text.size());
-        m_composition.text = {};
-    }
-
-
-public:
-    void expectUnchanged(const EditModel& model)const{
-        EXPECT_EQ(model.text(), AStringView(m_text.data(), m_text.size()));
-        EXPECT_EQ(model.graphemeBoundaries(), m_boundaries);
-        EXPECT_EQ(model.instanceGeneration(), m_generation);
-        EXPECT_EQ(model.revision(), m_revision);
-        EXPECT_EQ(model.externalRevision(), m_external);
-        EXPECT_EQ(model.compositionGeneration(), m_compositionGeneration);
-        EXPECT_EQ(model.selectionGeneration(), m_selectionGeneration);
-        EXPECT_EQ(model.anchor(), m_anchor);
-        EXPECT_EQ(model.caret(), m_caret);
-        EXPECT_EQ(model.canUndo(), m_undo);
-        EXPECT_EQ(model.canRedo(), m_redo);
-        EXPECT_EQ(model.textMode(), m_mode);
-        const EditCompositionView composition = model.composition();
-        EXPECT_EQ(composition.text, AStringView(m_preedit.data(), m_preedit.size()));
-        EXPECT_EQ(composition.anchor, m_composition.anchor);
-        EXPECT_EQ(composition.caret, m_composition.caret);
-        EXPECT_EQ(composition.replacementStart, m_composition.replacementStart);
-        EXPECT_EQ(composition.replacementEnd, m_composition.replacementEnd);
-        EXPECT_EQ(composition.active, m_composition.active);
-    }
-
-
-private:
-    AString<Core::Alloc::GlobalArena> m_text;
-    AString<Core::Alloc::GlobalArena> m_preedit;
-    EditBoundaryVector m_boundaries;
-    EditCompositionView m_composition;
-    u64 m_generation = 0u;
-    u64 m_revision = 0u;
-    u64 m_external = 0u;
-    u64 m_compositionGeneration = 0u;
-    u64 m_selectionGeneration = 0u;
-    usize m_anchor = 0u;
-    usize m_caret = 0u;
-    EditTextMode::Enum m_mode = EditTextMode::SingleLine;
-    b8 m_undo = false;
-    b8 m_redo = false;
-};
+using GlobalArena = Core::Alloc::GlobalArena;
+using EditTextModeEnum = Impl::Ui::EditTextMode::Enum;
+namespace EditTextMode = Impl::Ui::EditTextMode;
 
 class MultilineFixture : public testing::Test{
 public:
@@ -93,7 +38,7 @@ public:
     {}
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     EditModel m_model;
 };
@@ -101,11 +46,92 @@ protected:
 };
 
 NWB_END
-}
 
-b8 MultilineFixtureReady(in u32 value){
-    return value != 0u;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MultilineSnapshot{
+    private String m_text = "";
+    private String m_preedit = "";
+    private Vector<usize> m_boundaries;
+    private EditCompositionView m_composition;
+    private u64 m_generation = 0u;
+    private u64 m_revision = 0u;
+    private u64 m_external = 0u;
+    private u64 m_compositionGeneration = 0u;
+    private u64 m_selectionGeneration = 0u;
+    private usize m_anchor = 0u;
+    private usize m_caret = 0u;
+    private EditTextModeEnum m_mode = EditTextMode::SingleLine;
+    private b8 m_undo = false;
+    private b8 m_redo = false;
+
+    public MultilineSnapshot(in GlobalArena arena, in EditModel model){
+        this.capture(model);
+    }
+
+    public MultilineSnapshot(in EditModel model){
+        this.capture(model);
+    }
+
+    private void capture(in EditModel model){
+        const StringView textView = model.text();
+        if(!textView.empty())
+            this.m_text.assign(textView.data(), textView.size());
+        const auto boundariesCount = model.graphemeBoundaries().size();
+        this.m_boundaries.reserve(boundariesCount);
+        for(usize index = 0u; index < boundariesCount; ++index)
+            this.m_boundaries.push_back(model.graphemeBoundaries()[index]);
+        this.m_generation = model.instanceGeneration();
+        this.m_revision = model.revision();
+        this.m_external = model.externalRevision();
+        this.m_compositionGeneration = model.compositionGeneration();
+        this.m_selectionGeneration = model.selectionGeneration();
+        this.m_anchor = model.anchor();
+        this.m_caret = model.caret();
+        this.m_undo = model.canUndo();
+        this.m_redo = model.canRedo();
+        this.m_mode = model.textMode();
+        this.m_composition = model.composition();
+        if(!this.m_composition.text.empty())
+            this.m_preedit.assign(this.m_composition.text.data(), this.m_composition.text.size());
+        this.m_composition.text = "";
+    }
+
+    public void expectUnchanged(in EditModel model)const{
+        EXPECT_EQ(model.text(), StringView(this.m_text.data(), this.m_text.size()));
+        const usize actualCount = model.graphemeBoundaries().size();
+        EXPECT_EQ(actualCount, this.m_boundaries.size());
+        const usize count = Min(actualCount, this.m_boundaries.size());
+        for(usize index = 0u; index < count; ++index)
+            EXPECT_EQ(model.graphemeBoundaries()[index], this.m_boundaries[index]);
+        EXPECT_EQ(model.instanceGeneration(), this.m_generation);
+        EXPECT_EQ(model.revision(), this.m_revision);
+        EXPECT_EQ(model.externalRevision(), this.m_external);
+        EXPECT_EQ(model.compositionGeneration(), this.m_compositionGeneration);
+        EXPECT_EQ(model.selectionGeneration(), this.m_selectionGeneration);
+        EXPECT_EQ(model.anchor(), this.m_anchor);
+        EXPECT_EQ(model.caret(), this.m_caret);
+        EXPECT_EQ(model.canUndo(), this.m_undo);
+        EXPECT_EQ(model.canRedo(), this.m_redo);
+        EXPECT_EQ(model.textMode(), this.m_mode);
+        const EditCompositionView composition = model.composition();
+        EXPECT_EQ(composition.text, StringView(this.m_preedit.data(), this.m_preedit.size()));
+        EXPECT_EQ(composition.anchor, this.m_composition.anchor);
+        EXPECT_EQ(composition.caret, this.m_composition.caret);
+        EXPECT_EQ(composition.replacementStart, this.m_composition.replacementStart);
+        EXPECT_EQ(composition.replacementEnd, this.m_composition.replacementEnd);
+        EXPECT_EQ(composition.active, this.m_composition.active);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

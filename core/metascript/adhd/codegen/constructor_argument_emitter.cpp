@@ -5,7 +5,13 @@
 #include "constructor_argument_emitter.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeName, const Span<const Expr* const> arguments, const MStringView injectedArenaName, const b8 useBracesForList, const b8 emptyUsesBraces)const{
@@ -83,24 +89,42 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
             m_emitter.emitExpr(out, *arguments[0]);
         }
     }
+    else if(!useBracesForList && injectedArenaName.empty() && arguments.size() == 1u && arguments[0] && arguments[0]->kind == ExprKind::Call){
+        out.push_back('(');
+        m_emitter.emitExpr(out, *arguments[0]);
+        out.push_back(')');
+    }
     else{
+        const b8 omitsArena = !baseTypeName.empty() && !m_emitter.m_symbols.hasTypeSymbol(baseTypeName) && OmitsArenaInCtorType(baseTypeName);
+        const MStringView effArenaName = omitsArena ? MStringView{} : injectedArenaName;
+        const b8 arenaLast = !baseTypeName.empty() && !m_emitter.m_symbols.hasTypeSymbol(baseTypeName) && SymbolTable::IsArenaBackedContainer(baseTypeName) && !IsArenaFirstCtorType(baseTypeName);
+        const b8 arenaFirst = !effArenaName.empty() && !arenaLast;
+        if(arenaFirst){
+            out.append(effArenaName.data(), effArenaName.size());
+            if(!arguments.empty())
+                out.append(", ");
+        }
         for(usize i = 0u; i < arguments.size(); ++i){
             if(i > 0u)
                 out.append(", ");
             if(arguments[i])
                 m_emitter.emitExpr(out, *arguments[i]);
         }
-        if(!injectedArenaName.empty()){
+        if(!effArenaName.empty() && !arenaFirst){
             if(!arguments.empty())
                 out.append(", ");
-            out.append(injectedArenaName.data(), injectedArenaName.size());
+            out.append(effArenaName.data(), effArenaName.size());
         }
     }
     out.push_back(useBracesForList ? '}' : ')');
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

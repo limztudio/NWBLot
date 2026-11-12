@@ -2,56 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#if defined(NWB_COOK)
+#include <impl/assets_mesh/cook_meshlet_triangles.adhd>
+#include <impl/assets_mesh/cook_meshlet_scoring.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_meshlet_triangles.adhd.h>
-#include <impl/assets_mesh/cook_types.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_scoring.adhd.h>
+usize ComputeMeshletParallelCandidateReserve(in u32 workerThreadCount){
+    return (cast<usize>(workerThreadCount) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription;
+}
 
-#include <core/task/cpu/scheduler.h>
+b8 CanSearchDisconnectedMeshletCandidatesParallel(in b8 isParallelEnabled, in usize searchCount){
+    return isParallelEnabled && searchCount >= s_MeshletDisconnectedCandidateParallelThreshold;
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Scores frontier and disconnected triangles against the growing meshlet and picks the best fit.
-namespace MeshletCandidateSearch{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchOffset,
-    const Span<const u32> triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const Span<const u32> localVertexRefs,
-    Core::CpuTaskScheduler& cpuScheduler,
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates
+Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
+    in Span<MeshletTriangleData> triangles,
+    in Span<MeshletTriangleCalculation> triangleCalculations,
+    in Span<u8> visitedTriangles,
+    in usize searchOffset,
+    in Span<u32> triangleIndices,
+    in MeshletScoreState scoreState,
+    in MeshletDesc meshlet,
+    in Span<u32> localVertexRefs,
+    in b8 isParallelEnabled,
+    in u32 workerThreadCount,
+    mut Vector<MeshletCandidateSearchResult> parallelCandidates
 ){
-    const usize triangleCount = trianglePrecompute.triangles.size();
+    const usize triangleCount = triangles.size();
     if(searchOffset >= triangleCount)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
 
     const usize searchCount = triangleCount - searchOffset;
-    if(!cpuScheduler.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
+    if(!CanSearchDisconnectedMeshletCandidatesParallel(isParallelEnabled, searchCount)){
         return FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            trianglePrecompute.visitedTriangles,
+            triangles,
+            triangleCalculations,
+            visitedTriangles,
             searchOffset,
             triangleCount,
             triangleIndices,
@@ -61,22 +49,20 @@ namespace MeshletCandidateSearch{
         );
     }
 
-    const usize chunkCount = ResolveMeshletDisconnectedCandidateChunkCount(searchCount, cpuScheduler.workerThreadCount());
-
+    const usize chunkCount = ResolveMeshletDisconnectedCandidateChunkCount(searchCount, workerThreadCount);
     parallelCandidates.clear();
     parallelCandidates.resize(chunkCount);
-    const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](const usize chunkIndex)noexcept(
-        noexcept(FindBestDisconnectedMeshletCandidateRangeFromPrecompute(trianglePrecompute.triangles, trianglePrecompute.triangleCalculations, trianglePrecompute.visitedTriangles, DeclVal<const usize&>(), DeclVal<const usize&>(), triangleIndices, scoreState, meshlet, localVertexRefs))
-    ){
+
+    parallel_for(usize chunkIndex = 0u; chunkIndex < chunkCount; ++chunkIndex){
         usize chunkBegin = 0u;
         usize chunkEnd = 0u;
         ResolveMeshletDisconnectedCandidateChunkRange(searchOffset, searchCount, chunkCount, chunkIndex, chunkBegin, chunkEnd);
 
         MeshletCandidateSearchResult result;
-        const auto foundCandidate = FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            trianglePrecompute.visitedTriangles,
+        const Expected<MeshletFrontierCandidate> foundCandidate = FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
+            triangles,
+            triangleCalculations,
+            visitedTriangles,
             chunkBegin,
             chunkEnd,
             triangleIndices,
@@ -85,13 +71,9 @@ namespace MeshletCandidateSearch{
             localVertexRefs
         );
         result.found = foundCandidate.has_value();
-        if(foundCandidate)
-            result.candidate = *foundCandidate;
+        if(foundCandidate.has_value())
+            result.candidate = foundCandidate.value();
         parallelCandidates[chunkIndex] = result;
-    });
-    if(!parallelWork){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshCook: disconnected candidate preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
-        return MakeUnexpected(Failure{});
     }
 
     return SelectBestMeshletCandidateFromResults(parallelCandidates);
@@ -100,32 +82,3 @@ namespace MeshletCandidateSearch{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplAssetsMeshCookMeshletCandidatesAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

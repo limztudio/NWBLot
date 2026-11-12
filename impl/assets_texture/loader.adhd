@@ -2,11 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_texture/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_texture/asset.adhd.h>
 
+#include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
 #include <core/assets/ref.h>
+#include <core/graphics/rhi/format.h>
 #include <core/graphics/runtime/runtime.h>
 
 
@@ -14,6 +28,38 @@ native{
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Owns UASTC slice layout plus LDR/HDR mip decode feeding texture uploads.
+struct TextureDecodedMipUpload{
+    Vector<u8, Core::Alloc::ScratchArena> bytes;
+    usize rowPitch = 0u;
+    usize sliceByteCount = 0u;
+
+
+public:
+    explicit TextureDecodedMipUpload(Core::Alloc::ScratchArena& arena)noexcept
+        : bytes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextureMipDecoder final : NoCopy{
+public:
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decode(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
+
+
+private:
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
+
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,21 +116,56 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsTextureLoaderAdhdModule(in u64 value){
-    return value != 0u;
+Name ResolveTextureUploadDebugName(in Name debugName, in Name virtualPath){
+    if(debugName != s_NameNone)
+        return debugName;
+    return virtualPath;
+}
+
+b8 HasPartiallyInitializedTextureGpuResource(in b8 hasTexture, in b8 hasDescriptor, in b8 hasKnownFormat){
+    return hasTexture || hasDescriptor || hasKnownFormat;
+}
+
+b8 ShouldRetryTextureCreateWithFallback(
+    in b8 isLdrPayload,
+    in b8 isRgba8Format,
+    in b8 isHdrPayload,
+    in b8 isOpaqueAlpha
+){
+    return (isLdrPayload && !isRgba8Format) || (isHdrPayload && isOpaqueAlpha);
+}
+
+usize ComputeTextureUploadRegionReserveCount(
+    in Span<TextureMipLevel> mipLevels,
+    in b8 isVolumeTexture
+){
+    if(isVolumeTexture)
+        return mipLevels.size();
+    usize totalRegions = 0u;
+    for(in TextureMipLevel mip : mipLevels)
+        totalRegions += cast<usize>(mip.sliceCount);
+    return totalRegions;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_texture/texture_mip_decoder.adhd.h>
 #include <impl/assets_texture/asset.adhd.h>
 #include <core/graphics/api.h>
@@ -181,16 +262,14 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
 
 [[nodiscard]] static b8 DecodeTextureSliceAsAstc(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, const Span<u8> outUploadBytes){
     const auto source = TryGetPrimaryUastcSlice(textureAsset.payloadBytes(), textureAsset.primaryPayloadByteCount(), mip, sliceIndex);
-    if(!source || source->bytes.size() != outUploadBytes.size()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: ASTC UASTC slice size is invalid"));
+    if(!ValidateAstcSliceByteCount(source.has_value(), source ? source->bytes.size() : 0u, outUploadBytes.size()))
         return false;
-    }
 
     for(u64 blockOffset = 0u; blockOffset < source->bytes.size(); blockOffset += s_UastcBytesPerBlock){
         basist::uastc_block sourceBlock;
-        FOUNDATION_MEMCPY(&sourceBlock, sizeof(sourceBlock), source->bytes.data() + static_cast<usize>(blockOffset), sizeof(sourceBlock));
+        NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), source->bytes.data() + static_cast<usize>(blockOffset), sizeof(sourceBlock));
         if(!basist::transcode_uastc_to_astc(sourceBlock, outUploadBytes.data() + static_cast<usize>(blockOffset))){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: UASTC-to-ASTC transcoding failed"));
+            LogUastcTranscodeFailure("UASTC-to-ASTC transcoding failed");
             return false;
         }
     }
@@ -200,7 +279,7 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
 [[nodiscard]] static b8 DecodeTextureSliceAsBc7(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const u32 sliceIndex, const Span<u8> outUploadBytes){
     const auto source = TryGetPrimaryUastcSlice(textureAsset.payloadBytes(), textureAsset.primaryPayloadByteCount(), mip, sliceIndex);
     if(!source){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: BC7 UASTC slice size is invalid"));
+        LogUastcTranscodeFailure("BC7 UASTC slice size is invalid");
         return false;
     }
     if(!ValidateBc7UastcTranscodeLayout(*source, outUploadBytes.size()))
@@ -227,7 +306,7 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
         nullptr,
         mip.height
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: UASTC-to-BC7 transcoding failed"));
+        LogUastcTranscodeFailure("UASTC-to-BC7 transcoding failed");
         return false;
     }
     return true;
@@ -237,10 +316,9 @@ template<typename StoreTexelT>
 [[nodiscard]] static b8 VisitDecodedUastcTexels(const TextureMipLevel& mip, const BinaryByteView sourceBytes, StoreTexelT&& storeTexel){
     for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
         for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
-            const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
-            const u64 blockOffset = blockIndex * s_UastcBytesPerBlock;
+            const usize blockOffset = ComputeUastcBlockByteOffset(blockX, blockY, mip.blockCountX);
             basist::uastc_block sourceBlock;
-            FOUNDATION_MEMCPY(&sourceBlock, sizeof(sourceBlock), sourceBytes.data() + static_cast<usize>(blockOffset), sizeof(sourceBlock));
+            NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), sourceBytes.data() + blockOffset, sizeof(sourceBlock));
 
             Array<basist::color32, s_UastcBlockWidth * s_UastcBlockHeight> decodedTexels{};
             if(!basist::unpack_uastc(sourceBlock, decodedTexels.data(), false))
@@ -257,7 +335,7 @@ template<typename StoreTexelT>
                         break;
 
                     const usize sourceTexelIndex = static_cast<usize>(localY * s_UastcBlockWidth + localX);
-                    const usize destinationTexelIndex = static_cast<usize>(destinationY * static_cast<u64>(mip.width) + destinationX);
+                    const usize destinationTexelIndex = ComputeDecodedUastcDestinationTexelIndex(destinationX, destinationY, mip.width);
                     storeTexel(decodedTexels[sourceTexelIndex], destinationTexelIndex);
                 }
             }
@@ -273,11 +351,9 @@ template<typename StoreTexelT>
     const auto source = *expectedUploadByteCount == outUploadBytes.size()
         ? TryGetPrimaryUastcSlice(textureAsset.payloadBytes(), textureAsset.primaryPayloadByteCount(), mip, sliceIndex)
         : Expected<PrimaryUastcSlice>{ MakeUnexpected(Failure{}) };
-    if(*expectedUploadByteCount != outUploadBytes.size() || !source){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: invalid RGBA8 UASTC slice layout"));
+    if(!ValidateRgba8SliceLayout(source.has_value(), *expectedUploadByteCount, outUploadBytes.size()))
         return false;
-    }
-    FOUNDATION_ASSERT(source->bytes.size() == source->blockCount * s_UastcBytesPerBlock);
+    NWB_ASSERT(source->bytes.size() == source->blockCount * s_UastcBytesPerBlock);
 
     if(!VisitDecodedUastcTexels(mip, BinaryByteView{ source->bytes.data(), source->bytes.size() }, [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         const usize destinationByteOffset = destinationTexelIndex * s_TextureRgbaBytesPerTexel;
@@ -287,7 +363,7 @@ template<typename StoreTexelT>
         outUploadBytes[destinationByteOffset + 3u] = sourceTexel.a;
     }
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: UASTC-to-RGBA8 decoding failed"));
+        LogUastcTranscodeFailure("UASTC-to-RGBA8 decoding failed");
         return false;
     }
     return true;
@@ -312,7 +388,7 @@ template<typename StoreTexelT>
     case Core::Format::RGBA16_FLOAT:
         break;
     default:
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: unsupported HDR UASTC upload format"));
+        LogUastcTranscodeFailure("unsupported HDR UASTC upload format");
         return false;
     }
 
@@ -342,16 +418,16 @@ template<typename StoreTexelT>
         nullptr,
         mip.height
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: HDR UASTC transcoding failed"));
+        LogUastcTranscodeFailure("HDR UASTC transcoding failed");
         return false;
     }
     return true;
 }
 
 static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Span<u8> outRgba16FloatBytes)noexcept{
-    const basist::half_float alphaHalf = basist::float_to_half(static_cast<f32>(alphaUnorm8) / static_cast<f32>(Limit<u8>::s_Max));
+    const basist::half_float alphaHalf = basist::float_to_half(NormalizeTextureAlphaUnorm8(alphaUnorm8));
     u8* const destination = outRgba16FloatBytes.data() + texelIndex * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
-    FOUNDATION_MEMCPY(destination, sizeof(alphaHalf), &alphaHalf, sizeof(alphaHalf));
+    NWB_MEMCPY(destination, sizeof(alphaHalf), &alphaHalf, sizeof(alphaHalf));
 }
 
 [[nodiscard]] static b8 MergeHdrAlpha(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, const Span<u8> outRgba16FloatBytes){
@@ -360,7 +436,10 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
         return false;
 
     if(textureAsset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
-        const u8 alphaUnorm8 = textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8 ? textureAsset.alphaConstantUnorm8() : static_cast<u8>(Limit<u8>::s_Max);
+        const u8 alphaUnorm8 = ResolveHdrUniformAlphaUnorm8(
+            textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8,
+            textureAsset.alphaConstantUnorm8()
+        );
         for(usize texelIndex = 0u; texelIndex < texelCount; ++texelIndex)
             StoreHdrAlpha(texelIndex, alphaUnorm8, outRgba16FloatBytes);
         return true;
@@ -375,14 +454,14 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
     );
     if(!alphaSource)
         return false;
-    FOUNDATION_ASSERT(alphaSource->size() == static_cast<u64>(mip.blockCountX) * mip.blockCountY * s_UastcBytesPerBlock);
+    NWB_ASSERT(alphaSource->size() == static_cast<u64>(mip.blockCountX) * mip.blockCountY * s_UastcBytesPerBlock);
 
     if(!VisitDecodedUastcTexels(mip, BinaryByteView{ alphaSource->data(), alphaSource->size() }, [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         // The companion stream is a grayscale LDR mask: (a, a, a, 255).
         StoreHdrAlpha(destinationTexelIndex, sourceTexel.r, outRgba16FloatBytes);
     }
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: UASTC alpha decoding failed"));
+        LogUastcTranscodeFailure("UASTC alpha decoding failed");
         return false;
     }
     return true;
@@ -404,16 +483,14 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(const Texture& textu
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4)
         return decodeHdr(textureAsset, mip, mipLevel, format, arena);
 
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: unsupported texture payload format"));
+    LogUnsupportedTexturePayloadFormat();
     return MakeUnexpected(Failure{});
 }
 
 
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
-    if(format != Core::Format::ASTC_4x4_UNORM && format != Core::Format::BC7_UNORM && format != Core::Format::RGBA8_UNORM){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: unsupported linear LDR texture upload format"));
+    if(!ValidateSupportedLdrTextureUploadFormat(format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::BC7_UNORM || format == Core::Format::RGBA8_UNORM))
         return MakeUnexpected(Failure{});
-    }
 
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
@@ -441,10 +518,8 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& te
 
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
     const b8 compressedOutput = Core::Format::IsHdrCompressedFormat(format);
-    if(!compressedOutput && format != Core::Format::RGBA16_FLOAT){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureAssetLoader: unsupported HDR texture upload format"));
+    if(!ValidateSupportedHdrTextureUploadFormat(compressedOutput || format == Core::Format::RGBA16_FLOAT))
         return MakeUnexpected(Failure{});
-    }
 
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
@@ -552,32 +627,32 @@ static void InitializeBasisTranscoder(){
 
 
 b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName, const TStringView ownerName, Core::GraphicsRuntime& graphics, TextureGpuResource& outResource){
-    FOUNDATION_ASSERT(!outResource.valid());
-    if(outResource.texture || outResource.sampledImageHeapHandle.valid() || outResource.format != Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: texture resource is partially initialized; release it before recreating"), ownerName);
+    NWB_ASSERT(!outResource.valid());
+    if(HasPartiallyInitializedTextureGpuResource(static_cast<b8>(outResource.texture), outResource.sampledImageHeapHandle.valid(), outResource.format != Core::Format::UNKNOWN)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), ownerName);
         return false;
     }
     // Texture::loadBinary already validated the cooked payload; keep a debug-only invariant here.
-    FOUNDATION_ASSERT(textureAsset.validatePayload());
+    NWB_ASSERT(textureAsset.validatePayload());
 
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
         return false;
     }
 
     Core::Format::Enum format = TextureFormatSelector::SelectUploadFormat(textureAsset, device);
     if(format == Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: device cannot sample the required texture format for '{}'"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
         return false;
     }
 
-    const Name imageName = debugName ? debugName : textureAsset.virtualPath();
+    const Name imageName = ResolveTextureUploadDebugName(debugName, textureAsset.virtualPath());
     const Core::TextureDimension::Enum textureDimension = __hidden_texture_loader::ToCoreTextureDimension(textureAsset.dimension());
     const Core::GpuDescriptorClass::Enum descriptorClass = __hidden_texture_loader::ToSampledImageDescriptorClass(textureAsset.dimension());
     // Texture::loadBinary already validated the cooked dimension; keep a debug-only invariant here.
-    FOUNDATION_ASSERT(textureDimension != Core::TextureDimension::Unknown && descriptorClass != Core::GpuDescriptorClass::Count);
+    NWB_ASSERT(textureDimension != Core::TextureDimension::Unknown && descriptorClass != Core::GpuDescriptorClass::Count);
 
     Core::TextureDesc textureDesc;
     textureDesc
@@ -599,7 +674,12 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
     auto textureResult = graphics.createTexture(textureDesc);
     if(
         !textureResult
-        && ((textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && format != Core::Format::RGBA8_UNORM) || (textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque))
+        && ShouldRetryTextureCreateWithFallback(
+            textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4,
+            format == Core::Format::RGBA8_UNORM,
+            textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4,
+            textureAsset.alphaMode() == TextureAlphaMode::Opaque
+        )
     ){
         auto fallbackResult = __hidden_texture_loader::CreateTextureWithFormatFallback(
             textureDesc,
@@ -616,7 +696,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
             textureResult = MakeUnexpected(fallbackResult.error());
     }
     if(!textureResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
     Core::TextureHandle texture = Move(*textureResult);
@@ -635,17 +715,14 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
     }
 
     Vector<Core::GraphicsStandaloneService::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
-    usize uploadRegionReserveCount = 0u;
     const b8 isVolumeTexture = textureAsset.dimension() == TextureDimension::Texture3D;
-    for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex)
-        uploadRegionReserveCount += isVolumeTexture ? 1u : static_cast<usize>(textureAsset.mipLevels()[mipIndex].sliceCount);
-    uploadRegions.reserve(uploadRegionReserveCount);
+    uploadRegions.reserve(ComputeTextureUploadRegionReserveCount(textureAsset.mipLevels(), isVolumeTexture));
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
         const TextureMipLevel& mip = textureAsset.mipLevels()[mipIndex];
         const TextureDecodedMipUpload& decoded = decodedMips[mipIndex];
-        FOUNDATION_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
+        NWB_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
 
-        if(textureAsset.dimension() == TextureDimension::Texture3D){
+        if(isVolumeTexture){
             uploadRegions.push_back(Core::GraphicsStandaloneService::TextureUploadRegion{
                 .data = decoded.bytes.data(),
                 .dataSize = decoded.bytes.size(),
@@ -672,14 +749,14 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
     // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
     const Expected<Core::GpuDescriptorHandle> sampledImageHandleResult = heap.allocate(descriptorClass);
     if(!sampledImageHandleResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
     const Core::GpuDescriptorHandle sampledImageHandle = *sampledImageHandleResult;
     Core::GpuDescriptorRetirementGuard releaseDescriptor(heap, sampledImageHandle);
 
     if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, textureDimension))){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
 
@@ -694,7 +771,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
     })){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), ownerName, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
 
@@ -741,7 +818,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

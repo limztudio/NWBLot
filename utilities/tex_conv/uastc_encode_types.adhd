@@ -8,18 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <global/texture_payload.h>
-
-namespace NWB::TexConv{
-using TextureAlphaModeEnum = TextureAlphaMode::Enum;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class VolumeMipZSlabRange{
     public u64 intervalBegin = 0u;
     public u64 intervalEnd = 0u;
@@ -28,7 +16,7 @@ class VolumeMipZSlabRange{
 }
 
 class TexConvAlphaTransport{
-    public TextureAlphaModeEnum mode = cast<TextureAlphaModeEnum>(0u);
+    public TexConvAlphaMode mode = TexConvAlphaMode::Opaque;
     public u8 constantUnorm8 = 255u;
 }
 
@@ -155,27 +143,23 @@ Expected<TexConvAlphaTransport> TryResolveTexConvAlphaTransport(
     in b8 isUastcLdr4x4,
     in b8 constant,
     in u8 firstAlpha,
-    in u8 opaqueAlphaUnorm8,
-    in TextureAlphaModeEnum opaqueMode,
-    in TextureAlphaModeEnum embeddedLdrMode,
-    in TextureAlphaModeEnum constantUnorm8Mode,
-    in TextureAlphaModeEnum separateUastcLdr4x4Mode
+    in u8 opaqueAlphaUnorm8
 ){
     if(!found)
         return MakeUnexpected(Failure());
     TexConvAlphaTransport transport;
-    transport.mode = opaqueMode;
+    transport.mode = TexConvAlphaMode::Opaque;
     transport.constantUnorm8 = opaqueAlphaUnorm8;
     if(opaque)
-        transport.mode = opaqueMode;
+        transport.mode = TexConvAlphaMode::Opaque;
     else if(isUastcLdr4x4)
-        transport.mode = embeddedLdrMode;
+        transport.mode = TexConvAlphaMode::EmbeddedLdr;
     else if(constant){
-        transport.mode = constantUnorm8Mode;
+        transport.mode = TexConvAlphaMode::ConstantUnorm8;
         transport.constantUnorm8 = firstAlpha;
     }
     else
-        transport.mode = separateUastcLdr4x4Mode;
+        transport.mode = TexConvAlphaMode::SeparateUastcLdr4x4;
     return transport;
 }
 

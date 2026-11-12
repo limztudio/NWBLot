@@ -4,35 +4,64 @@
 
 #include "package_name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <logger/client/module.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <impl/assets_font/cook.adhd.h>
 #include <impl/assets_font_atlas/cook.adhd.h>
 
 #include <core/assets/bunch/cook.h>
-#include <core/common/application_entry.h>
 
-#include <global/filesystem.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace NWB::Tests::FontPackageCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using AssetArena = Core::Assets::AssetArena;
+using AssetBytes = Core::Assets::AssetBytes;
 using ScratchArena = Core::Alloc::ScratchArena;
+using Impl::Font;
+using Impl::FontAtlas;
 using Impl::FontAtlasPayload;
+using Impl::SerializeFontAtlasPayload;
+using Impl::ValidateFontAtlasSourceMatch;
 using Impl::s_FontAtlasKernTag;
 using Impl::s_FontAtlasGposTag;
 using Impl::s_FontAtlasGdefTag;
-inline constexpr Name s_PackageArena = s_OneOffNameTestsIntegrationFontBuilderPackage;
-inline constexpr TStringView s_LoggerAppName = FOUNDATION_TEXT("font_builder_package_probe");
-inline constexpr TStringView s_LoggerInitFailureText = FOUNDATION_TEXT("[font_builder_package_probe] logger.init() failed");
-inline constexpr i32 s_EntryFailure = -1;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView TableTag(in u32 tag){
+const Name s_PackageArena = s_OneOffNameTestsIntegrationFontBuilderPackage;
+const i32 s_EntryFailure = -1;
+
+StringView TableTag(in u32 tag){
     if(tag == s_FontAtlasKernTag)
         return "kern";
     if(tag == s_FontAtlasGposTag)
@@ -42,65 +71,64 @@ AStringView TableTag(in u32 tag){
     return "";
 }
 
-b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut ScratchArena scratch){
-    b8 ok = true;
-    native(in directory, in payload, mut scratch, mut ok){
-        const ::Path<NWB::Core::Alloc::ScratchArena> outputDirectory(scratch, directory);
-        if(!EnsureDirectories(outputDirectory)){
-            ok = false;
-            return ok;
-        }
-        const auto binary = NWB::Impl::SerializeFontAtlasPayload(payload, payload.glyphs.get_allocator().arena(), scratch);
-        if(!binary || !WriteBinaryFile(outputDirectory / "atlas.bin", *binary)){
-            ok = false;
-            return ok;
-        }
-        for(usize index = 0u; index < payload.groups.size(); ++index){
-            const auto name = StringFormat(scratch, "group_{}.pixels", index);
-            if(!WriteBinaryFile(outputDirectory / name, payload.groups[index].pixels)){
-                ok = false;
-                return ok;
-            }
-        }
-        for(const auto& table : payload.positioningTables){
-            const AStringView tag = TableTag(table.tag);
-            if(tag.empty()){
-                ok = false;
-                return ok;
-            }
-            const auto name = StringFormat(scratch, "table_{}.bin", tag);
-            if(!WriteBinaryFile(outputDirectory / name, table.bytes)){
-                ok = false;
-                return ok;
-            }
-        }
+b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
+    if(!EnsureDirectories(directory).has_value())
+        return false;
+    const Expected<AssetBytes> binary = SerializeFontAtlasPayload(payload, arena, scratch);
+    return binary.has_value() && WriteBinaryFile(directory / "atlas.bin", binary.value());
+}
+
+b8 WriteGroupPixelsFile(in Path directory, in usize index, in AssetBytes pixels){
+    const String name = StringFormat("group_{}.pixels", index);
+    return WriteBinaryFile(directory / name, pixels);
+}
+
+b8 WritePositioningTableFile(in Path directory, in StringView tag, in AssetBytes bytes){
+    const String name = StringFormat("table_{}.bin", tag);
+    return WriteBinaryFile(directory / name, bytes);
+}
+
+b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
+    if(!WriteAtlasHeaderBinary(directory, payload, arena, scratch))
+        return false;
+    for(usize index = 0u; index < payload.groups.size(); ++index){
+        if(!WriteGroupPixelsFile(directory, index, payload.groups[index].pixels))
+            return false;
     }
-    return ok;
+    for(usize index = 0u; index < payload.positioningTables.size(); ++index){
+        const StringView tag = TableTag(payload.positioningTables[index].tag);
+        if(tag.empty())
+            return false;
+        if(!WritePositioningTableFile(directory, tag, payload.positioningTables[index].bytes))
+            return false;
+    }
+    return true;
 }
 
 b8 DecodePackage(in StringView source, in StringView destination){
-    b8 ok = false;
-    native(in source, in destination, mut ok){
-        NWB::Core::Assets::AssetArena arena(s_PackageArena);
-        const NWB::Path sourcePath(arena, source);
-        const NWB::Path destinationPath(arena, destination);
-        NWB::Core::Metascript::MetaArena metadataArena{Name(s_FontPackageNameTestsIntegrationFontBuilderMetadata)};
-        NWB::Core::Alloc::ScratchArena scratch{Name(s_FontPackageNameTestsIntegrationFontBuilderScratch)};
-        NWB::Core::Metascript::MString metadata(metadataArena);
-        NWB::Core::Metascript::Document document(metadataArena);
-        if(!ReadTextFile(sourcePath, metadata))
-            return false;
+    AssetArena arena(s_PackageArena);
+    const Path sourcePath = Path(source);
+    const Path destinationPath = Path(destination);
+    ScratchArena scratch(Name(s_FontPackageNameTestsIntegrationFontBuilderScratch));
+    String metadata = "";
+    if(!ReadTextFile(sourcePath, metadata).has_value())
+        return false;
+
+    Font font(arena);
+    FontAtlas atlas(arena);
+    b8 foundFont = false;
+    b8 foundAtlas = false;
+
+    native(in sourcePath, mut metadata, mut arena, mut scratch, mut font, mut atlas, mut foundFont, mut foundAtlas){
         StripUtf8Bom(metadata);
+        NWB::Core::Metascript::MetaArena metadataArena{Name(s_FontPackageNameTestsIntegrationFontBuilderMetadata)};
+        NWB::Core::Metascript::Document document(metadataArena);
         if(!document.parse(metadata))
             return false;
         auto expanded = NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(sourcePath.parentPath(), "probe", sourcePath, document, scratch);
         if(!expanded || expanded->size() != 2u)
             return false;
 
-        NWB::Impl::Font font(arena);
-        NWB::Impl::FontAtlas atlas(arena);
-        b8 foundFont = false;
-        b8 foundAtlas = false;
         for(const auto& asset : *expanded){
             if(asset.assetType == Name(s_FontPackageLookupNameFont)){
                 if(foundFont)
@@ -129,27 +157,51 @@ b8 DecodePackage(in StringView source, in StringView destination){
             else
                 return false;
         }
-        ok = foundFont && foundAtlas && NWB::Impl::ValidateFontAtlasSourceMatch(atlas.payload(), font) && ExportPayload(destinationPath, atlas.payload(), scratch) && WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
     }
-    return ok;
+
+    if(!foundFont || !foundAtlas)
+        return false;
+    if(!ValidateFontAtlasSourceMatch(atlas.payload(), font))
+        return false;
+    if(!ExportPayload(destinationPath, atlas.payload(), arena, scratch))
+        return false;
+    return WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/client/module.h>
+
+#include <core/common/application_entry.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_font_builder_package_probe{
 int Run(const int argc, char** argv){
     using namespace NWB::Tests::FontPackageCases;
     NWB::Log::ClientStandalone logger;
-    if(!logger.init(s_LoggerAppName)){
-        FOUNDATION_TCERR << s_LoggerInitFailureText << FOUNDATION_TEXT("\n");
+    if(!logger.init(NWB_TEXT("font_builder_package_probe"))){
+        NWB_TCERR << NWB_TEXT("[font_builder_package_probe] logger.init() failed\n");
         return s_EntryFailure;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     if(argc != 3){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
         return s_EntryFailure;
     }
     if(!DecodePackage(argv[1], argv[2])){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder_package_probe: cannot cook or export font pair"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: cannot cook or export font pair"));
         return s_EntryFailure;
     }
     return 0;
@@ -157,7 +209,13 @@ int Run(const int argc, char** argv){
 };
 
 NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(__hidden_font_builder_package_probe::Run)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

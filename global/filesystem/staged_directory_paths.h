@@ -26,6 +26,8 @@ private:
 
 
 public:
+    using uses_leading_arena_t = ArenaT;
+
     Path<ArenaT> stageDirectory;
     Path<ArenaT> backupDirectory;
 
@@ -35,12 +37,30 @@ public:
         : stageDirectory(arena)
         , backupDirectory(arena)
     {}
+    StagedDirectoryPaths(const StagedDirectoryPaths&) = default;
+    StagedDirectoryPaths(StagedDirectoryPaths&&)noexcept = default;
+    explicit StagedDirectoryPaths(ArenaT& arena, const StagedDirectoryPaths& other)
+        : stageDirectory(arena, other.stageDirectory)
+        , backupDirectory(arena, other.backupDirectory)
+    {}
+    explicit StagedDirectoryPaths(ArenaT& arena, StagedDirectoryPaths&& other)
+        : stageDirectory(arena, Move(other.stageDirectory))
+        , backupDirectory(arena, Move(other.backupDirectory))
+    {}
+    template<typename OtherArenaT>
+    explicit StagedDirectoryPaths(ArenaT& arena, const StagedDirectoryPaths<OtherArenaT>& other)
+        : stageDirectory(arena, other.stageDirectory)
+        , backupDirectory(arena, other.backupDirectory)
+    {}
 
-    template<typename TempArenaT>
-    [[nodiscard]] static StagedDirectoryPaths Create(TempArenaT& tempArena, const Path<ArenaT>& outputDirectory, const AStringView stageToken){
+    StagedDirectoryPaths& operator=(const StagedDirectoryPaths&) = default;
+    StagedDirectoryPaths& operator=(StagedDirectoryPaths&&) = default;
+
+    template<typename TempArenaT, typename SourceArenaT = ArenaT>
+    [[nodiscard]] static StagedDirectoryPaths Create(TempArenaT& tempArena, const Path<SourceArenaT>& outputDirectory, const AStringView stageToken){
         ArenaT& pathArena = outputDirectory.arena();
-        const Path<ArenaT> outputParentDirectory = outputDirectory.parentPath();
-        const Path<ArenaT> stageBaseDirectory = outputParentDirectory.empty() ? outputDirectory : outputParentDirectory;
+        const Path<ArenaT> outputParentDirectory(pathArena, outputDirectory.parentPathView());
+        const Path<ArenaT> stageBaseDirectory = outputParentDirectory.empty() ? Path<ArenaT>(pathArena, outputDirectory) : outputParentDirectory;
 
         StagedDirectoryPaths<ArenaT> output(pathArena);
 

@@ -1,0 +1,99 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/mesh_asset_text_writer.adhd>
+#include <utilities/fbx_to_nwb/model_asset_text_writer.adhd>
+#include <utilities/fbx_to_nwb/skinned_asset_text_writer.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsSkinnedAssetBunch(in b8 hasSkinName, in b8 hasSkeletonName, in b8 hasSkinInfluences){
+    return hasSkinName && hasSkeletonName && hasSkinInfluences;
+}
+
+String BuildMeshAssetDocumentText(
+    in Span<Vec3> positions,
+    in Span<Vec3> normals,
+    in Span<Vec4> tangents,
+    in Span<Vec2> uv0,
+    in Span<Vec4> colors,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices
+){
+    String out;
+    out.reserve(512u + vertexRefs.size() * 48u + indices.size() * 8u);
+    out.append("mesh asset;\n\n");
+    AppendMeshAssetBodyText(positions, normals, tangents, uv0, colors, vertexRefs, indices, s_AssetVariableName, "", out);
+    return out;
+}
+
+String BuildModelAssetDocumentText(
+    in StringView meshName,
+    in b8 hasSkeletonAndSkin,
+    in StringView skinName,
+    in StringView skeletonName
+){
+    String out;
+    out.reserve(256u);
+    out.append("model asset;\n\n");
+    AppendModelAssetBodyText(
+        s_AssetVariableName,
+        meshName,
+        hasSkeletonAndSkin,
+        skinName,
+        skeletonName,
+        s_SkeletonAssetTypeText,
+        true,
+        true,
+        out
+    );
+    return out;
+}
+
+void AppendAssetBunchModelAndFooterText(in b8 skinnedBunch, mut String out){
+    out.append(s_AssetSectionSeparatorText);
+    out.append("model model;\n\n");
+    if(skinnedBunch){
+        AppendModelAssetBodyText(
+            s_ModelAssetTypeText,
+            s_MeshAssetTypeText,
+            true,
+            s_SkinAssetTypeText,
+            s_SkeletonAssetTypeText,
+            s_SkeletonAssetTypeText,
+            false,
+            true,
+            out
+        );
+    }
+    else{
+        AppendModelAssetBodyText(
+            s_ModelAssetTypeText,
+            s_MeshAssetTypeText,
+            false,
+            "",
+            "",
+            s_SkeletonAssetTypeText,
+            false,
+            false,
+            out
+        );
+    }
+
+    out.append(s_AssetSectionSeparatorText);
+    out.append("asset_bunch bunch = [\n");
+    out.append("    mesh,\n");
+    if(skinnedBunch){
+        out.append("    skeleton,\n");
+        out.append("    skin,\n");
+    }
+    out.append("    model,\n");
+    out.append(s_FormatListCloseText);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

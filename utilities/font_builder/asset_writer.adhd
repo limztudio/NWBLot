@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/bake_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsFontBuilderWorkPathFailure(in b8 isQueryWorkPath, in b8 isWorkPathExists){
+    return isQueryWorkPath || isWorkPathExists;
+}
+
+void LogFontBuilderPreValidationFailure(in b8 isQueryWorkPath, in b8 isWorkPathExists, in StringView errorMessage){
+    if(IsFontBuilderWorkPathFailure(isQueryWorkPath, isWorkPathExists))
+        error("font_builder: publication work paths unavailable: {}", errorMessage);
+    else
+        error("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files: {}", errorMessage);
+}
+
+void LogFontBuilderPublishFailure(in u8 failureStage, in StringView errorMessage){
+    if(failureStage == 8u)
+        error("font_builder: failed to stage font temporary: {}", errorMessage);
+    else if(failureStage == 9u)
+        error("font_builder: failed to stage metadata temporary: {}", errorMessage);
+    else if(failureStage == 10u || failureStage == 11u)
+        error("font_builder: staging or verification failed; previous pair remains in place");
+    else
+        error("font_builder: pair publication failed: {}", errorMessage);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

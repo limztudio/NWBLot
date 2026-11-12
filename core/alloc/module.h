@@ -10,6 +10,7 @@
 #include "general.h"
 #include "scratch.h"
 #include "persistent.h"
+#include "adhd_arena.h"
 
 #include <global/arena_base.h>
 #include <global/arena_object.h>

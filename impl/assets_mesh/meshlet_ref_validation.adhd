@@ -2,125 +2,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/assets_mesh/payload_validation.adhd.h>
+#include <impl/assets_mesh/payload_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshletRefValidationExceptionDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename AttributeSkinContainer, typename ConflictHandler, typename UnreferencedHandler>
-consteval b8 AttributeSkinsIsNothrow()noexcept{
-    return
-        IsNothrowDestructible_V<ConflictHandler> && IsNothrowDestructible_V<UnreferencedHandler>
-        && noexcept(DeclVal<AttributeSkinContainer&>().clear())
-        && noexcept(DeclVal<AttributeSkinContainer&>().resize(DeclVal<const usize&>(), s_MeshMissingStreamIndex))
-        && noexcept(DeclVal<void(*)(u32&)noexcept>()(DeclVal<AttributeSkinContainer&>()[DeclVal<const usize&>()]))
-        && noexcept(DeclVal<void(*)(b8)noexcept>()(DeclVal<ConflictHandler&>()(DeclVal<usize&>(), DeclVal<const usize&>(), DeclVal<u32&>(), DeclVal<const u32&>())))
-        && noexcept(static_cast<b8>(DeclVal<usize&>() < DeclVal<AttributeSkinContainer&>().size()))
-        && noexcept(static_cast<b8>(DeclVal<AttributeSkinContainer&>()[DeclVal<usize&>()] != s_MeshMissingStreamIndex))
-        && noexcept(DeclVal<void(*)(b8)noexcept>()(DeclVal<UnreferencedHandler&>()(DeclVal<usize&>())))
-    ;
+[reflect]
+enum<u8> MeshletAttributeSkinFailureKind{
+    None = 0,
+    ConflictingSkin = 1,
+    UnreferencedAttribute = 2
 }
 
+class MeshletAttributeSkinFailure{
+    public MeshletAttributeSkinFailureKind kind = MeshletAttributeSkinFailureKind::None;
+    public usize meshletIndex = 0u;
+    public usize attributeIndex = 0u;
+    public u32 existingSkin = s_MeshMissingStreamIndex;
+    public u32 conflictingSkin = s_MeshMissingStreamIndex;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshMeshletRefValidation{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<
-    typename AttributeSkinContainer,
-    typename ConflictHandler,
-    typename UnreferencedHandler
->
-[[nodiscard]] b8 ResolveMeshletAttributeSkins(
-    Span<const MeshletDesc> meshlets,
-    Span<const MeshletPositionStreamRef> positionRefs,
-    Span<const MeshletLocalVertexRef> localVertexRefs,
-    usize attributeCount,
-    ConflictHandler onConflict,
-    UnreferencedHandler onUnreferenced,
-    AttributeSkinContainer& outAttributeSkins
-)noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, ConflictHandler, UnreferencedHandler>());
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<
-    typename AttributeSkinContainer,
-    typename ConflictHandler,
-    typename UnreferencedHandler
->
-[[nodiscard]] b8 MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
-    const Span<const MeshletDesc> meshlets,
-    const Span<const MeshletPositionStreamRef> positionRefs,
-    const Span<const MeshletLocalVertexRef> localVertexRefs,
-    const usize attributeCount,
-    ConflictHandler onConflict,
-    UnreferencedHandler onUnreferenced,
-    AttributeSkinContainer& outAttributeSkins
-)noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, ConflictHandler, UnreferencedHandler>()){
+b8 ResolveMeshletAttributeSkins(
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletPositionStreamRef> positionRefs,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in usize attributeCount,
+    mut Vector<u32> outAttributeSkins,
+    mut MeshletAttributeSkinFailure outFailure
+){
     outAttributeSkins.clear();
     outAttributeSkins.resize(attributeCount, s_MeshMissingStreamIndex);
+    outFailure = MeshletAttributeSkinFailure();
 
     usize meshletPositionBase = 0u;
     usize meshletAttributeBase = 0u;
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc& meshlet = meshlets[meshletIndex];
+        const MeshletDesc meshlet = meshlets[meshletIndex];
         const u32 vertexCount = MeshletVertexCount(meshlet);
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
-            const MeshletLocalVertexRef& localVertexRef = localVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-            const usize attributeIndex = meshletAttributeBase + localVertexRef.localAttribute;
-            const u32 skinIndex = positionRefs[meshletPositionBase + localVertexRef.localDeformedPosition].skin;
+            const MeshletLocalVertexRef localVertexRef = localVertexRefs[cast<usize>(meshlet.localVertexOffset + localVertexIndex)];
+            const usize attributeIndex = meshletAttributeBase + cast<usize>(localVertexRef.localAttribute);
+            const u32 skinIndex = positionRefs[meshletPositionBase + cast<usize>(localVertexRef.localDeformedPosition)].skin;
 
-            u32& attributeSkin = outAttributeSkins[attributeIndex];
+            const u32 attributeSkin = outAttributeSkins[attributeIndex];
             if(attributeSkin == s_MeshMissingStreamIndex){
-                attributeSkin = skinIndex;
+                outAttributeSkins[attributeIndex] = skinIndex;
                 continue;
             }
             if(attributeSkin == skinIndex)
                 continue;
-            return onConflict(meshletIndex, attributeIndex, attributeSkin, skinIndex);
+
+            outFailure.kind = MeshletAttributeSkinFailureKind::ConflictingSkin;
+            outFailure.meshletIndex = meshletIndex;
+            outFailure.attributeIndex = attributeIndex;
+            outFailure.existingSkin = attributeSkin;
+            outFailure.conflictingSkin = skinIndex;
+            return false;
         }
 
-        meshletPositionBase += MeshletPositionCount(meshlet);
-        meshletAttributeBase += MeshletAttributeCount(meshlet);
+        meshletPositionBase += cast<usize>(MeshletPositionCount(meshlet));
+        meshletAttributeBase += cast<usize>(MeshletAttributeCount(meshlet));
     }
 
     for(usize attributeIndex = 0u; attributeIndex < outAttributeSkins.size(); ++attributeIndex){
         if(outAttributeSkins[attributeIndex] != s_MeshMissingStreamIndex)
             continue;
-        return onUnreferenced(attributeIndex);
+
+        outFailure.kind = MeshletAttributeSkinFailureKind::UnreferencedAttribute;
+        outFailure.attributeIndex = attributeIndex;
+        return false;
     }
 
     return true;
@@ -129,20 +80,3 @@ template<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplAssetsMeshMeshletRefValidationAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

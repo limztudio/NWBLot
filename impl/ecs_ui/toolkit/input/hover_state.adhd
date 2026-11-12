@@ -2,65 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_ui/toolkit/input/input.adhd.h>
+#include <impl/ecs_ui/toolkit/input/input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class InputHoverState final{
-public:
-    void setTarget(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const Span<const PopupRecord> popups, const HitTarget* const hovered)noexcept{
-        SetRouterHoverTarget(targets, lookup, popups, hovered != nullptr, hovered != nullptr ? *hovered : HitTarget{}, m_activityGeneration, m_identity, m_target);
+class InputHoverState{
+    public void setTarget(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in Span<PopupRecord> popups, in b8 hasHovered, in HitTarget hovered){
+        SetRouterHoverTarget(targets, lookup, popups, hasHovered, hovered, this.activityGeneration, this.identity, this.target);
     }
-    void advanceActivity()noexcept{ AdvanceRouterHoverActivity(m_activityGeneration); }
-    void clearTarget()noexcept{ ClearRouterHoverTarget(m_target, m_identity); }
-    void forgetSource()noexcept{ ForgetRouterHoverSource(m_activityGeneration, m_target, m_identity, m_known, m_source); }
 
-    [[nodiscard]] u64 activityGeneration()const noexcept{ return m_activityGeneration; }
-    [[nodiscard]] WidgetId& target()noexcept{ return m_target; }
-    [[nodiscard]] WidgetId target()const noexcept{ return m_target; }
-    [[nodiscard]] HoverIdentity& identity()noexcept{ return m_identity; }
-    [[nodiscard]] Point& position()noexcept{ return m_position; }
-    [[nodiscard]] const Point& position()const noexcept{ return m_position; }
-    [[nodiscard]] InputSource& source()noexcept{ return m_source; }
-    [[nodiscard]] b8& known()noexcept{ return m_known; }
-    [[nodiscard]] b8 known()const noexcept{ return m_known; }
+    public void advanceActivity(){
+        AdvanceRouterHoverActivity(this.activityGeneration);
+    }
 
+    public void clearTarget(){
+        ClearRouterHoverTarget(this.target, this.identity);
+    }
 
-private:
-    u64 m_activityGeneration = 1u;
-    WidgetId m_target;
-    HoverIdentity m_identity;
-    Point m_position;
-    InputSource m_source;
-    b8 m_known = false;
-};
+    public void forgetSource(){
+        ForgetRouterHoverSource(this.activityGeneration, this.target, this.identity, this.known, this.source);
+    }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public u64 activityGeneration = 1u;
+    public WidgetId target;
+    public HoverIdentity identity;
+    public Point position;
+    public InputSource source;
+    public b8 known = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsUiToolkitInputHoverStateAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

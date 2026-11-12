@@ -22,7 +22,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ScratchArena : public ::ArenaBaseT<ScratchArena>{
+class ScratchArena final : public ::ArenaBaseT<ScratchArena>{
 private:
     using Base = ::ArenaBaseT<ScratchArena>;
 
@@ -163,7 +163,7 @@ public:
             bucket.size = AlignmentPowerOfTwo(static_cast<usize>(1) << i, initSize);
         }
     }
-    ~ScratchArena()noexcept{
+    ~ScratchArena()noexcept override{
         for(auto& bucket : m_bucket){
             for(auto* chunk : { bucket.active, bucket.cached }){
                 while(chunk){
@@ -178,8 +178,8 @@ public:
 
 
 public:
-    inline void* allocate(usize align, usize size){
-        FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+    [[nodiscard]] NWB_INLINE void* allocate(usize align, usize size)override{
+        NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
             return nullptr;
 
@@ -199,8 +199,8 @@ public:
     }
 
     // LIFO only: p is the bucket's most-recent alloc. Grows in place, else moves to a fresh block.
-    inline void* reallocate(void* p, usize align, usize size){
-        FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+    [[nodiscard]] NWB_INLINE void* reallocate(void* p, usize align, usize size)override{
+        NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
             return nullptr;
         if(!p)
@@ -208,7 +208,7 @@ public:
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
-        FOUNDATION_ASSERT_MSG(bucket.active != nullptr, FOUNDATION_TEXT("Attempted to reallocate before allocating"));
+        NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to reallocate before allocating"));
         if(!bucket.active)
             return nullptr;
 
@@ -216,7 +216,7 @@ public:
 
         Chunk& chunk = *bucket.active;
         const usize oldSize = chunk.lifoTopSpan(p);
-        FOUNDATION_ASSERT_MSG(oldSize != 0, FOUNDATION_TEXT("ScratchArena can only reallocate its most-recent allocation"));
+        NWB_ASSERT_MSG(oldSize != 0, NWB_TEXT("ScratchArena can only reallocate its most-recent allocation"));
         if(oldSize == 0)
             return nullptr;
 
@@ -231,7 +231,7 @@ public:
         if(!next)
             return nullptr;
 
-        FOUNDATION_MEMCPY(next, size, p, oldSize);
+        NWB_MEMCPY(next, size, p, oldSize);
         if(chunk.tryPopLifo(p, oldSize)){
             m_memoryStats.recordDeallocation(oldSize);
             if(chunk.m_remaining == chunk.m_size)
@@ -241,18 +241,21 @@ public:
     }
 
     // LIFO across chunks: empty chunks cache and expose the prior live alloc; out-of-order frees are no-ops reclaimed at destroy.
-    inline void deallocate(void* p, usize align, usize size){
-        FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+    NWB_INLINE void deallocate(void* p, usize align, usize size)noexcept override{
+        NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align) || size == 0u)
             return;
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
-        FOUNDATION_ASSERT_MSG(bucket.active != nullptr, FOUNDATION_TEXT("Attempted to deallocate before allocating"));
+        NWB_ASSERT_MSG(bucket.active != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
         if(!bucket.active)
             return;
 
-        size = AlignmentPowerOfTwo(align, size);
+        const auto alignedSize = AlignUpPowerOfTwoChecked(size, align);
+        if(!alignedSize)
+            return;
+        size = *alignedSize;
         Chunk& chunk = *bucket.active;
         if(chunk.tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);
@@ -299,16 +302,16 @@ private:
     }
 
     void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk)noexcept{
-        FOUNDATION_ASSERT(chunk.m_remaining == chunk.m_size);
-        FOUNDATION_ASSERT(bucket.active == &chunk);
+        NWB_ASSERT(chunk.m_remaining == chunk.m_size);
+        NWB_ASSERT(bucket.active == &chunk);
         bucket.active = chunk.m_next;
         chunk.m_next = bucket.cached;
         bucket.cached = &chunk;
     }
 
     void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk& newer)noexcept{
-        FOUNDATION_ASSERT(chunk.m_remaining == chunk.m_size);
-        FOUNDATION_ASSERT(newer.m_next == &chunk);
+        NWB_ASSERT(chunk.m_remaining == chunk.m_size);
+        NWB_ASSERT(newer.m_next == &chunk);
         newer.m_next = chunk.m_next;
         chunk.m_next = bucket.cached;
         bucket.cached = &chunk;

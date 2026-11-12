@@ -1,248 +1,186 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 AssetsGraphicsBunchAndCacheCasesReady(in u64 value){
-    return value != 0u;
+#include "suite.adhd"
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_DoesNotTargetADeclaredAsset = "does not target a declared asset";
+const StringView s_BunchOwnershipMetadata = "\nmetadata local = { \"label\": \"a separately owned metadata string\", \"items\": [1, 2, 3] };\nprobe first;\nprobe second;\nfirst.local = local;\nfirst.target = second;\nsecond.items = [local, { \"target\": first }];\nasset_bunch bunch = [second, first];\n";
+const StringView s_ModifiedSamplerCacheMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 3.5;\n";
+
+b8 CanExpandFixtureBunch(mut BunchFixture fixture){
+    return ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena).has_value();
 }
 
-native{
-#include <tests/integration/assets_graphics/suite.adhd.h>
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <impl/assets_model/cook.adhd.h>
-
-#include <core/assets/bunch/cook.h>
-#include <core/assets/cook_metadata.h>
-
-#include <global/arena_memory.h>
-#include <global/text_utils.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_asset_bunch_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_ItemsField = "items";
-constexpr AStringView s_ValuesField = "values";
-constexpr AStringView s_IdField = "id";
-
-using NWB::Tests::AssetsGraphicsFixture::s_FieldTarget;
-using NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
-static constexpr AStringView s_ProjectFixturesBundleFirst = "project/fixtures/bundle/first";
-static constexpr AStringView s_Local = "local";
-static constexpr AStringView s_Label = "label";
-static constexpr AStringView s_ASeparatelyOwnedMetadataString = "a separately owned metadata string";
-static constexpr TStringView s_DoesNotTargetADeclaredAsset = FOUNDATION_TEXT("does not target a declared asset");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Core;
-using namespace NWB::Core::Assets;
-using Metascript::Value;
-
-
-struct BunchFixture{
-    Metascript::MetaArena metadataArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchMetadata) };
-    AssetArena outputArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchOutput) };
-    Alloc::ScratchArena scratchArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchScratch) };
-    Metascript::Document document{ metadataArena };
-    const NWB::Path assetRoot{ outputArena, "tests/asset_bunch/assets" };
-    const NWB::Path filePath{ outputArena, "tests/asset_bunch/assets/fixtures/bundle.nwb" };
-};
-
-
-static constexpr AStringView s_OwnershipMetadata = R"(
-metadata local = { "label": "a separately owned metadata string", "items": [1, 2, 3] };
-probe first;
-probe second;
-first.local = local;
-first.target = second;
-second.items = [local, { "target": first }];
-asset_bunch bunch = [second, first];
-)";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void VerifyOwnedOutput(const Span<const ExpandedAssetMetadata> output, const Metascript::Document& document){
-    ASSERT_EQ(output.size(), 2u);
-    EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
-    EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));
-    const Value* const items = output[0u].value.findField(s_ItemsField);
-    ASSERT_NE(items, nullptr);
-    ASSERT_TRUE(items->isList());
-    ASSERT_EQ(items->asList().size(), 2u);
-    const Value* const label = items->asList()[0u].findField(s_Label);
-    ASSERT_NE(label, nullptr);
-    EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
-    const Value* const target = items->asList()[1u].findField(s_FieldTarget);
-    ASSERT_NE(target, nullptr);
-    EXPECT_EQ(target->asString(), s_ProjectFixturesBundleFirst);
-    const Value* const first = document.findVariable("first");
-    ASSERT_NE(first, nullptr);
-    const Value* const sourceTarget = first->findField(s_FieldTarget);
-    ASSERT_NE(sourceTarget, nullptr);
-    EXPECT_TRUE(sourceTarget->isReference());
-    EXPECT_EQ(sourceTarget->asReference(), "second");
-    const Value* const sourceLocal = first->findField(s_Local);
-    ASSERT_NE(sourceLocal, nullptr);
-    EXPECT_TRUE(sourceLocal->isReference());
-    EXPECT_EQ(sourceLocal->asReference(), s_Local);
+Expected<ExpandedAssetMetadataVector> ExpandBunchWithScratch(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath filePath, in MetaDocument document, mut ScratchArena scratch){
+    return ExpandAssetBunch(assetRoot, virtualRoot, filePath, document, scratch);
 }
 
-[[nodiscard]] static b8 ParseLookupFixture(const AStringView metadata, const usize unusedDeclarations, BunchFixture& fixture){
-    AString<Alloc::ScratchArena> source(fixture.scratchArena);
-    source.reserve(unusedDeclarations * 32u + metadata.size());
-    for(usize index = 0u; index < unusedDeclarations; ++index)
-        source += StringFormat(fixture.scratchArena, "metadata unused_{};\n", index);
-    source.append(metadata.data(), metadata.size());
-    return fixture.document.parse(AStringView(source));
+Expected<AssetBunchExpandFailureEnum> TryBunchExpandFailure(mut BunchFixture fixture){
+    const AssetBunchExpandContext context(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+    const auto result = TryAutoCollectedAssetBunchExpanders(context);
+    if(result.has_value())
+        return MakeUnexpected(Failure());
+    return result.error();
 }
 
+Expected<ExpandedAssetMetadataVector> ExpandRegisteredBunch(mut BunchFixture fixture){
+    const AssetBunchExpandContext context(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+    const auto result = TryAutoCollectedAssetBunchExpanders(context);
+    if(!result.has_value())
+        return MakeUnexpected(Failure());
+    return result.value();
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 BuildAndGatherWithRepoRootHelper(mut TestArena testArena, in GraphicsTestPath root, in GraphicsTestPath assetRoot, in GraphicsTestPath builtDir, in GraphicsTestPath outDir){
+    return BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, builtDir, outDir);
+}
 
+Expected<SamplerAsset> LoadSamplerFromOutput(in GraphicsTestPath outputDirectory, in Name assetName, in usize expectedVolumeFileCount, mut TestArena testArena){
+    return LoadCookedSamplerAsset(outputDirectory, assetName, expectedVolumeFileCount, testArena);
+}
 
-TEST(AssetBunchOwnership, ClearReplacementAndDestructionReleaseAllResolvedValues){
-    BunchFixture fixture;
-    ASSERT_TRUE(fixture.document.parse(s_OwnershipMetadata));
+void PrepareCacheRecordHelper(in GraphicsTestPath root, in DiscoveredNwbFile discovered, in StringView metadataText, in Sha256Digest producer, mut ScratchArena scratchArena, mut ScratchString relativePath, mut ScratchString cacheName, mut NwbFileAssetCacheRecord outRecord){
+    PrepareNwbFileAssetCacheRecord(root, JoinGraphicsPath(root, s_CacheDirectory), discovered, metadataText, producer, scratchArena, relativePath, cacheName, outRecord);
+}
+
+void VerifyAssetBunchOwnership_ClearReplacementAndDestructionReleaseAllResolvedValues(){
+    BunchFixture fixture = BunchFixture();
+    ASSERT_TRUE(fixture.document.parse(s_BunchOwnershipMetadata));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
         for(usize iteration = 0u; iteration < 8u; ++iteration){
             {
-                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
-                ASSERT_TRUE(expandedResult);
-                output = Move(*expandedResult);
+                Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+                ASSERT_TRUE(expandedResult.has_value());
+                output = expandedResult.value();
             }
-            VerifyOwnedOutput(output, fixture.document);
+            VerifyOwnedBunchOutput(output, fixture.document);
             const ArenaMemoryStats liveMetadata = fixture.metadataArena.memoryStats();
             EXPECT_GT(liveMetadata.usedBytes, baselineMetadata.usedBytes);
             {
-                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
-                ASSERT_TRUE(expandedResult);
-                output = Move(*expandedResult);
+                Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+                ASSERT_TRUE(expandedResult.has_value());
+                output = expandedResult.value();
             }
-            VerifyOwnedOutput(output, fixture.document);
+            VerifyOwnedBunchOutput(output, fixture.document);
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, liveMetadata.usedBytes);
             output.clear();
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         }
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
-            ASSERT_TRUE(expandedResult);
-            output = Move(*expandedResult);
+            Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+            ASSERT_TRUE(expandedResult.has_value());
+            output = expandedResult.value();
         }
-        VerifyOwnedOutput(output, fixture.document);
+        VerifyOwnedBunchOutput(output, fixture.document);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
 
-TEST(AssetBunchOwnership, OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerDies){
-    BunchFixture fixture;
-    ASSERT_TRUE(fixture.document.parse(s_OwnershipMetadata));
+void VerifyAssetBunchOwnership_OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerDies(){
+    BunchFixture fixture = BunchFixture();
+    ASSERT_TRUE(fixture.document.parse(s_BunchOwnershipMetadata));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
         ExpandedAssetMetadataVector source(fixture.scratchArena);
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
-            ASSERT_TRUE(expandedResult);
-            source = Move(*expandedResult);
+            Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+            ASSERT_TRUE(expandedResult.has_value());
+            source = expandedResult.value();
         }
-        ExpandedAssetMetadataVector destination(Move(source));
+        ExpandedAssetMetadataVector destination = MoveExpandedBunchVector(source);
         destination.reserve(destination.capacity() + 37u);
-        VerifyOwnedOutput(destination, fixture.document);
-        destination[1u].value.field(s_Local).field(s_Label).setString("changed output");
-        const Value* const local = fixture.document.findVariable(s_Local);
-        ASSERT_NE(local, nullptr);
-        const Value* const label = local->findField(s_Label);
-        ASSERT_NE(label, nullptr);
-        EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
+        VerifyOwnedBunchOutput(destination, fixture.document);
+        destination[1u].value.field(s_BunchLocal).field(s_BunchLabel).setString("changed output");
+        ASSERT_TRUE(HasMetaVariable(fixture.document, s_BunchLocal));
+        ASSERT_TRUE(HasMetaField(GetMetaVariable(fixture.document, s_BunchLocal), s_BunchLabel));
+        EXPECT_EQ(GetMetaField(GetMetaVariable(fixture.document, s_BunchLocal), s_BunchLabel).asString(), s_ASeparatelyOwnedMetadataString);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
 
-TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReuseCallerScratch){
-    for(const usize unusedDeclarations : { 0u, 17u }){
-        BunchFixture fixture;
-        AString<Metascript::MetaArena> firstVariable("first_", fixture.metadataArena);
-        firstVariable.append(192u, 'a');
-        AString<Metascript::MetaArena> secondVariable("second_", fixture.metadataArena);
-        secondVariable.append(224u, 'b');
-        AString<Metascript::MetaArena> virtualRoot(256u, 'r', fixture.metadataArena);
-        AString<Metascript::MetaArena> source = StringFormat(
-            fixture.metadataArena,
-            "probe {};\r\nprobe {};\r\n{}.target = {};\r\n{}.nested = [{{ \"target\": {} }}];\r\nasset_bunch bunch = [{}, {}];\r\n",
-            firstVariable, secondVariable, firstVariable, secondVariable, secondVariable, firstVariable,
-            secondVariable, firstVariable
+void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAndReuseCallerScratch(){
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(2u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(17u);
+
+    for(in usize unusedDeclarations : unusedCounts){
+        BunchFixture fixture = BunchFixture();
+        MetaString firstVariable("first_", fixture.metadataArena);
+        AppendRepeatedAsciiByte(firstVariable, 192u, 97u);
+        MetaString secondVariable("second_", fixture.metadataArena);
+        AppendRepeatedAsciiByte(secondVariable, 224u, 98u);
+        MetaString rootText(fixture.metadataArena);
+        AppendRepeatedAsciiByte(rootText, 256u, 114u);
+
+        String source = StringFormat(
+            "probe {};\r\nprobe {};\r\n{}.target = {};\r\n{}.nested = [{{ \"target\": {} }}];\r\nasset_bunch bunch = [{}, {}];\r\n"
+            , ViewArenaString(firstVariable)
+            , ViewArenaString(secondVariable)
+            , ViewArenaString(firstVariable)
+            , ViewArenaString(secondVariable)
+            , ViewArenaString(secondVariable)
+            , ViewArenaString(firstVariable)
+            , ViewArenaString(secondVariable)
+            , ViewArenaString(firstVariable)
         );
         for(usize index = 0u; index < unusedDeclarations; ++index)
-            source += StringFormat(fixture.metadataArena, "metadata unused_{};\r\n", index);
+            StringAppendFormat(source, "metadata unused_{};\r\n", index);
         ASSERT_TRUE(fixture.document.parse(source));
-        const NWB::Path filePath = fixture.assetRoot / "bundle.nwb";
-        const auto firstPath = StringFormat(fixture.metadataArena, "{}/bundle/{}", virtualRoot, firstVariable);
-        const auto secondPath = StringFormat(fixture.metadataArena, "{}/bundle/{}", virtualRoot, secondVariable);
-        const auto firstIdentityResult = Name::FromText(AStringView(firstPath));
-        ASSERT_TRUE(firstIdentityResult);
-        const Name firstIdentity = *firstIdentityResult;
-        const auto secondIdentityResult = Name::FromText(AStringView(secondPath));
-        ASSERT_TRUE(secondIdentityResult);
-        const Name secondIdentity = *secondIdentityResult;
+
+        const GraphicsTestPath filePath = JoinGraphicsPath(fixture.assetRoot, "bundle.nwb");
+        const String formattedFirst = StringFormat("{}/bundle/{}", ViewArenaString(rootText), ViewArenaString(firstVariable));
+        const String formattedSecond = StringFormat("{}/bundle/{}", ViewArenaString(rootText), ViewArenaString(secondVariable));
+        const Expected<Name> firstIdentityResult = ParseName(formattedFirst);
+        ASSERT_TRUE(firstIdentityResult.has_value());
+        const Name firstIdentity = firstIdentityResult.value();
+        const Expected<Name> secondIdentityResult = ParseName(formattedSecond);
+        ASSERT_TRUE(secondIdentityResult.has_value());
+        const Name secondIdentity = secondIdentityResult.value();
+        const String virtualRoot(ViewArenaString(rootText));
+
         const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
 
         // Keep this regression within one chunk per alignment so it isolates string growth from chunk-stack reuse.
-        Alloc::ScratchArena scratch(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchLongPathScratch), 65536u);
-        auto* const sentinel = static_cast<u8*>(scratch.allocate(1u, 32u));
-        ASSERT_NE(sentinel, nullptr);
-        for(usize index = 0u; index < 32u; ++index)
-            sentinel[index] = static_cast<u8>(index + 73u);
+        ScratchArena scratch(s_AssetCaseTestsAssetBunchLongPathScratch, 65536u);
+        ScratchBunchSentinel sentinel(scratch);
+        ASSERT_TRUE(sentinel.valid());
         const ArenaMemoryStats baselineScratch = scratch.memoryStats();
-        ArenaMemoryStats warm;
+        ArenaMemoryStats warm = ArenaMemoryStats();
+        const StringView virtualRootView = virtualRoot;
+        const StringView firstPathView = formattedFirst;
+        const StringView secondPathView = formattedSecond;
         for(usize iteration = 0u; iteration < 16u; ++iteration){
             {
-                const auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, AStringView(virtualRoot), filePath, fixture.document, scratch);
-                ASSERT_TRUE(expandedResult);
-                const ExpandedAssetMetadataVector& output = *expandedResult;
+                ExpandedAssetMetadataVector output(scratch);
+                {
+                    Expected<ExpandedAssetMetadataVector> expandedResult = ExpandBunchWithScratch(fixture.assetRoot, virtualRootView, filePath, fixture.document, scratch);
+                    ASSERT_TRUE(expandedResult.has_value());
+                    output = expandedResult.value();
+                }
                 ASSERT_EQ(output.size(), 2u);
                 EXPECT_EQ(output[0u].virtualPath, secondIdentity);
                 EXPECT_EQ(output[1u].virtualPath, firstIdentity);
-                const Value* const nested = output[0u].value.findField("nested");
-                ASSERT_NE(nested, nullptr);
-                ASSERT_TRUE(nested->isList());
-                ASSERT_EQ(nested->asList().size(), 1u);
-                const Value* const nestedTarget = nested->asList()[0u].findField(s_FieldTarget);
-                ASSERT_NE(nestedTarget, nullptr);
-                ASSERT_TRUE(nestedTarget->isString());
-                EXPECT_EQ(nestedTarget->asString(), AStringView(firstPath));
-                const Value* const target = output[1u].value.findField(s_FieldTarget);
-                ASSERT_NE(target, nullptr);
-                ASSERT_TRUE(target->isString());
-                EXPECT_EQ(target->asString(), AStringView(secondPath));
+                ASSERT_TRUE(HasMetaField(output[0u].value, "nested"));
+                ASSERT_TRUE(GetMetaField(output[0u].value, "nested").isList());
+                ASSERT_EQ(GetMetaField(output[0u].value, "nested").asList().size(), 1u);
+                ASSERT_TRUE(HasMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget));
+                ASSERT_TRUE(GetMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget).isString());
+                EXPECT_EQ(GetMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget).asString(), firstPathView);
+                ASSERT_TRUE(HasMetaField(output[1u].value, s_FieldTarget));
+                ASSERT_TRUE(GetMetaField(output[1u].value, s_FieldTarget).isString());
+                EXPECT_EQ(GetMetaField(output[1u].value, s_FieldTarget).asString(), secondPathView);
             }
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, retainedMetadata.usedBytes);
-            for(usize index = 0u; index < 32u; ++index)
-                EXPECT_EQ(sentinel[index], static_cast<u8>(index + 73u));
+            EXPECT_TRUE(sentinel.intact());
             const ArenaMemoryStats current = scratch.memoryStats();
             EXPECT_EQ(current.usedBytes, baselineScratch.usedBytes);
             if(iteration == 0u)
@@ -252,149 +190,118 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReus
                 EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
             }
         }
-        scratch.deallocate(sentinel, 1u, 32u);
+        sentinel.release();
     }
 }
 
-TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive){
-    BunchFixture fixture;
+void VerifyAssetBunchOwnership_ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive(){
+    BunchFixture fixture = BunchFixture();
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
         {
-            Metascript::Document sourceDocument(fixture.metadataArena);
-            ASSERT_TRUE(sourceDocument.parse(s_OwnershipMetadata));
+            MetaDocument sourceDocument(fixture.metadataArena);
+            ASSERT_TRUE(sourceDocument.parse(s_BunchOwnershipMetadata));
             {
-                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, sourceDocument, fixture.scratchArena);
+                Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, sourceDocument, fixture.scratchArena);
+                ASSERT_TRUE(expandedResult.has_value());
+                output = expandedResult.value();
+            }
+            VerifyOwnedBunchOutput(output, sourceDocument);
+        }
+        ASSERT_EQ(output.size(), 2u);
+        ASSERT_TRUE(HasMetaField(output[0u].value, s_BunchItemsField));
+        ASSERT_TRUE(GetMetaField(output[0u].value, s_BunchItemsField).isList());
+        ASSERT_EQ(GetMetaField(output[0u].value, s_BunchItemsField).asList().size(), 2u);
+        ASSERT_TRUE(HasMetaField(GetMetaField(output[0u].value, s_BunchItemsField).asList()[0u], s_BunchLabel));
+        EXPECT_EQ(GetMetaField(GetMetaField(output[0u].value, s_BunchItemsField).asList()[0u], s_BunchLabel).asString(), s_ASeparatelyOwnedMetadataString);
+        ASSERT_TRUE(HasMetaField(GetMetaField(output[0u].value, s_BunchItemsField).asList()[1u], s_FieldTarget));
+        EXPECT_EQ(GetMetaField(GetMetaField(output[0u].value, s_BunchItemsField).asList()[1u], s_FieldTarget).asString(), s_ProjectFixturesBundleFirst);
+    }
+    EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
+}
+
+void VerifyAssetBunchOwnership_CallerUnwindDestroysEveryPublishedResolvedValue(){
+    BunchFixture fixture = BunchFixture();
+    ASSERT_TRUE(fixture.document.parse(s_BunchOwnershipMetadata));
+    const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
+    native(mut fixture){
+        using namespace NWB::Core::Assets;
+        struct CallerFailure{};
+        EXPECT_THROW({
+            ExpandedAssetMetadataVector output(fixture.scratchArena);
+            {
+                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
                 ASSERT_TRUE(expandedResult);
                 output = Move(*expandedResult);
             }
-            VerifyOwnedOutput(output, sourceDocument);
-        }
-        ASSERT_EQ(output.size(), 2u);
-        const Value* const items = output[0u].value.findField(s_ItemsField);
-        ASSERT_NE(items, nullptr);
-        ASSERT_TRUE(items->isList());
-        ASSERT_EQ(items->asList().size(), 2u);
-        const Value* const label = items->asList()[0u].findField(s_Label);
-        ASSERT_NE(label, nullptr);
-        EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
-        const Value* const target = items->asList()[1u].findField(s_FieldTarget);
-        ASSERT_NE(target, nullptr);
-        EXPECT_EQ(target->asString(), s_ProjectFixturesBundleFirst);
+            VerifyOwnedBunchOutput(output, fixture.document);
+            throw CallerFailure{};
+        }, CallerFailure);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
 
-TEST(AssetBunchOwnership, CallerUnwindDestroysEveryPublishedResolvedValue){
-    struct CallerFailure{};
-    BunchFixture fixture;
-    ASSERT_TRUE(fixture.document.parse(s_OwnershipMetadata));
+void VerifyAssetBunchOwnership_FailedLaterLocalCycleReleasesTheUnpublishedValueAndPriorOutput(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    BunchFixture fixture = BunchFixture();
+    ASSERT_TRUE(fixture.document.parse("\nmetadata loop_a;\nmetadata loop_b;\nloop_a = { \"copied\": [1, 2, 3], \"next\": loop_b };\nloop_b = { \"next\": loop_a };\nprobe first = { \"owned\": \"first output remains valid on failure\" };\nprobe second = [ { \"copied\": [4, 5, 6] }, loop_a ];\nasset_bunch bunch = [first, second];\n"));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    EXPECT_THROW({
-        ExpandedAssetMetadataVector output(fixture.scratchArena);
-        {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
-            ASSERT_TRUE(expandedResult);
-            output = Move(*expandedResult);
-        }
-        VerifyOwnedOutput(output, fixture.document);
-        throw CallerFailure{};
-    }, CallerFailure
-    );
-    EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-}
-
-TEST(AssetBunchOwnership, FailedLaterLocalCycleReleasesTheUnpublishedValueAndPriorOutput){
-    Tests::CapturingLogger logger;
-    Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    BunchFixture fixture;
-    ASSERT_TRUE(fixture.document.parse(R"(
-metadata loop_a;
-metadata loop_b;
-loop_a = { "copied": [1, 2, 3], "next": loop_b };
-loop_b = { "next": loop_a };
-probe first = { "owned": "first output remains valid on failure" };
-probe second = [ { "copied": [4, 5, 6] }, loop_a ];
-asset_bunch bunch = [first, second];
-)"
-    )
-    );
-    const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    {
-        for(usize iteration = 0u; iteration < 8u; ++iteration){
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
-            EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-        }
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
+    for(usize iteration = 0u; iteration < 9u; ++iteration){
+        EXPECT_FALSE(CanExpandFixtureBunch(fixture));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("cyclic local metadata reference")));
+    EXPECT_TRUE(SawCapturedError(logger, "cyclic local metadata reference"));
 }
 
-TEST(AssetBunchOwnership, MissingLaterReferenceReleasesPartialNestedCollections){
-    Tests::CapturingLogger logger;
-    Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    BunchFixture fixture;
-    ASSERT_TRUE(fixture.document.parse(R"(
-metadata known;
-probe first = { "items": ["copied string", 1, 2] };
-probe second = [ { "copied": [4, 5, 6] }, known.missing ];
-asset_bunch bunch = [first, second];
-)"
-    )
-    );
+void VerifyAssetBunchOwnership_MissingLaterReferenceReleasesPartialNestedCollections(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    BunchFixture fixture = BunchFixture();
+    ASSERT_TRUE(fixture.document.parse("\nmetadata known;\nprobe first = { \"items\": [\"copied string\", 1, 2] };\nprobe second = [ { \"copied\": [4, 5, 6] }, known.missing ];\nasset_bunch bunch = [first, second];\n"));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    {
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
-        EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    }
+    EXPECT_FALSE(CanExpandFixtureBunch(fixture));
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset));
+    EXPECT_TRUE(SawCapturedError(logger, s_DoesNotTargetADeclaredAsset));
 }
 
-TEST(AssetBunchOwnership, RegisteredExpanderDistinguishesUnsupportedDocumentsFromExpansionErrors){
-    Tests::CapturingLogger logger;
-    Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    BunchFixture fixture;
+void VerifyAssetBunchOwnership_RegisteredExpanderDistinguishesUnsupportedDocumentsFromExpansionErrors(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    BunchFixture fixture = BunchFixture();
     ASSERT_TRUE(fixture.document.parse("probe first;"));
-    const AssetBunchExpandContext context{ fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena };
-    const auto unsupported = TryAutoCollectedAssetBunchExpanders(context);
-    ASSERT_FALSE(unsupported);
-    EXPECT_EQ(unsupported.error(), AssetBunchExpandFailure::Unsupported);
+    const Expected<AssetBunchExpandFailureEnum> unsupported = TryBunchExpandFailure(fixture);
+    ASSERT_TRUE(unsupported.has_value());
+    EXPECT_EQ(unsupported.value(), AssetBunchExpandFailure::Unsupported);
     EXPECT_EQ(logger.errorCount(), 0u);
+
     ASSERT_TRUE(fixture.document.parse("asset_bunch bunch = [];"));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    const auto failed = TryAutoCollectedAssetBunchExpanders(context);
-    ASSERT_FALSE(failed);
-    EXPECT_EQ(failed.error(), AssetBunchExpandFailure::Error);
+    const Expected<AssetBunchExpandFailureEnum> failed = TryBunchExpandFailure(fixture);
+    ASSERT_TRUE(failed.has_value());
+    EXPECT_EQ(failed.value(), AssetBunchExpandFailure::Error);
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("list must contain at least one asset")));
+    EXPECT_TRUE(SawCapturedError(logger, "list must contain at least one asset"));
 }
 
-TEST(AssetBunchOwnership, RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime){
-    BunchFixture fixture;
-    ASSERT_TRUE(fixture.document.parse(R"(
-metadata rig = { "skeleton": "project/shared/skeleton" };
-model model;
-model.skeletons = { "rig": rig };
-asset_bunch bunch = [model];
-)"
-    )
-    );
+void VerifyAssetBunchOwnership_RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime(){
+    BunchFixture fixture = BunchFixture();
+    ASSERT_TRUE(fixture.document.parse("\nmetadata rig = { \"skeleton\": \"project/shared/skeleton\" };\nmodel model;\nmodel.skeletons = { \"rig\": rig };\nasset_bunch bunch = [model];\n"));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    Impl::ModelCookEntry entry(fixture.outputArena);
+    ModelCookEntry entry(fixture.outputArena);
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
-        AssetBunchExpandContext context{ fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena };
-        auto expandedResult = TryAutoCollectedAssetBunchExpanders(context);
-        ASSERT_TRUE(expandedResult);
-        output = Move(*expandedResult);
+        {
+            Expected<ExpandedAssetMetadataVector> expandedResult = ExpandRegisteredBunch(fixture);
+            ASSERT_TRUE(expandedResult.has_value());
+            output = expandedResult.value();
+        }
         ASSERT_EQ(output.size(), 1u);
-        auto entryParseResult = Impl::ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, entry.skeletonObjects.get_allocator().arena(), fixture.scratchArena);
-        ASSERT_TRUE(entryParseResult);
-        entry = Move(*entryParseResult);
+        Expected<ModelCookEntry> entryParseResult = ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, fixture.outputArena, fixture.scratchArena);
+        ASSERT_TRUE(entryParseResult.has_value());
+        entry = entryParseResult.value();
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     ASSERT_EQ(entry.skeletonObjects.size(), 1u);
@@ -402,404 +309,334 @@ asset_bunch bunch = [model];
     EXPECT_EQ(entry.skeletonObjects[0u].skeleton.name(), Name("project/shared/skeleton"));
 }
 
-TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContract){
-    Tests::CapturingLogger logger;
-    Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    BunchFixture fixture;
+void VerifyAssetBunchOwnership_NullValueReachesTheTypeParserAndKeepsItsRejectionContract(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    BunchFixture fixture = BunchFixture();
     ASSERT_TRUE(fixture.document.parse("model model; asset_bunch bunch = [model];"));
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-    Impl::ModelCookEntry entry(fixture.outputArena);
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
-        AssetBunchExpandContext context{ fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena };
-        auto expandedResult = TryAutoCollectedAssetBunchExpanders(context);
-        ASSERT_TRUE(expandedResult);
-        output = Move(*expandedResult);
+        {
+            Expected<ExpandedAssetMetadataVector> expandedResult = ExpandRegisteredBunch(fixture);
+            ASSERT_TRUE(expandedResult.has_value());
+            output = expandedResult.value();
+        }
         ASSERT_EQ(output.size(), 1u);
         EXPECT_TRUE(output[0u].value.isNull());
-        EXPECT_FALSE(Impl::ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, entry.skeletonObjects.get_allocator().arena(), fixture.scratchArena));
+        EXPECT_FALSE(ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, fixture.outputArena, fixture.scratchArena).has_value());
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("asset is not a map")));
+    EXPECT_TRUE(SawCapturedError(logger, "asset is not a map"));
 }
 
-TEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder){
-    for(const usize unusedDeclarations : { 0u, 11u, 12u, 32u }){
-        BunchFixture fixture;
-        ASSERT_TRUE(ParseLookupFixture(R"(
-metadata Local = { "id": 11 };
-metadata local = { "id": 22 };
-probe first = { "values": [Local, local, Local] };
-probe second = { "values": [local] };
-ASSET_BUNCH bunch = [second, first];
-)", unusedDeclarations, fixture
-        )
-        );
+void VerifyAssetBunchLookup_ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder(){
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(4u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(11u);
+    unusedCounts.push_back(12u);
+    unusedCounts.push_back(32u);
+
+    Array<i64, 3> expectedIds = Array<i64, 3>();
+    expectedIds[0u] = 11;
+    expectedIds[1u] = 22;
+    expectedIds[2u] = 11;
+
+    const StringView metadata = "\nmetadata Local = { \"id\": 11 };\nmetadata local = { \"id\": 22 };\nprobe first = { \"values\": [Local, local, Local] };\nprobe second = { \"values\": [local] };\nASSET_BUNCH bunch = [second, first];\n";
+    for(in usize unusedDeclarations : unusedCounts){
+        BunchFixture fixture = BunchFixture();
+        ASSERT_TRUE(ParseBunchLookupFixture(metadata, unusedDeclarations, fixture));
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-        ExpandedAssetMetadataVector output(fixture.scratchArena);
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
-            ASSERT_TRUE(expandedResult);
-            output = Move(*expandedResult);
+            ExpandedAssetMetadataVector output(fixture.scratchArena);
+            {
+                Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
+                ASSERT_TRUE(expandedResult.has_value());
+                output = expandedResult.value();
+            }
+            ASSERT_EQ(output.size(), 2u);
+            EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
+            EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));
+            ASSERT_TRUE(HasMetaField(output[1u].value, s_BunchValuesField));
+            ASSERT_TRUE(GetMetaField(output[1u].value, s_BunchValuesField).isList());
+            ASSERT_EQ(GetMetaField(output[1u].value, s_BunchValuesField).asList().size(), 3u);
+            for(usize index = 0u; index < expectedIds.size(); ++index){
+                ASSERT_TRUE(HasMetaField(GetMetaField(output[1u].value, s_BunchValuesField).asList()[index], s_BunchIdField));
+                EXPECT_EQ(GetMetaField(GetMetaField(output[1u].value, s_BunchValuesField).asList()[index], s_BunchIdField).asInteger(), expectedIds[index]);
+            }
+            ASSERT_TRUE(HasMetaField(output[0u].value, s_BunchValuesField));
+            ASSERT_TRUE(GetMetaField(output[0u].value, s_BunchValuesField).isList());
+            ASSERT_EQ(GetMetaField(output[0u].value, s_BunchValuesField).asList().size(), 1u);
+            ASSERT_TRUE(HasMetaField(GetMetaField(output[0u].value, s_BunchValuesField).asList()[0u], s_BunchIdField));
+            EXPECT_EQ(GetMetaField(GetMetaField(output[0u].value, s_BunchValuesField).asList()[0u], s_BunchIdField).asInteger(), 22);
+            output.clear();
         }
-        ASSERT_EQ(output.size(), 2u);
-        EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
-        EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));
-        const Value* const firstValues = output[1u].value.findField(s_ValuesField);
-        ASSERT_NE(firstValues, nullptr);
-        ASSERT_TRUE(firstValues->isList());
-        ASSERT_EQ(firstValues->asList().size(), 3u);
-        const Array<i64, 3u> expectedIds = { 11, 22, 11 };
-        for(usize index = 0u; index < expectedIds.size(); ++index){
-            const Value* const id = firstValues->asList()[index].findField(s_IdField);
-            ASSERT_NE(id, nullptr);
-            EXPECT_EQ(id->asInteger(), expectedIds[index]);
-        }
-        const Value* const secondValues = output[0u].value.findField(s_ValuesField);
-        ASSERT_NE(secondValues, nullptr);
-        ASSERT_TRUE(secondValues->isList());
-        ASSERT_EQ(secondValues->asList().size(), 1u);
-        const Value* const secondId = secondValues->asList()[0u].findField(s_IdField);
-        ASSERT_NE(secondId, nullptr);
-        EXPECT_EQ(secondId->asInteger(), 22);
-        output.clear();
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     }
 }
 
-TEST(AssetBunchLookup, CanonicalDuplicateExportsAreRejectedBeforeNestedResolution){
-    for(const usize unusedDeclarations : { 0u, 32u }){
-        Tests::CapturingLogger logger;
-        Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-        BunchFixture fixture;
-        ASSERT_TRUE(ParseLookupFixture(R"(
-metadata known;
-probe Asset = { "missing": known.missing };
-probe asset;
-asset_bunch bunch = [Asset, asset];
-)", unusedDeclarations, fixture
-        )
-        );
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
+void VerifyAssetBunchLookup_CanonicalDuplicateExportsAreRejectedBeforeNestedResolution(){
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(2u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(32u);
+
+    const StringView metadata = "\nmetadata known;\nprobe Asset = { \"missing\": known.missing };\nprobe asset;\nasset_bunch bunch = [Asset, asset];\n";
+    for(in usize unusedDeclarations : unusedCounts){
+        CapturingLogger logger = CapturingLogger();
+        LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+        BunchFixture fixture = BunchFixture();
+        ASSERT_TRUE(ParseBunchLookupFixture(metadata, unusedDeclarations, fixture));
+        EXPECT_FALSE(CanExpandFixtureBunch(fixture));
         EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("variable 'asset' is listed more than once")));
-        EXPECT_FALSE(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset));
+        EXPECT_TRUE(SawCapturedError(logger, "variable 'asset' is listed more than once"));
+        EXPECT_FALSE(SawCapturedError(logger, "does not target a declared asset"));
     }
 }
 
-TEST(AssetBunchLookup, LocalCycleDetectionKeepsCanonicalVariableIdentity){
-    for(const usize unusedDeclarations : { 0u, 32u }){
-        Tests::CapturingLogger logger;
-        Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-        BunchFixture fixture;
-        ASSERT_TRUE(ParseLookupFixture(R"(
-metadata Local;
-metadata local = { "id": 5 };
-Local.next = local;
-probe asset = { "nested": Local };
-asset_bunch bunch = [asset];
-)", unusedDeclarations, fixture
-        )
-        );
+void VerifyAssetBunchLookup_LocalCycleDetectionKeepsCanonicalVariableIdentity(){
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(2u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(32u);
+
+    const StringView metadata = "\nmetadata Local;\nmetadata local = { \"id\": 5 };\nLocal.next = local;\nprobe asset = { \"nested\": Local };\nasset_bunch bunch = [asset];\n";
+    for(in usize unusedDeclarations : unusedCounts){
+        CapturingLogger logger = CapturingLogger();
+        LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+        BunchFixture fixture = BunchFixture();
+        ASSERT_TRUE(ParseBunchLookupFixture(metadata, unusedDeclarations, fixture));
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
+        EXPECT_FALSE(CanExpandFixtureBunch(fixture));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("cyclic local metadata reference 'local'")));
+        EXPECT_TRUE(SawCapturedError(logger, "cyclic local metadata reference 'local'"));
     }
 }
 
-TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup){
-    const Array<AStringView, 2u> metadataCases = { "asset_bunch bunch; bunch = [bunch];", "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];", };
-    for(const usize unusedDeclarations : { 0u, 32u }){
+void VerifyAssetBunchLookup_BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup(){
+    Vector<StringView> metadataCases = Vector<StringView>();
+    metadataCases.reserve(2u);
+    metadataCases.push_back("asset_bunch bunch; bunch = [bunch];");
+    metadataCases.push_back("probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];");
+
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(2u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(32u);
+
+    for(in usize unusedDeclarations : unusedCounts){
         for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
-            Tests::CapturingLogger logger;
-            Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-            BunchFixture fixture;
-            ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
+            CapturingLogger logger = CapturingLogger();
+            LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+            BunchFixture fixture = BunchFixture();
+            ASSERT_TRUE(ParseBunchLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
+            EXPECT_FALSE(CanExpandFixtureBunch(fixture));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(FOUNDATION_TEXT("item 0 references undeclared asset variable 'bunch'")) : TStringView(FOUNDATION_TEXT("reference 'bunch' does not target a declared asset"))));
+            StringView expectedDiagnostic = "reference 'bunch' does not target a declared asset";
+            if(caseIndex == 0u)
+                expectedDiagnostic = "item 0 references undeclared asset variable 'bunch'";
+            EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
         }
     }
 }
 
-TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems){
-    const Array<AStringView, 2u> metadataCases = { "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];", "probe asset; asset_bunch bunch = [\"asset\", asset];", };
-    for(const usize unusedDeclarations : { 0u, 32u }){
+void VerifyAssetBunchLookup_ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems(){
+    Vector<StringView> metadataCases = Vector<StringView>();
+    metadataCases.reserve(2u);
+    metadataCases.push_back("metadata known; probe asset; asset_bunch bunch = [known.missing, asset];");
+    metadataCases.push_back("probe asset; asset_bunch bunch = [\"asset\", asset];");
+
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(2u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(32u);
+
+    for(in usize unusedDeclarations : unusedCounts){
         for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
-            Tests::CapturingLogger logger;
-            Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-            BunchFixture fixture;
-            ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
+            CapturingLogger logger = CapturingLogger();
+            LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+            BunchFixture fixture = BunchFixture();
+            ASSERT_TRUE(ParseBunchLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
+            EXPECT_FALSE(CanExpandFixtureBunch(fixture));
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(FOUNDATION_TEXT("item 0 references undeclared asset variable 'known.missing'")) : TStringView(FOUNDATION_TEXT("item 0 must be a declared asset reference"))));
+            StringView expectedDiagnostic = "item 0 must be a declared asset reference";
+            if(caseIndex == 0u)
+                expectedDiagnostic = "item 0 references undeclared asset variable 'known.missing'";
+            EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
         }
     }
 }
 
-TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
-    const Array<AStringView, 2u> metadataCases = {
-        "metadata known; metadata cycle; cycle.next = cycle; "
-        "probe asset = [known.missing, cycle]; asset_bunch bunch = [asset];",
-        "metadata known; metadata cycle; cycle.next = cycle; "
-        "probe asset = [cycle, known.missing]; asset_bunch bunch = [asset];",
-    };
-    for(const usize unusedDeclarations : { 0u, 32u }){
+void VerifyAssetBunchLookup_NestedListFailureFollowsSourceTraversalOrder(){
+    Vector<StringView> metadataCases = Vector<StringView>();
+    metadataCases.reserve(2u);
+    metadataCases.push_back("metadata known; metadata cycle; cycle.next = cycle; probe asset = [known.missing, cycle]; asset_bunch bunch = [asset];");
+    metadataCases.push_back("metadata known; metadata cycle; cycle.next = cycle; probe asset = [cycle, known.missing]; asset_bunch bunch = [asset];");
+
+    Vector<usize> unusedCounts = Vector<usize>();
+    unusedCounts.reserve(2u);
+    unusedCounts.push_back(0u);
+    unusedCounts.push_back(32u);
+
+    for(in usize unusedDeclarations : unusedCounts){
         for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
-            Tests::CapturingLogger logger;
-            Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-            BunchFixture fixture;
-            ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
+            CapturingLogger logger = CapturingLogger();
+            LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+            BunchFixture fixture = BunchFixture();
+            ASSERT_TRUE(ParseBunchLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
+            EXPECT_FALSE(CanExpandFixtureBunch(fixture));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_EQ(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset), caseIndex == 0u);
-            EXPECT_EQ(logger.sawErrorContaining(FOUNDATION_TEXT("cyclic local metadata reference")), caseIndex == 1u);
+            EXPECT_EQ(SawCapturedError(logger, "does not target a declared asset"), caseIndex == 0u);
+            EXPECT_EQ(SawCapturedError(logger, "cyclic local metadata reference"), caseIndex == 1u);
         }
     }
 }
 
+void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    TestArena testArena = TestArena();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <impl/assets_graphics/components.adhd.h>
-
-#include <core/assets/input_list.h>
-#include <core/assets/cook_metadata_internal.h>
-#include <core/assets/volume/built_asset.h>
-
-#include <global/filesystem/executable_paths.h>
-#include <global/sha1.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic.h>
-#include <global/sync.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_asset_cache_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirectory;
-constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
-using NWB::Tests::AssetsGraphicsFixture::s_LinearWrapSamplerMetadata;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange){
-    static constexpr AStringView s_ModifiedSamplerMetadata =
-        "sampler asset;\n"
-        "asset.min_filter = \"linear\";\n"
-        "asset.mag_filter = \"linear\";\n"
-        "asset.mip_filter = \"linear\";\n"
-        "asset.address_u = \"wrap\";\n"
-        "asset.address_v = \"wrap\";\n"
-        "asset.address_w = \"wrap\";\n"
-        "asset.reduction = \"standard\";\n"
-        "asset.max_anisotropy = 1.0;\n"
-        "asset.mip_bias = 3.5;\n";
-
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-
-    NWB::Core::Assets::AssetString emptySha1Hex(testArena.arena);
+    AssetString emptySha1Hex(testArena.arena);
     AppendSha1Hex(ComputeSha1Text(""), emptySha1Hex);
-    EXPECT_EQ(AStringView(emptySha1Hex), AStringView("da39a3ee5e6b4b0d3255bfef95601890afd80709"));
-    NWB::Core::Assets::AssetString abcSha1Hex(testArena.arena);
+    EXPECT_EQ(ViewArenaString(emptySha1Hex), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
+    AssetString abcSha1Hex(testArena.arena);
     AppendSha1Hex(ComputeSha1Text("abc"), abcSha1Hex);
-    EXPECT_EQ(AStringView(abcSha1Hex), AStringView("a9993e364706816aba3e25717850c26c9cd0d89d"));
+    EXPECT_EQ(ViewArenaString(abcSha1Hex), "a9993e364706816aba3e25717850c26c9cd0d89d");
 
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "nwb_asset_cache_sha1_param_checksum");
-    ASSERT_TRUE(cookCase);
-    const Path& root = cookCase->root;
-    const Path assetRoot = root / s_AssetsDirectory;
-    const Path mixedCaseNwbPath = assetRoot / "Samplers" / "First_Sampler.nwb";
-    const Name virtualPath = NWB::Tests::AssetsGraphicsFixture::s_ProjectSamplersFirstSampler;
-    NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(0u);
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "nwb_asset_cache_sha1_param_checksum");
+    ASSERT_TRUE(cookCase.has_value());
+    const CookCase prepared = cookCase.value();
+    const GraphicsTestPath root = prepared.root;
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
+    const GraphicsTestPath mixedCaseNwbPath = JoinGraphicsPath2(assetRoot, "Samplers", "First_Sampler.nwb");
+    const Name virtualPath = s_ProjectSamplersFirstSampler;
 
-    const auto buildAndGatherWithRepoRoot = [&](const Path& builtDir, const Path& outDir) -> b8{
-        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(testArena.arena, cookCpuTaskScheduler);
-        buildOptions.repoRoot = root;
-        buildOptions.outputDirectory = builtDir;
-        if(!buildOptions.configuration.assign(s_TestsConfiguration) || !buildOptions.assetType.assign("graphics"))
-            return false;
-        buildOptions.assetRoots.emplace_back(assetRoot, NWB::Core::Assets::s_ProjectVirtualRoot);
-        if(!NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions, scratchArena))
-            return false;
-
-        NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(testArena.arena);
-        gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDir));
-        gatherOptions.outputDirectory = PathToString(testArena.arena, outDir);
-        gatherOptions.configuration = s_TestsConfiguration.data();
-        return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
-    };
-
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_first", cookCase->outputDirectory));
+    ASSERT_TRUE(WriteTextFile(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
+    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_first"), prepared.outputDirectory));
 
     const Sha1Digest expectedDigest = ComputeSha1Text("assets/samplers/first_sampler.nwb");
-    NWB::Core::Assets::AssetString expectedSha1Name(testArena.arena);
+    AssetString expectedSha1Name(testArena.arena);
     AppendSha1Hex(expectedDigest, expectedSha1Name);
 
-    const Path expectedCacheFilePath = root / "__asset_cache" / AStringView(expectedSha1Name);
-    NWB::Core::Assets::AssetBytes initialCacheBytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, initialCacheBytes));
-    usize cursor = 0u;
-    const auto initialHeader = ReadPOD<NWB::Core::Assets::NwbAssetCacheFileHeader>(initialCacheBytes, cursor);
-    ASSERT_TRUE(initialHeader);
-    EXPECT_EQ(initialHeader->magic, NWB::Core::Assets::s_NwbAssetCacheMagic);
-    EXPECT_EQ(initialHeader->version, NWB::Core::Assets::s_NwbAssetCacheVersion);
-    EXPECT_NE(initialHeader->flags & NWB::Core::Assets::s_NwbAssetCacheFlagStandalone, 0u);
-    EXPECT_EQ(initialHeader->entryCount, 1u);
+    const GraphicsTestPath expectedCacheFilePath = JoinGraphicsPath2(root, s_CacheDirectory, ViewArenaString(expectedSha1Name));
+    AssetBytes initialCacheBytes(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, initialCacheBytes).has_value());
+    const Expected<NwbAssetCacheFileHeader> initialHeaderResult = ReadNwbCacheFileHeader(initialCacheBytes);
+    ASSERT_TRUE(initialHeaderResult.has_value());
+    const NwbAssetCacheFileHeader initialHeader = initialHeaderResult.value();
+    EXPECT_EQ(initialHeader.magic, s_NwbAssetCacheMagic);
+    EXPECT_EQ(initialHeader.version, s_NwbAssetCacheVersion);
+    EXPECT_NE(initialHeader.flags & s_NwbAssetCacheFlagStandalone, 0u);
+    EXPECT_EQ(initialHeader.entryCount, 1u);
 
     // A cache written by a different producer must not be reused.
     {
-        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        const auto executablePath = ExecutablePaths(scratchArena).path();
-        ASSERT_TRUE(executablePath);
-        Vector<u8, NWB::Core::Alloc::ScratchArena> executableBytes(scratchArena);
-        ASSERT_TRUE(ReadBinaryFile(*executablePath, executableBytes));
-        const Sha256Digest producer = ComputeSha256(BinaryByteView{ executableBytes.data(), executableBytes.size() });
+        ScratchArena scratchArena(s_CodecScratchArena);
+        const ExecutablePaths executablePaths = ExecutablePaths();
+        const Expected<Path, ErrorCode> executablePath = executablePaths.path();
+        ASSERT_TRUE(executablePath.has_value());
+        Vector<u8> executableBytes = Vector<u8>();
+        ASSERT_TRUE(ReadBinaryFile(executablePath.value(), executableBytes).has_value());
+        const Sha256Digest producer = ComputeSha256(executableBytes);
         Sha256Digest otherProducer = producer;
-        otherProducer.bytes[0u] ^= 1u;
-        const auto normalizedPath = PathToString(testArena.arena, mixedCaseNwbPath);
-        NWB::Core::Assets::DiscoveredNwbFile discovered(testArena.arena, assetRoot, mixedCaseNwbPath, AStringView(normalizedPath), NWB::Core::Assets::s_ProjectVirtualRoot);
-        NWB::Core::Assets::NwbFileAssetCacheRecord originalProducer(testArena.arena);
-        NWB::Core::Assets::NwbFileAssetCacheRecord staleProducer(testArena.arena);
-        NWB::Core::Assets::ScratchString relativePath(scratchArena);
-        NWB::Core::Assets::ScratchString cacheName(scratchArena);
-        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_LinearWrapSamplerMetadata, producer, scratchArena, relativePath, cacheName, originalProducer);
-        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_LinearWrapSamplerMetadata, otherProducer, scratchArena, relativePath, cacheName, staleProducer);
+        otherProducer.bytes[0u] = otherProducer.bytes[0u] ^ 1u;
+
+        const String normalizedPath = PathToString(mixedCaseNwbPath);
+        DiscoveredNwbFile discovered(testArena.arena, assetRoot, mixedCaseNwbPath, normalizedPath, s_ProjectVirtualRoot);
+        NwbFileAssetCacheRecord originalProducer(testArena.arena);
+        NwbFileAssetCacheRecord staleProducer(testArena.arena);
+        ScratchString relativePath(scratchArena);
+        ScratchString cacheName(scratchArena);
+        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, producer, scratchArena, relativePath, cacheName, originalProducer);
+        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, otherProducer, scratchArena, relativePath, cacheName, staleProducer);
         ASSERT_TRUE(originalProducer.canWriteCache);
         ASSERT_TRUE(staleProducer.canWriteCache);
-        EXPECT_EQ(originalProducer.paramSha256, initialHeader->paramSha256);
+        EXPECT_EQ(originalProducer.paramSha256, initialHeader.paramSha256);
         EXPECT_NE(staleProducer.paramSha256, originalProducer.paramSha256);
-        auto staleBytes = initialCacheBytes;
-        auto staleHeader = *initialHeader;
+
+        AssetBytes staleBytes = initialCacheBytes;
+        NwbAssetCacheFileHeader staleHeader = initialHeader;
         staleHeader.paramSha256 = staleProducer.paramSha256;
-        ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, staleHeader, staleBytes));
+        ASSERT_TRUE(OverwritePOD(0u, staleHeader, staleBytes));
         ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, staleBytes));
-        ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_new_producer", root / "out_new_producer"));
-        NWB::Core::Assets::AssetBytes refreshed(testArena.arena);
-        ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, refreshed));
+        ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_new_producer"), JoinGraphicsPath(root, "out_new_producer")));
+        AssetBytes refreshed(testArena.arena);
+        ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, refreshed).has_value());
         EXPECT_EQ(refreshed, initialCacheBytes);
 
-        const Path bunchPath = assetRoot / "Samplers" / "Sidecar_Bunch.nwb";
-        const Path fontPath = assetRoot / "Samplers" / "Sidecar_Bunch.font";
-        const Path texturePath = assetRoot / "Samplers" / "Sidecar_Bunch.tex";
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(fontPath, "font-one"));
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(texturePath, "texture-one"));
-        const auto bunchPathText = PathToString(testArena.arena, bunchPath);
-        NWB::Core::Assets::DiscoveredNwbFile bunch(testArena.arena, assetRoot, bunchPath, AStringView(bunchPathText), NWB::Core::Assets::s_ProjectVirtualRoot);
-        NWB::Core::Assets::ScratchString largeMetadata(scratchArena);
-        largeMetadata.resize(70000u, ' ');
+        const GraphicsTestPath bunchPath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.nwb");
+        const GraphicsTestPath fontPath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.font");
+        const GraphicsTestPath texturePath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.tex");
+        ASSERT_TRUE(WriteTextFile(fontPath, "font-one"));
+        ASSERT_TRUE(WriteTextFile(texturePath, "texture-one"));
+        const String bunchPathText = PathToString(bunchPath);
+        DiscoveredNwbFile bunch(testArena.arena, assetRoot, bunchPath, bunchPathText, s_ProjectVirtualRoot);
+        ScratchString largeMetadata(scratchArena);
+        AppendRepeatedAsciiByte(largeMetadata, 70000u, 32u);
         largeMetadata.append("ASSET_BUNCH asset; font f; texture t;");
-        NWB::Core::Assets::NwbFileAssetCacheRecord initialSidecars(testArena.arena);
-        NWB::Core::Assets::NwbFileAssetCacheRecord changedFont(testArena.arena);
-        NWB::Core::Assets::NwbFileAssetCacheRecord changedTexture(testArena.arena);
-        const auto prepareSidecars = [&](NWB::Core::Assets::NwbFileAssetCacheRecord& record){
-            NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", bunch, AStringView(largeMetadata), producer, scratchArena, relativePath, cacheName, record);
-        };
-        prepareSidecars(initialSidecars);
+        NwbFileAssetCacheRecord initialSidecars(testArena.arena);
+        NwbFileAssetCacheRecord changedFont(testArena.arena);
+        NwbFileAssetCacheRecord changedTexture(testArena.arena);
+        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratchArena, relativePath, cacheName, initialSidecars);
         ASSERT_TRUE(initialSidecars.canWriteCache);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(fontPath, "font-two"));
-        prepareSidecars(changedFont);
+        ASSERT_TRUE(WriteTextFile(fontPath, "font-two"));
+        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratchArena, relativePath, cacheName, changedFont);
         ASSERT_TRUE(changedFont.canWriteCache);
         EXPECT_NE(initialSidecars.paramSha256, changedFont.paramSha256);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(texturePath, "texture-two"));
-        prepareSidecars(changedTexture);
+        ASSERT_TRUE(WriteTextFile(texturePath, "texture-two"));
+        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratchArena, relativePath, cacheName, changedTexture);
         ASSERT_TRUE(changedTexture.canWriteCache);
         EXPECT_NE(changedFont.paramSha256, changedTexture.paramSha256);
     }
 
     // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_second", root / "out_second"));
+    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_second"), JoinGraphicsPath(root, "out_second")));
 
-    const auto cachedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(root / "out_second", virtualPath, 1u, testArena);
-    ASSERT_TRUE(cachedSampler);
-    EXPECT_FLOAT_EQ(static_cast<const NWB::Impl::Sampler*>(cachedSampler->get())->description().mipBias, 0.0f);
+    const Expected<SamplerAsset> cachedSampler = LoadSamplerFromOutput(JoinGraphicsPath(root, "out_second"), virtualPath, 1u, testArena);
+    ASSERT_TRUE(cachedSampler.has_value());
+    EXPECT_FLOAT_EQ(cachedSampler.value().description().mipBias, 0.0f);
 
     // Corrupt the cached payload section hash; build must reject the corrupted cache entry and repair it.
-    auto corruptedCacheBytes = initialCacheBytes;
-    auto corruptedHeader = *initialHeader;
-    corruptedHeader.payloadSectionHashFnv64 ^= 1u;
-    ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
+    AssetBytes corruptedCacheBytes = initialCacheBytes;
+    NwbAssetCacheFileHeader corruptedHeader = initialHeader;
+    corruptedHeader.payloadSectionHashFnv64 = corruptedHeader.payloadSectionHashFnv64 ^ 1u;
+    ASSERT_TRUE(OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
     ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_repaired", root / "out_repaired"));
-    NWB::Core::Assets::AssetBytes repairedCacheBytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes));
+    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_repaired"), JoinGraphicsPath(root, "out_repaired")));
+    AssetBytes repairedCacheBytes(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
     // A corrupt count must be rejected before reserving memory.
-    corruptedHeader = *initialHeader;
-    corruptedHeader.entryCount = Limit<u32>::s_Max;
+    corruptedHeader = initialHeader;
+    corruptedHeader.entryCount = u32.max;
     corruptedCacheBytes = initialCacheBytes;
-    ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
+    ASSERT_TRUE(OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
     ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_bad_count", root / "out_bad_count"));
-    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes));
+    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_bad_count"), JoinGraphicsPath(root, "out_bad_count")));
+    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
     // Modify .nwb parameter; checksum changes and invalidates __asset_cache/<sha1>.
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_ModifiedSamplerMetadata));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_third", root / "out_third"));
+    ASSERT_TRUE(WriteTextFile(mixedCaseNwbPath, s_ModifiedSamplerCacheMetadata));
+    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_third"), JoinGraphicsPath(root, "out_third")));
 
-    NWB::Core::Assets::AssetBytes updatedCacheBytes(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, updatedCacheBytes));
-    usize updatedCursor = 0u;
-    const auto updatedHeader = ReadPOD<NWB::Core::Assets::NwbAssetCacheFileHeader>(updatedCacheBytes, updatedCursor);
-    ASSERT_TRUE(updatedHeader);
-    EXPECT_NE(updatedHeader->paramSha256, initialHeader->paramSha256);
+    AssetBytes updatedCacheBytes(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, updatedCacheBytes).has_value());
+    const Expected<NwbAssetCacheFileHeader> updatedHeader = ReadNwbCacheFileHeader(updatedCacheBytes);
+    ASSERT_TRUE(updatedHeader.has_value());
+    EXPECT_NE(updatedHeader.value().paramSha256, initialHeader.paramSha256);
 
-    const auto updatedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(root / "out_third", virtualPath, 1u, testArena);
-    ASSERT_TRUE(updatedSampler);
-    EXPECT_FLOAT_EQ(static_cast<const NWB::Impl::Sampler*>(updatedSampler->get())->description().mipBias, 3.5f);
+    const Expected<SamplerAsset> updatedSampler = LoadSamplerFromOutput(JoinGraphicsPath(root, "out_third"), virtualPath, 1u, testArena);
+    ASSERT_TRUE(updatedSampler.has_value());
+    EXPECT_FLOAT_EQ(updatedSampler.value().description().mipBias, 3.5f);
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -808,982 +645,24 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST(AssetBunchOwnership, ClearReplacementAndDestructionReleaseAllResolvedValues, VerifyAssetBunchOwnership_ClearReplacementAndDestructionReleaseAllResolvedValues)
+NWB_ADHD_GTEST(AssetBunchOwnership, OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerDies, VerifyAssetBunchOwnership_OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerDies)
+NWB_ADHD_GTEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReuseCallerScratch, VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAndReuseCallerScratch)
+NWB_ADHD_GTEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive, VerifyAssetBunchOwnership_ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive)
+NWB_ADHD_GTEST(AssetBunchOwnership, CallerUnwindDestroysEveryPublishedResolvedValue, VerifyAssetBunchOwnership_CallerUnwindDestroysEveryPublishedResolvedValue)
+NWB_ADHD_GTEST(AssetBunchOwnership, FailedLaterLocalCycleReleasesTheUnpublishedValueAndPriorOutput, VerifyAssetBunchOwnership_FailedLaterLocalCycleReleasesTheUnpublishedValueAndPriorOutput)
+NWB_ADHD_GTEST(AssetBunchOwnership, MissingLaterReferenceReleasesPartialNestedCollections, VerifyAssetBunchOwnership_MissingLaterReferenceReleasesPartialNestedCollections)
+NWB_ADHD_GTEST(AssetBunchOwnership, RegisteredExpanderDistinguishesUnsupportedDocumentsFromExpansionErrors, VerifyAssetBunchOwnership_RegisteredExpanderDistinguishesUnsupportedDocumentsFromExpansionErrors)
+NWB_ADHD_GTEST(AssetBunchOwnership, RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime, VerifyAssetBunchOwnership_RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime)
+NWB_ADHD_GTEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContract, VerifyAssetBunchOwnership_NullValueReachesTheTypeParserAndKeepsItsRejectionContract)
+NWB_ADHD_GTEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder, VerifyAssetBunchLookup_ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder)
+NWB_ADHD_GTEST(AssetBunchLookup, CanonicalDuplicateExportsAreRejectedBeforeNestedResolution, VerifyAssetBunchLookup_CanonicalDuplicateExportsAreRejectedBeforeNestedResolution)
+NWB_ADHD_GTEST(AssetBunchLookup, LocalCycleDetectionKeepsCanonicalVariableIdentity, VerifyAssetBunchLookup_LocalCycleDetectionKeepsCanonicalVariableIdentity)
+NWB_ADHD_GTEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup, VerifyAssetBunchLookup_BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup)
+NWB_ADHD_GTEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems, VerifyAssetBunchLookup_ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
+NWB_ADHD_GTEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder, VerifyAssetBunchLookup_NestedListFailureFollowsSourceTraversalOrder)
+NWB_ADHD_GTEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange, VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_shader/asset.adhd.h>
-
-#include <core/assets/cook_metadata.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_asset_construction_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Core;
-using namespace NWB::Core::Assets;
-
-
-class NullAllocatedAsset final : public TypedAsset<NullAllocatedAsset>{
-public:
-    inline static u32 s_ConstructorCalls = 0u;
-    inline static b8 s_LoadCalled = false;
-    [[nodiscard]] static const Name& AssetTypeName()noexcept{
-        static constexpr Name s_Type = NWB::Tests::AssetsGraphicsFixture::s_MetadataRegistryNullAllocation;
-        return s_Type;
-    }
-
-    static void* operator new(usize)noexcept{ return nullptr; }
-
-    static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }
-
-
-public:
-    NullAllocatedAsset(AssetArena&, const Name& virtualPath)noexcept
-        : TypedAsset(virtualPath)
-    {
-        ++s_ConstructorCalls;
-    }
-
-
-public:
-    b8 loadBinary(const Span<const u8>)noexcept{
-        s_LoadCalled = true;
-        return true;
-    }
-};
-
-class NullAllocatedCodec final : public AssetCodec<NullAllocatedAsset>{
-public:
-    NullAllocatedCodec()noexcept = default;
-
-
-public:
-    virtual b8 serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
-};
-
-struct ThrowingImplicitAssetName{
-    explicit operator Name() & noexcept{ return s_NameNone; }
-
-    operator const Name&()const&{ throw 197u; }
-};
-
-class ImplicitNameAsset final : public TypedAsset<ImplicitNameAsset>{
-public:
-    [[nodiscard]] static ThrowingImplicitAssetName& AssetTypeName()noexcept{
-        static ThrowingImplicitAssetName s_Value;
-        return s_Value;
-    }
-
-
-public:
-    ImplicitNameAsset() = default;
-    explicit ImplicitNameAsset(const Name& virtualPath)
-        : TypedAsset(virtualPath)
-    {}
-    ImplicitNameAsset(AssetArena&, const Name& virtualPath)
-        : TypedAsset(virtualPath)
-    {}
-
-
-public:
-    b8 loadBinary(const Span<const u8>)noexcept{ return true; }
-};
-
-class ImplicitNameCodec final : public AssetCodec<ImplicitNameAsset>{
-public:
-    ImplicitNameCodec() = default;
-
-
-public:
-    virtual b8 serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
-};
-
-class ImplicitNameShader final : public Impl::TypedShader<ImplicitNameShader>{
-public:
-    static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ComputeStage;
-
-
-public:
-    [[nodiscard]] static ThrowingImplicitAssetName& AssetTypeName()noexcept{
-        static ThrowingImplicitAssetName s_Value;
-        return s_Value;
-    }
-
-
-public:
-    using Impl::TypedShader<ImplicitNameShader>::TypedShader;
-};
-
-
-struct ThrowingComparisonAnswer{
-    explicit operator b8()const{ throw 199u; }
-};
-
-struct AssetComparisonTag{};
-
-[[nodiscard]] inline ThrowingComparisonAnswer operator!=(const Name&, const AssetComparisonTag&)noexcept{ return {}; }
-
-class ContextualComparisonAsset final : public IAsset{
-public:
-    [[nodiscard]] static AssetComparisonTag AssetTypeName()noexcept{ return {}; }
-
-
-public:
-    ContextualComparisonAsset()noexcept
-        : IAsset(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetFixtureNameTestsAssetConstructorContextualComparison))
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad){
-    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetCodecNullAllocation)};
-    NullAllocatedAsset::s_ConstructorCalls = 0u;
-    NullAllocatedAsset::s_LoadCalled = false;
-    NullAllocatedCodec codec;
-    AssetBytes bytes(arena);
-    const auto result = codec.deserialize(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseProjectTestsNullAsset), bytes, arena);
-    EXPECT_FALSE(result);
-    EXPECT_EQ(NullAllocatedAsset::s_ConstructorCalls, 0u);
-    EXPECT_FALSE(NullAllocatedAsset::s_LoadCalled);
-}
-
-TEST(AssetConstructorContracts, ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion){
-    static_assert(noexcept(Name(ImplicitNameAsset::AssetTypeName())));
-    static_assert(!noexcept(DeclVal<void(*)(const Name&)noexcept>()(ImplicitNameAsset::AssetTypeName())));
-    static_assert(!IsNothrowConstructible_V<ImplicitNameAsset>);
-    static_assert(!IsNothrowConstructible_V<ImplicitNameCodec>);
-    static_assert(!IsNothrowConstructible_V<ImplicitNameShader, AssetArena&>);
-    static_assert(!IsNothrowConstructible_V<ImplicitNameShader, AssetArena&, const Name&>);
-    static_assert(!IsNothrowConstructible_V<Impl::ShaderAssetCodec<ImplicitNameShader>>);
-    EXPECT_THROW(ImplicitNameAsset{}, u32);
-    EXPECT_THROW(ImplicitNameAsset{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectTestsNameConversion)}, u32);
-    EXPECT_THROW(ImplicitNameCodec{}, u32);
-    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameTestsAssetConstructorImplicitName)};
-    EXPECT_THROW(ImplicitNameShader{arena}, u32);
-    EXPECT_THROW((ImplicitNameShader{arena, Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectTestsShaderNameConversion)}), u32);
-    EXPECT_THROW((Impl::ShaderAssetCodec<ImplicitNameShader>{}), u32);
-}
-
-
-TEST(AssetConstructorContracts, CastIncludesTheCompleteContextualComparisonConversion){
-    static_assert(noexcept(DeclVal<const IAsset&>().assetType() != ContextualComparisonAsset::AssetTypeName()));
-    static_assert(!noexcept(CastAsset<ContextualComparisonAsset>(DeclVal<const IAsset*>())));
-    ContextualComparisonAsset asset;
-    EXPECT_THROW({ EXPECT_EQ(CastAsset<ContextualComparisonAsset>(&asset), &asset); }, u32);
-    EXPECT_EQ(CastAsset<ContextualComparisonAsset>(nullptr), nullptr);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <core/assets/paths.h>
-#include <core/metascript/parser.h>
-
-#include <global/arena_memory.h>
-#include <global/text_utils.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_asset_path_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
-static constexpr AStringView s_StaleOutput = "stale/output";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Core;
-using namespace NWB::Core::Assets;
-
-
-struct PathFixture{
-    AssetArena arena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathInputs) };
-    const NWB::Path assetRoot{ arena, "tests/asset_path/assets" };
-    AString<AssetArena> relativeText{ arena };
-    AString<AssetArena> expectedRelative{ arena };
-    NWB::Path relativePath{ arena };
-    NWB::Path sourcePath{ arena };
-    AString<AssetArena> expectedDerived{ arena };
-};
-
-
-struct RelativeCase{
-    AStringView input;
-    AStringView expected;
-    b8 accepted;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void PrepareWorkload(const usize directoryCount, const AStringView directoryToken, const usize tokenRepeats, PathFixture& fixture){
-    const usize directoryBytes = directoryToken.size() * tokenRepeats;
-    fixture.relativeText.reserve(directoryCount * (directoryBytes + 1u) + 32u);
-    for(usize directory = 0u; directory < directoryCount; ++directory){
-        for(usize token = 0u; token < tokenRepeats; ++token)
-            fixture.relativeText.append(directoryToken.data(), directoryToken.size());
-        fixture.relativeText += '/';
-    }
-    fixture.relativeText += "Model.LOD0.NWB";
-    fixture.relativePath = NWB::Path(fixture.arena, AStringView(fixture.relativeText));
-    fixture.sourcePath = fixture.assetRoot / fixture.relativePath;
-    fixture.expectedRelative = fixture.relativeText;
-    CanonicalizeTextInPlace(fixture.expectedRelative);
-    fixture.expectedDerived.reserve(8u + fixture.expectedRelative.size());
-    fixture.expectedDerived = "project/";
-    fixture.expectedDerived.append(fixture.expectedRelative.data(), fixture.expectedRelative.size() - 4u);
-}
-
-[[nodiscard]] static b8 BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
-    const auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena, scratchArena);
-    return output && AStringView(*output) == AStringView(fixture.expectedDerived);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder){
-    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathMetadataDeclaration)};
-    Metascript::Document document(arena);
-    ASSERT_TRUE(document.parse("metadata helper; sampler decoy; texture asset;"));
-    const Metascript::Document::Declaration* const asset = document.findDeclaration(s_MetadataAssetVariable);
-    ASSERT_NE(asset, nullptr);
-    EXPECT_EQ(asset->variable, "asset");
-    EXPECT_EQ(asset->type, "texture");
-    EXPECT_NE(asset, &document.declarations().front());
-
-    ASSERT_TRUE(document.parse("texture entry;"));
-    ASSERT_NE(document.findDeclaration("entry"), nullptr);
-    EXPECT_EQ(document.findDeclaration(s_MetadataAssetVariable), nullptr);
-}
-
-TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
-    AssetArena inputArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRelativeInputs)};
-    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRelativeScratch)};
-    constexpr Array<RelativeCase, 10u> s_Cases = {{
-        { "Models//./Hero.LOD0.NWB///", "models/hero.lod0.nwb", true },
-        { "./.Hidden/../Ignored", ".hidden", false },
-        { "Dir.Name/.../File.", "dir.name/.../file.", true },
-        { "", "", false },
-        { ".", "", false },
-        { "././", "", false },
-        { "../After", "", false },
-        { "Valid/Part/../After", "valid/part", false },
-        { "Valid/./../After", "valid", false },
-        { "/Rooted/After", "", false },
-    }};
-    AString<Alloc::ScratchArena> output(scratchArena);
-    for(const RelativeCase& testCase : s_Cases){
-        SCOPED_TRACE(testCase.input);
-        output = s_StaleOutput;
-        const NWB::Path path(inputArena, testCase.input);
-        EXPECT_EQ(AssetPathsDetail::BuildRelativeAssetPathText(path, output), testCase.accepted);
-        EXPECT_EQ(AStringView(output), testCase.expected);
-        const ::Path<Alloc::ScratchArena> scratchPath(scratchArena, testCase.input);
-        EXPECT_EQ(AssetPathsDetail::BuildRelativeAssetPathText(scratchPath, output), testCase.accepted);
-        EXPECT_EQ(AStringView(output), testCase.expected);
-    }
-}
-
-TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalization){
-    AssetArena inputArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathSeparatorInputs)};
-    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathSeparatorScratch)};
-    AString<Alloc::ScratchArena> output(scratchArena);
-    const NWB::Path path(inputArena, "Prefix/Upper\\Name//./File");
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(path, output));
-    EXPECT_EQ(AStringView(output), "prefix/upper/name/file");
-    const NWB::Path driveRoot(inputArena, "C:\\Root\\File");
-    EXPECT_FALSE(AssetPathsDetail::BuildRelativeAssetPathText(driveRoot, output));
-    EXPECT_TRUE(output.empty());
-    const NWB::Path driveOnly(inputArena, "C:");
-    EXPECT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(driveOnly, output));
-    EXPECT_EQ(AStringView(output), "c:");
-#else
-    EXPECT_FALSE(AssetPathsDetail::BuildRelativeAssetPathText(path, output));
-    EXPECT_EQ(AStringView(output), "prefix");
-#endif
-}
-
-
-TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText){
-    PathFixture fixture;
-    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathDerivedScratch)};
-    const NWB::Path source = fixture.assetRoot / "Models//./Hero.LOD0.NWB";
-    const auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("MiXeD/Root"), source, scratchArena, scratchArena);
-    ASSERT_TRUE(output);
-    EXPECT_EQ(AStringView(*output), "MiXeD/Root/models/hero.lod0");
-    const NWB::Path hiddenSource = fixture.assetRoot / "Folder.Name/.Hidden";
-    const auto hiddenOutput = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), hiddenSource, scratchArena, scratchArena);
-    ASSERT_TRUE(hiddenOutput);
-    EXPECT_EQ(AStringView(*hiddenOutput), "project/folder.name/.hidden");
-    const NWB::Path extensionlessSource = fixture.assetRoot / "Folder/NoExtension";
-    const auto extensionlessOutput = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(""), extensionlessSource, scratchArena, scratchArena);
-    ASSERT_TRUE(extensionlessOutput);
-    EXPECT_EQ(AStringView(*extensionlessOutput), "/folder/noextension");
-
-}
-
-TEST(AssetPaths, DerivedOwningTextOutlivesBorrowedScratchSourcePath){
-    PathFixture fixture;
-    AString<AssetArena> retained(fixture.arena);
-    {
-        Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathBorrowedSourceScratch)};
-        const ::Path<Alloc::ScratchArena> source = ::Path<Alloc::ScratchArena>(scratchArena, fixture.assetRoot) / "Models/Hero.LOD0.NWB";
-        auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), source, fixture.arena, scratchArena);
-        ASSERT_TRUE(output);
-        retained = Move(*output);
-    }
-    EXPECT_EQ(AStringView(retained), "project/models/hero.lod0");
-}
-
-
-TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
-    Tests::CapturingLogger logger;
-    Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    PathFixture fixture;
-    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRejectionScratch)};
-    const NWB::Path outside = fixture.assetRoot / "../Elsewhere/Model.NWB";
-    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), outside, scratchArena, scratchArena));
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), outside, scratchArena));
-    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), fixture.assetRoot, scratchArena, scratchArena));
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), fixture.assetRoot, scratchArena));
-    EXPECT_EQ(logger.errorCount(), 4u);
-}
-
-TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaUse){
-    for(const b8 unicode : { false, true }){
-        PathFixture fixture;
-        PrepareWorkload(8u, unicode ? AStringView("ÉTAGE_한글_東京_😀_") : AStringView("Long_COMPONENT_"), unicode ? 8u : 12u, fixture);
-        Alloc::ScratchArena scratchArena(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRepeatedScratch), 65536u);
-        auto* const sentinel = static_cast<u8*>(scratchArena.allocate(1u, 64u));
-        ASSERT_NE(sentinel, nullptr);
-        for(usize index = 0u; index < 64u; ++index)
-            sentinel[index] = static_cast<u8>(index + 91u);
-        const ArenaMemoryStats retained = scratchArena.memoryStats();
-        ArenaMemoryStats warm;
-        for(usize call = 0u; call < 16u; ++call){
-            {
-                AString<Alloc::ScratchArena> relative(scratchArena);
-                ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(fixture.relativePath, relative));
-                EXPECT_EQ(AStringView(relative), AStringView(fixture.expectedRelative));
-                EXPECT_EQ(relative.c_str()[relative.size()], '\0');
-            }
-            EXPECT_TRUE(BuildAndVerifyDerivedPath(fixture, scratchArena));
-            for(usize index = 0u; index < 64u; ++index)
-                EXPECT_EQ(sentinel[index], static_cast<u8>(index + 91u));
-            const ArenaMemoryStats after = scratchArena.memoryStats();
-            if(call == 0u)
-                warm = after;
-            EXPECT_EQ(after.usedBytes, retained.usedBytes);
-            EXPECT_EQ(after.reservedBytes, warm.reservedBytes);
-        }
-        const NWB::Path parentInput = fixture.sourcePath / ".." / "Second.LOD1.NWB";
-        for(usize call = 0u; call < 16u; ++call){
-            {
-                const ::Path<Alloc::ScratchArena> source(scratchArena, parentInput);
-                const auto normal = source.lexicallyNormal();
-                const auto stem = normal.stem();
-                const auto extension = normal.extension();
-                EXPECT_EQ(stem.native(), TStringView(FOUNDATION_TEXT("Second.LOD1")));
-                EXPECT_EQ(extension.native(), TStringView(FOUNDATION_TEXT(".NWB")));
-            }
-            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
-        }
-        for(usize call = 0u; call < 16u; ++call){
-            {
-                const ::Path<Alloc::ScratchArena> source(scratchArena, fixture.relativePath);
-                const ::Path<Alloc::ScratchArena> emptyBase(scratchArena);
-                const auto relative = source.lexicallyRelative(emptyBase);
-                EXPECT_FALSE(relative.empty());
-            }
-            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
-        }
-        scratchArena.deallocate(sentinel, 1u, 64u);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStorage){
-    AssetArena inputArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathUnicodePrefixInputs)};
-    AString<AssetArena> expected(inputArena);
-    expected.reserve(512u);
-    for(usize index = 0u; index < 8u; ++index)
-        expected += "Étage_한글_東京_😀_";
-    AString<AssetArena> input(expected, inputArena);
-    input += "/./../Ignored/After";
-    const NWB::Path path(inputArena, AStringView(input));
-    Alloc::ScratchArena scratchArena(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathUnicodePrefixScratch), 65536u);
-    for(usize call = 0u; call < 16u; ++call){
-        {
-            AString<Alloc::ScratchArena> output(scratchArena);
-            EXPECT_FALSE(AssetPathsDetail::BuildRelativeAssetPathText(path, output));
-            EXPECT_EQ(AStringView(output), AStringView(expected));
-            EXPECT_EQ(output.c_str()[output.size()], '\0');
-        }
-        EXPECT_EQ(scratchArena.memoryStats().usedBytes, 0u);
-    }
-}
-
-TEST(AssetPaths, StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots){
-    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathNativeFilenameSpans)};
-    constexpr Array<Array<AStringView, 3u>, 6u> s_Cases = {{
-        { "foo.bar/", "foo", ".bar" },
-        { "Folder/.Hidden///", ".Hidden", "" },
-        { "Folder/..//", ".", "." },
-        { "Folder/Name.///", "Name", "." },
-        { "/", "", "" },
-        { "", "", "" },
-    }};
-    for(const auto& testCase : s_Cases){
-        const ::Path<Alloc::ScratchArena> path(scratchArena, testCase[0]);
-        const auto stem = path.stem();
-        const auto extension = path.extension();
-        EXPECT_EQ(PathToString(scratchArena, stem), testCase[1]);
-        EXPECT_EQ(PathToString(scratchArena, extension), testCase[2]);
-    }
-}
-
-TEST(AssetPaths, ConvertedPathByteCountingRejectsOverflowWithoutWrapping){
-    CountingByteOutput counter{ Limit<usize>::s_Max };
-    EXPECT_ANY_THROW(WriteConvertedText<char>(counter, AStringView("x")));
-    EXPECT_EQ(counter.byteCount, Limit<usize>::s_Max);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/integration/assets_graphics/case_types.adhd.h>
-
-#include <impl/assets_graphics/components.adhd.h>
-
-#include <core/assets/input_list.h>
-#include <core/assets/cook_metadata_internal.h>
-#include <core/assets/volume/built_asset.h>
-#include <core/assets/volume/asset_file_publisher.h>
-
-#include <global/filesystem/executable_paths.h>
-#include <global/sha1.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic.h>
-#include <global/sync.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_asset_publication_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirectory;
-constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
-constexpr AStringView s_FirstSamplerPath = AssetsGraphicsFixture::s_FirstSamplerPath;
-constexpr AStringView s_SecondSamplerPath = AssetsGraphicsFixture::s_SecondSamplerPath;
-using NWB::Tests::AssetsGraphicsFixture::s_LinearWrapSamplerMetadata;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, ConcurrentImmutablePublicationPreservesTheWinner){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    const Path root = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "immutable_publication_race");
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareCleanDirectory(root));
-    const Path destination = root / "shared.nwba";
-    Atomic<u32> ready{0u};
-    Atomic<b8> start{false};
-    b8 results[2]{};
-    const auto publish = [&](const usize index){
-        NWB::Core::Alloc::ScratchArena scratch(AssetsGraphicsFixture::s_CodecScratchArena);
-        ::Path<NWB::Core::Alloc::ScratchArena> path(scratch, destination);
-        Vector<u8, NWB::Core::Alloc::ScratchArena> bytes(scratch);
-        Vector<u8, NWB::Core::Alloc::ScratchArena> existing(scratch);
-        bytes.resize(1024u * 1024u, static_cast<u8>(index + 1u));
-        ready.fetch_add(1u);
-        while(!start.load())
-            YieldThread();
-        results[index] = NWB::Core::Assets::AssetFilePublisher::Write(path, bytes, false, existing);
-    };
-    Thread first(publish, 0u);
-    Thread second(publish, 1u);
-    while(ready.load() != 2u)
-        YieldThread();
-    start.store(true);
-    first.join();
-    second.join();
-    ASSERT_NE(results[0], results[1]);
-    NWB::Core::Assets::AssetBytes stored(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(destination, stored));
-    ASSERT_EQ(stored.size(), 1024u * 1024u);
-    const u8 expected = results[0] ? 1u : 2u;
-    for(const u8 byte : stored)
-        ASSERT_EQ(byte, expected);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
-    TestArena testArena;
-    const Path root = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
-    const b8 prepared = AssetsGraphicsFixture::PrepareCleanDirectory(root);
-    EXPECT_TRUE(prepared);
-
-    if(prepared){
-        NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
-        mountDesc.volumeName = "scratch_test";
-        mountDesc.segmentSize = 64ull * 1024ull;
-        mountDesc.metadataSize = 4ull * 1024ull;
-
-        mountDesc.mountDirectory = root / "volume";
-        mountDesc.createIfMissing = true;
-        mountDesc.usage = NWB::Core::Filesystem::VolumeUsage::CookWrite;
-        auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-        const b8 created = static_cast<b8>(filesystemResult);
-        EXPECT_TRUE(created);
-        if(created){
-            UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
-            NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-            ::Vector<u8, NWB::Core::Alloc::ScratchArena> payload{ scratchArena };
-            payload.reserve(4u);
-            payload.push_back(1u);
-            payload.push_back(2u);
-            payload.push_back(3u);
-            payload.push_back(4u);
-
-            const Name virtualPath = NWB::Tests::AssetsGraphicsFixture::s_ProjectTestsScratchPayload;
-            const b8 pushed = filesystem->writeFileDeferred(virtualPath, payload);
-            EXPECT_TRUE(pushed);
-            if(pushed){
-                payload[0] = 99u;
-
-                const b8 flushed = filesystem->flush();
-                EXPECT_TRUE(flushed);
-                if(flushed){
-                    NWB::Core::Assets::AssetBytes readback = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-                    const b8 loaded = filesystem->readFile(virtualPath, readback);
-                    EXPECT_TRUE(loaded);
-                    if(loaded){
-                        ASSERT_EQ(readback.size(), 4u);
-                        EXPECT_EQ(readback[0], 1u);
-                    }
-
-                }
-            }
-        }
-    }
-
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDirectories){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "shared_codec_payloads");
-    ASSERT_TRUE(cookCase);
-    const Path& root = cookCase->root;
-    const Path& outputDirectory = cookCase->outputDirectory;
-    const Path assetRoot = root / s_AssetsDirectory;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_LinearWrapSamplerMetadata));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_LinearWrapSamplerMetadata));
-
-    // A 200-character directory leaves room for compact artifacts within the traditional Windows path limit.
-    const usize rootTextLength = PathToString(testArena.arena, root).size();
-    ASSERT_LT(rootTextLength, 199u);
-    NWB::Core::Assets::AssetString directoryName(testArena.arena);
-    directoryName.resize(199u - rootTextLength, 'b');
-    const Path builtDirectory = root / directoryName;
-    ASSERT_EQ(PathToString(testArena.arena, builtDirectory).size(), 200u);
-    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, { assetRoot }, 2u));
-
-    NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
-    options.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
-    options.outputDirectory = PathToString(testArena.arena, outputDirectory);
-    options.configuration = s_TestsConfiguration.data();
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_GatherScratchArena);
-    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
-    for(const Name& virtualPath : { Name(s_FirstSamplerPath), Name(s_SecondSamplerPath) }){
-        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(outputDirectory, virtualPath, 2u, testArena);
-        ASSERT_TRUE(asset);
-        EXPECT_EQ((*asset)->virtualPath(), virtualPath);
-    }
-    EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualPaths){
-    namespace Pack = NWB::Core::Assets::AssetsVolumeCookDetail;
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    TestArena testArena;
-    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "failed_reordered_shared_payloads");
-    ASSERT_TRUE(cookCase);
-    const Path& root = cookCase->root;
-    const Path publishedDirectory = root / "published";
-    const Name firstPath(s_FirstSamplerPath);
-    const Name secondPath(s_SecondSamplerPath);
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-
-    NWB::Impl::Sampler samplerAsset(testArena.arena, firstPath);
-    NWB::Core::SamplerDesc samplerDesc;
-    samplerDesc.borderColor = NWB::Core::Color(0.0f);
-    samplerAsset.setDescription(samplerDesc);
-    const NWB::Impl::SamplerAssetCodec samplerCodec;
-    NWB::Core::Assets::AssetBytes samplerPayload(testArena.arena);
-    ASSERT_TRUE(samplerCodec.serialize(samplerAsset, samplerPayload));
-    constexpr u64 s_SharedCookKeyHash = AssetsGraphicsFixture::s_SharedCookKeyHash;
-
-    Pack::AssetVolumePackManifest initial(testArena.arena);
-    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u, initial));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(firstPath, samplerPayload, initial, s_SharedCookKeyHash));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(secondPath, samplerPayload, initial, s_SharedCookKeyHash));
-    ASSERT_TRUE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, initial, scratchArena));
-    NWB::Core::Assets::AssetBytes originalList(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, originalList));
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> originalArtifactPaths(testArena.arena);
-    ASSERT_TRUE(NWB::Core::Assets::ReadAssetInputList(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, scratchArena, originalArtifactPaths, true));
-    ASSERT_EQ(originalArtifactPaths.size(), 2u);
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetBytes> originalArtifactBytes(testArena.arena);
-    originalArtifactBytes.reserve(originalArtifactPaths.size());
-    for(const auto& artifactPath : originalArtifactPaths){
-        originalArtifactBytes.emplace_back(testArena.arena);
-        ASSERT_TRUE(ReadBinaryFile(Path(testArena.arena, artifactPath), originalArtifactBytes.back()));
-    }
-
-    Pack::AssetVolumePackManifest reordered(testArena.arena);
-    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u + 1u, reordered));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(secondPath, samplerPayload, reordered, s_SharedCookKeyHash));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(firstPath, samplerPayload, reordered, s_SharedCookKeyHash));
-    // Reorder both shared-payload entries before failing, so publication also has to create a new artifact slot.
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectSamplersFailing), samplerPayload, reordered, s_SharedCookKeyHash));
-    reordered.entries.back().identity.payloadHash ^= 1u;
-    EXPECT_FALSE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, reordered, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("invalid payload identity")));
-    NWB::Core::Assets::AssetBytes retainedList(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, retainedList));
-    EXPECT_EQ(retainedList, originalList);
-    NWB::Core::Assets::AssetBytes retainedArtifactBytes(testArena.arena);
-    for(usize index = 0u; index < originalArtifactPaths.size(); ++index){
-        ASSERT_TRUE(ReadBinaryFile(Path(testArena.arena, originalArtifactPaths[index]), retainedArtifactBytes));
-        EXPECT_EQ(retainedArtifactBytes, originalArtifactBytes[index]);
-    }
-
-    NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
-    options.inputs.emplace_back(PathToString(testArena.arena, publishedDirectory));
-    options.outputDirectory = PathToString(testArena.arena, cookCase->outputDirectory);
-    options.configuration = s_TestsConfiguration.data();
-    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
-    for(const Name& virtualPath : { firstPath, secondPath }){
-        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(cookCase->outputDirectory, virtualPath, 2u, testArena);
-        ASSERT_TRUE(asset);
-        EXPECT_EQ((*asset)->virtualPath(), virtualPath);
-    }
-    EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(RemoveAllIfExists(root));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_graphics/components.adhd.h>
-
-#include <core/assets/input_list.h>
-#include <core/assets/cook_metadata_internal.h>
-#include <core/assets/volume/built_asset.h>
-
-#include <global/filesystem/executable_paths.h>
-#include <global/sha1.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic.h>
-#include <global/sync.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_asset_registry_concurrency_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = AssetsGraphicsFixture::TestArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AssetsGraphics, AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnregister){
-    class ProbeAsset final : public NWB::Core::Assets::IAsset{
-    public:
-        ProbeAsset(const Name& assetType, const Name& virtualPath)noexcept
-            : IAsset(assetType, virtualPath)
-        {}
-    };
-
-    class LeafProbeCodec final : public NWB::Core::Assets::IAssetCodec{
-    public:
-        explicit LeafProbeCodec(const Name& assetType)noexcept
-            : IAssetCodec(assetType)
-        {}
-
-
-    public:
-        virtual Expected<UniquePtr<NWB::Core::Assets::IAsset>> deserialize(const Name& virtualPath, const Span<const u8>, NWB::Core::Assets::AssetArena&)const override{
-            return UniquePtr<NWB::Core::Assets::IAsset>(MakeUnique<ProbeAsset>(assetType(), virtualPath));
-        }
-
-#if defined(NWB_COOK)
-        virtual b8 serialize(const NWB::Core::Assets::IAsset&, NWB::Core::Assets::AssetBytes&)const override{
-            return true;
-        }
-#endif
-    };
-
-    class ReentrantBlockingCodec final : public NWB::Core::Assets::IAssetCodec{
-    public:
-        ReentrantBlockingCodec(const Name& assetType, const NWB::Core::Assets::AssetRegistry& registry, const Name& leafType, Atomic<b8>& entered, Atomic<b8>& release, Atomic<b8>& destroyedWhileActive)noexcept
-            : IAssetCodec(assetType)
-            , m_registry(registry)
-            , m_leafType(leafType)
-            , m_entered(entered)
-            , m_release(release)
-            , m_destroyedWhileActive(destroyedWhileActive)
-        {}
-
-        virtual ~ReentrantBlockingCodec()noexcept override{
-            if(m_inFlight.load())
-                m_destroyedWhileActive.store(true);
-        }
-
-
-    public:
-        virtual Expected<UniquePtr<NWB::Core::Assets::IAsset>> deserialize(const Name& virtualPath, const Span<const u8> binary, NWB::Core::Assets::AssetArena&)const override{
-            m_inFlight.store(true);
-            auto nested = m_registry.deserializeAsset(m_leafType, Name(AssetsGraphicsFixture::s_AssetCaseProjectProbeLeaf), binary);
-            if(!nested){
-                m_inFlight.store(false);
-                return MakeUnexpected(Failure{});
-            }
-            m_entered.store(true);
-            while(!m_release.load())
-                YieldThread();
-            m_inFlight.store(false);
-            return UniquePtr<NWB::Core::Assets::IAsset>(MakeUnique<ProbeAsset>(assetType(), virtualPath));
-        }
-
-#if defined(NWB_COOK)
-        virtual b8 serialize(const NWB::Core::Assets::IAsset&, NWB::Core::Assets::AssetBytes&)const override{
-            return true;
-        }
-#endif
-
-
-    private:
-        const NWB::Core::Assets::AssetRegistry& m_registry;
-        Name m_leafType;
-        Atomic<b8>& m_entered;
-        Atomic<b8>& m_release;
-        Atomic<b8>& m_destroyedWhileActive;
-        mutable Atomic<b8> m_inFlight{false};
-    };
-
-    TestArena testArena;
-    NWB::Core::Assets::AssetRegistry registry(testArena.arena);
-    const Name parentType = NWB::Tests::AssetsGraphicsFixture::s_ProbeParentAsset;
-    const Name leafType = NWB::Tests::AssetsGraphicsFixture::s_ProbeLeafAsset;
-    Atomic<b8> entered{false};
-    Atomic<b8> release{false};
-    Atomic<b8> destroyedWhileActive{false};
-    Atomic<b8> unregisterFinished{false};
-
-    ASSERT_TRUE(registry.registerCodec(MakeUnique<LeafProbeCodec>(leafType)));
-    ASSERT_TRUE(registry.registerCodec(MakeUnique<ReentrantBlockingCodec>(parentType, registry, leafType, entered, release, destroyedWhileActive)));
-
-    Expected<UniquePtr<NWB::Core::Assets::IAsset>> parentResult = MakeUnexpected(Failure{});
-    Thread deserializeThread([&](){
-        parentResult = registry.deserializeAsset(parentType, Name(AssetsGraphicsFixture::s_AssetCaseProjectProbeParent), Span<const u8>{});
-    });
-
-    while(!entered.load())
-        YieldThread();
-
-    b8 unregistered = false;
-    Thread unregisterThread([&](){
-        unregistered = registry.unregisterCodec(parentType);
-        unregisterFinished.store(true);
-    });
-
-    for(u32 spin = 0u; spin < 64u; ++spin)
-        YieldThread();
-    EXPECT_FALSE(unregisterFinished.load());
-
-    release.store(true);
-    deserializeThread.join();
-    unregisterThread.join();
-
-    ASSERT_TRUE(parentResult);
-    ASSERT_NE(parentResult->get(), nullptr);
-    EXPECT_EQ((*parentResult)->assetType(), parentType);
-    EXPECT_TRUE(unregistered);
-    EXPECT_TRUE(unregisterFinished.load());
-    EXPECT_FALSE(destroyedWhileActive.load());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

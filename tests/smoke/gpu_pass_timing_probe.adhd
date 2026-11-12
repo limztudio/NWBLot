@@ -6,37 +6,39 @@
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/perf/timing.h>
 
-#include <global/basic_string.h>
-#include <global/containers.h>
-#include <global/filesystem.h>
-#include <global/name.h>
-#include <global/simplemath.h>
-#include <global/type.h>
-
 namespace NWB::Tests::Smoke{
-using Core::Alloc::GlobalArena;
-using Core::Alloc::ScratchArena;
 using Core::Perf::TimingStats;
 using Core::Perf::TimingView;
-class GpuPassTimingScopeState;
-using GpuPassTimingScopeStateVector = Vector<GpuPassTimingScopeState, GlobalArena>;
-
-inline void OpenGpuPassTimingFile(ScratchArena& scratchArena, OutputFileStream& timingFile){
-    const auto timingPath = ReadSmokeEnvironmentText(scratchArena, "NWB_GPU_TIMING_FILE");
-    if(!timingPath)
-        return;
-
-    timingFile.open(timingPath->c_str(), s_FileOpenAppend);
-    if(!timingFile.is_open())
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuPassTimingProbe: failed to open requested timing output"));
-}
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Normalize asynchronous GPU timing windows by dispatch count.
+const f64 s_GpuTimingWarmupSeconds = 0.25;
+const f64 s_GpuTimingReportIntervalSeconds = s_SmokeProbeReportIntervalSeconds;
+const f64 s_GpuTimingMillisecondsPerSecond = 1000.0;
+const i32 s_GpuTimingFilePrecision = 4;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,21 +49,25 @@ class GpuPassTimingScopeState{
     public u64 lastFoldedPublish = 0u;
 }
 
-// Normalize asynchronous GPU timing windows by dispatch count.
-const f64 s_GpuTimingWarmupSeconds = 0.25;
-const f64 s_GpuTimingReportIntervalSeconds = s_SmokeProbeReportIntervalSeconds;
-const f64 s_GpuTimingMillisecondsPerSecond = 1000.0;
-const i32 s_GpuTimingFilePrecision = 4;
+class GpuPassTimingScopeReportLine{
+    public Name scopeName = s_NameNone;
+    public f64 avgMs = 0.0;
+    public f64 minMs = 0.0;
+    public f64 maxMs = 0.0;
+    public f64 totalMs = 0.0;
+    public f64 sampleAvgMs = 0.0;
+    public u64 samples = 0u;
+    public u32 frames = 0u;
+}
 
+[arena]
 class GpuPassTimingProbe{
-
-    public GpuPassTimingProbe(in TStringView label){
-        this.m_arena = GlobalArena(Name(s_SmokeNameSmokeGpuPassTimingProbe));
-        this.m_label = label;
+    public GpuPassTimingProbe(){
+        this.m_label = "";
     }
 
-    public void setLogScopes(in b8 value){
-        this.m_logScopes = value;
+    public GpuPassTimingProbe(in StringView label){
+        this.m_label = label;
     }
 
     public void recordFrame(in f32 delta, in TimingView gpuTiming){
@@ -119,59 +125,78 @@ class GpuPassTimingProbe{
     private void report(in TimingView gpuTiming){
         [essential] info("{}: gpu per-pass timing over {} frames / {}s", this.m_label, this.m_intervalFrames, this.m_intervalSeconds);
 
-        native{
-            // Write per-pass timings to the optional file sink for A/B scripts.
-            ScratchArena scratchArena(s_SmokeEnvironmentArena);
-            OutputFileStream timingFile;
-            OpenGpuPassTimingFile(scratchArena, timingFile);
-            if(timingFile.is_open()){
-                timingFile.setf(s_FileFormatFixed, s_FileFormatFloatField);
-                timingFile.precision(s_GpuTimingFilePrecision);
-                timingFile << "=== interval: " << this->m_intervalFrames << " frames / " << this->m_intervalSeconds << "s ===\n";
-            }
+        Vector<GpuPassTimingScopeReportLine> lines;
+        const usize scopeCount = gpuTiming.scopeCount();
+        for(usize i = 0u; i < scopeCount; ++i){
+            const GpuPassTimingScopeAccum accum = this.m_scopes[i].interval;
+            if(accum.frames == 0u)
+                continue;
 
-            const usize scopeCount = gpuTiming.scopeCount();
-            for(usize i = 0u; i < scopeCount; ++i){
-                const GpuPassTimingScopeAccum& accum = this->m_scopes[i].interval;
-                if(accum.frames == 0u)
-                    continue;
+            const Name scopeName = gpuTiming.scopeNameAt(i);
+            const f64 averageSeconds = accum.sumSeconds / cast<f64>(accum.frames);
+            const f64 avgMs = averageSeconds * s_GpuTimingMillisecondsPerSecond;
+            const f64 minMs = accum.minSeconds * s_GpuTimingMillisecondsPerSecond;
+            const f64 maxMs = accum.maxSeconds * s_GpuTimingMillisecondsPerSecond;
+            const f64 totalMs = accum.sumSeconds * s_GpuTimingMillisecondsPerSecond;
+            [essential] info(
+                "  {}: gpu_window_ms avg={} min={} max={} published_windows={}"
+                , scopeName.resolvedText()
+                , avgMs
+                , minMs
+                , maxMs
+                , accum.frames
+            );
 
-                const Name scopeName = gpuTiming.scopeNameAt(i);
-                const f64 averageSeconds = accum.sumSeconds / static_cast<f64>(accum.frames);
-                const f64 avgMs = averageSeconds * s_GpuTimingMillisecondsPerSecond;
-                const f64 minMs = accum.minSeconds * s_GpuTimingMillisecondsPerSecond;
-                const f64 maxMs = accum.maxSeconds * s_GpuTimingMillisecondsPerSecond;
-                const f64 totalMs = accum.sumSeconds * s_GpuTimingMillisecondsPerSecond;
-                if(this->m_logScopes || !timingFile.is_open()){
-                    NWB_LOGGER_ESSENTIAL_INFO(
-                        FOUNDATION_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
-                        , ConvertString(scopeName.resolvedText())
-                        , avgMs
-                        , minMs
-                        , maxMs
-                        , accum.frames
-                    );
-                }
-                if(timingFile.is_open()){
-                    timingFile
-                        << "  " << scopeName.resolvedText()
-                        << ": window_avg_ms=" << avgMs
-                        << " window_min_ms=" << minMs
-                        << " window_max_ms=" << maxMs
-                        << " published_windows=" << accum.frames
-                        << " total_ms=" << totalMs
-                        << " gpu_samples=" << accum.samples
-                        << " sample_avg_ms=" << (totalMs / static_cast<f64>(accum.samples))
-                        << "\n"
-                    ;
-                }
+            GpuPassTimingScopeReportLine line = GpuPassTimingScopeReportLine();
+            line.scopeName = scopeName;
+            line.avgMs = avgMs;
+            line.minMs = minMs;
+            line.maxMs = maxMs;
+            line.totalMs = totalMs;
+            line.sampleAvgMs = totalMs / cast<f64>(accum.samples);
+            line.samples = accum.samples;
+            line.frames = accum.frames;
+            lines.push_back(line);
+        }
+
+        const Expected<String> timingPath = ReadSmokeEnvironmentString("NWB_GPU_TIMING_FILE");
+        if(!timingPath.has_value())
+            return;
+
+        String reportBlock = StringFormat("=== interval: {} frames / {:.4f}s ===\n", this.m_intervalFrames, this.m_intervalSeconds);
+        for(in GpuPassTimingScopeReportLine line : lines){
+            StringAppendFormat(
+                reportBlock,
+                "  {}: window_avg_ms={:.4f} window_min_ms={:.4f} window_max_ms={:.4f} published_windows={} total_ms={:.4f} gpu_samples={} sample_avg_ms={:.4f}\n",
+                line.scopeName.resolvedText(),
+                line.avgMs,
+                line.minMs,
+                line.maxMs,
+                line.frames,
+                line.totalMs,
+                line.samples,
+                line.sampleAvgMs
+            );
+        }
+        const String timingPathValue = timingPath.value();
+        b8 openFailed = false;
+        b8 closeFailed = false;
+        native(in timingPathValue, in reportBlock, mut openFailed, mut closeFailed){
+            // Append formatted interval timings to the optional file sink for A/B scripts.
+            OutputFileStream timingFile(timingPathValue.c_str(), s_FileOpenAppend);
+            if(!timingFile.is_open()){
+                openFailed = true;
             }
-            if(timingFile.is_open()){
+            else{
+                timingFile.write(reportBlock.data(), static_cast<std::streamsize>(reportBlock.size()));
                 timingFile.close();
-                if(!timingFile.good())
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuPassTimingProbe: timing output write or close failed"));
+                closeFailed = !timingFile.good();
             }
         }
+        if(openFailed)
+            error("GpuPassTimingProbe: failed to open requested timing output");
+        if(closeFailed)
+            error("GpuPassTimingProbe: timing output write or close failed");
     }
 
     private void resetInterval(){
@@ -181,14 +206,13 @@ class GpuPassTimingProbe{
             this.m_scopes[i].interval = GpuPassTimingScopeAccum();
     }
 
-    private GlobalArena m_arena;
-    private GpuPassTimingScopeStateVector m_scopes(this.m_arena);
-    private TStringView m_label;
+    private Vector<GpuPassTimingScopeState> m_scopes;
+    private StringView m_label;
     private f64 m_elapsedSeconds = 0.0;
     private f64 m_intervalSeconds = 0.0;
     private u32 m_intervalFrames = 0u;
-    private b8 m_logScopes = true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

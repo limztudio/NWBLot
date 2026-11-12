@@ -318,6 +318,25 @@ template<typename CharT>
     return NameDetail::UpdateCanonicalNameHashText(inOutDerivedHash, text);
 }
 
+[[nodiscard]] inline constexpr b8 UpdateDerivedNameHashDecimal(NameHash& inOutDerivedHash, const u64 value)noexcept{
+    Array<char, 20u> buffer{};
+    usize index = buffer.size();
+    u64 remaining = value;
+    do{
+        --index;
+        buffer[index] = static_cast<char>('0' + static_cast<char>(remaining % 10u));
+        remaining /= 10u;
+    }while(remaining != 0u);
+    return NameDetail::UpdateCanonicalNameHashText(inOutDerivedHash, AStringView(buffer.data() + index, buffer.size() - index));
+}
+
+[[nodiscard]] inline constexpr Expected<Name> ParseNameText(const AStringView text){
+    const auto name = Name::FromText<char>(text);
+    if(!name || !*name)
+        return MakeUnexpected(Failure{});
+    return *name;
+}
+
 [[nodiscard]] inline Expected<Name> FinishDerivedNameHash(const NameHash& derivedHash)noexcept{
     const Name name(derivedHash);
     if(!name)

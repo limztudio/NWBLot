@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsBuiltAssetEntryExtension(in b8 isRegularFile, in StringView extensionText, in StringView expectedExtension){
+    return isRegularFile && extensionText == expectedExtension;
+}
+
+void LogGatherInputResolveFailure(in StringView inputPath){
+    error("AssetGatherer: failed to resolve input '{}'", inputPath);
+}
+
+void LogGatherInputInspectFailure(in StringView inputPath){
+    error("AssetGatherer: failed to inspect input '{}'", inputPath);
+}
+
+void LogGatherBuildManifestInspectFailure(in StringView manifestPath){
+    error("AssetGatherer: failed to inspect build manifest '{}'", manifestPath);
+}
+
+void LogGatherInputScanFailure(in StringView inputPath){
+    error("AssetGatherer: failed to scan input '{}'", inputPath);
+}
+
+void LogGatherInputEntryInspectFailure(in StringView entryPath){
+    error("AssetGatherer: failed to inspect input entry '{}'", entryPath);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

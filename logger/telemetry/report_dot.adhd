@@ -1,0 +1,185 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/report_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeTimedGraphDotReserveBytes(in usize nodeCount, in usize edgeCount, in usize labelBytes, in usize runtimeStatisticsBytes){
+    return s_LogTelemetryReportDotTimedGraphDotFixedReserveBytes
+        + s_LogTelemetryReportDotTimedGraphDotBytesPerGraph
+        + nodeCount * s_LogTelemetryReportDotTimedGraphDotBytesPerNode
+        + edgeCount * s_LogTelemetryReportDotTimedGraphDotBytesPerEdge
+        + labelBytes
+        + runtimeStatisticsBytes;
+}
+
+usize HashGraphTimingKeyPair(in u64 frameIndex, in Name scopeName){
+    return HashCombineValue(HashValue(frameIndex), HashValue(scopeName));
+}
+
+StringView SelectFrameGraphNodeShapeText(in u32 kindIndex){
+    switch(kindIndex){
+    case 2u:
+        return "ellipse";
+    case 3u:
+        return "diamond";
+    default:
+        return "box";
+    }
+}
+
+StringView SelectFrameGraphNodeKindText(in u32 kindIndex){
+    switch(kindIndex){
+    case 1u:
+        return "pass";
+    case 2u:
+        return "resource";
+    case 3u:
+        return "external";
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+StringView SelectFrameGraphEdgeLabelText(in u32 kindIndex){
+    switch(kindIndex){
+    case 1u:
+        return "reads";
+    case 2u:
+        return "writes";
+    case 3u:
+        return "dependsOn";
+    default:
+        return "";
+    }
+}
+
+StringView SelectFrameGraphQueueClassText(in u32 queueClassIndex){
+    switch(queueClassIndex){
+    case 1u:
+        return "graphics";
+    case 2u:
+        return "compute";
+    case 3u:
+        return "transfer";
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+StringView SelectFrameGraphQueueAssignmentReasonText(in u32 reasonIndex){
+    switch(reasonIndex){
+    case 1u:
+        return "requiredGraphics";
+    case 2u:
+        return "conservative";
+    case 3u:
+        return "scored";
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+StringView SelectFrameGraphQueueAssignmentAcceptanceText(in u32 acceptanceIndex){
+    switch(acceptanceIndex){
+    case 0u:
+        return "notAccepted";
+    case 1u:
+        return "first";
+    case 2u:
+        return "unchanged";
+    case 3u:
+        return "changed";
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+StringView SelectFrameGraphTaskPacketizationDecisionText(in u32 decisionIndex){
+    switch(decisionIndex){
+    case 1u:
+        return "firstTask";
+    case 2u:
+        return "mergeNotRequested";
+    case 3u:
+        return "taskForcesBoundary";
+    case 4u:
+        return "queueChanged";
+    case 5u:
+        return "precedingTaskForcesBoundary";
+    case 6u:
+        return "scoredMergeIneligible";
+    case 7u:
+        return "mergeRequiresExplicitImmediateDependency";
+    case 8u:
+        return "crossQueueConsumerFrontier";
+    case 9u:
+        return "mergedExplicit";
+    case 10u:
+        return "mergedFrontierScored";
+    case 11u:
+        return "scoredMergeDomainMismatch";
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+void AppendPhysicalQueueDotText(in StringView prefix, in b8 valid, in u32 index, in u32 deviceGeneration, mut String out){
+    if(!valid){
+        StringAppendFormat(out, ", {}_index=\"none\", {}_device_generation=\"none\"", prefix, prefix);
+        return;
+    }
+    StringAppendFormat(out, ", {}_index={}, {}_device_generation={}", prefix, index, prefix, deviceGeneration);
+}
+
+void AppendCompiledTaskDotText(in b8 present, in u64 planGeneration, in u32 packetIndex, in u32 decisionIndex, mut String out){
+    if(!present){
+        out.append(", compiled_task=\"none\"");
+        return;
+    }
+    StringAppendFormat(out, ", compiled_task=\"present\", compiled_plan_generation={}, compiled_packet_index={}", planGeneration, packetIndex);
+    out.append(", packetization_decision=");
+    AppendDotQuotedText(out, SelectFrameGraphTaskPacketizationDecisionText(decisionIndex));
+}
+
+void AppendRuntimeStatisticsDotText(
+    in b8 present,
+    in u64 graphGeneration,
+    in u64 planGeneration,
+    in u64 recordingAttemptGeneration,
+    in u32 deviceGeneration,
+    in usize physicalQueueRuntimeStatisticsCount,
+    in usize packetSubmissionStatisticsCount,
+    in b8 physicalQueueRuntimeStatisticsPresent,
+    in b8 packetSubmissionStatisticsPresent,
+    mut String out
+){
+    if(!present){
+        out.append(", runtime_statistics=\"none\"");
+        return;
+    }
+    StringAppendFormat(
+        out,
+        ", runtime_statistics=\"present\", runtime_graph_generation={}, runtime_plan_generation={}, runtime_recording_attempt_generation={}, runtime_device_generation={}",
+        graphGeneration,
+        planGeneration,
+        recordingAttemptGeneration,
+        deviceGeneration
+    );
+    if(physicalQueueRuntimeStatisticsPresent)
+        StringAppendFormat(out, ", runtime_physical_queue_count={}", physicalQueueRuntimeStatisticsCount);
+    else
+        out.append(", runtime_physical_queue_count=\"unknown\"");
+    if(packetSubmissionStatisticsPresent)
+        StringAppendFormat(out, ", runtime_packet_submission_count={}", packetSubmissionStatisticsCount);
+    else
+        out.append(", runtime_packet_submission_count=\"unknown\"");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

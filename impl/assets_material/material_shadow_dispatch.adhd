@@ -2,59 +2,59 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#if defined(NWB_COOK)
+const StringView s_DeferredBxdfDispatchGenerationLabel = "Deferred bxdf dispatch";
+const StringView s_ShadowSurfaceDispatchGenerationLabel = "Shadow surface dispatch";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_material/cook.adhd.h>
+usize ResolveDispatchSlotTableCapacity(in b8 hasAnySlot, in u32 maxSlotId){
+    if(hasAnySlot)
+        return cast<usize>(maxSlotId) + 1u;
+    return 0u;
+}
 
+b8 ValidateUniqueDeferredBxdfSlot(in u32 shadingModelId, in StringView existingSlot, in StringView incomingSource){
+    if(existingSlot.empty() || existingSlot == incomingSource)
+        return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources", shadingModelId);
+    return false;
+}
 
+b8 ValidateUniqueShadowSurfaceDispatchSlot(
+    in u32 surfaceDispatchId,
+    in StringView existingSurface,
+    in StringView incomingSurface,
+    in StringView existingInterface,
+    in StringView incomingInterface
+){
+    if(!existingSurface.empty() && existingSurface != incomingSurface){
+        error("Shadow surface dispatch: model id {} maps to multiple surface sources", surfaceDispatchId);
+        return false;
+    }
+    if(!existingInterface.empty() && existingInterface != incomingInterface){
+        error("Shadow surface dispatch: model id {} maps to multiple material interfaces", surfaceDispatchId);
+        return false;
+    }
+    return true;
+}
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShadowSurfaceDispatchGenerator{
-public:
-    [[nodiscard]] Expected<Path> emit(
-        const Path& cacheDirectory,
-        AStringView configurationSafeName,
-        Span<const MaterialBindEntry> materialBindEntries,
-        Span<const MaterialCookEntry> materialEntries,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 WriteShadowSurfaceGeneratedIncludeFile(in Path outputPath, in StringView source){
+    const Path parentPath = outputPath.parentPath();
+    const auto ensureResult = EnsureDirectories(parentPath);
+    if(!ensureResult.has_value()){
+        error("Shadow surface dispatch: failed to create generated include parent '{}' (error {})", PathToString(parentPath), ensureResult.error().value());
+        return false;
+    }
+    if(!WriteTextFile(outputPath, source)){
+        error("Shadow surface dispatch: failed to write generated include '{}'", PathToString(outputPath));
+        return false;
+    }
+    return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplAssetsMaterialMaterialShadowDispatchAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

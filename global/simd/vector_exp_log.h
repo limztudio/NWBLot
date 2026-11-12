@@ -122,6 +122,10 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorExpE(SIMDVectorSin
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorExp(SIMDVectorSingle value)noexcept{ return VectorExpE(value); }
 
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleExp(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Exp(VectorDoubleGetX(value)), Exp(VectorDoubleGetY(value)), Exp(VectorDoubleGetZ(value)), Exp(VectorDoubleGetW(value)));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -252,6 +256,16 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleLog2(SIMDVec
     return VectorDoubleSet(Log2(VectorDoubleGetX(value)), Log2(VectorDoubleGetY(value)), Log2(VectorDoubleGetZ(value)), Log2(VectorDoubleGetW(value)));
 }
 
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorLogE(SIMDVectorSingle value)noexcept{
+    return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
+}
+
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorLog(SIMDVectorSingle value)noexcept{ return VectorLogE(value); }
+
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleLog(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Log(VectorDoubleGetX(value)), Log(VectorDoubleGetY(value)), Log(VectorDoubleGetZ(value)), Log(VectorDoubleGetW(value)));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -276,4 +290,5 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoublePow(SIMDVect
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

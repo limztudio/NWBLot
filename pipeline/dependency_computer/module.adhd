@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 WriteDependencyListOutput(in StringView outputPathText, in StringView encodedListText){
+    const Expected<Path, ErrorCode> output = AbsolutePath(Path(outputPathText));
+    if(!output.has_value())
+        return false;
+    if(!EnsureDirectories(output.value().parentPath()).has_value())
+        return false;
+    return WriteTextFileAtomic(output.value(), encodedListText);
+}
+
+void LogUnrepresentableDependencyList(){
+    error("DependencyComputer: input paths cannot be represented in the dependency list");
+}
+
+void LogDependencyOutputWriteFailure(in StringView outputPath){
+    error("DependencyComputer: failed to write output '{}'", outputPath);
+}
+
+void LogReturnedDependencyInputCount(in usize count){
+    [essential] info("DependencyComputer: returned {} inputs", count);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

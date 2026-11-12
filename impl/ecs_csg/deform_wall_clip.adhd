@@ -3,140 +3,43 @@
 
 
 #include <impl/ecs_csg/deform_cap_loop.adhd>
-#include <impl/ecs_csg/shape_registry_validation.adhd>
+#include <impl/ecs_csg/deform_cutter_field.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-native{
-#include <global/scope_exit.h>
-
-namespace NWB::Impl{
-using ScratchCsgDeformDistanceVector = Vector<f32, Core::Alloc::ScratchArena>;
-
-struct CsgDeformEdgeSplitKeyHash{
-    [[nodiscard]] usize operator()(const u64 key)const noexcept{ return CsgDeformEdgeKeyHash(key); }
-};
-
-using CsgDeformEdgeSplitMap = HashMap<u64, u32, Core::Alloc::ScratchArena, CsgDeformEdgeSplitKeyHash, EqualTo<u64>>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<b8, CsgDeformViabilityReason> ComputeCsgDeformShapeDistances(
-    in CsgDeformShape shape,
-    in Span<CsgDeformVertex> vertices,
-    in f32 boundaryEpsilon,
-    in u32 registryParameterByteSize,
-    in Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>> registryDistanceCallback,
-    mut ScratchCsgDeformDistanceVector outDistances
-){
-    CsgShapeInlineParameters inlineParameters = MakeCsgShapeInlineParameters(VectorSingle(shape.parameter0), VectorSingle(shape.parameter1));
-    CsgBuiltInShapeKind builtInKind = CsgBuiltInShapeKind::Plane;
-
-    if(registryDistanceCallback.has_value()){
-        const Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> packedParameterBytes = PackCsgShapeDefaultParameterBytes(registryParameterByteSize, inlineParameters);
-        if(!packedParameterBytes.has_value())
-            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-        inlineParameters = ReadCsgShapeInlineParameters(packedParameterBytes.value());
-    }
-    else{
-        const Expected<CsgBuiltInShapeKind> resolvedBuiltInKind = TryResolveBuiltInCsgShapeKind(shape.shapeType);
-        if(!resolvedBuiltInKind.has_value())
-            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-        builtInKind = resolvedBuiltInKind.value();
-    }
-
-    const usize vertexCount = vertices.size();
-    outDistances.clear();
-    outDistances.resize(vertexCount, s_KeepDistanceZero);
-
-    const MatrixSingle worldToShape(shape.worldToShape);
-    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        const CsgDeformVertex vertex = vertices[vertexIndex];
-        const VectorSingle shapePosition = TransformCsgDeformVertexPosition(vertex, worldToShape);
-
-        f32 distance = 0.0f;
-        if(registryDistanceCallback.has_value()){
-            const Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)> callback = registryDistanceCallback.value();
-            const Expected<f32> evaluated = callback(shapePosition, inlineParameters);
-            if(!evaluated.has_value())
-                return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-            distance = evaluated.value();
-        }
-        else
-            distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePosition, inlineParameters);
-
-        const Expected<f32, CsgDeformViabilityReason> snapped = TrySnapCsgDeformSignedDistance(distance, boundaryEpsilon);
-        if(!snapped.has_value())
-            return MakeUnexpected(snapped.error());
-        const f32 snappedDistance = snapped.value();
-        native(in vertexIndex, in snappedDistance, mut outDistances){
-            outDistances[vertexIndex] = snappedDistance;
-        }
-    }
-    return true;
-}
 
 Expected<u32> SplitCsgDeformEdgeVertex(
     in u32 first,
     in u32 second,
     in f32 firstDistance,
     in f32 secondDistance,
-    mut ScratchCsgDeformVertexVector vertices,
-    mut CsgDeformEdgeSplitMap edgeSplits
+    mut Vector<CsgDeformVertex> vertices,
+    mut HashMap<u64, u32> edgeSplits
 ){
     if(vertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure());
     const u64 edge = PackUnorderedU32Pair(first, second);
-    u32 existingIndex = 0u;
-    b8 foundExisting = false;
-    native(in edge, in edgeSplits, mut existingIndex, mut foundExisting){
-        const auto found = edgeSplits.find(edge);
-        if(found != edgeSplits.end()){
-            existingIndex = found.value();
-            foundExisting = true;
-        }
-    }
-    if(foundExisting)
-        return existingIndex;
-    CsgDeformVertex firstVertex;
-    CsgDeformVertex secondVertex;
-    native(in first, in second, in vertices, mut firstVertex, mut secondVertex){
-        firstVertex = vertices[first];
-        secondVertex = vertices[second];
-    }
+    if(edgeSplits.contains(edge))
+        return edgeSplits[edge];
+    const CsgDeformVertex firstVertex = vertices[cast<usize>(first)];
+    const CsgDeformVertex secondVertex = vertices[cast<usize>(second)];
     // A zero secondDistance selects the second endpoint.
     const Expected<CsgDeformVertex> mixed = TryBuildInterpolatedCsgDeformVertex(firstVertex, secondVertex, firstDistance, secondDistance);
     if(!mixed.has_value())
         return MakeUnexpected(Failure());
     const u32 created = cast<u32>(vertices.size());
     vertices.push_back(mixed.value());
-    b8 inserted = false;
-    native(in edge, in created, mut vertices, mut edgeSplits, mut inserted){
-        ScopeExit discardVertex([&]()noexcept{ vertices.pop_back(); });
-        if(edgeSplits.emplace(edge, created).second){
-            discardVertex.release();
-            inserted = true;
-        }
-    }
-    if(!inserted){
-        assert(false);
-        return MakeUnexpected(Failure());
-    }
+    edgeSplits.try_emplace(edge, created);
     return created;
 }
 
 Expected<b8, CsgDeformViabilityReason> ClipCsgDeformShellWithDistances(
     in Span<f32> distances,
-    mut CsgDeformEdgeSplitMap edgeSplits,
-    mut ScratchCsgDeformTriangleVector scratchKept,
-    mut ScratchCsgDeformVertexVector inOutVertices,
-    mut ScratchCsgDeformTriangleVector inOutTriangles
+    mut HashMap<u64, u32> edgeSplits,
+    mut Vector<CsgDeformTriangle> scratchKept,
+    mut Vector<CsgDeformVertex> inOutVertices,
+    mut Vector<CsgDeformTriangle> inOutTriangles
 ){
     edgeSplits.clear();
     edgeSplits.reserve(inOutTriangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
@@ -145,10 +48,7 @@ Expected<b8, CsgDeformViabilityReason> ClipCsgDeformShellWithDistances(
 
     const usize triangleCount = inOutTriangles.size();
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-        CsgDeformTriangle triangle;
-        native(in triangleIndex, in inOutTriangles, mut triangle){
-            triangle = inOutTriangles[triangleIndex];
-        }
+        const CsgDeformTriangle triangle = inOutTriangles[triangleIndex];
         assert(cast<usize>(triangle.indices[0u]) < inOutVertices.size());
         assert(cast<usize>(triangle.indices[1u]) < inOutVertices.size());
         assert(cast<usize>(triangle.indices[2u]) < inOutVertices.size());
@@ -179,8 +79,8 @@ void PrepareCsgDeformPreviewBuffers(
     in Span<CsgDeformVertex> inputVertices,
     in Span<CsgDeformTriangle> inputTriangles,
     in usize cutCount,
-    mut ScratchCsgDeformVertexVector outVertices,
-    mut ScratchCsgDeformTriangleVector outTriangles
+    mut Vector<CsgDeformVertex> outVertices,
+    mut Vector<CsgDeformTriangle> outTriangles
 ){
     const usize inputVertexCount = inputVertices.size();
     const usize inputTriangleCount = inputTriangles.size();

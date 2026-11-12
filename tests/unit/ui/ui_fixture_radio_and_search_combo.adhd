@@ -1,0 +1,155 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include "ui_fixture_control_declarations.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<u64> FindRadioFixtureIndexOf(in u64 count, in u64 removed, in b8 reverseFlag, in b8 duplicate, in u64 value){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    for(u64 cursor = 0u; cursor < activeCount; ++cursor){
+        if(value != 0u && ComputeRadioFixtureRawKey(count, removed, reverseFlag, duplicate, cursor) == value)
+            return cursor;
+    }
+    return MakeUnexpected(Failure());
+}
+
+Expected<u64> FindRadioFixtureEnabledIndex(in u64 count, in u64 removed, in b8 reverseFlag, in b8 duplicate, in b8 allDisabled, in u64 disabledKey, in u64 start, in b8 backwards){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    if(start >= activeCount || allDisabled)
+        return MakeUnexpected(Failure());
+    u64 cursor = start;
+    while(cursor < activeCount){
+        if(ComputeRadioFixtureRawKey(count, removed, reverseFlag, duplicate, cursor) != disabledKey)
+            return cursor;
+        if(backwards){
+            if(cursor == 0u)
+                break;
+            --cursor;
+        }
+        else
+            ++cursor;
+    }
+    return MakeUnexpected(Failure());
+}
+
+void ResetRadioSourceCounters(mut RadioSource self){
+    self.m_calls = 0u;
+    self.m_textCalls = 0u;
+    self.m_mutations = 0u;
+    self.m_callbacksAfterMutation = 0u;
+    self.m_beginAccepted = false;
+    self.m_endAccepted = false;
+}
+
+StringView FormatRadioSourceLabel(mut RadioSource self, in u64 index){
+    const StringView letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    ++self.m_textCalls;
+    self.m_label[0u] = letters[cast<usize>(index % 26u)];
+    self.m_label[1u] = 'b';
+    self.m_label[2u] = 'c';
+    self.m_label[3u] = 'd';
+    return StringView(self.m_label.data(), self.m_label.size());
+}
+
+void ApplyRadioSourceStateMutation(in UiFixtureRadioMutation mutation, in u64 selected, mut RadioGroupState state){
+    if(mutation == UiFixtureRadioMutation::SelectAwayBack)
+        state.select(selected + 10u);
+    state.select(selected);
+}
+
+void ApplyRadioSourceBuilderMutation(in UiFixtureRadioMutation mutation, mut RadioSource self, mut Builder builder){
+    if(mutation == UiFixtureRadioMutation::ResetBuilder){
+        builder.reset();
+        return;
+    }
+    self.m_beginAccepted = builder.beginPanel("reentered", Rect(0.0f, 0.0f, 100.0f, 80.0f));
+    self.m_endAccepted = builder.endPanel();
+}
+
+void SetUpRadioGroupFixture(mut RadioGroupFixture self){
+    self.setUpWidgetBase();
+    self.configureRadioSkin();
+    ASSERT_TRUE(self.m_skin.validatePayload());
+    self.m_builder.setSkin(self.m_skin);
+    self.m_state.select(10u);
+}
+
+b8 DeclareRadioGroupFixtureSource(mut RadioGroupFixture self, in u64 generation, in IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options, in Rect bounds){
+    if(!self.begin(generation) || !self.m_builder.beginPanel(s_RadioPanelKey, bounds))
+        return false;
+    self.m_result = self.m_builder.radioGroup(s_RadioGroupKey, source, state, options);
+    return self.m_result.valid;
+}
+
+Expected<RadioGroupChoicePlacement> TryFindRadioGroupChoice(in u64 keyValue, in RadioGroupState state){
+    const RadioGroupPlacement placement = state.placement();
+    for(u32 index = 0u; index < placement.count; ++index){
+        if(placement.rows[cast<usize>(index)].key == keyValue)
+            return placement.rows[cast<usize>(index)];
+    }
+    return MakeUnexpected(Failure());
+}
+
+Point ComputeRadioGroupChoicePoint(in u64 keyValue, in RadioGroupState state){
+    const Expected<RadioGroupChoicePlacement> item = TryFindRadioGroupChoice(keyValue, state);
+    if(item.has_value())
+        return CenterUiRect(item.value().rectangle);
+    return Point();
+}
+
+EditBoxResult EditSearchHostInPopup(mut SearchEditHost self, in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model){
+    ++self.loans;
+    self.lastPopup = popup;
+    self.loanContextPopup = self.m_context.popupToken();
+    EditBoxResult result = EditBoxResult();
+    result.valid = true;
+    result.focused = options.enabled && (self.m_context.input().focus() == widget.id);
+    result.submitted = self.submitted;
+    result.cancelled = self.cancelled;
+    self.submitted = false;
+    self.cancelled = false;
+    if(self.m_changeText){
+        result.valid = model.setText(self.m_nextText);
+        result.textChanged = result.valid;
+        self.m_changeText = false;
+    }
+    if(self.preedit){
+        result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u);
+        self.preedit = false;
+    }
+    return result;
+}
+
+void SetSearchHostNextText(mut SearchEditHost self, in StringView value){
+    self.m_nextText = value;
+    self.m_changeText = true;
+}
+
+void SetUpSearchFixture(mut SearchFixture self){
+    self.setUpWidgetBase();
+    self.setEditHost(self.m_host);
+}
+
+b8 DeclareSearchFixture(mut SearchFixture self, in u64 generation){
+    if(!self.begin(generation) || !self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 280.0f)))
+        return false;
+    self.m_searchResult = self.m_builder.searchComboBox(s_ComboKey, self.m_searchSource, self.m_search, MakeSearchComboFixtureOptions());
+    return self.m_searchResult.combo.valid;
+}
+
+b8 OpenSearchFixture(mut SearchFixture self, in u64 generation){
+    const Expected<HitTarget> field = self.tryTarget(self.id(s_ComboKey, s_ComboPanelKey));
+    if(!field.has_value())
+        return false;
+    self.click(CenterUiRect(field.value().rectangle));
+    return self.acceptSearch(generation) && self.m_search.combo().isOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

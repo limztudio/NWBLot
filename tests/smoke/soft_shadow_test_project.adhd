@@ -10,8 +10,18 @@
 #include "smoke_scene_helpers.adhd"
 #include "smoke_skinned_scene_helpers.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <loader/project_entry.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd.h>
 
 #include <impl/assets_material/asset.adhd.h>
 #include <impl/ecs_scene/module.adhd.h>
@@ -33,6 +43,8 @@ namespace NWB::Tests::Smoke{
 using SoftShadowModelRef = Core::Assets::AssetRef<Impl::Model>;
 using SoftShadowMaterialRef = Core::Assets::AssetRef<Impl::Material>;
 using SoftShadowMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
+using Core::Perf::CaptureOptions;
+namespace Feature = Core::Feature;
 
 // Opaque and glass casters under directional, point, and spot soft shadows.
 inline constexpr SoftShadowModelRef s_SoftShadowModel{"project/characters/body/model"};
@@ -42,13 +54,18 @@ inline constexpr SoftShadowMaterialRef s_SoftShadowTimingOpaqueMaterial{"project
 inline constexpr SoftShadowMaterialRef s_SoftShadowTimingTransparentMaterial{"project/smoke/soft_shadow/materials/timing_transparent"};
 inline constexpr SoftShadowMeshRef s_SoftShadowGroundMesh{"project/meshes/shadow_plane"};
 
-inline constexpr TStringView s_SoftShadowProjectName = FOUNDATION_TEXT("SoftShadowTestSmokeProject");
+inline constexpr AStringView s_SoftShadowProjectName = "SoftShadowTestSmokeProject";
 inline constexpr f32 s_SoftShadowDefaultAngularRadius = 0.03f;
 inline constexpr f32 s_SoftShadowDefaultSourceRadius = 0.15f;
 inline constexpr f32 s_SoftShadowSpinSpeed = s_SmokeSpinSpeed;
 inline constexpr f32 s_SoftShadowManualYawSpeed = 0.6f;
 inline constexpr f32 s_SoftShadowMaxSpinDelta = 1.0f / 15.0f;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -93,13 +110,13 @@ class SoftShadowScene{
             // Timing materials omit stochastic surfel GI while keeping direct shadows.
             const auto& opaqueMaterial = timingEnabled ? s_SoftShadowTimingOpaqueMaterial : s_SoftShadowOpaqueMaterial;
             const auto& transparentMaterial = timingEnabled ? s_SoftShadowTimingTransparentMaterial : s_SoftShadowTransparentMaterial;
-            this->m_groundEntity = CreateTintedStaticMeshEntity(s_SoftShadowGroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_SoftShadowGroundScale, 1.0f, s_SoftShadowGroundScale, 0.0f), world);
+            this->m_groundEntity = CreateTintedStaticMeshEntity(s_SoftShadowGroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, VectorSet(0.82f, 0.82f, 0.85f, 1.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), VectorSet(s_SoftShadowGroundScale, 1.0f, s_SoftShadowGroundScale, 0.0f), world);
 
             // The opaque caster provides the contact-hardening reference.
-            const auto characterModel = CreateTintedModelEntity(s_SoftShadowModel, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), world);
+            const auto characterModel = CreateTintedModelEntity(s_SoftShadowModel, opaqueMaterial, s_SmokeSurfaceMaterialInterface, VectorSet(0.86f, 0.80f, 0.74f, 1.0f), VectorSet(0.7f, 0.0f, -1.1f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), world);
             this->m_characterOwner = characterModel.entity;
             if(!characterModel.tintApplied)
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
+                NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
             // The glass caster must preserve tint while its penumbra widens with receiver distance.
             const auto glassModel = CreateTintedModelEntity(
@@ -107,23 +124,23 @@ class SoftShadowScene{
                 transparentMaterial,
                 s_SmokeSurfaceMaterialInterface,
                 // Glass caster tint and density for Beer-Lambert shadow absorption.
-                Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f),
+                VectorSet(0.20f, 0.55f, 0.12f, 0.6f), VectorSet(-0.6f, 0.0f, -1.1f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
                 world
             );
             this->m_glassOwner = glassModel.entity;
             if(!glassModel.tintApplied)
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
+                NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
             SyncSmokeModelRuntimes(world);
 
-            FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_characterOwner.valid() && this->m_glassOwner.valid(), FOUNDATION_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
+            NWB_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_characterOwner.valid() && this->m_glassOwner.valid(), NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
 
             if(timingEnabled){
                 const Array<Core::ECS::EntityID, 3> lights = { directionalLight, pointLight, spotLight };
                 for(const auto lightEntity : lights){
                     const auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(lightEntity);
                     if(!light || light->enableCaustics){
-                        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShadowTimingProbe: timing light policy unavailable"));
+                        NWB_LOGGER_ERROR(NWB_TEXT("ShadowTimingProbe: timing light policy unavailable"));
                         ok = false;
                         break;
                     }
@@ -134,11 +151,11 @@ class SoftShadowScene{
     }
 
     public void spinCasters(mut World world, in f32 yaw)const{
-        native(mut world, in yaw){
-            for(const Core::ECS::EntityID owner : { this->m_characterOwner, this->m_glassOwner }){
-                auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(owner);
-                if(transform)
-                    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f), transform->rotation);
+        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f)));
+        native(in characterOwner = this.m_characterOwner, in glassOwner = this.m_glassOwner, in rotation, mut world){
+            for(const Core::ECS::EntityID owner : { characterOwner, glassOwner }){
+                if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(owner))
+                    transform->rotation = rotation;
             }
         }
     }
@@ -150,32 +167,22 @@ class SoftShadowScene{
 
 // Directional light angular radius in radians.
 f32 ConfiguredAngularRadius(){
-    f32 angle = s_SoftShadowDefaultAngularRadius;
-    native(mut angle){
-        static const f32 s_Angle = []()noexcept{
-            const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
-            if(!parsed)
-                return s_SoftShadowDefaultAngularRadius;
-            return *parsed > 0.0f ? Min(0.2f, *parsed) : 0.0f;
-        }();
-        angle = s_Angle;
-    }
-    return angle;
+    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
+    if(!parsed.has_value())
+        return s_SoftShadowDefaultAngularRadius;
+    if(parsed.value() > 0.0f)
+        return Min(0.2f, parsed.value());
+    return 0.0f;
 }
 
 // Point and spot source radius in world units.
 f32 ConfiguredSourceRadius(){
-    f32 radius = s_SoftShadowDefaultSourceRadius;
-    native(mut radius){
-        static const f32 s_Radius = []()noexcept{
-            const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
-            if(!parsed)
-                return s_SoftShadowDefaultSourceRadius;
-            return *parsed > 0.0f ? Min(1.0f, *parsed) : 0.0f;
-        }();
-        radius = s_Radius;
-    }
-    return radius;
+    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
+    if(!parsed.has_value())
+        return s_SoftShadowDefaultSourceRadius;
+    if(parsed.value() > 0.0f)
+        return Min(1.0f, parsed.value());
+    return 0.0f;
 }
 
 // Pin yaw for captures that isolate shimmer from motion.
@@ -183,6 +190,7 @@ f32 FrozenYaw(){
     return ReadSmokeFrozenYawCached("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
 }
 
+[arena]
 class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
     public SoftShadowTestSmokeProject(mut ProjectRuntimeContext context){
@@ -202,32 +210,30 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     public b8 onStartup()override{
         this.m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
         if(this.m_timingEnabled){
-            native{
-                this->m_context->setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
-            }
+            this.m_context.setPerfCapture(CaptureOptions::GpuTimingOnly());
             if(!this.m_timingRenderPass.start())
                 return false;
         }
         // Register arrow yaw scrubbing at the front of the input chain.
         this.m_context.input.addHandlerToBack(this.m_arrowYawInput);
 
-        b8 created = false;
-        native(mut created){
-            created = this->m_scene.create(*this->m_world, this->m_timingEnabled, ConfiguredAngularRadius(), ConfiguredSourceRadius());
-        }
-        if(!created)
+        this.m_angularRadius = ConfiguredAngularRadius();
+        this.m_sourceRadius = ConfiguredSourceRadius();
+        if(!this.m_scene.create(SmokeWorldRef(this.m_world), this.m_timingEnabled, this.m_angularRadius, this.m_sourceRadius))
             return false;
 
         if(this.m_timingEnabled){
-            native{
-                const b8 hardwareAvailable = this->m_context->graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && this->m_context->graphics.queryFeatureSupport(Core::Feature::RayQuery);
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("ShadowTimingProbe: natural shadow route {}"), hardwareAvailable ? FOUNDATION_TEXT("hardware") : FOUNDATION_TEXT("software"));
-            }
+            const b8 hardwareAvailable = this.m_context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+                && this.m_context.graphics.queryFeatureSupport(Feature::RayQuery);
+            StringView routeLabel = "software";
+            if(hardwareAvailable)
+                routeLabel = "hardware";
+            [essential] info("ShadowTimingProbe: natural shadow route {}", routeLabel);
             [essential] info("ShadowTimingProbe: caustic emission 0");
             [essential] info("ShadowTimingProbe: indirect response hemi-ambient");
-            [essential] info("ShadowTimingProbe: source extents angular={} radius={}", cast<f64>(ConfiguredAngularRadius()), cast<f64>(ConfiguredSourceRadius()));
+            [essential] info("ShadowTimingProbe: source extents angular={} radius={}", cast<f64>(this.m_angularRadius), cast<f64>(this.m_sourceRadius));
         }
-        [essential] info("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad", cast<f64>(ConfiguredAngularRadius()));
+        [essential] info("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad", cast<f64>(this.m_angularRadius));
         return true;
     }
 
@@ -264,40 +270,33 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         const f32 frozen = FrozenYaw();
         this.m_yaw.update(safeDelta, frozen, frozen >= 0.0f, this.m_arrowYawInput, s_SoftShadowManualYawSpeed, s_SoftShadowSpinSpeed, s_SoftShadowMaxSpinDelta);
         this.updateWindowTitle();
-        b8 ticked = false;
-        native(in safeDelta, mut ticked){
-            this->m_scene.spinCasters(*this->m_world, this->m_yaw.yaw());
-            ticked = TickSmokeWorld(safeDelta, *this->m_world);
-        }
-        if(!ticked)
+        this.m_scene.spinCasters(SmokeWorldRef(this.m_world), this.m_yaw.yaw());
+        if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
         ++this.m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
     private void destroyWorld(){
-        native{
-            DestroySmokeSkinnedRenderWorld(*this->m_context, this->m_world);
-        }
+        DestroySmokeSkinnedRenderWorld(this.m_context, this.m_world);
     }
 
     private void updateWindowTitle(){
-        native{
-            f32 wrappedYaw = FMod(this->m_yaw.yaw(), s_2PI);
-            if(wrappedYaw < 0.0f)
-                wrappedYaw += s_2PI;
-            const f32 yawDegrees = wrappedYaw * (360.0f / s_2PI);
-            const f32 angleDegrees = ConfiguredAngularRadius() * 360.0f / s_2PI;
-
+        const VectorSingle display = CalculateSmokeYawDisplay(VectorSingle(this.m_yaw.yaw()), VectorSingle(s_2PI));
+        const f32 yawDegrees = display.y;
+        const f32 angleDegrees = this.m_angularRadius * 360.0f / s_2PI;
+        const f32 srcRadius = this.m_sourceRadius;
+        const b8 manualControl = this.m_yaw.manualControl();
+        native(in yawDegrees, in angleDegrees, in srcRadius, in manualControl, mut ctx = this.m_context){
             static constexpr usize s_TitleCapacity = 256u;
             Array<tchar, s_TitleCapacity> title{};
-            FOUNDATION_TSPRINTF(
+            NWB_TSPRINTF(
                 title.data(), title.size(),
-                FOUNDATION_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-                static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDegrees, angleDegrees, ConfiguredSourceRadius(),
-                this->m_yaw.manualControl() ? FOUNDATION_TEXT("  [manual: <- ->]") : FOUNDATION_TEXT("")
+                NWB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
+                static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDegrees, angleDegrees, srcRadius,
+                manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
             );
-            this->m_context->graphics.setWindowTitle(TStringView(title.data()));
+            ctx.graphics.setWindowTitle(TStringView(title.data()));
         }
     }
 
@@ -309,24 +308,42 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     private ArrowYawInputHandler m_arrowYawInput = ArrowYawInputHandler();
     private SoftShadowScene m_scene = SoftShadowScene();
     private YawSpinController m_yaw = YawSpinController();
+    private f32 m_angularRadius = s_SoftShadowDefaultAngularRadius;
+    private f32 m_sourceRadius = s_SoftShadowDefaultSourceRadius;
     private u32 m_rendererBaselineRenderedFrameCount = 0u;
     private b8 m_timingEnabled = false;
     private b8 m_rendererBaselineCapturePaused = false;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Soft Shadow Test");
+    return NWB_TEXT("NWB Soft Shadow Test");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::SoftShadowTestSmokeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,348 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/avboit/avboit_stage_raster_record_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererCsgSystem;
+class RendererMaterialSystem;
+class AvboitGeneratedGeometryReuse;
+struct DeferredFrameTargets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared AVBOIT material upload owns instance plus typed plus CSG buffer uploads.
+struct AvboitMaterialUploadInputs{
+    const DeferredFrameTargets& targets;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    Core::GpuGraphResourceId materialInstances;
+    Core::GpuGraphResourceId materialTyped;
+    Core::GpuGraphResourceId csgReceiverRanges;
+    Core::GpuGraphResourceId csgCutters;
+    Core::GpuGraphResourceId csgClipContextSlots;
+    Core::GpuTaskId uploadTask;
+    AvboitGeometryPhase::Enum phase = AvboitGeometryPhase::Occupancy;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitMaterialUploadBuilder final : NoCopy{
+public:
+    AvboitMaterialUploadBuilder(Core::GpuTaskGraph& graph, RendererCsgSystem& csgSystem)noexcept
+        : m_graph(graph)
+        , m_csgSystem(csgSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<b8> declare(const AvboitMaterialUploadInputs& inputs, Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes, const CsgFrameGpuDataView& csgFrameData, b8 hasCsgDrawItems, Core::GpuTaskId& inOutUploadTask);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererCsgSystem& m_csgSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared AVBOIT geometry preparation owns material geometry plus sampled-texture sets.
+class AvboitGeometryPreparationBuilder final : NoCopy{
+public:
+    AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)noexcept
+        : m_graph(graph)
+        , m_materialSystem(materialSystem)
+        , m_scratchArena(scratchArena)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<AvboitGeometryPreparationResult> declare(const AvboitGeometryPreparationInputs& inputs);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererMaterialSystem& m_materialSystem;
+    Core::Alloc::ScratchArena& m_scratchArena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared AVBOIT pass upload owns gather plus readiness checks for occupancy, extinction, and accumulation.
+struct AvboitPassUploadInputs{
+    Core::Framebuffer& framebuffer;
+    MaterialPipelinePass::Enum pass = MaterialPipelinePass::AvboitOccupancy;
+    const CsgFrameState& csgFrameState;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const MeshViewGpuData& meshViewState;
+    Core::GpuGraphResourceId materialInstances;
+    Core::GpuGraphResourceId materialTyped;
+    Core::GpuGraphResourceId csgReceiverRanges;
+    Core::GpuGraphResourceId csgCutters;
+    Core::GpuGraphResourceId csgClipContextSlots;
+    Core::GpuGraphResourceId csgIntervalSampleState;
+};
+
+struct FrameGraphAvboitPassPhaseDesc{
+    Core::Framebuffer& framebuffer;
+    MaterialPipelinePass::Enum pass = MaterialPipelinePass::AvboitOccupancy;
+    AvboitGeometryPhase::Enum phase = AvboitGeometryPhase::Occupancy;
+};
+
+// Parameterized AVBOIT pass upload chain owns gather plus geometry, material-upload, snapshot, and emulation capture.
+struct FrameGraphAvboitPassUploadInputs{
+    DeferredFrameTargets& targets;
+    const CsgFrameState& csgFrameState;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const MeshViewGpuData& meshViewState;
+    Core::GpuGraphResourceId materialInstances;
+    Core::GpuGraphResourceId materialTyped;
+    Core::GpuGraphResourceId csgReceiverRanges;
+    Core::GpuGraphResourceId csgCutters;
+    Core::GpuGraphResourceId csgClipContextSlots;
+    Core::GpuGraphResourceId csgIntervalSampleState;
+    Core::GpuTaskId uploadTask;
+    b8 intervalOutputsGraphOwned = false;
+    b8 hasTransparentRenderers = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitPassUploadHelper final : NoCopy{
+public:
+    AvboitPassUploadHelper(RendererMaterialSystem& materialSystem)noexcept
+        : m_materialSystem(materialSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<AvboitPassUploadResult> gather(
+        const AvboitPassUploadInputs& inputs,
+        MaterialPassDrawItemPartitions& drawItems,
+        InstanceGpuDataVector& instanceData,
+        CsgFrameGpuData& csgFrameData,
+#if defined(NWB_DEBUG)
+        ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
+#endif
+        MaterialTypedByteDataVector& materialTypedBytes
+    );
+
+
+private:
+    RendererMaterialSystem& m_materialSystem;
+};
+
+class FrameGraphAvboitPassUploadChain final : NoCopy{
+public:
+    FrameGraphAvboitPassUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
+        : m_graph(graph)
+        , m_materialSystem(materialSystem)
+        , m_csgSystem(csgSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<FrameGraphAvboitMaterialUploadResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
+        const FrameGraphAvboitPassPhaseDesc& phaseDesc,
+        const FrameGraphAvboitPassUploadInputs& inputs,
+        AvboitRasterPassTaskPayload& rasterPayload,
+        AvboitComputeEmulationTaskPayload& computeEmulationPayload,
+        AvboitGeneratedGeometryReuse& generatedGeometry
+    );
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererMaterialSystem& m_materialSystem;
+    RendererCsgSystem& m_csgSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared AVBOIT compute-emulation capture owns regular plus CSG plus shared plan capture.
+struct AvboitComputeEmulationCaptureInputs{
+    MaterialPassDrawItemPartitionsView drawItems{};
+    CsgFrameGpuDataView csgFrameData{};
+    b8 geometryOwned = false;
+    b8 sampledTexturesCollected = false;
+    b8 csgStreamsUploaded = false;
+    b8 intervalOutputsGraphOwned = false;
+};
+
+struct AvboitComputeEmulationCaptureResult{
+    b8 regularCaptured = false;
+    b8 csgCaptured = false;
+    b8 sharedCaptured = false;
+    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedPlan;
+    usize sharedInstanceCount = 0u;
+    usize sharedMaterialTypedByteCount = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitComputeEmulationCapture final : NoCopy{
+public:
+    AvboitComputeEmulationCapture()noexcept = default;
+
+
+public:
+    [[nodiscard]] Expected<AvboitComputeEmulationCaptureResult> capture(
+        const AvboitComputeEmulationCaptureInputs& inputs,
+        usize instanceCount,
+        usize materialTypedByteCount,
+        Core::Alloc::ScratchArena& scratchArena,
+        ECSRenderDetail::AliasFreeComputeEmulationGraphPlan& plan,
+        ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
+    );
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Declaration-only ownership of one complete generated group; never carry this state across graph/frame resets.
+class AvboitGeneratedGeometryReuse final : NoCopy{
+public:
+    explicit AvboitGeneratedGeometryReuse(Core::Alloc::ScratchArena& arena)noexcept
+        : m_arena(arena)
+        , m_draws(arena)
+        , m_instances(arena)
+    {}
+
+
+public:
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
+    [[nodiscard]] b8 matches(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
+    // Publish the generation task or a dependent completion task proving all output writes; generation must disable pass-scissor culling.
+    [[nodiscard]] b8 publishProducer(Core::GpuTaskId task)noexcept;
+    [[nodiscard]] Core::GpuTaskId producerTask()const noexcept{ return m_producer; }
+
+
+private:
+    Core::Alloc::ScratchArena& m_arena;
+    MaterialPassDrawItemVector m_draws;
+    InstanceGpuDataVector m_instances;
+    ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;
+    Array<u8, sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT> m_viewBytes{};
+    Core::GpuTaskId m_producer;
+    b8 m_captured = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_INLINE Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
+    const AvboitPassUploadInputs& inputs,
+    MaterialPassDrawItemPartitions& drawItems,
+    InstanceGpuDataVector& instanceData,
+    CsgFrameGpuData& csgFrameData,
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
+#endif
+    MaterialTypedByteDataVector& materialTypedBytes
+){
+    const AvboitPassUploadReadinessPolicy readinessPolicy;
+    AvboitPassUploadResult result{};
+    m_materialSystem.gatherMaterialPassDrawItems(
+        &inputs.framebuffer,
+        inputs.pass,
+        true,
+        inputs.csgFrameState,
+        RendererResourceLookupMode::PreparedOnly,
+        &inputs.meshViewState,
+        drawItems,
+        instanceData,
+        csgFrameData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes
+    );
+
+    result.hasDrawItems = !drawItems.empty();
+    result.hasCsgDrawItems = !drawItems.csg.empty();
+    if(!result.hasDrawItems)
+        return result;
+    const b8 csgReady = readinessPolicy.isCsgPassReady(
+        result.hasCsgDrawItems,
+        csgFrameData.hasWork(),
+        inputs.csgReceiverRanges.valid(),
+        inputs.csgCutters.valid(),
+        inputs.csgClipContextSlots.valid(),
+        inputs.pass == MaterialPipelinePass::AvboitExtinction,
+        inputs.csgIntervalSampleState.valid(),
+        inputs.csgResources.frameReady(csgFrameData),
+        m_materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems.csg, inputs.frameBindings)
+    );
+    if(!readinessPolicy.arePassResourcesReady(
+        inputs.materialInstances.valid(),
+        inputs.materialTyped.valid(),
+        inputs.frameBindings.frameReady(instanceData.size(), materialTypedBytes.size()),
+        m_materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems.regular, inputs.frameBindings),
+        csgReady
+    ))
+        return MakeUnexpected(Failure{});
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AvboitStageRecordDependencyPolicy{
+    public b8 canDeclareRasterRecordPhase(in b8 predecessorTaskValid, in b8 uploadTaskValid)const{
+        return predecessorTaskValid && uploadTaskValid;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

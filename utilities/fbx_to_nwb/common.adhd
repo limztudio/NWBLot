@@ -1,0 +1,158 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SelectOptionListSeparator(in b8 isLast){
+    if(isLast)
+        return s_OptionLastSeparatorText;
+    return s_OptionSeparatorText;
+}
+
+String OutputAssetTypeOptionsText(){
+    Array<OutputAssetType, 5u> values;
+    values[0u] = OutputAssetType::Bunch;
+    values[1u] = OutputAssetType::Mesh;
+    values[2u] = OutputAssetType::Model;
+    values[3u] = OutputAssetType::Skeleton;
+    values[4u] = OutputAssetType::Skin;
+
+    String out;
+    out.reserve(64u);
+    for(usize i = 0u; i < values.size(); ++i){
+        if(i > 0u)
+            out.append(SelectOptionListSeparator(i + 1u == values.size()));
+        out.append(OutputAssetTypeText(values[i]));
+    }
+    return out;
+}
+
+String OutputAssetTypeErrorText(){
+    const String options = OutputAssetTypeOptionsText();
+    String out;
+    out.reserve(32u + options.size());
+    out.append("Asset type must be ");
+    out.append(options);
+    return out;
+}
+
+Expected<OutputAssetType> ParseAssetTypeText(in StringView value){
+    const StringView trimmed = TrimView(value);
+    Array<OutputAssetType, 5u> values;
+    values[0u] = OutputAssetType::Bunch;
+    values[1u] = OutputAssetType::Mesh;
+    values[2u] = OutputAssetType::Model;
+    values[3u] = OutputAssetType::Skeleton;
+    values[4u] = OutputAssetType::Skin;
+    for(usize i = 0u; i < values.size(); ++i){
+        if(EqualsAsciiIgnoreCase(trimmed, OutputAssetTypeText(values[i])))
+            return values[i];
+    }
+    return MakeUnexpected(Failure());
+}
+
+String NormalModeOptionsText(){
+    Array<NormalMode, 3u> values;
+    values[0u] = NormalMode::Imported;
+    values[1u] = NormalMode::Smooth;
+    values[2u] = NormalMode::Regenerate;
+
+    String out;
+    out.reserve(48u);
+    for(usize i = 0u; i < values.size(); ++i){
+        if(i > 0u)
+            out.append(SelectOptionListSeparator(i + 1u == values.size()));
+        out.append(NormalModeText(values[i]));
+    }
+    return out;
+}
+
+String NormalModeErrorText(){
+    const String options = NormalModeOptionsText();
+    String out;
+    out.reserve(32u + options.size());
+    out.append("normal mode must be ");
+    out.append(options);
+    return out;
+}
+
+Expected<NormalMode> ParseNormalModeText(in StringView value){
+    const StringView trimmed = TrimView(value);
+    Array<NormalMode, 3u> values;
+    values[0u] = NormalMode::Imported;
+    values[1u] = NormalMode::Smooth;
+    values[2u] = NormalMode::Regenerate;
+    for(usize i = 0u; i < values.size(); ++i){
+        if(EqualsAsciiIgnoreCase(trimmed, NormalModeText(values[i])))
+            return values[i];
+    }
+    return MakeUnexpected(Failure());
+}
+
+String NormalizeFbxOptionText(in StringView text){
+    const StringView trimmed = TrimView(text);
+    String out;
+    out.reserve(trimmed.size());
+    for(usize i = 0u; i < trimmed.size(); ++i)
+        out.push_back(cast<u8>(ToAsciiLower(trimmed[i])));
+    return out;
+}
+
+Expected<StringView> NextFbxColorComponentToken(in StringView text, mut usize inOutCursor){
+    while(inOutCursor < text.size() && (IsAsciiSpace(text[inOutCursor]) || text[inOutCursor] == s_AsciiCommaByte))
+        ++inOutCursor;
+    if(inOutCursor >= text.size())
+        return MakeUnexpected(Failure());
+    const usize start = inOutCursor;
+    while(inOutCursor < text.size() && !IsAsciiSpace(text[inOutCursor]) && text[inOutCursor] != s_AsciiCommaByte)
+        ++inOutCursor;
+    return text.substr(start, inOutCursor - start);
+}
+
+Expected<Vec4> ParseFbxColorText(in StringView text){
+    usize cursor = 0u;
+    const Expected<StringView> rToken = NextFbxColorComponentToken(text, cursor);
+    if(!rToken.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<StringView> gToken = NextFbxColorComponentToken(text, cursor);
+    if(!gToken.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<StringView> bToken = NextFbxColorComponentToken(text, cursor);
+    if(!bToken.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<StringView> aToken = NextFbxColorComponentToken(text, cursor);
+    if(!aToken.has_value())
+        return MakeUnexpected(Failure());
+    if(NextFbxColorComponentToken(text, cursor).has_value())
+        return MakeUnexpected(Failure());
+
+    const Expected<f32> red = ParseF32(rToken.value());
+    if(!red.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<f32> green = ParseF32(gToken.value());
+    if(!green.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<f32> blue = ParseF32(bToken.value());
+    if(!blue.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<f32> alpha = ParseF32(aToken.value());
+    if(!alpha.has_value())
+        return MakeUnexpected(Failure());
+
+    return TryMakeFiniteColorVec4(red.value(), green.value(), blue.value(), alpha.value());
+}
+
+Path DefaultFbxOutputPath(in StringView inputPath){
+    Path outputPath(inputPath);
+    outputPath.replaceExtension(s_NwbFileExtensionText);
+    return outputPath;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

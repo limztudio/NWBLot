@@ -2,10 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/task/gpu/task_graph.h>
 
 
@@ -39,7 +53,17 @@ public:
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] NWB_INLINE static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        Core::Texture* const destination = context.declarations.textureForResource(payload.destination);
+        if(!CanRecordFloatTextureClear(destination != nullptr, commandList.isRenderPassActive()))
+            return false;
+
+        const Core::GpuClearTextureTaskDesc clearDesc{ .destination = payload.destination, .subresources = payload.subresources, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = payload.floatValue, };
+        if(context.commandIrCapture && !context.commandIrCapture->captureClearTexture(context.task, context.packet, context.queue, payload.destination, clearDesc))
+            return false;
+        commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);
+        return true;
+    }
 };
 
 
@@ -56,15 +80,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderKernelTaskGraphFloatClearTasksAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

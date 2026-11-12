@@ -10,19 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_CompilerStatisticsProbeCapacity = 1024;
-const u32 s_GatherBenchmarkWarmupFrames = 96u;
-const u32 s_GatherBenchmarkSampleFrames = 256u;
-const u32 s_GatherBenchmarkDrainFrames = 32u;
-const u32 s_GatherBenchmarkCpuScopeCount = 8u;
-const u32 s_GatherBenchmarkGpuScopeCount = 18u;
-const u32 s_GatherBenchmarkArenaScopeCount = 3u;
+[header]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
 #include <core/alloc/general.h>
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
@@ -34,29 +28,17 @@ native{
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 
+namespace NWB::Tests::Smoke{
+using PerfSessionReport = Core::Perf::SessionReport;
+using PerfMemorySnapshot = Core::Perf::MemorySnapshot;
+namespace MemorySource = Core::Perf::MemorySource;
+using NameTextErrorEnum = NameTextError::Enum;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Impl{
-    class RendererSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::Smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+[[nodiscard]] NWB_INLINE Expected<Name, NameTextError::Enum> SmokeNameFromText(const AStringView text){
+    return Name::FromText(text);
+}
+using Core::Perf::TimingStats;
+using Core::Alloc::GlobalArena;
 
 class RendererCompilerStatisticsProbe final : public Core::IRenderPass{
 private:
@@ -71,23 +53,182 @@ private:
         b8 valid = false;
     };
 
+    struct DurationField{
+        AStringView name;
+        f64 Core::GpuTaskGraphCompileStatistics::*member;
+    };
+
+    struct CountField{
+        AStringView name;
+        usize Core::GpuTaskGraphCompileStatistics::*member;
+    };
 
 private:
-    static constexpr usize s_Capacity = s_CompilerStatisticsProbeCapacity;
+    static constexpr usize s_Capacity = 1024u;
+    static constexpr AStringView s_ValidStatus = "valid";
 
+    static constexpr Array<DurationField, 12> s_Durations = {{
+        { "declaration", &Core::GpuTaskGraphCompileStatistics::declarationSeconds },
+        { "analysis", &Core::GpuTaskGraphCompileStatistics::analysisSeconds },
+        { "validation", &Core::GpuTaskGraphCompileStatistics::validationSeconds },
+        { "dependency_analysis", &Core::GpuTaskGraphCompileStatistics::dependencyAnalysisSeconds },
+        { "hazard_analysis", &Core::GpuTaskGraphCompileStatistics::hazardAnalysisSeconds },
+        { "topological_order", &Core::GpuTaskGraphCompileStatistics::topologicalOrderSeconds },
+        { "queue_assignment", &Core::GpuTaskGraphCompileStatistics::queueAssignmentSeconds },
+        { "planning", &Core::GpuTaskGraphCompileStatistics::planningSeconds },
+        { "total", &Core::GpuTaskGraphCompileStatistics::totalSeconds },
+        { "packetization", &Core::GpuTaskGraphCompileStatistics::packetizationSeconds },
+        { "resource_state_planning", &Core::GpuTaskGraphCompileStatistics::resourceStatePlanningSeconds },
+        { "packet_dependency_planning", &Core::GpuTaskGraphCompileStatistics::packetDependencyPlanningSeconds },
+    }};
+
+    static constexpr Array<CountField, 19> s_Counts = {{
+        { "task", &Core::GpuTaskGraphCompileStatistics::taskCount },
+        { "resource", &Core::GpuTaskGraphCompileStatistics::resourceCount },
+        { "resource_use", &Core::GpuTaskGraphCompileStatistics::resourceUseCount },
+        { "resource_version", &Core::GpuTaskGraphCompileStatistics::resourceVersionCount },
+        { "resource_version_edge", &Core::GpuTaskGraphCompileStatistics::resourceVersionEdgeCount },
+        { "explicit_dependency", &Core::GpuTaskGraphCompileStatistics::explicitDependencyCount },
+        { "inferred_dependency", &Core::GpuTaskGraphCompileStatistics::inferredDependencyCount },
+        { "external_dependency", &Core::GpuTaskGraphCompileStatistics::externalDependencyCount },
+        { "packet", &Core::GpuTaskGraphCompileStatistics::packetCount },
+        { "packet_dependency", &Core::GpuTaskGraphCompileStatistics::packetDependencyCount },
+        { "packet_external_dependency", &Core::GpuTaskGraphCompileStatistics::packetExternalDependencyCount },
+        { "cross_queue_packet_dependency", &Core::GpuTaskGraphCompileStatistics::crossQueuePacketDependencyCount },
+        { "prologue_state_seed", &Core::GpuTaskGraphCompileStatistics::prologueStateSeedCount },
+        { "prologue_barrier", &Core::GpuTaskGraphCompileStatistics::prologueBarrierCount },
+        { "epilogue_barrier", &Core::GpuTaskGraphCompileStatistics::epilogueBarrierCount },
+        { "state_export_barrier", &Core::GpuTaskGraphCompileStatistics::stateExportBarrierCount },
+        { "resource_set", &Core::GpuTaskGraphCompileStatistics::resourceSetCount },
+        { "direct_resource_use", &Core::GpuTaskGraphCompileStatistics::directResourceUseCount },
+        { "expanded_resource_set_member_use", &Core::GpuTaskGraphCompileStatistics::expandedResourceSetMemberUseCount },
+    }};
 
 public:
-    RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept;
-    virtual ~RendererCompilerStatisticsProbe()noexcept override;
+    RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept
+        : IRenderPass(graphics)
+        , m_samples(arena)
+        , m_output(arena)
+    {}
 
+    virtual ~RendererCompilerStatisticsProbe()noexcept override{
+        stop();
+    }
 
 public:
-    [[nodiscard]] b8 start(AStringView path, Impl::RendererSystem& renderer);
-    void stop();
-    [[nodiscard]] b8 write()const;
+    [[nodiscard]] b8 start(const AStringView path, Impl::RendererSystem& renderer){
+        if(m_enabled || path.empty())
+            return false;
+        m_output.assign(path);
+        m_samples.reserve(s_Capacity);
+        m_renderer = &renderer;
+        getGraphics().addRenderPassToBack(*this);
+        m_registered = true;
+        m_enabled = true;
+        return true;
+    }
+
+    void stop(){
+        if(m_registered){
+            getGraphics().removeRenderPass(*this);
+            m_registered = false;
+        }
+        m_renderer = nullptr;
+    }
+
+    [[nodiscard]] b8 write()const{
+        if(!m_enabled)
+            return true;
+        if(m_registered)
+            return false;
+        OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
+        if(!output.is_open())
+            return false;
+        output.precision(17);
+        output << "{\"type\":\"compiler_statistics_configuration\",\"schema\":1,\"capacity\":" << s_Capacity << "}\n";
+        usize invalid = 0u;
+        for(usize index = 0u; index < m_samples.size(); ++index){
+            const Sample& sample = m_samples[index];
+            AStringView status = sample.valid ? s_ValidStatus : "invalid_snapshot";
+            if(sample.valid){
+                for(const auto& field : s_Durations){
+                    const f64 seconds = sample.compile.*field.member;
+                    if(!IsFinite(seconds) || seconds < 0.0){
+                        status = "invalid_duration";
+                        break;
+                    }
+                }
+                for(usize previous = 0u; previous < index; ++previous){
+                    const Sample& prior = m_samples[previous];
+                    if(
+                        prior.valid
+                        && prior.compile.graphGeneration == sample.compile.graphGeneration
+                        && prior.compile.planGeneration == sample.compile.planGeneration
+                        && prior.compile.deviceGeneration == sample.compile.deviceGeneration
+                    ){
+                        status = "duplicate_plan";
+                        break;
+                    }
+                }
+            }
+            if(index != 0u && sample.sourceFrame <= m_samples[index - 1u].sourceFrame)
+                status = "non_monotonic_frame";
+            output << "{\"type\":\"compiler_statistics\",\"sequence\":" << index << ",\"source_frame\":" << sample.sourceFrame << ",\"status\":\"" << status << '\"';
+            if(status == s_ValidStatus){
+                output << ",\"identity\":{\"graph_generation\":" << sample.compile.graphGeneration
+                    << ",\"plan_generation\":" << sample.compile.planGeneration
+                    << ",\"device_generation\":" << sample.compile.deviceGeneration
+                    << ",\"recording_attempt_generation\":" << sample.recordingAttempt << "},\"seconds\":{";
+                b8 first = true;
+                for(const auto& field : s_Durations){
+                    if(!first)
+                        output << ',';
+                    first = false;
+                    output << '\"' << field.name << "\":" << sample.compile.*field.member;
+                }
+                output << "},\"counts\":{";
+                first = true;
+                for(const auto& field : s_Counts){
+                    if(!first)
+                        output << ',';
+                    first = false;
+                    output << '\"' << field.name << "\":" << sample.compile.*field.member;
+                }
+                output << "},\"submission\":{\"accepted_packets\":" << sample.acceptedPackets << ",\"accepted_tasks\":" << sample.acceptedTasks << ",\"rejected_packets\":" << sample.rejectedPackets << ",\"rejected_tasks\":" << sample.rejectedTasks << '}';
+            }
+            else
+                ++invalid;
+            output << "}\n";
+        }
+        const u64 overflow = m_attempts - m_samples.size();
+        const b8 complete = !m_samples.empty() && overflow == 0u;
+        output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
+        output.close();
+        return output.good() && complete;
+    }
+
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-    virtual void render(Core::Framebuffer*)override;
 
+    virtual void render(Core::Framebuffer*)override{
+        if(!m_renderer)
+            return;
+        ++m_attempts;
+        if(m_samples.size() == s_Capacity)
+            return;
+        Sample sample;
+        sample.sourceFrame = getGraphics().getFrameIndex();
+        const auto statistics = m_renderer->deferredTaskGraphRuntimeStatistics();
+        sample.valid = statistics.valid() && statistics.compile.deviceGeneration != 0u;
+        if(sample.valid){
+            sample.compile = statistics.compile;
+            sample.recordingAttempt = statistics.recording.recordingAttemptGeneration;
+            sample.acceptedPackets = statistics.submission.acceptedPacketCount;
+            sample.acceptedTasks = statistics.submission.acceptedTaskCount;
+            sample.rejectedPackets = statistics.submission.rejectedPacketCount;
+            sample.rejectedTasks = statistics.submission.rejectedTaskCount;
+        }
+        m_samples.push_back(Move(sample));
+    }
 
 private:
     Vector<Sample, Core::Alloc::GlobalArena> m_samples;
@@ -97,438 +238,316 @@ private:
     b8 m_enabled = false;
     b8 m_registered = false;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_renderer_compiler_statistics_probe{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_ValidStatus = "valid";
-
-struct DurationField{
-    AStringView name;
-    f64 Core::GpuTaskGraphCompileStatistics::*member;
-};
-
-struct CountField{
-    AStringView name;
-    usize Core::GpuTaskGraphCompileStatistics::*member;
-};
-
-static constexpr Array<DurationField, 12> s_Durations = {{
-    { "declaration", &Core::GpuTaskGraphCompileStatistics::declarationSeconds },
-    { "analysis", &Core::GpuTaskGraphCompileStatistics::analysisSeconds },
-    { "validation", &Core::GpuTaskGraphCompileStatistics::validationSeconds },
-    { "dependency_analysis", &Core::GpuTaskGraphCompileStatistics::dependencyAnalysisSeconds },
-    { "hazard_analysis", &Core::GpuTaskGraphCompileStatistics::hazardAnalysisSeconds },
-    { "topological_order", &Core::GpuTaskGraphCompileStatistics::topologicalOrderSeconds },
-    { "queue_assignment", &Core::GpuTaskGraphCompileStatistics::queueAssignmentSeconds },
-    { "planning", &Core::GpuTaskGraphCompileStatistics::planningSeconds },
-    { "total", &Core::GpuTaskGraphCompileStatistics::totalSeconds },
-    { "packetization", &Core::GpuTaskGraphCompileStatistics::packetizationSeconds },
-    { "resource_state_planning", &Core::GpuTaskGraphCompileStatistics::resourceStatePlanningSeconds },
-    { "packet_dependency_planning", &Core::GpuTaskGraphCompileStatistics::packetDependencyPlanningSeconds },
-}};
-
-static constexpr Array<CountField, 19> s_Counts = {{
-    { "task", &Core::GpuTaskGraphCompileStatistics::taskCount },
-    { "resource", &Core::GpuTaskGraphCompileStatistics::resourceCount },
-    { "resource_use", &Core::GpuTaskGraphCompileStatistics::resourceUseCount },
-    { "resource_version", &Core::GpuTaskGraphCompileStatistics::resourceVersionCount },
-    { "resource_version_edge", &Core::GpuTaskGraphCompileStatistics::resourceVersionEdgeCount },
-    { "explicit_dependency", &Core::GpuTaskGraphCompileStatistics::explicitDependencyCount },
-    { "inferred_dependency", &Core::GpuTaskGraphCompileStatistics::inferredDependencyCount },
-    { "external_dependency", &Core::GpuTaskGraphCompileStatistics::externalDependencyCount },
-    { "packet", &Core::GpuTaskGraphCompileStatistics::packetCount },
-    { "packet_dependency", &Core::GpuTaskGraphCompileStatistics::packetDependencyCount },
-    { "packet_external_dependency", &Core::GpuTaskGraphCompileStatistics::packetExternalDependencyCount },
-    { "cross_queue_packet_dependency", &Core::GpuTaskGraphCompileStatistics::crossQueuePacketDependencyCount },
-    { "prologue_state_seed", &Core::GpuTaskGraphCompileStatistics::prologueStateSeedCount },
-    { "prologue_barrier", &Core::GpuTaskGraphCompileStatistics::prologueBarrierCount },
-    { "epilogue_barrier", &Core::GpuTaskGraphCompileStatistics::epilogueBarrierCount },
-    { "state_export_barrier", &Core::GpuTaskGraphCompileStatistics::stateExportBarrierCount },
-    { "resource_set", &Core::GpuTaskGraphCompileStatistics::resourceSetCount },
-    { "direct_resource_use", &Core::GpuTaskGraphCompileStatistics::directResourceUseCount },
-    { "expanded_resource_set_member_use", &Core::GpuTaskGraphCompileStatistics::expandedResourceSetMemberUseCount },
-}};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept
-    : IRenderPass(graphics)
-    , m_samples(arena)
-    , m_output(arena)
-{}
-
-RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe()noexcept{ stop(); }
-
-b8 RendererCompilerStatisticsProbe::start(const AStringView path, Impl::RendererSystem& renderer){
-    if(m_enabled || path.empty())
-        return false;
-    m_output.assign(path);
-    m_samples.reserve(s_Capacity);
-    m_renderer = &renderer;
-    getGraphics().addRenderPassToBack(*this);
-    m_registered = true;
-    m_enabled = true;
-    return true;
 }
 
-void RendererCompilerStatisticsProbe::stop(){
-    if(m_registered){
-        getGraphics().removeRenderPass(*this);
-        m_registered = false;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_CompilerStatisticsProbeCapacity = 1024;
+const u32 s_GatherBenchmarkWarmupFrames = 96u;
+const u32 s_GatherBenchmarkSampleFrames = 256u;
+const u32 s_GatherBenchmarkDrainFrames = 32u;
+const u32 s_GatherBenchmarkCpuScopeCount = 8u;
+const u32 s_GatherBenchmarkGpuScopeCount = 18u;
+const u32 s_GatherBenchmarkArenaScopeCount = 3u;
+
+StringView GatherBenchmarkCpuScopeName(in u32 scope){
+    switch(scope){
+    case 0u: return "graphics.frame";
+    case 1u: return "graphics.frame_preamble";
+    case 2u: return "graphics.prepare_resources";
+    case 3u: return "graphics.render_passes";
+    case 4u: return "graphics.render";
+    case 5u: return "frame.project_update";
+    case 6u: return "graphics.present";
     }
-    m_renderer = nullptr;
+    return "graphics.begin_frame";
 }
 
-b8 RendererCompilerStatisticsProbe::write()const{
-    if(!m_enabled)
-        return true;
-    if(m_registered)
-        return false;
-    OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
-    if(!output.is_open())
-        return false;
-    output.precision(17);
-    output << "{\"type\":\"compiler_statistics_configuration\",\"schema\":1,\"capacity\":" << s_Capacity << "}\n";
-    usize invalid = 0u;
-    for(usize index = 0u; index < m_samples.size(); ++index){
-        const Sample& sample = m_samples[index];
-        AStringView status = sample.valid ? __hidden_renderer_compiler_statistics_probe::s_ValidStatus : "invalid_snapshot";
-        if(sample.valid){
-            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
-                const f64 seconds = sample.compile.*field.member;
-                if(!IsFinite(seconds) || seconds < 0.0){
-                    status = "invalid_duration";
-                    break;
-                }
-            }
-            for(usize previous = 0u; previous < index; ++previous){
-                const Sample& prior = m_samples[previous];
-                if(prior.valid && prior.compile.graphGeneration == sample.compile.graphGeneration && prior.compile.planGeneration == sample.compile.planGeneration && prior.compile.deviceGeneration == sample.compile.deviceGeneration){
-                    status = "duplicate_plan";
-                    break;
-                }
-            }
-        }
-        if(index != 0u && sample.sourceFrame <= m_samples[index - 1u].sourceFrame)
-            status = "non_monotonic_frame";
-        output << "{\"type\":\"compiler_statistics\",\"sequence\":" << index << ",\"source_frame\":" << sample.sourceFrame << ",\"status\":\"" << status << '\"';
-        if(status == __hidden_renderer_compiler_statistics_probe::s_ValidStatus){
-            output << ",\"identity\":{\"graph_generation\":" << sample.compile.graphGeneration
-                << ",\"plan_generation\":" << sample.compile.planGeneration
-                << ",\"device_generation\":" << sample.compile.deviceGeneration
-                << ",\"recording_attempt_generation\":" << sample.recordingAttempt << "},\"seconds\":{";
-            b8 first = true;
-            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
-                if(!first)
-                    output << ',';
-                first = false;
-                output << '\"' << field.name << "\":" << sample.compile.*field.member;
-            }
-            output << "},\"counts\":{";
-            first = true;
-            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Counts){
-                if(!first)
-                    output << ',';
-                first = false;
-                output << '\"' << field.name << "\":" << sample.compile.*field.member;
-            }
-            output << "},\"submission\":{\"accepted_packets\":" << sample.acceptedPackets << ",\"accepted_tasks\":" << sample.acceptedTasks << ",\"rejected_packets\":" << sample.rejectedPackets << ",\"rejected_tasks\":" << sample.rejectedTasks << '}';
-        }
-        else
-            ++invalid;
-        output << "}\n";
+StringView GatherBenchmarkGpuScopeName(in u32 scope){
+    switch(scope){
+    case 0u: return "render.frame";
+    case 1u: return "render.opaque_regular";
+    case 2u: return "render.shadow_visibility";
+    case 3u: return "render.deferred_lighting";
+    case 4u: return "render.deferred_composite";
+    case 5u: return "render.deferred_present";
+    case 6u: return "render.avboit_clear";
+    case 7u: return "render.avboit_occupancy";
+    case 8u: return "render.avboit_depth_warp";
+    case 9u: return "render.avboit_extinction";
+    case 10u: return "render.avboit_integration";
+    case 11u: return "render.avboit_accumulate";
+    case 12u: return "render.reflection_classify";
+    case 13u: return "render.reflection_build_args";
+    case 14u: return "render.reflection_hardware";
+    case 15u: return "render.reflection_depth_pyramid";
+    case 16u: return "render.reflection_temporal";
     }
-    const u64 overflow = m_attempts - m_samples.size();
-    const b8 complete = !m_samples.empty() && overflow == 0u;
-    output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
-    output.close();
-    return output.good() && complete;
+    return "render.reflection_spatial";
 }
 
-void RendererCompilerStatisticsProbe::render(Core::Framebuffer*){
-    if(!m_renderer)
-        return;
-    ++m_attempts;
-    if(m_samples.size() == s_Capacity)
-        return;
-    Sample sample;
-    sample.sourceFrame = getGraphics().getFrameIndex();
-    const auto statistics = m_renderer->deferredTaskGraphRuntimeStatistics();
-    sample.valid = statistics.valid() && statistics.compile.deviceGeneration != 0u;
-    if(sample.valid){
-        sample.compile = statistics.compile;
-        sample.recordingAttempt = statistics.recording.recordingAttemptGeneration;
-        sample.acceptedPackets = statistics.submission.acceptedPacketCount;
-        sample.acceptedTasks = statistics.submission.acceptedTaskCount;
-        sample.rejectedPackets = statistics.submission.rejectedPacketCount;
-        sample.rejectedTasks = statistics.submission.rejectedTaskCount;
+StringView GatherBenchmarkArenaScopeName(in u32 scope){
+    switch(scope){
+    case 0u: return "impl/ecs_render/prepare";
+    case 1u: return "impl/ecs_render/render";
     }
-    m_samples.push_back(Move(sample));
+    return "impl/ecs_render/task_graph";
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererGatherBenchmarkProbe final : NoCopy{
-public:
-    static constexpr u32 s_WarmupFrames = s_GatherBenchmarkWarmupFrames;
-    static constexpr u32 s_SampleFrames = s_GatherBenchmarkSampleFrames;
-    static constexpr u32 s_DrainFrames = s_GatherBenchmarkDrainFrames;
-    static constexpr u32 s_CpuScopeCount = s_GatherBenchmarkCpuScopeCount;
-    static constexpr u32 s_GpuScopeCount = s_GatherBenchmarkGpuScopeCount;
-    static constexpr u32 s_ArenaScopeCount = s_GatherBenchmarkArenaScopeCount;
-    static constexpr Array<StringView, s_CpuScopeCount> s_CpuNames = {
-        "graphics.frame", "graphics.frame_preamble", "graphics.prepare_resources", "graphics.render_passes",
-        "graphics.render", "frame.project_update", "graphics.present", "graphics.begin_frame",
-    };
-    static constexpr Array<StringView, s_GpuScopeCount> s_GpuNames = {
-        "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
-        "render.deferred_composite", "render.deferred_present", "render.avboit_clear", "render.avboit_occupancy",
-        "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate",
-        "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
-        "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
-    };
-    static constexpr Array<StringView, s_ArenaScopeCount> s_ArenaNames = { "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph", };
+class RendererGatherCpuSample{
+    public Array<PerfMemorySnapshot, s_GatherBenchmarkArenaScopeCount> memory;
+    public Array<f64, s_GatherBenchmarkCpuScopeCount> milliseconds;
+    public u64 sourceFrame = 0u;
+    public u64 publishFrame = 0u;
+}
 
+class RendererGatherGpuSample{
+    public RendererGatherGpuSample(){
+        this.timing = TimingStats();
+        this.scope = 0u;
+    }
 
-private:
-    struct CpuSample{
-        Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> memory = {};
-        Array<f64, s_CpuScopeCount> milliseconds = {};
-        u64 sourceFrame = 0u;
-        u64 publishFrame = 0u;
-    };
-    struct GpuSample{
-        Core::Perf::TimingStats timing;
-        u32 scope = 0u;
-    };
+    public RendererGatherGpuSample(in TimingStats stats, in u32 scopeIndex){
+        this.timing = stats;
+        this.scope = scopeIndex;
+    }
 
+    public TimingStats timing;
+    public u32 scope;
+}
 
-private:
-    static void WriteMemory(Span<const Core::Perf::MemorySnapshot> snapshots, OutputFileStream& output);
-
-
-public:
-    explicit RendererGatherBenchmarkProbe(Core::Alloc::GlobalArena& arena);
-
-
-public:
-    [[nodiscard]] b8 poll(const Core::Perf::SessionReport& report, b8 memoryEnabled);
-
-    [[nodiscard]] b8 finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
-
-    [[nodiscard]] u32 successfulFrames()const noexcept{ return m_successfulFrames; }
-
-    [[nodiscard]] b8 write(AStringView path, AStringView workload, b8 memoryEnabled, u32 renderers, u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;
-
-
-private:
-    Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> m_memoryBaseline = {};
-    Array<u64, s_GpuScopeCount> m_gpuPublish = {};
-    Vector<CpuSample, Core::Alloc::GlobalArena> m_cpu;
-    Vector<GpuSample, Core::Alloc::GlobalArena> m_gpu;
-    Array<b8, s_GpuScopeCount> m_hasGpuPublication = {};
-    u64 m_lastPublish = 0u;
-    u32 m_successfulFrames = 0u;
-    b8 m_hasPublication = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_renderer_gather_benchmark_probe{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr f64 s_MillisecondsPerSecond = s_PresentationPacingMsPerSecond;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererGatherBenchmarkProbe::WriteMemory(const Span<const Core::Perf::MemorySnapshot> snapshots, OutputFileStream& output){
-    output << '{';
-    for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
+void AppendGatherBenchmarkMemory(in Span<PerfMemorySnapshot> snapshots, mut String out){
+    out.push_back('{');
+    for(u32 scope = 0u; scope < s_GatherBenchmarkArenaScopeCount; ++scope){
         if(scope != 0u)
-            output << ',';
-        const auto& snapshot = snapshots[scope];
-        output << '"' << s_ArenaNames[scope] << "\":{\"present\":" << (snapshot.valid() ? "true" : "false")
-            << ",\"frame\":" << snapshot.frameIndex << ",\"reserved\":" << snapshot.reservedBytes
-            << ",\"used\":" << snapshot.usedBytes << ",\"historical_arena_peak\":" << snapshot.peakUsedBytes
-            << ",\"allocations\":" << snapshot.allocationCount << ",\"reallocations\":" << snapshot.reallocationCount
-            << ",\"deallocations\":" << snapshot.deallocationCount << '}';
+            out.push_back(',');
+        const PerfMemorySnapshot snapshot = snapshots[scope];
+        StringView presentText = "false";
+        if(snapshot.valid())
+            presentText = "true";
+        StringAppendFormat(
+            out,
+            "\"{}\":{{\"present\":{},\"frame\":{},\"reserved\":{},\"used\":{},\"historical_arena_peak\":{},\"allocations\":{},\"reallocations\":{},\"deallocations\":{}}}",
+            GatherBenchmarkArenaScopeName(scope),
+            presentText,
+            snapshot.frameIndex,
+            snapshot.reservedBytes,
+            snapshot.usedBytes,
+            snapshot.peakUsedBytes,
+            snapshot.allocationCount,
+            snapshot.reallocationCount,
+            snapshot.deallocationCount
+        );
     }
-    output << '}';
+    out.push_back('}');
 }
 
-RendererGatherBenchmarkProbe::RendererGatherBenchmarkProbe(Core::Alloc::GlobalArena& arena)
-    : m_cpu(arena)
-    , m_gpu(arena)
-{
-    m_cpu.reserve(s_SampleFrames);
-    m_gpu.reserve((s_WarmupFrames + s_SampleFrames + s_DrainFrames) * s_GpuScopeCount);
-}
+class RendererGatherBenchmarkProbe{
+    public RendererGatherBenchmarkProbe(){
+        this.m_cpu.reserve(s_GatherBenchmarkSampleFrames);
+        this.m_gpu.reserve((s_GatherBenchmarkWarmupFrames + s_GatherBenchmarkSampleFrames + s_GatherBenchmarkDrainFrames) * s_GatherBenchmarkGpuScopeCount);
+    }
 
-b8 RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, const b8 memoryEnabled){
-    const auto& frame = report.cpuTiming.stats(Name(s_CpuNames[0u]));
-    if(!frame.valid() || (m_hasPublication && frame.publishFrameIndex == m_lastPublish))
-        return true;
-    if((m_hasPublication && frame.publishFrameIndex < m_lastPublish) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex)
-        return false;
-    const auto& failedPreparation = report.cpuTiming.stats(Name(s_PresentationTimingNamePrepareResourcesFailed));
-    if(failedPreparation.valid() && failedPreparation.publishFrameIndex == frame.publishFrameIndex)
-        return false;
-    const auto& preamble = report.cpuTiming.stats(Name(s_PresentationTimingNameFramePreamble));
-    if((!preamble.valid() || preamble.publishFrameIndex != frame.publishFrameIndex) && m_successfulFrames == 0u)
-        return true;
-    CpuSample sample;
-    sample.sourceFrame = frame.firstSampleFrameIndex;
-    sample.publishFrame = frame.publishFrameIndex;
-    for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
-        const auto scopeName = Name::FromText(s_CpuNames[scope]);
-        if(!scopeName)
-            return false;
-        const auto& timing = report.cpuTiming.stats(*scopeName);
-        if(!timing.valid() || timing.sampleCount != 1u || timing.publishFrameIndex != frame.publishFrameIndex || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame)
-            return false;
-        sample.milliseconds[scope] = timing.seconds;
+    public RendererGatherBenchmarkProbe(mut GlobalArena arena){
+        this.m_cpu.reserve(s_GatherBenchmarkSampleFrames);
+        this.m_gpu.reserve((s_GatherBenchmarkWarmupFrames + s_GatherBenchmarkSampleFrames + s_GatherBenchmarkDrainFrames) * s_GatherBenchmarkGpuScopeCount);
     }
-    u32 scope = 0u;
-    for(; scope + 1u < s_CpuScopeCount; scope += 2u){
-        const SIMDVectorDouble milliseconds = VectorDoubleScale(VectorDoubleSet(sample.milliseconds[scope], sample.milliseconds[scope + 1u], 0.0, 0.0), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
-        sample.milliseconds[scope] = VectorDoubleGetX(milliseconds);
-        sample.milliseconds[scope + 1u] = VectorDoubleGetY(milliseconds);
-    }
-    if(scope < s_CpuScopeCount)
-        sample.milliseconds[scope] = sample.milliseconds[scope] * (__hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
-    if(memoryEnabled){
-        for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
-            const auto arenaName = Name::FromText(s_ArenaNames[scope]);
-            if(!arenaName)
+
+    public b8 poll(in PerfSessionReport report, in b8 memoryEnabled){
+        const Expected<Name, NameTextErrorEnum> frameScopeName = SmokeNameFromText(GatherBenchmarkCpuScopeName(0u));
+        if(!frameScopeName.has_value())
+            return false;
+        const TimingStats frame = report.cpuTiming.stats(frameScopeName.value());
+        if(!frame.valid() || (this.m_hasPublication && frame.publishFrameIndex == this.m_lastPublish))
+            return true;
+        if((this.m_hasPublication && frame.publishFrameIndex < this.m_lastPublish) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex)
+            return false;
+
+        const TimingStats failedPreparation = report.cpuTiming.stats(s_PresentationTimingNamePrepareResourcesFailed);
+        if(failedPreparation.valid() && failedPreparation.publishFrameIndex == frame.publishFrameIndex)
+            return false;
+
+        const TimingStats preamble = report.cpuTiming.stats(s_PresentationTimingNameFramePreamble);
+        if((!preamble.valid() || preamble.publishFrameIndex != frame.publishFrameIndex) && this.m_successfulFrames == 0u)
+            return true;
+
+        const u64 publishFrame = frame.publishFrameIndex;
+        const u64 sourceFrame = frame.firstSampleFrameIndex;
+
+        RendererGatherCpuSample sample = RendererGatherCpuSample();
+        sample.sourceFrame = sourceFrame;
+        sample.publishFrame = publishFrame;
+        for(u32 scope = 0u; scope < s_GatherBenchmarkCpuScopeCount; ++scope){
+            const Expected<Name, NameTextErrorEnum> scopeName = SmokeNameFromText(GatherBenchmarkCpuScopeName(scope));
+            if(!scopeName.has_value())
                 return false;
-            const auto& snapshot = report.memory.snapshot(*arenaName, Core::Perf::MemorySource::Arena);
-            if(snapshot.valid() && snapshot.frameIndex != sample.publishFrame)
+            const TimingStats timing = report.cpuTiming.stats(scopeName.value());
+            if(
+                !timing.valid()
+                || timing.sampleCount != 1u
+                || timing.publishFrameIndex != publishFrame
+                || timing.firstSampleFrameIndex != sourceFrame
+                || timing.lastSampleFrameIndex != sourceFrame
+            )
                 return false;
-            sample.memory[scope] = snapshot;
+            sample.milliseconds[scope] = timing.seconds;
         }
-    }
-    for(u32 scope = 0u; scope < s_GpuScopeCount; ++scope){
-        const auto scopeName = Name::FromText(s_GpuNames[scope]);
-        if(!scopeName)
-            return false;
-        const auto& timing = report.gpuTiming.stats(*scopeName);
-        if(!timing.valid() || (m_hasGpuPublication[scope] && timing.publishFrameIndex == m_gpuPublish[scope]))
-            continue;
-        if(m_hasGpuPublication[scope] && timing.publishFrameIndex < m_gpuPublish[scope])
-            return false;
-        m_hasGpuPublication[scope] = true;
-        m_gpuPublish[scope] = timing.publishFrameIndex;
-        m_gpu.push_back(GpuSample{ timing, scope });
-    }
-    m_lastPublish = frame.publishFrameIndex;
-    m_hasPublication = true;
-    ++m_successfulFrames;
-    if(m_successfulFrames == s_WarmupFrames)
-        m_memoryBaseline = sample.memory;
-    if(m_successfulFrames > s_WarmupFrames && m_cpu.size() < s_SampleFrames)
-        m_cpu.push_back(Move(sample));
-    return true;
-}
 
-b8 RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const b8 memoryEnabled, const u32 renderers, const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
-    const b8 complete = finished() && m_cpu.size() == s_SampleFrames;
-    const AString<Core::Alloc::GlobalArena> outputPath(path, m_cpu.get_allocator());
-    OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
-    if(!output.is_open())
-        return false;
-    output.setf(s_FileFormatFixed, s_FileFormatFloatField);
-    output.precision(9);
-    output << "{\"type\":\"configuration\",\"schema\":2,\"workload\":\"" << workload
-        << "\",\"mode\":\"" << (memoryEnabled ? "memory" : "timing")
-        << "\",\"width\":960,\"height\":720,\"warmup\":" << s_WarmupFrames
-        << ",\"samples\":" << s_SampleFrames << ",\"drain\":" << s_DrainFrames
-        << ",\"successful_frames\":" << m_successfulFrames << ",\"renderers\":" << renderers
-        << ",\"runtime_renderers\":" << runtimeRenderers << ",\"transparent_renderers\":" << transparentRenderers
-        << ",\"runtime_owners\":" << runtimeOwners
-        << ",\"reflection_mode\":\"hardware\",\"hardware_budget\":4096,\"optical_queries\":16"
-        << ",\"temporal\":false,\"spatial\":false,\"feedback\":false,\"diagnostics\":false"
-        << ",\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}\n";
-    if(memoryEnabled){
-        output << "{\"type\":\"memory_baseline\",\"arenas\":";
-        WriteMemory(m_memoryBaseline, output);
-        output << "}\n";
-    }
-    for(const CpuSample& sample : m_cpu){
-        output << "{\"type\":\"cpu\",\"source_frame\":" << sample.sourceFrame << ",\"publish_frame\":" << sample.publishFrame << ",\"scopes_ms\":{";
-        for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
-            if(scope != 0u)
-                output << ',';
-            output << '"' << s_CpuNames[scope] << "\":" << sample.milliseconds[scope];
+        u32 cpuScope = 0u;
+        while(cpuScope + 1u < s_GatherBenchmarkCpuScopeCount){
+            const VectorDouble ms = VectorDouble(sample.milliseconds[cpuScope], sample.milliseconds[cpuScope + 1u], 0.0, 0.0) * s_PresentationPacingMsPerSecond;
+            sample.milliseconds[cpuScope] = ms.x;
+            sample.milliseconds[cpuScope + 1u] = ms.y;
+            cpuScope += 2u;
         }
-        output << '}';
+        if(cpuScope < s_GatherBenchmarkCpuScopeCount)
+            sample.milliseconds[cpuScope] = sample.milliseconds[cpuScope] * s_PresentationPacingMsPerSecond;
+
         if(memoryEnabled){
-            output << ",\"arenas\":";
-            WriteMemory(sample.memory, output);
+            for(u32 arenaIndex = 0u; arenaIndex < s_GatherBenchmarkArenaScopeCount; ++arenaIndex){
+                const Expected<Name, NameTextErrorEnum> arenaName = SmokeNameFromText(GatherBenchmarkArenaScopeName(arenaIndex));
+                if(!arenaName.has_value())
+                    return false;
+                const PerfMemorySnapshot current = report.memory.snapshot(arenaName.value(), MemorySource::Arena);
+                if(current.valid() && current.frameIndex != publishFrame)
+                    return false;
+                sample.memory[arenaIndex] = current;
+            }
         }
-        output << "}\n";
-    }
-    for(usize index = 0u; index < m_gpu.size(); index += 2u){
-        const usize count = Min(usize{ 2u }, m_gpu.size() - index);
-        const SIMDVectorDouble milliseconds = VectorDoubleScale(VectorDoubleSet(m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0, 0.0, 0.0), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
-        for(usize lane = 0u; lane < count; ++lane){
-            const GpuSample& sample = m_gpu[index + lane];
-            output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]
-                << "\",\"publish_frame\":" << sample.timing.publishFrameIndex
-                << ",\"first_source_frame\":" << sample.timing.firstSampleFrameIndex
-                << ",\"last_source_frame\":" << sample.timing.lastSampleFrameIndex
-                << ",\"total_ms\":" << VectorDoubleGetByIndex(milliseconds, lane)
-                << ",\"samples\":" << sample.timing.sampleCount << "}\n";
+
+        for(u32 gpuScope = 0u; gpuScope < s_GatherBenchmarkGpuScopeCount; ++gpuScope){
+            const Expected<Name, NameTextErrorEnum> gpuScopeName = SmokeNameFromText(GatherBenchmarkGpuScopeName(gpuScope));
+            if(!gpuScopeName.has_value())
+                return false;
+            const b8 hadPub = this.m_hasGpuPublication[gpuScope];
+            const u64 prevPub = this.m_gpuPublish[gpuScope];
+            const TimingStats gpuTiming = report.gpuTiming.stats(gpuScopeName.value());
+            if(gpuTiming.valid() && (!hadPub || gpuTiming.publishFrameIndex != prevPub)){
+                if(hadPub && gpuTiming.publishFrameIndex < prevPub)
+                    return false;
+                this.m_hasGpuPublication[gpuScope] = true;
+                this.m_gpuPublish[gpuScope] = gpuTiming.publishFrameIndex;
+                this.m_gpu.push_back(RendererGatherGpuSample(gpuTiming, gpuScope));
+            }
         }
+
+        this.m_lastPublish = publishFrame;
+        this.m_hasPublication = true;
+        ++this.m_successfulFrames;
+        if(this.m_successfulFrames == s_GatherBenchmarkWarmupFrames)
+            this.m_memoryBaseline = sample.memory;
+        if(this.m_successfulFrames > s_GatherBenchmarkWarmupFrames && this.m_cpu.size() < s_GatherBenchmarkSampleFrames)
+            this.m_cpu.push_back(sample);
+        return true;
     }
-    if(complete)
-        output << "{\"type\":\"complete\"}\n";
-    output.close();
-    return output.good() && complete;
+
+    public b8 finished()const{
+        return this.m_successfulFrames >= s_GatherBenchmarkWarmupFrames + s_GatherBenchmarkSampleFrames + s_GatherBenchmarkDrainFrames;
+    }
+
+    public u32 successfulFrames()const{
+        return this.m_successfulFrames;
+    }
+
+    public b8 write(
+        in StringView path,
+        in StringView workload,
+        in b8 memoryEnabled,
+        in u32 renderers,
+        in u32 runtimeRenderers,
+        in u32 transparentRenderers,
+        in u32 runtimeOwners
+    )const{
+        const b8 complete = this.finished() && this.m_cpu.size() == s_GatherBenchmarkSampleFrames;
+        String modeText = "timing";
+        if(memoryEnabled)
+            modeText = "memory";
+        String out = String();
+        out.reserve(65536u);
+        StringAppendFormat(
+            out,
+            "{{\"type\":\"configuration\",\"schema\":2,\"workload\":\"{}\",\"mode\":\"{}\",\"width\":960,\"height\":720,\"warmup\":{},\"samples\":{},\"drain\":{},\"successful_frames\":{},\"renderers\":{},\"runtime_renderers\":{},\"transparent_renderers\":{},\"runtime_owners\":{},\"reflection_mode\":\"hardware\",\"hardware_budget\":4096,\"optical_queries\":16,\"temporal\":false,\"spatial\":false,\"feedback\":false,\"diagnostics\":false,\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}}\n",
+            workload,
+            modeText,
+            s_GatherBenchmarkWarmupFrames,
+            s_GatherBenchmarkSampleFrames,
+            s_GatherBenchmarkDrainFrames,
+            this.m_successfulFrames,
+            renderers,
+            runtimeRenderers,
+            transparentRenderers,
+            runtimeOwners
+        );
+        if(memoryEnabled){
+            out.append("{\"type\":\"memory_baseline\",\"arenas\":");
+            AppendGatherBenchmarkMemory(Span<PerfMemorySnapshot>(this.m_memoryBaseline), out);
+            out.append("}\n");
+        }
+        for(in RendererGatherCpuSample sample : this.m_cpu){
+            StringAppendFormat(out, "{{\"type\":\"cpu\",\"source_frame\":{},\"publish_frame\":{},\"scopes_ms\":{{", sample.sourceFrame, sample.publishFrame);
+            for(u32 scope = 0u; scope < s_GatherBenchmarkCpuScopeCount; ++scope){
+                if(scope != 0u)
+                    out.push_back(',');
+                StringAppendFormat(out, "\"{}\":{:.9f}", GatherBenchmarkCpuScopeName(scope), sample.milliseconds[scope]);
+            }
+            out.push_back('}');
+            if(memoryEnabled){
+                out.append(",\"arenas\":");
+                AppendGatherBenchmarkMemory(Span<PerfMemorySnapshot>(sample.memory), out);
+            }
+            out.append("}\n");
+        }
+        for(usize index = 0u; index < this.m_gpu.size(); index += 2u){
+            const usize count = Min(2u, this.m_gpu.size() - index);
+            f64 secondSeconds = 0.0;
+            if(count > 1u)
+                secondSeconds = this.m_gpu[index + 1u].timing.seconds;
+            const VectorDouble milliseconds = VectorDouble(this.m_gpu[index].timing.seconds, secondSeconds, 0.0, 0.0) * s_PresentationPacingMsPerSecond;
+            for(usize lane = 0u; lane < count; ++lane){
+                const RendererGatherGpuSample sample = this.m_gpu[index + lane];
+                f64 totalMs = milliseconds.x;
+                if(lane != 0u)
+                    totalMs = milliseconds.y;
+                StringAppendFormat(
+                    out,
+                    "{{\"type\":\"gpu\",\"scope\":\"{}\",\"publish_frame\":{},\"first_source_frame\":{},\"last_source_frame\":{},\"total_ms\":{:.9f},\"samples\":{}}}\n",
+                    GatherBenchmarkGpuScopeName(sample.scope),
+                    sample.timing.publishFrameIndex,
+                    sample.timing.firstSampleFrameIndex,
+                    sample.timing.lastSampleFrameIndex,
+                    totalMs,
+                    sample.timing.sampleCount
+                );
+            }
+        }
+        if(complete)
+            out.append("{\"type\":\"complete\"}\n");
+        const Expected<b8> written = WriteTextFile(Path(path), out);
+        return written.has_value() && written.value() && complete;
+    }
+
+    private Array<PerfMemorySnapshot, s_GatherBenchmarkArenaScopeCount> m_memoryBaseline;
+    private Array<u64, s_GatherBenchmarkGpuScopeCount> m_gpuPublish;
+    private Vector<RendererGatherCpuSample> m_cpu;
+    private Vector<RendererGatherGpuSample> m_gpu;
+    private Array<b8, s_GatherBenchmarkGpuScopeCount> m_hasGpuPublication;
+    private u64 m_lastPublish = 0u;
+    private u32 m_successfulFrames = 0u;
+    private b8 m_hasPublication = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

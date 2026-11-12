@@ -2,21 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/global/contract_name_cases.adhd>
 
-b8 GlobalContractBoundaryTestsReady(in u64 value){
-    return value != 0u;
-}
 
-native{
-// limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/global/contract_name_cases.adhd.h>
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <core/alloc/scratch.h>
 
@@ -24,15 +23,15 @@ native{
 #include <global/allocation_size.h>
 #include <global/fixed_index_map.h>
 #include <global/hash_utils.h>
+#include <global/not_null.h>
 #include <global/numeric_text.h>
 #include <global/overflow.h>
-#include <global/process_execution.h>
 #include <global/process_capture.h>
+#include <global/process_execution.h>
+#include <global/refcount_ptr.h>
 #include <global/utf8_text.h>
 
-#include <gtest/gtest.h>
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <unistd.h>
 #endif
 
@@ -46,29 +45,392 @@ namespace __hidden_contract_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+[[noreturn]] void VerifyRedirectedFileWithClosedDescriptors(u32 mask, AStringView outputPath);
+[[noreturn]] void VerifyCapturedOutputWithClosedDescriptors(u32 mask);
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_global_pointer_contract_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr u32 s_ConversionFailure = NWB::Tests::GlobalContractCases::s_GlobalContractConversionFailure;
+constexpr u32 s_DeleterTag = NWB::Tests::GlobalContractCases::s_GlobalContractDeleterTag;
+
+struct ThrowingPointerConversion{
+public:
+    int* value;
+
+
+public:
+    [[nodiscard]] operator int*()const{ throw s_ConversionFailure; }
+};
+
+struct NonthrowingPointerConversion{
+public:
+    int* value;
+
+
+public:
+    [[nodiscard]] operator int*()const noexcept{ return value; }
+};
+
+struct PotentiallyThrowingPointerDestruction{
+public:
+    int* value;
+
+
+public:
+    ~PotentiallyThrowingPointerDestruction()noexcept(false){}
+
+
+public:
+    [[nodiscard]] operator int*()const noexcept{ return value; }
+};
+
+struct ReferenceProbeBase{
+public:
+    u32 referenceCount = 1u;
+    u32& destroyedCount;
+
+
+public:
+    explicit ReferenceProbeBase(u32& count)noexcept
+        : destroyedCount(count)
+    {}
+    virtual ~ReferenceProbeBase()noexcept{ ++destroyedCount; }
+
+
+public:
+    [[nodiscard]] u32 addReference()noexcept{ return ++referenceCount; }
+
+    [[nodiscard]] u32 release()noexcept{ return --referenceCount; }
+};
+
+struct ReferenceProbeDerived final : ReferenceProbeBase{
+public:
+    explicit ReferenceProbeDerived(u32& count)noexcept
+        : ReferenceProbeBase(count)
+    {}
+    virtual ~ReferenceProbeDerived()noexcept override = default;
+};
+
 template<typename T>
-void VerifySignedLowerSaturation(){
-    constexpr T s_Minimum = Limit<T>::s_Min;
-    constexpr T s_Maximum = Limit<T>::s_Max;
-    EXPECT_EQ(AddSaturating<T>(s_Minimum, T(-1)), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(T(-1), s_Minimum), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(s_Minimum, s_Minimum), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(T(s_Minimum + T(1)), T(-1)), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(s_Maximum, T(1)), s_Maximum);
+struct StatefulValueDeleter{
+public:
+    u32 tag;
+    u32& deleteCount;
+
+
+public:
+    StatefulValueDeleter(const u32 value, u32& count)noexcept
+        : tag(value)
+        , deleteCount(count)
+    {}
+    template<typename U>
+    StatefulValueDeleter(const StatefulValueDeleter<U>& other)noexcept
+        : tag(other.tag)
+        , deleteCount(other.deleteCount)
+    {}
+
+
+public:
+    void operator()(T* value)const noexcept{
+        ++deleteCount;
+        delete value;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifySignedLowerSaturation<T>(in T minimum, in T nearMinimum, in T maximum){
+    const T minusOne = cast<T>(-1);
+    const T plusOne = cast<T>(1);
+    EXPECT_EQ(AddSaturating<T>(minimum, minusOne), minimum);
+    EXPECT_EQ(AddSaturating<T>(minusOne, minimum), minimum);
+    EXPECT_EQ(AddSaturating<T>(minimum, minimum), minimum);
+    EXPECT_EQ(AddSaturating<T>(nearMinimum, minusOne), minimum);
+    EXPECT_EQ(AddSaturating<T>(maximum, plusOne), maximum);
+}
+
+void VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound(){
+    VerifySignedLowerSaturation<i8>(i8.min, cast<i8>(i8.min + cast<i8>(1)), i8.max);
+    VerifySignedLowerSaturation<i16>(i16.min, cast<i16>(i16.min + cast<i16>(1)), i16.max);
+    VerifySignedLowerSaturation<i32>(i32.min, i32.min + 1, i32.max);
+    VerifySignedLowerSaturation<i64>(i64.min, i64.min + cast<i64>(1), i64.max);
+    EXPECT_EQ(AddSaturating<i32>(i32.min, -1), i32.min);
+}
+
+void VerifyGlobalContractBoundaries_AlignmentOverflowKeepsTheLastRepresentableAlignedSize(){
+    const usize maximum = usize.max;
+    const usize lastAligned = maximum & ~cast<usize>(7u);
+    EXPECT_EQ(Alignment(8u, lastAligned), lastAligned);
+    EXPECT_EQ(AlignmentPowerOfTwo(8u, lastAligned), lastAligned);
+    native(in lastAligned, in maximum){
+        EXPECT_THROW(Alignment(8u, lastAligned + 1u), AllocationSizeException);
+        EXPECT_THROW(AlignmentPowerOfTwo(8u, lastAligned + 1u), AllocationSizeException);
+        EXPECT_THROW(Alignment(10u, maximum), AllocationSizeException);
+    }
+    EXPECT_EQ(Alignment(0u, maximum), maximum);
+    EXPECT_EQ(AlignmentPowerOfTwo(0u, maximum), maximum);
+    EXPECT_FALSE(IsAligned(maximum, cast<usize>(8u)));
+    EXPECT_TRUE(IsAligned(lastAligned, cast<usize>(8u)));
+}
+
+void VerifyGlobalContractBoundaries_CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors(){
+    const u32 highAlignment = 1u << 31u;
+    const Expected<u32> sharedFactor = CommonAlignmentChecked(highAlignment, highAlignment);
+    ASSERT_TRUE(sharedFactor.has_value());
+    EXPECT_EQ(sharedFactor.value(), highAlignment);
+    const Expected<u32> zeroLeft = CommonAlignmentChecked(0u, 8u);
+    const Expected<u32> zeroRight = CommonAlignmentChecked(8u, 0u);
+    const Expected<u32> maxU32 = CommonAlignmentChecked(u32.max, 2u);
+    EXPECT_FALSE(zeroLeft.has_value());
+    EXPECT_FALSE(zeroRight.has_value());
+    EXPECT_FALSE(maxU32.has_value());
+    const Expected<u64> wideSharedFactor = CommonAlignmentChecked(u64.max - 1u, cast<u64>(2u));
+    ASSERT_TRUE(wideSharedFactor.has_value());
+    EXPECT_EQ(wideSharedFactor.value(), u64.max - 1u);
+    const Expected<u64> maxU64 = CommonAlignmentChecked(u64.max, cast<u64>(2u));
+    EXPECT_FALSE(maxU64.has_value());
+}
+
+void VerifyGlobalContractBoundaries_DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap(){
+    EXPECT_EQ(ParseDecimalPrefixU64(StringView("18446744073709551616tail")), 0u);
+    native{
+        EXPECT_EQ(ParseDecimalPrefixU64(WStringView(L"18446744073709551617tail")), 1u);
+    }
+    EXPECT_EQ(ParseDecimalPrefixU64(StringView("17-9")), 17u);
+    EXPECT_EQ(ParseDecimalPrefixU64(StringView("-17")), 0u);
+    EXPECT_EQ(ParseDecimalPrefixU64(StringView()), 0u);
+}
+
+void VerifyGlobalContractBoundaries_WideHashCombinationRetainsHighBitsAndWraparound(){
+    u64 seed = 0xfedcba9876543210u;
+    HashCombineHash(seed, cast<u64>(0x8877665544332211u), s_HashCombineGoldenRatio64);
+    EXPECT_EQ(seed, 0xe3480e4a004b1cbau);
+}
+
+void VerifyGlobalContractBoundaries_Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix(){
+    const StringView text = StringView("a\xc3\xa9\0\xff", 5u);
+    const Expected<usize> boundary = Utf8ByteOffset(text, 2u);
+    ASSERT_TRUE(boundary.has_value());
+    EXPECT_EQ(boundary.value(), 3u);
+    EXPECT_FALSE(IsValidUtf8TextWithoutNul(text));
+    EXPECT_FALSE(Utf8ByteOffset(text, 3u).has_value());
+    EXPECT_FALSE(Utf8ByteOffset(text.substr(1u, 1u), 1u).has_value());
+    EXPECT_FALSE(Utf8ByteOffset(StringView(), 1u).has_value());
+    const Expected<usize> emptyBoundary = Utf8ByteOffset(StringView(), 0u);
+    ASSERT_TRUE(emptyBoundary.has_value());
+    EXPECT_EQ(emptyBoundary.value(), 0u);
+}
+
+void VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries(){
+    const Name ownerName = s_GlobalContractNameTestsGlobalFixedIndexCollision;
+    b8 mapValid = false;
+    b8 insertedInitial = true;
+    b8 overflowKeyInserted = true;
+    b8 overflowKeyMissing = false;
+    b8 updatedExisting = false;
+    FixedVector<usize, 5u> storedValues;
+    b8 allFound = true;
+    b8 overflowMapValid = true;
+    b8 overflowMapInsert = true;
+    b8 overflowMapMissing = false;
+    native(in ownerName, mut mapValid, mut insertedInitial, mut overflowKeyInserted, mut overflowKeyMissing, mut updatedExisting, mut storedValues, mut allFound, mut overflowMapValid, mut overflowMapInsert, mut overflowMapMissing){
+        NWB::Core::Alloc::ScratchArena arena{ ownerName };
+        const auto collide = [](const u32)noexcept{ return usize{ 1u }; };
+        FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena, decltype(collide)> map(arena, 2u, collide);
+        mapValid = map.valid();
+        if(mapValid){
+            for(u32 key = 0u; key < 5u; ++key)
+                insertedInitial = insertedInitial && map.insertOrAssign(key, key + 10u);
+            overflowKeyInserted = map.insertOrAssign(5u, 99u);
+            overflowKeyMissing = map.find(5u) == nullptr;
+            updatedExisting = map.insertOrAssign(4u, 77u);
+            for(u32 key = 0u; key < 5u; ++key){
+                const usize* const value = map.find(key);
+                if(value == nullptr){
+                    allFound = false;
+                    break;
+                }
+                storedValues.push_back(*value);
+            }
+        }
+        FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena> overflow(arena, Limit<usize>::s_Max);
+        overflowMapValid = overflow.valid();
+        overflowMapInsert = overflow.insertOrAssign(0u, 0u);
+        overflowMapMissing = overflow.find(0u) == nullptr;
+    }
+    ASSERT_TRUE(mapValid);
+    ASSERT_TRUE(insertedInitial);
+    EXPECT_FALSE(overflowKeyInserted);
+    EXPECT_TRUE(overflowKeyMissing);
+    ASSERT_TRUE(updatedExisting);
+    ASSERT_TRUE(allFound);
+    ASSERT_EQ(storedValues.size(), 5u);
+    for(usize key = 0u; key < 5u; ++key){
+        if(key == 4u)
+            EXPECT_EQ(storedValues[key], 77u);
+        else
+            EXPECT_EQ(storedValues[key], key + 10u);
+    }
+    EXPECT_FALSE(overflowMapValid);
+    EXPECT_FALSE(overflowMapInsert);
+    EXPECT_TRUE(overflowMapMissing);
+}
+
+void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors(){
+    b8 supported = false;
+    native(mut supported){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        supported = true;
+#endif
+    }
+    if(!supported)
+        return;
+
+    const Path root = Path("global_test_artifacts/contract_redirected_closed_stdio");
+    ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
+    const Path outputPath = root / "combined.txt";
+    const String outputText = PathToString(outputPath);
+    const StringView outputPathView = outputText;
+    EXPECT_FALSE(outputPathView.empty());
+    for(u32 mask = 1u; mask < 8u; ++mask){
+        ScopedTestTrace trace(mask);
+        native(in mask, in outputPathView){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+            ASSERT_EXIT(__hidden_contract_boundary_tests::VerifyRedirectedFileWithClosedDescriptors(mask, outputPathView), testing::ExitedWithCode(0), "");
+#else
+            static_cast<void>(mask);
+            static_cast<void>(outputPathView);
+#endif
+        }
+    }
+
+    ASSERT_TRUE(RemoveAllIfExists(root).has_value());
+}
+
+void VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors(){
+    b8 supported = false;
+    u32 checkedMasks = 0u;
+    for(u32 mask = 1u; mask < 8u; ++mask){
+        ScopedTestTrace trace(mask);
+        native(in mask, mut supported, mut checkedMasks){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+            supported = true;
+            ASSERT_EXIT(__hidden_contract_boundary_tests::VerifyCapturedOutputWithClosedDescriptors(mask), testing::ExitedWithCode(0), "");
+            ++checkedMasks;
+#else
+            static_cast<void>(mask);
+            static_cast<void>(supported);
+            static_cast<void>(checkedMasks);
+#endif
+        }
+    }
+    if(!supported)
+        return;
+    EXPECT_EQ(checkedMasks, 7u);
+}
+
+void VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer(){
+    i32 original = 17;
+    i32 replacement = 29;
+    b8 preservedAddress = false;
+    i32 storedValue = 0;
+    native(mut original, mut replacement, mut preservedAddress, mut storedValue){
+        using namespace __hidden_global_pointer_contract_tests;
+        ThrowingPointerConversion conversion{ &replacement };
+        static_assert(!noexcept(NotNull<int*>(conversion)));
+        static_assert(!IsConstructible_V<NotNull<int*>, NotNull<const int*>>);
+        static_assert(!IsConstructible_V<NotNull<ReferenceProbeDerived*>, NotNull<ReferenceProbeBase*>>);
+        NotNull<int*> stored(&original);
+        static_assert(!noexcept(stored = conversion));
+        EXPECT_THROW((NotNull<int*>(conversion)), u32);
+        EXPECT_THROW(stored = conversion, u32);
+        preservedAddress = stored.get() == &original;
+        storedValue = *stored;
+
+        using ThrowingDestructorAssignment = NotNull<int*>&(NotNull<int*>::*)(PotentiallyThrowingPointerDestruction);
+        using NonthrowingAssignment = NotNull<int*>&(NotNull<int*>::*)(NonthrowingPointerConversion)noexcept;
+        static_assert(IsSame_V<decltype(&NotNull<int*>::template operator=<PotentiallyThrowingPointerDestruction>), ThrowingDestructorAssignment>);
+        static_assert(IsSame_V<decltype(&NotNull<int*>::template operator=<NonthrowingPointerConversion>), NonthrowingAssignment>);
+        static_assert(!noexcept(NotNull<int*>(DeclVal<PotentiallyThrowingPointerDestruction>())));
+    }
+    EXPECT_TRUE(preservedAddress);
+    EXPECT_EQ(storedValue, 17);
+    EXPECT_EQ(original, 17);
+    EXPECT_EQ(replacement, 29);
+}
+
+void VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime(){
+    u32 destroyedCount = 0u;
+    u32 deleteCount = 0u;
+    native(mut destroyedCount, mut deleteCount){
+        using namespace __hidden_global_pointer_contract_tests;
+        const StatefulValueDeleter<ReferenceProbeDerived> deleter(s_DeleterTag, deleteCount);
+        const RefCountPtr<ReferenceProbeDerived, StatefulValueDeleter<ReferenceProbeDerived>> source(new ReferenceProbeDerived(destroyedCount), deleter, s_AdoptRef);
+        {
+            const RefCountPtr<ReferenceProbeBase, StatefulValueDeleter<ReferenceProbeBase>> copied(source);
+            EXPECT_EQ(copied.get(), source.get());
+            EXPECT_EQ(source->referenceCount, 2u);
+            EXPECT_EQ(copied.getDeleter().tag, s_DeleterTag);
+            EXPECT_EQ(&copied.getDeleter().deleteCount, &deleteCount);
+            EXPECT_EQ(destroyedCount, 0u);
+        }
+        EXPECT_EQ(source->referenceCount, 1u);
+        EXPECT_EQ(deleteCount, 0u);
+        EXPECT_EQ(destroyedCount, 0u);
+    }
+    EXPECT_EQ(deleteCount, 1u);
+    EXPECT_EQ(destroyedCount, 1u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-[[noreturn]] void VerifyRedirectedFileWithClosedDescriptors(const u32 mask, const AStringView outputPath){
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_contract_boundary_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+void VerifyRedirectedFileWithClosedDescriptors(const u32 mask, const AStringView outputPath){
     NWB::Tests::TestArena<> testArena;
     for(int descriptor = 0; descriptor < 3; ++descriptor){
         if((mask & (1u << descriptor)) != 0u && ::close(descriptor) != 0)
@@ -79,7 +441,7 @@ void VerifySignedLowerSaturation(){
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, s_Arguments, outputPath);
     if(!exitCode || *exitCode != 23)
         ::_exit(11);
-    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, outputPath);
+    const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, outputPath);
     AString<NWB::Core::Alloc::GlobalArena> output(testArena.arena);
     const auto read = ReadTextFile(path, output);
     if(!read || AStringView(output) != "stdout\nstderr\n")
@@ -87,7 +449,7 @@ void VerifySignedLowerSaturation(){
     ::_exit(0);
 }
 
-[[noreturn]] void VerifyCapturedOutputWithClosedDescriptors(const u32 mask){
+void VerifyCapturedOutputWithClosedDescriptors(const u32 mask){
     NWB::Tests::TestArena<> testArena;
     for(int descriptor = 0; descriptor < 3; ++descriptor){
         if((mask & (1u << descriptor)) != 0u && ::close(descriptor) != 0)
@@ -116,283 +478,46 @@ void VerifySignedLowerSaturation(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBound){
-    using namespace __hidden_contract_boundary_tests;
-    VerifySignedLowerSaturation<i8>();
-    VerifySignedLowerSaturation<i16>();
-    VerifySignedLowerSaturation<i32>();
-    VerifySignedLowerSaturation<i64>();
-}
-
-TEST(GlobalContractBoundaries, AlignmentOverflowKeepsTheLastRepresentableAlignedSize){
-    constexpr usize s_Maximum = Limit<usize>::s_Max;
-    constexpr usize s_LastAligned = s_Maximum & ~usize{ 7u };
-    EXPECT_EQ(Alignment(8u, s_LastAligned), s_LastAligned);
-    EXPECT_EQ(AlignmentPowerOfTwo(8u, s_LastAligned), s_LastAligned);
-    EXPECT_THROW(Alignment(8u, s_LastAligned + 1u), AllocationSizeException);
-    EXPECT_THROW(AlignmentPowerOfTwo(8u, s_LastAligned + 1u), AllocationSizeException);
-    EXPECT_THROW(Alignment(10u, s_Maximum), AllocationSizeException);
-    EXPECT_EQ(Alignment(0u, s_Maximum), s_Maximum);
-    EXPECT_EQ(AlignmentPowerOfTwo(0u, s_Maximum), s_Maximum);
-    EXPECT_FALSE(IsAligned(s_Maximum, usize{ 8u }));
-    EXPECT_TRUE(IsAligned(s_LastAligned, usize{ 8u }));
-}
-
-TEST(GlobalContractBoundaries, CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors){
-    constexpr u32 s_HighAlignment = u32{ 1u } << 31u;
-    const auto sharedFactor = CommonAlignmentChecked(s_HighAlignment, s_HighAlignment);
-    ASSERT_TRUE(sharedFactor);
-    EXPECT_EQ(*sharedFactor, s_HighAlignment);
-    EXPECT_FALSE(CommonAlignmentChecked(u32{ 0u }, u32{ 8u }));
-    EXPECT_FALSE(CommonAlignmentChecked(u32{ 8u }, u32{ 0u }));
-    EXPECT_FALSE(CommonAlignmentChecked(Limit<u32>::s_Max, u32{ 2u }));
-    const auto wideSharedFactor = CommonAlignmentChecked(Limit<u64>::s_Max - u64{ 1u }, u64{ 2u });
-    ASSERT_TRUE(wideSharedFactor);
-    EXPECT_EQ(*wideSharedFactor, Limit<u64>::s_Max - u64{ 1u });
-    EXPECT_FALSE(CommonAlignmentChecked(Limit<u64>::s_Max, u64{ 2u }));
-}
-
-TEST(GlobalContractBoundaries, DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap){
-    EXPECT_EQ(ParseDecimalPrefixU64(AStringView("18446744073709551616tail")), 0u);
-    EXPECT_EQ(ParseDecimalPrefixU64(WStringView(L"18446744073709551617tail")), 1u);
-    EXPECT_EQ(ParseDecimalPrefixU64(AStringView("17-9")), 17u);
-    EXPECT_EQ(ParseDecimalPrefixU64(AStringView("-17")), 0u);
-    EXPECT_EQ(ParseDecimalPrefixU64(AStringView{}), 0u);
-}
-
-TEST(GlobalContractBoundaries, WideHashCombinationRetainsHighBitsAndWraparound){
-    u64 seed = 0xfedcba9876543210ull;
-    HashCombineHash(seed, u64{ 0x8877665544332211ull }, s_HashCombineGoldenRatio64);
-    EXPECT_EQ(seed, 0xe3480e4a004b1cbaull);
-}
-
-TEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix){
-    const Array<char, 5u> bytes = { 'a', static_cast<char>(0xc3u), static_cast<char>(0xa9u), '\0', static_cast<char>(0xffu) };
-    const AStringView text(bytes.data(), bytes.size());
-    const auto boundary = Utf8ByteOffset(text, 2u);
-    ASSERT_TRUE(boundary);
-    EXPECT_EQ(*boundary, 3u);
-    EXPECT_FALSE(IsValidUtf8TextWithoutNul(text));
-    EXPECT_FALSE(Utf8ByteOffset(text, 3u));
-    EXPECT_FALSE(Utf8ByteOffset(AStringView(bytes.data() + 1u, 1u), 1u));
-    EXPECT_FALSE(Utf8ByteOffset(AStringView{}, 1u));
-    const auto emptyBoundary = Utf8ByteOffset(AStringView{}, 0u);
-    ASSERT_TRUE(emptyBoundary);
-    EXPECT_EQ(*emptyBoundary, 0u);
-}
-
-TEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries){
-    NWB::Core::Alloc::ScratchArena arena{Name(NWB::Tests::GlobalContractCases::s_GlobalContractNameTestsGlobalFixedIndexCollision)};
-    const auto collide = [](const u32)noexcept{ return usize{ 1u }; };
-    FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena, decltype(collide)> map(arena, 2u, collide);
-    ASSERT_TRUE(map.valid());
-    for(u32 key = 0u; key < 5u; ++key)
-        ASSERT_TRUE(map.insertOrAssign(key, key + 10u));
-    EXPECT_FALSE(map.insertOrAssign(5u, 99u));
-    EXPECT_EQ(map.find(5u), nullptr);
-    ASSERT_TRUE(map.insertOrAssign(4u, 77u));
-    for(u32 key = 0u; key < 5u; ++key){
-        const usize* const value = map.find(key);
-        ASSERT_NE(value, nullptr);
-        EXPECT_EQ(*value, key == 4u ? 77u : key + 10u);
-    }
-    FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena> overflow(arena, Limit<usize>::s_Max);
-    EXPECT_FALSE(overflow.valid());
-    EXPECT_FALSE(overflow.insertOrAssign(0u, 0u));
-    EXPECT_EQ(overflow.find(0u), nullptr);
-}
-
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(GlobalContractBoundaries, RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors){
-    using namespace __hidden_contract_boundary_tests;
-    NWB::Tests::TestArena<> testArena;
-    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/contract_redirected_closed_stdio");
-    ASSERT_TRUE(EnsureEmptyDirectory(root));
-    const auto outputPath = root / "combined.txt";
-    const auto outputText = PathToString<char>(testArena.arena, outputPath);
-    for(u32 mask = 1u; mask < 8u; ++mask){
-        SCOPED_TRACE(mask);
-        ASSERT_EXIT(VerifyRedirectedFileWithClosedDescriptors(mask, AStringView(outputText)), testing::ExitedWithCode(0), "");
-    }
-    ASSERT_TRUE(RemoveAllIfExists(root));
+    VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors();
 }
 
 TEST(GlobalContractBoundaries, CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors){
-    using namespace __hidden_contract_boundary_tests;
-    for(u32 mask = 1u; mask < 8u; ++mask){
-        SCOPED_TRACE(mask);
-        ASSERT_EXIT(VerifyCapturedOutputWithClosedDescriptors(mask), testing::ExitedWithCode(0), "");
-    }
+    VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/global/contract_name_cases.adhd.h>
-
-#include <global/not_null.h>
-#include <global/refcount_ptr.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_global_pointer_contract_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ConversionFailure = NWB::Tests::GlobalContractCases::s_GlobalContractConversionFailure;
-constexpr u32 s_DeleterTag = NWB::Tests::GlobalContractCases::s_GlobalContractDeleterTag;
-
-
-struct ThrowingPointerConversion{
-    int* value;
-
-
-public:
-    [[nodiscard]] operator int*()const{ throw s_ConversionFailure; }
-};
-
-struct NonthrowingPointerConversion{
-    int* value;
-
-
-public:
-    [[nodiscard]] operator int*()const noexcept{ return value; }
-};
-
-struct PotentiallyThrowingPointerDestruction{
-    int* value;
-
-
-public:
-    ~PotentiallyThrowingPointerDestruction()noexcept(false){}
-
-
-public:
-    [[nodiscard]] operator int*()const noexcept{ return value; }
-};
-
-struct ReferenceProbeBase{
-    u32 referenceCount = 1u;
-    u32& destroyedCount;
-
-
-public:
-    explicit ReferenceProbeBase(u32& count)noexcept
-        : destroyedCount(count)
-    {}
-    virtual ~ReferenceProbeBase()noexcept{ ++destroyedCount; }
-
-
-public:
-    [[nodiscard]] u32 addReference()noexcept{ return ++referenceCount; }
-
-    [[nodiscard]] u32 release()noexcept{ return --referenceCount; }
-};
-
-struct ReferenceProbeDerived final : ReferenceProbeBase{
-    explicit ReferenceProbeDerived(u32& count)noexcept
-        : ReferenceProbeBase(count)
-    {}
-    virtual ~ReferenceProbeDerived()noexcept override = default;
-};
-
-template<typename T>
-struct StatefulValueDeleter{
-    u32 tag;
-    u32& deleteCount;
-
-
-public:
-    StatefulValueDeleter(const u32 value, u32& count)noexcept
-        : tag(value)
-        , deleteCount(count)
-    {}
-    template<typename U>
-    StatefulValueDeleter(const StatefulValueDeleter<U>& other)noexcept
-        : tag(other.tag)
-        , deleteCount(other.deleteCount)
-    {}
-
-
-public:
-    void operator()(T* value)const noexcept{
-        ++deleteCount;
-        delete value;
-    }
-};
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer){
-    using namespace __hidden_global_pointer_contract_tests;
-    int original = 17;
-    int replacement = 29;
-    ThrowingPointerConversion conversion{ &replacement };
-    static_assert(!noexcept(NotNull<int*>(conversion)));
-    static_assert(!IsConstructible_V<NotNull<int*>, NotNull<const int*>>);
-    static_assert(!IsConstructible_V<NotNull<ReferenceProbeDerived*>, NotNull<ReferenceProbeBase*>>);
-    NotNull<int*> stored(&original);
-    static_assert(!noexcept(stored = conversion));
-    EXPECT_THROW((NotNull<int*>(conversion)), u32);
-    EXPECT_THROW(stored = conversion, u32);
-    EXPECT_EQ(stored.get(), &original);
-
-    using ThrowingDestructorAssignment = NotNull<int*>&(NotNull<int*>::*)(PotentiallyThrowingPointerDestruction);
-    using NonthrowingAssignment = NotNull<int*>&(NotNull<int*>::*)(NonthrowingPointerConversion)noexcept;
-    static_assert(IsSame_V<decltype(&NotNull<int*>::template operator=<PotentiallyThrowingPointerDestruction>), ThrowingDestructorAssignment>);
-    static_assert(IsSame_V<decltype(&NotNull<int*>::template operator=<NonthrowingPointerConversion>), NonthrowingAssignment>);
-    static_assert(!noexcept(NotNull<int*>(DeclVal<PotentiallyThrowingPointerDestruction>())));
-}
-
-TEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime){
-    using namespace __hidden_global_pointer_contract_tests;
-    u32 destroyedCount = 0u;
-    u32 deleteCount = 0u;
-    {
-        const StatefulValueDeleter<ReferenceProbeDerived> deleter(s_DeleterTag, deleteCount);
-        const RefCountPtr<ReferenceProbeDerived, StatefulValueDeleter<ReferenceProbeDerived>> source(new ReferenceProbeDerived(destroyedCount), deleter, s_AdoptRef);
-        {
-            const RefCountPtr<ReferenceProbeBase, StatefulValueDeleter<ReferenceProbeBase>> copied(source);
-            EXPECT_EQ(copied.get(), source.get());
-            EXPECT_EQ(source->referenceCount, 2u);
-            EXPECT_EQ(copied.getDeleter().tag, s_DeleterTag);
-            EXPECT_EQ(&copied.getDeleter().deleteCount, &deleteCount);
-            EXPECT_EQ(destroyedCount, 0u);
-        }
-        EXPECT_EQ(source->referenceCount, 1u);
-        EXPECT_EQ(deleteCount, 0u);
-        EXPECT_EQ(destroyedCount, 0u);
-    }
-    EXPECT_EQ(deleteCount, 1u);
-    EXPECT_EQ(destroyedCount, 1u);
-}
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBound, VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound)
+NWB_ADHD_GTEST(GlobalContractBoundaries, AlignmentOverflowKeepsTheLastRepresentableAlignedSize, VerifyGlobalContractBoundaries_AlignmentOverflowKeepsTheLastRepresentableAlignedSize)
+NWB_ADHD_GTEST(GlobalContractBoundaries, CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors, VerifyGlobalContractBoundaries_CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors)
+NWB_ADHD_GTEST(GlobalContractBoundaries, DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap, VerifyGlobalContractBoundaries_DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap)
+NWB_ADHD_GTEST(GlobalContractBoundaries, WideHashCombinationRetainsHighBitsAndWraparound, VerifyGlobalContractBoundaries_WideHashCombinationRetainsHighBitsAndWraparound)
+NWB_ADHD_GTEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix, VerifyGlobalContractBoundaries_Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix)
+NWB_ADHD_GTEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries, VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries)
+NWB_ADHD_GTEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer, VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer)
+NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime, VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

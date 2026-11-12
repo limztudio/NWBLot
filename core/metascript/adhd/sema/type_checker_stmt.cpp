@@ -205,12 +205,13 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 ok = false;
             const TypeRef* subjTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
-            const b8 isNonSwitchableBuiltin = BuiltinTypeSemantics::IsFloatScalarType(subjectType) || subjectType == "void" || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType) || FindBuiltinGenericType(subjectType) != nullptr;
+            const b8 isUserSubjType = m_symbols.hasTypeSymbol(subjectType);
+            const b8 isNonSwitchableBuiltin = !isUserSubjType && (BuiltinTypeSemantics::IsFloatScalarType(subjectType) || subjectType == "void" || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType) || FindBuiltinGenericType(subjectType) != nullptr);
             if(!subjectType.empty() && (isNonSwitchableBuiltin || (subjTypeRef && subjTypeRef->isFuncType))){
                 reportError(errors, stmt.span, "invalid 'switch' subject type; floating-point, SIMD, container, callable, and 'void' types cannot be switched on");
                 ok = false;
             }
-            if(SymbolTable::IsStringSwitchType(subjectType)){
+            if(!isUserSubjType && SymbolTable::IsStringSwitchType(subjectType)){
                 stmt.lowerSwitchToIfChain = true;
             }
             else{

@@ -4,8 +4,19 @@
 
 #include "scene_types.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <impl/ecs_csg/components.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_csg/shape_id.adhd.h>
+#include <impl/ecs_csg/module.adhd.h>
 
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
@@ -18,43 +29,134 @@ using Core::ECS::World;
 using Impl::CsgCutterComponent;
 using Impl::StaticCsgMeshComponent;
 using Impl::SkinnedCsgMeshComponent;
+using Impl::s_CsgPlaneShapeName;
+using Impl::s_CsgBoxShapeName;
 
 template<typename ParameterT>
-inline void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
+NWB_INLINE void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(ParameterT));
     FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
-template<typename ReceiverComponentT>
-inline ReceiverComponentT& AddCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
-    auto& receiver = world.entity(entity).addComponent<ReceiverComponentT>();
-    receiver.receiverGroup = receiverGroup;
-    receiver.affectOpaquePass = affectOpaquePass;
-    receiver.affectTransparentPass = affectTransparentPass;
-    return receiver;
+NWB_INLINE Core::ECS::EntityID CreateSmokeCsgBoxCutter(
+    const Name receiverGroup,
+    const Name shapeType,
+    const b8 active,
+    const Float4& halfExtents,
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation,
+    Core::ECS::World& world
+){
+    auto entity = world.createEntity();
+    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
+    component.receiverGroup = receiverGroup;
+    component.shapeType = shapeType;
+    component.active = active;
+    Impl::CsgBoxShapeParameters parameters{};
+    parameters.halfExtents = halfExtents;
+    AssignCsgCutterParameters(parameters, component);
+    SIMDMatrix worldToShape{};
+    SIMDMatrix shapeToWorld{};
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+    StoreFloat(worldToShape, component.worldToShape);
+    StoreFloat(shapeToWorld, component.shapeToWorld);
+    return entity.id();
 }
 
-inline Impl::StaticCsgMeshComponent& AddStaticCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
-    return AddCsgMeshReceiver<Impl::StaticCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
+NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
+    const Name receiverGroup,
+    const Name shapeType,
+    const b8 active,
+    const Float4& normalDistance,
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation,
+    Core::ECS::World& world
+){
+    auto entity = world.createEntity();
+    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
+    component.receiverGroup = receiverGroup;
+    component.shapeType = shapeType;
+    component.active = active;
+    Impl::CsgPlaneShapeParameters parameters{};
+    parameters.normalDistance = normalDistance;
+    AssignCsgCutterParameters(parameters, component);
+    SIMDMatrix worldToShape{};
+    SIMDMatrix shapeToWorld{};
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+    StoreFloat(worldToShape, component.worldToShape);
+    StoreFloat(shapeToWorld, component.shapeToWorld);
+    return entity.id();
 }
 
-inline Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(const Core::ECS::EntityID entity, const Name receiverGroup, const b8 affectOpaquePass, const b8 affectTransparentPass, Core::ECS::World& world){
-    return AddCsgMeshReceiver<Impl::SkinnedCsgMeshComponent>(entity, receiverGroup, affectOpaquePass, affectTransparentPass, world);
+NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
+    const Name receiverGroup,
+    const Name shapeType,
+    const b8 active,
+    const Float4& normalDistance,
+    Core::ECS::World& world
+){
+    return CreateSmokeCsgPlaneCutter(receiverGroup, shapeType, active, normalDistance, VectorZero(), QuaternionIdentity(), world);
+}
+
+NWB_INLINE b8 SetSmokeCsgCutterTransform(
+    const Core::ECS::EntityID cutterEntity,
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation,
+    Core::ECS::World& world
+){
+    if(auto* const cutter = world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity)){
+        SIMDMatrix worldToShape{};
+        SIMDMatrix shapeToWorld{};
+        ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+        StoreFloat(worldToShape, cutter->worldToShape);
+        StoreFloat(shapeToWorld, cutter->shapeToWorld);
+        return true;
+    }
+    return false;
+}
+
+NWB_INLINE void SetSmokeCsgCutterActive(const Core::ECS::EntityID cutterEntity, const b8 active, Core::ECS::World& world){
+    auto& cutter = *MakeNotNull(world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity));
+    cutter.active = active;
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void AddStaticCsgMeshReceiver(in EntityID entity, in Name receiverGroup, in b8 affectOpaquePass, in b8 affectTransparentPass, mut World world){
+    native(in entity, in receiverGroup, in affectOpaquePass, in affectTransparentPass, mut world){
+        auto& receiver = world.entity(entity).addComponent<Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = receiverGroup;
+        receiver.affectOpaquePass = affectOpaquePass;
+        receiver.affectTransparentPass = affectTransparentPass;
+    }
+}
+
+void AddSkinnedCsgMeshReceiver(in EntityID entity, in Name receiverGroup, in b8 affectOpaquePass, in b8 affectTransparentPass, mut World world){
+    native(in entity, in receiverGroup, in affectOpaquePass, in affectTransparentPass, mut world){
+        auto& receiver = world.entity(entity).addComponent<Impl::SkinnedCsgMeshComponent>();
+        receiver.receiverGroup = receiverGroup;
+        receiver.affectOpaquePass = affectOpaquePass;
+        receiver.affectTransparentPass = affectTransparentPass;
+    }
+}
 
 void AssignCsgCutterTransform(in VectorSingle center, in VectorSingle rotation, mut CsgCutterComponent cutter){
     MatrixSingle worldToShape = MatrixSingle();
     MatrixSingle shapeToWorld = MatrixSingle();
     ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
-    StoreFloat(worldToShape, cutter.worldToShape);
-    StoreFloat(shapeToWorld, cutter.shapeToWorld);
+    cutter.worldToShape = f32x3x4(worldToShape);
+    cutter.shapeToWorld = f32x3x4(shapeToWorld);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

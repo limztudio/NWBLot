@@ -1,0 +1,556 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/shader_define_planner.adhd>
+#include <impl/assets_shader/slang_compiler.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/asset.adhd.h>
+#include <impl/assets_shader/cook.adhd.h>
+#include <impl/assets_shader/slang_compiler_request_validator.adhd.h>
+
+#include <core/assets/cook_metadata.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
+#include <core/graphics/shader_stage_names.h>
+#include <core/graphics/spirv_entry_point.h>
+
+#include <global/process_execution.h>
+#include <global/scope_exit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_cook_shader_metadata{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace ShaderBinaryPayload;
+using ScratchPath = SlangCompilerWorkspace::ScratchPath;
+using ScratchString = SlangCompilerWorkspace::ScratchString;
+template<typename T>
+using ScratchVector = SlangCompilerWorkspace::ScratchVector<T>;
+template<typename T>
+using ScratchHashSet = HashSet<T, Core::Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
+
+// Slang's SPIR-V 1.5 profile does not include the standard capability set used by the generated Vulkan shaders.
+// Declare it explicitly so Slang produces the same output without silently rewriting the requested profile.
+static constexpr Array<AStringView, s_SpirvBaselineCapabilityCount> s_SpirvBaselineCapabilities = {
+    s_SpirvCapabilityNonSemanticInfo,
+    s_SpirvCapabilityUserType,
+    s_SpirvCapabilityDerivativeControl,
+    s_SpirvCapabilityImageQuery,
+    s_SpirvCapabilityImageGatherExtended,
+    s_SpirvCapabilitySparseResidency,
+    s_SpirvCapabilityMinLod,
+    s_SpirvCapabilityFragmentFullyCovered,
+};
+
+static constexpr Array<AStringView, s_CommonCompilerArgumentCount> s_CommonCompilerArguments = {
+    s_SlangTargetArgument, s_SlangTargetSpirv,
+    s_SlangEmitSpirvDirectlyArgument,
+    s_SlangUseEntryPointNameArgument,
+    s_SlangWarningsAsErrorsArgument, s_SlangWarningsAsErrorsAll,
+    s_SlangProfileArgument, ShaderBinaryPayload::s_Spirv15TargetProfileText,
+};
+
+static const Array<SlangStageMapping, 14u> s_StageMappings = {{
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage), s_SlangStageVertex },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::HullStage), s_SlangStageHull },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::DomainStage), s_SlangStageDomain },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::GeometryStage), s_SlangStageGeometry },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage), s_SlangStageFragment },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage), s_SlangStageCompute },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AmplificationStage), s_SlangStageAmplification },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage), s_SlangStageMesh },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::RayGenerationStage), s_SlangStageRayGeneration },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AnyHitStage), s_SlangStageAnyHit },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ClosestHitStage), s_SlangStageClosestHit },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MissStage), s_SlangStageMiss },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::IntersectionStage), s_SlangStageIntersection },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::CallableStage), s_SlangStageCallable },
+}};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<ScratchString> BuildCompilerDefineArgument(const ShaderBinaryPayload::ShaderMacroDefinition& define, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena){
+    const b8 plannedMacroInclude = IsPlannedMacroIncludeDefine(request.compilerInputsHaveBom, request.externallyPlannedMacroIncludes, define.name);
+    const AStringView includeName = plannedMacroInclude ? UnquoteDoubleQuotedView(define.value) : AStringView();
+    const ScratchPath includePath(scratchArena, includeName);
+    Expected<ScratchString> overlayIncludePathText = MakeUnexpected(Failure{});
+    usize valueCapacity = define.value.size();
+    if(!includeName.empty() && includePath.isAbsolute()){
+        const auto absoluteIncludePath = AbsolutePath(includePath);
+        if(!absoluteIncludePath){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
+            return MakeUnexpected(Failure{});
+        }
+        const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
+        const auto overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
+        if(!SlangCompilerWorkspace::IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
+            return MakeUnexpected(Failure{});
+        }
+        overlayIncludePathText = SlangCompilerWorkspace::BuildCompilerPathText(*overlayIncludePath, scratchArena);
+        if(!overlayIncludePathText)
+            return MakeUnexpected(Failure{});
+        const auto quotedCapacity = ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(overlayIncludePathText->size());
+        if(!quotedCapacity)
+            return MakeUnexpected(Failure{});
+        valueCapacity = *quotedCapacity;
+    }
+    const usize fixedBytes = ComputeCompilerDefineFixedArgumentBytes(s_SlangDefineArgument.size(), !define.value.empty());
+    const auto argumentCapacity = ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(fixedBytes, define.name.size(), valueCapacity);
+    if(!argumentCapacity)
+        return MakeUnexpected(Failure{});
+    const auto formattedArgument = FormatCompilerDefineArgument(
+        scratchArena,
+        s_SlangDefineArgument,
+        define.name,
+        define.value,
+        overlayIncludePathText.has_value(),
+        overlayIncludePathText ? AStringView(*overlayIncludePathText) : AStringView()
+    );
+    return ScratchString(AStringView(formattedArgument), scratchArena);
+}
+
+static Expected<ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEntry>> ParseDefines(const Path& nwbFilePath, const Core::Metascript::Value& asset, ShaderCook::CookArena& arena){
+    ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEntry> defines{arena};
+
+    const auto* definesVal = asset.findField(s_ShaderDefinesField);
+    if(!definesVal)
+        return defines;
+
+    if(!definesVal->isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
+        return MakeUnexpected(Failure{});
+    }
+
+    const ShaderCook::CookString nwbFilePathText = PathToString(arena, nwbFilePath);
+    const auto& definesMap = definesVal->asMap();
+    defines.reserve(definesMap.size());
+    for(const auto& [key, val] : definesMap){
+        ShaderCook::CookString defineName(key.data(), key.size(), arena);
+        const ShaderDefineNameStatus::Enum nameStatus = ClassifyShaderDefineName(AStringView(defineName));
+        if(nameStatus == ShaderDefineNameStatus::Reserved){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            return MakeUnexpected(Failure{});
+        }
+        if(nameStatus == ShaderDefineNameStatus::Invalid){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            return MakeUnexpected(Failure{});
+        }
+
+        ShaderCook::CookVector<ShaderCook::CookString> defineValues(arena);
+        if(!val.copyStringList(defineValues)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            return MakeUnexpected(Failure{});
+        }
+        ShaderCook::CookVector<AStringView> defineValueViews(arena);
+        defineValueViews.reserve(defineValues.size());
+        for(const ShaderCook::CookString& defineValue : defineValues)
+            defineValueViews.emplace_back(defineValue);
+        if(!ValidateShaderDefineEntrySpec(AStringView(nwbFilePathText), AStringView(defineName), defineValueViews))
+            return MakeUnexpected(Failure{});
+
+        ShaderCook::DefineEntry defineEntry(Move(defineValues));
+        defines.insert_or_assign(Move(defineName), Move(defineEntry));
+    }
+    return defines;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_cook_shader_metadata;
+    return SlangCompilerFingerprint::Compute(temporaryRoot, scratchArena, s_CommonCompilerArguments, s_SpirvBaselineCapabilities, s_StageMappings);
+}
+
+b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode){
+    using namespace __hidden_cook_shader_metadata;
+
+    outBytecode.clear();
+
+    AStringView slangStage;
+    AStringView optimizationArgument;
+    if(!SlangCompilerRequestValidator{}.validateInputs(
+        request.shaderName,
+        request.sourcePath.empty(),
+        request.outputPath.empty(),
+        request.entryPoint,
+        request.stage,
+        static_cast<u8>(request.optimizationLevel),
+        s_StageMappings,
+        slangStage,
+        optimizationArgument
+    ))
+        return false;
+
+    const ScratchPath outputParent = request.outputPath.parentPath();
+    const auto compilerWorkDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(outputParent.empty() ? ScratchPath(scratchArena, s_CurrentDirectoryPathText) : outputParent, scratchArena);
+    if(!compilerWorkDirectoryResult)
+        return false;
+    const ScratchPath& compilerWorkDirectory = *compilerWorkDirectoryResult;
+    SlangCompilerWorkspace::ScopedDirectoryCleanupGuard workDirectoryCleanup(compilerWorkDirectory);
+    const ScratchPath diagnosticsPath = compilerWorkDirectory / s_CompilerDiagFileName;
+    const ScratchPath compilerOutputPath = compilerWorkDirectory / s_ModuleSpvFileName;
+    const ScratchPath compilerOverlayRoot = compilerWorkDirectory / s_SourcesDirName;
+    const auto compilerInputs = SlangCompilerWorkspace::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, scratchArena);
+    if(!compilerInputs)
+        return false;
+    const ScratchVector<ScratchPath>& compilerIncludeDirectories = compilerInputs->includeDirectories;
+
+    const usize includeDirectoryCount = compilerIncludeDirectories.size();
+    const usize defineCount = request.defines.size();
+    usize argumentReserve = 0u;
+    usize ownedArgumentCount = 0u;
+    if(!SlangCompilerRequestValidator{}.argumentCounts(request.shaderName, includeDirectoryCount, defineCount, argumentReserve, ownedArgumentCount))
+        return false;
+
+    ScratchVector<AStringView> arguments(scratchArena);
+    arguments.reserve(argumentReserve);
+    ScratchVector<ScratchString> ownedArguments(scratchArena);
+    // Retire nested string allocations before the owner array, independently of STL destruction order.
+    ScopeExit retireArguments([&ownedArguments]()noexcept{
+        while(!ownedArguments.empty())
+            ownedArguments.pop_back();
+    });
+    // Reserve owners before publishing views so inline string storage cannot move.
+    ownedArguments.reserve(ownedArgumentCount);
+    arguments.push_back(AStringView(NWB_SLANGC_EXECUTABLE));
+
+    auto sourcePathText = SlangCompilerWorkspace::BuildCompilerPathText(compilerInputs->sourcePath, scratchArena);
+    if(!sourcePathText)
+        return false;
+    ownedArguments.push_back(Move(*sourcePathText));
+    arguments.push_back(AStringView(ownedArguments.back()));
+    for(const AStringView argument : s_CommonCompilerArguments)
+        arguments.push_back(argument);
+    if(!optimizationArgument.empty())
+        arguments.push_back(optimizationArgument);
+    if(request.rayQuery){
+        arguments.push_back(s_SlangCapabilityArgument);
+        arguments.push_back(ShaderBinaryPayload::s_SpvRayQueryCapabilityText);
+    }
+    for(const AStringView capability : s_SpirvBaselineCapabilities){
+        arguments.push_back(s_SlangCapabilityArgument);
+        arguments.push_back(capability);
+    }
+    arguments.push_back(s_SlangEntryPointArgument);
+    arguments.push_back(request.entryPoint);
+    arguments.push_back(s_SlangStageArgument);
+    arguments.push_back(slangStage);
+    for(const ScratchPath& includeDirectory : compilerIncludeDirectories){
+        arguments.push_back(s_SlangIncludeArgument);
+        auto includeDirectoryText = SlangCompilerWorkspace::BuildCompilerPathText(includeDirectory, scratchArena);
+        if(!includeDirectoryText)
+            return false;
+        ownedArguments.push_back(Move(*includeDirectoryText));
+        arguments.push_back(AStringView(ownedArguments.back()));
+    }
+
+    for(const ShaderBinaryPayload::ShaderMacroDefinition& define : request.defines){
+        auto defineArgument = BuildCompilerDefineArgument(define, request, compilerOverlayRoot, scratchArena);
+        if(!defineArgument)
+            return false;
+        ownedArguments.push_back(Move(*defineArgument));
+        arguments.push_back(AStringView(ownedArguments.back()));
+    }
+
+    arguments.push_back(s_SlangOutputArgument);
+    auto outputPathText = SlangCompilerWorkspace::BuildCompilerPathText(compilerOutputPath, scratchArena);
+    if(!outputPathText)
+        return false;
+    ownedArguments.push_back(Move(*outputPathText));
+    arguments.push_back(AStringView(ownedArguments.back()));
+
+    const auto diagnosticsPathText = SlangCompilerWorkspace::BuildCompilerPathText(diagnosticsPath, scratchArena);
+    if(!diagnosticsPathText)
+        return false;
+    const auto exitCode = ::RunProcessRedirectedToFile(scratchArena, arguments, AStringView(*diagnosticsPathText));
+    if(!exitCode || *exitCode != 0){
+        const TStringView failureStage = exitCode ? NWB_TEXT("compiler exit code") : NWB_TEXT("process execution failure");
+        const i64 failureCode = exitCode ? static_cast<i64>(*exitCode) : static_cast<i64>(exitCode.error());
+        ScratchString diagnostics{scratchArena};
+        const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
+        if(!diagnosticsRead)
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}; diagnostics read '{}' failed: {}:{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, PathToString<tchar>(diagnosticsPath), ConvertString(diagnosticsRead.error().category().name()), diagnosticsRead.error().value());
+        else if(!diagnostics.empty())
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {} :\n{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, ConvertString(diagnostics));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode);
+        return false;
+    }
+
+    ScratchString diagnostics{scratchArena};
+    const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
+    if(!diagnosticsRead){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler diagnostics '{}' for '{}' (variant '{}'): {}:{}"), PathToString<tchar>(diagnosticsPath), ConvertString(request.shaderName), ConvertString(request.variantName), ConvertString(diagnosticsRead.error().category().name()), diagnosticsRead.error().value());
+        return false;
+    }
+    if(!ValidateUnexpectedCompilerDiagnosticsEmpty(request.shaderName, request.variantName, AStringView(diagnostics)))
+        return false;
+
+    auto readBinaryFileResult = ReadBinaryFile(compilerOutputPath, outBytecode);
+    if(!readBinaryFileResult){
+        if(readBinaryFileResult.error())
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath), ConvertString(readBinaryFileResult.error().message()));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath));
+        return false;
+    }
+
+    const auto stageName = Name::FromText(request.stage);
+    if(!ValidateCompiledShaderStageName(request.shaderName, request.variantName, stageName.has_value())){
+        outBytecode.clear();
+        return false;
+    }
+    const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(*stageName);
+    const auto resolvedEntryPoint = Core::ResolveSpirvEntryPointName(BinaryByteView{ outBytecode.data(), outBytecode.size() }, request.entryPoint, Core::ShaderType::ToMask(shaderType));
+    if(!ValidateCompiledSpirvEntryPoint(request.shaderName, request.variantName, resolvedEntryPoint.has_value())){
+        outBytecode.clear();
+        return false;
+    }
+
+    auto renamePathResult = RenamePath(compilerOutputPath, request.outputPath);
+    if(!renamePathResult){
+        ScratchVector<u8> publishedBytecode(scratchArena);
+        if(
+            ReadBinaryFile(request.outputPath, publishedBytecode)
+            && publishedBytecode.size() == outBytecode.size()
+            && NWB_MEMCMP(publishedBytecode.data(), outBytecode.data(), outBytecode.size()) == 0
+            && Core::ResolveSpirvEntryPointName(BinaryByteView{ publishedBytecode.data(), publishedBytecode.size() }, request.entryPoint, Core::ShaderType::ToMask(shaderType))
+        )
+            return true;
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to publish verified bytecode cache '{}' : {}"), PathToString<tchar>(request.outputPath), ConvertString(renamePathResult.error().message()));
+        outBytecode.clear();
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShaderCook::ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena){
+    using namespace ShaderBinaryPayload;
+
+    b8 isComplete = false;
+    if(!ValidateVariantSignaturePreamble(contextLabel, variantSignature, defineValues.empty(), isComplete))
+        return false;
+    if(isComplete)
+        return true;
+
+    using ScratchStringSet = __hidden_cook_shader_metadata::ScratchHashSet<AStringView>;
+    ScratchStringSet seenDefines{0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena};
+    seenDefines.reserve(defineValues.size());
+    const b8 parsedAssignments = ParseVariantSignatureAssignments(
+        variantSignature,
+        [&](const AStringView defineName, const AStringView defineValue) -> b8{
+            const auto defineIt = defineValues.find(defineName);
+            const b8 defineKnown = defineIt != defineValues.end();
+            b8 valueFound = false;
+            if(defineKnown){
+                for(const CookString& allowedValue : defineIt.value().values){
+                    if(AStringView(allowedValue) == defineValue){
+                        valueFound = true;
+                        break;
+                    }
+                }
+            }
+            const b8 insertedUnique = defineKnown && valueFound && seenDefines.insert(defineName).second;
+            return ValidateVariantSignatureAssignmentStatus(contextLabel, variantSignature, defineName, defineValue, defineKnown, valueFound, insertedUnique);
+        },
+        [&](const VariantSignatureSegmentError::Enum error, const AStringView segment){
+            ReportVariantSignatureSegmentError(contextLabel, variantSignature, error, segment);
+        });
+    if(!parsedAssignments)
+        return false;
+
+    return ValidateVariantSignatureSeenCount(contextLabel, variantSignature, seenDefines.size(), defineValues.size());
+}
+
+Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena){
+    using namespace ShaderBinaryPayload;
+
+    ShaderEntry entry(m_memoryArena);
+
+    const auto* assetDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
+    if(!assetDeclaration){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(Core::Assets::s_MetadataAssetVariable));
+        return MakeUnexpected(Failure{});
+    }
+    const AStringView assetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
+    const Core::ShaderType::Enum shaderType = ShaderAssetTypes::ShaderTypeFromAssetTypeText(assetTypeText);
+    if(shaderType == Core::ShaderType::Invalid){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported shader asset type '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(assetTypeText));
+        return MakeUnexpected(Failure{});
+    }
+
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_ShaderDiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Core::Metascript::Value& asset = **assetValue;
+
+    auto pairedSource = Core::Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, m_memoryArena, scratchArena);
+    if(!pairedSource)
+        return MakeUnexpected(Failure{});
+    entry.source = Move(*pairedSource);
+    if(!Core::Assets::CheckPairedSourceExtension(nwbFilePath, entry.source, s_SlangSourceExtension, s_ShaderDiagnosticPrefix, scratchArena))
+        return MakeUnexpected(Failure{});
+
+    const Core::Assets::ScratchString nwbFilePathText = PathToString(scratchArena, nwbFilePath);
+    entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType);
+    if(!ValidateDerivedShaderStageText(AStringView(nwbFilePathText), entry.stage))
+        return MakeUnexpected(Failure{});
+    entry.archiveStage = entry.stage;
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ShaderMetaDiagnosticPrefix, [isMesh = shaderType == Core::ShaderType::MeshStage](const AStringView field)noexcept{
+        return IsAllowedShaderMetadataField(field, isMesh);
+    }))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ReadOptionalMetadataBoolField(nwbFilePath, asset, s_ShaderOptionalBoolMetaPrefix, s_ShaderRayQueryField, entry.rayQuery))
+        return MakeUnexpected(Failure{});
+    const auto optimizationLevelText = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ShaderMetaDiagnosticPrefix, s_ShaderOptimizationLevelField, false);
+    if(!optimizationLevelText)
+        return MakeUnexpected(Failure{});
+    if(optimizationLevelText->present){
+        const auto optimizationLevel = TryParseShaderOptimizationLevelText(optimizationLevelText->text);
+        if(!optimizationLevel){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(optimizationLevelText->text));
+            return MakeUnexpected(Failure{});
+        }
+        entry.optimizationLevel = *optimizationLevel;
+    }
+    auto entryPointTextResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ShaderMetaDiagnosticPrefix, s_ShaderEntryPointField, false);
+    if(!entryPointTextResult)
+        return MakeUnexpected(Failure{});
+    const AStringView entryPointText = entryPointTextResult->text;
+    entry.entryPoint.assign(entryPointText.data(), entryPointText.size());
+    if(!ValidateNonEmptyShaderEntryPoint(AStringView(nwbFilePathText), AStringView(entry.entryPoint)))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ReadOptionalMetadataBoolField(nwbFilePath, asset, s_ShaderOptionalBoolMetaPrefix, s_ShaderEmitMeshComputeShadowField, entry.emitMeshComputeShadow))
+        return MakeUnexpected(Failure{});
+
+    if(const auto* includeRootsVal = asset.findField(s_ShaderIncludeRootsField)){
+        if(!includeRootsVal->copyStringList(entry.includeRoots)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
+            return MakeUnexpected(Failure{});
+        }
+        Vector<AStringView, Core::Alloc::ScratchArena> includeRootViews(scratchArena);
+        includeRootViews.reserve(entry.includeRoots.size());
+        for(const ShaderCook::CookString& includeRoot : entry.includeRoots)
+            includeRootViews.emplace_back(includeRoot);
+        if(!ValidateShaderIncludeRoots(AStringView(nwbFilePathText), includeRootViews))
+            return MakeUnexpected(Failure{});
+    }
+
+    auto defines = __hidden_cook_shader_metadata::ParseDefines(nwbFilePath, asset, m_memoryArena);
+    if(!defines)
+        return MakeUnexpected(Failure{});
+    entry.defineValues = Move(*defines);
+
+    return entry;
+}
+
+Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena){
+    using namespace ShaderBinaryPayload;
+
+    IncludeEntry entry(m_memoryArena);
+
+    const auto* assetDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
+    if(!assetDeclaration){
+        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(Core::Assets::s_MetadataAssetVariable));
+        return MakeUnexpected(Failure{});
+    }
+    const ACompactString assetType(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
+    if(!IsIncludeShaderAssetType(assetType.view(), s_ShaderAssetTypeInclude))
+        return entry;
+
+    auto pairedSource = Core::Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, m_memoryArena, scratchArena);
+    if(!pairedSource)
+        return MakeUnexpected(Failure{});
+    entry.source = Move(*pairedSource);
+    if(!Core::Assets::CheckPairedSourceExtension(nwbFilePath, entry.source, s_SlangIncludeExtension, s_IncludeDiagnosticPrefix, scratchArena))
+        return MakeUnexpected(Failure{});
+
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_IncludeDiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Core::Metascript::Value& asset = **assetValue;
+
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_IncludeMetaDiagnosticPrefix, &IsAllowedIncludeMetadataField))
+        return MakeUnexpected(Failure{});
+    auto defines = __hidden_cook_shader_metadata::ParseDefines(nwbFilePath, asset, m_memoryArena);
+    if(!defines)
+        return MakeUnexpected(Failure{});
+    entry.defineValues = Move(*defines);
+
+    return entry;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShaderAssetSerialization::Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary){
+    return ShaderBinaryPayload::SerializeShaderAssetPayload(AStringView(shader.entryPoint()), shader.bytecode(), outBinary);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

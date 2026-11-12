@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidMinidumpByteRange(in u64 byteCount, in u64 offset, in u64 size){
+    if(offset > byteCount)
+        return false;
+    return size <= byteCount - offset;
+}
+
+b8 IsValidMinidumpRecordCount(in usize byteCount, in usize recordsOffset, in usize recordByteSize, in u64 count){
+    if(recordByteSize == 0u || recordsOffset > byteCount)
+        return false;
+    return count <= cast<u64>((byteCount - recordsOffset) / recordByteSize);
+}
+
+b8 IsValidMinidumpWideStringByteCount(in u32 textByteCount, in usize wcharByteSize){
+    if(wcharByteSize == 0u)
+        return false;
+    return (cast<usize>(textByteCount) % wcharByteSize) == 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

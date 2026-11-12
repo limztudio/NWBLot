@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeMeshSelectionInitialCapacity(in usize instanceCount){
+    if(instanceCount > 1u)
+        return instanceCount;
+    return 1u;
+}
+
+b8 ShouldCollectMeshNode(in b8 hasNode, in b8 hasMesh, in b8 includeHidden, in b8 visible){
+    return hasNode && hasMesh && (includeHidden || visible);
+}
+
+void AppendFbxMeshInstanceLine(
+    in usize index,
+    in b8 hasNode,
+    in StringView rawNodeName,
+    in StringView rawMeshName,
+    in usize numTriangles,
+    in b8 visible,
+    mut String outReport
+){
+    const StringView nodeName = ResolveFbxNodeDisplayName(hasNode, rawNodeName);
+    const StringView meshName = ResolveFbxMeshDisplayName(rawMeshName);
+    outReport.append("  [");
+    AppendUnsignedU64Text(outReport, cast<u64>(index));
+    outReport.append("] node=\"");
+    outReport.append(nodeName);
+    outReport.append("\" mesh=\"");
+    outReport.append(meshName);
+    outReport.append("\" triangles=");
+    AppendUnsignedU64Text(outReport, cast<u64>(numTriangles));
+    if(!visible)
+        outReport.append(" hidden");
+    outReport.append(s_ReportLineEndText);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

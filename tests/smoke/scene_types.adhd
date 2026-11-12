@@ -2,11 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <global/environment.h>
-}
-
-
 const StringView s_ShadowSmokeAnalyticAtlas = "analytic";
 const f32 s_ShadowSmokeCameraDepth = -4.0f;
 const StringView s_ShadowSmokeCapsuleShapePath = "engine/csg/capsule";
@@ -195,56 +190,34 @@ StringView ResolveCsgShadowOpenCaseName(in CsgShadowOpenCase openCase){
     return s_ShadowSmokeOpenCaseRetained;
 }
 
-b8 TryParseCsgShadowArm(in StringView text, mut CsgShadowArm outArm){
-    if(text == "reference"){
-        outArm = CsgShadowArm::Reference;
-        return true;
-    }
-    if(text == "cut"){
-        outArm = CsgShadowArm::Cut;
-        return true;
-    }
-    if(text == "uncut"){
-        outArm = CsgShadowArm::Uncut;
-        return true;
-    }
-    if(text == "moved"){
-        outArm = CsgShadowArm::Moved;
-        return true;
-    }
-    if(text == "camera_shift"){
-        outArm = CsgShadowArm::CameraShift;
-        return true;
-    }
-    return false;
+Expected<CsgShadowArm> ParseCsgShadowArm(in StringView text){
+    if(text == "reference")
+        return CsgShadowArm::Reference;
+    if(text == "cut")
+        return CsgShadowArm::Cut;
+    if(text == "uncut")
+        return CsgShadowArm::Uncut;
+    if(text == "moved")
+        return CsgShadowArm::Moved;
+    if(text == "camera_shift")
+        return CsgShadowArm::CameraShift;
+    return MakeUnexpected(Failure());
 }
 
-b8 TryParseCsgShadowOpenCase(in StringView text, mut CsgShadowOpenCase outOpenCase){
-    if(text == s_ShadowSmokeOpenCaseReference){
-        outOpenCase = CsgShadowOpenCase::Reference;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseRetained){
-        outOpenCase = CsgShadowOpenCase::Retained;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseClippedReference){
-        outOpenCase = CsgShadowOpenCase::ClippedReference;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseClipped){
-        outOpenCase = CsgShadowOpenCase::Clipped;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseBoundary64){
-        outOpenCase = CsgShadowOpenCase::Boundary64;
-        return true;
-    }
-    if(text == s_ShadowSmokeOpenCaseTerminal65){
-        outOpenCase = CsgShadowOpenCase::Terminal65;
-        return true;
-    }
-    return false;
+Expected<CsgShadowOpenCase> ParseCsgShadowOpenCase(in StringView text){
+    if(text == s_ShadowSmokeOpenCaseReference)
+        return CsgShadowOpenCase::Reference;
+    if(text == s_ShadowSmokeOpenCaseRetained)
+        return CsgShadowOpenCase::Retained;
+    if(text == s_ShadowSmokeOpenCaseClippedReference)
+        return CsgShadowOpenCase::ClippedReference;
+    if(text == s_ShadowSmokeOpenCaseClipped)
+        return CsgShadowOpenCase::Clipped;
+    if(text == s_ShadowSmokeOpenCaseBoundary64)
+        return CsgShadowOpenCase::Boundary64;
+    if(text == s_ShadowSmokeOpenCaseTerminal65)
+        return CsgShadowOpenCase::Terminal65;
+    return MakeUnexpected(Failure());
 }
 
 u32 ComputeSkinningBenchmarkJointSeed(in u32 jointIndex, in u32 characterIndex){
@@ -705,6 +678,17 @@ u32 ExpectedRefractionProbeTileCount(in u32 phase){
     return s_RefractionTileProbeTileCount - 1u;
 }
 
+b8 TryReadNonEmptySmokeEnvVar(in StringView name, mut String outValue){
+    const Expected<Optional<String>, ErrorCode> result = ReadEnvironmentVariable(name);
+    if(!result.has_value())
+        return false;
+    const Optional<String> candidate = result.value();
+    if(!candidate.has_value() || candidate.value().empty())
+        return false;
+    outValue = candidate.value();
+    return true;
+}
+
 class CsgShadowMode{
     public CsgShadowArm arm = CsgShadowArm::Cut;
     public CsgShadowOpenCase openCase = CsgShadowOpenCase::Retained;
@@ -727,8 +711,10 @@ class CsgShadowMode{
         in b8 caustic
     ){
         if(hasArm){
-            if(!TryParseCsgShadowArm(armText, this.arm))
+            const Expected<CsgShadowArm> parsedArm = ParseCsgShadowArm(armText);
+            if(!parsedArm.has_value())
                 return false;
+            this.arm = parsedArm.value();
         }
         if(hasLight){
             if(lightText != s_ShadowSmokeDirectional && lightText != s_ShadowSmokePoint)
@@ -749,8 +735,10 @@ class CsgShadowMode{
         if(this.openAtlas){
             if(!hasOpenCase || this.pointLight || this.finiteLightSource || this.arm != CsgShadowArm::Cut || caustic)
                 return false;
-            if(!TryParseCsgShadowOpenCase(openCaseText, this.openCase))
+            const Expected<CsgShadowOpenCase> parsedOpenCase = ParseCsgShadowOpenCase(openCaseText);
+            if(!parsedOpenCase.has_value())
                 return false;
+            this.openCase = parsedOpenCase.value();
         }
         return !this.analyticAtlas || (!this.pointLight && (this.arm == CsgShadowArm::Cut || this.arm == CsgShadowArm::Uncut));
     }
@@ -761,25 +749,11 @@ class CsgShadowMode{
         String sourceStr;
         String atlasStr;
         String openCaseStr;
-        b8 hasArm = false;
-        b8 hasLight = false;
-        b8 hasSource = false;
-        b8 hasAtlas = false;
-        b8 hasOpenCase = false;
-        native(mut armStr, mut lightStr, mut sourceStr, mut atlasStr, mut openCaseStr, mut hasArm, mut hasLight, mut hasSource, mut hasAtlas, mut hasOpenCase){
-            const auto ReadEnv = [&](const AStringView varName, auto& outStr, b8& outHas){
-                const auto v = ReadEnvironmentVariable(__adhd_scratch, varName);
-                if(v && *v && !(*v)->empty()){
-                    outStr.assign((*v)->data(), (*v)->size());
-                    outHas = true;
-                }
-            };
-            ReadEnv("NWB_CSG_SHADOW_ARM", armStr, hasArm);
-            ReadEnv("NWB_CSG_SHADOW_LIGHT", lightStr, hasLight);
-            ReadEnv("NWB_CSG_SHADOW_LIGHT_SOURCE", sourceStr, hasSource);
-            ReadEnv("NWB_CSG_SHADOW_ATLAS", atlasStr, hasAtlas);
-            ReadEnv("NWB_CSG_SHADOW_OPEN_CASE", openCaseStr, hasOpenCase);
-        }
+        const b8 hasArm = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ARM", armStr);
+        const b8 hasLight = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT", lightStr);
+        const b8 hasSource = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT_SOURCE", sourceStr);
+        const b8 hasAtlas = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ATLAS", atlasStr);
+        const b8 hasOpenCase = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_OPEN_CASE", openCaseStr);
         return this.applyEnvironmentValues(armStr, hasArm, lightStr, hasLight, sourceStr, hasSource, atlasStr, hasAtlas, openCaseStr, hasOpenCase, caustic);
     }
 

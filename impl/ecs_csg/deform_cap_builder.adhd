@@ -2,64 +2,117 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_csg/deform_wall_builder.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+#include <impl/ecs_csg/deform_wall_builder.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Owns cut boundary loop collection, deterministic ordering, and fan fills with one cap orientation rule, so preview and commit caps always agree.
-namespace CsgDeformCapBuilder{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline void CollectBoundaryEdges(Core::Alloc::ScratchArena&, const Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges){
-    CollectCsgDeformBoundaryEdges(triangles, outEdges);
-}
-[[nodiscard]] inline b8 OrderBoundaryLoop(Core::Alloc::ScratchArena&, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop){
-    return OrderCsgDeformBoundaryLoop(edges, outLoop);
-}
-[[nodiscard]] inline Expected<u32> FillCutCaps(
-    Core::Alloc::ScratchArena&,
-    Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,
-    CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
+Expected<u32, CsgDeformViabilityReason> ApplyCsgDeformCutStep(
+    in CsgDeformShape shape,
+    in f32 boundaryEpsilon,
+    in b8 fillCaps,
+    in u32 registryParameterByteSize,
+    in Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>> registryDistanceCallback,
+    mut HashMap<u64, u32> edgeSplits,
+    mut Vector<CsgDeformTriangle> scratchKept,
+    mut Vector<f32> scratchDistances,
+    mut Vector<CsgDeformCutLoopEdge> scratchEdges,
+    mut Vector<CsgDeformVertex> inOutVertices,
+    mut Vector<CsgDeformTriangle> inOutTriangles
 ){
-    return FillCsgDeformCutCaps(scratchEdges, inOutVertices, inOutTriangles);
+    const Expected<b8, CsgDeformViabilityReason> clipped = ClipCsgDeformWallShell(
+        shape,
+        boundaryEpsilon,
+        registryParameterByteSize,
+        registryDistanceCallback,
+        edgeSplits,
+        scratchKept,
+        scratchDistances,
+        inOutVertices,
+        inOutTriangles
+    );
+    if(!clipped.has_value())
+        return MakeUnexpected(clipped.error());
+
+    const CsgDeformViabilityReason postCutReason = ClassifyPostCutCsgDeformViability(inOutVertices.size(), inOutTriangles.size());
+    if(postCutReason != CsgDeformViabilityReason::Ok)
+        return MakeUnexpected(postCutReason);
+
+    if(!fillCaps)
+        return 0u;
+
+    const Expected<u32> cutCaps = FillCsgDeformCutCaps(scratchEdges, inOutVertices, inOutTriangles);
+    if(!cutCaps.has_value())
+        return MakeUnexpected(CsgDeformViabilityReason::CapLoopFailed);
+    return cutCaps.value();
+}
+
+Expected<CsgDeformStats, CsgDeformFailure> ExecuteCsgDeformPreview(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    in Span<u32> cutRegistryParameterByteSizes,
+    in Span<Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>>> cutRegistryCallbacks,
+    mut Vector<CsgDeformVertex> outVertices,
+    mut Vector<CsgDeformTriangle> outTriangles
+){
+    const usize inputVertexCount = inputVertices.size();
+    const usize inputTriangleCount = inputTriangles.size();
+    const usize cutCount = cuts.size();
+    CsgDeformStats stats;
+    outVertices.clear();
+    outTriangles.clear();
+    stats.inputVertexCount = cast<u32>(inputVertexCount);
+    stats.inputTriangleCount = cast<u32>(inputTriangleCount);
+    const Expected<f32, CsgDeformViabilityReason> boundaryEpsilonResult = TryValidateCsgDeformPreviewInputs(inputVertices, inputTriangles, options);
+    if(!boundaryEpsilonResult.has_value())
+        return MakeUnexpected(MakeCsgDeformFailure(boundaryEpsilonResult.error(), stats));
+
+    const f32 boundaryEpsilon = boundaryEpsilonResult.value();
+    PrepareCsgDeformPreviewBuffers(inputVertices, inputTriangles, cutCount, outVertices, outTriangles);
+
+    HashMap<u64, u32> edgeSplits;
+    Vector<CsgDeformTriangle> scratchKept;
+    Vector<f32> scratchDistances;
+    Vector<CsgDeformCutLoopEdge> scratchEdges;
+
+    u32 appliedCuts = 0u;
+    u32 capTriangles = 0u;
+    for(usize cutIndex = 0u; cutIndex < cutCount; ++cutIndex){
+        const CsgDeformCutDesc cut = cuts[cutIndex];
+        if(!cut.active)
+            continue;
+        u32 registryParameterByteSize = 0u;
+        Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>> registryDistanceCallback;
+        if(cutIndex < cutRegistryParameterByteSizes.size())
+            registryParameterByteSize = cutRegistryParameterByteSizes[cutIndex];
+        if(cutIndex < cutRegistryCallbacks.size())
+            registryDistanceCallback = cutRegistryCallbacks[cutIndex];
+        const Expected<u32, CsgDeformViabilityReason> cutStep = ApplyCsgDeformCutStep(
+            cut.shape,
+            boundaryEpsilon,
+            options.fillCaps,
+            registryParameterByteSize,
+            registryDistanceCallback,
+            edgeSplits,
+            scratchKept,
+            scratchDistances,
+            scratchEdges,
+            outVertices,
+            outTriangles
+        );
+        if(!cutStep.has_value())
+            return MakeUnexpected(MakeCsgDeformFailure(cutStep.error(), stats));
+        ++appliedCuts;
+        capTriangles += cutStep.value();
+    }
+
+    return FinalizeCsgDeformStats(outVertices, outTriangles, appliedCuts, capTriangles, stats);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsCsgDeformCapBuilderAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

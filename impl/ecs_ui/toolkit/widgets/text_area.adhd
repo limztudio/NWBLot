@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/text_area_scroll.adhd.h>
 
@@ -11,54 +17,6 @@ native{
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Owns copied scroll admission, separate from preferred-column navigation and the application model.
-class TextAreaScrollState final{
-    friend class Builder;
-    friend class TextAreaCoordinator;
-    friend class TextAreaState;
-
-
-private:
-    [[nodiscard]] ControlToken prepare(
-        const WidgetState& widget, const PopupToken& popup,
-        const u64 stateGeneration, const u64 stateRevision, const EditModel& model, const b8 enabled, const b8 readOnly,
-        const ScrollViewportPlacement& placement,
-        const Point step
-    )noexcept{
-        return PrepareTextAreaScrollState(
-            widget,
-            popup,
-            stateGeneration,
-            stateRevision,
-            model.stamp(),
-            enabled,
-            readOnly,
-            placement,
-            step,
-            m_snapshot,
-            m_placement,
-            m_step,
-            m_revision,
-            m_prepared
-        );
-    }
-    void retire()noexcept{
-        RetireTextAreaScrollState(m_snapshot, m_placement, m_step, m_revision, m_prepared);
-    }
-
-
-private:
-    TextAreaScrollSnapshot m_snapshot;
-    ScrollViewportPlacement m_placement;
-    Point m_step;
-    u64 m_revision = 1u;
-    b8 m_prepared = false;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +44,7 @@ public:
 
     [[nodiscard]] const EditBoxPlacement& placement()const noexcept{ return m_visual.placement; }
 
-    [[nodiscard]] const ScrollViewportPlacement& scrollbars()const noexcept{ return m_scrollInput.m_placement; }
+    [[nodiscard]] const ScrollViewportPlacement& scrollbars()const noexcept{ return m_scrollInput.placement; }
 
     [[nodiscard]] Point scroll()const noexcept{ return { m_visual.scroll, m_scrollY }; }
 
@@ -133,15 +91,10 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsUiToolkitWidgetsTextAreaAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

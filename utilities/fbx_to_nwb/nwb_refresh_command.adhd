@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldPromptRefreshOutputPath(in b8 hasOutputOption, in b8 acceptDefaults){
+    return !hasOutputOption && !acceptDefaults;
+}
+
+b8 IsNwbRefreshInputPath(in b8 refreshNwbFlag, in StringView inputPathText){
+    if(refreshNwbFlag)
+        return true;
+    const Path inputPath(inputPathText);
+    Array<StringView, 1u> extensions;
+    extensions[0u] = s_NwbFileExtensionText;
+    return PathHasListedExtension(inputPath, extensions);
+}
+
+void AppendNwbRefreshCountLine(in StringView name, in usize beforeCount, in usize afterCount, mut String outReport){
+    outReport.append("  ");
+    outReport.append(name);
+    outReport.append(": ");
+    AppendUnsignedU64Text(outReport, cast<u64>(beforeCount));
+    outReport.append(" -> ");
+    AppendUnsignedU64Text(outReport, cast<u64>(afterCount));
+    outReport.append(s_ReportLineEndText);
+}
+
+String FormatNwbRefreshReport(
+    in StringView outputText,
+    in StringView inputText,
+    in SourceMeshCanonicalizeReport canonicalizeReport
+){
+    String report;
+    report.reserve(256u + outputText.size() + inputText.size());
+    report.append("Refreshed ");
+    report.append(outputText);
+    report.append(s_ReportLineEndText);
+    report.append("  input: ");
+    report.append(inputText);
+    report.append(s_ReportLineEndText);
+    AppendNwbRefreshCountLine(s_MeshPositionsFieldNameView, canonicalizeReport.before.positions, canonicalizeReport.after.positions, report);
+    AppendNwbRefreshCountLine(s_MeshNormalsFieldNameView, canonicalizeReport.before.normals, canonicalizeReport.after.normals, report);
+    AppendNwbRefreshCountLine(s_MeshTangentsFieldNameView, canonicalizeReport.before.tangents, canonicalizeReport.after.tangents, report);
+    AppendNwbRefreshCountLine(s_MeshUv0FieldNameView, canonicalizeReport.before.uv0, canonicalizeReport.after.uv0, report);
+    AppendNwbRefreshCountLine(s_MeshColorsFieldNameView, canonicalizeReport.before.colors, canonicalizeReport.after.colors, report);
+    AppendNwbRefreshCountLine(s_SkinStreamLabel, canonicalizeReport.before.skin, canonicalizeReport.after.skin, report);
+    AppendNwbRefreshCountLine(s_MeshVertexRefsFieldNameView, canonicalizeReport.before.vertexRefs, canonicalizeReport.after.vertexRefs, report);
+    AppendNwbRefreshCountLine(s_MeshIndicesFieldNameView, canonicalizeReport.before.indices, canonicalizeReport.after.indices, report);
+    return report;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

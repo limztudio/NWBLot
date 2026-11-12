@@ -4,13 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
 
-native{
-#include <core/alloc/scratch.h>
-namespace NWB::Impl::Ui{
-using ScratchByteVector = Vector<u8, Core::Alloc::ScratchArena>;
-};
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

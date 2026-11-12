@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
@@ -42,6 +48,18 @@ public:
 
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
+
+template<typename RootArenaT, typename FileArenaT>
+    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<FontCookEntry> ParseFontCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseFontCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
+}
+
+template<typename FileArenaT>
+    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
+    return ParseFontCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena);
+}
 [[nodiscard]] Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena);
 
 
@@ -58,27 +76,38 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontCookAdhdModule(in u64 value){
-    return value != 0u;
+const b8 s_FontCookIncludePreparedPixels = false;
+
+b8 IsValidFontCookVirtualPath(in Name virtualPath){
+    return virtualPath != s_NameNone;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_font/font_binary_codec.adhd.h>
-#include <impl/assets_font/prepared_source.adhd.h>
 
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
@@ -146,7 +175,7 @@ Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, const AStri
 
 Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
     FontCookEntry entry(arena);
-    if(!virtualPath)
+    if(!IsValidFontCookVirtualPath(virtualPath))
         return MakeUnexpected(Failure{});
     if(!asset.isNull()){
         if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontMetaDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontMetaDiagnosticPrefix, InitializerList<AStringView>{}))
@@ -154,7 +183,7 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
     }
     Path fontPath = nwbFilePath;
     fontPath.replaceExtension(s_PreparedFontExtension);
-    auto source = ReadPreparedFontSource(fontPath, false, arena);
+    auto source = ReadPreparedFontSource(fontPath, s_FontCookIncludePreparedPixels, arena);
     if(!source || !ValidateFontSource(source->fontBytes, source->faceIndex))
         return MakeUnexpected(Failure{});
     entry.fontBytes = Move(source->fontBytes);
@@ -191,7 +220,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,111 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/global.adhd>
+#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/skin_types.adhd>
+#include <impl/assets_skeleton/joint_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <engine_namespace.h>
+
+#include <core/alloc/module.h>
+#include <core/task/cpu/scheduler.h>
+
+#include <global/compile.h>
+#include <global/assert.h>
+#include <global/containers.h>
+#include <global/filesystem.h>
+#include <global/hash_utils.h>
+#include <global/limit.h>
+#include <global/simdmath.h>
+#include <global/simd/type.h>
+#include <global/span.h>
+#include <global/simplemath.h>
+#include <global/text_utils.h>
+#include <global/type.h>
+
+#include <ufbx.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_FBX_TO_NWB_BEGIN NWB_BEGIN namespace FbxToNwb{
+#define NWB_FBX_TO_NWB_END }; NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_UtilityArena = "utilities/fbx_to_nwb/utility";
+
+using NWB::Impl::SkinInfluence4;
+using NWB::Impl::ValidateSourceStreamIndexWithContext;
+using NWB::Impl::s_MeshletTriangleIndexCount;
+using NWB::Impl::s_MeshMissingStreamIndex;
+using NWB::Impl::s_SkinInfluenceJointCount;
+using NWB::Impl::s_VertexRefPositionName;
+using NWB::Impl::s_VertexRefNormalName;
+using NWB::Impl::s_VertexRefTangentName;
+using NWB::Impl::s_MeshUv0FieldNameView;
+using NWB::Impl::s_VertexRefColorName;
+using NWB::Impl::s_MeshPositionsFieldNameView;
+using NWB::Impl::s_MeshNormalsFieldNameView;
+using NWB::Impl::s_MeshTangentsFieldNameView;
+using NWB::Impl::s_MeshColorsFieldNameView;
+using NWB::Impl::s_MeshVertexRefsFieldNameView;
+using NWB::Impl::s_MeshIndicesFieldNameView;
+using NWB::Impl::IsFiniteSkeletonJointMatrix;
+using NWB::Impl::IsFiniteSkeletonJointRow;
+using NWB::Impl::s_SkeletonJointMatrixFloatCount;
+using NWB::Impl::s_SkeletonJointMatrixRowCount;
+
+using UtilityString = DefaultAString<Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using ScratchString = ::AString<Core::Alloc::ScratchArena>;
+using ScratchStringStream = ::AStringStream<Core::Alloc::ScratchArena>;
+
+template<typename T>
+using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
+
+template<typename T>
+using UtilityScratchVector = ::Vector<T, Core::Alloc::ScratchArena>;
+
+template<typename K, typename V, typename Hash = Hasher<K>, typename Equal = EqualTo<K>>
+using UtilityScratchMap = ::HashMap<K, V, Core::Alloc::ScratchArena, Hash, Equal>;
+
+using ScratchU32Vector = UtilityScratchVector<u32>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

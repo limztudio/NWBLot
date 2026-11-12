@@ -2,8 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/task_desc.h>
@@ -27,21 +40,55 @@ struct GraphClearTimingRecordState{
 };
 
 
-[[nodiscard]] inline Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(const GraphClearTimingRecordState& state)noexcept{
+[[nodiscard]] NWB_INLINE Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(const GraphClearTimingRecordState& state)noexcept{
     return state.rebindableTimingTicket ? *state.rebindableTimingTicket : state.timingTicket;
 }
 
-[[nodiscard]] b8 BeginGraphClearTiming(
-    Core::GraphicsRuntime* graphics,
-    Optional<Core::GpuTimingMeasure>* timing,
-    Core::GpuTimingSubmissionTicket* timingTicket,
+[[nodiscard]] NWB_INLINE b8 BeginGraphClearTiming(
+    Core::GraphicsRuntime* const graphics,
+    Optional<Core::GpuTimingMeasure>* const timing,
+    Core::GpuTimingSubmissionTicket* const timingTicket,
     const Core::GpuTimingScopeDefinition& scope,
     Core::CommandList& commandList
-);
-[[nodiscard]] b8 EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* timing, Core::GpuTimingSubmissionTicket* timingTicket, Core::CommandList& commandList);
-[[nodiscard]] b8 BeginGraphClearTimingRecord(void* rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-[[nodiscard]] b8 EndGraphClearTimingRecord(void* rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-void DiscardGraphClearTimingRecord(void* rawState);
+){
+    if(!CanBeginGraphClearTimingState(graphics != nullptr, timing != nullptr, timingTicket != nullptr, timing && timing->has_value()))
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*timingTicket);
+    timing->emplace(graphics->gpuTiming(), scope, graphics->getDevice(), commandList);
+    return Core::FinishSplitGpuTimingMarker(timing);
+}
+
+[[nodiscard]] NWB_INLINE b8 EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
+    if(!CanEndGraphClearTimingState(timing != nullptr, timing && timing->has_value(), timingTicket != nullptr))
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*timingTicket);
+    timing->value().finishTiming(commandList);
+    timing->reset();
+    return true;
+}
+
+[[nodiscard]] NWB_INLINE b8 BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+    GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
+    if(!state)
+        return false;
+    return BeginGraphClearTiming(state->graphics, state->timing, ResolveGraphClearTimingTicket(*state), state->scope, commandList);
+}
+
+[[nodiscard]] NWB_INLINE b8 EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+    GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
+    if(!state)
+        return false;
+    return EndGraphClearTiming(state->timing, ResolveGraphClearTimingTicket(*state), commandList);
+}
+
+NWB_INLINE void DiscardGraphClearTimingRecord(void* const rawState){
+    GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
+    if(!state)
+        return;
+    Core::DiscardGpuTimingMeasure(state->timing);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,15 +98,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderKernelTaskGraphClearTimingAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

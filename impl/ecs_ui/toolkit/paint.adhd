@@ -2,7 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/layout/paint_skin_emission.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/global.adhd.h>
 #include <impl/ecs_ui/toolkit/paint_image_bindings.adhd.h>
 #include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
@@ -100,28 +112,7 @@ public:
 
 public:
     // Skin payload validation belongs to loading; begin captures its descriptor for this frame.
-    void begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
-        FOUNDATION_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
-        FOUNDATION_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
-        FOUNDATION_ASSERT(IsFinite(skin.referenceDensity()));
-        m_snapshot.m_generation = generation;
-        m_snapshot.m_displayMetrics = metrics;
-        m_snapshot.m_skinBinding = { skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
-        m_snapshot.m_images.clear();
-        BeginPaintBuilderRecording(
-            metrics,
-            skin.regions(),
-            m_snapshot.m_vertices,
-            m_snapshot.m_indices,
-            m_snapshot.m_commands,
-            m_regions,
-            m_clips,
-            m_overlayDepth,
-            m_layer,
-            m_commandsOrdered,
-            m_recording
-        );
-    }
+    void begin(const DisplayMetrics& metrics, u64 generation, u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin);
     void reserve(const usize quadCount, const usize clipDepth = s_PaintDefaultClipDepth){
         ReservePaintSnapshot(quadCount, clipDepth, m_snapshot.m_vertices, m_snapshot.m_indices, m_snapshot.m_commands, m_clips);
     }
@@ -139,117 +130,29 @@ public:
         return EndPaintOverlay(m_recording, m_overlays, m_overlayDepth, m_layer, m_clips);
     }
     void fillRect(const Rect& rectangle, const Color& color = {}){ emitQuad(rectangle, {}, color, PaintMaterial::Solid); }
-    [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {}){
-        FOUNDATION_ASSERT(m_recording);
-        return DrawPaintSkinRegion(
-            m_recording,
-            m_clips.back(),
-            m_regions,
-            regionName,
-            rectangle,
-            tint,
-            m_snapshot.m_skinBinding.atlasWidth,
-            m_snapshot.m_skinBinding.atlasHeight,
-            m_snapshot.m_skinBinding.referenceDensity,
-            m_layer,
-            m_snapshot.m_vertices,
-            m_snapshot.m_indices,
-            m_snapshot.m_commands,
-            m_commandsOrdered
-        );
-    }
+    [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
     [[nodiscard]] b8 prepareGlyphPages(const Span<const SharedGlyphPage> pages){ return prepareImages(pages, {}); }
-    [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {}){
-        FOUNDATION_ASSERT(m_recording);
-        if(!page || !IsValidPaintUvRect(uv))
-            return false;
-        u32 index = 0u;
-        if(!PaintImageBindings::Resolve(
-            m_snapshot.m_images.glyphPages(),
-            page,
-            [this](const Span<const SharedGlyphPage> pages){ return prepareGlyphPages(pages); },
-            [](const GlyphPage& lhs, const GlyphPage& rhs)noexcept{ return SameGlyphPageKey(lhs.binding(), rhs.binding()); },
-            index
-        ))
-            return false;
-        emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index);
-        return true;
-    }
+    [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
     [[nodiscard]] b8 prepareSdfPages(const Span<const SharedSdfAtlasPage> pages){ return prepareImages({}, pages); }
     [[nodiscard]] b8 prepareImages(const Span<const SharedGlyphPage> glyphPages, const Span<const SharedSdfAtlasPage> sdfPages, const Span<const SharedImageSource> textureImages = {}){
-        FOUNDATION_ASSERT(m_recording);
+        NWB_ASSERT(m_recording);
         return m_snapshot.m_images.prepare(glyphPages, sdfPages, textureImages);
     }
-    [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {}){
-        FOUNDATION_ASSERT(m_recording);
-        if(!page || channel >= page->binding().channelCount || !IsValidPaintUvRect(uv))
-            return false;
-        u32 index = 0u;
-        if(!PaintImageBindings::Resolve(
-            m_snapshot.m_images.sdfPages(),
-            page,
-            [this](const Span<const SharedSdfAtlasPage> pages){ return prepareSdfPages(pages); },
-            [](const SdfAtlasPage& lhs, const SdfAtlasPage& rhs)noexcept{ return lhs.binding() == rhs.binding(); },
-            index
-        ))
-            return false;
-        emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, Limit<u32>::s_Max, index, channel);
-        return true;
-    }
+    [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {});
     [[nodiscard]] b8 prepareTextureImages(const Span<const SharedImageSource> images){ return prepareImages({}, {}, images); }
     // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
-    [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {}){
-        FOUNDATION_ASSERT(m_recording);
-        if(!source || !IsValidPaintImageDrawRequest(rectangle, uv, tint))
-            return false;
-        const Rect clip = m_clips.back();
-        if(IsPaintImageInvisible(rectangle, clip, tint))
-            return true;
-        u32 index = 0u;
-        if(!PaintImageBindings::Resolve(
-            m_snapshot.m_images.textureImages(),
-            source,
-            [this](const Span<const SharedImageSource> images){ return prepareTextureImages(images); },
-            [](const ImageSource& lhs, const ImageSource& rhs)noexcept{ return SameTextureImageKey(lhs, rhs); },
-            index
-        ))
-            return false;
-        emitQuad(rectangle, uv, tint, PaintMaterial::Image, Limit<u32>::s_Max, Limit<u32>::s_Max, 0u, index);
-        return true;
-    }
-    [[nodiscard]] DrawSnapshot freeze(){
-        FinalizePaintBuilderRecording(m_commandsOrdered, m_overlayDepth, m_snapshot.m_commands, m_clips, m_recording);
-        return Move(m_snapshot);
-    }
+    [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
+    [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
     [[nodiscard]] Rect currentClip()const noexcept{
-        FOUNDATION_ASSERT(m_recording);
+        NWB_ASSERT(m_recording);
         return m_clips.back();
     }
 
 
 private:
-    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex = Limit<u32>::s_Max, const u32 sdfPageIndex = Limit<u32>::s_Max, const u32 sdfChannel = 0u, const u32 textureImageIndex = Limit<u32>::s_Max){
-        FOUNDATION_ASSERT(m_recording);
-        EmitPaintQuad(
-            m_recording,
-            m_clips.back(),
-            rectangle,
-            uv,
-            color,
-            material,
-            m_layer,
-            glyphPageIndex,
-            sdfPageIndex,
-            sdfChannel,
-            textureImageIndex,
-            m_snapshot.m_vertices,
-            m_snapshot.m_indices,
-            m_snapshot.m_commands,
-            m_commandsOrdered
-        );
-    }
+    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material, u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u, u32 textureImageIndex = Limit<u32>::s_Max);
 
 
 private:
@@ -271,15 +174,196 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitPaintAdhdModule(in u64 value){
-    return value != 0u;
+SkinBindingRecord<TUiSkin, TTexture> MakePaintSkinBinding<TUiSkin, TTexture>(
+    in AssetRef<TUiSkin> skinRef,
+    in AssetRef<TTexture> textureRef,
+    in u64 generation,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity
+){
+    SkinBindingRecord<TUiSkin, TTexture> binding;
+    binding.skin = skinRef;
+    binding.texture = textureRef;
+    binding.generation = generation;
+    binding.atlasWidth = atlasWidth;
+    binding.atlasHeight = atlasHeight;
+    binding.referenceDensity = referenceDensity;
+    return binding;
+}
+
+b8 IsValidPaintSkinBinding<TUiSkin, TTexture>(in SkinBindingRecord<TUiSkin, TTexture> binding, in Name skinVirtualPath){
+    return binding.skin.valid()
+        && binding.skin.name() == skinVirtualPath
+        && binding.atlasWidth > 0u
+        && binding.atlasHeight > 0u
+        && IsFinite(binding.referenceDensity)
+        && binding.referenceDensity > 0.0f;
+}
+
+b8 IsValidPaintSdfGlyphRequest(in u32 channel, in u32 channelCount, in Rect uv){
+    return channel < channelCount && IsValidPaintUvRect(uv);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
+    const SkinBinding binding = MakePaintSkinBinding<UiSkin, Texture>(skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity());
+    NWB_ASSERT(IsValidPaintSkinBinding(binding, skin.virtualPath()));
+    m_snapshot.m_generation = generation;
+    m_snapshot.m_displayMetrics = metrics;
+    m_snapshot.m_skinBinding = binding;
+    m_snapshot.m_images.clear();
+    BeginPaintBuilderRecording(
+        metrics,
+        skin.regions(),
+        m_snapshot.m_vertices,
+        m_snapshot.m_indices,
+        m_snapshot.m_commands,
+        m_regions,
+        m_clips,
+        m_overlayDepth,
+        m_layer,
+        m_commandsOrdered,
+        m_recording
+    );
+}
+
+b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
+    NWB_ASSERT(m_recording);
+    return DrawPaintSkinRegion(
+        m_recording,
+        m_clips.back(),
+        m_regions,
+        regionName,
+        rectangle,
+        tint,
+        m_snapshot.m_skinBinding.atlasWidth,
+        m_snapshot.m_skinBinding.atlasHeight,
+        m_snapshot.m_skinBinding.referenceDensity,
+        m_layer,
+        m_snapshot.m_vertices,
+        m_snapshot.m_indices,
+        m_snapshot.m_commands,
+        m_commandsOrdered
+    );
+}
+
+b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
+    NWB_ASSERT(m_recording);
+    if(!page || !IsValidPaintUvRect(uv))
+        return false;
+    u32 index = 0u;
+    if(!PaintImageBindings::Resolve(
+        m_snapshot.m_images.glyphPages(),
+        page,
+        [this](const Span<const SharedGlyphPage> pages){ return prepareGlyphPages(pages); },
+        [](const GlyphPage& lhs, const GlyphPage& rhs)noexcept{ return SameGlyphPageKey(lhs.binding(), rhs.binding()); },
+        index
+    ))
+        return false;
+    emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index);
+    return true;
+}
+
+b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint){
+    NWB_ASSERT(m_recording);
+    if(!page || !IsValidPaintSdfGlyphRequest(channel, page->binding().channelCount, uv))
+        return false;
+    u32 index = 0u;
+    if(!PaintImageBindings::Resolve(
+        m_snapshot.m_images.sdfPages(),
+        page,
+        [this](const Span<const SharedSdfAtlasPage> pages){ return prepareSdfPages(pages); },
+        [](const SdfAtlasPage& lhs, const SdfAtlasPage& rhs)noexcept{ return lhs.binding() == rhs.binding(); },
+        index
+    ))
+        return false;
+    emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, Limit<u32>::s_Max, index, channel);
+    return true;
+}
+
+b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
+    NWB_ASSERT(m_recording);
+    if(!source || !IsValidPaintImageDrawRequest(rectangle, uv, tint))
+        return false;
+    const Rect clip = m_clips.back();
+    if(IsPaintImageInvisible(rectangle, clip, tint))
+        return true;
+    u32 index = 0u;
+    if(!PaintImageBindings::Resolve(
+        m_snapshot.m_images.textureImages(),
+        source,
+        [this](const Span<const SharedImageSource> images){ return prepareTextureImages(images); },
+        [](const ImageSource& lhs, const ImageSource& rhs)noexcept{ return SameTextureImageKey(lhs, rhs); },
+        index
+    ))
+        return false;
+    emitQuad(rectangle, uv, tint, PaintMaterial::Image, Limit<u32>::s_Max, Limit<u32>::s_Max, 0u, index);
+    return true;
+}
+
+DrawSnapshot PaintBuilder::freeze(){
+    FinalizePaintBuilderRecording(m_commandsOrdered, m_overlayDepth, m_snapshot.m_commands, m_clips, m_recording);
+    return Move(m_snapshot);
+}
+
+void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex, const u32 sdfPageIndex, const u32 sdfChannel, const u32 textureImageIndex){
+    NWB_ASSERT(m_recording);
+    EmitPaintQuad(
+        m_recording,
+        m_clips.back(),
+        rectangle,
+        uv,
+        color,
+        material,
+        m_layer,
+        glyphPageIndex,
+        sdfPageIndex,
+        sdfChannel,
+        textureImageIndex,
+        m_snapshot.m_vertices,
+        m_snapshot.m_indices,
+        m_snapshot.m_commands,
+        m_commandsOrdered
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

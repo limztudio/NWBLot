@@ -1,0 +1,134 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
+#include <impl/ecs_render/kernel/timing_policy.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
+#include <impl/ecs_render/kernel/timing_policy.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiler.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(static_cast<u32>(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
+
+
+// Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
+class RendererTaskTimingFeedbackState final : NoCopy{
+public:
+    explicit RendererTaskTimingFeedbackState(Core::Alloc::GlobalArena& arena)noexcept
+        : m_pendingSamples(arena)
+    {}
+
+
+public:
+    [[nodiscard]] NWB_INLINE b8 trackSample(
+        const Core::GpuTimingSampleAttribution attribution,
+        const Name& scopeName,
+        const Core::GpuTaskTimingKey& key,
+        const Core::GpuPhysicalQueueId& expectedQueue,
+        const u64 sourceFrameIndex,
+        const b8 recordsNonCommittingTimingSample
+    ){
+        return TrackRendererTaskTimingSample(attribution, scopeName, key, expectedQueue, sourceFrameIndex, recordsNonCommittingTimingSample, m_pendingSamples);
+    }
+
+    NWB_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
+        AcceptRendererTaskTimingSubmission(attribution, token, feedbackActive, true, m_pendingSamples);
+    }
+
+    NWB_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
+        DiscardRendererTaskTimingRecording(attribution, m_pendingSamples);
+    }
+
+    NWB_INLINE void completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
+        CompleteRendererTaskTimingSample(sample, feedbackActive, m_pendingSamples);
+    }
+
+    [[nodiscard]] NWB_INLINE RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, const u16 deviceGeneration){
+        return DrainRendererTaskTimingPendingSamples(history, deviceGeneration, m_pendingSamples);
+    }
+
+    NWB_INLINE void reset()noexcept{ m_pendingSamples.clear(); }
+
+
+private:
+    Vector<RendererTaskTimingPendingSample, Core::Alloc::GlobalArena> m_pendingSamples;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(in RendererTimingPolicy requestedPolicy, in b8 rendererActive, mut RendererTimingPolicy currentPolicy){
+    RendererTaskTimingFeedbackPolicyTransition transition = RendererTaskTimingFeedbackPolicyTransition(
+        currentPolicy,
+        requestedPolicy,
+        ResolveRendererTaskTimingFeedbackCollectionAction(rendererActive, currentPolicy.enabled, requestedPolicy.enabled)
+    );
+    if(transition.action != RendererTaskTimingFeedbackCollectionAction::Enable)
+        currentPolicy = requestedPolicy;
+    return transition;
+}
+
+void ResolveRendererTaskTimingFeedbackPolicyTransition(in RendererTaskTimingFeedbackPolicyTransition transition, in b8 collectionUpdated, mut RendererTimingPolicy currentPolicy){
+    if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
+        return;
+
+    if(collectionUpdated)
+        currentPolicy = transition.requestedPolicy;
+    else
+        currentPolicy = transition.previousPolicy;
+}
+
+b8 IsAcceptedRendererTaskTimingSubmission(
+    in b8 feedbackActive,
+    in b8 tokenValid,
+    in b8 hasPhysicalQueueIdentity,
+    in b8 queueClassMatches,
+    in b8 physicalQueueMatches
+){
+    return feedbackActive && tokenValid && hasPhysicalQueueIdentity && queueClassMatches && physicalQueueMatches;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

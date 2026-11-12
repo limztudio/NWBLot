@@ -2,14 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <core/task/gpu/timing_feedback.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-namespace NWB::Impl{
-using RendererTimingPolicy = Core::GpuTaskTimingFeedbackPolicy;
-using RendererTimingAction = RendererTaskTimingFeedbackCollectionAction::Enum;
-};
-}
+#include <impl/ecs_render/shared/statistics_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,15 +11,15 @@ using RendererTimingAction = RendererTaskTimingFeedbackCollectionAction::Enum;
 class RendererTaskTimingFeedbackPolicyTransition{
     public RendererTimingPolicy previousPolicy;
     public RendererTimingPolicy requestedPolicy;
-    public RendererTimingAction action;
+    public RendererTaskTimingFeedbackCollectionAction action;
 
     public RendererTaskTimingFeedbackPolicyTransition(){
         this.previousPolicy = RendererTimingPolicy();
         this.requestedPolicy = RendererTimingPolicy();
-        this.action = cast<RendererTimingAction>(0u);
+        this.action = RendererTaskTimingFeedbackCollectionAction::None;
     }
 
-    public RendererTaskTimingFeedbackPolicyTransition(in RendererTimingPolicy previousPolicy, in RendererTimingPolicy requestedPolicy, in RendererTimingAction action){
+    public RendererTaskTimingFeedbackPolicyTransition(in RendererTimingPolicy previousPolicy, in RendererTimingPolicy requestedPolicy, in RendererTaskTimingFeedbackCollectionAction action){
         this.previousPolicy = previousPolicy;
         this.requestedPolicy = requestedPolicy;
         this.action = action;

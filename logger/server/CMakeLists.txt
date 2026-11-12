@@ -1,52 +1,31 @@
-nwb_declare_executable(nwb_logserver)
-nwb_target_adhd_sources(nwb_logserver NAMESPACE "NWB::Log" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_auth.adhd" "${CMAKE_CURRENT_LIST_DIR}/crash_retention.adhd" "${CMAKE_CURRENT_LIST_DIR}/arena_names.adhd" "${CMAKE_CURRENT_LIST_DIR}/server_values.adhd")
-nwb_declare_static_library(nwb_logserver_crash_values)
-nwb_target_adhd_sources(nwb_logserver_crash_values NAMESPACE "NWB::Log::CrashValues" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_values.adhd")
-nwb_declare_static_library(nwb_logserver_crash_path_names)
-nwb_target_adhd_sources(nwb_logserver_crash_path_names NAMESPACE "NWB::Log::CrashPathNames" SOURCES "${CMAKE_CURRENT_LIST_DIR}/crash_path_names.adhd")
-target_sources(nwb_logserver PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_android.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_archive_extractor.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_manifest_validator.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest_worker.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/http_handler.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_linux.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/linux_frame_symbol_resolver.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_report_composer.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_rgd.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_aftermath.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.h"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
-    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
-    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
-    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
-)
-nwb_target_sources_standalone_runtime(nwb_logserver)
+file(GLOB _nwb_logserver_core_adhd CONFIGURE_DEPENDS LIST_DIRECTORIES false "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
+list(REMOVE_ITEM _nwb_logserver_core_adhd "${CMAKE_CURRENT_LIST_DIR}/main.adhd")
+
+nwb_declare_static_library(nwb_logserver_core)
+nwb_target_adhd_sources(nwb_logserver_core NAMESPACE "NWB::Log" SOURCES ${_nwb_logserver_core_adhd})
+unset(_nwb_logserver_core_adhd)
 if(WIN32)
-    target_sources(nwb_logserver PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/clipboard_text.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_win32.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/minidump_image.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/frame_win.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/log_row_painter.cpp"
-    )
-    set_target_properties(nwb_logserver PROPERTIES WIN32_EXECUTABLE ON)
-    target_link_libraries(nwb_logserver PRIVATE dbghelp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_sources(nwb_logserver PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/frame_linux.cpp"
-    )
+    target_link_libraries(nwb_logserver_core PRIVATE dbghelp)
 endif()
-target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_common nwb_alloc nwb_crash nwb_logtelemetry nwb::cli11_headers)
-target_link_libraries(nwb_logserver PUBLIC nwb_logserver_crash_path_names PRIVATE nwb_logserver_crash_values)
-target_link_libraries(nwb_logserver PRIVATE nwb::aftermath_headers)
-nwb_copy_aftermath_runtime(nwb_logserver)
 # Radeon GPU Detective in-process .rgd decoder.
 # The logger-owned adapter consumes the vendored amdrdf/system_info/isa_decoder/comgr_utils/pix stack.
-target_link_libraries(nwb_logserver PRIVATE nwb_logrgd)
+target_link_libraries(nwb_logserver_core
+    PUBLIC
+        nwb::microhttpd
+        nwb_common
+        nwb_alloc
+        nwb_crash
+        nwb_logtelemetry
+        nwb_logrgd
+    PRIVATE
+        nwb::aftermath_headers
+)
 
+nwb_declare_executable(nwb_logserver)
+nwb_target_adhd_sources(nwb_logserver NAMESPACE "NWB::Log" SOURCES "${CMAKE_CURRENT_LIST_DIR}/main.adhd")
+nwb_target_sources_standalone_runtime(nwb_logserver)
+if(WIN32)
+    set_target_properties(nwb_logserver PROPERTIES WIN32_EXECUTABLE ON)
+endif()
+target_link_libraries(nwb_logserver PRIVATE nwb_logserver_core nwb::cli11_headers)
+nwb_copy_aftermath_runtime(nwb_logserver)

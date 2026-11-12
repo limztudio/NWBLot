@@ -10,21 +10,25 @@ const usize s_EcsTestNestedOuterCount = 4u;
 const usize s_EcsTestDependentQueryEntityCount = 512u;
 const Name s_EcsTestParallelArenaName = "tests/ecs_parallel";
 
-
 class PositionComponent{
     public i32 x = 0;
     public i32 y = 0;
 }
-
 
 class VelocityComponent{
     public i32 x = 0;
     public i32 y = 0;
 }
 
-
 class PoolSlotComponent<const usize I>{
     public usize value = I;
+}
+
+class SystemLifetimeState{
+    public Array<u32, 2> destructionOrder = Array<u32, 2>();
+    public usize destructionCount = 0u;
+    public b8 providerAlive = false;
+    public b8 borrowerObservedProvider = false;
 }
 
 

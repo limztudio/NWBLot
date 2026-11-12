@@ -22,6 +22,7 @@ void LambdaCaptureAnalyzer::propagateFuncCaptureBytes(TypeRef* targetType, const
     if(rhs->kind == ExprKind::Lambda){
         if(!rhs->lambdaCaptures.empty())
             funcType->inferredCaptureBytes = s_InferredLambdaCaptureBytes;
+        const_cast<Expr*>(rhs)->wrapInFuncType = funcType;
         return;
     }
     if(rhs->kind == ExprKind::Identifier){

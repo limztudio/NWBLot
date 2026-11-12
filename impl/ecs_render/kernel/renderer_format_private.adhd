@@ -2,11 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
-#include <impl/global.adhd.h>
 
-#include <core/graphics/runtime/runtime.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/global.adhd.h>
+#include <impl/assets/graphics/csg/constants.h>
+
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/rhi/pipeline.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/task_graph.h>
+#include <core/task/gpu/timing_feedback.h>
+#include <core/telemetry/frame_graph.h>
 
 #include <global/span.h>
 
@@ -26,7 +40,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Span<const Core::Format::Enum> candidates, const Core::FormatSupport::Mask requiredSupport)noexcept{
+[[nodiscard]] NWB_INLINE Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Span<const Core::Format::Enum> candidates, const Core::FormatSupport::Mask requiredSupport)noexcept{
     for(const Core::Format::Enum format : candidates){
         if((device.queryFormatSupport(format) & requiredSupport) == requiredSupport)
             return format;
@@ -35,7 +49,7 @@ namespace ECSRenderDetail{
     return Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] inline b8 CreateClampSampler(Core::Device& device, const b8 linearFiltering, Core::SamplerHandle& sampler){
+[[nodiscard]] NWB_INLINE b8 CreateClampSampler(Core::Device& device, const b8 linearFiltering, Core::SamplerHandle& sampler){
     if(sampler)
         return true;
 
@@ -58,6 +72,238 @@ namespace ECSRenderDetail{
 
 };
 
+using KernelGraphicsRuntime = Core::GraphicsRuntime;
+using KernelDevice = Core::Device;
+using KernelFormat = Core::Format::Enum;
+using KernelFormatSupportMask = Core::FormatSupport::Mask;
+using KernelColor = Core::Color;
+using KernelSamplerHandle = Core::SamplerHandle;
+using KernelShaderHandle = Core::ShaderHandle;
+using KernelComputePipelineHandle = Core::ComputePipelineHandle;
+using KernelBindingLayoutHandle = Core::BindingLayoutHandle;
+using KernelGraphicsPipelineHandle = Core::GraphicsPipelineHandle;
+using KernelBufferHandle = Core::BufferHandle;
+using KernelTextureHandle = Core::TextureHandle;
+using KernelFramebufferHandle = Core::FramebufferHandle;
+using KernelGpuDescriptorHandle = Core::GpuDescriptorHandle;
+using KernelGpuTaskId = Core::GpuTaskId;
+using KernelGpuGraphResourceSetId = Core::GpuGraphResourceSetId;
+using KernelGpuTaskGraph = Core::GpuTaskGraph;
+using KernelGpuTaskGraphPtr = Core::GpuTaskGraph*;
+using KernelScratchArena = Core::Alloc::ScratchArena;
+using KernelScratchArenaPtr = Core::Alloc::ScratchArena*;
+using KernelGpuTimingSubmissionTicket = Core::GpuTimingSubmissionTicket;
+using KernelGpuTimingSubmissionTicketPtr = Core::GpuTimingSubmissionTicket*;
+using KernelGpuTimingRecorderStatistics = Core::GpuTimingRecorderStatistics;
+using KernelGpuPhysicalQueueTopology = Core::GpuPhysicalQueueTopology;
+using KernelGpuPhysicalQueueInfo = Core::GpuPhysicalQueueInfo;
+using KernelGpuPhysicalQueueInfoConstPtr = const Core::GpuPhysicalQueueInfo*;
+using KernelGpuPhysicalQueueId = Core::GpuPhysicalQueueId;
+using KernelGpuDescriptorHeapLifecycleStatistics = Core::GpuDescriptorHeapLifecycleStatistics;
+using KernelGpuCommandArenaStatistics = Core::GpuCommandArenaStatistics;
+using KernelGpuCommandArenaWorkerStatistics = Core::GpuCommandArenaWorkerStatistics;
+using KernelGpuTaskGraphRuntimeStatistics = Core::GpuTaskGraphRuntimeStatistics;
+using KernelGpuTaskGraphCompileStatistics = Core::GpuTaskGraphCompileStatistics;
+using KernelGpuTaskGraphRecordingStatistics = Core::GpuTaskGraphRecordingStatistics;
+using KernelGpuTaskGraphSubmissionStatistics = Core::GpuTaskGraphSubmissionStatistics;
+using KernelFrameGraphPhysicalQueueRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics;
+using KernelFrameGraphPhysicalQueueRuntimeStatisticsSpan = Span<const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics>;
+using KernelFrameGraphPhysicalQueueCompileRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics;
+using KernelFrameGraphPhysicalQueueRecordingRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics;
+using KernelFrameGraphPhysicalQueueSubmissionRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics;
+using KernelGpuCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
+using KernelGpuCompiledGraphReadViewConstPtr = const Core::GpuCompiledGraph::ReadView*;
+using KernelGpuRecordedGraph = Core::GpuRecordedGraph;
+using KernelGpuCompiledOwnershipTransfer = Core::GpuCompiledOwnershipTransfer;
+using KernelGpuTimingSampleAttribution = Core::GpuTimingSampleAttribution;
+using KernelGpuTaskTimingKey = Core::GpuTaskTimingKey;
+using KernelQueueSubmissionToken = Core::QueueSubmissionToken;
+using KernelGpuTimingSample = Core::GpuTimingSample;
+using KernelGpuTaskTimingHistoryStore = Core::GpuTaskTimingHistoryStore;
+using KernelGpuTaskSchedulingHint = Core::GpuTaskSchedulingHint;
+
+inline constexpr KernelFormat s_KernelFormatUnknown = Core::Format::UNKNOWN;
+inline constexpr KernelFormat s_KernelFormatRGBA16Float = Core::Format::RGBA16_FLOAT;
+inline constexpr KernelFormat s_KernelFormatD32 = Core::Format::D32;
+inline constexpr KernelFormat s_KernelFormatD24S8 = Core::Format::D24S8;
+inline constexpr KernelFormat s_KernelFormatD16 = Core::Format::D16;
+inline constexpr KernelFormatSupportMask s_KernelFormatSupportTexture = Core::FormatSupport::Texture;
+inline constexpr KernelFormatSupportMask s_KernelFormatSupportRenderTarget = Core::FormatSupport::RenderTarget;
+inline constexpr KernelFormatSupportMask s_KernelFormatSupportShaderUavStore = Core::FormatSupport::ShaderUavStore;
+inline constexpr KernelFormatSupportMask s_KernelFormatSupportDepthStencil = Core::FormatSupport::DepthStencil;
+inline constexpr KernelGpuTimingSampleAttribution s_KernelNoGpuTimingSampleAttribution = Core::s_NoGpuTimingSampleAttribution;
+inline constexpr u8 s_KernelGpuTaskCostTiny = static_cast<u8>(Core::GpuTaskCostHint::Tiny);
+inline constexpr u8 s_KernelGpuTaskCostMedium = static_cast<u8>(Core::GpuTaskCostHint::Medium);
+
+[[nodiscard]] NWB_INLINE constexpr KernelColor MakeKernelColor(const f32 r, const f32 g, const f32 b, const f32 a)noexcept{
+    return Core::Color(r, g, b, a);
+}
+
+[[nodiscard]] NWB_INLINE b8 HasLiveKernelBuffer(const KernelBufferHandle& buffer)noexcept{
+    return buffer != nullptr;
+}
+
+[[nodiscard]] NWB_INLINE constexpr KernelGpuTaskGraphPtr NullKernelGpuTaskGraphPtr()noexcept{
+    return nullptr;
+}
+
+[[nodiscard]] NWB_INLINE KernelGpuTaskGraphPtr AddressOfKernelGpuTaskGraph(KernelGpuTaskGraph& graph)noexcept{
+    return &graph;
+}
+
+[[nodiscard]] NWB_INLINE constexpr KernelScratchArenaPtr NullKernelScratchArenaPtr()noexcept{
+    return nullptr;
+}
+
+[[nodiscard]] NWB_INLINE KernelScratchArenaPtr AddressOfKernelScratchArena(Core::Alloc::ScratchArena& arena)noexcept{
+    return &arena;
+}
+
+[[nodiscard]] NWB_INLINE constexpr KernelGpuTimingSubmissionTicketPtr NullKernelGpuTimingSubmissionTicketPtr()noexcept{
+    return nullptr;
+}
+
+[[nodiscard]] NWB_INLINE KernelGpuTimingSubmissionTicketPtr AddressOfKernelGpuTimingSubmissionTicket(KernelGpuTimingSubmissionTicket& ticket)noexcept{
+    return &ticket;
+}
+
+[[nodiscard]] NWB_INLINE constexpr KernelGpuCompiledGraphReadViewConstPtr NullKernelGpuCompiledGraphReadViewConstPtr()noexcept{
+    return nullptr;
+}
+
+[[nodiscard]] NWB_INLINE KernelGpuCompiledGraphReadViewConstPtr AddressOfKernelCompiledGraphReadView(const KernelGpuCompiledGraphReadView& plan)noexcept{
+    return &plan;
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTaskIsValid(const KernelGpuCompiledGraphReadViewConstPtr plan, const KernelGpuTaskId& task)noexcept{
+    return plan && plan->findTask(task).valid();
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTasksSharePacket(const KernelGpuCompiledGraphReadViewConstPtr plan, const KernelGpuTaskId& first, const KernelGpuTaskId& second)noexcept{
+    return plan && plan->tasksSharePacket(first, second);
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTaskPrecedesInSamePacket(const KernelGpuCompiledGraphReadViewConstPtr plan, const KernelGpuTaskId& first, const KernelGpuTaskId& second)noexcept{
+    return plan && plan->taskPrecedesInSamePacket(first, second);
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTaskPrecedesOrSharesPacket(const KernelGpuCompiledGraphReadViewConstPtr plan, const KernelGpuTaskId& first, const KernelGpuTaskId& second)noexcept{
+    return plan && plan->taskPrecedesOrSharesPacket(first, second);
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTaskPairIsContiguous(const KernelGpuCompiledGraphReadViewConstPtr plan, const KernelGpuTaskId& first, const KernelGpuTaskId& second)noexcept{
+    if(!plan)
+        return false;
+    const Array<Core::GpuTaskId, 2u> sequence = { first, second };
+    return plan->tasksFormContiguousPacketSequence(sequence);
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTaskPrefixIsContiguous(const KernelGpuCompiledGraphReadViewConstPtr plan, const Span<const KernelGpuTaskId> tasks, const usize count)noexcept{
+    return plan && count <= tasks.size() && plan->tasksFormContiguousPacketSequence(tasks.subspan(0u, count));
+}
+
+[[nodiscard]] NWB_INLINE b8 QueueInfoIsGraphicsQueue(const KernelGpuPhysicalQueueInfoConstPtr queue)noexcept{
+    return queue && queue->queueClass == Core::CommandQueue::Graphics;
+}
+
+[[nodiscard]] NWB_INLINE b8 CompiledGraphTaskIsOnGraphicsQueue(const KernelGpuCompiledGraphReadViewConstPtr plan, const KernelGpuTaskId& task)noexcept{
+    return plan && QueueInfoIsGraphicsQueue(plan->queueInfoForTask(task));
+}
+
+[[nodiscard]] NWB_INLINE KernelFormat SelectKernelSupportedFormat(KernelDevice& device, const Span<const KernelFormat> candidates, const KernelFormatSupportMask requiredSupport)noexcept{
+    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
+[[nodiscard]] NWB_INLINE b8 PrepareKernelGpuTimingScopeQueries(KernelGraphicsRuntime& graphics, const Name& scope, const u32 queryCount){
+    return graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), queryCount);
+}
+
+[[nodiscard]] NWB_INLINE KernelGpuTimingRecorderStatistics QueryKernelGpuTimingStatistics(KernelGraphicsRuntime& graphics){
+    return graphics.gpuTiming().statistics(graphics.getDevice());
+}
+
+[[nodiscard]] NWB_INLINE u64 KernelSkippedScopeCount(const KernelGpuTimingRecorderStatistics& statistics, const usize reasonIndex)noexcept{
+    return statistics.skippedScopeCountByReason[reasonIndex];
+}
+
+[[nodiscard]] NWB_INLINE KernelGpuPhysicalQueueTopology QueryKernelPhysicalQueueTopology(const KernelGraphicsRuntime& graphics)noexcept{
+    return graphics.getDevice().getPhysicalQueueTopology();
+}
+
+[[nodiscard]] NWB_INLINE const KernelGpuPhysicalQueueInfo& KernelTopologyQueueAt(const KernelGpuPhysicalQueueTopology& topology, const usize queueIndex)noexcept{
+    return topology.queues[queueIndex];
+}
+
+[[nodiscard]] NWB_INLINE u8 KernelQueueInfoClassValue(const KernelGpuPhysicalQueueInfo& queueInfo)noexcept{
+    return static_cast<u8>(queueInfo.queueClass);
+}
+
+[[nodiscard]] NWB_INLINE u32 KernelQueueInfoCapabilitiesValue(const KernelGpuPhysicalQueueInfo& queueInfo)noexcept{
+    return static_cast<u32>(queueInfo.capabilities);
+}
+
+[[nodiscard]] NWB_INLINE b8 SupportsKernelComparableGpuTimestamps(const KernelGraphicsRuntime& graphics, const KernelGpuPhysicalQueueId& queueId)noexcept{
+    return graphics.getDevice().supportsComparableGpuTimestamps(queueId);
+}
+
+[[nodiscard]] NWB_INLINE KernelGpuDescriptorHeapLifecycleStatistics QueryKernelDescriptorHeapLifecycleStatistics(KernelGraphicsRuntime& graphics)noexcept{
+    return graphics.getDevice().getDescriptorHeap().lifecycleStatistics();
+}
+
+[[nodiscard]] NWB_INLINE usize KernelOwnershipTransferCountByRoute(const KernelGpuTaskGraphCompileStatistics& statistics, const usize routeIndex)noexcept{
+    return statistics.logicalOwnershipTransferCountByRoute[routeIndex];
+}
+
+[[nodiscard]] NWB_INLINE usize KernelLogicalOwnershipTransferCount(const KernelGpuCompiledGraphReadView& plan)noexcept{
+    return plan.logicalOwnershipTransfers() ? plan.logicalOwnershipTransferCount() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE const KernelGpuCompiledOwnershipTransfer& KernelLogicalOwnershipTransferAt(const KernelGpuCompiledGraphReadView& plan, const usize transferIndex)noexcept{
+    return plan.logicalOwnershipTransfers()[transferIndex];
+}
+
+[[nodiscard]] NWB_INLINE u8 KernelOwnershipTransferRouteValue(const KernelGpuCompiledOwnershipTransfer& transfer)noexcept{
+    return static_cast<u8>(transfer.route);
+}
+
+[[nodiscard]] NWB_INLINE u8 KernelOwnershipTransferSharingValue(const KernelGpuCompiledOwnershipTransfer& transfer)noexcept{
+    return static_cast<u8>(transfer.declaredQueueSharing);
+}
+
+[[nodiscard]] NWB_INLINE b8 KernelTokenMatchesTimingKeyQueue(const KernelQueueSubmissionToken& token, const KernelGpuTaskTimingKey& key)noexcept{
+    return token.queue == key.queue;
+}
+
+[[nodiscard]] NWB_INLINE b8 InspectCompiledPacketForQueue(
+    const KernelGpuCompiledGraphReadView& plan,
+    const KernelGpuRecordedGraph& recordedGraph,
+    const usize packetIndex,
+    const KernelGpuPhysicalQueueId& queueId,
+    b8& outMatchesQueue,
+    b8& outHasRecordedWorker,
+    u32& outWorkerDomain,
+    u32& outWorkerIndex
+)noexcept{
+    outMatchesQueue = false;
+    outHasRecordedWorker = false;
+    outWorkerDomain = 0u;
+    outWorkerIndex = 0u;
+    const Core::GpuSubmissionPacketId packet = plan.packetIdAt(packetIndex);
+    const Core::GpuCompiledPacketView packetView = plan.packet(packet);
+    if(!packetView.valid())
+        return false;
+    if(packetView.plan->queue != queueId)
+        return true;
+    outMatchesQueue = true;
+    const Optional<Core::GpuRecordedPacket> recordedPacket = recordedGraph.packetSnapshot(packet);
+    if(!recordedPacket.has_value())
+        return true;
+    outHasRecordedWorker = true;
+    outWorkerDomain = recordedPacket->recordingWorkerDomain;
+    outWorkerIndex = recordedPacket->recordingWorkerIndex;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,15 +312,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderKernelRendererFormatPrivateAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

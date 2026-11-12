@@ -129,9 +129,7 @@ void FinalizeUiNativeKeyState(
 }
 
 void AdvanceUiLayerFrameGeneration(mut u64 inOutFrameGeneration){
-    if(inOutFrameGeneration == u64.max)
-        TerminateInvariant();
-    ++inOutFrameGeneration;
+    AdvanceNonWrappingRevision(inOutFrameGeneration);
 }
 
 

@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/tex_conv/encode_uastc.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ResolveTexConvEncodeDepth(in b8 is3d, in usize inputCount){
+    if(is3d)
+        return cast<u32>(inputCount);
+    return 1u;
+}
+
+TexConvPayloadFormat ResolveTexConvPayloadFormat(in b8 hdr){
+    if(hdr)
+        return TexConvPayloadFormat::UastcHdr4x4;
+    return TexConvPayloadFormat::UastcLdr4x4;
+}
+
+b8 ValidateTexConvInputPathsHdrConsistency(in Span<Path> inputPaths, mut b8 outHdr){
+    outHdr = IsHdrTexConvInputPath(inputPaths[0u]);
+    for(usize i = 1u; i < inputPaths.size(); ++i){
+        if(IsHdrTexConvInputPath(inputPaths[i]) != outHdr){
+            error("tex_conv: an individual texture conversion cannot mix HDR and LDR source images.");
+            return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -179,7 +179,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(emitFreeFnPrototypesEarly){
         for(const MethodDecl* fn : unit.freeFunctions){
             if(fn && !fn->isImported)
-                m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, false, false);
+                m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, false, false, true);
         }
     }
 
@@ -253,14 +253,23 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx]);
         }
         for(const ClassDecl* classDecl : sortedClasses){
-            if(!classDecl || !classDecl->isImported)
+            if(!classDecl)
                 continue;
-            for(const MethodDecl* method : classDecl->methods){
-                if(!method || method->isImported || !method->hasBody)
-                    continue;
-                if(classDecl->templateParams.empty() && method->templateParams.empty() && !method->isInline)
-                    continue;
-                m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true);
+            if(classDecl->isImported){
+                for(const MethodDecl* method : classDecl->methods){
+                    if(!method || method->isImported || !method->hasBody)
+                        continue;
+                    if(classDecl->templateParams.empty() && method->templateParams.empty() && !method->isInline && !method->hasSynthesizedArenaParams)
+                        continue;
+                    m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
+                }
+            }
+            else if(classDecl->templateParams.empty()){
+                for(const MethodDecl* method : classDecl->methods){
+                    if(!method || method->isImported || !method->hasBody || !method->hasSynthesizedArenaParams)
+                        continue;
+                    m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
+                }
             }
         }
     }
@@ -272,10 +281,10 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     for(const MethodDecl* fn : unit.freeFunctions){
         if(!fn || fn->isImported)
             continue;
-        const b8 emitInlineBody = (fn->isInline || !fn->templateParams.empty()) && fn->hasBody;
+        const b8 emitInlineBody = (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams) && fn->hasBody;
         if(emitFreeFnPrototypesEarly && !emitInlineBody)
             continue;
-        m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, emitInlineBody, true);
+        m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, emitInlineBody, true, !emitFreeFnPrototypesEarly);
     }
 
     if(!namespacePath.empty()){

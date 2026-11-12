@@ -79,37 +79,42 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("native")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on top-level 'native' blocks");
+        b8 hasExplicitTarget = false;
+        b8 explicitIsSource = false;
+        for(const ParsedAttribute& attr : attributes){
+            b8 attrIsSource = false;
+            if(!KeywordSemantics::TryParseTopLevelNativeAttribute(attr.name, attrIsSource)){
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on top-level 'native' block; only '[header]' or '[source]' is permitted");
+                return false;
+            }
+            if(!attr.arguments.empty()){
+                m_cursor.error(attr.line, attr.column, "top-level 'native' target attribute does not accept arguments");
+                return false;
+            }
+            if(hasExplicitTarget){
+                m_cursor.error(attr.line, attr.column, "duplicate or conflicting target attribute on top-level 'native' block");
+                return false;
+            }
+            hasExplicitTarget = true;
+            explicitIsSource = attrIsSource;
+        }
+        if(!hasExplicitTarget){
+            m_cursor.error(span.line, span.column, "top-level 'native' block must specify '[header]' or '[source]'");
             return false;
         }
         MStringView code;
         if(!m_cursor.consumeBalancedBracesRaw(code))
             return false;
         if(!isImported){
-            b8 hasPriorLocalDecl = false;
-            for(const Stmt* s : outUnit.globalConstants){ if(s && !s->isImported){ hasPriorLocalDecl = true; break; } }
-            if(!hasPriorLocalDecl){ for(const TypeAliasDecl* a : outUnit.typeAliases){ if(a && !a->isImported){ hasPriorLocalDecl = true; break; } } }
-            if(!hasPriorLocalDecl){ for(const EnumDecl* e : outUnit.enums){ if(e && !e->isImported){ hasPriorLocalDecl = true; break; } } }
-            if(!hasPriorLocalDecl){ for(const InterfaceDecl* i : outUnit.interfaces){ if(i && !i->isImported){ hasPriorLocalDecl = true; break; } } }
-            if(!hasPriorLocalDecl){ for(const ClassDecl* c : outUnit.classes){ if(c && !c->isImported){ hasPriorLocalDecl = true; break; } } }
-            if(!hasPriorLocalDecl){ for(const MethodDecl* f : outUnit.freeFunctions){ if(f && !f->isImported){ hasPriorLocalDecl = true; break; } } }
-            if(!hasPriorLocalDecl){ for(const MethodDecl* m : outUnit.outOfLineMethods){ if(m && !m->isImported){ hasPriorLocalDecl = true; break; } } }
-            if(hasPriorLocalDecl)
+            if(explicitIsSource)
                 outUnit.sourceNativeBlocks.push_back(code);
             else
                 outUnit.topLevelNativeBlocks.push_back(code);
         }
-        else{
+        else if(!explicitIsSource){
             outUnit.hasImportedNativeBlocks = true;
         }
         return true;
-    }
-
-    if(!isImported && !outUnit.sourceNativeBlocks.empty()){
-        for(const MStringView& pending : outUnit.sourceNativeBlocks)
-            outUnit.topLevelNativeBlocks.push_back(pending);
-        outUnit.sourceNativeBlocks.clear();
     }
 
     if(m_cursor.matchIdentifier("const")){

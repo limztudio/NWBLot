@@ -79,6 +79,7 @@ struct FieldDecl{
     usize originalIndex = 0u;
     b8 hasCtorInit = false;
     b8 usesClassArena = false;
+    b8 arenaFirstDefaultInit = false;
     b8 isTransient = false;
     b8 isReflect = false;
 
@@ -115,6 +116,8 @@ struct MethodDecl{
     b8 isReflect = false;
     b8 usesScratchArena = false;
     b8 usesTaskScope = false;
+    b8 injectsCallerArena = false;
+    b8 hasSynthesizedArenaParams = false;
     b8 isImported = false;
 
 
@@ -169,6 +172,7 @@ struct ClassDecl{
     usize totalAlign = 1u;
     b8 isSerialize = false;
     b8 isReflect = false;
+    b8 isArenaOwner = false;
     b8 needsClassArena = false;
     b8 isImported = false;
 
@@ -193,6 +197,7 @@ struct ClassTemplateInstantiation{
     MVector<FieldDecl*> orderedFields;
     usize totalSize = 1u;
     usize totalAlign = 1u;
+    b8 needsClassArena = false;
     b8 isImported = false;
 
 
@@ -210,6 +215,7 @@ public:
 struct TranslationUnit{
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
+    MVector<MStringView> requiredGlobalHeaders;
     MVector<MString> includedAdhdFiles;
     MVector<MString> resolvedIncludedFiles;
     MVector<Stmt*> globalConstants;
@@ -227,6 +233,7 @@ public:
     explicit TranslationUnit(MetaArena& arena)noexcept
         : topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
+        , requiredGlobalHeaders(arena)
         , includedAdhdFiles(arena)
         , resolvedIncludedFiles(arena)
         , globalConstants(arena)

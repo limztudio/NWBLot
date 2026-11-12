@@ -44,7 +44,7 @@ class MaterialInstanceParameter{
     public u32x4u value;
 }
 
-[reflect]
+[arena, reflect]
 class MaterialInstanceComponent{
     public MaterialInstanceComponent(){}
 

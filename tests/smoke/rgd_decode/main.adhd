@@ -2,23 +2,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <tests/common/test_context.adhd.h>
 
-#include <logger/rgd/decode.h>
 
-#include <global/array.h>
-#include <global/diagnostics.h>
-#include <global/filesystem.h>
-#include <global/scope_exit.h>
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <gtest/gtest.h>
+
+#include <logger/rgd/decode.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
-
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-#define ASSERT_TRUE(...) native{ ASSERT_TRUE(...) }
-#define ASSERT_FALSE(...) native{ ASSERT_FALSE(...) }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,80 +31,81 @@ const StringView s_RgdCleanupDiagnosticCategory = "rgd_decode_test_cleanup";
 const StringView s_RgdMissingPath = "nwb_rgd_smoke_missing.rgd";
 const StringView s_RgdGarbagePath = "nwb_rgd_smoke_garbage.rgd";
 const StringView s_RgdEmptyContainerPath = "nwb_rgd_smoke_empty_container.rgd";
+const StringView s_RgdGarbagePayload = "not a valid radeon gpu detective capture\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void VerifyRgdDecodeMissingFile(){
-    native{
-        const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(s_RgdMissingPath);
-        ASSERT_FALSE(result);
-        EXPECT_EQ(result.error(), StringView("rdf_open_failed"));
+Expected<u8, StringView> ProbeRgdCrashDumpDecode(in StringView path){
+    b8 succeeded = false;
+    StringView errorText = "";
+    native(in path, mut succeeded, mut errorText){
+        const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(path);
+        if(result)
+            succeeded = true;
+        else
+            errorText = result.error();
     }
+    if(succeeded)
+        return 1u;
+    return MakeUnexpected(errorText);
+}
+
+void VerifyRgdFixtureRejectsPayload(in StringView fixturePath, in Span<u8> payload, in StringView cleanupFailureMessage, in StringView expectedError){
+    const Path inputPath = Path(fixturePath);
+    const b8 wroteFile = WriteBinaryFile(inputPath, payload);
+    if(!wroteFile){
+        const Expected<b8, ErrorCode> cleanupRemoved = RemoveFile(inputPath);
+        if(!cleanupRemoved.has_value())
+            CaptureDiagnosticMessage(s_RgdCleanupDiagnosticCategory, cleanupFailureMessage);
+        ASSERT_TRUE(wroteFile);
+        return;
+    }
+    const Expected<u8, StringView> decoded = ProbeRgdCrashDumpDecode(fixturePath);
+    const Expected<b8, ErrorCode> removed = RemoveFile(inputPath);
+    if(!removed.has_value()){
+        CaptureDiagnosticMessage(s_RgdCleanupDiagnosticCategory, cleanupFailureMessage);
+        ASSERT_TRUE(removed.has_value());
+        return;
+    }
+    EXPECT_TRUE(removed.value());
+    ASSERT_FALSE(decoded.has_value());
+    EXPECT_EQ(decoded.error(), expectedError);
+}
+
+void VerifyRgdDecodeMissingFile(){
+    const Expected<u8, StringView> result = ProbeRgdCrashDumpDecode(s_RgdMissingPath);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), StringView("rdf_open_failed"));
 }
 
 void VerifyRgdDecodeGarbageInput(){
-    native{
-        NWB::Tests::TestArena<> testArena;
-        ::Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, s_RgdGarbagePath);
-        ScopeExit cleanup([&inputPath]()noexcept{
-            const auto removed = RemoveFile(inputPath);
-            if(!removed)
-                CaptureDiagnosticEvent(s_RgdCleanupDiagnosticCategory, "Failed to remove garbage-input fixture", __FILE__, __LINE__);
-        });
-        ASSERT_TRUE(WriteBinaryFile(inputPath, StringView("not a valid radeon gpu detective capture\n")));
-
-        const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(s_RgdGarbagePath);
-        const auto removed = RemoveFile(inputPath);
-        ASSERT_TRUE(removed);
-        EXPECT_TRUE(*removed);
-        cleanup.release();
-        ASSERT_FALSE(result);
-        EXPECT_EQ(result.error(), StringView("parse_failed"));
-    }
+    Vector<u8> payload;
+    for(usize i = 0u; i < s_RgdGarbagePayload.size(); ++i)
+        payload.push_back(cast<u8>(s_RgdGarbagePayload[i]));
+    VerifyRgdFixtureRejectsPayload(s_RgdGarbagePath, payload, "Failed to remove garbage-input fixture", "parse_failed");
 }
 
 void VerifyRgdDecodeEmptyContainer(){
-    native{
-        constexpr Array<u8, 32u> s_EmptyContainer{
-            'A', 'M', 'D', '_', 'R', 'D', 'F', ' ',
-            3u, 0u, 0u, 0u, 0u, 0u, 0u, 0u,
-            32u, 0u, 0u, 0u, 0u, 0u, 0u, 0u,
-            0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u,
-        };
-        NWB::Tests::TestArena<> testArena;
-        ::Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, s_RgdEmptyContainerPath);
-        ScopeExit cleanup([&inputPath]()noexcept{
-            const auto removed = RemoveFile(inputPath);
-            if(!removed)
-                CaptureDiagnosticEvent(s_RgdCleanupDiagnosticCategory, "Failed to remove admitted-container fixture", __FILE__, __LINE__);
-        });
-        ASSERT_TRUE(WriteBinaryFile(inputPath, s_EmptyContainer));
-
-        const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(s_RgdEmptyContainerPath);
-        const auto removed = RemoveFile(inputPath);
-        ASSERT_TRUE(removed);
-        EXPECT_TRUE(*removed);
-        cleanup.release();
-        ASSERT_FALSE(result);
-        EXPECT_EQ(result.error(), StringView("parse_failed"));
-    }
+    Array<u8, 32u> emptyContainer;
+    emptyContainer[0u] = 65u;
+    emptyContainer[1u] = 77u;
+    emptyContainer[2u] = 68u;
+    emptyContainer[3u] = 95u;
+    emptyContainer[4u] = 82u;
+    emptyContainer[5u] = 68u;
+    emptyContainer[6u] = 70u;
+    emptyContainer[7u] = 32u;
+    emptyContainer[8u] = 3u;
+    emptyContainer[16u] = 32u;
+    VerifyRgdFixtureRejectsPayload(s_RgdEmptyContainerPath, emptyContainer, "Failed to remove admitted-container fixture", "parse_failed");
 }
 
-native{
-TEST(RgdDecode, MissingFileFailsGracefully){
-    VerifyRgdDecodeMissingFile();
-}
-
-TEST(RgdDecode, GarbageInputFailsGracefully){
-    VerifyRgdDecodeGarbageInput();
-}
-
-TEST(RgdDecode, AdmittedContainerWithoutCrashChunksFailsGracefully){
-    VerifyRgdDecodeEmptyContainer();
-}
-}
+NWB_ADHD_GTEST(RgdDecode, MissingFileFailsGracefully, VerifyRgdDecodeMissingFile)
+NWB_ADHD_GTEST(RgdDecode, GarbageInputFailsGracefully, VerifyRgdDecodeGarbageInput)
+NWB_ADHD_GTEST(RgdDecode, AdmittedContainerWithoutCrashChunksFailsGracefully, VerifyRgdDecodeEmptyContainer)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

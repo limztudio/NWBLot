@@ -365,12 +365,18 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
         }
         return !hasAnyCtor;
     }
+    if(findInterface(baseName))
+        return false;
     if(IsUnalignedVectorType(baseName) || findEnum(baseName) != nullptr)
         return true;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName))
-        return objInfo->isSelfDefaulted;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(baseName))
-        return info->isSelfDefaulted;
+    if(!hasTypeSymbol(baseName)){
+        if(FindBuiltinEnum(baseName) != nullptr)
+            return true;
+        if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName))
+            return objInfo->isSelfDefaulted;
+        if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(baseName))
+            return info->isSelfDefaulted;
+    }
     return false;
 }
 
@@ -378,15 +384,35 @@ b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
     typeName = resolveBaseTypeName(typeName);
     if(BuiltinTypeSemantics::IsScalarType(typeName) || IsSimdRegisterVectorType(typeName) || findEnum(typeName) != nullptr)
         return true;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
-        return objInfo->isSmallValue;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(typeName))
-        return info->isSmallValue;
+    if(!hasTypeSymbol(typeName)){
+        if(FindBuiltinEnum(typeName) != nullptr)
+            return true;
+        if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
+            return objInfo->isSmallValue;
+        if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(typeName))
+            return info->isSmallValue;
+    }
     return false;
 }
 
 b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
     return findEnum(name) != nullptr || findInterface(name) != nullptr || findClass(name) != nullptr || findTypeAlias(name) != nullptr;
+}
+
+b8 SymbolTable::isAbstractBuiltinType(const MStringView name)const noexcept{
+    const MStringView baseName = resolveBaseTypeName(name);
+    if(hasTypeSymbol(baseName))
+        return false;
+    const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName);
+    return objInfo && objInfo->isAbstract;
+}
+
+b8 SymbolTable::isPolymorphicBaseBuiltinType(const MStringView name)const noexcept{
+    const MStringView baseName = resolveBaseTypeName(name);
+    if(hasTypeSymbol(baseName))
+        return false;
+    const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName);
+    return objInfo && objInfo->isPolymorphicBase;
 }
 
 

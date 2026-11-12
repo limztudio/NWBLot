@@ -7,17 +7,13 @@
 #include "source_emitter.h"
 #include "switch_statement_emitter.h"
 
+#include <core/metascript/adhd/sema/type_layout_analyzer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,10 +66,18 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append("); return ::MakeNotNull(&__adhd_ref); }());\r\n");
             break;
         }
+        const TypeRef* rawVarType = (stmt.varType && !stmt.varType->isAuto) ? stmt.varType : stmt.inferredAutoType;
+        const TypeRef* effectiveVarType = (!m_activeTemplateParams.empty() && rawVarType)
+            ? m_symbols.substituteTypeParams(*rawVarType, m_activeTemplateParams, m_activeTemplateArgs)
+            : rawVarType;
+        const b8 varUsesScratch = stmt.usesScratchArena
+            || (!m_activeTemplateParams.empty() && effectiveVarType && TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*effectiveVarType));
         emitIndent(out, indent);
         if(stmt.isConst)
             out.append("const ");
-        if(stmt.varType)
+        if(stmt.varType && stmt.varType->isAuto && stmt.usesScratchArena && stmt.inferredAutoType)
+            m_typeEmitter.emitTypeCpp(out, *stmt.inferredAutoType);
+        else if(stmt.varType)
             m_typeEmitter.emitTypeCpp(out, *stmt.varType);
         else
             out.append("auto");
@@ -86,22 +90,42 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append("));\r\n");
         }
         else if(stmt.isCtorInit){
-            const MStringView baseVarType = stmt.varType ? m_symbols.resolveBaseTypeName(stmt.varType->name) : MStringView{};
+            const MStringView baseVarType = effectiveVarType ? m_symbols.resolveBaseTypeName(effectiveVarType->name) : MStringView{};
             ConstructorArgumentEmitter(*this).emit(
                 out,
                 baseVarType,
                 stmt.arguments,
-                stmt.usesScratchArena ? MStringView("__adhd_scratch") : MStringView{},
+                varUsesScratch ? MStringView("__adhd_scratch") : MStringView{},
                 false,
                 true
             );
             out.append(";\r\n");
         }
         else if(stmt.expr){
-            if(stmt.usesScratchArena && stmt.expr->kind == ExprKind::StringLiteral){
-                out.push_back('(');
+            const MStringView effectiveBaseType = effectiveVarType ? m_symbols.resolveBaseTypeName(effectiveVarType->name) : MStringView{};
+            if(varUsesScratch && stmt.expr->kind == ExprKind::StringLiteral && !effectiveBaseType.empty() && SymbolTable::IsArenaBackedContainer(effectiveBaseType)){
+                if(stmt.arenaFirstInit || IsArenaFirstCtorType(effectiveBaseType)){
+                    out.append("(__adhd_scratch, ");
+                    emitExpr(out, *stmt.expr);
+                    out.append(");\r\n");
+                }
+                else{
+                    out.push_back('(');
+                    emitExpr(out, *stmt.expr);
+                    out.append(", __adhd_scratch);\r\n");
+                }
+            }
+            else if(
+                varUsesScratch
+                && effectiveVarType
+                && !stmt.expr->wrapInSimdResult
+                && !(stmt.expr->kind == ExprKind::Call && stmt.expr->injectScratchArena)
+            ){
+                out.append(" = ::AdhdRebindConstruct<");
+                m_typeEmitter.emitTypeCpp(out, *effectiveVarType);
+                out.append(">(__adhd_scratch, ");
                 emitExpr(out, *stmt.expr);
-                out.append(", __adhd_scratch);\r\n");
+                out.append(");\r\n");
             }
             else{
                 out.append(" = ");
@@ -109,8 +133,15 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 out.append(";\r\n");
             }
         }
-        else if(stmt.usesScratchArena){
-            out.append("(__adhd_scratch);\r\n");
+        else if(varUsesScratch){
+            if(effectiveVarType && TypeLayoutAnalyzer(m_symbols).isFixedArrayNeedingArenaDefaultInit(*effectiveVarType)){
+                out.append(" = ::AdhdDefaultConstructInArena<");
+                m_typeEmitter.emitTypeCpp(out, *effectiveVarType);
+                out.append(">(__adhd_scratch);\r\n");
+            }
+            else{
+                out.append("(__adhd_scratch);\r\n");
+            }
         }
         else{
             out.append("{};\r\n");
@@ -150,6 +181,33 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 out.append(" ::MakeNotNull(&(");
                 emitExpr(out, *stmt.expr);
                 out.append("))");
+            }
+            else if(m_activeCallerArenaReturnType && !(stmt.expr->kind == ExprKind::Call && stmt.expr->injectScratchArena)){
+                b8 moveLocalReturnValue = false;
+                if(stmt.expr->kind == ExprKind::Identifier && !stmt.expr->derefNotNull && !stmt.expr->moveAtLastUse){
+                    for(usize i = m_activeLocalVarDecls.size(); i > 0u; --i){
+                        const Stmt* localDecl = m_activeLocalVarDecls[i - 1u];
+                        if(localDecl && localDecl->name == stmt.expr->text){
+                            if(
+                                localDecl->kind == StmtKind::VarDecl
+                                && !localDecl->isConst
+                                && (!localDecl->varType || m_symbols.resolveRefMode(localDecl->varType) == ParamPassingMode::None)
+                            ){
+                                moveLocalReturnValue = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+                out.append(" ::AdhdRebindConstruct<");
+                m_typeEmitter.emitTypeCpp(out, *m_activeCallerArenaReturnType);
+                out.append(">(__adhd_caller_arena, ");
+                if(moveLocalReturnValue)
+                    out.append("::Move(");
+                emitExpr(out, *stmt.expr);
+                if(moveLocalReturnValue)
+                    out.push_back(')');
+                out.push_back(')');
             }
             else{
                 out.push_back(' ');
@@ -289,46 +347,59 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         emitIndent(out, indent);
         out.append("{\r\n");
         b8 hasDerefShadowBindings = false;
+        b8 hasPrefixStatements = false;
         for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
             const NativeBinding& binding = stmt.nativeBindings[i];
             if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName){
                 if(binding.sourceExpr->derefNotNull){
                     hasDerefShadowBindings = true;
+                    hasPrefixStatements = true;
                     emitIndent(out, indent + 1u);
                     if(binding.mode == ParamPassingMode::In)
-                        out.append("const auto* __adhd_native_ptr_");
+                        out.append("[[maybe_unused]] const auto* __adhd_native_ptr_");
                     else
-                        out.append("auto* __adhd_native_ptr_");
+                        out.append("[[maybe_unused]] auto* __adhd_native_ptr_");
                     AppendUnsignedDecimal(out, static_cast<u32>(i));
                     out.append(" = &(");
                     emitExpr(out, *binding.sourceExpr);
                     out.append(");\r\n");
                 }
+                else if(stmt.nativeCode.find("#if") != MStringView::npos){
+                    hasPrefixStatements = true;
+                    emitIndent(out, indent + 1u);
+                    out.append("(void)");
+                    out.append(binding.aliasName.data(), binding.aliasName.size());
+                    out.append(";\r\n");
+                }
                 continue;
             }
+            hasPrefixStatements = true;
             emitIndent(out, indent + 1u);
             if(binding.mode == ParamPassingMode::In)
-                out.append("const auto& ");
+                out.append("[[maybe_unused]] const auto& ");
             else
-                out.append("auto& ");
+                out.append("[[maybe_unused]] auto& ");
             out.append(binding.aliasName.data(), binding.aliasName.size());
             out.append(" = (");
             if(binding.sourceExpr)
                 emitExpr(out, *binding.sourceExpr);
             out.append(");\r\n");
         }
-        const u32 bodyIndent = hasDerefShadowBindings ? (indent + 2u) : (indent + 1u);
+        const MStringView trimmedNative = TrimView(stmt.nativeCode);
+        const b8 wrapPragmaCompound = hasPrefixStatements && trimmedNative.starts_with("#pragma");
+        const u32 derefIndent = hasDerefShadowBindings ? (indent + 2u) : (indent + 1u);
+        const u32 bodyIndent = wrapPragmaCompound ? (derefIndent + 1u) : derefIndent;
         if(hasDerefShadowBindings){
             emitIndent(out, indent + 1u);
             out.append("{\r\n");
             for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
                 const NativeBinding& binding = stmt.nativeBindings[i];
                 if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName && binding.sourceExpr->derefNotNull){
-                    emitIndent(out, bodyIndent);
+                    emitIndent(out, derefIndent);
                     if(binding.mode == ParamPassingMode::In)
-                        out.append("const auto& ");
+                        out.append("[[maybe_unused]] const auto& ");
                     else
-                        out.append("auto& ");
+                        out.append("[[maybe_unused]] auto& ");
                     out.append(binding.aliasName.data(), binding.aliasName.size());
                     out.append(" = *__adhd_native_ptr_");
                     AppendUnsignedDecimal(out, static_cast<u32>(i));
@@ -336,14 +407,21 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 }
             }
         }
+        if(wrapPragmaCompound){
+            emitIndent(out, derefIndent);
+            out.append("{\r\n");
+        }
         emitIndent(out, bodyIndent);
-        const MStringView trimmedNative = TrimView(stmt.nativeCode);
         AppendTextDiscardCrAndExpandLf(out, trimmedNative);
         const usize lastNl = trimmedNative.rfind('\n');
         const MStringView lastLine = TrimView(lastNl == MStringView::npos ? trimmedNative : trimmedNative.substr(lastNl + 1u));
         if(!trimmedNative.empty() && trimmedNative.back() != ';' && trimmedNative.back() != '}' && (lastLine.empty() || lastLine[0] != '#'))
             out.push_back(';');
         out.append("\r\n");
+        if(wrapPragmaCompound){
+            emitIndent(out, derefIndent);
+            out.append("}\r\n");
+        }
         if(hasDerefShadowBindings){
             emitIndent(out, indent + 1u);
             out.append("}\r\n");

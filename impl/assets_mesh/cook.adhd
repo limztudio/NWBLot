@@ -2,7 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/cook_meshlet_growth.adhd>
+#include <impl/assets_mesh/mesh_binary_codec.adhd>
+#include <impl/assets_mesh/skin_cook.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
@@ -10,6 +24,7 @@ native{
 
 
 #include <impl/assets_mesh/asset.adhd.h>
+#include <impl/assets_mesh/skin_asset.adhd.h>
 #include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
@@ -80,6 +95,29 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct SkinCookEntry{
+    Name virtualPath = s_NameNone;
+    Core::Assets::AssetRef<Mesh> mesh;
+    Core::Assets::AssetRef<Skeleton> skeleton;
+    Core::Assets::AssetVector<SkinInfluence4> influences;
+    Core::Assets::AssetVector<SkeletonJointMatrix> inverseBindMatrices;
+
+
+public:
+    explicit SkinCookEntry(Core::Assets::AssetArena& arena)noexcept
+        : influences(arena)
+        , inverseBindMatrices(arena)
+    {}
+};
+
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 
@@ -90,39 +128,76 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMeshCookAdhdModule(in u64 value){
-    return value != 0u;
+b8 SerializeMeshBinaryPayload(
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> meshletPositionRefDeltas,
+    in Span<u8> meshletAttributeRefDeltas,
+    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in Span<u32> solidTriangleWords,
+    mut Vector<u8> outBinary
+){
+    MeshBinaryCodec codec;
+    return codec.serialize(
+        positions,
+        normals,
+        tangents,
+        uv0,
+        colors,
+        meshlets,
+        meshletBounds,
+        meshletPositionRefDeltas,
+        meshletAttributeRefDeltas,
+        meshletLocalVertexRefs,
+        meshletPrimitiveIndices,
+        solidTriangleWords,
+        outBinary
+    );
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
-#include <impl/assets_mesh/skin_cook.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_mesh/cook_metadata.adhd.h>
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/metadata_fields.h>
 #include <core/assets/paths.h>
 #include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_growth.adhd.h>
 #include <impl/assets_mesh/binary_payload_io.adhd.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
 #include <impl/assets_mesh/payload_validation.adhd.h>
-#include <impl/assets_mesh/mesh_binary_codec.adhd.h>
-#include <impl/assets_mesh/skin_binary_codec.adhd.h>
 #include <impl/assets_mesh/cook_stream_reorder.adhd.h>
 #include <impl/assets_mesh/cook_solid_topology.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_scoring.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_metrics.adhd.h>
-#include <impl/assets_skeleton/cook_matrix.adhd.h>
+#include <impl/assets_skeleton/cook.adhd.h>
 #include <core/assets/binary_payload_io.h>
 #include <global/algorithm.h>
 #include <global/simd/vector.h>
@@ -132,204 +207,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MeshCookMeshlets::GrowMeshletFromFrontier(
-    const AStringView metaKind,
-    const AStringView filePathText,
-    const usize seedSearchOffset,
-    Core::CpuTaskScheduler& cpuScheduler,
-    MeshletTrianglePrecompute& trianglePrecompute,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
-    MeshletDesc& meshlet,
-    Core::Assets::AssetVector<u8>& primitiveIndices,
-    MeshletScoreState& scoreState,
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
-){
-    while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
-        if(frontier.empty()){
-            const auto disconnectedCandidate = MeshletCandidateSearch::FindBestDisconnectedMeshletCandidate(trianglePrecompute, seedSearchOffset + 1u, localTriangleIndices, scoreState, meshlet, localSourceVertexRefs, cpuScheduler, parallelCandidates);
-            if(!disconnectedCandidate)
-                break;
-
-            if(!AddVisitedMeshletTriangle(
-                metaKind,
-                filePathText,
-                disconnectedCandidate->triangleIndex,
-                trianglePrecompute.triangles,
-                trianglePrecompute.triangleCalculations,
-                trianglePrecompute.positionTriangleOffsets,
-                trianglePrecompute.positionTriangleIndices,
-                trianglePrecompute.visitedTriangles,
-                localSourceVertexRefs,
-                localTriangleIndices,
-                meshlet,
-                primitiveIndices,
-                scoreState,
-                frontier,
-                frontierFlags
-            ))
-                return false;
-            continue;
-        }
-
-        const auto bestCandidate = FindBestMeshletFrontierCandidateFromPrecompute(
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            frontier,
-            localTriangleIndices,
-            scoreState,
-            meshlet,
-            localSourceVertexRefs
-        );
-        if(!bestCandidate)
-            break;
-
-        RemoveMeshletFrontierCandidate(bestCandidate->frontierOffset, frontier, frontierFlags);
-        if(!AddVisitedMeshletTriangle(
-            metaKind,
-            filePathText,
-            bestCandidate->triangleIndex,
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            trianglePrecompute.positionTriangleOffsets,
-            trianglePrecompute.positionTriangleIndices,
-            trianglePrecompute.visitedTriangles,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            meshlet,
-            primitiveIndices,
-            scoreState,
-            frontier,
-            frontierFlags
-        ))
-            return false;
-    }
-
-    return true;
-}
-
-
-b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& entry){
-    auto precomputed = MeshletTriangleGeometry::PrecomputeMeshletTriangleData(nwbFilePath, metaKind, indices, entry, scratchArena);
-    if(!precomputed)
-        return false;
-    MeshletTrianglePrecompute& trianglePrecompute = *precomputed;
-
-    MeshletDesc current;
-    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
-    Core::Assets::AssetArena& assetArena = entry.positions.get_allocator().arena();
-    Core::Assets::AssetVector<u32> localSourceVertexRefs(assetArena);
-    Core::Assets::AssetVector<u32> localTriangleIndices(assetArena);
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena> parallelCandidates(scratchArena);
-    Core::Assets::AssetVector<u32> frontier(assetArena);
-    Core::Assets::AssetVector<u8> frontierFlags(assetArena);
-    PrepareMeshletBuildOutputStreams(
-        indices.size(),
-        trianglePrecompute.triangles.size(),
-        entry.meshlets,
-        entry.meshletBounds,
-        entry.meshletPositionStreamRefs,
-        entry.meshletAttributeStreamRefs,
-        entry.meshletLocalVertexRefs,
-        entry.meshletPrimitiveIndices,
-        localSourceVertexRefs,
-        localTriangleIndices,
-        frontier,
-        frontierFlags
-    );
-    parallelCandidates.reserve((static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription);
-
-    MeshletScoreState scoreState;
-
-    auto resetCurrentMeshlet = [&]()noexcept{
-        ResetMeshletBuilderState(entry.meshletPrimitiveIndices.size(), current, localSourceVertexRefs, localTriangleIndices, scoreState);
-    };
-
-    auto flushMeshlet = [&]() -> b8{
-        if(!FlushBuiltMeshlet(
-            s_MeshMetaKindText,
-            AStringView(filePathText),
-            entry.positions,
-            entry.vertexRefs,
-            entry.meshletPrimitiveIndices,
-            localSourceVertexRefs,
-            current,
-            entry.meshletPositionStreamRefs,
-            entry.meshletAttributeStreamRefs,
-            entry.meshletLocalVertexRefs,
-            entry.meshlets,
-            entry.meshletBounds
-        ))
-            return false;
-
-        resetCurrentMeshlet();
-        return true;
-    };
-
-    usize seedSearchOffset = 0u;
-    while(const Expected<u32> seedTriangleIndex = TryFindNextUnvisitedMeshletTriangle(trianglePrecompute.visitedTriangles, trianglePrecompute.triangles.size(), seedSearchOffset)){
-        seedSearchOffset = *seedTriangleIndex;
-        ClearMeshletFrontier(frontier, frontierFlags);
-        resetCurrentMeshlet();
-
-        if(!AddVisitedMeshletTriangle(
-            s_MeshMetaKindText,
-            AStringView(filePathText),
-            *seedTriangleIndex,
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            trianglePrecompute.positionTriangleOffsets,
-            trianglePrecompute.positionTriangleIndices,
-            trianglePrecompute.visitedTriangles,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            current,
-            entry.meshletPrimitiveIndices,
-            scoreState,
-            frontier,
-            frontierFlags
-        ))
-            return false;
-
-        if(!GrowMeshletFromFrontier(s_MeshMetaKindText, AStringView(filePathText), seedSearchOffset, cpuScheduler, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, parallelCandidates, frontier, frontierFlags))
-            return false;
-
-        ClearMeshletFrontier(frontier, frontierFlags);
-        if(!flushMeshlet())
-            return false;
-    }
-
-    if(entry.meshlets.empty()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': meshlet build produced no meshlets"), metaKind, PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    LogMeshletCookMetrics(
-        s_MeshMetaKindText,
-        AStringView(filePathText),
-        indices,
-        entry.positions,
-        entry.normals,
-        entry.tangents,
-        entry.uv0,
-        entry.colors,
-        entry.vertexRefs,
-        entry.meshlets,
-        entry.meshletBounds,
-        entry.meshletPositionStreamRefs,
-        entry.meshletAttributeStreamRefs,
-        entry.meshletLocalVertexRefs,
-        entry.meshletPrimitiveIndices
-    );
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -361,7 +238,24 @@ static b8 ParseSourceMeshMeta(const Path& nwbFilePath, const Core::Metascript::V
         outEntry.colors,
         outEntry.vertexRefs
     );
-    return MeshCookMeshlets::BuildMeshlets(nwbFilePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
+    return BuildCookMeshlets(
+        nwbFilePath,
+        streams.indices,
+        cpuScheduler.isParallelEnabled(),
+        cpuScheduler.workerThreadCount(),
+        outEntry.positions,
+        outEntry.normals,
+        outEntry.tangents,
+        outEntry.uv0,
+        outEntry.colors,
+        outEntry.vertexRefs,
+        outEntry.meshlets,
+        outEntry.meshletBounds,
+        outEntry.meshletPositionStreamRefs,
+        outEntry.meshletAttributeStreamRefs,
+        outEntry.meshletLocalVertexRefs,
+        outEntry.meshletPrimitiveIndices
+    );
 }
 
 
@@ -386,7 +280,7 @@ using namespace Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
+[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const AStringView nwbFilePathText, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
     const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinInverseBindMatricesField);
@@ -400,23 +294,18 @@ using namespace Core::Metascript;
         if(!matrix)
             return MakeUnexpected(Failure{});
 
-        if(!IsValidSkinInverseBindMatrix(LoadFloat(*matrix))){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"), PathToString<tchar>(nwbFilePath), matrixIndex);
+        if(!ValidateSkinCookInverseBindMatrix(LoadFloat(*matrix), nwbFilePathText, matrixIndex))
             return MakeUnexpected(Failure{});
-        }
         values.push_back(*matrix);
     }
 
-    if(values.empty()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_SkinInverseBindMatricesField));
+    if(!ValidateSkinCookInverseBindMatricesNonEmpty(values.size(), nwbFilePathText))
         return MakeUnexpected(Failure{});
-    }
     return values;
 }
 
-[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
-    const Core::Assets::AssetString nwbFilePathText = PathToString(entry.influences.get_allocator().arena(), nwbFilePath);
-    return ValidateSkinCookInfluenceJointIndices(AStringView(nwbFilePathText), entry.inverseBindMatrices.size(), entry.influences);
+[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const AStringView nwbFilePathText, const SkinCookEntry& entry){
+    return ValidateSkinCookInfluenceJointIndices(nwbFilePathText, entry.inverseBindMatrices.size(), entry.influences);
 }
 
 
@@ -480,7 +369,7 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
     ))
         return MakeUnexpected(Failure{});
     if(!EncodeMeshletRefDeltas(meshEntry.meshletPositionStreamRefs, meshEntry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);
         return false;
     }, meshEntry.meshlets, meshEntry.meshletPositionRefDeltas, meshEntry.meshletAttributeRefDeltas))
         return MakeUnexpected(Failure{});
@@ -525,7 +414,7 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!mesh.validatePayload(scratchArena))
         return false;
 
-    return MeshBinaryCodec().serialize(
+    return SerializeMeshBinaryPayload(
         mesh.positionStream(),
         mesh.normalStream(),
         mesh.tangentStream(),
@@ -554,7 +443,7 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!skin.validatePayload())
         return false;
 
-    return SkinBinaryCodec().serialize(
+    return SerializeSkinBinaryPayload(
         skin.mesh().name().hash(),
         skin.skeleton().name().hash(),
         skin.influences(),
@@ -597,13 +486,15 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
-    if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, FOUNDATION_TEXT("Skin"), {}, true, entry.influences))
+    if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
-    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
+
+    const Core::Assets::AssetString nwbFilePathText = PathToString(arena, nwbFilePath);
+    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, AStringView(nwbFilePathText), asset, arena);
     if(!inverseBindMatricesResult)
         return MakeUnexpected(Failure{});
     entry.inverseBindMatrices = Move(*inverseBindMatricesResult);
-    if(!ValidateSkinInfluenceJointIndices(nwbFilePath, entry))
+    if(!ValidateSkinInfluenceJointIndices(AStringView(nwbFilePathText), entry))
         return MakeUnexpected(Failure{});
 
     return entry;
@@ -627,7 +518,16 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

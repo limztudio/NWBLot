@@ -8,28 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <core/alloc/scratch.h>
-
-namespace NWB::Impl{
-using ScratchCsgDeformVertexVector = Vector<CsgDeformVertex, Core::Alloc::ScratchArena>;
-using ScratchCsgDeformTriangleVector = Vector<CsgDeformTriangle, Core::Alloc::ScratchArena>;
-using ScratchCsgDeformCutLoopEdgeVector = Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>;
-using ScratchCsgDeformLoopVertexVector = Vector<u32, Core::Alloc::ScratchArena>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void EraseCsgDeformCutLoopEdgeAt(mut Vector<CsgDeformCutLoopEdge> edges, in usize eraseIndex){
     for(usize index = eraseIndex; index + 1u < edges.size(); ++index)
         edges[index] = edges[index + 1u];
     edges.pop_back();
 }
 
-void CollectCsgDeformBoundaryEdges(in Span<CsgDeformTriangle> triangles, mut ScratchCsgDeformCutLoopEdgeVector outEdges){
+void CollectCsgDeformBoundaryEdges(in Span<CsgDeformTriangle> triangles, mut Vector<CsgDeformCutLoopEdge> outEdges){
     outEdges.clear();
     if(triangles.empty())
         return;
@@ -104,42 +89,24 @@ b8 OrderCsgDeformBoundaryLoopInto(in Span<CsgDeformCutLoopEdge> edges, mut Vecto
     return true;
 }
 
-b8 OrderCsgDeformBoundaryLoop(in Span<CsgDeformCutLoopEdge> edges, mut ScratchCsgDeformLoopVertexVector outLoop){
-    Vector<u32> loop;
-    if(!OrderCsgDeformBoundaryLoopInto(edges, loop)){
-        outLoop.clear();
-        return false;
-    }
-    outLoop.clear();
-    outLoop.reserve(loop.size());
-    for(in u32 vertex : loop)
-        outLoop.push_back(vertex);
-    return true;
+b8 OrderCsgDeformBoundaryLoop(in Span<CsgDeformCutLoopEdge> edges, mut Vector<u32> outLoop){
+    return OrderCsgDeformBoundaryLoopInto(edges, outLoop);
 }
 
 Expected<u32> FillCsgDeformCutCaps(
-    mut ScratchCsgDeformCutLoopEdgeVector scratchEdges,
-    mut ScratchCsgDeformVertexVector inOutVertices,
-    mut ScratchCsgDeformTriangleVector inOutTriangles
+    mut Vector<CsgDeformCutLoopEdge> scratchEdges,
+    mut Vector<CsgDeformVertex> inOutVertices,
+    mut Vector<CsgDeformTriangle> inOutTriangles
 ){
     u32 capTriangles = 0u;
-    Span<CsgDeformTriangle> initialTriangles;
-    native(in inOutTriangles, mut initialTriangles){
-        initialTriangles = Span<const CsgDeformTriangle>(inOutTriangles.data(), inOutTriangles.size());
-    }
-    CollectCsgDeformBoundaryEdges(initialTriangles, scratchEdges);
+    CollectCsgDeformBoundaryEdges(inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return capTriangles;
     // Peel one closed loop at a time from the boundary set; open chains stay cap-free while a closed but degenerate loop fails viability.
     Vector<CsgDeformCutLoopEdge> remaining;
     remaining.reserve(scratchEdges.size());
-    for(usize i = 0u; i < scratchEdges.size(); ++i){
-        CsgDeformCutLoopEdge edge;
-        native(in i, in scratchEdges, mut edge){
-            edge = scratchEdges[i];
-        }
-        remaining.push_back(edge);
-    }
+    for(usize i = 0u; i < scratchEdges.size(); ++i)
+        remaining.push_back(scratchEdges[i]);
     Vector<CsgDeformCutLoopEdge> loopEdges;
     Vector<u32> loop;
     HashSet<u32> loopMembers;
@@ -175,11 +142,7 @@ Expected<u32> FillCsgDeformCutCaps(
         // Open chains carry no closable loop; they stay viable cap-free. Only a closed degenerate loop fails.
         if(!OrderCsgDeformBoundaryLoopInto(loopEdges, loop))
             continue;
-        Span<CsgDeformVertex> currentVertices;
-        native(in inOutVertices, mut currentVertices){
-            currentVertices = Span<const CsgDeformVertex>(inOutVertices.data(), inOutVertices.size());
-        }
-        const Expected<CsgDeformVertex> center = TryResolveCsgDeformCapLoopCenter(currentVertices, loop, inOutTriangles.size());
+        const Expected<CsgDeformVertex> center = TryResolveCsgDeformCapLoopCenter(inOutVertices, loop, inOutTriangles.size());
         if(!center.has_value())
             return MakeUnexpected(Failure());
         const u32 centerIndex = cast<u32>(inOutVertices.size());

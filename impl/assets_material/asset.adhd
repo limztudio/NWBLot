@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
 #include <impl/assets_material/binary_validation.adhd.h>
 
@@ -35,7 +41,7 @@ static_assert(sizeof(MaterialTypedLayoutFieldBinary) == s_MaterialTypedLayoutFie
 static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceReferenceBytes, "MaterialResourceReferenceBinary layout drifted");
 
 // Materials hold only mesh and pixel stages. The compute emulation shader is found by the mesh shader name, so it is never stored here.
-[[nodiscard]] inline constexpr b8 IsSupportedMaterialShaderStage(const Core::ShaderType::Enum shaderType)noexcept{
+[[nodiscard]] NWB_INLINE constexpr b8 IsSupportedMaterialShaderStage(const Core::ShaderType::Enum shaderType)noexcept{
     return shaderType == Core::ShaderType::MeshStage || shaderType == Core::ShaderType::PixelStage;
 }
 
@@ -201,15 +207,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplAssetsMaterialAssetAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -177,9 +177,21 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] FOUNDATION_INLINE T ASin(const T value)noexcept(IsArithmetic_V<T>){
+    using std::asin;
+    return static_cast<T>(asin(value));
+}
+
+template<typename T>
 [[nodiscard]] FOUNDATION_INLINE T ACos(const T value)noexcept(IsArithmetic_V<T>){
     using std::acos;
     return static_cast<T>(acos(value));
+}
+
+template<typename T>
+[[nodiscard]] FOUNDATION_INLINE T ATan(const T value)noexcept(IsArithmetic_V<T>){
+    using std::atan;
+    return static_cast<T>(atan(value));
 }
 
 template<typename T>
@@ -244,4 +256,5 @@ template<typename T>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

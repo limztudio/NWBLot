@@ -9,8 +9,18 @@
 #include "smoke_environment.adhd"
 #include "smoke_project_helpers.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <loader/project_entry.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd.h>
 
 #include <impl/ecs_scene/module.adhd.h>
 #include <impl/ecs_mesh/system.adhd.h>
@@ -39,7 +49,7 @@ inline constexpr Array<Core::Color, 4> s_SRGBClearEdgeColors = {{
     { -0.25f, 1.25f, 0.0f, -0.5f },
 }};
 
-[[nodiscard]] inline u8 ExpectedSRGBClearByte(const f32 value, const b8 srgb)noexcept{
+[[nodiscard]] NWB_INLINE u8 ExpectedSRGBClearByte(const f32 value, const b8 srgb)noexcept{
     const f32 clamped = Clamp(value, 0.0f, 1.0f);
     f32 encoded = clamped;
     if(srgb){
@@ -90,7 +100,7 @@ struct SRGBClearEdgeInputs{
     Core::StagingTextureHandle readback;
 };
 
-[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareSRGBClearEdges(void* const userData, Core::GpuTaskGraph& graph){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareSRGBClearEdges(void* const userData, Core::GpuTaskGraph& graph){
     using namespace Core;
     const auto& inputs = *MakeNotNull(static_cast<const SRGBClearEdgeInputs*>(userData));
     const auto texture = graph.importTexture(inputs.texture, GpuGraphResourceDesc{}.setIdentity(Name(s_SmokeNameTestsSmokeTextureSrgbEdges))
@@ -126,7 +136,7 @@ struct SRGBClearEdgeInputs{
         SRGBClearEdgeReadbackTask::Payload{ inputs.texture, inputs.readback });
 }
 
-inline constexpr TStringView s_TextureSmokeProjectName = FOUNDATION_TEXT("TextureSmokeProject");
+inline constexpr AStringView s_TextureSmokeProjectName = "TextureSmokeProject";
 
 using TextureSmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
 using TextureSmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
@@ -147,99 +157,155 @@ inline constexpr f32 s_TextureDirectionalLightPitch = 0.48f;
 inline constexpr f32 s_TextureDirectionalLightYaw = 2.2f;
 inline constexpr f32 s_TextureDirectionalLightIntensity = 2.0f;
 inline constexpr u32 s_TextureFramebufferCaptureDefaultFrameCount = 360u;
+using Core::GraphicsRuntime;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-namespace NWB::Tests::Smoke{
-using Core::GraphicsRuntime;
-};
+Array<f32, 4u> TextureSrgbClearEdgeColor(in u32 index){
+    Array<f32, 4u> rgba = Array<f32, 4u>();
+    if(index == 0u){
+        rgba[0u] = bit_cast<f32>(bit_cast<u32>(0.0031308f) - 1u);
+        rgba[1u] = 0.0031308f;
+        rgba[2u] = bit_cast<f32>(bit_cast<u32>(0.0031308f) + 1u);
+        rgba[3u] = 0.25f;
+        return rgba;
+    }
+    if(index == 1u){
+        rgba[0u] = bit_cast<f32>(bit_cast<u32>(0.21404114f) - 1u);
+        rgba[1u] = 0.21404114f;
+        rgba[2u] = bit_cast<f32>(bit_cast<u32>(0.21404114f) + 1u);
+        rgba[3u] = 0.5f;
+        return rgba;
+    }
+    if(index == 2u){
+        rgba[0u] = 0.25f;
+        rgba[1u] = 0.5f;
+        rgba[2u] = 0.75f;
+        rgba[3u] = 1.0f;
+        return rgba;
+    }
+    rgba[0u] = -0.25f;
+    rgba[1u] = 1.25f;
+    rgba[2u] = 0.0f;
+    rgba[3u] = -0.5f;
+    return rgba;
+}
+
+b8 VerifyTextureSrgbClearPixels(in u32 formatCode, in b8 swapRb, in Span<u8> bytes, in usize rowPitch){
+    for(u32 y = 0u; y < s_TextureSrgbClearEdgeHeight; ++y){
+        for(u32 x = 0u; x < s_TextureSrgbClearEdgeWidth; ++x){
+            Array<u8, 4u> expected = Array<u8, 4u>();
+            expected[0u] = 0u;
+            expected[1u] = 0u;
+            expected[2u] = 0u;
+            expected[3u] = 255u;
+            if(x > 0u && x <= 4u && y > 0u && y < 3u){
+                const Array<f32, 4u> color = TextureSrgbClearEdgeColor(x - 1u);
+                expected[0u] = ExpectedSRGBClearByte(color[0u], true);
+                expected[1u] = ExpectedSRGBClearByte(color[1u], true);
+                expected[2u] = ExpectedSRGBClearByte(color[2u], true);
+                expected[3u] = ExpectedSRGBClearByte(color[3u], false);
+                if(swapRb){
+                    const u8 red = expected[0u];
+                    expected[0u] = expected[2u];
+                    expected[2u] = red;
+                }
+            }
+            for(u32 channel = 0u; channel < s_TextureSrgbClearEdgeBytesPerPixel; ++channel){
+                const usize byteOffset = cast<usize>(y) * rowPitch + cast<usize>(x) * cast<usize>(s_TextureSrgbClearEdgeBytesPerPixel) + cast<usize>(channel);
+                const u8 actual = bytes[byteOffset];
+                if(actual != expected[channel]){
+                    error(
+                        "TextureSmokeProject: sRGB bounded clear changed format {} pixel ({}, {}) channel {}: {} != {}"
+                        , formatCode
+                        , x
+                        , y
+                        , channel
+                        , actual
+                        , expected[channel]
+                    );
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 b8 VerifyTextureSrgbClear(mut GraphicsRuntime graphics){
-        b8 ok = true;
-        native(mut graphics, mut ok){
-            using namespace Core;
-            auto& device = graphics.getDevice();
-            for(const Format::Enum format : { Format::RGBA8_UNORM_SRGB, Format::BGRA8_UNORM_SRGB }){
-                TextureDesc description;
-                description.width = s_SRGBClearEdgeWidth;
-                description.height = s_SRGBClearEdgeHeight;
-                description.format = format;
-                description.isShaderResource = false;
-                const auto texture = graphics.createTexture(description);
-                const auto readback = device.createStagingTexture(description, CpuAccessMode::Read);
-                if(!texture || !readback){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: failed to allocate the sRGB clear edge resources"));
-                    ok = false;
-                    break;
-                }
-                SRGBClearEdgeInputs inputs{ *texture, *readback };
-                const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&inputs, DeclareSRGBClearEdges);
-                if(!token || !device.waitForSubmissionToken(*token)){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: sRGB clear edge graph did not complete"));
-                    ok = false;
-                    break;
-                }
-                const auto mapping = device.mapStagingTexture(**readback, TextureSlice{}, CpuAccessMode::Read);
-                if(!mapping){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: failed to map the sRGB clear edge readback"));
-                    ok = false;
-                    break;
-                }
-                ScopeExit unmap([&]()noexcept{ device.unmapStagingTexture(**readback); });
-                if(!mapping->data || mapping->rowPitch < s_SRGBClearEdgeWidth * s_SRGBClearEdgeBytesPerPixel){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: sRGB clear edge mapping has an invalid extent"));
-                    ok = false;
-                    break;
-                }
-                const auto bytes = MakeNotNull(static_cast<const u8*>(mapping->data));
-                for(u32 y = 0u; y < s_SRGBClearEdgeHeight && ok; ++y){
-                    for(u32 x = 0u; x < s_SRGBClearEdgeWidth && ok; ++x){
-                        Array<u8, 4> expected = { 0u, 0u, 0u, 255u };
-                        if(x > 0u && x <= s_SRGBClearEdgeColors.size() && y > 0u && y < 3u){
-                            const Color& color = s_SRGBClearEdgeColors[x - 1u];
-                            expected[0] = ExpectedSRGBClearByte(color.r, true);
-                            expected[1] = ExpectedSRGBClearByte(color.g, true);
-                            expected[2] = ExpectedSRGBClearByte(color.b, true);
-                            expected[3] = ExpectedSRGBClearByte(color.a, false);
-                            if(format == Format::BGRA8_UNORM_SRGB)
-                                Swap(expected[0], expected[2]);
-                        }
-                        for(u32 channel = 0u; channel < s_SRGBClearEdgeBytesPerPixel; ++channel){
-                            const u8 actual = bytes.get()[static_cast<usize>(y) * mapping->rowPitch + static_cast<usize>(x) * s_SRGBClearEdgeBytesPerPixel + channel];
-                            if(actual != expected[channel]){
-                                NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: sRGB bounded clear changed format {} pixel ({}, {}) channel {}: {} != {}"), static_cast<u32>(format), x, y, channel, actual, expected[channel]);
-                                ok = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if(!ok)
-                    break;
+    b8 ok = true;
+    native(mut graphics, mut ok){
+        using namespace Core;
+        auto& device = graphics.getDevice();
+        for(const Format::Enum format : { Format::RGBA8_UNORM_SRGB, Format::BGRA8_UNORM_SRGB }){
+            TextureDesc description;
+            description.width = s_SRGBClearEdgeWidth;
+            description.height = s_SRGBClearEdgeHeight;
+            description.format = format;
+            description.isShaderResource = false;
+            const auto texture = graphics.createTexture(description);
+            const auto readback = device.createStagingTexture(description, CpuAccessMode::Read);
+            if(!texture || !readback){
+                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: failed to allocate the sRGB clear edge resources"));
+                ok = false;
+                break;
             }
-            if(ok)
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("TextureSmokeProject: bounded sRGB clear edges preserve alpha and neighboring pixels"));
+            SRGBClearEdgeInputs inputs{ *texture, *readback };
+            const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&inputs, DeclareSRGBClearEdges);
+            if(!token || !device.waitForSubmissionToken(*token)){
+                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: sRGB clear edge graph did not complete"));
+                ok = false;
+                break;
+            }
+            const auto mapping = device.mapStagingTexture(**readback, TextureSlice{}, CpuAccessMode::Read);
+            if(!mapping){
+                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: failed to map the sRGB clear edge readback"));
+                ok = false;
+                break;
+            }
+            ScopeExit unmap([&]()noexcept{ device.unmapStagingTexture(**readback); });
+            if(!mapping->data || mapping->rowPitch < s_SRGBClearEdgeWidth * s_SRGBClearEdgeBytesPerPixel){
+                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: sRGB clear edge mapping has an invalid extent"));
+                ok = false;
+                break;
+            }
+            const usize spanBytes = static_cast<usize>(s_SRGBClearEdgeHeight - 1u) * mapping->rowPitch
+                + static_cast<usize>(s_SRGBClearEdgeWidth) * s_SRGBClearEdgeBytesPerPixel;
+            const Span<const u8> bytes(static_cast<const u8*>(mapping->data), spanBytes);
+            ok = VerifyTextureSrgbClearPixels(static_cast<u32>(format), format == Format::BGRA8_UNORM_SRGB, bytes, mapping->rowPitch);
+            if(!ok)
+                break;
         }
+    }
+    if(ok)
+        [essential] info("TextureSmokeProject: bounded sRGB clear edges preserve alpha and neighboring pixels");
     return ok;
 }
 
+[arena]
 class TextureSmokeProject : IProjectEntryCallbacks{
     public TextureSmokeProject(mut ProjectRuntimeContext context){
         this.m_context = context;
         this.m_world = CreateSmokeRenderWorldOrDie(s_TextureSmokeProjectName, context);
-        this.m_captureConfigurationValid = this.configureFramebufferCapture();
+        this.m_captureConfigurationValid = ConfigureSmokeFramebufferCapture(
+            this.m_context,
+            "TextureSmokeProject",
+            s_TextureFramebufferCaptureDefaultFrameCount,
+            this.m_framebufferCapture
+        );
     }
 
     public ~TextureSmokeProject(){
-        native{
-            DestroyCapturedSmokeRenderWorld(*this->m_context, this->m_world, this->m_framebufferCapture);
-        }
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
     }
 
     public b8 onStartup()override{
@@ -248,55 +314,49 @@ class TextureSmokeProject : IProjectEntryCallbacks{
         if(!VerifyTextureSrgbClear(this.m_context.graphics))
             return false;
 
-        native{
-            const Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_TextureCameraHeight, s_TextureCameraDistance, s_TextureCameraPitch, *this->m_world);
-            const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(*this->m_world, s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity);
+        const EntityID activeCamera = CreateSmokeCamera(s_TextureCameraHeight, s_TextureCameraDistance, s_TextureCameraPitch, SmokeWorldRef(this.m_world));
+        // Use an untextured white floor to isolate indirect color bounce from the sphere.
+        this.m_whiteGround = CreateTintedStaticMeshEntity(
+            s_TextureGroundPlaneMesh,
+            s_WhiteGroundMaterial,
+            NameTextAscii(s_WhiteGroundMaterialInterface),
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+            VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(3.25f, 1.0f, 3.25f, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        // Place the UV-mapped sphere just above the white floor.
+        this.m_texturedSphere = CreateTintedStaticMeshEntity(
+            s_TexturedSphereMesh,
+            s_TextureMaterial,
+            NameTextAscii(s_TextureMaterialInterface),
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+            VectorSingle(0.0f, 1.16f, 0.15f, 0.0f),
+            VectorSingle(1.1f, 1.1f, 1.1f, 0.0f),
+            s_TextureRuntimeTintParameter,
+            SmokeWorldRef(this.m_world)
+        );
 
-            // Use an untextured white floor to isolate indirect color bounce from the sphere.
-            this->m_whiteGround = CreateTintedStaticMeshEntity(s_TextureGroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f), *this->m_world);
-            // Place the UV-mapped sphere just above the white floor.
-            this->m_texturedSphere = CreateTintedStaticMeshEntity(
-                s_TexturedSphereMesh,
-                s_TextureMaterial,
-                s_TextureMaterialInterface,
-                Float4(1.0f, 1.0f, 1.0f, 1.0f),
-                Float4(0.0f, 1.16f, 0.15f, 0.0f),
-                Float4(1.1f, 1.1f, 1.1f, 0.0f),
-                s_TextureRuntimeTintParameter,
-                *this->m_world
-            );
-            FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && directionalLight.valid() && this->m_whiteGround.valid() && this->m_texturedSphere.valid(), FOUNDATION_TEXT("TextureSmokeProject failed to create the white receiver and textured sphere"));
+        EntityID directionalLight = s_InvalidEntityId;
+        native(mut world = this.m_world, mut directionalLight){
+            directionalLight = Impl::Scene::CreateDirectionalLightEntity(*world, s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity);
         }
+        [essential] assert(
+            activeCamera.valid() && directionalLight.valid() && this.m_whiteGround.valid() && this.m_texturedSphere.valid(),
+            "TextureSmokeProject failed to create the white receiver and textured sphere"
+        );
 
         [essential] info("TextureSmokeProject: white receiver + UV-mapped authored Texture2D sphere created");
         return true;
     }
 
     public void onShutdown()override{
-        native{
-            DestroyCapturedSmokeRenderWorld(*this->m_context, this->m_world, this->m_framebufferCapture);
-        }
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
         [essential] info("TextureSmokeProject: shutdown");
     }
 
     public b8 onUpdate(in f32 delta)override{
-        b8 ticked = false;
-        native(in delta, mut ticked){
-            ticked = TickSmokeWorldWithCapture(delta, *this->m_world, this->m_framebufferCapture);
-        }
-        return ticked;
-    }
-
-    private b8 configureFramebufferCapture(){
-        b8 ok = false;
-        native(mut ok){
-            auto capture = SmokeCaptureFactory(*this->m_context).configure(s_TextureSmokeProjectName, s_TextureFramebufferCaptureDefaultFrameCount, {});
-            if(capture){
-                this->m_framebufferCapture = Move(*capture);
-                ok = true;
-            }
-        }
-        return ok;
+        return TickSmokeWorldWithCapture(delta, SmokeWorldRef(this.m_world), this.m_framebufferCapture);
     }
 
     private mut ProjectRuntimeContext m_context;
@@ -307,19 +367,35 @@ class TextureSmokeProject : IProjectEntryCallbacks{
     private b8 m_captureConfigurationValid;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Texture Smoke");
+    return NWB_TEXT("NWB Texture Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::TextureSmokeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

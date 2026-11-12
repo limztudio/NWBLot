@@ -281,6 +281,22 @@ class bucket_entry : public bucket_entry_hash<StoreHash> {
     tsl_rh_assert(!empty());
   }
 
+  template <typename Alloc, typename... Args>
+  void set_value_of_empty_bucket_with_alloc(
+      Alloc& alloc, distance_type dist_from_ideal_bucket,
+      truncated_hash_type hash, Args&&... value_type_args) {
+    tsl_rh_assert(dist_from_ideal_bucket >= 0);
+    tsl_rh_assert(empty());
+
+    std::allocator_traits<Alloc>::construct(
+        alloc, reinterpret_cast<value_type*>(std::addressof(m_value)),
+        std::forward<Args>(value_type_args)...);
+    this->set_hash(hash);
+    m_dist_from_ideal_bucket = dist_from_ideal_bucket;
+
+    tsl_rh_assert(!empty());
+  }
+
   void swap_with_value_in_bucket(distance_type& dist_from_ideal_bucket,
                                  truncated_hash_type& hash, value_type& value) {
     tsl_rh_assert(!empty());
@@ -591,6 +607,73 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     other.clear_and_shrink();
   }
 
+  robin_hash(const robin_hash& other, const Allocator& alloc)
+      : robin_hash(other.bucket_count(), static_cast<const Hash&>(other),
+                   static_cast<const KeyEqual&>(other), alloc,
+                   other.m_min_load_factor, other.m_max_load_factor) {
+    if (other.size() == 0) {
+      return;
+    }
+
+    allocator_type value_alloc = get_allocator();
+    for (std::size_t ibucket = 0; ibucket < m_bucket_count; ++ibucket) {
+      if (!other.m_buckets[ibucket].empty()) {
+        m_buckets[ibucket].set_value_of_empty_bucket_with_alloc(
+            value_alloc, other.m_buckets[ibucket].dist_from_ideal_bucket(),
+            other.m_buckets[ibucket].truncated_hash(),
+            other.m_buckets[ibucket].value());
+      }
+    }
+    m_nb_elements = other.m_nb_elements;
+    m_grow_on_next_insert = other.m_grow_on_next_insert;
+    m_try_shrink_on_next_insert = other.m_try_shrink_on_next_insert;
+  }
+
+  robin_hash(robin_hash&& other, const Allocator& alloc)
+      : Hash(std::move(static_cast<Hash&>(other))),
+        KeyEqual(std::move(static_cast<KeyEqual&>(other))),
+        GrowthPolicy(other),
+        m_buckets_data(buckets_allocator(alloc)),
+        m_buckets(static_empty_bucket_ptr()),
+        m_bucket_count(0),
+        m_nb_elements(0),
+        m_load_threshold(0),
+        m_min_load_factor(other.m_min_load_factor),
+        m_max_load_factor(other.m_max_load_factor),
+        m_grow_on_next_insert(false),
+        m_try_shrink_on_next_insert(false) {
+    if (m_buckets_data.get_allocator() == other.m_buckets_data.get_allocator()) {
+      m_buckets_data = std::move(other.m_buckets_data);
+      m_buckets = m_buckets_data.empty() ? static_empty_bucket_ptr()
+                                         : m_buckets_data.data();
+      m_bucket_count = other.m_bucket_count;
+      m_nb_elements = other.m_nb_elements;
+      m_load_threshold = other.m_load_threshold;
+      m_grow_on_next_insert = other.m_grow_on_next_insert;
+      m_try_shrink_on_next_insert = other.m_try_shrink_on_next_insert;
+    } else if (other.m_bucket_count > 0) {
+      m_buckets_data.resize(other.m_bucket_count);
+      m_buckets_data.back().set_as_last_bucket();
+      m_buckets = m_buckets_data.data();
+      m_bucket_count = other.m_bucket_count;
+      this->max_load_factor(m_max_load_factor);
+
+      allocator_type value_alloc = get_allocator();
+      for (std::size_t ibucket = 0; ibucket < m_bucket_count; ++ibucket) {
+        if (!other.m_buckets[ibucket].empty()) {
+          m_buckets[ibucket].set_value_of_empty_bucket_with_alloc(
+              value_alloc, other.m_buckets[ibucket].dist_from_ideal_bucket(),
+              other.m_buckets[ibucket].truncated_hash(),
+              std::move(other.m_buckets[ibucket].value()));
+        }
+      }
+      m_nb_elements = other.m_nb_elements;
+      m_grow_on_next_insert = other.m_grow_on_next_insert;
+      m_try_shrink_on_next_insert = other.m_try_shrink_on_next_insert;
+    }
+    other.clear_and_shrink();
+  }
+
   robin_hash& operator=(const robin_hash& other) {
     if (&other != this) {
       Hash::operator=(other);
@@ -720,7 +803,7 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
   std::pair<iterator, bool> insert_or_assign(K&& key, M&& obj) {
     auto it = try_emplace(std::forward<K>(key), std::forward<M>(obj));
     if (!it.second) {
-      it.first.value() = std::forward<M>(obj);
+      assign_mapped_value(it.first.value(), std::forward<M>(obj));
     }
 
     return it;
@@ -730,7 +813,7 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
   iterator insert_or_assign(const_iterator hint, K&& key, M&& obj) {
     if (hint != cend() && compare_keys(KeySelect()(*hint), key)) {
       auto it = mutable_iterator(hint);
-      it.value() = std::forward<M>(obj);
+      assign_mapped_value(it.value(), std::forward<M>(obj));
 
       return it;
     }
@@ -740,12 +823,38 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
 
   template <class... Args>
   std::pair<iterator, bool> emplace(Args&&... args) {
-    return insert(value_type(std::forward<Args>(args)...));
+    allocator_type alloc = get_allocator();
+    alignas(value_type) unsigned char raw_value[sizeof(value_type)];
+    value_type* value_ptr = reinterpret_cast<value_type*>(raw_value);
+    std::allocator_traits<allocator_type>::construct(
+        alloc, value_ptr, std::forward<Args>(args)...);
+    struct ValueGuard {
+      allocator_type& alloc_ref;
+      value_type* ptr;
+      ~ValueGuard() noexcept {
+        std::allocator_traits<allocator_type>::destroy(alloc_ref,
+                                                       std::launder(ptr));
+      }
+    } guard{alloc, value_ptr};
+    return insert(std::move(*std::launder(value_ptr)));
   }
 
   template <class... Args>
   iterator emplace_hint(const_iterator hint, Args&&... args) {
-    return insert_hint(hint, value_type(std::forward<Args>(args)...));
+    allocator_type alloc = get_allocator();
+    alignas(value_type) unsigned char raw_value[sizeof(value_type)];
+    value_type* value_ptr = reinterpret_cast<value_type*>(raw_value);
+    std::allocator_traits<allocator_type>::construct(
+        alloc, value_ptr, std::forward<Args>(args)...);
+    struct ValueGuard {
+      allocator_type& alloc_ref;
+      value_type* ptr;
+      ~ValueGuard() noexcept {
+        std::allocator_traits<allocator_type>::destroy(alloc_ref,
+                                                       std::launder(ptr));
+      }
+    } guard{alloc, value_ptr};
+    return insert_hint(hint, std::move(*std::launder(value_ptr)));
   }
 
   template <class K, class... Args>
@@ -1190,8 +1299,9 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     }
 
     if (m_buckets[ibucket].empty()) {
-      m_buckets[ibucket].set_value_of_empty_bucket(
-          dist_from_ideal_bucket, bucket_entry::truncate_hash(hash),
+      allocator_type alloc = get_allocator();
+      m_buckets[ibucket].set_value_of_empty_bucket_with_alloc(
+          alloc, dist_from_ideal_bucket, bucket_entry::truncate_hash(hash),
           std::forward<Args>(value_type_args)...);
     } else {
       insert_value(ibucket, dist_from_ideal_bucket,
@@ -1207,16 +1317,50 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     return std::make_pair(iterator(m_buckets + ibucket), true);
   }
 
+  template <class Mapped, class M>
+  void assign_mapped_value(Mapped& dst, M&& obj) {
+    using mapped_allocator = typename std::allocator_traits<
+        allocator_type>::template rebind_alloc<Mapped>;
+    if constexpr (!std::allocator_traits<
+                      mapped_allocator>::is_always_equal::value &&
+                  std::is_move_assignable<Mapped>::value) {
+      mapped_allocator mapped_alloc(get_allocator());
+      alignas(Mapped) unsigned char raw_mapped[sizeof(Mapped)];
+      Mapped* mapped_ptr = reinterpret_cast<Mapped*>(raw_mapped);
+      std::allocator_traits<mapped_allocator>::construct(
+          mapped_alloc, mapped_ptr, std::forward<M>(obj));
+      struct MappedGuard {
+        mapped_allocator& alloc_ref;
+        Mapped* ptr;
+        ~MappedGuard() noexcept {
+          std::allocator_traits<mapped_allocator>::destroy(alloc_ref,
+                                                           std::launder(ptr));
+        }
+      } guard{mapped_alloc, mapped_ptr};
+      dst = std::move(*std::launder(mapped_ptr));
+    } else {
+      dst = std::forward<M>(obj);
+    }
+  }
+
   template <class... Args>
   void insert_value(std::size_t ibucket, distance_type dist_from_ideal_bucket,
                     truncated_hash_type hash, Args&&... value_type_args) {
-    value_type value(std::forward<Args>(value_type_args)...);
-    insert_value_impl(ibucket, dist_from_ideal_bucket, hash, value);
-  }
-
-  void insert_value(std::size_t ibucket, distance_type dist_from_ideal_bucket,
-                    truncated_hash_type hash, value_type&& value) {
-    insert_value_impl(ibucket, dist_from_ideal_bucket, hash, value);
+    allocator_type alloc = get_allocator();
+    alignas(value_type) unsigned char raw_value[sizeof(value_type)];
+    value_type* value_ptr = reinterpret_cast<value_type*>(raw_value);
+    std::allocator_traits<allocator_type>::construct(
+        alloc, value_ptr, std::forward<Args>(value_type_args)...);
+    struct ValueGuard {
+      allocator_type& alloc_ref;
+      value_type* ptr;
+      ~ValueGuard() noexcept {
+        std::allocator_traits<allocator_type>::destroy(alloc_ref,
+                                                       std::launder(ptr));
+      }
+    } guard{alloc, value_ptr};
+    insert_value_impl(ibucket, dist_from_ideal_bucket, hash,
+                      *std::launder(value_ptr));
   }
 
   /*
@@ -1500,8 +1644,9 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
             truncated_hash = deserialize_value<std::uint32_t>(deserializer);
           }
 
-          bucket.set_value_of_empty_bucket(
-              dist_from_ideal_bucket, truncated_hash,
+          allocator_type alloc = get_allocator();
+          bucket.set_value_of_empty_bucket_with_alloc(
+              alloc, dist_from_ideal_bucket, truncated_hash,
               deserialize_value<value_type>(deserializer));
         }
       }

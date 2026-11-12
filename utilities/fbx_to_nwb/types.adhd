@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_UtilityArena = "utilities/fbx_to_nwb/utility";
 const Name s_UtilityScratch = "utilities/fbx_to_nwb/utility_scratch";
 
 const f64 s_DefaultImportScale = 1.0;
@@ -25,6 +24,14 @@ const StringView s_ImportedSourceLabel = "imported";
 const StringView s_DefaultSourceLabel = "default";
 const StringView s_SeparateAssetLayoutLabel = "separate";
 const StringView s_ReportLineEndText = "\n";
+const StringView s_NwbFileExtensionText = ".nwb";
+const StringView s_AssetsDirectoryLabel = "assets";
+
+const u8 s_AsciiSlashByte = 47u;
+const u8 s_AsciiBackslashByte = 92u;
+const u8 s_AsciiDoubleQuoteByte = 34u;
+const u8 s_AsciiSingleQuoteByte = 39u;
+const u8 s_AsciiCommaByte = 44u;
 
 const StringView s_OptionSeparatorText = ", ";
 const StringView s_OptionLastSeparatorText = ", or ";

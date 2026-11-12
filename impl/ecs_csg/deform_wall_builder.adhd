@@ -2,88 +2,39 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/global.adhd.h>
-
-#include <impl/ecs_csg/deform_cutter_field.adhd.h>
-#include <impl/ecs_csg/deform_wall_clip.adhd.h>
-#include <impl/ecs_csg/shape_registry.adhd.h>
-#include <core/alloc/general.h>
-#include <core/alloc/scratch.h>
-
-#include <global/simd/vector.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-using CsgDeformVertexVector = Vector<CsgDeformVertex, ArenaT>;
-template<typename ArenaT>
-using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
+#include <impl/ecs_csg/deform_wall_clip.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Owns zero-crossing splits with the shared edge cache (never welds source verts) and interpolated attributes, emitting the kept split triangles.
-namespace CsgDeformWallBuilder{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
-[[nodiscard]] inline Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
-    Core::Alloc::ScratchArena& scratchArena,
-    const CsgDeformShape& shape,
-    const f32 boundaryEpsilon,
-    const CsgShapeRegistry* shapeRegistry,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
-    Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
-    CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
+Expected<b8, CsgDeformViabilityReason> ClipCsgDeformWallShell(
+    in CsgDeformShape shape,
+    in f32 boundaryEpsilon,
+    in u32 registryParameterByteSize,
+    in Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>> registryDistanceCallback,
+    mut HashMap<u64, u32> edgeSplits,
+    mut Vector<CsgDeformTriangle> scratchKept,
+    mut Vector<f32> scratchDistances,
+    mut Vector<CsgDeformVertex> inOutVertices,
+    mut Vector<CsgDeformTriangle> inOutTriangles
 ){
-    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, boundaryEpsilon, shapeRegistry, scratchDistances);
-    if(!shapeDistances)
+    const Expected<b8, CsgDeformViabilityReason> shapeDistances = ComputeCsgDeformShapeDistances(
+        shape,
+        inOutVertices,
+        boundaryEpsilon,
+        registryParameterByteSize,
+        registryDistanceCallback,
+        scratchDistances
+    );
+    if(!shapeDistances.has_value())
         return MakeUnexpected(shapeDistances.error());
 
-    CsgDeformEdgeSplitMap edgeSplits(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
-    const auto clipped = ClipCsgDeformShellWithDistances(scratchDistances, edgeSplits, scratchKept, inOutVertices, inOutTriangles);
-    if(!clipped)
-        return MakeUnexpected(clipped.error());
-    return {};
+    return ClipCsgDeformShellWithDistances(scratchDistances, edgeSplits, scratchKept, inOutVertices, inOutTriangles);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsCsgDeformWallBuilderAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

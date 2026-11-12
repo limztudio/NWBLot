@@ -109,7 +109,7 @@ class UiRadioGroupSource : IListDataSource{
 }
 
 class UiListGallery{
-    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("list_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ListGalleryPanelHeight)))
             return;
         const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
@@ -119,7 +119,7 @@ class UiListGallery{
         const ListResult result = context.ui.virtualList("rows", this.m_source, this.m_state, options);
         if(result.activated)
             [essential] info("Testbed: custom list selected key={}", this.m_state.selectedKey());
-        declared = DeclareSelectedKeyLabel(context.ui, scratchArena, this.m_state.selectedKey()) && result.valid && declared;
+        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.selectedKey()) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -131,7 +131,7 @@ class UiListGallery{
 }
 
 class UiComboGallery{
-    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("combo_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ComboGalleryPanelHeight)))
             return;
         const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
@@ -141,7 +141,7 @@ class UiComboGallery{
         const ComboResult result = context.ui.comboBox(s_ChoiceKey, this.m_source, this.m_state, options);
         if(result.committed)
             [essential] info("Testbed: custom combo selected key={}", this.m_state.selectedKey());
-        declared = DeclareSelectedKeyLabel(context.ui, scratchArena, this.m_state.selectedKey()) && result.valid && declared;
+        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.selectedKey()) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -187,7 +187,11 @@ class UiEditGallery{
 
 class UiImageGallery{
     public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
-        return LoadUiGallerySkinImageSource(arena, assets, sceneSubsystems, this.m_source);
+        Expected<SharedImageSource> source = LoadUiGallerySkinImageSource(arena, assets, sceneSubsystems);
+        if(!source.has_value())
+            return false;
+        this.m_source = source.value();
+        return true;
     }
 
     public void paint(mut UiPaintContext context, in f32 x, in f32 y){
@@ -340,7 +344,7 @@ class UiNumericEditGallery{
         [essential] assert(initialized);
     }
 
-    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("numeric_edit_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_NumericEditPanelHeight)))
             return;
         const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
@@ -350,7 +354,7 @@ class UiNumericEditGallery{
         FloatEditOptions floating = FloatEditOptions();
         floating.bounds = FloatBounds(-s_NumericEditDecimalLimit, s_NumericEditDecimalLimit, NumericBoundsPolicy::Clamp);
         const NumericEditBoxResult second = context.ui.floatEdit("float", this.m_float, this.m_floatState, floating);
-        declared = DeclareFormattedLabel(context.ui, scratchArena, "committed", "Committed: {} / {}", this.m_integer.value(), this.m_float.value()) && first.edit.valid && second.edit.valid && declared;
+        declared = DeclareCommittedNumericLabel(context.ui, this.m_integer.value(), this.m_float.value()) && first.edit.valid && second.edit.valid && declared;
         declared = context.ui.label(s_HintKey, "Enter: commit, Escape: restore") && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
@@ -407,7 +411,7 @@ class UiPopupGallery{
 }
 
 class UiPopupToolsGallery{
-    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("popup_tools_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_PopupToolsPanelHeight)))
             return;
         const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
@@ -422,7 +426,7 @@ class UiPopupToolsGallery{
             this.m_command = result.key;
             [essential] info("Testbed: custom context command key={}", this.m_command);
         }
-        declared = DeclareFormattedLabel(context.ui, scratchArena, s_SelectedKey, "Command: {} / Clicks: {}", this.m_command, this.m_anchorClicks) && result.valid && declared;
+        declared = DeclarePopupToolsStatusLabel(context.ui, this.m_command, this.m_anchorClicks) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -437,14 +441,14 @@ class UiPopupToolsGallery{
 }
 
 class UiProgressGallery{
-    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("progress_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ProgressGalleryPanelHeight)))
             return;
         b8 valid = context.ui.label(s_TitleKey, "Skinned progress bar");
         if(context.ui.button("advance", "Advance by 25%"))
             this.m_fraction = AdvanceProgressGalleryFraction(this.m_fraction);
         valid = context.ui.progress(s_AmountKey, this.m_fraction) && valid;
-        valid = DeclareFormattedLabel(context.ui, scratchArena, "value", "Completed: {:.0f}%", this.m_fraction * s_ProgressPercentScale) && valid;
+        valid = DeclareProgressPercentLabel(context.ui, this.m_fraction * s_ProgressPercentScale) && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid)
             error("Testbed: custom progress declaration failed");
@@ -477,7 +481,7 @@ class UiSearchComboGallery{
         this.m_state = SearchComboState(arena);
     }
 
-    public void paint(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("search_combo_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_SearchComboPanelHeight)))
             return;
         const f32 previousFontSize = SetBuilderFontSize(context.ui, s_GalleryFontSize);
@@ -487,7 +491,7 @@ class UiSearchComboGallery{
         const SearchComboResult result = context.ui.searchComboBox(s_ChoiceKey, this.m_source, this.m_state, options);
         if(result.combo.committed)
             [essential] info("Testbed: custom searchable combo selected key={}", this.m_state.combo().selectedKey());
-        declared = DeclareSelectedKeyLabel(context.ui, scratchArena, this.m_state.combo().selectedKey()) && result.combo.valid && declared;
+        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.combo().selectedKey()) && result.combo.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -583,8 +587,7 @@ class UiWidgetGallery{
             ++this.m_selectedGallery;
         valid = context.ui.endContainer() && valid;
         const u32 selected = this.m_selectedGallery;
-        ScratchArena scratchArena(s_SelectorArena);
-        valid = DeclareFormattedLabel(context.ui, scratchArena, "section", "UI samples {}/{}: {}", selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected))) && valid;
+        valid = DeclareGallerySectionLabel(context.ui, selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected))) && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid){
             error("Testbed: UI gallery selector declaration failed");
@@ -598,26 +601,26 @@ class UiWidgetGallery{
         const f32 y = contentOrigin.y;
         switch(cast<Section>(selected)){
         case Section::Controls:
-            this.paintControls(context, scratchArena, x, y);
+            this.paintControls(context, x, y);
             this.m_popups.paint(context, x, y);
             break;
         case Section::Edit: this.m_edits.paint(context, x, y); break;
-        case Section::List: this.m_lists.paint(context, scratchArena, x, y); break;
-        case Section::Combo: this.m_combos.paint(context, scratchArena, x, y); break;
-        case Section::SearchCombo: this.m_searchCombos.paint(context, scratchArena, x, y); break;
-        case Section::PopupTools: this.m_popupTools.paint(context, scratchArena, x, y); break;
+        case Section::List: this.m_lists.paint(context, x, y); break;
+        case Section::Combo: this.m_combos.paint(context, x, y); break;
+        case Section::SearchCombo: this.m_searchCombos.paint(context, x, y); break;
+        case Section::PopupTools: this.m_popupTools.paint(context, x, y); break;
         case Section::NestedPopup: this.m_nestedPopups.paint(context, x, y); break;
-        case Section::NumericEdit: this.m_numericEdits.paint(context, scratchArena, x, y); break;
+        case Section::NumericEdit: this.m_numericEdits.paint(context, x, y); break;
         case Section::TextArea: this.m_textAreas.paint(context, x, y); break;
         case Section::RadioGroup: this.m_radioGroups.paint(context, x, y); break;
         case Section::Slider: this.m_sliders.paint(context, x, y); break;
-        case Section::Progress: this.m_progress.paint(context, scratchArena, x, y); break;
+        case Section::Progress: this.m_progress.paint(context, x, y); break;
         case Section::Image: this.m_images.paint(context, x, y); break;
         case Section::kCount: break;
         }
     }
 
-    private void paintControls(mut UiPaintContext context, mut ScratchArena scratchArena, in f32 x, in f32 y){
+    private void paintControls(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("interactive_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_ControlsPanelHeight)))
             return;
         b8 valid = context.ui.label(s_TitleKey, "Interactive custom UI");
@@ -635,7 +638,7 @@ class UiWidgetGallery{
             this.m_count = 0u;
         this.m_popups.trigger(context.ui);
         valid = context.ui.endContainer() && valid;
-        valid = DeclareFormattedLabel(context.ui, scratchArena, "count", "Count: {}", this.m_count) && valid;
+        valid = DeclareCounterLabel(context.ui, this.m_count) && valid;
         valid = context.ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid)
@@ -752,3 +755,4 @@ class UiSkinPreview{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

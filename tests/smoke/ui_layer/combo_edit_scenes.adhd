@@ -4,1003 +4,937 @@
 
 #include "smoke_common.adhd"
 
-native{
-NWB_BEGIN
-namespace Tests::Smoke{
 
-class UiComboSmokeScene : public Core::IInputEventHandler, NoCopy{
-public:
-    explicit UiComboSmokeScene(Core::InputDispatcher& input);
-    virtual ~UiComboSmokeScene()noexcept override;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
-
-
-private:
-    [[nodiscard]] Array<u64, 16u> values()const noexcept;
-    [[nodiscard]] Impl::Ui::Rect cursorRow()const noexcept;
-    void observeState();
-
-
-private:
-    Core::InputDispatcher& m_input;
-    UiComboSmokeSource m_source;
-    Impl::Ui::ComboState m_state;
-    Impl::Ui::ScrollPlacement m_lastPlacement;
-    Array<u64, 16u> m_lastValues{};
-    Impl::Ui::PopupPlacement m_lastPopup;
-    Impl::Ui::Rect m_lastBounds;
-    Impl::Ui::DisplayMetrics m_lastDisplay;
-    u32 m_sequence = 0u;
-    u32 m_commits = 0u;
-    u32 m_underlying = 0u;
-    b8 m_focused = false;
-    b8 m_visible = true;
-    b8 m_enabled = true;
-    b8 m_bottom = false;
-    b8 m_displayChanged = false;
-};
-
-using SharedUiComboSmokeScene = RefCountPtr< RefCounter<UiComboSmokeScene>, ArenaRefDeleter<RefCounter<UiComboSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiComboSmokeScene CreateUiComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-
-class UiEditSmokeScene : public Core::IInputEventHandler, NoCopy{
-public:
-    UiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiEditSmokeScene()noexcept override;
-
-
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
-
-
-private:
-    void resetModels();
-    [[nodiscard]] Array<u32, 12u> values()const noexcept;
-    void observeState(Impl::Ui::TextService& text);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::InputDispatcher& m_input;
-    Impl::Ui::EditModel m_primary;
-    Impl::Ui::EditModel m_secondary;
-    Impl::Ui::EditBoxState m_primaryState;
-    Impl::Ui::EditBoxState m_secondaryState;
-    Impl::Ui::EditBoxPlacement m_lastPrimary;
-    Impl::Ui::EditBoxPlacement m_lastSecondary;
-    Impl::Ui::Rect m_lastPrimarySelection;
-    Impl::Ui::Rect m_lastSecondarySelection;
-    Impl::Ui::DisplayMetrics m_lastDisplay;
-    Array<u32, 12u> m_lastValues{};
-    u32 m_sequence = 0u;
-    b8 m_primaryFocused = false;
-    b8 m_secondaryFocused = false;
-    b8 m_readOnly = false;
-    b8 m_visible = true;
-    b8 m_displayChanged = false;
-};
-
-using SharedUiEditSmokeScene = RefCountPtr< RefCounter<UiEditSmokeScene>, ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiEditSmokeScene CreateUiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-
-class UiImageSmokeScene : public Core::IInputEventHandler, NoCopy{
-public:
-    explicit UiImageSmokeScene(Core::InputDispatcher& input);
-    virtual ~UiImageSmokeScene()noexcept override;
-
-
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
-
-
-private:
-    [[nodiscard]] b8 paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] b8 paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] b8 paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] b8 paintPopups(Impl::Ui::Builder& ui, f32 right);
-    void observeState(Impl::UiPaintContext& context);
-    void paintMarkers(Impl::UiPaintContext& context)const;
-
-
-private:
-    Core::InputDispatcher& m_input;
-    Impl::Ui::PopupState m_parent;
-    Impl::Ui::PopupState m_child;
-    UiImageSnapshot m_declared;
-    UiImageSnapshot m_snapshot;
-    u32 m_beforeClicks = 0u;
-    u32 m_afterClicks = 0u;
-    b8 m_phase = false;
-};
-
-using SharedUiImageSmokeScene = RefCountPtr< RefCounter<UiImageSmokeScene>, ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiImageSmokeScene CreateUiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-
-class UiInteractiveSmokeScene : NoCopy{
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-
-
-private:
-    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    void logAction(TStringView action);
-    void paintMarkers(Impl::UiPaintContext& context)const;
-
-
-private:
-    Impl::Ui::DisplayMetrics m_lastDisplay;
-    u32 m_count = 0u;
-    u32 m_actions = 0u;
-    b8 m_enabled = true;
-};
-
-using SharedUiInteractiveSmokeScene = RefCountPtr< RefCounter<UiInteractiveSmokeScene>, ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiInteractiveSmokeScene CreateUiInteractiveSmokeScene(Core::Alloc::GlobalArena& arena);
-
-class UiListSmokeScene : public Core::IInputEventHandler, NoCopy{
-public:
-    explicit UiListSmokeScene(Core::InputDispatcher& input);
-    virtual ~UiListSmokeScene()noexcept override;
-
-
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
-
-
-private:
-    [[nodiscard]] Array<u64, 12u> values()const noexcept;
-    [[nodiscard]] Impl::Ui::Rect selectedRow()const noexcept;
-    void observeState();
-
-
-private:
-    Core::InputDispatcher& m_input;
-    UiListSmokeSource m_source;
-    Impl::Ui::ListState m_state;
-    Impl::Ui::ScrollPlacement m_lastPlacement;
-    Impl::Ui::DisplayMetrics m_lastDisplay;
-    Array<u64, 12u> m_lastValues{};
-    u32 m_sequence = 0u;
-    u32 m_commits = 0u;
-    u32 m_underlying = 0u;
-    b8 m_focused = false;
-    b8 m_visible = true;
-    b8 m_displayChanged = false;
-};
-
-using SharedUiListSmokeScene = RefCountPtr< RefCounter<UiListSmokeScene>, ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena> >;
-
-[[nodiscard]] SharedUiListSmokeScene CreateUiListSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-
-namespace __hidden_ui_combo_smoke{
+const Name s_UiSmokeNameRadioMark = "radio.mark";
+const StringView s_UiComboSmokeTag = "UiComboSmoke";
+const StringView s_UiEditSmokeTag = "UiEditSmoke";
+const StringView s_UiEditSmokePrimaryKey = "primary";
+const StringView s_UiEditSmokeSecondaryKey = "secondary";
+const StringView s_UiEditSmokePrimaryText = "Hello 한글";
+const StringView s_UiEditSmokeSecondaryText = "Target";
+const StringView s_UiImageSmokeTag = "UiImageSmoke";
+const StringView s_UiImageSmokeTitleKey = "title";
+const StringView s_UiInteractiveSmokeIncrease = "increase";
+const StringView s_UiInteractiveSmokeEnabled = "enabled";
+const StringView s_UiInteractiveSmokeReset = "reset";
+const StringView s_UiListSmokeTag = "UiListSmoke";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 160.0f };
-static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
-static constexpr TStringView s_LogTag = FOUNDATION_TEXT("UiComboSmoke");
+class UiComboSmokeScene{
+    private UiComboSmokeSource m_source = UiComboSmokeSource();
+    private ComboState m_state = ComboState();
+    private ScrollPlacement m_lastPlacement = ScrollPlacement();
+    private Array<u64, 16u> m_lastValues;
+    private PopupPlacement m_lastPopup = PopupPlacement();
+    private Rect m_lastBounds = Rect();
+    private DisplayMetrics m_lastDisplay = DisplayMetrics();
+    private u32 m_sequence = 0u;
+    private u32 m_commits = 0u;
+    private u32 m_underlying = 0u;
+    private b8 m_focused = false;
+    private b8 m_visible = true;
+    private b8 m_enabled = true;
+    private b8 m_bottom = false;
+    private b8 m_displayChanged = false;
 
+    public b8 paint(mut UiPaintContext context);
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiComboSmokeScene::UiComboSmokeScene(Core::InputDispatcher& input)
-    : m_input(input)
-{
-    m_input.addHandlerToBack(*this);
+    private Array<u64, 16u> values()const;
+    private Rect cursorRow()const;
+    private void observeState();
 }
 
-UiComboSmokeScene::~UiComboSmokeScene()noexcept{
-    m_input.removeHandler(*this);
+
+class UiEditSmokeScene{
+    private EditModel m_primary;
+    private EditModel m_secondary;
+    private EditBoxView m_selectionView;
+    private EditBoxState m_primaryState = EditBoxState();
+    private EditBoxState m_secondaryState = EditBoxState();
+    private EditBoxPlacement m_lastPrimary = EditBoxPlacement();
+    private EditBoxPlacement m_lastSecondary = EditBoxPlacement();
+    private Rect m_lastPrimarySelection = Rect();
+    private Rect m_lastSecondarySelection = Rect();
+    private DisplayMetrics m_lastDisplay = DisplayMetrics();
+    private Array<u32, 12u> m_lastValues;
+    private u32 m_sequence = 0u;
+    private b8 m_primaryFocused = false;
+    private b8 m_secondaryFocused = false;
+    private b8 m_readOnly = false;
+    private b8 m_visible = true;
+    private b8 m_displayChanged = false;
+
+    public UiEditSmokeScene(mut GlobalArena arena);
+
+    public b8 paint(mut UiPaintContext context);
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+
+    private void resetModels();
+    private Array<u32, 12u> values()const;
+    private void observeState(mut TextService text);
 }
 
-b8 UiComboSmokeScene::paint(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    ObserveSmokeDisplay(__hidden_ui_combo_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
-    m_source.beginFrame();
-    m_focused = false;
-    Builder& ui = context.ui;
-    ui.style().fontSize = 12.0f;
-    ui.style().gap = 8.0f;
-    ui.listStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    Rect panel = __hidden_ui_combo_smoke::s_Panel;
-    if(m_bottom)
+
+class UiImageSmokeScene{
+    private PopupState m_parent = PopupState();
+    private PopupState m_child = PopupState();
+    private UiImageSnapshot m_declared = UiImageSnapshot();
+    private UiImageSnapshot m_snapshot = UiImageSnapshot();
+    private u32 m_beforeClicks = 0u;
+    private u32 m_afterClicks = 0u;
+    private b8 m_phase = false;
+
+    public b8 paint(mut UiPaintContext context);
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+
+    private b8 paintMain(mut Builder ui, in Rect bounds);
+    private b8 paintFrozen(mut Builder ui, in Rect bounds);
+    private b8 paintExternal(mut UiPaintContext context, in Rect bounds);
+    private b8 paintPopups(mut Builder ui, in f32 right);
+    private void observeState(mut UiPaintContext context);
+    private void paintMarkers(mut UiPaintContext context)const;
+}
+
+
+class UiInteractiveSmokeScene{
+    private DisplayMetrics m_lastDisplay = DisplayMetrics();
+    private u32 m_count = 0u;
+    private u32 m_actions = 0u;
+    private b8 m_enabled = true;
+
+    public b8 paint(mut UiPaintContext context);
+
+    private void observeDisplay(in DisplayMetrics display);
+    private void logAction(in StringView action);
+    private void paintMarkers(mut UiPaintContext context)const;
+}
+
+
+class UiListSmokeScene{
+    private UiListSmokeSource m_source = UiListSmokeSource();
+    private ListState m_state = ListState();
+    private ScrollPlacement m_lastPlacement = ScrollPlacement();
+    private DisplayMetrics m_lastDisplay = DisplayMetrics();
+    private Array<u64, 12u> m_lastValues;
+    private u32 m_sequence = 0u;
+    private u32 m_commits = 0u;
+    private u32 m_underlying = 0u;
+    private b8 m_focused = false;
+    private b8 m_visible = true;
+    private b8 m_displayChanged = false;
+
+    public b8 paint(mut UiPaintContext context);
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+
+    private Array<u64, 12u> values()const;
+    private Rect selectedRow()const;
+    private void observeState();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView UiImageSmokeRectName(in usize index){
+    switch(index){
+    case 0u:
+        return "before";
+    case 1u:
+        return "after";
+    case 2u:
+        return "natural_sprite";
+    case 3u:
+        return "natural_slice";
+    case 4u:
+        return "fixed_sprite";
+    case 5u:
+        return "fixed_slice";
+    case 6u:
+        return "stretch";
+    case 7u:
+        return "tinted";
+    case 8u:
+        return "transparent";
+    case 9u:
+        return "frozen";
+    case 10u:
+        return "external";
+    case 11u:
+        return "external_clip";
+    case 12u:
+        return "parent_image";
+    case 13u:
+        return "child_image";
+    case 14u:
+        return "parent";
+    case 15u:
+        return "child";
+    default:
+        return "";
+    }
+}
+
+
+b8 UiComboSmokeScene::paint(mut UiPaintContext context){
+    ObserveSmokeDisplay(s_UiComboSmokeTag, context.display, this.m_lastDisplay, this.m_displayChanged);
+    this.m_source.beginFrame();
+    this.m_focused = false;
+    context.ui.style().fontSize = 12.0f;
+    context.ui.style().gap = 8.0f;
+    context.ui.listStyle().padding = MakeUniformSmokeInsets(8.0f);
+    Rect panel(24.0f, 24.0f, 400.0f, 160.0f);
+    if(this.m_bottom)
         panel.y = context.display.logicalHeight - 192.0f;
-    if(!ui.beginPanel("combo_fixture", panel))
+    if(!context.ui.beginPanel("combo_fixture", panel))
         return false;
-    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
-    if(!ui.label("title", "Combo: 100000 keyed rows, row5 disabled", title))
+    const WidgetOptions title = MakeFixedHeightSmokeWidget(24.0f);
+    if(!context.ui.label("title", "Combo: 100000 keyed rows, row5 disabled", title))
         return false;
-    if(m_visible){
-        ComboOptions options;
-        options.height = { LayoutSizePolicy::Fixed, 36.0f };
+    if(this.m_visible){
+        ComboOptions options();
+        options.height.policy = LayoutSizePolicy::Fixed;
+        options.height.value = 36.0f;
         options.popupHeight = 240.0f;
-        options.enabled = m_enabled;
-        const ComboResult result = ui.comboBox("choice", m_source, m_state, options);
+        options.enabled = this.m_enabled;
+        const ComboResult result = context.ui.comboBox("choice", this.m_source, this.m_state, options);
         if(!result.valid)
             return false;
-        m_focused = result.focused;
+        this.m_focused = result.focused;
         if(result.committed)
-            ++m_commits;
+            ++this.m_commits;
     }
     else{
-        const WidgetOptions spacer{ {}, { LayoutSizePolicy::Fixed, 36.0f } };
-        if(!ui.label("omitted_choice", "Combo omitted", spacer))
+        const WidgetOptions spacer = MakeFixedHeightSmokeWidget(36.0f);
+        if(!context.ui.label("omitted_choice", "Combo omitted", spacer))
             return false;
     }
-    if(!ui.label("hint", "Preview arrows / Enter commit / Escape cancel", title) || !ui.endPanel())
+    if(!context.ui.label("hint", "Preview arrows / Enter commit / Escape cancel", title) || !context.ui.endPanel())
         return false;
-    if(!ui.beginPanel("outside_fixture", { 448.0f, 24.0f, 146.0f, 52.0f }))
+    if(!context.ui.beginPanel("outside_fixture", Rect(448.0f, 24.0f, 146.0f, 52.0f)))
         return false;
-    const WidgetOptions counter{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
-    if(ui.button("underlying", "Outside counter", counter))
-        ++m_underlying;
-    if(!ui.endPanel())
+    const WidgetOptions counter = MakeFixedSmokeWidget(130.0f, 36.0f);
+    if(context.ui.button("underlying", "Outside counter", counter))
+        ++this.m_underlying;
+    if(!context.ui.endPanel())
         return false;
-    observeState();
-    PaintKeyedSmokeValueMarkers<16u, 12u>(values(), m_sequence, context);
+    this.observeState();
+    const Array<u64, 16u> markerValues = this.values();
+    PaintKeyedSmokeValueMarkersDefault(markerValues, cast<u64>(this.m_sequence), 16u, 12u, context);
     return true;
 }
 
-::NWB::Core::KeyboardInputResult UiComboSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
-    if(key < Core::Key::F4 || key > Core::Key::F12)
+b8 UiComboSmokeScene::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
+    if(key < s_SmokeKeyF4 || key > s_SmokeKeyF12)
         return false;
-    if(action != Core::InputAction::Press)
+    if(action != s_SmokeActionPress)
         return true;
-    switch(key){
-    case Core::Key::F4:
-        m_state.select(100000u);
-        break;
-    case Core::Key::F5:
-        m_source.reverse();
-        break;
-    case Core::Key::F6:
-        m_source.remove(m_state.selectedKey());
-        break;
-    case Core::Key::F7:
-        m_visible = !m_visible;
-        break;
-    case Core::Key::F8:
-        m_source.toggleEmpty();
-        break;
-    case Core::Key::F9:
-        m_enabled = !m_enabled;
-        break;
-    case Core::Key::F10:
-        m_bottom = !m_bottom;
-        break;
-    case Core::Key::F11:
-        m_state.select(2u);
-        break;
-    case Core::Key::F12:
-        m_source.replace();
-        break;
-    default:
-        break;
-    }
+    if(key == s_SmokeKeyF4)
+        this.m_state.select(100000u);
+    else if(key == s_SmokeKeyF5)
+        this.m_source.reverse();
+    else if(key == s_SmokeKeyF6)
+        this.m_source.remove(this.m_state.selectedKey());
+    else if(key == s_SmokeKeyF7)
+        this.m_visible = !this.m_visible;
+    else if(key == s_SmokeKeyF8)
+        this.m_source.toggleEmpty();
+    else if(key == s_SmokeKeyF9)
+        this.m_enabled = !this.m_enabled;
+    else if(key == s_SmokeKeyF10)
+        this.m_bottom = !this.m_bottom;
+    else if(key == s_SmokeKeyF11)
+        this.m_state.select(2u);
+    else if(key == s_SmokeKeyF12)
+        this.m_source.replace();
     return true;
 }
 
-Array<u64, 16u> UiComboSmokeScene::values()const noexcept{
-    const auto& list = m_state.listState();
-    const auto& placement = list.placement();
-    return { m_state.selectedKey(), list.cursorKey(), m_source.rowCount(), placement.firstRow, placement.endRow,
-        m_source.labelReads(), static_cast<u64>(m_visible && m_state.isOpen()), static_cast<u64>(m_focused),
-        static_cast<u64>(m_source.reversed()), m_source.removedKey(), static_cast<u64>(m_visible), m_commits,
-        m_underlying, static_cast<u64>(m_enabled), static_cast<u64>(m_bottom), m_source.instanceGeneration() };
+Array<u64, 16u> UiComboSmokeScene::values()const{
+    const ScrollPlacement placement = this.m_state.listState().placement();
+    Array<u64, 16u> out;
+    out[0u] = this.m_state.selectedKey();
+    out[1u] = this.m_state.listState().cursorKey();
+    out[2u] = this.m_source.rowCount();
+    out[3u] = placement.firstRow;
+    out[4u] = placement.endRow;
+    out[5u] = cast<u64>(this.m_source.labelReads());
+    out[6u] = cast<u64>(this.m_visible && this.m_state.isOpen());
+    out[7u] = cast<u64>(this.m_focused);
+    out[8u] = cast<u64>(this.m_source.reversed());
+    out[9u] = this.m_source.removedKey();
+    out[10u] = cast<u64>(this.m_visible);
+    out[11u] = cast<u64>(this.m_commits);
+    out[12u] = cast<u64>(this.m_underlying);
+    out[13u] = cast<u64>(this.m_enabled);
+    out[14u] = cast<u64>(this.m_bottom);
+    out[15u] = this.m_source.instanceGeneration();
+    return out;
 }
 
-Impl::Ui::Rect UiComboSmokeScene::cursorRow()const noexcept{
-    const auto& list = m_state.listState();
-    const auto& placement = list.placement();
-    if(!m_visible || !m_state.isOpen())
-        return {};
-    const auto index = m_source.indexOf(list.cursorKey());
-    if(!index || *index < placement.firstRow || *index >= placement.endRow)
-        return {};
-    const auto rectangle = SmokeListRowBounds(placement, *index);
-    if(!rectangle)
-        return {};
-    return *rectangle;
+Rect UiComboSmokeScene::cursorRow()const{
+    const ScrollPlacement placement = this.m_state.listState().placement();
+    if(!this.m_visible || !this.m_state.isOpen())
+        return Rect();
+    const Expected<u64> index = this.m_source.indexOf(this.m_state.listState().cursorKey());
+    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
+        return Rect();
+    const Expected<Rect> rectangle = SmokeListRowBounds(placement, index.value());
+    if(!rectangle.has_value())
+        return Rect();
+    return rectangle.value();
 }
 
 void UiComboSmokeScene::observeState(){
-    const auto current = values();
-    const auto& placement = m_state.listState().placement();
-    const auto& popup = m_state.placement();
-    const auto& bounds = m_state.bounds();
+    const Array<u64, 16u> current = this.values();
+    const ScrollPlacement placement = this.m_state.listState().placement();
+    const PopupPlacement popup = this.m_state.placement();
+    const Rect bounds = this.m_state.bounds();
     if(
-        m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && placement.offset == m_lastPlacement.offset && placement.contentHeight == m_lastPlacement.contentHeight
-        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds)
-        && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
-        && SameSmokeRect(popup.bounds, m_lastPopup.bounds)
-        && SameSmokeRect(bounds, m_lastBounds)
+        this.m_sequence != 0u
+        && !this.m_displayChanged
+        && SameSmokeU64Span(current, this.m_lastValues)
+        && placement.offset == this.m_lastPlacement.offset
+        && placement.contentHeight == this.m_lastPlacement.contentHeight
+        && SameSmokeRect(placement.bounds, this.m_lastPlacement.bounds)
+        && SameSmokeRect(placement.thumb, this.m_lastPlacement.thumb)
+        && SameSmokeRect(popup.bounds, this.m_lastPopup.bounds)
+        && SameSmokeRect(bounds, this.m_lastBounds)
     )
         return;
-    ++m_sequence;
-    m_lastValues = current;
-    m_lastPlacement = placement;
-    m_lastPopup = popup;
-    m_lastBounds = bounds;
-    m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
-        , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
-        , current[8], current[9], current[10], current[11], current[12], current[13], current[14], current[15]
+    ++this.m_sequence;
+    this.m_lastValues = current;
+    this.m_lastPlacement = placement;
+    this.m_lastPopup = popup;
+    this.m_lastBounds = bounds;
+    this.m_displayChanged = false;
+    [essential] info(
+        "UiComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
+        , this.m_sequence
+        , current[0u]
+        , current[1u]
+        , current[2u]
+        , current[3u]
+        , current[4u]
+        , current[5u]
+        , current[6u]
+        , current[7u]
+        , current[8u]
+        , current[9u]
+        , current[10u]
+        , current[11u]
+        , current[12u]
+        , current[13u]
+        , current[14u]
+        , current[15u]
     );
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("trigger"), bounds);
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("popup"), popup.bounds);
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("list"), placement.bounds);
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("viewport"), placement.viewport);
-    const auto first = SmokeListRowBounds(placement, placement.firstRow);
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("track"), placement.track);
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("cursor_row"), cursorRow());
-    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "trigger", bounds);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "popup", popup.bounds);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "list", placement.bounds);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "viewport", placement.viewport);
+    const Expected<Rect> first = SmokeListRowBounds(placement, placement.firstRow);
+    Rect firstRect();
+    if(first.has_value())
+        firstRect = first.value();
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "first_row", firstRect);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "track", placement.track);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "thumb", placement.thumb);
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "cursor_row", this.cursorRow());
+    LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "counter", Rect(456.0f, 32.0f, 130.0f, 36.0f));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-SharedUiComboSmokeScene CreateUiComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiComboSmokeScene(NewArenaObject<RefCounter<UiComboSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiComboSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+UiEditSmokeScene::UiEditSmokeScene(mut GlobalArena arena){
+    this.m_primary = EditModel(arena);
+    this.m_secondary = EditModel(arena);
+    this.m_selectionView = EditBoxView(arena);
+    this.resetModels();
 }
 
-
-namespace __hidden_ui_edit_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr TStringView s_PrimaryLabel = FOUNDATION_TEXT("primary");
-constexpr AStringView s_PrimaryKey = "primary";
-constexpr TStringView s_SecondaryLabel = FOUNDATION_TEXT("secondary");
-constexpr AStringView s_SecondaryKey = "secondary";
-constexpr TStringView s_LogTag = FOUNDATION_TEXT("UiEditSmoke");
-static constexpr AStringView s_Primary = "Hello \xED\x95\x9C\xEA\xB8\x80";
-static constexpr AStringView s_Secondary = "Target";
-static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 340.0f, 276.0f };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiEditSmokeScene::UiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
-    : m_arena(arena)
-    , m_input(input)
-    , m_primary(arena)
-    , m_secondary(arena)
-{
-    resetModels();
-    m_input.addHandlerToBack(*this);
-}
-
-UiEditSmokeScene::~UiEditSmokeScene()noexcept{
-    m_input.removeHandler(*this);
-}
-
-b8 UiEditSmokeScene::paint(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    ObserveSmokeDisplay(__hidden_ui_edit_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
-    Builder& ui = context.ui;
-    ui.style().fontSize = 16.0f;
-    ui.style().gap = 8.0f;
-    if(!ui.beginPanel("edit_fixture", __hidden_ui_edit_smoke::s_Panel))
+b8 UiEditSmokeScene::paint(mut UiPaintContext context){
+    ObserveSmokeDisplay(s_UiEditSmokeTag, context.display, this.m_lastDisplay, this.m_displayChanged);
+    context.ui.style().fontSize = 16.0f;
+    context.ui.style().gap = 8.0f;
+    if(!context.ui.beginPanel("edit_fixture", Rect(24.0f, 24.0f, 340.0f, 276.0f)))
         return false;
-    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
-    const WidgetOptions label{ {}, { LayoutSizePolicy::Fixed, 18.0f } };
-    if(!ui.label("title", "Single-line custom edit boxes", title) || !ui.label("primary_caption", "Latin + Korean", label))
+    const WidgetOptions title = MakeFixedHeightSmokeWidget(24.0f);
+    const WidgetOptions label = MakeFixedHeightSmokeWidget(18.0f);
+    if(!context.ui.label("title", "Single-line custom edit boxes", title) || !context.ui.label("primary_caption", "Latin + Korean", label))
         return false;
-    EditBoxOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 260.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    options.readOnly = m_readOnly;
-    m_primaryFocused = false;
-    if(m_visible){
-        const EditBoxResult result = ui.editBox(__hidden_ui_edit_smoke::s_PrimaryKey, m_primary, m_primaryState, options);
+    EditBoxOptions options();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 260.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 40.0f;
+    options.readOnly = this.m_readOnly;
+    this.m_primaryFocused = false;
+    if(this.m_visible){
+        const EditBoxResult result = context.ui.editBox(s_UiEditSmokePrimaryKey, this.m_primary, this.m_primaryState, options);
         if(!result.valid)
             return false;
-        m_primaryFocused = result.focused;
+        this.m_primaryFocused = result.focused;
     }
-    else if(!ui.label("primary_hidden", "Primary field is hidden", title))
+    else if(!context.ui.label("primary_hidden", "Primary field is hidden", title)){
         return false;
-    if(!ui.label("secondary_caption", "Clipboard destination", label))
+    }
+    if(!context.ui.label("secondary_caption", "Clipboard destination", label))
         return false;
     options.readOnly = false;
-    const EditBoxResult secondary = ui.editBox(__hidden_ui_edit_smoke::s_SecondaryKey, m_secondary, m_secondaryState, options);
+    const EditBoxResult secondary = context.ui.editBox(s_UiEditSmokeSecondaryKey, this.m_secondary, this.m_secondaryState, options);
     if(!secondary.valid)
         return false;
-    m_secondaryFocused = secondary.focused;
-    if(!ui.label("read_only_hint", m_readOnly ? "F5: primary read-only" : "F5: primary editable", label) || !ui.label("visibility_hint", "F6: hide primary / F7: reset", label) || !ui.endPanel())
+    this.m_secondaryFocused = secondary.focused;
+    StringView readOnlyHint = "F5: primary editable";
+    if(this.m_readOnly)
+        readOnlyHint = "F5: primary read-only";
+    if(!context.ui.label("read_only_hint", readOnlyHint, label) || !context.ui.label("visibility_hint", "F6: hide primary / F7: reset", label) || !context.ui.endPanel())
         return false;
-    observeState(context.text);
-    PaintSingleSmokeValueMarkers(values(), m_sequence, context);
+    this.observeState(context.text);
+    const Array<u32, 12u> markerValues = this.values();
+    PaintSingleSmokeValueMarkers(markerValues, this.m_sequence, context);
     return true;
 }
 
-::NWB::Core::KeyboardInputResult UiEditSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
-    if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
+b8 UiEditSmokeScene::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
+    if(key != s_SmokeKeyF5 && key != s_SmokeKeyF6 && key != s_SmokeKeyF7)
         return false;
-    if(action == Core::InputAction::Press){
-        if(key == Core::Key::F5)
-            m_readOnly = !m_readOnly;
-        else if(key == Core::Key::F6)
-            m_visible = !m_visible;
+    if(action == s_SmokeActionPress){
+        if(key == s_SmokeKeyF5)
+            this.m_readOnly = !this.m_readOnly;
+        else if(key == s_SmokeKeyF6)
+            this.m_visible = !this.m_visible;
         else
-            resetModels();
+            this.resetModels();
     }
     return true;
 }
 
 void UiEditSmokeScene::resetModels(){
-    const b8 reset = m_primary.setText(__hidden_ui_edit_smoke::s_Primary) && m_secondary.setText(__hidden_ui_edit_smoke::s_Secondary);
-    FOUNDATION_FATAL_ASSERT_MSG(reset, FOUNDATION_TEXT("UI edit smoke documents must be valid UTF8"));
+    const b8 reset = this.m_primary.setText(s_UiEditSmokePrimaryText) && this.m_secondary.setText(s_UiEditSmokeSecondaryText);
+    [essential] assert(reset, "UI edit smoke documents must be valid UTF8");
 }
 
-Array<u32, 12u> UiEditSmokeScene::values()const noexcept{
-    return { static_cast<u32>(m_primary.text().size()), ComputeFnv32TextHash(m_primary.text()),
-        static_cast<u32>(m_primary.anchor()), static_cast<u32>(m_primary.caret()), static_cast<u32>(m_primaryFocused),
-        static_cast<u32>(m_secondary.text().size()), ComputeFnv32TextHash(m_secondary.text()),
-        static_cast<u32>(m_secondary.anchor()), static_cast<u32>(m_secondary.caret()), static_cast<u32>(m_secondaryFocused),
-        static_cast<u32>(m_readOnly), static_cast<u32>(m_visible) };
+Array<u32, 12u> UiEditSmokeScene::values()const{
+    Array<u32, 12u> out;
+    out[0u] = cast<u32>(this.m_primary.text().size());
+    out[1u] = ComputeFnv32TextHash(this.m_primary.text());
+    out[2u] = cast<u32>(this.m_primary.anchor());
+    out[3u] = cast<u32>(this.m_primary.caret());
+    out[4u] = cast<u32>(this.m_primaryFocused);
+    out[5u] = cast<u32>(this.m_secondary.text().size());
+    out[6u] = ComputeFnv32TextHash(this.m_secondary.text());
+    out[7u] = cast<u32>(this.m_secondary.anchor());
+    out[8u] = cast<u32>(this.m_secondary.caret());
+    out[9u] = cast<u32>(this.m_secondaryFocused);
+    out[10u] = cast<u32>(this.m_readOnly);
+    out[11u] = cast<u32>(this.m_visible);
+    return out;
 }
 
-void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
-    const auto current = values();
-    const Impl::Ui::EditBoxPlacement primary = m_visible ? m_primaryState.placement : Impl::Ui::EditBoxPlacement{};
-    const auto& secondary = m_secondaryState.placement;
-    const auto primarySelection = CaptureEditSelection(m_arena, text, m_primary, primary, 16.0f);
-    const auto secondarySelection = CaptureEditSelection(m_arena, text, m_secondary, secondary, 16.0f);
+void UiEditSmokeScene::observeState(mut TextService text){
+    const Array<u32, 12u> current = this.values();
+    EditBoxPlacement primary();
+    if(this.m_visible)
+        primary = this.m_primaryState.placement;
+    const EditBoxPlacement secondary = this.m_secondaryState.placement;
+    const Rect primarySelection = CaptureEditSelection(this.m_selectionView, text, this.m_primary, primary, 16.0f);
+    const Rect secondarySelection = CaptureEditSelection(this.m_selectionView, text, this.m_secondary, secondary, 16.0f);
     if(
-        m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && SameSmokePlacement(primary, m_lastPrimary)
-        && SameSmokePlacement(secondary, m_lastSecondary)
-        && SameSmokeRect(primarySelection, m_lastPrimarySelection)
-        && SameSmokeRect(secondarySelection, m_lastSecondarySelection)
+        this.m_sequence != 0u
+        && !this.m_displayChanged
+        && SameSmokeU32Span(current, this.m_lastValues)
+        && SameSmokePlacement(primary, this.m_lastPrimary)
+        && SameSmokePlacement(secondary, this.m_lastSecondary)
+        && SameSmokeRect(primarySelection, this.m_lastPrimarySelection)
+        && SameSmokeRect(secondarySelection, this.m_lastSecondarySelection)
     )
         return;
-    ++m_sequence;
-    m_lastValues = current;
-    m_lastPrimary = primary;
-    m_lastSecondary = secondary;
-    m_lastPrimarySelection = primarySelection;
-    m_lastSecondarySelection = secondarySelection;
-    m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiEditSmoke: state sequence={} primary={},{},{},{},{} secondary={},{},{},{},{} readonly={} visible={}")
-        , m_sequence, current[0], current[1], current[2], current[3], current[4]
-        , current[5], current[6], current[7], current[8], current[9], current[10], current[11]
+    ++this.m_sequence;
+    this.m_lastValues = current;
+    this.m_lastPrimary = primary;
+    this.m_lastSecondary = secondary;
+    this.m_lastPrimarySelection = primarySelection;
+    this.m_lastSecondarySelection = secondarySelection;
+    this.m_displayChanged = false;
+    [essential] info(
+        "UiEditSmoke: state sequence={} primary={},{},{},{},{} secondary={},{},{},{},{} readonly={} visible={}"
+        , this.m_sequence
+        , current[0u]
+        , current[1u]
+        , current[2u]
+        , current[3u]
+        , current[4u]
+        , current[5u]
+        , current[6u]
+        , current[7u]
+        , current[8u]
+        , current[9u]
+        , current[10u]
+        , current[11u]
     );
-    LogSmokeEditGeometry(__hidden_ui_edit_smoke::s_LogTag, m_sequence, __hidden_ui_edit_smoke::s_PrimaryLabel, primary, primarySelection);
-    LogSmokeEditGeometry(__hidden_ui_edit_smoke::s_LogTag, m_sequence, __hidden_ui_edit_smoke::s_SecondaryLabel, secondary, secondarySelection);
+    LogSmokeEditGeometry(s_UiEditSmokeTag, this.m_sequence, s_UiEditSmokePrimaryKey, primary, primarySelection);
+    LogSmokeEditGeometry(s_UiEditSmokeTag, this.m_sequence, s_UiEditSmokeSecondaryKey, secondary, secondarySelection);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-SharedUiEditSmokeScene CreateUiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiEditSmokeScene(NewArenaObject<RefCounter<UiEditSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-namespace __hidden_ui_image_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_TitleKey = "title";
-constexpr AStringView s_RadioRegion = "radio.mark";
-constexpr AStringView s_ProgressRegion = "progress.fill";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiImageSmokeScene::UiImageSmokeScene(Core::InputDispatcher& input)
-    : m_input(input)
-{
-    m_input.addHandlerToBack(*this);
-}
-
-UiImageSmokeScene::~UiImageSmokeScene()noexcept{
-    m_input.removeHandler(*this);
-}
-
-b8 UiImageSmokeScene::paint(Impl::UiPaintContext& context){
-    auto& ui = context.ui;
-    ui.style().fontSize = 14.0f;
-    ui.style().gap = 8.0f;
-    m_declared = {};
+b8 UiImageSmokeScene::paint(mut UiPaintContext context){
+    context.ui.style().fontSize = 14.0f;
+    context.ui.style().gap = 8.0f;
+    this.m_declared = UiImageSnapshot();
     const PassiveSmokeColumns columns = ResolvePassiveSmokeColumns(context.display);
     const f32 width = columns.mainWidth;
     const f32 right = columns.rightColumn;
     const f32 otherWidth = columns.rightWidth;
-    if(!paintMain(ui, { 24.0f, 24.0f, width, 392.0f }) || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f }) || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed())
+    if(
+        !this.paintMain(context.ui, Rect(24.0f, 24.0f, width, 392.0f))
+        || !this.paintFrozen(context.ui, Rect(right, 24.0f, otherWidth, 120.0f))
+        || !this.paintExternal(context, Rect(right, 176.0f, otherWidth, 84.0f))
+        || !this.paintPopups(context.ui, right)
+        || context.ui.failed()
+    )
         return false;
-    observeState(context);
-    paintMarkers(context);
+    this.observeState(context);
+    this.paintMarkers(context);
     return true;
 }
 
-::NWB::Core::KeyboardInputResult UiImageSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
-    return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
+b8 UiImageSmokeScene::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
+    return HandlePassiveSmokeKeyboard(key, action, this.m_phase, this.m_parent, this.m_child);
 }
 
-b8 UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
-    using namespace Impl::Ui;
+b8 UiImageSmokeScene::paintMain(mut Builder ui, in Rect bounds){
     if(!ui.beginPanel("image_main", bounds))
         return false;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    if(!ui.label(__hidden_ui_image_smoke::s_TitleKey, "Atlas images / copied size and tint", caption))
+    const WidgetOptions caption = MakeFixedHeightSmokeWidget(16.0f);
+    const WidgetOptions button = MakeStretchWidthSmokeWidget(28.0f);
+    if(!ui.label(s_UiImageSmokeTitleKey, "Atlas images / copied size and tint", caption))
         return false;
     if(ui.button("before", "Before images", button))
-        ++m_beforeClicks;
-    ImageOptions options;
-    if(!ui.image("natural_sprite", Name(__hidden_ui_image_smoke::s_RadioRegion), options) || !ui.image("natural_slice", Name(__hidden_ui_image_smoke::s_ProgressRegion)))
+        ++this.m_beforeClicks;
+    ImageOptions options();
+    if(!ui.image("natural_sprite", s_UiSmokeNameRadioMark, options) || !ui.image("natural_slice", s_UiSmokeNameProgressFill))
         return false;
-    const SIMDVectorSingle origin = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);
-    m_declared.rectangles[2u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 68.0f, 24.0f, 24.0f)));
-    m_declared.rectangles[3u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 100.0f, 24.0f, 24.0f)));
-    options.width = { LayoutSizePolicy::Fixed, 96.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    if(!ui.image("fixed_sprite", Name(__hidden_ui_image_smoke::s_RadioRegion), options) || !ui.image("fixed_slice", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
+    const VectorSingle origin(bounds.x, bounds.y, 0.0f, 0.0f);
+    this.m_declared.rectangles[2u] = StoreRect(origin + VectorSingle(8.0f, 68.0f, 24.0f, 24.0f));
+    this.m_declared.rectangles[3u] = StoreRect(origin + VectorSingle(8.0f, 100.0f, 24.0f, 24.0f));
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 96.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 40.0f;
+    if(!ui.image("fixed_sprite", s_UiSmokeNameRadioMark, options) || !ui.image("fixed_slice", s_UiSmokeNameProgressFill, options))
         return false;
-    m_declared.rectangles[4u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 132.0f, 96.0f, 40.0f)));
-    m_declared.rectangles[5u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 180.0f, 96.0f, 40.0f)));
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 32.0f };
-    if(!ui.image("stretch", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
+    this.m_declared.rectangles[4u] = StoreRect(origin + VectorSingle(8.0f, 132.0f, 96.0f, 40.0f));
+    this.m_declared.rectangles[5u] = StoreRect(origin + VectorSingle(8.0f, 180.0f, 96.0f, 40.0f));
+    options.width.policy = LayoutSizePolicy::Stretch;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 32.0f;
+    if(!ui.image("stretch", s_UiSmokeNameProgressFill, options))
         return false;
-    m_declared.rectangles[6u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 228.0f, -16.0f, 32.0f)));
-    options.width = { LayoutSizePolicy::Fixed, 96.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    options.tint = { 0.4f, 0.7f, 0.9f, 0.5f };
-    if(!ui.image("tinted", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
+    this.m_declared.rectangles[6u] = StoreRect(VectorSingle(bounds.x, bounds.y, bounds.width, 0.0f) + VectorSingle(8.0f, 228.0f, -16.0f, 32.0f));
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 96.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 40.0f;
+    options.tint = Color(0.4f, 0.7f, 0.9f, 0.5f);
+    if(!ui.image("tinted", s_UiSmokeNameRadioMark, options))
         return false;
-    m_declared.rectangles[7u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 268.0f, 96.0f, 40.0f)));
-    options.height = { LayoutSizePolicy::Fixed, 24.0f };
-    options.tint = { 1.0f, 1.0f, 1.0f, 0.0f };
-    if(!ui.image("transparent", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
+    this.m_declared.rectangles[7u] = StoreRect(origin + VectorSingle(8.0f, 268.0f, 96.0f, 40.0f));
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 24.0f;
+    options.tint = Color(1.0f, 1.0f, 1.0f, 0.0f);
+    if(!ui.image("transparent", s_UiSmokeNameRadioMark, options))
         return false;
-    m_declared.rectangles[8u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 316.0f, 96.0f, 24.0f)));
+    this.m_declared.rectangles[8u] = StoreRect(origin + VectorSingle(8.0f, 316.0f, 96.0f, 24.0f));
     if(ui.button("after", "After images", button))
-        ++m_afterClicks;
+        ++this.m_afterClicks;
     return ui.endPanel();
 }
 
-b8 UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
-    using namespace Impl::Ui;
+b8 UiImageSmokeScene::paintFrozen(mut Builder ui, in Rect bounds){
     if(!ui.beginPanel("image_frozen", bounds))
         return false;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label(__hidden_ui_image_smoke::s_TitleKey, "Declaration retains region, options and tint", caption))
+    const WidgetOptions caption = MakeFixedHeightSmokeWidget(16.0f);
+    if(!ui.label(s_UiImageSmokeTitleKey, "Declaration retains region, options and tint", caption))
         return false;
-    Name region = m_phase ? Name(__hidden_ui_image_smoke::s_RadioRegion) : Name(__hidden_ui_image_smoke::s_ProgressRegion);
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 96.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    options.tint = m_phase ? Color{ 0.5f, 0.75f, 1.0f, 0.5f } : Color{};
-    m_declared.values[8u] = m_phase ? 2u : 1u;
+    Name region = s_UiSmokeNameProgressFill;
+    if(this.m_phase)
+        region = s_UiSmokeNameRadioMark;
+    ImageOptions options();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 96.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 40.0f;
+    options.tint = Color();
+    if(this.m_phase)
+        options.tint = Color(0.5f, 0.75f, 1.0f, 0.5f);
+    u64 declaredFirst = 1u;
+    if(this.m_phase)
+        declaredFirst = 2u;
+    this.m_declared.values[8u] = declaredFirst;
     if(!ui.image("frozen", region, options))
         return false;
-    m_declared.rectangles[9u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(8.0f, 32.0f, 96.0f, 40.0f)));
-    region = m_phase ? Name(__hidden_ui_image_smoke::s_ProgressRegion) : Name(__hidden_ui_image_smoke::s_RadioRegion);
-    m_declared.values[9u] = m_phase ? 1u : 2u;
-    options.width = { LayoutSizePolicy::Fixed, 70.0f };
-    options.height = { LayoutSizePolicy::Fixed, 70.0f };
-    options.tint = { 0.0f, 0.0f, 0.0f, 1.0f };
+    this.m_declared.rectangles[9u] = StoreRect(VectorSingle(bounds.x, bounds.y, 0.0f, 0.0f) + VectorSingle(8.0f, 32.0f, 96.0f, 40.0f));
+    if(this.m_phase)
+        region = s_UiSmokeNameProgressFill;
+    else
+        region = s_UiSmokeNameRadioMark;
+    u64 declaredSecond = 2u;
+    if(this.m_phase)
+        declaredSecond = 1u;
+    this.m_declared.values[9u] = declaredSecond;
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 70.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 70.0f;
+    options.tint = Color(0.0f, 0.0f, 0.0f, 1.0f);
     return ui.endPanel();
 }
 
-b8 UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds){
-    using namespace Impl::Ui;
-    auto& ui = context.ui;
-    const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 40.0f));
-    m_declared.rectangles[10u] = Impl::Ui::StoreRect(content);
-    const Rect clip = Impl::Ui::StoreRect(VectorMultiply(content, VectorSet(1.0f, 1.0f, 0.5f, 1.0f)));
-    m_declared.rectangles[11u] = clip;
-    context.paint.fillRect(bounds, { 0.07f, 0.13f, 0.2f, 1.0f });
+b8 UiImageSmokeScene::paintExternal(mut UiPaintContext context, in Rect bounds){
+    const VectorSingle content = VectorSingle(bounds.x, bounds.y, bounds.width, 0.0f) + VectorSingle(8.0f, 8.0f, -16.0f, 40.0f);
+    this.m_declared.rectangles[10u] = StoreRect(content);
+    const Rect clip = StoreRect(content * VectorSingle(1.0f, 1.0f, 0.5f, 1.0f));
+    this.m_declared.rectangles[11u] = clip;
+    context.paint.fillRect(bounds, Color(0.07f, 0.13f, 0.2f, 1.0f));
     context.paint.pushClip(clip);
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    const b8 painted = ui.beginPanel("image_external", bounds) && ui.image("external", Name(__hidden_ui_image_smoke::s_ProgressRegion), options) && ui.endPanel();
+    ImageOptions options();
+    options.width.policy = LayoutSizePolicy::Stretch;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 40.0f;
+    const b8 painted = context.ui.beginPanel("image_external", bounds) && context.ui.image("external", s_UiSmokeNameProgressFill, options) && context.ui.endPanel();
     const b8 popped = context.paint.popClip();
     return painted && popped;
 }
 
-b8 UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
-    using namespace Impl::Ui;
-    PopupOptions parent;
-    parent.anchor = { right, 300.0f, 8.0f, 24.0f };
-    parent.size = { 280.0f, 128.0f };
-    if(!ui.beginPopup("image_parent", m_parent, parent))
+b8 UiImageSmokeScene::paintPopups(mut Builder ui, in f32 right){
+    PopupOptions parent();
+    parent.anchor = Rect(right, 300.0f, 8.0f, 24.0f);
+    parent.size = MakeSmokePoint(280.0f, 128.0f);
+    if(!ui.beginPopup("image_parent", this.m_parent, parent))
         return !ui.failed();
-    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
+    const WidgetOptions button = MakeStretchWidthSmokeWidget(28.0f);
     if(ui.button("parent_action", "Parent action", button))
-        m_parent.close();
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    if(!ui.image("parent_value", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
+        this.m_parent.close();
+    ImageOptions options();
+    options.width.policy = LayoutSizePolicy::Stretch;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 40.0f;
+    if(!ui.image("parent_value", s_UiSmokeNameProgressFill, options))
         return false;
-    PopupOptions child;
-    child.anchor = { right + 100.0f, 370.0f, 8.0f, 16.0f };
-    child.size = { 240.0f, 128.0f };
-    if(ui.beginPopup("image_child", m_child, child)){
-        options.tint = { 0.5f, 1.0f, 0.5f, 0.75f };
-        if(!ui.image("child_value", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
+    PopupOptions child();
+    child.anchor = Rect(right + 100.0f, 370.0f, 8.0f, 16.0f);
+    child.size = MakeSmokePoint(240.0f, 128.0f);
+    if(ui.beginPopup("image_child", this.m_child, child)){
+        options.tint = Color(0.5f, 1.0f, 0.5f, 0.75f);
+        if(!ui.image("child_value", s_UiSmokeNameRadioMark, options))
             return false;
         if(ui.button("child_action", "Child action", button))
-            m_child.close();
+            this.m_child.close();
         if(!ui.endPopup())
             return false;
     }
     if(ui.failed() || !ui.endPopup())
         return false;
-    const Rect& parentBounds = m_parent.placement().bounds;
-    m_declared.rectangles[14u] = parentBounds;
-    m_declared.rectangles[12u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 40.0f)));
-    if(m_child.isOpen()){
-        const Rect& childBounds = m_child.placement().bounds;
-        m_declared.rectangles[15u] = childBounds;
-        m_declared.rectangles[13u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 40.0f)));
+    const Rect parentBounds = this.m_parent.placement().bounds;
+    this.m_declared.rectangles[14u] = parentBounds;
+    this.m_declared.rectangles[12u] = StoreRect(VectorSingle(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f) + VectorSingle(8.0f, 44.0f, -16.0f, 40.0f));
+    if(this.m_child.isOpen()){
+        const Rect childBounds = this.m_child.placement().bounds;
+        this.m_declared.rectangles[15u] = childBounds;
+        this.m_declared.rectangles[13u] = StoreRect(VectorSingle(childBounds.x, childBounds.y, childBounds.width, 0.0f) + VectorSingle(8.0f, 8.0f, -16.0f, 40.0f));
     }
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-SharedUiImageSmokeScene CreateUiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiImageSmokeScene(NewArenaObject<RefCounter<UiImageSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_image_snapshot{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Array<TStringView, 16u> s_RectNames{
-    FOUNDATION_TEXT("before"), FOUNDATION_TEXT("after"), FOUNDATION_TEXT("natural_sprite"), FOUNDATION_TEXT("natural_slice"),
-    FOUNDATION_TEXT("fixed_sprite"), FOUNDATION_TEXT("fixed_slice"), FOUNDATION_TEXT("stretch"), FOUNDATION_TEXT("tinted"), FOUNDATION_TEXT("transparent"),
-    FOUNDATION_TEXT("frozen"), FOUNDATION_TEXT("external"), FOUNDATION_TEXT("external_clip"), FOUNDATION_TEXT("parent_image"), FOUNDATION_TEXT("child_image"),
-    FOUNDATION_TEXT("parent"), FOUNDATION_TEXT("child")
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void UiImageSmokeScene::observeState(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    using namespace __hidden_ui_image_snapshot;
-    UiImageSnapshot current = m_declared;
+void UiImageSmokeScene::observeState(mut UiPaintContext context){
+    UiImageSnapshot current = this.m_declared;
     current.display = context.display;
-    const InputRouter& input = context.ui.input();
-    const auto observation = ObservePassiveSmokeTargets(input, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, 14u, [](const usize index)noexcept{ return index != 11u; }, current.rectangles);
-    const u32 focusCode = observation.focusCode;
-    const u32 imageTargets = observation.passiveTargets;
-    current.values[0u] = static_cast<u64>(m_phase);
-    current.values[1u] = focusCode;
-    current.values[2u] = m_beforeClicks;
-    current.values[3u] = m_afterClicks;
-    current.values[4u] = static_cast<u64>(m_parent.isOpen());
-    current.values[5u] = static_cast<u64>(m_child.isOpen());
-    current.values[6u] = input.popupCount();
-    current.values[7u] = imageTargets;
-    const auto update = PublishPassiveSmokeSnapshot([&]()noexcept{ return current.values != m_snapshot.values; }, current, m_snapshot);
+    const PassiveSmokeTargetObservation observation = ObservePassiveSmokeTargets(
+        context.ui.input(),
+        this.m_parent.instanceGeneration(),
+        this.m_child.instanceGeneration(),
+        2u,
+        14u,
+        11u,
+        current.rectangles
+    );
+    current.values[0u] = cast<u64>(this.m_phase);
+    current.values[1u] = cast<u64>(observation.focusCode);
+    current.values[2u] = cast<u64>(this.m_beforeClicks);
+    current.values[3u] = cast<u64>(this.m_afterClicks);
+    current.values[4u] = cast<u64>(this.m_parent.isOpen());
+    current.values[5u] = cast<u64>(this.m_child.isOpen());
+    current.values[6u] = context.ui.input().popupCount();
+    current.values[7u] = cast<u64>(observation.passiveTargets);
+    const b8 stateChanged = !SameSmokeU64Span(current.values, this.m_snapshot.values);
+    const PassiveSmokeSnapshotUpdate update = PublishPassiveSmokeSnapshot(stateChanged, current, this.m_snapshot);
     if(!update.published)
         return;
     if(update.displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
+        [essential] info(
+            "UiImageSmoke: display logical={}x{} scale={}x{}"
+            , current.display.logicalWidth
+            , current.display.logicalHeight
+            , current.display.pixelScaleX
+            , current.display.pixelScaleY
+        );
     }
-    const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}"), current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]);
+    [essential] info(
+        "UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}"
+        , current.sequence
+        , current.values[0u]
+        , current.values[1u]
+        , current.values[2u]
+        , current.values[3u]
+        , current.values[4u]
+        , current.values[5u]
+        , current.values[6u]
+        , current.values[7u]
+        , current.values[8u]
+        , current.values[9u]
+    );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(FOUNDATION_TEXT("UiImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(s_UiImageSmokeTag, current.sequence, UiImageSmokeRectName(index), current.rectangles[index]);
 }
 
-void UiImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    PaintPassiveSmokeValueMarkers(m_snapshot.values, m_snapshot.sequence, context);
+void UiImageSmokeScene::paintMarkers(mut UiPaintContext context)const{
+    PaintPassiveSmokeValueMarkers(this.m_snapshot.values, this.m_snapshot.sequence, context);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_interactive_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr TStringView s_IncreaseLabel = FOUNDATION_TEXT("increase");
-constexpr AStringView s_IncreaseKey = "increase";
-constexpr TStringView s_EnabledLabel = FOUNDATION_TEXT("enabled");
-constexpr AStringView s_EnabledKey = "enabled";
-constexpr TStringView s_ResetLabel = FOUNDATION_TEXT("reset");
-constexpr AStringView s_ResetKey = "reset";
-static constexpr Impl::Ui::Rect s_Panel{ 18.0f, 18.0f, 320.0f, 220.0f };
-static constexpr Impl::Ui::Color s_Off{ 0.08f, 0.01f, 0.01f, 1.0f };
-static constexpr Impl::Ui::Color s_On{ 0.02f, 0.70f, 0.12f, 1.0f };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 UiInteractiveSmokeScene::paint(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    observeDisplay(context.display);
-    Builder& ui = context.ui;
-    ui.style().gap = 8.0f;
-    if(!ui.beginPanel("interaction", __hidden_ui_interactive_smoke::s_Panel))
+b8 UiInteractiveSmokeScene::paint(mut UiPaintContext context){
+    this.observeDisplay(context.display);
+    context.ui.style().gap = 8.0f;
+    if(!context.ui.beginPanel("interaction", Rect(18.0f, 18.0f, 320.0f, 220.0f)))
         return false;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
-    if(!ui.label("caption", "Custom UI interaction", caption))
+    const WidgetOptions caption = MakeFixedHeightSmokeWidget(24.0f);
+    if(!context.ui.label("caption", "Custom UI interaction", caption))
         return false;
-    ContainerOptions actions;
-    actions.height = { LayoutSizePolicy::Fixed, 40.0f };
-    if(!ui.beginRow("actions", actions))
+    ContainerOptions actions();
+    actions.height.policy = LayoutSizePolicy::Fixed;
+    actions.height.value = 40.0f;
+    if(!context.ui.beginRow("actions", actions))
         return false;
-    const WidgetOptions increase{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f }, m_enabled };
-    if(ui.button(__hidden_ui_interactive_smoke::s_IncreaseKey, "Increase", increase)){
-        m_count = Min(m_count + 1u, 255u);
-        logAction(__hidden_ui_interactive_smoke::s_IncreaseLabel);
+    const WidgetOptions increase = MakeFixedEnabledSmokeWidget(130.0f, 36.0f, this.m_enabled);
+    if(context.ui.button(s_UiInteractiveSmokeIncrease, "Increase", increase)){
+        this.m_count = Min(this.m_count + 1u, 255u);
+        this.logAction(s_UiInteractiveSmokeIncrease);
     }
-    const WidgetOptions checkbox{ { LayoutSizePolicy::Fixed, 140.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
-    if(ui.checkbox(__hidden_ui_interactive_smoke::s_EnabledKey, "Enabled", m_enabled, checkbox))
-        logAction(__hidden_ui_interactive_smoke::s_EnabledLabel);
-    if(!ui.endContainer())
+    const WidgetOptions checkbox = MakeFixedSmokeWidget(140.0f, 36.0f);
+    if(context.ui.checkbox(s_UiInteractiveSmokeEnabled, "Enabled", this.m_enabled, checkbox))
+        this.logAction(s_UiInteractiveSmokeEnabled);
+    if(!context.ui.endContainer())
         return false;
-    const WidgetOptions reset{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
-    if(ui.button(__hidden_ui_interactive_smoke::s_ResetKey, "Reset", reset)){
-        m_count = 0u;
-        logAction(__hidden_ui_interactive_smoke::s_ResetLabel);
+    const WidgetOptions reset = MakeFixedSmokeWidget(130.0f, 36.0f);
+    if(context.ui.button(s_UiInteractiveSmokeReset, "Reset", reset)){
+        this.m_count = 0u;
+        this.logAction(s_UiInteractiveSmokeReset);
     }
-    if(!ui.endPanel())
+    if(!context.ui.endPanel())
         return false;
-    paintMarkers(context);
+    this.paintMarkers(context);
     return true;
 }
 
-void UiInteractiveSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
+void UiInteractiveSmokeScene::observeDisplay(in DisplayMetrics display){
+    if(
+        this.m_lastDisplay.logicalWidth == display.logicalWidth
+        && this.m_lastDisplay.logicalHeight == display.logicalHeight
+        && this.m_lastDisplay.pixelScaleX == display.pixelScaleX
+        && this.m_lastDisplay.pixelScaleY == display.pixelScaleY
+    )
         return;
-    m_lastDisplay = display;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiInteractiveSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
+    this.m_lastDisplay = display;
+    [essential] info(
+        "UiInteractiveSmoke: display logical={}x{} scale={}x{}"
+        , display.logicalWidth
+        , display.logicalHeight
+        , display.pixelScaleX
+        , display.pixelScaleY
+    );
 }
 
-void UiInteractiveSmokeScene::logAction(const TStringView action){
-    ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiInteractiveSmoke: action={} count={} enabled={} actions={}"), action, m_count, static_cast<u32>(m_enabled), m_actions);
+void UiInteractiveSmokeScene::logAction(in StringView action){
+    ++this.m_actions;
+    [essential] info(
+        "UiInteractiveSmoke: action={} count={} enabled={} actions={}"
+        , action
+        , this.m_count
+        , cast<u32>(this.m_enabled)
+        , this.m_actions
+    );
 }
 
-void UiInteractiveSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
+void UiInteractiveSmokeScene::paintMarkers(mut UiPaintContext context)const{
+    const Color offColor(0.08f, 0.01f, 0.01f, 1.0f);
+    const Color onColor(0.02f, 0.70f, 0.12f, 1.0f);
     const f32 y = context.display.logicalHeight - 20.0f;
-    const auto positions = BuildSmokeMarkerPositions<8u, 18u, 20u>();
+    const Array<f32, 8u> positions = BuildSmokeMarkerPositions<8u>(18u, 20u);
     for(u32 bit = 0u; bit < 8u; ++bit){
-        const b8 set = (m_count & (1u << bit)) != 0u;
-        const Impl::Ui::Rect marker{ positions[bit], y, 14.0f, 12.0f };
-        context.paint.fillRect(marker, set ? __hidden_ui_interactive_smoke::s_On : __hidden_ui_interactive_smoke::s_Off);
+        const b8 isSet = (this.m_count & (1u << bit)) != 0u;
+        Color markerColor = offColor;
+        if(isSet)
+            markerColor = onColor;
+        context.paint.fillRect(Rect(positions[bit], y, 14.0f, 12.0f), markerColor);
     }
-    const Impl::Ui::Rect enabledMarker{ 210.0f, y, 28.0f, 12.0f };
-    context.paint.fillRect(enabledMarker, m_enabled ? __hidden_ui_interactive_smoke::s_On : __hidden_ui_interactive_smoke::s_Off);
+    Color enabledColor = offColor;
+    if(this.m_enabled)
+        enabledColor = onColor;
+    context.paint.fillRect(Rect(210.0f, y, 28.0f, 12.0f), enabledColor);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-SharedUiInteractiveSmokeScene CreateUiInteractiveSmokeScene(Core::Alloc::GlobalArena& arena){
-    return SharedUiInteractiveSmokeScene(NewArenaObject<RefCounter<UiInteractiveSmokeScene>>(arena), ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_list_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 340.0f };
-static constexpr Impl::Ui::Rect s_Counter{ 32.0f, 312.0f, 140.0f, 36.0f };
-static constexpr TStringView s_LogTag = FOUNDATION_TEXT("UiListSmoke");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiListSmokeScene::UiListSmokeScene(Core::InputDispatcher& input)
-    : m_input(input)
-{
-    m_input.addHandlerToBack(*this);
-}
-
-UiListSmokeScene::~UiListSmokeScene()noexcept{
-    m_input.removeHandler(*this);
-}
-
-b8 UiListSmokeScene::paint(Impl::UiPaintContext& context){
-    using namespace Impl::Ui;
-    ObserveSmokeDisplay(__hidden_ui_list_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
-    m_source.beginFrame();
-    m_focused = false;
-    Builder& ui = context.ui;
-    ui.style().fontSize = 12.0f;
-    ui.style().gap = 8.0f;
-    ui.listStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    if(!ui.beginPanel("list_fixture", __hidden_ui_list_smoke::s_Panel))
+b8 UiListSmokeScene::paint(mut UiPaintContext context){
+    ObserveSmokeDisplay(s_UiListSmokeTag, context.display, this.m_lastDisplay, this.m_displayChanged);
+    this.m_source.beginFrame();
+    this.m_focused = false;
+    context.ui.style().fontSize = 12.0f;
+    context.ui.style().gap = 8.0f;
+    context.ui.listStyle().padding = MakeUniformSmokeInsets(8.0f);
+    if(!context.ui.beginPanel("list_fixture", Rect(24.0f, 24.0f, 400.0f, 340.0f)))
         return false;
-    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
-    if(!ui.label("title", "100000 keyed rows: row5 disabled", title))
+    const WidgetOptions title = MakeFixedHeightSmokeWidget(24.0f);
+    if(!context.ui.label("title", "100000 keyed rows: row5 disabled", title))
         return false;
-    if(m_visible){
-        ListOptions options;
-        options.height = { LayoutSizePolicy::Fixed, 240.0f };
-        const ListResult result = ui.virtualList("rows", m_source, m_state, options);
+    if(this.m_visible){
+        ListOptions options();
+        options.height.policy = LayoutSizePolicy::Fixed;
+        options.height.value = 240.0f;
+        const ListResult result = context.ui.virtualList("rows", this.m_source, this.m_state, options);
         if(!result.valid)
             return false;
-        m_focused = result.focused;
+        this.m_focused = result.focused;
         if(result.activated)
-            ++m_commits;
+            ++this.m_commits;
     }
     else{
-        const WidgetOptions spacer{ {}, { LayoutSizePolicy::Fixed, 240.0f } };
-        if(!ui.label("omitted_rows", "Rows omitted", spacer))
+        const WidgetOptions spacer = MakeFixedHeightSmokeWidget(240.0f);
+        if(!context.ui.label("omitted_rows", "Rows omitted", spacer))
             return false;
     }
-    const WidgetOptions counter{ { LayoutSizePolicy::Fixed, 140.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
-    if(ui.button("underlying", "Outside counter", counter))
-        ++m_underlying;
-    if(!ui.endPanel())
+    const WidgetOptions counter = MakeFixedSmokeWidget(140.0f, 36.0f);
+    if(context.ui.button("underlying", "Outside counter", counter))
+        ++this.m_underlying;
+    if(!context.ui.endPanel())
         return false;
-    observeState();
-    PaintKeyedSmokeValueMarkers<20u, 14u>(values(), m_sequence, context);
+    this.observeState();
+    const Array<u64, 12u> markerValues = this.values();
+    PaintKeyedSmokeValueMarkersDefault(markerValues, cast<u64>(this.m_sequence), 20u, 14u, context);
     return true;
 }
 
-::NWB::Core::KeyboardInputResult UiListSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
-    if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
+b8 UiListSmokeScene::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
+    if(key != s_SmokeKeyF5 && key != s_SmokeKeyF6 && key != s_SmokeKeyF7)
         return false;
-    if(action == Core::InputAction::Press){
-        if(key == Core::Key::F5)
-            m_source.reverse();
-        else if(key == Core::Key::F6)
-            m_source.remove(m_state.selectedKey());
+    if(action == s_SmokeActionPress){
+        if(key == s_SmokeKeyF5)
+            this.m_source.reverse();
+        else if(key == s_SmokeKeyF6)
+            this.m_source.remove(this.m_state.selectedKey());
         else
-            m_visible = !m_visible;
+            this.m_visible = !this.m_visible;
     }
     return true;
 }
 
-Array<u64, 12u> UiListSmokeScene::values()const noexcept{
-    const auto& placement = m_state.placement();
-    return { m_state.selectedKey(), m_state.cursorKey(), m_source.rowCount(), placement.firstRow, placement.endRow,
-        m_source.labelReads(), static_cast<u64>(m_focused), static_cast<u64>(m_source.reversed()),
-        m_source.removedKey(), static_cast<u64>(m_visible), m_commits, m_underlying };
+Array<u64, 12u> UiListSmokeScene::values()const{
+    const ScrollPlacement placement = this.m_state.placement();
+    Array<u64, 12u> out;
+    out[0u] = this.m_state.selectedKey();
+    out[1u] = this.m_state.cursorKey();
+    out[2u] = this.m_source.rowCount();
+    out[3u] = placement.firstRow;
+    out[4u] = placement.endRow;
+    out[5u] = cast<u64>(this.m_source.labelReads());
+    out[6u] = cast<u64>(this.m_focused);
+    out[7u] = cast<u64>(this.m_source.reversed());
+    out[8u] = this.m_source.removedKey();
+    out[9u] = cast<u64>(this.m_visible);
+    out[10u] = cast<u64>(this.m_commits);
+    out[11u] = cast<u64>(this.m_underlying);
+    return out;
 }
 
-Impl::Ui::Rect UiListSmokeScene::selectedRow()const noexcept{
-    const auto& placement = m_state.placement();
-    if(!m_visible)
-        return {};
-    const auto index = m_source.indexOf(m_state.selectedKey());
-    if(!index || *index < placement.firstRow || *index >= placement.endRow)
-        return {};
-    const auto rectangle = SmokeListRowBounds(placement, *index);
-    if(!rectangle)
-        return {};
-    return *rectangle;
+Rect UiListSmokeScene::selectedRow()const{
+    const ScrollPlacement placement = this.m_state.placement();
+    if(!this.m_visible)
+        return Rect();
+    const Expected<u64> index = this.m_source.indexOf(this.m_state.selectedKey());
+    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
+        return Rect();
+    const Expected<Rect> rectangle = SmokeListRowBounds(placement, index.value());
+    if(!rectangle.has_value())
+        return Rect();
+    return rectangle.value();
 }
 
 void UiListSmokeScene::observeState(){
-    const auto current = values();
-    const auto& placement = m_state.placement();
+    const Array<u64, 12u> current = this.values();
+    const ScrollPlacement placement = this.m_state.placement();
     if(
-        m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && placement.offset == m_lastPlacement.offset && placement.contentHeight == m_lastPlacement.contentHeight
-        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds) && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
+        this.m_sequence != 0u
+        && !this.m_displayChanged
+        && SameSmokeU64Span(current, this.m_lastValues)
+        && placement.offset == this.m_lastPlacement.offset
+        && placement.contentHeight == this.m_lastPlacement.contentHeight
+        && SameSmokeRect(placement.bounds, this.m_lastPlacement.bounds)
+        && SameSmokeRect(placement.thumb, this.m_lastPlacement.thumb)
     )
         return;
-    ++m_sequence;
-    m_lastValues = current;
-    m_lastPlacement = placement;
-    m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiListSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}")
-        , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
-        , current[6], current[7], current[8], current[9], current[10], current[11]
+    ++this.m_sequence;
+    this.m_lastValues = current;
+    this.m_lastPlacement = placement;
+    this.m_displayChanged = false;
+    [essential] info(
+        "UiListSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}"
+        , this.m_sequence
+        , current[0u]
+        , current[1u]
+        , current[2u]
+        , current[3u]
+        , current[4u]
+        , current[5u]
+        , current[6u]
+        , current[7u]
+        , current[8u]
+        , current[9u]
+        , current[10u]
+        , current[11u]
     );
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("list"), placement.bounds);
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("viewport"), placement.viewport);
-    const auto first = SmokeListRowBounds(placement, placement.firstRow);
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("track"), placement.track);
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("selected_row"), selectedRow());
-    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, FOUNDATION_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "list", placement.bounds);
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "viewport", placement.viewport);
+    const Expected<Rect> first = SmokeListRowBounds(placement, placement.firstRow);
+    Rect firstRect();
+    if(first.has_value())
+        firstRect = first.value();
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "first_row", firstRect);
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "track", placement.track);
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "thumb", placement.thumb);
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "selected_row", this.selectedRow());
+    LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "counter", Rect(32.0f, 312.0f, 140.0f, 36.0f));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-SharedUiListSmokeScene CreateUiListSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiListSmokeScene(NewArenaObject<RefCounter<UiListSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
-
-
-};
-NWB_END
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,13 @@
 #include "simd_optimization_analysis.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView simdType)const{
@@ -85,7 +91,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
                 if(i > 0u)
                     out.append(", ");
                 if(callArgs[i]){
-                    if(IsRegisterPromotableSimdType(callArgs[i]->resolvedSimdType))
+                    if(!callArgs[i]->isMutArg && IsRegisterPromotableSimdType(callArgs[i]->resolvedSimdType))
                         m_emitter.emitSimdRegExpr(out, *callArgs[i], callArgs[i]->resolvedSimdType);
                     else
                         m_emitter.emitSimdRegExpr(out, *callArgs[i], simdType);
@@ -94,11 +100,21 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             out.push_back(')');
         };
 
-        const MStringView registerCall = MapSimdRegisterCall(callee);
+        const MStringView registerCall = expr.callTemplateArgs.empty() ? MapSimdRegisterCall(callee) : MStringView{};
         if(!registerCall.empty()){
             out.append(registerCall.data(), registerCall.size());
             out.push_back('(');
-            emitSimdCallRegArgsAndClose(expr.arguments);
+            for(usize i = 0u; i < expr.arguments.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                if(expr.arguments[i]){
+                    if(!expr.arguments[i]->isMutArg && IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
+                        m_emitter.emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
+                    else
+                        m_emitter.emitExpr(out, *expr.arguments[i]);
+                }
+            }
+            out.push_back(')');
             return true;
         }
         if(!isInt && !isMatrix){
@@ -262,6 +278,9 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
     }
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

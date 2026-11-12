@@ -1,0 +1,423 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/raytrace_internal.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TraceGeometryImportPolicy{
+    public b8 hasHardwareRole(in u8 roles)const{
+        const PreparedShadowTraceGeometryRole hardwareMask =
+            PreparedShadowTraceGeometryRole::HardwarePosition
+            | PreparedShadowTraceGeometryRole::HardwareIndex
+            | PreparedShadowTraceGeometryRole::HardwareAttribute;
+        return (roles & cast<u8>(hardwareMask)) != 0u;
+    }
+
+    public b8 hasSoftwareRole(in u8 roles)const{
+        const PreparedShadowTraceGeometryRole softwareMask =
+            PreparedShadowTraceGeometryRole::SoftwareNode
+            | PreparedShadowTraceGeometryRole::SoftwarePosition
+            | PreparedShadowTraceGeometryRole::SoftwareIndex
+            | PreparedShadowTraceGeometryRole::SoftwareAttribute;
+        return (roles & cast<u8>(softwareMask)) != 0u;
+    }
+
+    public usize computeBuildStateReserveCapacity(in usize parentStateCount)const{
+        return parentStateCount + s_SortBuildStateCapacity;
+    }
+
+    public b8 isConstantBufferSceneSlot(in usize importedBufferIndex)const{
+        return importedBufferIndex == 0u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/material/task_graph_resource_sets.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/optics/task_graph_optical_scene_upload.adhd.h>
+#include <impl/ecs_render/raytrace/frame_graph_trace_geometry.adhd.h>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/graphics/api.h>
+#include <core/task/gpu/task_graph.h>
+
+#include <global/not_null.h>
+#include <global/span.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
+    FrameGraphSoftwareBvhBuildStateResult result(scratchArena);
+    using namespace RendererTaskGraphDetail;
+    const TraceGeometryImportPolicy importPolicy;
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = inputs.rayTracingShadowResources;
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ scratchArena };
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ scratchArena };
+    if(inputs.softwareTraceResourcesPrepared){
+        const auto meshSoftwareBvhParentBuildStates = m_meshSystem.collectSoftwareBvhParentBuildStates(scratchArena);
+        if(!meshSoftwareBvhParentBuildStates)
+            return MakeUnexpected(Failure{});
+        // Sort keys, sort payload, and visit counter follow the parent build states.
+        const usize reserveCapacity = importPolicy.computeBuildStateReserveCapacity(meshSoftwareBvhParentBuildStates->size());
+        softwareBvhBuildStateResources.reserve(reserveCapacity);
+        softwareBvhBuildStateBuffers.reserve(reserveCapacity);
+        const auto appendSoftwareBvhBuildState = [&](const Core::BufferHandle& buffer, const Name identity, const AStringView label){
+            if(!buffer || !identity)
+                return false;
+            for(const NotNull<Core::Buffer*> existing : softwareBvhBuildStateBuffers){
+                if(existing.get() == buffer.get())
+                    return true;
+            }
+            const auto resourceResult = ImportExternalBuffer(m_graph, buffer, identity, label);
+            if(!resourceResult)
+                return false;
+            const Core::GpuGraphResourceId resource = *resourceResult;
+            softwareBvhBuildStateBuffers.push_back(MakeNotNull(buffer.get()));
+            softwareBvhBuildStateResources.push_back(resource);
+            return true;
+        };
+        for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : *meshSoftwareBvhParentBuildStates){
+            if(!appendSoftwareBvhBuildState(state.buffer, state.identity, "Software BVH Parent")){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
+                return MakeUnexpected(Failure{});
+            }
+        }
+        if(
+            !rayTracingShadowResources.bvhSortKeysBuffer
+            || !rayTracingShadowResources.bvhSortPayloadBuffer
+            || !rayTracingShadowResources.bvhVisitCounterBuffer
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortKeysBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortKeys), "Software BVH Sort Keys")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortPayloadBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortPayload), "Software BVH Sort Payload")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhVisitCounterBuffer, Name(s_RenderNameRenderShadowTraceSwBvhVisitCounter), "Software BVH Visit Counter")
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    result.buildStateResources = Move(softwareBvhBuildStateResources);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(Core::Alloc::ScratchArena& scratchArena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources){
+    using namespace RendererTaskGraphDetail;
+    const TraceGeometryImportPolicy importPolicy;
+
+    // Preflight froze the mesh tables; import each buffer once and fan out IDs.
+    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(scratchArena)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
+        return MakeUnexpected(Failure{});
+    }
+    const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
+    const Span<const Core::TextureHandle> preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
+
+    FrameGraphTraceGeometryResult result(scratchArena);
+    result.traceGeometry.reserve(preparedTraceGeometry.size());
+    result.hardwareTraceGeometry.reserve(preparedTraceGeometry.size());
+    result.softwareTraceGeometry.reserve(preparedTraceGeometry.size());
+    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
+        Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
+        desc.setInitialState(preparedBuffer.initialState);
+        const auto resourceResult = m_graph.importBuffer(preparedBuffer.buffer, desc);
+        if(!resourceResult){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
+            return MakeUnexpected(Failure{});
+        }
+        const Core::GpuGraphResourceId resource = *resourceResult;
+        result.traceGeometry.push_back(resource);
+        if(importPolicy.hasHardwareRole(preparedBuffer.roles))
+            result.hardwareTraceGeometry.push_back(resource);
+        if(importPolicy.hasSoftwareRole(preparedBuffer.roles))
+            result.softwareTraceGeometry.push_back(resource);
+    }
+    // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
+    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(preparedTraceMaterialSampledTextures, "Prepared Trace Material Sampled Texture", m_graph, scratchArena);
+    if(!traceMaterialSampledTextureResources){
+        switch(traceMaterialSampledTextureResources.error()){
+        case SampledTextureImportFailure::GraphUnavailable:
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
+            return MakeUnexpected(Failure{});
+        case SampledTextureImportFailure::MissingIdentity:
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
+            return MakeUnexpected(Failure{});
+        case SampledTextureImportFailure::ImportFailed:
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    result.shadowTraceGeometrySet = importSet(result.traceGeometry, Name(s_RenderNameRenderPostGbufferTraceGeometry), "Post-G-Buffer Trace Geometry");
+    result.softwareTraceGeometrySet = importSet(result.softwareTraceGeometry, Name(s_RenderNameRenderSoftwareTraceGeometry), "Software Trace Geometry");
+    if(!traceMaterialSampledTextureResources->empty()){
+        const auto traceMaterialSampledTextureSetResult = m_graph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}.setIdentity(Name(s_RenderNameRenderTraceMaterialSampledTextures)).setMarkerLabel("Trace Material Sampled Textures").setMembers(*traceMaterialSampledTextureResources)
+        );
+        if(!traceMaterialSampledTextureSetResult){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
+            return MakeUnexpected(Failure{});
+        }
+        result.traceMaterialSampledTextureSet = *traceMaterialSampledTextureSetResult;
+    }
+    result.hardwareTraceGeometrySet = importSet(result.hardwareTraceGeometry, Name(s_RenderNameRenderHardwareTraceGeometry), "Hardware Trace Geometry");
+
+    result.softwareTraceResourcesPrepared = !result.softwareTraceGeometry.empty();
+    FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_graph, m_meshSystem);
+    auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
+        FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = rayTracingShadowResources, .softwareTraceResourcesPrepared = result.softwareTraceResourcesPrepared, },
+        scratchArena
+    );
+    if(!softwareBvhBuildStateResult){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+        return MakeUnexpected(Failure{});
+    }
+    result.softwareBvhBuildState = Move(softwareBvhBuildStateResult->buildStateResources);
+    return result;
+}
+
+// Empty member lists and failed imports leave the set invalid.
+Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Span<const Core::GpuGraphResourceId> members, const Name& identity, const AStringView markerLabel){
+    if(members.empty())
+        return {};
+
+    const auto setResult = m_graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(markerLabel).setMembers(members));
+    if(!setResult)
+        return {};
+    return *setResult;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RayTracingSceneGraphResources::valid()const noexcept{
+    return hardwareAvailable && sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer && opticalScene.valid();
+}
+
+b8 RayTracingSceneGraphReads::valid()const noexcept{
+    for(const auto& use : uses){
+        if(!use.resource.valid())
+            return false;
+    }
+    for(const auto& use : csgUses){
+        if(!use.resource.valid())
+            return false;
+    }
+    return true;
+}
+
+Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
+    const RayTracingSceneGraphResources& resources,
+    const Core::ResourceStates::Mask tlasInitialState,
+    const Core::GpuTaskId priorReadersDrained,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    if(!resources.valid())
+        return MakeUnexpected(Failure{});
+
+    const TraceGeometryImportPolicy importPolicy;
+    const Array<ReferenceWrapper<const Core::BufferHandle>, s_SceneImportedBufferCount> buffers = {
+        resources.materialContextSlotsBuffer,
+        resources.instanceMaterialBuffer,
+        resources.materialTypedBuffer,
+        resources.instanceBuffer,
+    };
+    Array<Core::GpuGraphResourceId, s_SceneImportedBufferCount> importedBuffers{};
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure{});
+        for(usize index = 0u; index < s_SceneImportedBufferCount; ++index)
+            importedBuffers[index] = declarations.findImportedBuffer(buffers[index]);
+    }
+    for(usize index = 0u; index < s_SceneImportedBufferCount; ++index){
+        if(importedBuffers[index].valid())
+            continue;
+        const Core::BufferHandle& buffer = buffers[index];
+        const Name identity = buffer->getCreationDescription().debugName;
+        if(!identity)
+            return MakeUnexpected(Failure{});
+        const auto importedBufferResult = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
+        if(!importedBufferResult)
+            return MakeUnexpected(Failure{});
+        importedBuffers[index] = *importedBufferResult;
+    }
+
+    // Shared consumers reuse this identity. Reimporting the same TLAS returns it, keeping producer and cross-effect deps.
+    const auto tlasResult = graph.importAccelStruct(
+        resources.sceneTlas,
+        RendererTaskGraphDetail::AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel).setInitialState(tlasInitialState)
+    );
+    if(!tlasResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceId tlas = *tlasResult;
+
+    auto opticalResult = ImportRayTracingOpticalSceneBuffer(resources.opticalScene, priorReadersDrained, graph, scratchArena);
+    if(!opticalResult)
+        return MakeUnexpected(Failure{});
+    const RayTracingOpticalSceneGraphBuffer optical = Move(*opticalResult);
+
+    RayTracingSceneGraphReads result(scratchArena);
+    result.uses[0] = RendererTaskGraphDetail::ReadUse(tlas, Core::ResourceStates::AccelStructRead);
+    for(usize index = 0u; index < s_SceneImportedBufferCount; ++index){
+        const Core::ResourceStates::Mask state = importPolicy.isConstantBufferSceneSlot(index) ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::ShaderResource;
+        result.uses[index + 1u] = RendererTaskGraphDetail::ReadUse(importedBuffers[index], state);
+    }
+    result.uses[LengthOf(result.uses) - 1u] = RendererTaskGraphDetail::ReadUse(optical.resource);
+    if(resources.csgTraceContextBuffer){
+        result.csgUses.reserve(1u + resources.csgTraceBoundsBuffers.size());
+        if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(resources.csgTraceContextBuffer, resources.csgTraceBoundsBuffers, graph, result.csgUses))
+            return MakeUnexpected(Failure{});
+    }
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererFramePipelineDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AppendRayTracingSceneShadowBuffers(
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
+){
+    const Array<ReferenceWrapper<const Core::BufferHandle>, s_SceneShadowBufferCount> sceneShadowBuffers = {
+        rayTracingResources.sceneBvhNodeBuffer,
+        rayTracingResources.sceneInstanceBuffer,
+        rayTracingResources.shadowInstanceMaterialBuffer,
+        rayTracingResources.shadowMaterialTypedBuffer,
+        rayTracingResources.shadowInstanceBuffer,
+    };
+    const Array<Name, s_SceneShadowBufferCount> sceneShadowIdentities = {
+        Name(s_SceneBvhNodesName),
+        Name(s_SceneInstancesName),
+        Name(s_SceneShadowInstanceMaterialName),
+        Name(s_SceneShadowMaterialTypedName),
+        Name(s_SceneShadowInstancesName),
+    };
+    const Array<AStringView, s_SceneShadowBufferCount> sceneShadowLabels = {
+        s_SceneBvhNodesLabel,
+        s_SceneInstancesLabel,
+        s_SceneShadowInstanceMaterialLabel,
+        s_SceneShadowMaterialTypedLabel,
+        s_SceneShadowInstancesLabel,
+    };
+    for(usize bufferIndex = 0u; bufferIndex < s_SceneShadowBufferCount; ++bufferIndex){
+        const Core::BufferHandle& buffer = sceneShadowBuffers[bufferIndex];
+        if(!buffer)
+            continue;
+        const auto resourceResult = RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
+        if(!resourceResult)
+            return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
+        resourceUses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
+    return true;
+}
+
+b8 AppendCurrentCsgRayGeometry(
+    const Core::BufferHandle& context,
+    const Span<const Core::BufferHandle> bounds,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
+){
+    if(!context)
+        return true;
+    const auto appendRead = [&](const Core::BufferHandle& buffer){
+        if(!buffer)
+            return false;
+        Core::GpuGraphResourceId resource;
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            resource = declarations.findImportedBuffer(buffer);
+        }
+        if(!resource.valid()){
+            const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, buffer->getCreationDescription().debugName, "Current CSG Ray Geometry");
+            if(!importedResource)
+                return false;
+            resource = *importedResource;
+        }
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(RendererTaskGraphDetail::ReadUse(resource));
+        return true;
+    };
+    if(!appendRead(context))
+        return false;
+    for(const Core::BufferHandle& boundBuffer : bounds){
+        if(!appendRead(boundBuffer))
+            return false;
+    }
+    return true;
+}
+
+TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId traceGeometrySet, const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet)noexcept{
+    TraceResourceSetUses result;
+    if(traceGeometrySet.valid())
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+    if(traceMaterialSampledTextureSet.valid())
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

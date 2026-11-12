@@ -2,19 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <core/alloc/scratch.h>
-
-namespace NWB::Impl{
-using ScratchSubsystemNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
-using ScratchSubsystemFieldCountVector = Vector<u64, Core::Alloc::ScratchArena>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_SubsystemLoadBinaryArena = "impl/assets_subsystem/load_binary";
 const Name s_SubsystemSerializeArena = "impl/assets_subsystem/serialize";
 
@@ -158,6 +145,7 @@ b8 UnpackSubsystemRefHashes<TAsset>(in Span<NameHash> subsystemHashes, mut Vecto
 const usize s_SubsystemHeaderBinaryBytes = 96u;
 const usize s_SubsystemNameHashBinaryBytes = 64u;
 const usize s_SubsystemFieldCountBinaryBytes = 8u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

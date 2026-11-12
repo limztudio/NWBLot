@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.adhd.h>
@@ -185,7 +191,7 @@ public:
 [[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 template<typename RenderPassMethod>
-[[nodiscard]] inline b8 RecordAvboitRasterPassFromPayload(
+[[nodiscard]] NWB_INLINE b8 RecordAvboitRasterPassFromPayload(
     const AvboitRasterPassTaskPayload& payload,
     Core::CommandList& commandList,
     const RenderPassMethod renderPass
@@ -235,15 +241,22 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitComputeEmulationRecordAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 regularCaptured, in b8 csgCaptured){
+    return hasFramebufferMember && regularCaptured != csgCaptured;
+}
+
+b8 HasValidAvboitSharedComputeEmulationRecordInputs(in b8 hasFramebuffer, in b8 planCaptured, in usize drawIndex, in usize drawCount){
+    return hasFramebuffer && planCaptured && drawIndex < drawCount;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -45,7 +48,7 @@ struct AvboitComputeEffectRecordInputs{
 };
 
 template<typename DispatchMethod>
-[[nodiscard]] inline b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const DispatchMethod dispatch){
+[[nodiscard]] NWB_INLINE b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const DispatchMethod dispatch){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     b8 timingRecorded = false;
     const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
@@ -62,13 +65,13 @@ template<typename DispatchMethod>
     return true;
 }
 
-inline void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
+NWB_INLINE void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 }
 
-inline void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
+NWB_INLINE void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->discardRecording(payload.timingAttribution);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
@@ -108,15 +111,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderAvboitComputeEffectRecordInputsAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

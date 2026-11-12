@@ -138,6 +138,20 @@ class robin_set {
   explicit robin_set(const Allocator& alloc)
       : robin_set(ht::DEFAULT_INIT_BUCKETS_SIZE, alloc) {}
 
+  robin_set(const robin_set& other) = default;
+
+  robin_set(const robin_set& other, const Allocator& alloc)
+      : m_ht(other.m_ht, alloc) {}
+
+  robin_set(robin_set&& other) = default;
+
+  robin_set(robin_set&& other, const Allocator& alloc)
+      : m_ht(std::move(other.m_ht), alloc) {}
+
+  robin_set& operator=(const robin_set& other) = default;
+
+  robin_set& operator=(robin_set&& other) = default;
+
   template <class InputIt>
   robin_set(InputIt first, InputIt last,
             size_type bucket_count = ht::DEFAULT_INIT_BUCKETS_SIZE,

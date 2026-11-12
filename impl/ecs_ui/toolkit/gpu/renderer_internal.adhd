@@ -2,15 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/gpu/renderer.adhd>
+#include <impl/ecs_ui/toolkit/gpu/image_cache.adhd>
+#include <impl/ecs_ui/toolkit/gpu/sampled_texture_resources.adhd>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <impl/ecs_ui/toolkit/gpu/renderer.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/image_cache.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/sampled_texture_resources.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
 #include <impl/assets_texture/loader.adhd.h>
-#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
 #include <impl/ecs_ui/toolkit/text/glyph_page.adhd.h>
 #include <impl/ecs_ui/toolkit/text/sdf_page.adhd.h>
 
@@ -79,6 +89,7 @@ template<typename T, typename... Args>
 void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
 [[nodiscard]] b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token);
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -135,27 +146,27 @@ public:
     TextureGpuResource m_texture;
 };
 
-inline GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
+NWB_INLINE GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
     : m_glyphCache(arena)
     , m_sdfCache(arena)
     , m_textureCache(arena)
 {}
 
-inline GpuImageCache::~GpuImageCache()noexcept = default;
+NWB_INLINE GpuImageCache::~GpuImageCache()noexcept = default;
 
-inline void GpuImageCache::reserve(){
+NWB_INLINE void GpuImageCache::reserve(){
     m_glyphCache.reserve(s_PaintMaxImages);
     m_sdfCache.reserve(s_PaintMaxImages);
     m_textureCache.reserve(s_PaintMaxImages);
 }
 
-inline void GpuImageCache::clear()noexcept{
+NWB_INLINE void GpuImageCache::clear()noexcept{
     m_glyphCache.clear();
     m_sdfCache.clear();
     m_textureCache.clear();
 }
 
-inline void GpuImageCache::trim(const DrawSnapshot& snapshot){
+NWB_INLINE void GpuImageCache::trim(const DrawSnapshot& snapshot){
     const auto sameGlyphKey = [](const GpuVersion<GpuGlyphVersion>& cached, const SharedGlyphPage& page)noexcept{
         return SameGlyphPageKey(cached->m_page->binding(), page->binding());
     };
@@ -184,7 +195,7 @@ inline void GpuImageCache::trim(const DrawSnapshot& snapshot){
     retainReferenced(snapshot.textureImages(), sameTextureKey, m_textureCache);
 }
 
-inline void GpuImageCache::evict()noexcept{
+NWB_INLINE void GpuImageCache::evict()noexcept{
     // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
     if(!m_glyphCache.empty())
         m_glyphCache.erase(m_glyphCache.begin());
@@ -414,15 +425,10 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsUiToolkitGpuRendererInternalAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

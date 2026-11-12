@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DependencyPathHints{
+    private HashMap<Name, String> m_texts;
+
+    public void reserve(in usize count){
+        this.m_texts.reserve(count);
+    }
+
+    public void record(in StringView rawText){
+        const Expected<StringView> trimmed = TryTrimVirtualPathText(rawText);
+        if(!trimmed.has_value())
+            return;
+
+        const StringView trimmedText = trimmed.value();
+        const Expected<Name> parsedName = ParseName(trimmedText);
+        if(!parsedName.has_value())
+            return;
+
+        const Name key = parsedName.value();
+        if(!this.m_texts.contains(key))
+            this.m_texts.try_emplace(key, String(trimmedText));
+    }
+
+    public StringView lookup(in Name virtualPath)const{
+        if(this.m_texts.contains(virtualPath))
+            return StringView(this.m_texts.at(virtualPath));
+        return virtualPath.resolvedText();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

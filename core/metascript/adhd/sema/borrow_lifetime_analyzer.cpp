@@ -83,6 +83,10 @@ b8 BorrowLifetimeAnalyzer::borrowsTemporaryStringOwner(const ClassDecl* ownerCla
             if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
                 return borrowsTemporaryStringOwner(ownerClass, method, *expr.arguments[0], scope);
         }
+        else if(expr.lhs->kind == ExprKind::ScopeAccess && expr.lhs->scopeChain.size() == 2u){
+            if(const BuiltinFunctionInfo* scopedFn = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]); scopedFn && scopedFn->returnsBorrowedView && !expr.arguments.empty() && expr.arguments[0])
+                return borrowsTemporaryStringOwner(ownerClass, method, *expr.arguments[0], scope);
+        }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView mName = expr.lhs->text;
             const MStringView recvBase = m_checker.inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
@@ -191,6 +195,10 @@ b8 BorrowLifetimeAnalyzer::borrowsLocalStringOwner(const ClassDecl* ownerClass, 
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_checker.m_symbols.resolveBaseTypeName(expr.lhs->text);
             if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
+                return borrowsLocalStringOwner(ownerClass, method, *expr.arguments[0], scope, outOwnerName, outOwnerScopeIndex);
+        }
+        else if(expr.lhs->kind == ExprKind::ScopeAccess && expr.lhs->scopeChain.size() == 2u){
+            if(const BuiltinFunctionInfo* scopedFn = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]); scopedFn && scopedFn->returnsBorrowedView && !expr.arguments.empty() && expr.arguments[0])
                 return borrowsLocalStringOwner(ownerClass, method, *expr.arguments[0], scope, outOwnerName, outOwnerScopeIndex);
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){

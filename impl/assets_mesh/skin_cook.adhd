@@ -2,74 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#if defined(NWB_COOK)
+#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/skin_binary_codec.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/skin_asset.adhd.h>
+b8 ValidateSkinCookInverseBindMatrix(in MatrixSingle matrix, in StringView filePathText, in usize matrixIndex){
+    if(IsValidSkinInverseBindMatrix(matrix))
+        return true;
 
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
+    error(
+        "Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix",
+        filePathText,
+        matrixIndex
+    );
+    return false;
+}
 
+b8 ValidateSkinCookInverseBindMatricesNonEmpty(in usize matrixCount, in StringView filePathText){
+    if(matrixCount != 0u)
+        return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("Skin meta '{}': '{}' must not be empty", filePathText, s_SkinInverseBindMatricesField);
+    return false;
+}
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkinCookEntry{
-    Name virtualPath = s_NameNone;
-    Core::Assets::AssetRef<Mesh> mesh;
-    Core::Assets::AssetRef<Skeleton> skeleton;
-    Core::Assets::AssetVector<SkinInfluence4> influences;
-    Core::Assets::AssetVector<SkeletonJointMatrix> inverseBindMatrices;
-
-
-public:
-    explicit SkinCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : influences(arena)
-        , inverseBindMatrices(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
-[[nodiscard]] Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 SerializeSkinBinaryPayload(
+    in NameHash meshNameHash,
+    in NameHash skeletonNameHash,
+    in Span<SkinInfluence4> influences,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    mut Vector<u8> outBinary
+){
+    SkinBinaryCodec codec;
+    return codec.serialize(meshNameHash, skeletonNameHash, influences, inverseBindMatrices, outBinary);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplAssetsMeshSkinCookAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

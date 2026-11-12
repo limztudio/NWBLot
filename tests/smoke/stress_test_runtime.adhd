@@ -8,336 +8,282 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
-#include <loader/project_entry.h>
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_model_renderer/model_renderer.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #include <core/graphics/backend_selection/backend.h>
 #endif
-#include <core/graphics/runtime/runtime.h>
-#include <core/input/module.h>
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <global/simd/quaternion.h>
 
+namespace NWB::Tests::Smoke{
+[[nodiscard]] NWB_INLINE AStringView StressTestProjectName()noexcept{
+    return "StressTestSmokeProject";
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[[nodiscard]] NWB_INLINE AStringView StressCpuTimingOwnerName()noexcept{
+    return "stress";
+}
 
-
-namespace __hidden_stress_test_smoke{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr TStringView s_ProjectName = FOUNDATION_TEXT("StressTestSmokeProject");
-
-using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
-using NWB::Tests::Smoke::ArrowYawInputHandler;
-using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
-using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
-using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
-using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
-using NWB::Tests::Smoke::RendererBaselineFixedDelta;
-using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
-using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
-using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
-using NWB::Tests::Smoke::TickSmokeWorld;
-
-static constexpr u32 s_DefaultCharactersPerClass = NWB::Tests::Smoke::s_StressDefaultCharactersPerClass;
-static constexpr u32 s_ComparisonCharactersPerClass = NWB::Tests::Smoke::s_StressComparisonCharactersPerClass;
-
-static constexpr f32 s_SpinSpeed = NWB::Tests::Smoke::s_StressSpinSpeed;
-static constexpr f32 s_ManualYawSpeed = NWB::Tests::Smoke::s_StressManualYawSpeed;
-static constexpr f32 s_MaxSpinDelta = NWB::Tests::Smoke::s_StressMaxSpinDelta;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class StressTestSmokeProjectImpl final : public NWB::IProjectEntryCallbacks{
-private:
-    [[nodiscard]] static b8 TimingEnabled(){
-        static const b8 s_Enabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
-        return s_Enabled;
-    }
-
-    [[nodiscard]] static u32 M4PixelCaptureFreezeFrame(){
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-        static const u32 s_CaptureFrame = [](){
-            const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
-            if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f)
-                return 0u;
-            return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
-        }();
-        return s_CaptureFrame;
+inline constexpr b8 s_StressAsyncShadowM4Benchmark = true;
 #else
-        return 0u;
+inline constexpr b8 s_StressAsyncShadowM4Benchmark = false;
 #endif
-    }
 
-    [[nodiscard]] static b8 HardwareShadowOpaqueBaseline(){
-#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-        static const b8 s_Enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
-        return s_Enabled;
-#else
-        return false;
-#endif
-    }
-
-    [[nodiscard]] static Expected<u32> ReadCharactersPerClass(){
-        NWB::Core::Alloc::GlobalArena arena{Name(NWB::Tests::Smoke::s_SmokeNameTestsStressWorkload)};
-        const auto value = ReadEnvironmentVariable(arena, "NWB_STRESS_CHARACTERS_PER_CLASS");
-        if(!value){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(value.error().message()));
-            return MakeUnexpected(Failure{});
-        }
-        if(!*value)
-            return s_DefaultCharactersPerClass;
-        const AStringView text((*value)->data(), (*value)->size());
-        if(text == "5")
-            return s_ComparisonCharactersPerClass;
-        if(text != "10"){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: characters per class must be exactly 5 or 10"));
-            return MakeUnexpected(Failure{});
-        }
-        return s_DefaultCharactersPerClass;
-    }
-
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(s_ProjectName, context);
-
-        NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
-        settings.shadow.transparentSampling = NWB::Impl::TransparentShadowSampling::TemporalOne;
-        settings.shadow.receiverResolution = NWB::Impl::ShadowReceiverResolution::Quarter;
-        settings.surfelGi.resolveResolution = NWB::Impl::SurfelGiResolveResolution::Quarter;
-        settings.softwareShadow.blockerSearch = NWB::Impl::SoftwareShadowBlockerSearch::Center1;
-        settings.softwareShadow.coverage = NWB::Impl::SoftwareShadowCoverage::FittedVolume;
-        settings.softwareShadow.captureCadence = NWB::Impl::SoftwareShadowCaptureCadence::ReuseTwoFrames;
-        settings.caustic.photonGridDivisor = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 2u : 4u;
-        AddSmokeSkinnedRenderSystems(*world, context, settings);
-        return world;
-    }
-
-    static f32 FrozenYaw(){
-        return ReadSmokeFrozenYawCached("NWB_STRESS_TEST_SPIN_ANGLE");
-    }
-
-
-public:
-    explicit StressTestSmokeProjectImpl(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateWorldOrDie(context))
-        , m_renderer(*MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>()))
-        , m_scene(context, *m_world)
-    {}
-    virtual ~StressTestSmokeProjectImpl()noexcept override{
-        m_context.input.removeHandler(m_arrowYawInput);
-        m_timingRenderPass.stop();
-        destroyWorld();
-    }
-
-
-public:
-    virtual b8 onStartup()override{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
-        constexpr b8 s_AsyncRequested = false;
+inline constexpr b8 s_StressAsyncComputeRequested = false;
 #else
-        constexpr b8 s_AsyncRequested = true;
+inline constexpr b8 s_StressAsyncComputeRequested = true;
 #endif
-        const auto& device = m_context.graphics.getDevice();
-        const auto graphicsQueue = device.getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
-        const auto computeQueue = device.getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Compute);
-        const auto* const graphicsInfo = device.getPhysicalQueueInfo(graphicsQueue);
-        const auto* const computeInfo = device.getPhysicalQueueInfo(computeQueue);
-        const auto topology = device.getPhysicalQueueTopology();
-        const u16 deviceGeneration = device.getDeviceGeneration();
-        b8 graphicsRegistered = false;
-        b8 computeRegistered = false;
-        b8 topologyValid = topology.queues && topology.queueCount != 0u;
-        if(topologyValid){
-            for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-                const auto& queue = topology.queues[queueIndex];
-                topologyValid = topologyValid && queue.id.valid() && queue.id.deviceGeneration == deviceGeneration;
-                graphicsRegistered = graphicsRegistered || queue.id == graphicsQueue;
-                computeRegistered = computeRegistered || queue.id == computeQueue;
+
+#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
+inline constexpr b8 s_StressHardwareShadowBenchmark = true;
+#else
+inline constexpr b8 s_StressHardwareShadowBenchmark = false;
+#endif
+
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
+inline constexpr b8 s_StressContinuousBenchmarkRendering = true;
+#else
+inline constexpr b8 s_StressContinuousBenchmarkRendering = false;
+#endif
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f64 s_StressTimingWarmupSeconds = 5.0;
+const f64 s_StressDefaultWarmupSeconds = 0.25;
+const f64 s_StressTimingMeasurementSeconds = 30.0;
+const f32 s_StressMaxM4FreezeFrame = 1000000.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class StressM4QueueEntry{
+    public u16 index = u16.max;
+    public u16 deviceGeneration = 0u;
+
+    public b8 valid()const{
+        return this.index != u16.max && this.deviceGeneration != 0u;
+    }
+
+    public b8 matches(in StressM4QueueEntry other)const{
+        return this.index == other.index && this.deviceGeneration == other.deviceGeneration;
+    }
+}
+
+class StressM4QueueInfoSnapshot{
+    public StressM4QueueEntry id = StressM4QueueEntry();
+    public b8 present = false;
+    public b8 dedicated = false;
+    public b8 computeSupported = false;
+    public b8 graphicsSupported = false;
+}
+
+[arena]
+class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
+    public StressTestSmokeProjectImpl(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = CreateStressTestWorldOrDie(context);
+        this.m_timingRenderPass = AvboitTimingRenderPass(context.graphics);
+        this.m_timingEnabled = StressTimingEnabled();
+        this.m_fpsProbe = PresentationFpsProbe(StressFpsWarmupSeconds(StressTimingEnabled()), StressFpsMeasurementSeconds(StressTimingEnabled()));
+        this.m_cpuTimingProbe = SmokeCpuGpuTimingProbe(StressCpuTimingOwnerName());
+        this.m_gpuPassTimingProbe = GpuPassTimingProbe(StressTestProjectName());
+        this.m_m4PixelCaptureFreezeFrame = ResolveStressM4PixelCaptureFreezeFrame();
+        this.m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
+        this.m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
+    }
+
+    public ~StressTestSmokeProjectImpl(){
+        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        this.m_timingRenderPass.stop();
+        this.destroyWorld();
+    }
+
+    public b8 onStartup()override{
+        if(!ValidateStressM4QueueTopology(this.m_context))
+            return false;
+
+        if(s_StressAsyncShadowM4Benchmark){
+            const Expected<String> snapshotPath = ReadSmokeEnvironmentString("NWB_STRESS_FRAME_GRAPH_FILE");
+            if(snapshotPath.has_value())
+                this.m_frameGraphSnapshotPath = snapshotPath.value();
+            else
+                this.m_frameGraphSnapshotPath.clear();
+            if(!this.m_frameGraphSnapshotPath.empty() && (this.m_timingEnabled || this.m_m4PixelCaptureFreezeFrame == 0u)){
+                error("StressTestSmokeProject: frame graph snapshot requires pixel freeze and excludes presentation measurement");
+                return false;
             }
         }
-        if(
-            !topologyValid || !graphicsQueue.valid() || graphicsQueue.deviceGeneration != deviceGeneration
-            || !graphicsInfo || graphicsInfo->id != graphicsQueue || !graphicsRegistered
-            || (computeQueue.valid() ? !computeInfo || computeInfo->id != computeQueue || !computeRegistered || computeQueue.deviceGeneration != deviceGeneration : computeQueue != NWB::Core::GpuPhysicalQueueId{} || computeInfo != nullptr)
-        ){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: M4 selected queue topology is invalid"));
-            return false;
-        }
-        const b8 computeDedicated = computeInfo && computeInfo->dedicated;
-        const b8 computeSupported = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Compute) != NWB::Core::GpuQueueCapability::None;
-        const b8 computeGraphics = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Graphics) != NWB::Core::GpuQueueCapability::None;
-        const b8 asyncEffective = s_AsyncRequested && computeQueue != graphicsQueue && computeDedicated && computeSupported && !computeGraphics;
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: M4 async compute requested={} effective={} graphicsQueue={}:{} computeQueue={}:{} computeDedicated={} computeSupported={} computeGraphics={}")
-            , s_AsyncRequested ? 1u : 0u
-            , asyncEffective ? 1u : 0u
-            , graphicsQueue.index
-            , graphicsQueue.deviceGeneration
-            , computeQueue.index
-            , computeQueue.deviceGeneration
-            , computeDedicated ? 1u : 0u
-            , computeSupported ? 1u : 0u
-            , computeGraphics ? 1u : 0u
-        );
-#endif
 
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-        auto snapshotPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_STRESS_FRAME_GRAPH_FILE");
-        if(snapshotPath)
-            m_frameGraphSnapshotPath = Move(*snapshotPath);
-        else
-            m_frameGraphSnapshotPath.clear();
-        if(snapshotPath && (m_timingEnabled || M4PixelCaptureFreezeFrame() == 0u)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: frame graph snapshot requires pixel freeze and excludes presentation measurement"));
+        const Expected<u32> charactersPerClass = ReadStressCharactersPerClass();
+        if(!charactersPerClass.has_value())
             return false;
-        }
-#endif
+        this.m_charactersPerClass = charactersPerClass.value();
 
-        const auto charactersPerClass = ReadCharactersPerClass();
-        if(!charactersPerClass)
+        ReflectionSettings reflectionSettings = ReflectionSettings();
+        reflectionSettings.diagnosticsEnabled = this.m_reflectionDiagnosticsEnabled;
+        if(!ApplyReflectionQualitySmokeSettings(reflectionSettings, SmokeRendererSystemRef(SmokeWorldRef(this.m_world))))
             return false;
-        m_charactersPerClass = *charactersPerClass;
-        NWB::Impl::ReflectionSettings reflectionSettings;
-        reflectionSettings.diagnosticsEnabled = m_reflectionDiagnosticsEnabled;
-        if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(reflectionSettings, m_renderer, scratchArena))
+        if(this.m_reflectionDiagnosticsEnabled)
+            [essential] info("StressTestSmokeProject: reflection diagnostics enabled");
+
+        String cpuTimingPath = String();
+        const Expected<String> cpuTimingEnv = ReadSmokeEnvironmentString("NWB_STRESS_CPU_TIMING_FILE");
+        if(cpuTimingEnv.has_value())
+            cpuTimingPath = cpuTimingEnv.value();
+        if(!this.m_cpuTimingProbe.initialize(this.m_cpuDiagnosticsEnabled, this.m_timingEnabled, StringView(cpuTimingPath)))
             return false;
-        if(m_reflectionDiagnosticsEnabled)
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
-        const auto cpuTimingPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CPU_TIMING_FILE");
-        if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled, cpuTimingPath ? AStringView(cpuTimingPath->data(), cpuTimingPath->size()) : AStringView{}))
-            return false;
-        NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
-        capture.cpuTiming = m_cpuDiagnosticsEnabled;
-        m_context.setPerfCapture(capture);
-        if(m_timingEnabled && (M4PixelCaptureFreezeFrame() != 0u || RendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: timing requires continuous submissions and a quit callback"));
+
+        PerfCaptureOptions capture = SmokePerfGpuTimingOnly();
+        capture.cpuTiming = this.m_cpuDiagnosticsEnabled;
+        this.m_context.setPerfCapture(capture);
+        const b8 hasQuitCallback = SmokeContextHasQuitCallback(this.m_context);
+        if(this.m_timingEnabled && (this.m_m4PixelCaptureFreezeFrame != 0u || RendererBaselineCaptureFreezeFrame() != 0u || !hasQuitCallback)){
+            error("StressTestSmokeProject: timing requires continuous submissions and a quit callback");
             return false;
         }
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-        constexpr b8 s_ContinuousBenchmarkRendering = true;
-#else
-        constexpr b8 s_ContinuousBenchmarkRendering = false;
-#endif
-        if((m_timingEnabled || s_ContinuousBenchmarkRendering) && !m_timingRenderPass.start(true))
+        if((this.m_timingEnabled || s_StressContinuousBenchmarkRendering) && !this.m_timingRenderPass.start(true))
             return false;
-        if(m_timingEnabled){
-            m_pacingRing.reset();
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1"));
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: device capability meshlets={} rayquery={} raypipeline={} accelstruct={} wavelanes={} renderer={}")
-                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets) ? 1u : 0u
-                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 1u : 0u
-                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingPipeline) ? 1u : 0u
-                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) ? 1u : 0u
-                , m_context.graphics.queryWaveLaneCount()
-                , m_context.graphics.getRendererString()
+        if(this.m_timingEnabled){
+            this.m_pacingRing.reset();
+            [essential] info("StressTestSmokeProject: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1");
+            u32 meshletsFlag = 0u;
+            if(this.m_context.graphics.queryFeatureSupport(Feature::Meshlets))
+                meshletsFlag = 1u;
+            u32 rayQueryFlag = 0u;
+            if(this.m_context.graphics.queryFeatureSupport(Feature::RayQuery))
+                rayQueryFlag = 1u;
+            u32 rayPipelineFlag = 0u;
+            if(this.m_context.graphics.queryFeatureSupport(Feature::RayTracingPipeline))
+                rayPipelineFlag = 1u;
+            u32 accelStructFlag = 0u;
+            if(this.m_context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
+                accelStructFlag = 1u;
+            [essential] info(
+                "StressTestSmokeProject: device capability meshlets={} rayquery={} raypipeline={} accelstruct={} wavelanes={} renderer={}"
+                , meshletsFlag
+                , rayQueryFlag
+                , rayPipelineFlag
+                , accelStructFlag
+                , this.m_context.graphics.queryWaveLaneCount()
+                , this.m_context.graphics.getRendererString()
             );
         }
 
-        m_context.input.addHandlerToBack(m_arrowYawInput);
+        this.m_context.input.addHandlerToBack(this.m_arrowYawInput);
 
-        if(!m_scene.initialize(m_context, m_charactersPerClass, m_charactersPerClass == s_ComparisonCharactersPerClass, HardwareShadowOpaqueBaseline(), scratchArena))
-            return false;
-        return true;
+        const u32 charsPerClass = this.m_charactersPerClass;
+        const b8 comparison = charsPerClass == s_StressComparisonCharactersPerClass;
+        const b8 opaqueOnly = StressHardwareShadowOpaqueBaseline();
+        return this.m_scene.initialize(this.m_context, SmokeWorldRef(this.m_world), charsPerClass, comparison, opaqueOnly);
     }
 
-    virtual void onShutdown()override{
-        m_context.graphics.setFrameSubmissionSuspended(false);
-        m_context.input.removeHandler(m_arrowYawInput);
-        m_timingRenderPass.stop();
-        if(m_timingEnabled && !m_timingComplete)
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: presentation measurement incomplete"));
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: shutdown"));
+    public void onShutdown()override{
+        this.m_context.graphics.setFrameSubmissionSuspended(false);
+        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        this.m_timingRenderPass.stop();
+        if(this.m_timingEnabled && !this.m_timingComplete)
+            error("StressTestSmokeProject: presentation measurement incomplete");
+        this.destroyWorld();
+        [essential] info("StressTestSmokeProject: shutdown");
     }
 
-    virtual b8 onUpdate(const f32 delta)override{
-        const u32 m4CaptureFreezeFrame = M4PixelCaptureFreezeFrame();
-        if(m4CaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= m4CaptureFreezeFrame){
-            if(!m_m4PixelCapturePaused){
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-                if(!m_frameGraphSnapshotPath.empty() && !NWB::Tests::Smoke::CaptureStressFrameGraphSnapshot(m_frameGraphSnapshotPath, m_m4RenderedFrameCount, m_context))
-                    return false;
-#endif
-                m_context.graphics.setFrameSubmissionSuspended(true);
-                m_m4PixelCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: M4 pixel capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
+    public b8 onUpdate(in f32 delta)override{
+        if(this.m_m4PixelCaptureFreezeFrame != 0u && this.m_m4RenderedFrameCount >= this.m_m4PixelCaptureFreezeFrame){
+            if(!this.m_m4PixelCapturePaused){
+                if(s_StressAsyncShadowM4Benchmark && !this.m_frameGraphSnapshotPath.empty()){
+                    const u64 renderedFrames = cast<u64>(this.m_m4RenderedFrameCount);
+                    if(!CaptureStressFrameGraphSnapshot(StringView(this.m_frameGraphSnapshotPath), renderedFrames, this.m_context))
+                        return false;
+                }
+                this.m_context.graphics.setFrameSubmissionSuspended(true);
+                this.m_m4PixelCapturePaused = true;
+                [essential] info("StressTestSmokeProject: M4 pixel capture ready after {} rendered frames; render submission suspended", this.m_m4RenderedFrameCount);
             }
             return true;
         }
 
         const u32 baselineCaptureFreezeFrame = RendererBaselineCaptureFreezeFrame();
-        if(baselineCaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= baselineCaptureFreezeFrame){
-            if(!m_rendererBaselineCapturePaused){
-                m_context.graphics.setFrameSubmissionSuspended(true);
-                m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
+        if(baselineCaptureFreezeFrame != 0u && this.m_m4RenderedFrameCount >= baselineCaptureFreezeFrame){
+            if(!this.m_rendererBaselineCapturePaused){
+                this.m_context.graphics.setFrameSubmissionSuspended(true);
+                this.m_rendererBaselineCapturePaused = true;
+                [essential] info("StressTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended", this.m_m4RenderedFrameCount);
             }
             return true;
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
-        if(!samplePresentationFps())
+        f32 safeDelta = 0.0f;
+        if(fixedDelta > 0.0f)
+            safeDelta = fixedDelta;
+        else if(IsFinite(delta))
+            safeDelta = Max(delta, 0.0f);
+
+        if(!this.samplePresentationFps())
             return false;
-        m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        const f32 frozen = FrozenYaw();
-        m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
-        if(!m_scene.update(m_yaw.yaw()))
+        this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
+        const f32 frozen = StressFrozenYaw();
+        this.m_yaw.update(safeDelta, frozen, frozen >= 0.0f, this.m_arrowYawInput, s_StressManualYawSpeed, s_StressSpinSpeed, s_StressMaxSpinDelta);
+
+        const f32 currentYaw = this.m_yaw.yaw();
+        if(!this.m_scene.update(currentYaw, SmokeWorldRef(this.m_world)))
             return false;
-        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_2PI, m_context);
-        if(!TickSmokeWorld(safeDelta, *m_world))
+
+        SetSmokeYawWindowTitle(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi, this.m_context);
+
+        if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
-        reportReflectionStatistics();
-        ++m_m4RenderedFrameCount;
+
+        this.reportReflectionStatistics();
+        ++this.m_m4RenderedFrameCount;
         return true;
     }
 
-
-private:
-    void destroyWorld(){
-        DestroySmokeSkinnedRenderWorld(m_context, m_world);
+    private void destroyWorld(){
+        DestroySmokeSkinnedRenderWorld(this.m_context, this.m_world);
     }
 
-    void reportReflectionStatistics(){
-        if(!m_reflectionDiagnosticsEnabled)
+    private void reportReflectionStatistics(){
+        if(!this.m_reflectionDiagnosticsEnabled)
             return;
-        const auto statisticsResult = m_renderer.tryGetLatestReflectionStatistics();
-        if(!statisticsResult)
+        const Expected<ReflectionStatistics> statisticsResult = SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).tryGetLatestReflectionStatistics();
+        if(!statisticsResult.has_value())
             return;
-        const NWB::Impl::ReflectionStatistics& statistics = *statisticsResult;
-        if(statistics.sequence == m_reflectionStatisticsSequence && statistics.generation == m_reflectionStatisticsGeneration)
+        const ReflectionStatistics statistics = statisticsResult.value();
+        if(statistics.sequence == this.m_reflectionStatisticsSequence && statistics.generation == this.m_reflectionStatisticsGeneration)
             return;
-        m_reflectionStatisticsSequence = statistics.sequence;
-        m_reflectionStatisticsGeneration = statistics.generation;
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
-            FOUNDATION_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
-            FOUNDATION_TEXT(" query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
-            FOUNDATION_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
+        this.m_reflectionStatisticsSequence = statistics.sequence;
+        this.m_reflectionStatisticsGeneration = statistics.generation;
+        u32 hardwareReadyFlag = 0u;
+        if(statistics.hardwareReady)
+            hardwareReadyFlag = 1u;
+        u32 opticalTransportFlag = 0u;
+        if(statistics.opticalTransportEnabled)
+            opticalTransportFlag = 1u;
+        [essential] info(
+            "StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={} hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={} query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={} screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}"
             , statistics.sequence
             , statistics.generation
             , statistics.frameIndex
             , statistics.graphicsFrameIndex
-            , statistics.hardwareReady ? 1u : 0u
-            , statistics.opticalTransportEnabled ? 1u : 0u
+            , hardwareReadyFlag
+            , opticalTransportFlag
             , statistics.candidates
             , statistics.hardwareRays
             , statistics.exteriorEligibleRays
@@ -354,86 +300,309 @@ private:
         );
     }
 
-    b8 samplePresentationFps(){
-        const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
+    private b8 samplePresentationFps(){
+        const u64 successfulPresentations = this.m_context.graphics.getSuccessfulPresentationCount();
         const Timer observationTime = TimerNow();
-        m_pacingRing.record(successfulPresentations, observationTime);
-        const auto status = m_fpsProbe.observe(successfulPresentations, observationTime);
-        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: presentation measurement invalid counter or clock"));
+        this.m_pacingRing.record(successfulPresentations, observationTime);
+        const PresentationFpsStatus status = this.m_fpsProbe.observe(successfulPresentations, observationTime);
+        if(status == PresentationFpsStatus::Invalid){
+            error("StressTestSmokeProject: presentation measurement invalid counter or clock");
             return false;
         }
-        if(!m_cpuTimingProbe.observe(m_context.perfSession, m_fpsProbe, successfulPresentations, status == NWB::Tests::Smoke::PresentationFpsStatus::Complete))
+        const b8 measurementComplete = status == PresentationFpsStatus::Complete;
+        if(!this.m_cpuTimingProbe.observe(this.m_context.perfSession, this.m_fpsProbe, successfulPresentations, measurementComplete))
             return false;
-        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Waiting)
+        if(status == PresentationFpsStatus::Waiting)
             return true;
 
-        const auto& interval = m_fpsProbe.interval();
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}")
+        const PresentationFpsSample interval = this.m_fpsProbe.interval();
+        [essential] info(
+            "StressTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}"
             , interval.averageFps()
             , interval.presentations()
             , interval.wallSeconds
             , interval.firstPresentationCount
             , interval.lastPresentationCount
         );
-        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Complete){
-            const auto& total = m_fpsProbe.total();
-            const NWB::Tests::Smoke::PresentationPacingSummary pacingSummary = m_pacingRing.summarize();
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}")
+        if(status == PresentationFpsStatus::Complete){
+            const PresentationFpsSample total = this.m_fpsProbe.total();
+            const PresentationPacingSummary pacingSummary = this.m_pacingRing.summarize();
+            [essential] info(
+                "StressTestSmokeProject: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}"
                 , pacingSummary.samples
                 , pacingSummary.p50Ms
                 , pacingSummary.p95Ms
                 , pacingSummary.maxMs
                 , pacingSummary.stallsOver50Ms
             );
-            m_timingComplete = true;
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("StressTestSmokeProject: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
+            this.m_timingComplete = true;
+            [essential] info(
+                "StressTestSmokeProject: presentation measurement complete fps={} presentations={} seconds={} first={} last={}"
                 , total.averageFps()
                 , total.presentations()
                 , total.wallSeconds
                 , total.firstPresentationCount
                 , total.lastPresentationCount
             );
-            m_context.requestQuit();
+            RequestSmokeQuit(this.m_context);
         }
         return true;
     }
 
-
-private:
-    NWB::ProjectRuntimeContext& m_context;
-    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Impl::RendererSystem& m_renderer;
-    NWB::Tests::Smoke::StressCrowdScene m_scene;
-    NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
-    NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ TimingEnabled() ? 5.0 : 0.25, TimingEnabled() ? 30.0 : 0.0 };
-    NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
-    NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ FOUNDATION_TEXT("stress"), m_context.objectArena };
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
-    ArrowYawInputHandler m_arrowYawInput;
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-    NWB::Tests::Smoke::SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
-#endif
-    u64 m_reflectionStatisticsSequence = 0u;
-    u64 m_reflectionStatisticsGeneration = 0u;
-    NWB::Tests::Smoke::YawSpinController m_yaw;
-    u32 m_charactersPerClass = s_DefaultCharactersPerClass;
-    u32 m_m4RenderedFrameCount = 0u;
-    const b8 m_timingEnabled = TimingEnabled();
-    const b8 m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
-    const b8 m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
-    b8 m_timingComplete = false;
-    b8 m_m4PixelCapturePaused = false;
-    b8 m_rendererBaselineCapturePaused = false;
-};
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private StressCrowdScene m_scene = StressCrowdScene();
+    private AvboitTimingRenderPass m_timingRenderPass;
+    private PresentationFpsProbe m_fpsProbe;
+    private PresentationPacingRing m_pacingRing = PresentationPacingRing();
+    private SmokeCpuGpuTimingProbe m_cpuTimingProbe;
+    private GpuPassTimingProbe m_gpuPassTimingProbe;
+    private ArrowYawInputHandler m_arrowYawInput = ArrowYawInputHandler();
+    private String m_frameGraphSnapshotPath = String();
+    private u64 m_reflectionStatisticsSequence = 0u;
+    private u64 m_reflectionStatisticsGeneration = 0u;
+    private YawSpinController m_yaw = YawSpinController();
+    private u32 m_charactersPerClass = s_StressDefaultCharactersPerClass;
+    private u32 m_m4PixelCaptureFreezeFrame;
+    private u32 m_m4RenderedFrameCount = 0u;
+    private b8 m_timingEnabled;
+    private b8 m_cpuDiagnosticsEnabled;
+    private b8 m_reflectionDiagnosticsEnabled;
+    private b8 m_timingComplete = false;
+    private b8 m_m4PixelCapturePaused = false;
+    private b8 m_rendererBaselineCapturePaused = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NotNullUniquePtr<World> CreateStressTestWorldOrDie(mut ProjectRuntimeContext context){
+    SmokeRenderQualitySettings settings = SmokeRenderQualitySettings();
+    settings.shadow.transparentSampling = TransparentShadowSampling::TemporalOne;
+    settings.shadow.receiverResolution = ShadowReceiverResolution::Quarter;
+    settings.surfelGi.resolveResolution = SurfelGiResolveResolution::Quarter;
+    settings.softwareShadow.blockerSearch = SoftwareShadowBlockerSearch::Center1;
+    settings.softwareShadow.coverage = SoftwareShadowCoverage::FittedVolume;
+    settings.softwareShadow.captureCadence = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    if(context.graphics.queryFeatureSupport(Feature::RayQuery))
+        settings.caustic.photonGridDivisor = 2u;
+    else
+        settings.caustic.photonGridDivisor = 4u;
+    return CreateSmokeSkinnedRenderWorldOrDie(StressTestProjectName(), settings, context);
+}
 
-namespace NWB::Tests::Smoke{ using StressTestSmokeProjectImpl = __hidden_stress_test_smoke::StressTestSmokeProjectImpl; }
+b8 StressTimingEnabled(){
+    return ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+}
+
+f64 StressFpsWarmupSeconds(in b8 timingEnabled){
+    if(timingEnabled)
+        return s_StressTimingWarmupSeconds;
+    return s_StressDefaultWarmupSeconds;
+}
+
+f64 StressFpsMeasurementSeconds(in b8 timingEnabled){
+    if(timingEnabled)
+        return s_StressTimingMeasurementSeconds;
+    return 0.0;
+}
+
+u32 ParseStressM4PixelCaptureFreezeFrame(){
+    const Expected<f32> configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
+    if(!configuredFrame.has_value() || !IsFinite(configuredFrame.value()) || configuredFrame.value() < 1.0f)
+        return 0u;
+    return cast<u32>(Min(configuredFrame.value(), s_StressMaxM4FreezeFrame));
+}
+
+u32 ResolveStressM4PixelCaptureFreezeFrame(){
+    if(!s_StressAsyncShadowM4Benchmark)
+        return 0u;
+    return ParseStressM4PixelCaptureFreezeFrame();
+}
+
+b8 StressHardwareShadowOpaqueBaseline(){
+    if(!s_StressHardwareShadowBenchmark)
+        return false;
+    return ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
+}
+
+Expected<u32> ReadStressCharactersPerClass(){
+    const Expected<Optional<String>, ErrorCode> value = ReadEnvironmentVariable("NWB_STRESS_CHARACTERS_PER_CLASS");
+    if(!value.has_value()){
+        const String errorText = StringFormat("{}", value.error().message());
+        error("StressTestSmokeProject: failed to read workload environment: {}", errorText);
+        return MakeUnexpected(Failure());
+    }
+    const Optional<String> candidate = value.value();
+    if(!candidate.has_value())
+        return s_StressDefaultCharactersPerClass;
+    const StringView view = StringView(candidate.value());
+    if(view == "5")
+        return s_StressComparisonCharactersPerClass;
+    if(view != "10"){
+        error("StressTestSmokeProject: characters per class must be exactly 5 or 10");
+        return MakeUnexpected(Failure());
+    }
+    return s_StressDefaultCharactersPerClass;
+}
+
+f32 StressFrozenYaw(){
+    return ReadSmokeFrozenYawCached("NWB_STRESS_TEST_SPIN_ANGLE");
+}
+
+b8 ValidateStressM4QueueTopology(mut ProjectRuntimeContext context){
+    if(!s_StressAsyncShadowM4Benchmark)
+        return true;
+
+    StressM4QueueEntry graphicsQueue = StressM4QueueEntry();
+    StressM4QueueEntry computeQueue = StressM4QueueEntry();
+    StressM4QueueInfoSnapshot graphicsInfo = StressM4QueueInfoSnapshot();
+    StressM4QueueInfoSnapshot computeInfo = StressM4QueueInfoSnapshot();
+    Vector<StressM4QueueEntry> queues;
+    u16 deviceGeneration = 0u;
+    b8 hasTopology = false;
+    native(
+        mut context,
+        mut graphicsQueue,
+        mut computeQueue,
+        mut graphicsInfo,
+        mut computeInfo,
+        mut queues,
+        mut deviceGeneration,
+        mut hasTopology
+    ){
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+        const auto& device = context.graphics.getDevice();
+        const auto rawGraphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
+        const auto rawComputeQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Compute);
+        graphicsQueue.index = rawGraphicsQueue.index;
+        graphicsQueue.deviceGeneration = rawGraphicsQueue.deviceGeneration;
+        computeQueue.index = rawComputeQueue.index;
+        computeQueue.deviceGeneration = rawComputeQueue.deviceGeneration;
+        if(const auto* const info = device.getPhysicalQueueInfo(rawGraphicsQueue)){
+            graphicsInfo.present = true;
+            graphicsInfo.id.index = info->id.index;
+            graphicsInfo.id.deviceGeneration = info->id.deviceGeneration;
+        }
+        if(const auto* const info = device.getPhysicalQueueInfo(rawComputeQueue)){
+            computeInfo.present = true;
+            computeInfo.id.index = info->id.index;
+            computeInfo.id.deviceGeneration = info->id.deviceGeneration;
+            computeInfo.dedicated = info->dedicated;
+            computeInfo.computeSupported = (info->capabilities & Core::GpuQueueCapability::Compute) != Core::GpuQueueCapability::None;
+            computeInfo.graphicsSupported = (info->capabilities & Core::GpuQueueCapability::Graphics) != Core::GpuQueueCapability::None;
+        }
+        const auto topology = device.getPhysicalQueueTopology();
+        deviceGeneration = device.getDeviceGeneration();
+        hasTopology = topology.queues != nullptr && topology.queueCount != 0u;
+        if(hasTopology){
+            queues.reserve(topology.queueCount);
+            for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+                StressM4QueueEntry entry;
+                entry.index = topology.queues[queueIndex].id.index;
+                entry.deviceGeneration = topology.queues[queueIndex].id.deviceGeneration;
+                queues.push_back(entry);
+            }
+        }
+#else
+        (void)context;
+        (void)graphicsQueue;
+        (void)computeQueue;
+        (void)graphicsInfo;
+        (void)computeInfo;
+        (void)queues;
+        (void)deviceGeneration;
+        (void)hasTopology;
+#endif
+    }
+
+    b8 graphicsRegistered = false;
+    b8 computeRegistered = false;
+    b8 topologyValid = hasTopology && !queues.empty();
+    if(topologyValid){
+        for(in StressM4QueueEntry queue : queues){
+            topologyValid = topologyValid && queue.valid() && queue.deviceGeneration == deviceGeneration;
+            graphicsRegistered = graphicsRegistered || queue.matches(graphicsQueue);
+            computeRegistered = computeRegistered || queue.matches(computeQueue);
+        }
+    }
+
+    const StressM4QueueEntry defaultInvalidQueue = StressM4QueueEntry();
+    b8 computeQueueValid = false;
+    if(computeQueue.valid()){
+        computeQueueValid = computeInfo.present
+            && computeInfo.id.matches(computeQueue)
+            && computeRegistered
+            && computeQueue.deviceGeneration == deviceGeneration;
+    }
+    else{
+        computeQueueValid = computeQueue.matches(defaultInvalidQueue) && !computeInfo.present;
+    }
+
+    if(
+        !topologyValid
+        || !graphicsQueue.valid()
+        || graphicsQueue.deviceGeneration != deviceGeneration
+        || !graphicsInfo.present
+        || !graphicsInfo.id.matches(graphicsQueue)
+        || !graphicsRegistered
+        || !computeQueueValid
+    ){
+        error("StressTestSmokeProject: M4 selected queue topology is invalid");
+        return false;
+    }
+
+    const b8 computeDedicated = computeInfo.present && computeInfo.dedicated;
+    const b8 computeSupported = computeInfo.present && computeInfo.computeSupported;
+    const b8 computeGraphics = computeInfo.present && computeInfo.graphicsSupported;
+    const b8 asyncEffective = s_StressAsyncComputeRequested
+        && !computeQueue.matches(graphicsQueue)
+        && computeDedicated
+        && computeSupported
+        && !computeGraphics;
+
+    u32 asyncRequestedFlag = 0u;
+    if(s_StressAsyncComputeRequested)
+        asyncRequestedFlag = 1u;
+    u32 asyncEffectiveFlag = 0u;
+    if(asyncEffective)
+        asyncEffectiveFlag = 1u;
+    u32 computeDedicatedFlag = 0u;
+    if(computeDedicated)
+        computeDedicatedFlag = 1u;
+    u32 computeSupportedFlag = 0u;
+    if(computeSupported)
+        computeSupportedFlag = 1u;
+    u32 computeGraphicsFlag = 0u;
+    if(computeGraphics)
+        computeGraphicsFlag = 1u;
+
+    [essential] info(
+        "StressTestSmokeProject: M4 async compute requested={} effective={} graphicsQueue={}:{} computeQueue={}:{} computeDedicated={} computeSupported={} computeGraphics={}"
+        , asyncRequestedFlag
+        , asyncEffectiveFlag
+        , graphicsQueue.index
+        , graphicsQueue.deviceGeneration
+        , computeQueue.index
+        , computeQueue.deviceGeneration
+        , computeDedicatedFlag
+        , computeSupportedFlag
+        , computeGraphicsFlag
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
@@ -441,18 +610,24 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-    return FOUNDATION_TEXT("NWB Hardware Shadow Boundary Benchmark");
+    return NWB_TEXT("NWB Hardware Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-    return FOUNDATION_TEXT("NWB Async Shadow M4 Benchmark");
+    return NWB_TEXT("NWB Async Shadow M4 Benchmark");
 #else
-    return FOUNDATION_TEXT("NWB Stress Test Smoke");
+    return NWB_TEXT("NWB Stress Test Smoke");
 #endif
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::StressTestSmokeProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

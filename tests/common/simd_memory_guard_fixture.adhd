@@ -4,7 +4,17 @@
 
 #include "test_helpers.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <engine_namespace.h>
 
 #include <global/global.h>
@@ -12,9 +22,9 @@ native{
 #include <global/process.h>
 #include <global/simd/memory.h>
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <Windows.h>
-#elif defined(FOUNDATION_PLATFORM_LINUX)
+#elif defined(NWB_PLATFORM_LINUX)
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
@@ -23,7 +33,7 @@ NWB_BEGIN
 
 namespace Tests{
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
 struct GuardedBytes final : NoCopy{
     void* mapping = nullptr;
     u8* data = nullptr;
@@ -39,8 +49,8 @@ public:
     ~GuardedBytes()noexcept;
 };
 
-inline GuardedBytes::GuardedBytes()noexcept{
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
+NWB_INLINE GuardedBytes::GuardedBytes()noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
     SYSTEM_INFO systemInfo{};
     GetSystemInfo(&systemInfo);
     pageBytes = static_cast<usize>(systemInfo.dwPageSize);
@@ -54,7 +64,7 @@ inline GuardedBytes::GuardedBytes()noexcept{
         return;
     accessibleBytes = pageBytes * 4u;
     mappingBytes = pageBytes * 6u;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     mapping = VirtualAlloc(nullptr, mappingBytes, MEM_RESERVE, PAGE_NOACCESS);
     if(mapping == nullptr)
         return;
@@ -75,10 +85,10 @@ inline GuardedBytes::GuardedBytes()noexcept{
     upperGuard = data + accessibleBytes;
 }
 
-inline GuardedBytes::~GuardedBytes()noexcept{
+NWB_INLINE GuardedBytes::~GuardedBytes()noexcept{
     if(mapping == nullptr)
         return;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     if(VirtualFree(mapping, 0u, MEM_RELEASE) == 0)
         abort();
 #else
@@ -87,11 +97,11 @@ inline GuardedBytes::~GuardedBytes()noexcept{
 #endif
 }
 
-[[nodiscard]] inline u8* GuardAddress(const void* base, const usize byteOffset)noexcept{
+[[nodiscard]] NWB_INLINE u8* GuardAddress(const void* base, const usize byteOffset)noexcept{
     return reinterpret_cast<u8*>(reinterpret_cast<usize>(base) + byteOffset);
 }
 
-inline void ExitOnAbort([[maybe_unused]] const int signalNumber)noexcept{
+NWB_INLINE void ExitOnAbort([[maybe_unused]] const int signalNumber)noexcept{
     _exit(s_SIMDMemoryAbortExitCode);
 }
 #endif
@@ -99,7 +109,13 @@ inline void ExitOnAbort([[maybe_unused]] const int signalNumber)noexcept{
 };
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

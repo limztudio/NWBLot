@@ -1,0 +1,75 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "runtime_constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CurrentDirectoryStage = "current directory";
+const StringView s_ExecutableDirectoryStage = "executable directory";
+const StringView s_ResourceDirectoryStage = "resource directory";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ResourceMountError{
+    public ErrorCode code;
+    public StringView stage;
+    public Path path;
+
+    public ResourceMountError(){
+        this.code = ErrorCode();
+        this.stage = "";
+        this.path = Path();
+    }
+
+    public ResourceMountError(in ErrorCode errorCode, in StringView errorStage, in Path errorPath){
+        this.code = errorCode;
+        this.stage = errorStage;
+        this.path = errorPath;
+    }
+}
+
+Expected<Path, ResourceMountError> ResolveResourceMountDirectory(in Func<Expected<b8, ErrorCode>(in Path, in StringView)> volumeSegmentExists){
+    const Expected<Path, ErrorCode> currentDirectory = GetCurrentPath();
+    if(!currentDirectory.has_value())
+        return MakeUnexpected(ResourceMountError(currentDirectory.error(), s_CurrentDirectoryStage, Path()));
+    const Path currentResDirectory = currentDirectory.value() / s_ResourceDirectoryName;
+    const Expected<b8, ErrorCode> currentExists = volumeSegmentExists(currentResDirectory, s_GraphicsVolumeName);
+    if(!currentExists.has_value())
+        return MakeUnexpected(ResourceMountError(currentExists.error(), s_ResourceDirectoryStage, currentResDirectory));
+    if(currentExists.value())
+        return currentResDirectory;
+
+    const Expected<Path, ErrorCode> executableDirectory = ExecutablePaths().directory();
+    if(!executableDirectory.has_value())
+        return MakeUnexpected(ResourceMountError(executableDirectory.error(), s_ExecutableDirectoryStage, Path()));
+
+    const Path executableResDirectory = executableDirectory.value() / s_ResourceDirectoryName;
+    const Expected<b8, ErrorCode> executableExists = volumeSegmentExists(executableResDirectory, s_GraphicsVolumeName);
+    if(!executableExists.has_value())
+        return MakeUnexpected(ResourceMountError(executableExists.error(), s_ResourceDirectoryStage, executableResDirectory));
+    if(executableExists.value())
+        return executableResDirectory;
+
+    const Path parentDirectory = executableDirectory.value().parentPath();
+    if(parentDirectory.empty())
+        return Path(s_ResourceDirectoryName);
+
+    const Path parentResDirectory = parentDirectory / s_ResourceDirectoryName;
+    const Expected<b8, ErrorCode> parentExists = volumeSegmentExists(parentResDirectory, s_GraphicsVolumeName);
+    if(!parentExists.has_value())
+        return MakeUnexpected(ResourceMountError(parentExists.error(), s_ResourceDirectoryStage, parentResDirectory));
+    if(parentExists.value())
+        return parentResDirectory;
+
+    return Path(s_ResourceDirectoryName);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

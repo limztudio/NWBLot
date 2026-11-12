@@ -2,57 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/global.adhd.h>
-
-#include <core/graphics/rhi/pipeline.h>
-#include <core/graphics/rhi/pipeline_state.h>
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+const Name s_AvboitDepthWarpShaderDebugName = "ECSRender_AvboitDepthWarpCS";
+const Name s_AvboitIntegrateShaderDebugName = "ECSRender_AvboitIntegrateCS";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererAvboitState final : NoCopy{
-public:
-    RendererAvboitState()noexcept = default;
+class RendererAvboitState : NoCopy{
+    public KernelSamplerHandle m_linearSampler = KernelSamplerHandle();
+    public KernelShaderHandle m_depthWarpComputeShader = KernelShaderHandle();
+    public KernelShaderHandle m_integrateComputeShader = KernelShaderHandle();
+    public KernelComputePipelineHandle m_depthWarpPipeline = KernelComputePipelineHandle();
+    public KernelComputePipelineHandle m_integratePipeline = KernelComputePipelineHandle();
+    public b8 m_targetsNeedClear = true;
 
-
-public:
-    void invalidateResources()noexcept;
-
-
-public:
-    Core::SamplerHandle m_linearSampler;
-    Core::ShaderHandle m_depthWarpComputeShader;
-    Core::ShaderHandle m_integrateComputeShader;
-    Core::ComputePipelineHandle m_depthWarpPipeline;
-    Core::ComputePipelineHandle m_integratePipeline;
-    b8 m_targetsNeedClear = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void invalidateResources(){
+        this.m_linearSampler.reset();
+        this.m_depthWarpComputeShader.reset();
+        this.m_integrateComputeShader.reset();
+        this.m_depthWarpPipeline.reset();
+        this.m_integratePipeline.reset();
+        this.m_targetsNeedClear = true;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderAvboitRendererAvboitStateAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

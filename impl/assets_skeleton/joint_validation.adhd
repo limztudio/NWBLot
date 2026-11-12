@@ -8,16 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-namespace NWB::Impl{
-using ScratchSkeletonByteVector = Vector<u8, Core::Alloc::ScratchArena>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 IsValidSkeletonHeaderBinary(in SkeletonHeaderBinary header){
     return header.padding0 == 0u && header.jointCount <= 0xFFFFFFFFul;
 }
@@ -92,13 +82,15 @@ b8 ValidateSkeletonJointLookupEntry(in Name jointName, in u32 jointIndex, in usi
 b8 ValidateSkeletonPayloadData(
     in Span<SkeletonJoint> joints,
     in HashMap<Name, u32> jointIndices,
-    mut ScratchSkeletonByteVector namedJoints
+    mut Span<u8> namedJoints
 ){
     if(!ValidateSkeletonJointCounts(joints.size(), jointIndices.size()))
         return false;
+    if(namedJoints.size() < joints.size())
+        return false;
 
-    namedJoints.clear();
-    namedJoints.resize(joints.size(), 0u);
+    for(usize i = 0u; i < joints.size(); ++i)
+        namedJoints[i] = 0u;
     for(in auto jointLookup : jointIndices){
         const Name jointName = jointLookup.first;
         const u32 jointIndex = jointLookup.second;
@@ -191,7 +183,7 @@ b8 ReadSkeletonJointsPayload(
 b8 SerializeSkeletonBinaryPayload(
     in Span<SkeletonJoint> joints,
     in HashMap<Name, u32> jointIndices,
-    mut ScratchSkeletonNameHashVector jointNameHashes,
+    mut Span<NameHash> jointNameHashes,
     mut Vector<u8> outBinary
 ){
     usize reserveBytes = s_SkeletonHeaderBinaryBytes;
@@ -241,3 +233,4 @@ b8 DeserializeSkeletonBinaryPayload(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

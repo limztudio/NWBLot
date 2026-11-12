@@ -142,5 +142,6 @@ const usize s_TransformComponentPayloadBinaryBytes = 48u;
 const usize s_CameraComponentPayloadBinaryBytes = 16u;
 const usize s_LightComponentPayloadBinaryBytes = 40u;
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

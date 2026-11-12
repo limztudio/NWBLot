@@ -8,7 +8,13 @@
 #include "simd_codegen_utils.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] b8 SimdExpressionAnalysis::IsSimdMulExpr(const Expr*& outMulA, const Expr*& outMulB, const Expr* expr, const SymbolTable* const symbols)noexcept{
@@ -344,7 +350,8 @@ NWB_ADHD_BEGIN
         if(expr->isBuiltinCall){
             if(!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty())
                 return true;
-            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || callee == "IsFinite"){
+            const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(callee);
+            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || (fnInfo && fnInfo->rejectsSimdStorage)){
                 for(const Expr* arg : expr->arguments){
                     if(arg && (!arg->resolvedSimdType.empty() || !arg->resolvedUnalignedType.empty()))
                         return true;
@@ -362,6 +369,9 @@ NWB_ADHD_BEGIN
     }
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

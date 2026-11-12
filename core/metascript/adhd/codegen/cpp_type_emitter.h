@@ -37,11 +37,14 @@ public:
 
 public:
     void emitTypeCpp(MString& out, const TypeRef& type)const;
-    void emitTypeArgListCpp(MString& out, Span<const TypeArg> args, b8 appendArena = false)const;
+    void emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, MStringView arenaExpr)const;
+    void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;
     void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;
-    void emitParamListCpp(MString& out, Span<const ParamDecl> params)const;
+    void emitParamListCpp(MString& out, Span<const ParamDecl> params, b8 injectCallerArena = false)const;
     void emitTemplateHeaderCpp(MString& out, Span<const TemplateParamDecl> params)const;
+    void emitCallableTemplateHeaderCpp(MString& out, const MethodDecl& callable, b8 includeDefaults, MStringView indent = {})const;
     void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, b8 isDeclarationInClass)const;
+    void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, b8 isDeclarationInClass, b8 ownerNeedsMotherArena)const;
 
 
 private:

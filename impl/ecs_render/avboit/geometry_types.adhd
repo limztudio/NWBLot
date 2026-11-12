@@ -3,19 +3,7 @@
 
 
 #include <impl/ecs_render/shared/frame_types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-native{
-#include <core/task/gpu/types.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-namespace NWB::Impl{
-using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
-using AvboitGeometryResourceSetId = Core::GpuGraphResourceSetId;
-};
-}
+#include <impl/ecs_render/shared/statistics_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

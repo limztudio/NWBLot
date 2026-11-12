@@ -3,19 +3,8 @@
 
 
 #include <impl/assets_ui_skin/validation.adhd>
-
-native{
-#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
-namespace NWB::Impl{
-class UiSkin;
-class Texture;
-};
-namespace NWB::Impl::Ui{
-template<typename TUiSkin, typename TTexture>
-class SkinBindingRecord;
-using SkinBinding = SkinBindingRecord<NWB::Impl::UiSkin, NWB::Impl::Texture>;
-};
-}
+#include <impl/ecs_ui/toolkit/global.adhd>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

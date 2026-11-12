@@ -1,0 +1,136 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/types.adhd>
+#include <utilities/fbx_to_nwb/text_write.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendSourceVertexRefText(in SourceVertexRef ref, mut String out){
+    out.append("[");
+    AppendUnsignedU64Text(out, cast<u64>(ref.position));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.normal));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.tangent));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.uv0));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.color));
+    out.append("]");
+}
+
+void AppendMeshAssetBodyText(
+    in Span<Vec3> positions,
+    in Span<Vec3> normals,
+    in Span<Vec4> tangents,
+    in Span<Vec2> uv0,
+    in Span<Vec4> colors,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices,
+    in StringView variableName,
+    in StringView indent,
+    mut String out
+){
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshPositionsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec3 position : positions){
+        out.append(indent);
+        out.append("    ");
+        AppendVec3Text(position, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
+
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshNormalsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec3 normal : normals){
+        out.append(indent);
+        out.append("    ");
+        AppendVec3Text(normal, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
+
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshTangentsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec4 tangent : tangents){
+        out.append(indent);
+        out.append("    ");
+        AppendVec4Text(tangent, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
+
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshUv0FieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec2 uv : uv0){
+        out.append(indent);
+        out.append("    ");
+        AppendVec2Text(uv, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
+
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshColorsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec4 color : colors){
+        out.append(indent);
+        out.append("    ");
+        AppendVec4Text(color, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
+
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshVertexRefsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in SourceVertexRef ref : vertexRefs){
+        out.append(indent);
+        out.append("    ");
+        AppendSourceVertexRefText(ref, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
+
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshIndicesFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(usize i = 0u; i < indices.size(); i += cast<usize>(s_MeshletTriangleIndexCount)){
+        out.append(indent);
+        out.append("    [");
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 0u]));
+        out.append(", ");
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 1u]));
+        out.append(", ");
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 2u]));
+        out.append(s_RowSuffixText);
+    }
+    out.append(indent);
+    out.append(s_FormatListCloseText);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

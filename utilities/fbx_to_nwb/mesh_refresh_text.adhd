@@ -1,0 +1,95 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/types.adhd>
+#include <utilities/fbx_to_nwb/text_write.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DidMeshStreamCountChange(in usize beforeCount, in usize afterCount){
+    return beforeCount != afterCount;
+}
+
+String FormatMeshRefreshVec2List(in Span<Vec2> values){
+    String out;
+    out.reserve(16u + values.size() * 28u);
+    out.append(s_ListOpenText);
+    for(in Vec2 value : values){
+        out.append(s_ListItemIndentText);
+        AppendVec2Text(value, out);
+        out.append(s_ListItemSuffixText);
+    }
+    out.append(s_ListCloseText);
+    return out;
+}
+
+String FormatMeshRefreshVec3List(in Span<Vec3> values){
+    String out;
+    out.reserve(16u + values.size() * 40u);
+    out.append(s_ListOpenText);
+    for(in Vec3 value : values){
+        out.append(s_ListItemIndentText);
+        AppendVec3Text(value, out);
+        out.append(s_ListItemSuffixText);
+    }
+    out.append(s_ListCloseText);
+    return out;
+}
+
+String FormatMeshRefreshVec4List(in Span<Vec4> values){
+    String out;
+    out.reserve(16u + values.size() * 52u);
+    out.append(s_ListOpenText);
+    for(in Vec4 value : values){
+        out.append(s_ListItemIndentText);
+        AppendVec4Text(value, out);
+        out.append(s_ListItemSuffixText);
+    }
+    out.append(s_ListCloseText);
+    return out;
+}
+
+String FormatMeshRefreshIndexList(in Span<u32> indices){
+    String out;
+    out.reserve(16u + indices.size() * 10u);
+    out.append(s_ListOpenText);
+    for(usize i = 0u; i < indices.size(); i += cast<usize>(s_MeshletTriangleIndexCount)){
+        out.append(s_RowOpenText);
+        AppendUnsignedU64Text(out, cast<u64>(indices[i]));
+        out.append(s_RowItemSeparatorText);
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 1u]));
+        out.append(s_RowItemSeparatorText);
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 2u]));
+        out.append(s_RowSuffixText);
+    }
+    out.append(s_ListCloseText);
+    return out;
+}
+
+String FormatMeshRefreshVertexRefList(in Span<SourceVertexRef> refs){
+    String out;
+    out.reserve(16u + refs.size() * 36u);
+    out.append(s_ListOpenText);
+    for(in SourceVertexRef ref : refs){
+        out.append(s_RowOpenText);
+        AppendUnsignedU64Text(out, cast<u64>(ref.position));
+        out.append(s_RowItemSeparatorText);
+        AppendUnsignedU64Text(out, cast<u64>(ref.normal));
+        out.append(s_RowItemSeparatorText);
+        AppendUnsignedU64Text(out, cast<u64>(ref.tangent));
+        out.append(s_RowItemSeparatorText);
+        AppendUnsignedU64Text(out, cast<u64>(ref.uv0));
+        out.append(s_RowItemSeparatorText);
+        AppendUnsignedU64Text(out, cast<u64>(ref.color));
+        out.append(s_RowSuffixText);
+    }
+    out.append(s_ListCloseText);
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

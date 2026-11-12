@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/raytrace/rt_private.adhd.h>
 #include <impl/ecs_render/optics/coincident_volumes.adhd.h>
 #include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd.h>
@@ -36,19 +42,19 @@ using MeshBufferSlotLookup = HashMap<NotNull<Core::Buffer*>, u32, Core::Alloc::S
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 HasPreparedShadowMaterialContextBuffers(const RendererRayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasPreparedShadowMaterialContextBuffers(const RendererRayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept{
     const usize requiredMaterialTypedBytes = AlignUp(Max<usize>(materialTypedUploadBytes, sizeof(u32)), sizeof(u32));
     return PreparedShadowMaterialContext::StorageReady(state, materialCount, instanceCount, requiredMaterialTypedBytes);
 }
 
-[[nodiscard]] inline b8 HasPreparedSceneBvhBuffers(const RendererRayTracingState& state, const u32 instanceCount)noexcept{
-    FOUNDATION_ASSERT(instanceCount > 0u);
+[[nodiscard]] NWB_INLINE b8 HasPreparedSceneBvhBuffers(const RendererRayTracingState& state, const u32 instanceCount)noexcept{
+    NWB_ASSERT(instanceCount > 0u);
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
     return PreparedSceneBvhUpload::StorageReady(state, requiredNodeCount, instanceCount);
 }
 
 template<typename ArenaT>
-inline void AppendLightSpaceSceneBuffers(
+NWB_INLINE void AppendLightSpaceSceneBuffers(
     const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources,
     const b8 includeCsgBuffers,
     Vector<Core::BufferHandle, ArenaT>& outBuffers
@@ -69,8 +75,6 @@ inline void AppendLightSpaceSceneBuffers(
 }
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -84,15 +88,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderRaytraceRtSwbvhHelpersAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

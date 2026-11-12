@@ -71,6 +71,7 @@ public:
     void recordReallocation(u64 oldBytes, u64 newBytes)noexcept;
     void recordDeallocation(u64 bytes)noexcept;
     [[nodiscard]] ArenaMemoryStats snapshot()const noexcept;
+    [[nodiscard]] FOUNDATION_INLINE Name ownerName()const noexcept;
 
 
 private:
@@ -109,6 +110,14 @@ struct ArenaMemoryOwnerSnapshot{
 [[nodiscard]] const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept;
 // Identity and successor are immutable after publication; this read does not sample counters or lock live trackers.
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerIdentity& outIdentity)noexcept;
+
+FOUNDATION_INLINE Name ArenaMemoryTracker::ownerName()const noexcept{
+    if(!m_owner)
+        return s_NameNone;
+    ArenaMemoryOwnerIdentity identity;
+    (void)ReadArenaMemoryOwnerIdentity(*m_owner, identity);
+    return identity.ownerName;
+}
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerSnapshot& outSnapshot)noexcept;
 
 // Raw heap total is separate from named arenas; per-thread counters retain exited history.
@@ -119,4 +128,5 @@ void RecordHeapMemoryDeallocation(u64 bytes)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

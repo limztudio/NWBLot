@@ -161,6 +161,20 @@ class robin_map {
   explicit robin_map(const Allocator& alloc)
       : robin_map(ht::DEFAULT_INIT_BUCKETS_SIZE, alloc) {}
 
+  robin_map(const robin_map& other) = default;
+
+  robin_map(const robin_map& other, const Allocator& alloc)
+      : m_ht(other.m_ht, alloc) {}
+
+  robin_map(robin_map&& other) = default;
+
+  robin_map(robin_map&& other, const Allocator& alloc)
+      : m_ht(std::move(other.m_ht), alloc) {}
+
+  robin_map& operator=(const robin_map& other) = default;
+
+  robin_map& operator=(robin_map&& other) = default;
+
   template <class InputIt>
   robin_map(InputIt first, InputIt last,
             size_type bucket_count = ht::DEFAULT_INIT_BUCKETS_SIZE,

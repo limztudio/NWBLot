@@ -2,17 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsShaderRuntimeAdhdModule(in u64 value){
-    return value != 0u;
-}
+#include <impl/assets_shader/shader_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_shader/asset.adhd.h>
-#include <impl/assets_shader/shader_types.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -48,11 +51,14 @@ NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ValidateResolvedSpirvEntryPoint(b8 resolved, AStringView entryPoint, Name assetType)noexcept;
+
+
 IShader::~IShader()noexcept = default;
 
 
 b8 IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderType::Enum shaderType){
-    if(!checkVirtualPath(FOUNDATION_TEXT("IShader::loadBinaryForStage")))
+    if(!checkVirtualPath(NWB_TEXT("IShader::loadBinaryForStage")))
         return false;
 
     const auto payload = ShaderBinaryPayload::DecodeAssetPayload(binary);
@@ -62,10 +68,8 @@ b8 IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderTy
     }
 
     const auto lookupResult = Core::ResolveSpirvEntryPointName(BinaryByteView{ payload->bytecode.data(), payload->bytecode.size() }, payload->entryPoint, Core::ShaderType::ToMask(shaderType));
-    if(!lookupResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed"), ConvertString(payload->entryPoint), ConvertString(assetType().resolvedText()));
+    if(!ValidateResolvedSpirvEntryPoint(lookupResult.has_value(), payload->entryPoint, assetType()))
         return false;
-    }
 
     ShaderBinaryPayload::CommitDecodedShaderAssetPayload(payload->entryPoint, payload->bytecode, m_entryPoint, m_bytecode);
     return true;
@@ -106,7 +110,30 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateResolvedSpirvEntryPoint(
+    in b8 resolved,
+    in StringView entryPoint,
+    in Name assetType
+){
+    if(resolved)
+        return true;
+
+    error(
+        "IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed",
+        entryPoint,
+        assetType.resolvedText()
+    );
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

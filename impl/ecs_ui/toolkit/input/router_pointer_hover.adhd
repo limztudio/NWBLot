@@ -122,9 +122,7 @@ void UpdateRouterHoverTarget(
 }
 
 void AdvanceRouterHoverActivity(mut u64 inOutActivityGeneration){
-    if(inOutActivityGeneration == u64.max)
-        TerminateInvariant();
-    ++inOutActivityGeneration;
+    AdvanceNonWrappingRevision(inOutActivityGeneration);
 }
 
 void ClearRouterHoverTarget(mut WidgetId outTarget, mut HoverIdentity outIdentity){
@@ -265,3 +263,4 @@ void ObserveRouterPointer(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

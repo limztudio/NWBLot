@@ -2,26 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/common/initializer_case_types.adhd>
 
-b8 CommonInitializerTestsReady(in u64 value){
-    return value != 0u;
-}
 
-native{
-// limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/common/initializer_case_types.adhd.h>
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <core/common/module.h>
 
 #include <global/terminal_entry.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,25 +30,9 @@ namespace __hidden_common_initializer_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct InitializerState{
-    Array<u32, s_InitializerCount> initializeCounts{};
-    Array<u32, s_InitializerCount> finalizeCounts{};
-    Array<u32, s_EventCapacity> events{};
-    usize eventCount = 0u;
-    b8 failNext = false;
-    b8 throwNext = false;
+using InitializerGuard = NWB::Core::Common::InitializerGuard;
 
-
-public:
-    void record(const u32 event)noexcept{
-        if(eventCount >= events.size())
-            TerminateInvariant();
-        events[eventCount] = event;
-        ++eventCount;
-    }
-};
-
-static InitializerState s_State;
+extern InitializerState s_State;
 
 class InitializerProbe final : public NWB::Core::Common::Initializerable{
 public:
@@ -61,26 +42,8 @@ public:
 
 
 public:
-    virtual b8 initialize()override{
-        ++s_State.initializeCounts[m_index];
-        s_State.record(m_index);
-        if(m_index == 1u){
-            if(s_State.failNext){
-                s_State.failNext = false;
-                return false;
-            }
-            if(s_State.throwNext){
-                s_State.throwNext = false;
-                throw InitializerFailure{ .code = s_InitializationFailureCode };
-            }
-        }
-        return true;
-    }
-
-    virtual void finalize()noexcept override{
-        ++s_State.finalizeCounts[m_index];
-        s_State.record(m_index + s_InitializerCount);
-    }
+    virtual b8 initialize()override;
+    virtual void finalize()noexcept override;
 
 
 private:
@@ -97,108 +60,197 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(CommonInitializerLifetime, FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire){
-    using namespace __hidden_common_initializer_tests;
-    s_State = {};
-    s_State.failNext = true;
-    NWB::Core::Common::InitializerGuard initializer;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ResetInitializerState(in b8 failNext, in b8 throwNext){
+    native(in failNext, in throwNext){
+        s_State.reset();
+        s_State.failNext = failNext;
+        s_State.throwNext = throwNext;
+    }
+}
+
+InitializerState SnapshotInitializerState(){
+    return s_State;
+}
+
+void VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire(){
+    ResetInitializerState(true, false);
+    InitializerGuard initializer = InitializerGuard();
     EXPECT_FALSE(initializer.initialize());
-    EXPECT_EQ(s_State.eventCount, 3u);
-    EXPECT_EQ(s_State.events[0], 0u);
-    EXPECT_EQ(s_State.events[1], 1u);
-    EXPECT_EQ(s_State.events[2], s_InitializerCount);
-    EXPECT_EQ(s_State.finalizeCounts[0], 1u);
-    EXPECT_EQ(s_State.finalizeCounts[1], 0u);
+    InitializerState afterFail = SnapshotInitializerState();
+    EXPECT_EQ(afterFail.eventCount, 3u);
+    EXPECT_EQ(afterFail.events[0u], 0u);
+    EXPECT_EQ(afterFail.events[1u], 1u);
+    EXPECT_EQ(afterFail.events[2u], s_InitializerCount);
+    EXPECT_EQ(afterFail.finalizeCounts[0u], 1u);
+    EXPECT_EQ(afterFail.finalizeCounts[1u], 0u);
 
     ASSERT_TRUE(initializer.initialize());
-    EXPECT_EQ(s_State.initializeCounts[0], 2u);
-    EXPECT_EQ(s_State.initializeCounts[1], 2u);
+    InitializerState afterReacquire = SnapshotInitializerState();
+    EXPECT_EQ(afterReacquire.initializeCounts[0u], 2u);
+    EXPECT_EQ(afterReacquire.initializeCounts[1u], 2u);
     initializer.finalize();
-    EXPECT_EQ(s_State.finalizeCounts[0], 2u);
-    EXPECT_EQ(s_State.finalizeCounts[1], 1u);
-    EXPECT_EQ(s_State.eventCount, 7u);
-    EXPECT_EQ(s_State.events[5], s_InitializerCount);
-    EXPECT_EQ(s_State.events[6], s_InitializerCount + 1u);
+    InitializerState afterFinalize = SnapshotInitializerState();
+    EXPECT_EQ(afterFinalize.finalizeCounts[0u], 2u);
+    EXPECT_EQ(afterFinalize.finalizeCounts[1u], 1u);
+    EXPECT_EQ(afterFinalize.eventCount, 7u);
+    EXPECT_EQ(afterFinalize.events[5u], s_InitializerCount);
+    EXPECT_EQ(afterFinalize.events[6u], s_InitializerCount + 1u);
     initializer.finalize();
-    EXPECT_EQ(s_State.eventCount, 7u);
+    EXPECT_EQ(SnapshotInitializerState().eventCount, 7u);
 }
 
-TEST(CommonInitializerLifetime, ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire){
-    using namespace __hidden_common_initializer_tests;
-    s_State = {};
-    s_State.throwNext = true;
-    const int result = InvokeTerminalEntry<InitializerFailure>([]()->int{
-        NWB::Core::Common::InitializerGuard initializer;
-        return initializer.initialize() ? 0 : -1;
-    }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
+void VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire(){
+    ResetInitializerState(false, true);
+    i32 result = 0;
+    native(mut result){
+        result = InvokeTerminalEntry<InitializerFailure>([]()->int{
+            InitializerGuard guard;
+            return guard.initialize() ? 0 : -1;
+        }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
+    }
     EXPECT_EQ(result, s_InitializationFailureCode);
-    EXPECT_EQ(s_State.eventCount, 3u);
-    EXPECT_EQ(s_State.events[0], 0u);
-    EXPECT_EQ(s_State.events[1], 1u);
-    EXPECT_EQ(s_State.events[2], s_InitializerCount);
-    EXPECT_EQ(s_State.finalizeCounts[0], 1u);
-    EXPECT_EQ(s_State.finalizeCounts[1], 0u);
+    InitializerState afterThrow = SnapshotInitializerState();
+    EXPECT_EQ(afterThrow.eventCount, 3u);
+    EXPECT_EQ(afterThrow.events[0u], 0u);
+    EXPECT_EQ(afterThrow.events[1u], 1u);
+    EXPECT_EQ(afterThrow.events[2u], s_InitializerCount);
+    EXPECT_EQ(afterThrow.finalizeCounts[0u], 1u);
+    EXPECT_EQ(afterThrow.finalizeCounts[1u], 0u);
 
-    NWB::Core::Common::InitializerGuard initializer;
+    InitializerGuard initializer = InitializerGuard();
     ASSERT_TRUE(initializer.initialize());
-    EXPECT_EQ(s_State.initializeCounts[0], 2u);
-    EXPECT_EQ(s_State.initializeCounts[1], 2u);
+    InitializerState afterReacquire = SnapshotInitializerState();
+    EXPECT_EQ(afterReacquire.initializeCounts[0u], 2u);
+    EXPECT_EQ(afterReacquire.initializeCounts[1u], 2u);
     initializer.finalize();
-    EXPECT_EQ(s_State.finalizeCounts[0], 2u);
-    EXPECT_EQ(s_State.finalizeCounts[1], 1u);
-    EXPECT_EQ(s_State.eventCount, 7u);
+    InitializerState afterFinalize = SnapshotInitializerState();
+    EXPECT_EQ(afterFinalize.finalizeCounts[0u], 2u);
+    EXPECT_EQ(afterFinalize.finalizeCounts[1u], 1u);
+    EXPECT_EQ(afterFinalize.eventCount, 7u);
 }
 
-TEST(CommonInitializerLifetime, NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire){
-    using namespace __hidden_common_initializer_tests;
-    s_State = {};
+void VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire(){
+    ResetInitializerState(false, false);
     {
-        NWB::Core::Common::InitializerGuard outer;
+        InitializerGuard outer = InitializerGuard();
         ASSERT_TRUE(outer.initialize());
         ASSERT_TRUE(outer.initialize());
         {
-            NWB::Core::Common::InitializerGuard inner;
+            InitializerGuard inner = InitializerGuard();
             ASSERT_TRUE(inner.initialize());
             ASSERT_TRUE(inner.initialize());
-            EXPECT_EQ(s_State.initializeCounts[0], 1u);
-            EXPECT_EQ(s_State.initializeCounts[1], 1u);
+            InitializerState nested = SnapshotInitializerState();
+            EXPECT_EQ(nested.initializeCounts[0u], 1u);
+            EXPECT_EQ(nested.initializeCounts[1u], 1u);
             outer.finalize();
-            EXPECT_EQ(s_State.finalizeCounts[0], 0u);
-            EXPECT_EQ(s_State.finalizeCounts[1], 0u);
+            InitializerState afterOuterFinalize = SnapshotInitializerState();
+            EXPECT_EQ(afterOuterFinalize.finalizeCounts[0u], 0u);
+            EXPECT_EQ(afterOuterFinalize.finalizeCounts[1u], 0u);
         }
-        EXPECT_EQ(s_State.finalizeCounts[0], 1u);
-        EXPECT_EQ(s_State.finalizeCounts[1], 1u);
+        InitializerState afterInnerExit = SnapshotInitializerState();
+        EXPECT_EQ(afterInnerExit.finalizeCounts[0u], 1u);
+        EXPECT_EQ(afterInnerExit.finalizeCounts[1u], 1u);
     }
-    EXPECT_EQ(s_State.eventCount, 4u);
+    EXPECT_EQ(SnapshotInitializerState().eventCount, 4u);
     {
-        NWB::Core::Common::InitializerGuard reacquired;
+        InitializerGuard reacquired = InitializerGuard();
         ASSERT_TRUE(reacquired.initialize());
-        EXPECT_EQ(s_State.initializeCounts[0], 2u);
-        EXPECT_EQ(s_State.initializeCounts[1], 2u);
+        InitializerState duringReacquire = SnapshotInitializerState();
+        EXPECT_EQ(duringReacquire.initializeCounts[0u], 2u);
+        EXPECT_EQ(duringReacquire.initializeCounts[1u], 2u);
     }
-    EXPECT_EQ(s_State.finalizeCounts[0], 2u);
-    EXPECT_EQ(s_State.finalizeCounts[1], 2u);
-    EXPECT_EQ(s_State.eventCount, 8u);
+    InitializerState finalState = SnapshotInitializerState();
+    EXPECT_EQ(finalState.finalizeCounts[0u], 2u);
+    EXPECT_EQ(finalState.finalizeCounts[1u], 2u);
+    EXPECT_EQ(finalState.eventCount, 8u);
 }
 
-TEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure){
-    using namespace __hidden_common_initializer_tests;
-    s_State = {};
-    const int result = InvokeTerminalEntry<InitializerFailure>([]()->int{
-        NWB::Core::Common::InitializerGuard initializer;
-        if(!initializer.initialize())
-            return -1;
-        throw InitializerFailure{ .code = s_OwnerFailureCode };
-    }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
+void VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure(){
+    ResetInitializerState(false, false);
+    i32 result = 0;
+    native(mut result){
+        result = InvokeTerminalEntry<InitializerFailure>([]()->int{
+            InitializerGuard initializer;
+            if(!initializer.initialize())
+                return -1;
+            InitializerFailure failure;
+            failure.code = s_OwnerFailureCode;
+            throw failure;
+        }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
+    }
     EXPECT_EQ(result, s_OwnerFailureCode);
-    EXPECT_EQ(s_State.initializeCounts[0], 1u);
-    EXPECT_EQ(s_State.initializeCounts[1], 1u);
-    EXPECT_EQ(s_State.finalizeCounts[0], 1u);
-    EXPECT_EQ(s_State.finalizeCounts[1], 1u);
-    EXPECT_EQ(s_State.eventCount, 4u);
-    EXPECT_EQ(s_State.events[2], s_InitializerCount);
-    EXPECT_EQ(s_State.events[3], s_InitializerCount + 1u);
+    InitializerState afterUnwind = SnapshotInitializerState();
+    EXPECT_EQ(afterUnwind.initializeCounts[0u], 1u);
+    EXPECT_EQ(afterUnwind.initializeCounts[1u], 1u);
+    EXPECT_EQ(afterUnwind.finalizeCounts[0u], 1u);
+    EXPECT_EQ(afterUnwind.finalizeCounts[1u], 1u);
+    EXPECT_EQ(afterUnwind.eventCount, 4u);
+    EXPECT_EQ(afterUnwind.events[2u], s_InitializerCount);
+    EXPECT_EQ(afterUnwind.events[3u], s_InitializerCount + 1u);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(CommonInitializerLifetime, FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
+NWB_ADHD_GTEST(CommonInitializerLifetime, ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
+NWB_ADHD_GTEST(CommonInitializerLifetime, NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire, VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire)
+NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure, VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_common_initializer_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+InitializerState s_State{};
+
+b8 InitializerProbe::initialize(){
+    ++s_State.initializeCounts[m_index];
+    s_State.record(m_index);
+    if(m_index == 1u){
+        if(s_State.failNext){
+            s_State.failNext = false;
+            return false;
+        }
+        if(s_State.throwNext){
+            s_State.throwNext = false;
+            InitializerFailure failure;
+            failure.code = s_InitializationFailureCode;
+            throw failure;
+        }
+    }
+    return true;
+}
+
+void InitializerProbe::finalize()noexcept{
+    ++s_State.finalizeCounts[m_index];
+    s_State.record(m_index + s_InitializerCount);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,7 +269,10 @@ int main(int argc, char** argv){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

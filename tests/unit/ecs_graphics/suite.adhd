@@ -1,29 +1,57 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "ecs_graphics_light_and_material_cases.adhd"
-#include "ecs_graphics_mesh_and_optics_cases.adhd"
-#include "ecs_graphics_reflection_and_refraction_cases.adhd"
-#include "ecs_graphics_shadow_and_surfel_cases.adhd"
 
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/ecs_test_world.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ecs_graphics/name_cases.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+#include <tests/common/test_context.adhd.h>
 
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets_mesh/asset.adhd.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd.h>
+#include <impl/ecs_render/caustic/caustic_emission_target_builder.adhd.h>
+#include <impl/ecs_render/caustic/caustic_light_selector.adhd.h>
+#include <impl/ecs_render/caustic/settings.adhd.h>
+#include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
+#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
+#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/reflection/types.adhd.h>
+#include <impl/ecs_render/shadow/light_space_csg.adhd.h>
 #include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/alloc/general.h>
+#include <core/alloc/scratch.h>
+#include <core/ecs/entity.h>
 #include <core/graphics/rhi/command.h>
 
-#include <gtest/gtest.h>
+#include <global/limit.h>
+#include <global/simd/vector.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,12 +63,12 @@ namespace ReflectionStatisticsTestHelpers{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline NWB::Impl::ReflectionSceneContentStamp Stamp()noexcept{
+[[nodiscard]] NWB_INLINE NWB::Impl::ReflectionSceneContentStamp Stamp()noexcept{
     return NWB::Impl::ReflectionSceneContentStamp{ 1u, 2u, 3u, 4u, true };
 }
 
 template<u16 DefaultDeviceGeneration = 1u, u64 DefaultValue = 20u>
-[[nodiscard]] inline NWB::Core::QueueSubmissionToken Token(const u64 value = DefaultValue)noexcept{
+[[nodiscard]] NWB_INLINE NWB::Core::QueueSubmissionToken Token(const u64 value = DefaultValue)noexcept{
     return NWB::Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = DefaultDeviceGeneration, .queue = NWB::Core::CommandQueue::Graphics, };
 }
 
@@ -48,7 +76,7 @@ template<typename ControlT, u16 DefaultDeviceGeneration = 1u>
 struct StatisticsContext{
     using Handle = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, NWB::Core::Alloc::GlobalArena>>;
 
-    NWB::Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsStatistics)};
+    NWB::Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsStatistics) };
     Handle control;
 
 
@@ -64,7 +92,7 @@ public:
 };
 
 template<typename StateT, typename PlanT>
-inline void Accept(const PlanT& plan, StateT& state, const b8 hardwareReady = true){
+NWB_INLINE void Accept(const PlanT& plan, StateT& state, const b8 hardwareReady = true){
     ASSERT_TRUE(state.reserve(plan));
     if constexpr(IsSame_V<decltype(state.accept(plan, Token(plan.sequence), hardwareReady)), b8>)
         ASSERT_TRUE(state.accept(plan, Token(plan.sequence), hardwareReady));
@@ -98,29 +126,9 @@ struct DestructorReservationLeaseTask{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-
-b8 EcsGraphicsSuiteReady(in u64 value){
-    return value != 0u;
-}
-
-native{
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/caustic/caustic_emission_target_builder.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_caustic_emission_target_builder_tests{
+namespace EcsGraphicsSuiteDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,232 +137,27 @@ namespace __hidden_caustic_emission_target_builder_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity){
-    const CausticEmissionTargetBuilder builder;
-    u32 first = 0u;
-    u32 count = 0u;
-    u64 hash = 14695981039346656037ull;
-    const u64 initialHash = hash;
-    builder.recordUnsupportedVolume(9u, OpticalBoundaryMode::ClosedNested, first, count, hash);
-    EXPECT_EQ(count, 0u);
-    EXPECT_EQ(hash, initialHash);
-    builder.recordUnsupportedVolume(11u, OpticalBoundaryMode::Unspecified, first, count, hash);
-    const u64 firstHash = hash;
-    EXPECT_EQ(first, 11u);
-    EXPECT_EQ(count, 1u);
-    EXPECT_NE(hash, initialHash);
-    builder.recordUnsupportedVolume(12u, OpticalBoundaryMode::ClosedPriority, first, count, hash);
-    EXPECT_EQ(count, 1u);
-    EXPECT_EQ(hash, firstHash);
-    builder.recordUnsupportedVolume(13u, OpticalBoundaryMode::Unspecified, first, count, hash);
-    EXPECT_EQ(first, 11u);
-    EXPECT_EQ(count, 2u);
-    EXPECT_NE(hash, firstHash);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/caustic/caustic_light_selector.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_caustic_light_selector_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CausticLightSelectorTests, MissingInputsPreserveSlotsAndPointLightsCannotWin){
-    Array<SceneLightGpuData, 3> lights{};
-    lights[0].params.y = 0.0f;
-    lights[1].params.y = 1.0f;
-    lights[2].params.y = 2.0f;
-    for(auto& light : lights)
-        light.params.w = -1.0f;
-    const Array<f32, 3> importance{ 10.0f, 100.0f, 5.0f };
-    MutableSceneLightGpuDataSpan lightSpan(lights.data(), lights.size());
-    const Span<const f32> allImportance(importance.data(), importance.size());
-    const Span<const f32> shortImportance(importance.data(), importance.size() - 1u);
-    const CausticLightSelector selector;
-
-    EXPECT_EQ(selector.assignSlots(allImportance, 0u, lightSpan), 0u);
-    EXPECT_EQ(selector.assignSlots(shortImportance, 1u, lightSpan), 0u);
-    for(const auto& light : lights)
-        EXPECT_EQ(light.params.w, -1.0f);
-    EXPECT_EQ(selector.assignSlots(allImportance, 1u, lightSpan), 2u);
-    EXPECT_EQ(lights[0].params.w, 0.0f);
-    EXPECT_EQ(lights[1].params.w, -1.0f);
-    EXPECT_EQ(lights[2].params.w, 1.0f);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/caustic/settings.adhd.h>
-
-#include <global/limit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_caustic_quality_settings_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Impl;
-
-TEST(CausticQualitySettings, RejectsUnsupportedPhotonGridDivisors){
-    CausticQualitySettings settings;
-    for(const u32 divisor : { 0u, 3u, 5u, 8u, 65536u, Limit<u32>::s_Max }){
-        settings.photonGridDivisor = divisor;
-        EXPECT_FALSE(ValidateCausticQualitySettings(settings));
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/caustic/settings.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_caustic_resolve_activity_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-TEST(CausticResolveActivityTests, PartialTilesReserveOneWordForEveryDispatchGroup){
-    const Expected<CausticResolveActivityLayout> layout = TryResolveCausticActivityLayout(65u, 17u);
-    ASSERT_TRUE(layout);
-    EXPECT_EQ(layout->tilesX, 9u);
-    EXPECT_EQ(layout->tilesY, 3u);
-    EXPECT_EQ(layout->bufferByteSize, 27u * sizeof(u32));
-}
-
-TEST(CausticResolveActivityTests, InvalidExtentsNeverPublishLayout){
-    constexpr Array<Array<u32, 2>, 4> extents = {{
-        { 0u, 1u },
-        { 1u, 0u },
-        { Limit<u32>::s_Max, 1u },
-        { Limit<u32>::s_Max, Limit<u32>::s_Max },
-    }};
-    for(const auto& extent : extents){
-        EXPECT_FALSE(TryResolveCausticActivityLayout(extent[0], extent[1]));
-    }
-}
-
-TEST(CausticResolveActivityTests, LastRawWordMayEndAtTheUintAddressBoundary){
-    const Expected<CausticResolveActivityLayout> layout = TryResolveCausticActivityLayout(262144u, 262144u);
-    ASSERT_TRUE(layout);
-    EXPECT_EQ(layout->bufferByteSize, static_cast<u64>(Limit<u32>::s_Max) + 1u);
-    EXPECT_EQ(layout->tilesX, 32768u);
-    EXPECT_EQ(layout->tilesY, 32768u);
-    EXPECT_FALSE(TryResolveCausticActivityLayout(262145u, 262144u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
-#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/alloc/scratch.h>
-
-#include <global/limit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_coincident_optical_volumes_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-struct SelectionContext{
+struct CoincidentSelectionContext{
     Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesSelection) };
     Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesScratch) };
     RendererOpticalVolumeSelection selection{ arena };
+
+
+public:
+    void select(const Span<const CoincidentOpticalVolumeCandidate> candidates){
+        selection.select(candidates, scratch);
+    }
+
+    void selectEmpty(){
+        selection.select(Span<const CoincidentOpticalVolumeCandidate>{}, scratch);
+    }
+
+    void selectSingle(const CoincidentOpticalVolumeCandidate& candidate){
+        selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidate, 1u), scratch);
+    }
 };
 
-[[nodiscard]] CoincidentOpticalVolumeCandidate MakeCandidate(const u32 entityIndex)noexcept{
+[[nodiscard]] NWB_INLINE CoincidentOpticalVolumeCandidate MakeOpticalCandidate(const u32 entityIndex)noexcept{
     CoincidentOpticalVolumeCandidate candidate;
     candidate.entity = Core::ECS::EntityID(entityIndex, 0u);
     candidate.mesh = Core::Assets::AssetRef<Mesh>("tests/coincident_optical_volumes/mesh");
@@ -362,521 +165,54 @@ struct SelectionContext{
     return candidate;
 }
 
+struct ComputeEmulationOutputTag{};
+using ComputeOutputTestArena = Tests::TestArena<ComputeEmulationOutputTag>;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+inline constexpr Name s_ComputeOutputSetIdentity = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsComputeOutputSetResources;
+inline constexpr AStringView s_ComputeOutputSetLabel = "Compute Emulation Outputs";
 
-
-TEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAllocations){
-    SelectionContext context;
-    const Array<u8, 4> firstBytes = { 0u, 17u, 255u, 64u };
-    const Array<u8, 4> secondBytes = { 0u, 17u, 255u, 64u };
-    Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(20u), MakeCandidate(10u), MakeCandidate(30u) };
-    candidates[0].mutableTypedBytes = firstBytes;
-    candidates[1].mutableTypedBytes = secondBytes;
-    candidates[2].mutableTypedBytes = firstBytes;
-
-    context.selection.select(candidates, context.scratch);
-
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[2].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(Core::ECS::EntityID(99u, 0u)));
-}
-
-TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLengths){
-    SelectionContext context;
-    const Array<u8, 4> firstBytes = { 1u, 2u, 3u, 4u };
-    const Array<u8, 4> changedBytes = { 1u, 2u, 3u, 5u };
-    Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
-    candidates[0].mutableTypedBytes = firstBytes;
-    candidates[1].mutableTypedBytes = changedBytes;
-    candidates[2].mutableTypedBytes = Span<const u8>(firstBytes.data(), firstBytes.size() - 1u);
-    candidates[1].priority = 100;
-
-    context.selection.select(candidates, context.scratch);
-
-    for(const auto& candidate : candidates)
-        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
-}
-
-TEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSemantics){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
-    candidates[1].boundaryMode = 1u;
-    candidates[2].boundaryMode = 2u;
-    candidates[3].boundaryMode = 2u;
-    candidates[3].mediumPriority = 50;
-    context.selection.select(candidates, context.scratch);
-    for(const auto& candidate : candidates)
-        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
-
-    candidates[3].mediumPriority = 0;
-    context.selection.select(candidates, context.scratch);
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[3].entity));
-}
-
-
-TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermutation){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 3> source = { MakeCandidate(200u), MakeCandidate(1u), MakeCandidate(300u) };
-    source[1].entity = Core::ECS::EntityID(1u, 1u);
-    for(auto& candidate : source){
-        candidate.group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesTie);
-        candidate.priority = 3;
-    }
-    const Array<Array<u32, 3>, 6> permutations = {{
-        { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u },
-        { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u }
-    }};
-
-    for(const auto& permutation : permutations){
-        const Array<CoincidentOpticalVolumeCandidate, 3> candidates = { source[permutation[0]], source[permutation[1]], source[permutation[2]] };
-        context.selection.select(candidates, context.scratch);
-        EXPECT_FALSE(context.selection.isSuppressed(source[0].entity));
-        EXPECT_TRUE(context.selection.isSuppressed(source[1].entity));
-        EXPECT_TRUE(context.selection.isSuppressed(source[2].entity));
-    }
-}
-
-TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 9> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u), MakeCandidate(90u) };
-    const Name firstGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCoincidentOpticalVolumesFirst;
-    const Name secondGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCoincidentOpticalVolumesSecond;
-    candidates[2].group = firstGroup;
-    candidates[3].group = firstGroup;
-    candidates[4].group = secondGroup;
-    candidates[5].group = secondGroup;
-    candidates[6].group = firstGroup;
-    candidates[6].mesh = Core::Assets::AssetRef<Mesh>("tests/coincident_optical_volumes/other_mesh");
-    candidates[7].group = firstGroup;
-    candidates[7].material = Core::Assets::AssetRef<Material>("tests/coincident_optical_volumes/other_glass");
-    candidates[8].group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesThird);
-
-    context.selection.select(candidates, context.scratch);
-
-    for(usize index = 0u; index < LengthOf(candidates); ++index){
-        const b8 expectedSuppressed = index == 1u || index == 3u || index == 5u;
-        EXPECT_EQ(context.selection.isSuppressed(candidates[index].entity), expectedSuppressed) << index;
-    }
-}
-
-TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
-    for(auto& candidate : candidates)
-        candidate.group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesTranslation);
-    candidates[1].position.x = 0.0000001f;
-    candidates[2].position.y = 0.0000001f;
-    candidates[3].position.z = 0.0000001f;
-
-    context.selection.select(candidates, context.scratch);
-
-    for(const auto& candidate : candidates)
-        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
-}
-
-TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBoundaries){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 8> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u) };
-    for(auto& candidate : candidates)
-        candidate.group = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCoincidentOpticalVolumesTransforms);
-    candidates[1].rotation = Float4(0.6f, 0.f, 0.f, 0.8f);
-    candidates[2].rotation = Float4(0.f, 0.6f, 0.f, 0.8f);
-    candidates[3].rotation = Float4(0.f, 0.f, 0.6f, 0.8f);
-    candidates[4].rotation = Float4(0.6f, 0.f, 0.f, -0.8f);
-    candidates[5].scale.x = 1.000001f;
-    candidates[6].scale.y = 1.000001f;
-    candidates[7].scale.z = 1.000001f;
-
-    context.selection.select(candidates, context.scratch);
-
-    for(const auto& candidate : candidates)
-        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
-}
-
-TEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(20u), MakeCandidate(10u) };
-    candidates[0].position = Float4(-0.f, 0.f, -0.f, 0.f);
-    candidates[0].rotation = Float4(-0.f, 0.f, -0.f, 1.f);
-    candidates[1].position = Float4(0.f, -0.f, 0.f, 0.f);
-    candidates[1].rotation = Float4(0.f, -0.f, 0.f, 1.f);
-
-    context.selection.select(candidates, context.scratch);
-
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-}
-
-TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGeometry){
-    SelectionContext context;
-    Array<CoincidentOpticalVolumeCandidate, 11> invalidCases{};
-    for(usize index = 0u; index < LengthOf(invalidCases); ++index){
-        invalidCases[index] = MakeCandidate(static_cast<u32>(index) + 100u);
-        invalidCases[index].priority = 100;
-    }
-    invalidCases[0].entity = Core::ECS::s_InvalidEntityId;
-    invalidCases[1].mesh.reset();
-    invalidCases[2].material.reset();
-    invalidCases[3].position.x = Limit<f32>::s_QuietNaN;
-    invalidCases[4].position.z = Limit<f32>::s_Infinity;
-    invalidCases[5].rotation.y = Limit<f32>::s_Infinity;
-    invalidCases[6].scale.y = Limit<f32>::s_Infinity;
-    invalidCases[7].scale.x = 0.f;
-    invalidCases[8].scale.y = -0.f;
-    invalidCases[9].scale.z = 0.f;
-    invalidCases[10].rotation = Float4(0.f, 0.f, 0.f, 0.f);
-
-    for(const auto& invalidCase : invalidCases){
-        Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(10u), invalidCase, invalidCase };
-        if(candidates[2].entity.valid())
-            candidates[2].entity = Core::ECS::EntityID(candidates[1].entity.index() + 100u, 0u);
-        else
-            candidates[2].entity = Core::ECS::EntityID(candidates[1].entity.index(), 0u);
-
-        context.selection.select(candidates, context.scratch);
-
-        for(const auto& candidate : candidates)
-            EXPECT_FALSE(context.selection.isSuppressed(candidate.entity)) << candidate.entity.id;
-    }
-}
-
-TEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChangeOrExpire){
-    SelectionContext context;
-    const Core::ECS::EntityID retained(10u, 0u);
-    const Core::ECS::EntityID suppressed(20u, 0u);
-    {
-        Array<u8, 4> firstBytes = { 1u, 2u, 3u, 4u };
-        Array<u8, 4> secondBytes = { 1u, 2u, 3u, 4u };
-        Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(10u), MakeCandidate(20u) };
-        candidates[0].mutableTypedBytes = firstBytes;
-        candidates[1].mutableTypedBytes = secondBytes;
-        context.selection.select(candidates, context.scratch);
-
-        secondBytes[0] = 99u;
-        candidates[0].entity = Core::ECS::EntityID(100u, 0u);
-        candidates[1].entity = Core::ECS::EntityID(200u, 0u);
-        EXPECT_FALSE(context.selection.isSuppressed(retained));
-        EXPECT_TRUE(context.selection.isSuppressed(suppressed));
-        EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-    }
-
-    EXPECT_FALSE(context.selection.isSuppressed(retained));
-    EXPECT_TRUE(context.selection.isSuppressed(suppressed));
-
-    const Array<CoincidentOpticalVolumeCandidate, 2> nextFrame = { MakeCandidate(30u), MakeCandidate(40u) };
-    context.selection.select(nextFrame, context.scratch);
-    EXPECT_FALSE(context.selection.isSuppressed(suppressed));
-    EXPECT_FALSE(context.selection.isSuppressed(nextFrame[0].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(nextFrame[1].entity));
-}
-
-TEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives){
-    SelectionContext context;
-    Array<u8, 4> firstBytes = { 10u, 20u, 30u, 40u };
-    Array<u8, 4> secondBytes = { 10u, 20u, 30u, 40u };
-    Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u) };
-    for(auto& candidate : candidates){
-        candidate.mutableTypedBytes = firstBytes;
-    }
-    candidates[1].mutableTypedBytes = secondBytes;
-    context.selection.select(candidates, context.scratch);
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[2].entity));
-
-    secondBytes[3] = 99u;
-    context.selection.select(candidates, context.scratch);
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[2].entity));
-
-    secondBytes[3] = firstBytes[3];
-    candidates[2].priority = 1;
-    context.selection.select(candidates, context.scratch);
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
-
-    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(candidates.data(), 2u), context.scratch);
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[0].entity));
-    EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
-}
-
-TEST(CoincidentOpticalVolumes, ResetEmptyAndSingleCandidateClearPriorSuppression){
-    SelectionContext context;
-    const Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(10u), MakeCandidate(20u) };
-    context.selection.select(candidates, context.scratch);
-    ASSERT_TRUE(context.selection.isSuppressed(candidates[1].entity));
-    context.selection.reset();
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-
-    context.selection.select(candidates, context.scratch);
-    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>{}, context.scratch);
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-
-    context.selection.select(candidates, context.scratch);
-    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidates[1], 1u), context.scratch);
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[0].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(Core::ECS::s_InvalidEntityId));
-}
-
-TEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate){
-    SelectionContext context;
-    const CoincidentOpticalVolumeCandidate candidate = MakeCandidate(10u);
-    const ArenaMemoryStats ownerBefore = context.arena.memoryStats();
-    const ArenaMemoryStats scratchBefore = context.scratch.memoryStats();
-
-    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>{}, context.scratch);
-    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidate, 1u), context.scratch);
-    context.selection.reset();
-
-    const ArenaMemoryStats ownerAfter = context.arena.memoryStats();
-    const ArenaMemoryStats scratchAfter = context.scratch.memoryStats();
-    EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
-    EXPECT_EQ(ownerAfter.allocationCount, ownerBefore.allocationCount);
-    EXPECT_EQ(ownerAfter.reallocationCount, ownerBefore.reallocationCount);
-    EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
-    EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
-#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/assets_mesh/asset.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_compute_emulation_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-TEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView){
-    const Expected<ComputeEmulationLayout> layout = MeshGeometryBufferPolicy().resolveComputeEmulationLayout(3u * sizeof(MeshletLocalVertexRef), 3u);
-    ASSERT_TRUE(layout);
-    EXPECT_EQ(layout->indexByteOffset, 4u * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
-    EXPECT_EQ(layout->bufferByteSize, 5u * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
-    EXPECT_GE(layout->bufferByteSize, static_cast<u64>(layout->indexByteOffset) + 3u * sizeof(u32));
-}
-
-TEST(ComputeEmulationLayoutTests, RejectsInvalidSourceSizes){
-    const Array<u64, 4> sizes = { 0u, 1u, sizeof(MeshletLocalVertexRef) + 1u, Limit<u64>::s_Max - 3u };
-    for(const u64 size : sizes)
-        EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(size, 3u));
-    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(sizeof(MeshletLocalVertexRef), 0u));
-}
-
-TEST(ComputeEmulationLayoutTests, LastIndexWordMayEndAtTheUintAddressBoundary){
-    constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
-    constexpr u64 s_VertexCapacity = s_AddressableBytes / NWB_MESH_EMULATION_VERTEX_BYTE_SIZE - 1u;
-    constexpr u64 s_RefBytes = (s_VertexCapacity - NWB_MESH_EMULATION_FIRST_VERTEX_INDEX) * sizeof(MeshletLocalVertexRef);
-    const Expected<ComputeEmulationLayout> layout = MeshGeometryBufferPolicy().resolveComputeEmulationLayout(s_RefBytes, 16u);
-    ASSERT_TRUE(layout);
-    EXPECT_EQ(layout->indexByteOffset, s_AddressableBytes - NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
-    EXPECT_EQ(layout->bufferByteSize, s_AddressableBytes);
-    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(s_RefBytes, 17u));
-    EXPECT_FALSE(MeshGeometryBufferPolicy().resolveComputeEmulationLayout(s_RefBytes + sizeof(MeshletLocalVertexRef), 1u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
-#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
-#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_compute_emulation_output_resource_set_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using TestArena = Tests::TestArena<struct ComputeEmulationOutputResourceSetTestsTag>;
-inline constexpr Name s_SetIdentity = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsComputeOutputSetResources;
-inline constexpr AStringView s_SetLabel = "Compute Emulation Outputs";
-
-struct OutputContext{
-    TestArena testArena;
+struct ComputeOutputContext{
+    ComputeOutputTestArena testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphPlan plan{ testArena.arena };
+
+
+public:
+    [[nodiscard]] Expected<Core::GpuGraphResourceSetId> gatherOutputs(Core::Alloc::ScratchArena& scratchArena){
+        return RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(graph, plan, scratchArena, s_ComputeOutputSetIdentity, s_ComputeOutputSetLabel);
+    }
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(ComputeEmulationOutputResourceSet, EmptyPlansFailWithoutImporting){
-    OutputContext context;
-    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsComputeOutputSetEmpty)};
-    EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel));
-    context.plan.captured = true;
-    EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel));
-    const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
-    ASSERT_TRUE(view.valid());
-    EXPECT_EQ(view.resourceCount(), 0u);
-    EXPECT_EQ(view.resourceSetCount(), 0u);
-}
-
-
-TEST(AvboitComputeEmulationValidator, RejectsStrayAndOversizedSharedPhases){
-    TestArena testArena;
-    Core::GpuCompiledGraph graph(testArena.arena);
-    const Core::GpuCompiledGraph::ReadView plan(graph);
-    const AvboitComputeEmulationValidator validator(plan);
-    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> tasks = {};
-    EXPECT_TRUE(validator.sharedComputeEmulationChainValid(tasks, 0u, {}, {}, {}, nullptr, nullptr));
-    tasks[0u] = Core::GpuTaskId{ .generation = 1u, .index = 0u };
-    EXPECT_FALSE(validator.sharedComputeEmulationChainValid(tasks, 0u, {}, {}, {}, nullptr, nullptr));
-    EXPECT_FALSE(validator.sharedComputeEmulationChainValid(tasks, tasks.size() + 1u, {}, {}, {}, nullptr, nullptr));
-    Core::GpuPhysicalQueueInfo graphicsQueue{};
-    graphicsQueue.queueClass = Core::CommandQueue::Graphics;
-    const Array<Core::GpuTaskId, 1> shortTasks = { tasks[0u] };
-    const usize supportedPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
-    EXPECT_FALSE(validator.sharedComputeEmulationChainValid(shortTasks, supportedPhaseCount, {}, tasks[0u], tasks[0u], &graphicsQueue, &graphicsQueue));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+struct AvboitValidatorContext{
+    ComputeOutputTestArena testArena;
+    Core::GpuCompiledGraph graph{ testArena.arena };
+    Core::GpuCompiledGraph::ReadView plan{ graph };
+    AvboitComputeEmulationValidator validator{ plan };
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_csg_shader_variant_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CsgShaderVariantBuilderTests, RejectsMalformedSegmentsAndEmptyAssignmentValues){
-    const CsgShaderVariantBuilder builder;
-    EXPECT_FALSE(builder.findDefineAssignment("default", "MODE", "default"));
-    EXPECT_FALSE(builder.findDefineAssignment("BROKEN;MODE=1", "MODE", "default"));
-    EXPECT_FALSE(builder.findDefineAssignment("MODE=;OTHER=2", "MODE", "default"));
-    const auto found = builder.findDefineAssignment("FIRST=0;MODE=1;OTHER=2", "MODE", "default");
-    ASSERT_TRUE(found);
-    EXPECT_EQ(*found, AStringView("MODE=1"));
+[[nodiscard]] inline constexpr const Core::GpuPhysicalQueueInfo* NullSuitePhysicalQueueInfo()noexcept{
+    return nullptr;
 }
 
+[[nodiscard]] NWB_INLINE const Core::GpuPhysicalQueueInfo* AddressOfSuitePhysicalQueueInfo(const Core::GpuPhysicalQueueInfo& info)noexcept{
+    return &info;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[[nodiscard]] NWB_INLINE Core::GpuPhysicalQueueInfo MakeSuiteGraphicsPhysicalQueueInfo()noexcept{
+    Core::GpuPhysicalQueueInfo info{};
+    info.queueClass = Core::CommandQueue::Graphics;
+    return info;
+}
 
+[[nodiscard]] NWB_INLINE Core::GpuTaskId MakeSuiteGpuTaskId(const u32 generation, const u32 index)noexcept{
+    return Core::GpuTaskId{ .generation = generation, .index = index };
+}
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/ecs_test_world.adhd.h>
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
-#include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
-#include <impl/ecs_render/shadow/light_space_csg.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-
-#include <core/ecs/entity.h>
-
-#include <global/simd/vector.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_csg_shadow_snapshot_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-inline constexpr Name s_ReceiverGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowGroup;
-inline constexpr Name s_OtherGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowOther;
-inline constexpr Name s_CustomShape = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowCustom;
+inline constexpr Name s_CsgShadowReceiverGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowGroup;
+inline constexpr Name s_CsgShadowOtherGroup = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowOther;
+inline constexpr Name s_CsgShadowCustomShape = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsCsgShadowCustom;
 inline constexpr Array<u32, 1> s_OpenTriangleWords = { 0u };
 inline constexpr i32 s_FrameCacheBindingFailure = 43;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 struct FrameCacheRuntimeProvider final : IRuntimeMeshProvider{
     Core::ECS::EntityID receiver = Core::ECS::s_InvalidEntityId;
@@ -896,7 +232,12 @@ public:
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet&)noexcept override{}
 };
 
-struct SnapshotContext{
+NWB_INLINE void SetCsgCutterParameters(const Float4& parameter, CsgCutterComponent& cutter){
+    cutter.parameterBytes.resize(sizeof(parameter));
+    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
+}
+
+struct CsgShadowSnapshotContext{
     Tests::EcsTestWorld testWorld;
     Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowScratch) };
     CsgShapeRegistry registry{ testWorld.arena };
@@ -908,7 +249,11 @@ public:
         return BuildCsgShadowSnapshot(registry, receivers, testWorld.world, scratch, snapshot);
     }
 
-    [[nodiscard]] Core::ECS::EntityID addReceiver(const Name group = s_ReceiverGroup, const b8 skinned = false){
+    [[nodiscard]] b8 buildEmpty(){
+        return BuildCsgShadowSnapshot(registry, Span<const CsgShadowReceiverInput>{}, testWorld.world, scratch, snapshot);
+    }
+
+    [[nodiscard]] Core::ECS::EntityID addReceiver(const Name group = s_CsgShadowReceiverGroup, const b8 skinned = false){
         auto entity = testWorld.world.createEntity();
         if(skinned)
             entity.addComponent<SkinnedCsgMeshComponent>().receiverGroup = group;
@@ -917,16 +262,27 @@ public:
         return entity.id();
     }
 
-    [[nodiscard]] Core::ECS::EntityID addCutter(const Name shape, const Name group = s_ReceiverGroup){
+    [[nodiscard]] Core::ECS::EntityID addCutter(const Name shape, const Name group = s_CsgShadowReceiverGroup){
         auto entity = testWorld.world.createEntity();
         auto& cutter = entity.addComponent<CsgCutterComponent>();
         cutter.receiverGroup = group;
         cutter.shapeType = shape;
         return entity.id();
     }
+
+    void setCutterTranslation(const Core::ECS::EntityID cutterEntity, const f32 x, const f32 y, const f32 z){
+        auto& cutter = testWorld.world.entity(cutterEntity).getComponent<CsgCutterComponent>();
+        StoreFloat(MatrixTranslation(x, y, z), cutter.shapeToWorld);
+        StoreFloat(MatrixTranslation(-x, -y, -z), cutter.worldToShape);
+    }
+
+    void setCutterParameters(const Core::ECS::EntityID cutterEntity, const Float4& parameter){
+        auto& cutter = testWorld.world.entity(cutterEntity).getComponent<CsgCutterComponent>();
+        SetCsgCutterParameters(parameter, cutter);
+    }
 };
 
-[[nodiscard]] CsgShadowReceiverInput ReceiverInput(const Core::ECS::EntityID entity)noexcept{
+[[nodiscard]] NWB_INLINE CsgShadowReceiverInput MakeCsgReceiverInput(const Core::ECS::EntityID entity)noexcept{
     CsgShadowReceiverInput input;
     input.entity = entity;
     input.worldMin = Float3U(-2.0f, -2.0f, -2.0f);
@@ -935,12 +291,7 @@ public:
     return input;
 }
 
-void SetParameters(const Float4& parameter, CsgCutterComponent& cutter){
-    cutter.parameterBytes.resize(sizeof(parameter));
-    FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
-}
-
-[[nodiscard]] Expected<CsgShapeBounds> CustomBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameters)noexcept{
+[[nodiscard]] NWB_INLINE Expected<CsgShapeBounds> CustomCsgShapeBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameters)noexcept{
     if(!parameters.empty())
         return MakeUnexpected(Failure{});
     const auto bounds = AabbTests::Transform(shapeToWorld, VectorReplicate(-1.0f), VectorReplicate(1.0f));
@@ -949,497 +300,125 @@ void SetParameters(const Float4& parameter, CsgCutterComponent& cutter){
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] b8 RegisterCustomShape(SnapshotContext& context, const Name name = s_CustomShape){
+[[nodiscard]] NWB_INLINE b8 RegisterCustomCsgShape(CsgShadowSnapshotContext& context, const Name name = s_CsgShadowCustomShape){
     CsgShapeTypeDesc description(context.testWorld.arena);
     description.name = name;
-    description.shaderModule = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowEvaluator);
+    description.shaderModule = NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowEvaluator;
     description.shaderModuleInclude = "tests/csg_shadow/evaluator.slangi";
-    description.boundsCallback = &CustomBounds;
+    description.boundsCallback = &CustomCsgShapeBounds;
     return context.registry.registerShapeType(description).has_value();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CsgShadowSnapshot, EmptyAndDisabledReceiversKeepTheZeroCsgPath){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    CsgShadowReceiverInput input = ReceiverInput(context.addReceiver());
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    EXPECT_FALSE(context.snapshot.hasCsg);
-    EXPECT_TRUE(context.snapshot.receiverRanges.empty());
-    EXPECT_TRUE(context.snapshot.cutters.empty());
-    EXPECT_EQ(context.snapshot.identity, 0u);
-
-    const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgSphereShapeName);
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    ASSERT_TRUE(context.snapshot.hasCsg);
-    auto* receiver = context.testWorld.world.tryGetComponent<StaticCsgMeshComponent>(input.entity);
-    ASSERT_NE(receiver, nullptr);
-    receiver->enabled = false;
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    EXPECT_FALSE(context.snapshot.hasCsg);
-    EXPECT_TRUE(context.snapshot.receiverRanges.empty());
-    EXPECT_TRUE(context.snapshot.cutters.empty());
-
-    receiver->enabled = true;
-    auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
-    ASSERT_NE(cutter, nullptr);
-    cutter->active = false;
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    EXPECT_FALSE(context.snapshot.hasCsg);
-    EXPECT_TRUE(context.snapshot.receiverRanges.empty());
-    EXPECT_TRUE(context.build(Span<const CsgShadowReceiverInput>{}));
+NWB_INLINE void AppendIdentityLightSpaceCsgReceiver(
+    LightSpaceCsgState& state,
+    const Core::ECS::EntityID receiver,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
+    AppendLightSpaceCsgReceiver(
+        state,
+        receiver,
+        false,
+        MatrixIdentity(),
+        MatrixIdentity(),
+        LoadFloatInt(mesh.csgLocalBounds.minBounds),
+        LoadFloatInt(mesh.csgLocalBounds.maxBounds),
+        mesh
+    );
 }
 
-TEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    const Core::ECS::EntityID receiverEntity = context.addReceiver();
-    const Core::ECS::EntityID otherReceiver = context.addReceiver(s_OtherGroup);
-    const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
-    ASSERT_TRUE(cutterEntity.valid());
-    auto* receiver = context.testWorld.world.tryGetComponent<StaticCsgMeshComponent>(receiverEntity);
-    ASSERT_NE(receiver, nullptr);
-    receiver->affectTransparentPass = false;
-    Array<CsgShadowReceiverInput, 3> inputs = { ReceiverInput(otherReceiver), ReceiverInput(receiverEntity), ReceiverInput(receiverEntity) };
-    inputs[1].receiverPass = CsgReceiverPass::Transparent;
-    ASSERT_TRUE(context.build(inputs));
-    ASSERT_TRUE(context.snapshot.hasCsg);
-    ASSERT_EQ(context.snapshot.receiverRanges.size(), LengthOf(inputs));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[1].flags, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[2].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
-    EXPECT_EQ(context.snapshot.receiverRanges[2].cutterCount, 1u);
-    ASSERT_EQ(context.snapshot.cutters.size(), 1u);
+NWB_INLINE void AppendTranslatedXLightSpaceCsgReceiver(
+    LightSpaceCsgState& state,
+    const Core::ECS::EntityID receiver,
+    const f32 x,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
+    const SIMDMatrix inverseShift = MatrixTranslation(-x, 0.0f, 0.0f);
+    AppendLightSpaceCsgReceiver(
+        state,
+        receiver,
+        false,
+        MatrixTranslation(x, 0.0f, 0.0f),
+        inverseShift,
+        LoadFloatInt(mesh.csgLocalBounds.minBounds),
+        LoadFloatInt(mesh.csgLocalBounds.maxBounds),
+        mesh
+    );
 }
 
-TEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    Array<CsgShadowReceiverInput, 2> inputs = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_ReceiverGroup, true)) };
-    inputs[1].boundsValid = false;
-    const Core::ECS::EntityID sphereEntity = context.addCutter(s_CsgSphereShapeName);
-    const Core::ECS::EntityID planeEntity = context.addCutter(s_CsgPlaneShapeName);
-    ASSERT_TRUE(planeEntity.valid());
-    auto* sphere = context.testWorld.world.tryGetComponent<CsgCutterComponent>(sphereEntity);
-    ASSERT_NE(sphere, nullptr);
-    StoreFloat(MatrixTranslation(10.0f, 0.0f, 0.0f), sphere->shapeToWorld);
-    StoreFloat(MatrixTranslation(-10.0f, 0.0f, 0.0f), sphere->worldToShape);
-    ASSERT_TRUE(context.build(inputs));
-    ASSERT_EQ(context.snapshot.receiverRanges.size(), LengthOf(inputs));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
-    EXPECT_EQ(context.snapshot.receiverRanges[1].cutterCount, 2u);
-    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_RAY_SHAPE_PLANE);
-    EXPECT_EQ(context.snapshot.cutters.size(), 3u);
-
-    inputs[0].worldMin = Float3U(2.0f, 2.0f, 2.0f);
-    inputs[0].worldMax = Float3U(-2.0f, -2.0f, -2.0f);
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 2u);
+NWB_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance)noexcept{
+    instance.translation.x = x;
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f), instance.rotation);
 }
 
-TEST(CsgShadowSnapshot, CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCanOverlap){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    ASSERT_TRUE(RegisterCustomShape(context));
-    const CsgShadowReceiverInput input = ReceiverInput(context.addReceiver());
-    const Core::ECS::EntityID boxEntity = context.addCutter(s_CsgBoxShapeName);
-    const Core::ECS::EntityID customEntity = context.addCutter(s_CustomShape);
-    ASSERT_TRUE(boxEntity.valid());
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    ASSERT_TRUE(context.snapshot.hasCsg);
-    ASSERT_EQ(context.snapshot.receiverRanges.size(), 1u);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE | NWB_CSG_RAY_RECEIVER_UNSUPPORTED);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
-    EXPECT_TRUE(context.snapshot.cutters.empty());
-
-    auto* custom = context.testWorld.world.tryGetComponent<CsgCutterComponent>(customEntity);
-    ASSERT_NE(custom, nullptr);
-    StoreFloat(MatrixTranslation(10.0f, 0.0f, 0.0f), custom->shapeToWorld);
-    StoreFloat(MatrixTranslation(-10.0f, 0.0f, 0.0f), custom->worldToShape);
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
+[[nodiscard]] NWB_INLINE u64 BuildSuiteLightSpaceCsgCaptureIdentity(
+    const LightSpaceCsgState& state,
+    const Span<const NwbRtInstanceMaterialGpu> materials,
+    const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialBytes
+)noexcept{
+    return BuildLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes, Span<const Core::TextureHandle>{});
 }
 
-TEST(CsgShadowSnapshot, CutterLimitFallsBackForTheWholeReceiverWithoutPartialSubtraction){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    const CsgShadowReceiverInput input = ReceiverInput(context.addReceiver());
-    for(u32 index = 0u; index < NWB_CSG_RAY_MAX_CUTTERS; ++index){
-        const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgPlaneShapeName);
-        ASSERT_TRUE(cutterEntity.valid());
-    }
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    ASSERT_EQ(context.snapshot.cutters.size(), NWB_CSG_RAY_MAX_CUTTERS);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
-    const Core::ECS::EntityID overflowCutter = context.addCutter(s_CsgPlaneShapeName);
-    ASSERT_TRUE(overflowCutter.valid());
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE | NWB_CSG_RAY_RECEIVER_UNSUPPORTED);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
-    EXPECT_TRUE(context.snapshot.cutters.empty());
+[[nodiscard]] NWB_INLINE u64 BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(
+    const LightSpaceCsgState& state,
+    const Span<const NwbRtInstanceMaterialGpu> materials,
+    const Span<const InstanceGpuData> instances
+)noexcept{
+    return BuildLightSpaceCsgCaptureIdentity(state, materials, instances, Span<const u8>{}, Span<const Core::TextureHandle>{});
 }
 
-TEST(CsgShadowSnapshot, MalformedAndUnregisteredCuttersFollowRasterSkipSemantics){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    const CsgShadowReceiverInput input = ReceiverInput(context.addReceiver());
-    const Core::ECS::EntityID planeEntity = context.addCutter(s_CsgPlaneShapeName);
-    const Core::ECS::EntityID malformedEntity = context.addCutter(s_CsgBoxShapeName);
-    const Core::ECS::EntityID missingEntity = context.addCutter(s_CustomShape);
-    ASSERT_TRUE(planeEntity.valid());
-    ASSERT_TRUE(missingEntity.valid());
-    auto* malformed = context.testWorld.world.tryGetComponent<CsgCutterComponent>(malformedEntity);
-    ASSERT_NE(malformed, nullptr);
-    malformed->parameterBytes.push_back(0u);
-    ASSERT_TRUE(context.build(Span<const CsgShadowReceiverInput>(&input, 1u)));
-    ASSERT_EQ(context.snapshot.cutters.size(), 1u);
-    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_RAY_SHAPE_PLANE);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
+[[nodiscard]] NWB_INLINE Core::GpuDescriptorHandle MakeSuiteStorageBufferDescriptor(const u32 slot)noexcept{
+    return Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, slot);
 }
 
-TEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    ASSERT_TRUE(RegisterCustomShape(context));
-    Array<CsgShadowReceiverInput, 2> inputs = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_OtherGroup)) };
-    const Core::ECS::EntityID firstCutter = context.addCutter(s_CsgBoxShapeName);
-    const Core::ECS::EntityID secondCutter = context.addCutter(s_CsgSphereShapeName, s_OtherGroup);
-    ASSERT_TRUE(secondCutter.valid());
-    ASSERT_TRUE(context.build(inputs));
-    ASSERT_EQ(context.snapshot.receiverRanges.size(), LengthOf(inputs));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
-    EXPECT_EQ(context.snapshot.receiverRanges[1].firstCutter, 1u);
-    auto* receiver = context.testWorld.world.tryGetComponent<StaticCsgMeshComponent>(inputs[0].entity);
-    ASSERT_NE(receiver, nullptr);
-    receiver->enabled = false;
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].firstCutter, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[1].firstCutter, 0u);
-    EXPECT_EQ(context.snapshot.cutters.size(), 1u);
-
-    receiver->enabled = true;
-    auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(firstCutter);
-    ASSERT_NE(cutter, nullptr);
-    cutter->shapeType = s_CustomShape;
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_NE(context.snapshot.receiverRanges[0].flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
-    cutter->shapeType = s_CsgBoxShapeName;
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
-    EXPECT_EQ(context.snapshot.receiverRanges[1].firstCutter, 1u);
-    EXPECT_EQ(context.snapshot.cutters.size(), 2u);
+[[nodiscard]] NWB_INLINE Span<const u32> EmptySuiteU32Span()noexcept{
+    return Span<const u32>{};
 }
 
-TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedState){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    const Core::ECS::EntityID receiver = context.addReceiver();
-    const Core::ECS::EntityID cutter = context.addCutter(s_CsgBoxShapeName);
-    ASSERT_TRUE(cutter.valid());
-    LightSpaceCsgState state(context.testWorld.arena);
-    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-    mesh.meshletPrimitiveIndexCount = 3u;
-    mesh.solidTriangleWords = s_OpenTriangleWords;
-    mesh.csgLocalBounds.minBounds = Float3Int(-2.0f, -2.0f, -2.0f, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
-    mesh.csgLocalBounds.maxBounds = Float3Int(2.0f, 2.0f, 2.0f, 0);
-    BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-    ASSERT_TRUE(state.snapshot.hasCsg);
-    const usize rangeMembershipOffset = NWB_CSG_RAY_CONTEXT_BYTES + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
-    u32 membershipOffset = 0u;
-    FOUNDATION_MEMCPY(&membershipOffset, sizeof(membershipOffset), state.bytes.data() + rangeMembershipOffset, sizeof(membershipOffset));
-    EXPECT_NE(membershipOffset, 0u);
-    EXPECT_EQ(membershipOffset, state.bytes.size() - sizeof(u32));
-    u32 membershipWord = Limit<u32>::s_Max;
-    FOUNDATION_MEMCPY(&membershipWord, sizeof(membershipWord), state.bytes.data() + membershipOffset, sizeof(membershipWord));
-    EXPECT_EQ(membershipWord, s_OpenTriangleWords[0]);
-    constexpr u32 s_SoftwareRootSlot = 17u;
-    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
-    BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-    EXPECT_EQ(state.instances[0].meshRootSlot, Limit<u32>::s_Max);
-    BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-    EXPECT_EQ(state.instances[0].meshRootSlot, s_SoftwareRootSlot);
-
-    auto* cutterComponent = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutter);
-    ASSERT_NE(cutterComponent, nullptr);
-    cutterComponent->active = false;
-    BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-    EXPECT_FALSE(state.snapshot.hasCsg);
-    EXPECT_EQ(state.snapshot.identity, 0u);
-    EXPECT_TRUE(state.bytes.empty());
+[[nodiscard]] NWB_INLINE b8 ResolveSuiteCsgBoxWorkBounds(
+    const CsgShapeRegistry& registry,
+    const CsgShapeTypeInfo& shape,
+    const SIMDMatrix& shapeToWorld,
+    const CsgBoxShapeParameters& parameters,
+    const CsgClipWorkBounds& receiver,
+    CsgClipWorkBounds& outWork
+){
+    const BinaryByteView parameterBytes(reinterpret_cast<const u8*>(&parameters), sizeof(parameters));
+    return ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, outWork);
 }
 
-TEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext){
-    Tests::CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    const Core::ECS::EntityID receiver = context.addReceiver();
-    ASSERT_TRUE(context.addCutter(s_CsgBoxShapeName).valid());
-    LightSpaceCsgState state(context.testWorld.arena);
-    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-    mesh.meshletPrimitiveIndexCount = 3u;
-    const Array<u32, 2> extraWords = { 0u, 0u };
-    for(const Span<const u32> words : { Span<const u32>{}, Span<const u32>(extraWords) }){
-        mesh.solidTriangleWords = words;
-        BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-        AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-        EXPECT_FALSE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-        EXPECT_TRUE(state.bytes.empty());
-    }
-    EXPECT_EQ(logger.errorCount(), 2u);
-    EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("CSG receiver has no valid cooked solid topology")));
+[[nodiscard]] NWB_INLINE b8 ResolveSuiteCsgTranslatedBoxWorkBounds(
+    const CsgShapeRegistry& registry,
+    const CsgShapeTypeInfo& shape,
+    const f32 tx,
+    const f32 ty,
+    const f32 tz,
+    const CsgBoxShapeParameters& parameters,
+    const CsgClipWorkBounds& receiver,
+    CsgClipWorkBounds& outWork
+){
+    const BinaryByteView parameterBytes(reinterpret_cast<const u8*>(&parameters), sizeof(parameters));
+    return ResolveCsgClipWorkBounds(registry, shape, MatrixTranslation(tx, ty, tz), parameterBytes, receiver, outWork);
 }
 
-TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence){
-    struct CaptureCase{
-        SoftwareShadowCaptureCadence::Enum cadence;
-        u32 refreshInterval;
-    };
-    const Array<CaptureCase, 3> cases = {{
-        { SoftwareShadowCaptureCadence::EveryFrame, 1u },
-        { SoftwareShadowCaptureCadence::ReuseOneFrame, 2u },
-        { SoftwareShadowCaptureCadence::ReuseTwoFrames, 3u },
-    }};
-    for(const auto& captureCase : cases){
-        SnapshotContext context;
-        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-        const Core::ECS::EntityID receiver = context.addReceiver(s_ReceiverGroup, true);
-        const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
-        auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
-        ASSERT_NE(cutter, nullptr);
-        LightSpaceCsgState state(context.testWorld.arena);
-        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-        mesh.runtimeMesh = true;
-        mesh.runtimeMeshVersion = 3u;
-        mesh.runtimeGeometryContentRevision = 7u;
-        mesh.meshletPrimitiveIndexCount = 3u;
-        mesh.solidTriangleWords = s_OpenTriangleWords;
-        NwbRtInstanceMaterialGpu material;
-        InstanceGpuData instance;
-        LightSpaceCaptureHistory history;
-        u64 previousExact = 0u;
-        u64 previousContent = 0u;
-        for(u32 frame = 0u; frame < 7u; ++frame){
-            const f32 x = static_cast<f32>(frame) * 0.25f;
-            // Move only lane X.
-            const SIMDMatrix inverseShift = MatrixTranslation(-x, 0.0f, 0.0f);
-            StoreFloat(MatrixTranslation(x, 0.0f, 0.0f), cutter->shapeToWorld);
-            StoreFloat(inverseShift, cutter->worldToShape);
-            instance.translation.x = x;
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f), instance.rotation);
-            BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.0f, 0.0f), inverseShift, LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-            ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-            ASSERT_TRUE(state.snapshot.hasCsg);
-            ASSERT_TRUE(state.captureGeometryTrusted);
-            const u64 content = BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{});
-            if(frame != 0u){
-                EXPECT_NE(state.snapshot.identity, previousExact);
-                EXPECT_EQ(content, previousContent);
-            }
-            previousExact = state.snapshot.identity;
-            previousContent = content;
-            history.beginFrame();
-            const LightSpaceCaptureIdentity identity{ content, 11u, 13u, state.captureGeometryTrusted };
-            const auto ticket = history.prepare(identity, captureCase.cadence);
-            EXPECT_EQ(ticket.reuse, (frame % captureCase.refreshInterval) != 0u);
-            if(!ticket.reuse)
-                history.recordCapture(ticket);
-            ASSERT_TRUE(history.accept(ticket));
-        }
-    }
+NWB_INLINE void ExpandSuitePerspectiveWorldBounds(
+    CsgFrameWorkRegion& region,
+    const SIMDVectorSingle minBounds,
+    const SIMDVectorSingle maxBounds,
+    const u32 width,
+    const u32 height
+){
+    region.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f), minBounds, maxBounds, width, height);
 }
 
-TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    Array<Core::ECS::EntityID, 2> receivers = { context.addReceiver(), context.addReceiver() };
-    const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
-    auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
-    ASSERT_NE(cutter, nullptr);
-    LightSpaceCsgState state(context.testWorld.arena);
-    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-    mesh.runtimeMesh = true;
-    mesh.runtimeMeshVersion = 3u;
-    mesh.runtimeGeometryContentRevision = 7u;
-    mesh.meshletPrimitiveIndexCount = 3u;
-    mesh.solidTriangleWords = s_OpenTriangleWords;
-    Array<NwbRtInstanceMaterialGpu, 2> materials{};
-    Array<InstanceGpuData, 2> instances{};
-    Array<u8, 4> materialBytes = { 1u, 2u, 3u, 4u };
-    const auto build = [&](){
-        BeginLightSpaceCsgGather(state, context.testWorld.world, LengthOf(receivers), false);
-        for(const auto receiver : receivers)
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-        return FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch);
-    };
-    const auto identity = [&]()noexcept{
-        return LightSpaceCaptureIdentity{ BuildLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes, Span<const Core::TextureHandle>{}), 11u, 13u, state.captureGeometryTrusted };
-    };
-    const auto expectRefresh = [&](const auto& change){
-        ASSERT_TRUE(build());
-        ASSERT_TRUE(state.snapshot.hasCsg);
-        const Array<SoftwareShadowCaptureCadence::Enum, 2> cadences = { SoftwareShadowCaptureCadence::ReuseOneFrame, SoftwareShadowCaptureCadence::ReuseTwoFrames };
-        Array<LightSpaceCaptureHistory, 2> histories{};
-        for(usize index = 0u; index < LengthOf(cadences); ++index){
-            auto& history = histories[index];
-            history.beginFrame();
-            const auto captured = history.prepare(identity(), cadences[index]);
-            history.recordCapture(captured);
-            ASSERT_TRUE(history.accept(captured));
-        }
-        change();
-        ASSERT_TRUE(build());
-        for(usize index = 0u; index < LengthOf(cadences); ++index){
-            histories[index].beginFrame();
-            EXPECT_FALSE(histories[index].prepare(identity(), cadences[index]).reuse);
-        }
-    };
-    expectRefresh([&]()noexcept{ ++mesh.runtimeGeometryContentRevision; });
-    expectRefresh([&]()noexcept{ ++mesh.runtimeMeshVersion; });
-    expectRefresh([&]()noexcept{ mesh.meshletPrimitiveIndexCount += 3u; });
-    expectRefresh([&]()noexcept{ mesh.meshName = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowReplacementMesh); });
-    expectRefresh([&]()noexcept{
-        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 17u);
-    });
-    expectRefresh([&]()noexcept{ materials[0].surfaceDispatchId = 5u; });
-    expectRefresh([&]()noexcept{ materials[0].positionSlot = 9u; });
-    expectRefresh([&]()noexcept{ materials[0].flags = RtInstanceMaterialFlag::Transparent; });
-    expectRefresh([&]()noexcept{ ++instances[0].translation.w; });
-    expectRefresh([&]()noexcept{ ++instances[0].geometryHeapSlots[0]; });
-    expectRefresh([&]()noexcept{ ++materialBytes[0]; });
-    expectRefresh([&](){ SetParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), *cutter); });
-    expectRefresh([&]()noexcept{ Swap(receivers[0], receivers[1]); });
-    expectRefresh([&](){ ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry)); });
-    expectRefresh([&]()noexcept{ cutter->active = false; });
-}
-
-TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture){
-    for(const auto cadence : { SoftwareShadowCaptureCadence::ReuseOneFrame, SoftwareShadowCaptureCadence::ReuseTwoFrames }){
-        SnapshotContext context;
-        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-        const Core::ECS::EntityID receiver = context.addReceiver(s_ReceiverGroup, true);
-        const Core::ECS::EntityID cutter = context.addCutter(s_CsgBoxShapeName);
-        ASSERT_TRUE(cutter.valid());
-        LightSpaceCsgState state(context.testWorld.arena);
-        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-        mesh.runtimeMesh = true;
-        mesh.meshletPrimitiveIndexCount = 3u;
-        mesh.solidTriangleWords = s_OpenTriangleWords;
-        NwbRtInstanceMaterialGpu material;
-        InstanceGpuData instance;
-        LightSpaceCaptureHistory history;
-        for(const u64 revision : { 7ull, 0ull, 0ull, 8ull }){
-            mesh.runtimeGeometryContentRevision = revision;
-            BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-            ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-            EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
-            const LightSpaceCaptureIdentity identity{
-                BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{}),
-                11u,
-                13u,
-                state.captureGeometryTrusted
-            };
-            history.beginFrame();
-            const auto ticket = history.prepare(identity, cadence);
-            EXPECT_FALSE(ticket.reuse);
-            history.recordCapture(ticket);
-            ASSERT_TRUE(history.accept(ticket));
-        }
-    }
-}
-
-TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    Array<CsgShadowReceiverInput, 2> inputs = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_OtherGroup)) };
-    const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
-    ASSERT_TRUE(context.build(inputs));
-    u64 identity = context.snapshot.identity;
-    EXPECT_NE(identity, 0u);
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_EQ(context.snapshot.identity, identity);
-
-    auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
-    ASSERT_NE(cutter, nullptr);
-    SetParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), *cutter);
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_NE(context.snapshot.identity, identity);
-    identity = context.snapshot.identity;
-    StoreFloat(MatrixTranslation(0.5f, 0.0f, 0.0f), cutter->shapeToWorld);
-    StoreFloat(MatrixTranslation(-0.5f, 0.0f, 0.0f), cutter->worldToShape);
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_NE(context.snapshot.identity, identity);
-    identity = context.snapshot.identity;
-
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_NE(context.snapshot.identity, identity);
-    identity = context.snapshot.identity;
-    Swap(inputs[0], inputs[1]);
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_NE(context.snapshot.identity, identity);
-    identity = context.snapshot.identity;
-    inputs[1].worldMin.x = inputs[1].worldMin.x - 1.0f;
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_NE(context.snapshot.identity, identity);
-
-    cutter->receiverGroup = s_NameNone;
-    ASSERT_TRUE(context.build(inputs));
-    EXPECT_FALSE(context.snapshot.hasCsg);
-    EXPECT_EQ(context.snapshot.identity, 0u);
-}
-
-TEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs){
-    SnapshotContext context;
-    MeshSystem meshSystem(context.testWorld.arena, context.testWorld.world);
-    auto entity = context.testWorld.world.createEntity();
-    entity.addComponent<StaticCsgMeshComponent>().receiverGroup = s_ReceiverGroup;
-    entity.addComponent<RendererComponent>();
-    entity.addComponent<MeshComponent>().mesh.virtualPath = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowStaticCacheMesh);
-    entity.addComponent<Scene::TransformComponent>();
-    FrameCacheRuntimeProvider provider;
-    provider.receiver = entity.id();
-    meshSystem.registerRuntimeMeshProvider(provider);
-
-    const auto original = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
-    ASSERT_TRUE(original);
-    const auto staticMesh = meshSystem.resolveRenderableMeshStatus(entity.id());
-    ASSERT_TRUE(staticMesh);
-    EXPECT_FALSE(staticMesh->runtime);
-
-    provider.attached = true;
-    EXPECT_TRUE(meshSystem.hasRuntimeMeshBinding(entity.id()));
-    EXPECT_FALSE(CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem));
-    provider.attached = false;
-    const auto restored = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
-    ASSERT_TRUE(restored);
-    EXPECT_EQ(*original, *restored);
-
-    provider.throwOnQuery = true;
-    EXPECT_THROW({ const auto throwingSignature = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem); EXPECT_FALSE(throwingSignature); }, i32);
-    provider.throwOnQuery = false;
-    const auto afterFailure = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
-    ASSERT_TRUE(afterFailure);
-    EXPECT_EQ(*original, *afterFailure);
-    meshSystem.unregisterRuntimeMeshProvider(provider);
+[[nodiscard]] NWB_INLINE b8 ResolveSuiteCsgEmptyWorkBounds(
+    const CsgShapeRegistry& registry,
+    const CsgShapeTypeInfo& shape,
+    const SIMDMatrix& shapeToWorld,
+    const CsgClipWorkBounds& receiver,
+    CsgClipWorkBounds& outWork
+){
+    return ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, BinaryByteView{}, receiver, outWork);
 }
 
 
@@ -1452,57 +431,1384 @@ TEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedSt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <tests/common/test_context.adhd.h>
-
-#include <global/limit.h>
-#include <global/span.h>
-
-#include <gtest/gtest.h>
+NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_csg_work_bounds_tests{
+namespace Tests::EcsGraphicsCases{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling){
-    NWB::Impl::CsgReceiverCpuBounds posedReceiverBounds;
-    posedReceiverBounds.minBounds = Float3Int(-1.0f, -1.0f, -1.0f, NWB::Impl::s_CsgBoundsValidFlag);
-    posedReceiverBounds.maxBounds = Float3Int(1.0f, 1.0f, 1.0f, 0);
+using CapturingLogger = Tests::CapturingLogger;
+using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
+namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
+using ScopedTestTrace = Tests::ScopedTestTrace;
+using EntityID = Core::ECS::EntityID;
 
-    EXPECT_FALSE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
+using CausticEmissionTargetBuilder = Impl::CausticEmissionTargetBuilder;
+namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
+using CausticLightSelector = Impl::CausticLightSelector;
+using SceneLightGpuData = Impl::SceneLightGpuData;
+using MutableSceneLightGpuDataSpan = Impl::MutableSceneLightGpuDataSpan;
+using CausticQualitySettings = Impl::CausticQualitySettings;
+using CausticResolveActivityLayout = Impl::CausticResolveActivityLayout;
+using Impl::ValidateCausticQualitySettings;
+using Impl::TryResolveCausticActivityLayout;
 
-    posedReceiverBounds.minBounds.w |= NWB::Impl::s_CsgBoundsFiniteFlag;
-    EXPECT_TRUE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
+using CoincidentOpticalVolumeCandidate = Impl::CoincidentOpticalVolumeCandidate;
+using CoincidentSelectionContext = EcsGraphicsSuiteDetail::CoincidentSelectionContext;
+using EcsGraphicsSuiteDetail::MakeOpticalCandidate;
+
+using ComputeEmulationLayout = Impl::ComputeEmulationLayout;
+using MeshGeometryBufferPolicy = Impl::MeshGeometryBufferPolicy;
+using ComputeOutputTestArena = EcsGraphicsSuiteDetail::ComputeOutputTestArena;
+using ComputeOutputContext = EcsGraphicsSuiteDetail::ComputeOutputContext;
+using AvboitComputeEmulationValidator = Impl::AvboitComputeEmulationValidator;
+using CsgShaderVariantBuilder = Impl::CsgShaderVariantBuilder;
+
+using CsgShadowSnapshotContext = EcsGraphicsSuiteDetail::CsgShadowSnapshotContext;
+using FrameCacheRuntimeProvider = EcsGraphicsSuiteDetail::FrameCacheRuntimeProvider;
+using CsgShadowReceiverInput = Impl::CsgShadowReceiverInput;
+using StaticCsgMeshComponent = Impl::StaticCsgMeshComponent;
+using CsgCutterComponent = Impl::CsgCutterComponent;
+using CsgReceiverCpuBounds = Impl::CsgReceiverCpuBounds;
+using CsgClipWorkBounds = Impl::CsgClipWorkBounds;
+using CsgFrameWorkRegion = Impl::CsgFrameWorkRegion;
+using CsgWorkRect = Impl::CsgWorkRect;
+using CsgShapeRegistry = Impl::CsgShapeRegistry;
+using CsgShapeTypeInfo = Impl::CsgShapeTypeInfo;
+using CsgShapeTypeDesc = Impl::CsgShapeTypeDesc;
+using CsgBoxShapeParameters = Impl::CsgBoxShapeParameters;
+namespace CsgReceiverPass = Impl::CsgReceiverPass;
+namespace SoftwareShadowCaptureCadence = Impl::SoftwareShadowCaptureCadence;
+using SoftwareShadowCaptureCadenceEnum = Impl::SoftwareShadowCaptureCadence::Enum;
+using LightSpaceCsgState = Impl::LightSpaceCsgState;
+using NwbRtInstanceMaterialGpu = Impl::NwbRtInstanceMaterialGpu;
+using InstanceGpuData = Impl::InstanceGpuData;
+using LightSpaceCaptureHistory = Impl::LightSpaceCaptureHistory;
+using LightSpaceCaptureIdentity = Impl::LightSpaceCaptureIdentity;
+using LightSpaceCaptureTicket = Impl::LightSpaceCaptureTicket;
+using Impl::BeginLightSpaceCsgGather;
+using Impl::FinishLightSpaceCsgGather;
+using Impl::RegisterBuiltInCsgShapeTypes;
+using Impl::CsgReceiverBoundsCanCull;
+using Impl::ResolveCsgClipWorkBounds;
+using Impl::s_CsgSphereShapeName;
+using Impl::s_CsgBoxShapeName;
+using Impl::s_CsgPlaneShapeName;
+using Impl::s_CsgBoundsValidFlag;
+using Impl::s_CsgBoundsFiniteFlag;
+using EcsGraphicsSuiteDetail::MakeCsgReceiverInput;
+using EcsGraphicsSuiteDetail::SetCsgCutterParameters;
+using EcsGraphicsSuiteDetail::RegisterCustomCsgShape;
+using EcsGraphicsSuiteDetail::s_CsgShadowReceiverGroup;
+using EcsGraphicsSuiteDetail::s_CsgShadowOtherGroup;
+using EcsGraphicsSuiteDetail::s_CsgShadowCustomShape;
+using EcsGraphicsSuiteDetail::s_OpenTriangleWords;
+
+using SuiteMeshAssetRef = Core::Assets::AssetRef<Impl::Mesh>;
+using SuiteMaterialAssetRef = Core::Assets::AssetRef<Impl::Material>;
+using SuiteScratchArena = Core::Alloc::ScratchArena;
+using SuiteTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadView;
+using SuiteGpuGraphResourceSetId = Core::GpuGraphResourceSetId;
+using AvboitValidatorContext = EcsGraphicsSuiteDetail::AvboitValidatorContext;
+using SuiteGpuPhysicalQueueInfo = Core::GpuPhysicalQueueInfo;
+using SuiteGpuPhysicalQueueInfoConstPtr = const Core::GpuPhysicalQueueInfo*;
+using SuiteGpuTaskId = Core::GpuTaskId;
+using SuiteSharedPhaseTaskArray = Array<Core::GpuTaskId, Impl::s_SharedComputeEmulationMaximumPhaseCount>;
+using MeshRayTracingResourceSnapshot = Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
+
+using EcsGraphicsSuiteDetail::NullSuitePhysicalQueueInfo;
+using EcsGraphicsSuiteDetail::AddressOfSuitePhysicalQueueInfo;
+using EcsGraphicsSuiteDetail::MakeSuiteGraphicsPhysicalQueueInfo;
+using EcsGraphicsSuiteDetail::MakeSuiteGpuTaskId;
+using EcsGraphicsSuiteDetail::AppendIdentityLightSpaceCsgReceiver;
+using EcsGraphicsSuiteDetail::AppendTranslatedXLightSpaceCsgReceiver;
+using EcsGraphicsSuiteDetail::SetSuiteInstancePitchAndX;
+using EcsGraphicsSuiteDetail::BuildSuiteLightSpaceCsgCaptureIdentity;
+using EcsGraphicsSuiteDetail::BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes;
+using EcsGraphicsSuiteDetail::MakeSuiteStorageBufferDescriptor;
+using EcsGraphicsSuiteDetail::EmptySuiteU32Span;
+using EcsGraphicsSuiteDetail::ResolveSuiteCsgBoxWorkBounds;
+using EcsGraphicsSuiteDetail::ResolveSuiteCsgTranslatedBoxWorkBounds;
+using EcsGraphicsSuiteDetail::ExpandSuitePerspectiveWorldBounds;
+using EcsGraphicsSuiteDetail::ResolveSuiteCsgEmptyWorkBounds;
+
+inline constexpr EntityID s_SuiteInvalidEntityId = Core::ECS::s_InvalidEntityId;
+inline constexpr usize s_SuiteSharedPhaseTaskCapacity = Impl::s_SharedComputeEmulationMaximumPhaseCount;
+inline constexpr usize s_SuiteSupportedSharedPhaseCount = Impl::s_SharedComputeEmulationMinimumDrawCount * Impl::s_SharedComputeEmulationPhasesPerDraw;
+inline constexpr u32 s_SuiteCsgRayReceiverActive = NWB_CSG_RAY_RECEIVER_ACTIVE;
+inline constexpr u32 s_SuiteCsgRayReceiverUnsupported = NWB_CSG_RAY_RECEIVER_UNSUPPORTED;
+inline constexpr u32 s_SuiteCsgRayShapePlane = NWB_CSG_RAY_SHAPE_PLANE;
+inline constexpr u32 s_SuiteCsgRayMaxCutters = NWB_CSG_RAY_MAX_CUTTERS;
+inline constexpr usize s_SuiteCsgRangeMembershipOffset = NWB_CSG_RAY_CONTEXT_BYTES + offsetof(Impl::CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
+inline constexpr u32 s_SuiteRtMaterialFlagTransparent = static_cast<u32>(Impl::RtInstanceMaterialFlag::Transparent);
+
+inline constexpr usize s_MeshletLocalVertexRefBytes = sizeof(Impl::MeshletLocalVertexRef);
+inline constexpr u64 s_EmulationVertexByteSize = NWB_MESH_EMULATION_VERTEX_BYTE_SIZE;
+inline constexpr u64 s_EmulationFirstVertexIndex = NWB_MESH_EMULATION_FIRST_VERTEX_INDEX;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
-TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection){
-    NWB::Tests::TestArena<> arena;
-    NWB::Impl::CsgShapeRegistry registry(arena.arena);
-    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    NWB::Impl::CsgShapeTypeInfo shape(arena.arena);
-    const auto foundShape1 = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
-    ASSERT_TRUE(foundShape1);
-    shape = *foundShape1;
-    NWB::Impl::CsgBoxShapeParameters parameters;
-    parameters.halfExtents = Float4(0.25f, 0.125f, 0.5f, 0.0f);
-    const SIMDMatrix shapeToWorld = MatrixTranslation(0.5f, 0.25f, 2.0f);
-    NWB::Impl::CsgClipWorkBounds receiver;
-    receiver.minBounds = Float4(-20.0f, -20.0f, -20.0f, 0.0f);
-    receiver.maxBounds = Float4(-10.0f, -10.0f, -10.0f, 0.0f);
-    NWB::Impl::CsgClipWorkBounds work;
-    const BinaryByteView parameterBytes(reinterpret_cast<const u8*>(&parameters), sizeof(parameters));
-    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, work));
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void SuiteSelectOpticalVolumes(mut CoincidentSelectionContext context, in Span<CoincidentOpticalVolumeCandidate> candidates){
+    context.select(candidates);
+}
+
+void SuiteSelectEmptyOpticalVolumes(mut CoincidentSelectionContext context){
+    context.selectEmpty();
+}
+
+void SuiteSelectSingleOpticalVolume(mut CoincidentSelectionContext context, in CoincidentOpticalVolumeCandidate candidate){
+    context.selectSingle(candidate);
+}
+
+void SuiteResetOpticalVolumes(mut CoincidentSelectionContext context){
+    context.selection.reset();
+}
+
+Expected<SuiteGpuGraphResourceSetId> SuiteGatherComputeOutputs(mut ComputeOutputContext context, mut SuiteScratchArena scratch){
+    return context.gatherOutputs(scratch);
+}
+
+b8 SuiteBuildCsgSnapshot(mut CsgShadowSnapshotContext context, in Span<CsgShadowReceiverInput> receivers){
+    return context.build(receivers);
+}
+
+b8 SuiteBuildEmptyCsgSnapshot(mut CsgShadowSnapshotContext context){
+    return context.buildEmpty();
+}
+
+b8 SuiteRegisterCustomCsgShape(mut CsgShadowSnapshotContext context){
+    return RegisterCustomCsgShape(context);
+}
+
+void SuiteSetCutterTranslation(mut CsgShadowSnapshotContext context, in EntityID cutterEntity, in f32 x, in f32 y, in f32 z){
+    context.setCutterTranslation(cutterEntity, x, y, z);
+}
+
+void SuiteSetCutterParameters(mut CsgShadowSnapshotContext context, in EntityID cutterEntity, in VectorSingle parameter){
+    context.setCutterParameters(cutterEntity, f32x4(parameter));
+}
+
+void SuiteBeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut CsgShadowSnapshotContext context, in usize capacity, in b8 hardware){
+    BeginLightSpaceCsgGather(state, context.testWorld.world, capacity, hardware);
+}
+
+void SuiteAppendIdentityCsgReceiver(mut LightSpaceCsgState state, in EntityID receiver, in MeshRayTracingResourceSnapshot mesh){
+    AppendIdentityLightSpaceCsgReceiver(state, receiver, mesh);
+}
+
+void SuiteAppendTranslatedXCsgReceiver(mut LightSpaceCsgState state, in EntityID receiver, in f32 x, in MeshRayTracingResourceSnapshot mesh){
+    AppendTranslatedXLightSpaceCsgReceiver(state, receiver, x, mesh);
+}
+
+b8 SuiteFinishLightSpaceCsgGather(mut CsgShadowSnapshotContext context, mut LightSpaceCsgState state){
+    return FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch);
+}
+
+void SuiteUpdateInstancePitchAndX(in f32 x, mut InstanceGpuData instance){
+    SetSuiteInstancePitchAndX(x, instance);
+}
+
+u32 ReadSuiteU32LittleEndian(in Span<u8> bytes, in usize offset){
+    return cast<u32>(bytes[offset])
+        | (cast<u32>(bytes[offset + 1u]) << 8u)
+        | (cast<u32>(bytes[offset + 2u]) << 16u)
+        | (cast<u32>(bytes[offset + 3u]) << 24u);
+}
+
+Span<u8> AsSuiteByteSpan(in Span<u8> bytes){
+    return bytes;
+}
+
+Span<u32> AsSuiteU32Span(in Span<u32> words){
+    return words;
+}
+
+b8 SuiteResolveCsgBoxWorkBounds(
+    in CsgShapeRegistry registry,
+    in CsgShapeTypeInfo shape,
+    in MatrixSingle shapeToWorld,
+    in CsgBoxShapeParameters parameters,
+    in CsgClipWorkBounds receiver,
+    mut CsgClipWorkBounds outWork
+){
+    return ResolveSuiteCsgBoxWorkBounds(registry, shape, shapeToWorld, parameters, receiver, outWork);
+}
+
+b8 SuiteResolveCsgTranslatedBoxWorkBounds(
+    in CsgShapeRegistry registry,
+    in CsgShapeTypeInfo shape,
+    in f32 tx,
+    in f32 ty,
+    in f32 tz,
+    in CsgBoxShapeParameters parameters,
+    in CsgClipWorkBounds receiver,
+    mut CsgClipWorkBounds outWork
+){
+    return ResolveSuiteCsgTranslatedBoxWorkBounds(registry, shape, tx, ty, tz, parameters, receiver, outWork);
+}
+
+void SuiteExpandPerspectiveCsgWorldBounds(
+    mut CsgFrameWorkRegion region,
+    in VectorSingle minBounds,
+    in VectorSingle maxBounds,
+    in u32 width,
+    in u32 height
+){
+    ExpandSuitePerspectiveWorldBounds(region, minBounds, maxBounds, width, height);
+}
+
+b8 SuiteResolveCsgEmptyWorkBounds(
+    in CsgShapeRegistry registry,
+    in CsgShapeTypeInfo shape,
+    in MatrixSingle shapeToWorld,
+    in CsgClipWorkBounds receiver,
+    mut CsgClipWorkBounds outWork
+){
+    return ResolveSuiteCsgEmptyWorkBounds(registry, shape, shapeToWorld, receiver, outWork);
+}
+
+void SuiteExpandCsgWorldBounds(
+    mut CsgFrameWorkRegion region,
+    in MatrixSingle viewProj,
+    in VectorSingle minBounds,
+    in VectorSingle maxBounds,
+    in u32 width,
+    in u32 height
+){
+    region.expandWorldBounds(viewProj, minBounds, maxBounds, width, height);
+}
+
+void VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity(){
+    const CausticEmissionTargetBuilder builder = CausticEmissionTargetBuilder();
+    u32 first = 0u;
+    u32 count = 0u;
+    u64 hash = 14695981039346656037uLL;
+    const u64 initialHash = hash;
+    builder.recordUnsupportedVolume(9u, OpticalBoundaryMode::ClosedNested, first, count, hash);
+    EXPECT_EQ(count, 0u);
+    EXPECT_EQ(hash, initialHash);
+    builder.recordUnsupportedVolume(11u, OpticalBoundaryMode::Unspecified, first, count, hash);
+    const u64 firstHash = hash;
+    EXPECT_EQ(first, 11u);
+    EXPECT_EQ(count, 1u);
+    EXPECT_NE(hash, initialHash);
+    builder.recordUnsupportedVolume(12u, OpticalBoundaryMode::ClosedPriority, first, count, hash);
+    EXPECT_EQ(count, 1u);
+    EXPECT_EQ(hash, firstHash);
+    builder.recordUnsupportedVolume(13u, OpticalBoundaryMode::Unspecified, first, count, hash);
+    EXPECT_EQ(first, 11u);
+    EXPECT_EQ(count, 2u);
+    EXPECT_NE(hash, firstHash);
+}
+
+void VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCannotWin(){
+    Array<SceneLightGpuData, 3> lights = Array<SceneLightGpuData, 3>();
+    lights[0u].params.y = 0.0f;
+    lights[1u].params.y = 1.0f;
+    lights[2u].params.y = 2.0f;
+    for(mut SceneLightGpuData light : lights)
+        light.params.w = -1.0f;
+    Array<f32, 3> importance = Array<f32, 3>();
+    importance[0u] = 10.0f;
+    importance[1u] = 100.0f;
+    importance[2u] = 5.0f;
+    MutableSceneLightGpuDataSpan lightSpan = MutableSceneLightGpuDataSpan(lights.data(), lights.size());
+    const Span<f32> allImportance = importance;
+    const Span<f32> shortImportance = allImportance.subspan(0u, 2u);
+    const CausticLightSelector selector = CausticLightSelector();
+
+    EXPECT_EQ(selector.assignSlots(allImportance, 0u, lightSpan), 0u);
+    EXPECT_EQ(selector.assignSlots(shortImportance, 1u, lightSpan), 0u);
+    for(in SceneLightGpuData light : lights)
+        EXPECT_EQ(light.params.w, -1.0f);
+    EXPECT_EQ(selector.assignSlots(allImportance, 1u, lightSpan), 2u);
+    EXPECT_EQ(lights[0u].params.w, 0.0f);
+    EXPECT_EQ(lights[1u].params.w, -1.0f);
+    EXPECT_EQ(lights[2u].params.w, 1.0f);
+}
+
+void VerifyCausticQualitySettings_RejectsUnsupportedPhotonGridDivisors(){
+    CausticQualitySettings settings = CausticQualitySettings();
+    Array<u32, 6> divisors = Array<u32, 6>();
+    divisors[0u] = 0u;
+    divisors[1u] = 3u;
+    divisors[2u] = 5u;
+    divisors[3u] = 8u;
+    divisors[4u] = 65536u;
+    divisors[5u] = u32.max;
+    for(in u32 divisor : divisors){
+        settings.photonGridDivisor = divisor;
+        EXPECT_FALSE(ValidateCausticQualitySettings(settings));
+    }
+}
+
+void VerifyCausticResolveActivityTests_PartialTilesReserveOneWordForEveryDispatchGroup(){
+    const Expected<CausticResolveActivityLayout> layout = TryResolveCausticActivityLayout(65u, 17u);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout.value().tilesX, 9u);
+    EXPECT_EQ(layout.value().tilesY, 3u);
+    EXPECT_EQ(layout.value().bufferByteSize, 27u * 4u);
+}
+
+void VerifyCausticResolveActivityTests_InvalidExtentsNeverPublishLayout(){
+    EXPECT_FALSE(TryResolveCausticActivityLayout(0u, 1u).has_value());
+    EXPECT_FALSE(TryResolveCausticActivityLayout(1u, 0u).has_value());
+    EXPECT_FALSE(TryResolveCausticActivityLayout(u32.max, 1u).has_value());
+    EXPECT_FALSE(TryResolveCausticActivityLayout(u32.max, u32.max).has_value());
+}
+
+void VerifyCausticResolveActivityTests_LastRawWordMayEndAtTheUintAddressBoundary(){
+    const Expected<CausticResolveActivityLayout> layout = TryResolveCausticActivityLayout(262144u, 262144u);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout.value().bufferByteSize, cast<u64>(u32.max) + 1u);
+    EXPECT_EQ(layout.value().tilesX, 32768u);
+    EXPECT_EQ(layout.value().tilesY, 32768u);
+    EXPECT_FALSE(TryResolveCausticActivityLayout(262145u, 262144u).has_value());
+}
+
+void VerifyCoincidentOpticalVolumes_AutomaticSelectionComparesBytesFromSeparateAllocations(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<u8, 4> firstBytes = Array<u8, 4>();
+    firstBytes[0u] = 0u;
+    firstBytes[1u] = 17u;
+    firstBytes[2u] = 255u;
+    firstBytes[3u] = 64u;
+    Array<u8, 4> secondBytes = Array<u8, 4>();
+    secondBytes[0u] = 0u;
+    secondBytes[1u] = 17u;
+    secondBytes[2u] = 255u;
+    secondBytes[3u] = 64u;
+    Array<CoincidentOpticalVolumeCandidate, 3> candidates = Array<CoincidentOpticalVolumeCandidate, 3>();
+    candidates[0u] = MakeOpticalCandidate(20u);
+    candidates[1u] = MakeOpticalCandidate(10u);
+    candidates[2u] = MakeOpticalCandidate(30u);
+    candidates[0u].mutableTypedBytes = AsSuiteByteSpan(firstBytes);
+    candidates[1u].mutableTypedBytes = AsSuiteByteSpan(secondBytes);
+    candidates[2u].mutableTypedBytes = AsSuiteByteSpan(firstBytes);
+
+    SuiteSelectOpticalVolumes(context, candidates);
+
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[0u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[2u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(EntityID(99u, 0u)));
+}
+
+void VerifyCoincidentOpticalVolumes_AutomaticSelectionKeepsDifferentByteValuesAndLengths(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<u8, 4> firstBytes = Array<u8, 4>();
+    firstBytes[0u] = 1u;
+    firstBytes[1u] = 2u;
+    firstBytes[2u] = 3u;
+    firstBytes[3u] = 4u;
+    Array<u8, 4> changedBytes = Array<u8, 4>();
+    changedBytes[0u] = 1u;
+    changedBytes[1u] = 2u;
+    changedBytes[2u] = 3u;
+    changedBytes[3u] = 5u;
+    const Span<u8> firstByteSpan = firstBytes;
+    Array<CoincidentOpticalVolumeCandidate, 4> candidates = Array<CoincidentOpticalVolumeCandidate, 4>();
+    candidates[0u] = MakeOpticalCandidate(10u);
+    candidates[1u] = MakeOpticalCandidate(20u);
+    candidates[2u] = MakeOpticalCandidate(30u);
+    candidates[3u] = MakeOpticalCandidate(40u);
+    candidates[0u].mutableTypedBytes = AsSuiteByteSpan(firstBytes);
+    candidates[1u].mutableTypedBytes = AsSuiteByteSpan(changedBytes);
+    candidates[2u].mutableTypedBytes = firstByteSpan.subspan(0u, firstBytes.size() - 1u);
+    candidates[1u].priority = 100;
+
+    SuiteSelectOpticalVolumes(context, candidates);
+
+    for(in CoincidentOpticalVolumeCandidate candidate : candidates)
+        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+}
+
+void VerifyCoincidentOpticalVolumes_IdenticalMaterialGroupingKeepsDistinctMediumSemantics(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 4> candidates = Array<CoincidentOpticalVolumeCandidate, 4>();
+    candidates[0u] = MakeOpticalCandidate(10u);
+    candidates[1u] = MakeOpticalCandidate(20u);
+    candidates[2u] = MakeOpticalCandidate(30u);
+    candidates[3u] = MakeOpticalCandidate(40u);
+    candidates[1u].boundaryMode = 1u;
+    candidates[2u].boundaryMode = 2u;
+    candidates[3u].boundaryMode = 2u;
+    candidates[3u].mediumPriority = 50;
+    SuiteSelectOpticalVolumes(context, candidates);
+    for(in CoincidentOpticalVolumeCandidate candidate : candidates)
+        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+
+    candidates[3u].mediumPriority = 0;
+    SuiteSelectOpticalVolumes(context, candidates);
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[2u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[3u].entity));
+}
+
+void VerifyCoincidentOpticalVolumes_PriorityTiesUseFullEntityIdRegardlessOfInputPermutation(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 3> source = Array<CoincidentOpticalVolumeCandidate, 3>();
+    source[0u] = MakeOpticalCandidate(200u);
+    source[1u] = MakeOpticalCandidate(1u);
+    source[2u] = MakeOpticalCandidate(300u);
+    source[1u].entity = EntityID(1u, 1u);
+    for(mut CoincidentOpticalVolumeCandidate candidate : source){
+        candidate.group = s_EcsCaseTestsCoincidentOpticalVolumesTie;
+        candidate.priority = 3;
+    }
+    Array<u32, 18> permutationIndices = Array<u32, 18>();
+    permutationIndices[0u] = 0u;
+    permutationIndices[1u] = 1u;
+    permutationIndices[2u] = 2u;
+    permutationIndices[3u] = 0u;
+    permutationIndices[4u] = 2u;
+    permutationIndices[5u] = 1u;
+    permutationIndices[6u] = 1u;
+    permutationIndices[7u] = 0u;
+    permutationIndices[8u] = 2u;
+    permutationIndices[9u] = 1u;
+    permutationIndices[10u] = 2u;
+    permutationIndices[11u] = 0u;
+    permutationIndices[12u] = 2u;
+    permutationIndices[13u] = 0u;
+    permutationIndices[14u] = 1u;
+    permutationIndices[15u] = 2u;
+    permutationIndices[16u] = 1u;
+    permutationIndices[17u] = 0u;
+
+    for(usize perm = 0u; perm < 6u; ++perm){
+        const usize base = perm * 3u;
+        Array<CoincidentOpticalVolumeCandidate, 3> candidates = Array<CoincidentOpticalVolumeCandidate, 3>();
+        candidates[0u] = source[permutationIndices[base]];
+        candidates[1u] = source[permutationIndices[base + 1u]];
+        candidates[2u] = source[permutationIndices[base + 2u]];
+        SuiteSelectOpticalVolumes(context, candidates);
+        EXPECT_FALSE(context.selection.isSuppressed(source[0u].entity));
+        EXPECT_TRUE(context.selection.isSuppressed(source[1u].entity));
+        EXPECT_TRUE(context.selection.isSuppressed(source[2u].entity));
+    }
+}
+
+void VerifyCoincidentOpticalVolumes_GroupsMeshAndMaterialRemainIndependentBoundaries(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 9> candidates = Array<CoincidentOpticalVolumeCandidate, 9>();
+    for(u32 index = 0u; index < 9u; ++index)
+        candidates[index] = MakeOpticalCandidate((index + 1u) * 10u);
+    const Name firstGroup = s_EcsGraphicsNameTestsCoincidentOpticalVolumesFirst;
+    const Name secondGroup = s_EcsGraphicsNameTestsCoincidentOpticalVolumesSecond;
+    candidates[2u].group = firstGroup;
+    candidates[3u].group = firstGroup;
+    candidates[4u].group = secondGroup;
+    candidates[5u].group = secondGroup;
+    candidates[6u].group = firstGroup;
+    candidates[6u].mesh = SuiteMeshAssetRef("tests/coincident_optical_volumes/other_mesh");
+    candidates[7u].group = firstGroup;
+    candidates[7u].material = SuiteMaterialAssetRef("tests/coincident_optical_volumes/other_glass");
+    candidates[8u].group = s_EcsCaseTestsCoincidentOpticalVolumesThird;
+
+    SuiteSelectOpticalVolumes(context, candidates);
+
+    for(usize index = 0u; index < candidates.size(); ++index){
+        const b8 expectedSuppressed = index == 1u || index == 3u || index == 5u;
+        ScopedTestTrace trace = ScopedTestTrace(StringFormat("index={}", index));
+        EXPECT_EQ(context.selection.isSuppressed(candidates[index].entity), expectedSuppressed);
+    }
+}
+
+void VerifyCoincidentOpticalVolumes_TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 4> candidates = Array<CoincidentOpticalVolumeCandidate, 4>();
+    candidates[0u] = MakeOpticalCandidate(10u);
+    candidates[1u] = MakeOpticalCandidate(20u);
+    candidates[2u] = MakeOpticalCandidate(30u);
+    candidates[3u] = MakeOpticalCandidate(40u);
+    for(mut CoincidentOpticalVolumeCandidate candidate : candidates)
+        candidate.group = s_EcsCaseTestsCoincidentOpticalVolumesTranslation;
+    candidates[1u].position.x = 0.0000001f;
+    candidates[2u].position.y = 0.0000001f;
+    candidates[3u].position.z = 0.0000001f;
+
+    SuiteSelectOpticalVolumes(context, candidates);
+
+    for(in CoincidentOpticalVolumeCandidate candidate : candidates)
+        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+}
+
+void VerifyCoincidentOpticalVolumes_RotationAndScaleDifferencesPreserveDistinctBoundaries(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 8> candidates = Array<CoincidentOpticalVolumeCandidate, 8>();
+    for(u32 index = 0u; index < 8u; ++index){
+        candidates[index] = MakeOpticalCandidate((index + 1u) * 10u);
+        candidates[index].group = s_EcsCaseTestsCoincidentOpticalVolumesTransforms;
+    }
+    candidates[1u].rotation = f32x4(0.6f, 0.0f, 0.0f, 0.8f);
+    candidates[2u].rotation = f32x4(0.0f, 0.6f, 0.0f, 0.8f);
+    candidates[3u].rotation = f32x4(0.0f, 0.0f, 0.6f, 0.8f);
+    candidates[4u].rotation = f32x4(0.6f, 0.0f, 0.0f, -0.8f);
+    candidates[5u].scale.x = 1.000001f;
+    candidates[6u].scale.y = 1.000001f;
+    candidates[7u].scale.z = 1.000001f;
+
+    SuiteSelectOpticalVolumes(context, candidates);
+
+    for(in CoincidentOpticalVolumeCandidate candidate : candidates)
+        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+}
+
+void VerifyCoincidentOpticalVolumes_SignedZeroTransformLanesHaveTheSameIdentity(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 2> candidates = Array<CoincidentOpticalVolumeCandidate, 2>();
+    candidates[0u] = MakeOpticalCandidate(20u);
+    candidates[1u] = MakeOpticalCandidate(10u);
+    candidates[0u].position = f32x4(-0.0f, 0.0f, -0.0f, 0.0f);
+    candidates[0u].rotation = f32x4(-0.0f, 0.0f, -0.0f, 1.0f);
+    candidates[1u].position = f32x4(0.0f, -0.0f, 0.0f, 0.0f);
+    candidates[1u].rotation = f32x4(0.0f, -0.0f, 0.0f, 1.0f);
+
+    SuiteSelectOpticalVolumes(context, candidates);
+
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[0u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+}
+
+void VerifyCoincidentOpticalVolumes_InvalidCandidatesCannotSuppressEachOtherOrValidGeometry(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    const f32 quietNan = bit_cast<f32>(0x7FC00000u);
+    const f32 posInf = bit_cast<f32>(0x7F800000u);
+    Array<CoincidentOpticalVolumeCandidate, 11> invalidCases = Array<CoincidentOpticalVolumeCandidate, 11>();
+    for(usize index = 0u; index < invalidCases.size(); ++index){
+        invalidCases[index] = MakeOpticalCandidate(cast<u32>(index) + 100u);
+        invalidCases[index].priority = 100;
+    }
+    invalidCases[0u].entity = s_SuiteInvalidEntityId;
+    invalidCases[1u].mesh.reset();
+    invalidCases[2u].material.reset();
+    invalidCases[3u].position.x = quietNan;
+    invalidCases[4u].position.z = posInf;
+    invalidCases[5u].rotation.y = posInf;
+    invalidCases[6u].scale.y = posInf;
+    invalidCases[7u].scale.x = 0.0f;
+    invalidCases[8u].scale.y = -0.0f;
+    invalidCases[9u].scale.z = 0.0f;
+    invalidCases[10u].rotation = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    for(in CoincidentOpticalVolumeCandidate invalidCase : invalidCases){
+        Array<CoincidentOpticalVolumeCandidate, 3> candidates = Array<CoincidentOpticalVolumeCandidate, 3>();
+        candidates[0u] = MakeOpticalCandidate(10u);
+        candidates[1u] = invalidCase;
+        candidates[2u] = invalidCase;
+        if(candidates[2u].entity.valid())
+            candidates[2u].entity = EntityID(candidates[1u].entity.index() + 100u, 0u);
+        else
+            candidates[2u].entity = EntityID(candidates[1u].entity.index(), 0u);
+
+        SuiteSelectOpticalVolumes(context, candidates);
+
+        for(in CoincidentOpticalVolumeCandidate candidate : candidates){
+            ScopedTestTrace trace = ScopedTestTrace(StringFormat("entity={}", candidate.entity.id));
+            EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+        }
+    }
+}
+
+void VerifyCoincidentOpticalVolumes_SelectionOwnsOnlyItsResultAfterBorrowedInputsChangeOrExpire(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    const EntityID retained = EntityID(10u, 0u);
+    const EntityID suppressed = EntityID(20u, 0u);
+    {
+        Array<u8, 4> firstBytes = Array<u8, 4>();
+        firstBytes[0u] = 1u;
+        firstBytes[1u] = 2u;
+        firstBytes[2u] = 3u;
+        firstBytes[3u] = 4u;
+        Array<u8, 4> secondBytes = Array<u8, 4>();
+        secondBytes[0u] = 1u;
+        secondBytes[1u] = 2u;
+        secondBytes[2u] = 3u;
+        secondBytes[3u] = 4u;
+        Array<CoincidentOpticalVolumeCandidate, 2> candidates = Array<CoincidentOpticalVolumeCandidate, 2>();
+        candidates[0u] = MakeOpticalCandidate(10u);
+        candidates[1u] = MakeOpticalCandidate(20u);
+        candidates[0u].mutableTypedBytes = AsSuiteByteSpan(firstBytes);
+        candidates[1u].mutableTypedBytes = AsSuiteByteSpan(secondBytes);
+        SuiteSelectOpticalVolumes(context, candidates);
+
+        secondBytes[0u] = 99u;
+        candidates[0u].entity = EntityID(100u, 0u);
+        candidates[1u].entity = EntityID(200u, 0u);
+        EXPECT_FALSE(context.selection.isSuppressed(retained));
+        EXPECT_TRUE(context.selection.isSuppressed(suppressed));
+        EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+    }
+
+    EXPECT_FALSE(context.selection.isSuppressed(retained));
+    EXPECT_TRUE(context.selection.isSuppressed(suppressed));
+
+    Array<CoincidentOpticalVolumeCandidate, 2> nextFrame = Array<CoincidentOpticalVolumeCandidate, 2>();
+    nextFrame[0u] = MakeOpticalCandidate(30u);
+    nextFrame[1u] = MakeOpticalCandidate(40u);
+    SuiteSelectOpticalVolumes(context, nextFrame);
+    EXPECT_FALSE(context.selection.isSuppressed(suppressed));
+    EXPECT_FALSE(context.selection.isSuppressed(nextFrame[0u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(nextFrame[1u].entity));
+}
+
+void VerifyCoincidentOpticalVolumes_NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<u8, 4> firstBytes = Array<u8, 4>();
+    firstBytes[0u] = 10u;
+    firstBytes[1u] = 20u;
+    firstBytes[2u] = 30u;
+    firstBytes[3u] = 40u;
+    Array<u8, 4> secondBytes = Array<u8, 4>();
+    secondBytes[0u] = 10u;
+    secondBytes[1u] = 20u;
+    secondBytes[2u] = 30u;
+    secondBytes[3u] = 40u;
+    Array<CoincidentOpticalVolumeCandidate, 3> candidates = Array<CoincidentOpticalVolumeCandidate, 3>();
+    candidates[0u] = MakeOpticalCandidate(10u);
+    candidates[1u] = MakeOpticalCandidate(20u);
+    candidates[2u] = MakeOpticalCandidate(30u);
+    for(mut CoincidentOpticalVolumeCandidate candidate : candidates)
+        candidate.mutableTypedBytes = firstBytes;
+    candidates[1u].mutableTypedBytes = AsSuiteByteSpan(secondBytes);
+    SuiteSelectOpticalVolumes(context, candidates);
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[1u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[2u].entity));
+
+    secondBytes[3u] = 99u;
+    SuiteSelectOpticalVolumes(context, candidates);
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[2u].entity));
+
+    secondBytes[3u] = firstBytes[3u];
+    candidates[2u].priority = 1;
+    SuiteSelectOpticalVolumes(context, candidates);
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[0u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[1u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[2u].entity));
+
+    const Span<CoincidentOpticalVolumeCandidate> candidateSpan = candidates;
+    SuiteSelectOpticalVolumes(context, candidateSpan.subspan(0u, 2u));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[0u].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[1u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[2u].entity));
+}
+
+void VerifyCoincidentOpticalVolumes_ResetEmptyAndSingleCandidateClearPriorSuppression(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    Array<CoincidentOpticalVolumeCandidate, 2> candidates = Array<CoincidentOpticalVolumeCandidate, 2>();
+    candidates[0u] = MakeOpticalCandidate(10u);
+    candidates[1u] = MakeOpticalCandidate(20u);
+    SuiteSelectOpticalVolumes(context, candidates);
+    ASSERT_TRUE(context.selection.isSuppressed(candidates[1u].entity));
+    SuiteResetOpticalVolumes(context);
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+
+    SuiteSelectOpticalVolumes(context, candidates);
+    SuiteSelectEmptyOpticalVolumes(context);
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+
+    SuiteSelectOpticalVolumes(context, candidates);
+    SuiteSelectSingleOpticalVolume(context, candidates[1u]);
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[0u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1u].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(s_SuiteInvalidEntityId));
+}
+
+void VerifyCoincidentOpticalVolumes_EmptyAndSingleCandidateFastPathsDoNotAllocate(){
+    CoincidentSelectionContext context = CoincidentSelectionContext();
+    const CoincidentOpticalVolumeCandidate candidate = MakeOpticalCandidate(10u);
+    const ArenaMemoryStats ownerBefore = context.arena.memoryStats();
+    const ArenaMemoryStats scratchBefore = context.scratch.memoryStats();
+
+    SuiteSelectEmptyOpticalVolumes(context);
+    SuiteSelectSingleOpticalVolume(context, candidate);
+    SuiteResetOpticalVolumes(context);
+
+    const ArenaMemoryStats ownerAfter = context.arena.memoryStats();
+    const ArenaMemoryStats scratchAfter = context.scratch.memoryStats();
+    EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+    EXPECT_EQ(ownerAfter.allocationCount, ownerBefore.allocationCount);
+    EXPECT_EQ(ownerAfter.reallocationCount, ownerBefore.reallocationCount);
+    EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
+    EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
+}
+
+void VerifyComputeEmulationLayoutTests_TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView(){
+    const MeshGeometryBufferPolicy policy = MeshGeometryBufferPolicy();
+    const Expected<ComputeEmulationLayout> layout = policy.resolveComputeEmulationLayout(3u * s_MeshletLocalVertexRefBytes, 3u);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout.value().indexByteOffset, 4u * s_EmulationVertexByteSize);
+    EXPECT_EQ(layout.value().bufferByteSize, 5u * s_EmulationVertexByteSize);
+    EXPECT_GE(layout.value().bufferByteSize, cast<u64>(layout.value().indexByteOffset) + 3u * 4u);
+}
+
+void VerifyComputeEmulationLayoutTests_RejectsInvalidSourceSizes(){
+    const MeshGeometryBufferPolicy policy = MeshGeometryBufferPolicy();
+    Array<u64, 4> sizes = Array<u64, 4>();
+    sizes[0u] = 0u;
+    sizes[1u] = 1u;
+    sizes[2u] = s_MeshletLocalVertexRefBytes + 1u;
+    sizes[3u] = u64.max - 3u;
+    for(in u64 size : sizes)
+        EXPECT_FALSE(policy.resolveComputeEmulationLayout(size, 3u).has_value());
+    EXPECT_FALSE(policy.resolveComputeEmulationLayout(s_MeshletLocalVertexRefBytes, 0u).has_value());
+}
+
+void VerifyComputeEmulationLayoutTests_LastIndexWordMayEndAtTheUintAddressBoundary(){
+    const MeshGeometryBufferPolicy policy = MeshGeometryBufferPolicy();
+    const u64 addressableBytes = cast<u64>(u32.max) + 1u;
+    const u64 vertexCapacity = addressableBytes / s_EmulationVertexByteSize - 1u;
+    const u64 refBytes = (vertexCapacity - s_EmulationFirstVertexIndex) * s_MeshletLocalVertexRefBytes;
+    const Expected<ComputeEmulationLayout> layout = policy.resolveComputeEmulationLayout(refBytes, 16u);
+    ASSERT_TRUE(layout.has_value());
+    EXPECT_EQ(layout.value().indexByteOffset, addressableBytes - s_EmulationVertexByteSize);
+    EXPECT_EQ(layout.value().bufferByteSize, addressableBytes);
+    EXPECT_FALSE(policy.resolveComputeEmulationLayout(refBytes, 17u).has_value());
+    EXPECT_FALSE(policy.resolveComputeEmulationLayout(refBytes + s_MeshletLocalVertexRefBytes, 1u).has_value());
+}
+
+void VerifyComputeEmulationOutputResourceSet_EmptyPlansFailWithoutImporting(){
+    ComputeOutputContext context = ComputeOutputContext();
+    SuiteScratchArena scratch = SuiteScratchArena(s_EcsCaseTestsComputeOutputSetEmpty);
+    EXPECT_FALSE(SuiteGatherComputeOutputs(context, scratch).has_value());
+    context.plan.captured = true;
+    EXPECT_FALSE(SuiteGatherComputeOutputs(context, scratch).has_value());
+    const SuiteTaskGraphDeclarationReadView view = SuiteTaskGraphDeclarationReadView(context.graph);
+    ASSERT_TRUE(view.valid());
+    EXPECT_EQ(view.resourceCount(), 0u);
+    EXPECT_EQ(view.resourceSetCount(), 0u);
+}
+
+void VerifyAvboitComputeEmulationValidator_RejectsStrayAndOversizedSharedPhases(){
+    AvboitValidatorContext context = AvboitValidatorContext();
+    SuiteSharedPhaseTaskArray tasks = SuiteSharedPhaseTaskArray();
+    const SuiteGpuTaskId emptyTask = SuiteGpuTaskId();
+    const SuiteGpuPhysicalQueueInfoConstPtr nullQueue = NullSuitePhysicalQueueInfo();
+    EXPECT_TRUE(context.validator.sharedComputeEmulationChainValid(tasks, 0u, emptyTask, emptyTask, emptyTask, nullQueue, nullQueue));
+    tasks[0u] = MakeSuiteGpuTaskId(1u, 0u);
+    EXPECT_FALSE(context.validator.sharedComputeEmulationChainValid(tasks, 0u, emptyTask, emptyTask, emptyTask, nullQueue, nullQueue));
+    EXPECT_FALSE(context.validator.sharedComputeEmulationChainValid(tasks, s_SuiteSharedPhaseTaskCapacity + 1u, emptyTask, emptyTask, emptyTask, nullQueue, nullQueue));
+    const SuiteGpuPhysicalQueueInfo graphicsQueue = MakeSuiteGraphicsPhysicalQueueInfo();
+    const SuiteGpuPhysicalQueueInfoConstPtr graphicsQueuePtr = AddressOfSuitePhysicalQueueInfo(graphicsQueue);
+    Array<SuiteGpuTaskId, 1> shortTasks = Array<SuiteGpuTaskId, 1>();
+    shortTasks[0u] = tasks[0u];
+    EXPECT_FALSE(context.validator.sharedComputeEmulationChainValid(shortTasks, s_SuiteSupportedSharedPhaseCount, emptyTask, tasks[0u], tasks[0u], graphicsQueuePtr, graphicsQueuePtr));
+}
+
+void VerifyCsgShaderVariantBuilderTests_RejectsMalformedSegmentsAndEmptyAssignmentValues(){
+    const CsgShaderVariantBuilder builder = CsgShaderVariantBuilder();
+    EXPECT_FALSE(builder.findDefineAssignment("default", "MODE", "default").has_value());
+    EXPECT_FALSE(builder.findDefineAssignment("BROKEN;MODE=1", "MODE", "default").has_value());
+    EXPECT_FALSE(builder.findDefineAssignment("MODE=;OTHER=2", "MODE", "default").has_value());
+    const Expected<StringView> found = builder.findDefineAssignment("FIRST=0;MODE=1;OTHER=2", "MODE", "default");
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found.value(), "MODE=1");
+}
+
+void VerifyCsgShadowSnapshot_EmptyAndDisabledReceiversKeepTheZeroCsgPath(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Array<CsgShadowReceiverInput, 1> inputs = Array<CsgShadowReceiverInput, 1>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    ASSERT_TRUE(context.build(inputs));
+    EXPECT_FALSE(context.snapshot.hasCsg);
+    EXPECT_TRUE(context.snapshot.receiverRanges.empty());
+    EXPECT_TRUE(context.snapshot.cutters.empty());
+    EXPECT_EQ(context.snapshot.identity, 0u);
+
+    const EntityID cutterEntity = context.addCutter(s_CsgSphereShapeName);
+    ASSERT_TRUE(context.build(inputs));
+    ASSERT_TRUE(context.snapshot.hasCsg);
+    context.testWorld.world.entity(inputs[0u].entity).getComponent<StaticCsgMeshComponent>().enabled = false;
+    ASSERT_TRUE(context.build(inputs));
+    EXPECT_FALSE(context.snapshot.hasCsg);
+    EXPECT_TRUE(context.snapshot.receiverRanges.empty());
+    EXPECT_TRUE(context.snapshot.cutters.empty());
+
+    context.testWorld.world.entity(inputs[0u].entity).getComponent<StaticCsgMeshComponent>().enabled = true;
+    context.testWorld.world.entity(cutterEntity).getComponent<CsgCutterComponent>().active = false;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_FALSE(context.snapshot.hasCsg);
+    EXPECT_TRUE(context.snapshot.receiverRanges.empty());
+    EXPECT_TRUE(SuiteBuildEmptyCsgSnapshot(context));
+}
+
+void VerifyCsgShadowSnapshot_ResolvesGroupsAndMaterialPassesInShadowInstanceOrder(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    const EntityID receiverEntity = context.addReceiver();
+    const EntityID otherReceiver = context.addReceiver(s_CsgShadowOtherGroup);
+    const EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+    ASSERT_TRUE(cutterEntity.valid());
+    context.testWorld.world.entity(receiverEntity).getComponent<StaticCsgMeshComponent>().affectTransparentPass = false;
+    Array<CsgShadowReceiverInput, 3> inputs = Array<CsgShadowReceiverInput, 3>();
+    inputs[0u] = MakeCsgReceiverInput(otherReceiver);
+    inputs[1u] = MakeCsgReceiverInput(receiverEntity);
+    inputs[2u] = MakeCsgReceiverInput(receiverEntity);
+    inputs[1u].receiverPass = CsgReceiverPass::Transparent;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    ASSERT_TRUE(context.snapshot.hasCsg);
+    ASSERT_EQ(context.snapshot.receiverRanges.size(), 3u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, 0u);
+    EXPECT_EQ(context.snapshot.receiverRanges[1u].flags, 0u);
+    EXPECT_EQ(context.snapshot.receiverRanges[2u].flags, s_SuiteCsgRayReceiverActive);
+    EXPECT_EQ(context.snapshot.receiverRanges[2u].cutterCount, 1u);
+    ASSERT_EQ(context.snapshot.cutters.size(), 1u);
+}
+
+void VerifyCsgShadowSnapshot_CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Array<CsgShadowReceiverInput, 2> inputs = Array<CsgShadowReceiverInput, 2>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    inputs[1u] = MakeCsgReceiverInput(context.addReceiver(s_CsgShadowReceiverGroup, true));
+    inputs[1u].boundsValid = false;
+    const EntityID sphereEntity = context.addCutter(s_CsgSphereShapeName);
+    const EntityID planeEntity = context.addCutter(s_CsgPlaneShapeName);
+    ASSERT_TRUE(planeEntity.valid());
+    SuiteSetCutterTranslation(context, sphereEntity, 10.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    ASSERT_EQ(context.snapshot.receiverRanges.size(), 2u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 1u);
+    EXPECT_EQ(context.snapshot.receiverRanges[1u].cutterCount, 2u);
+    EXPECT_EQ(context.snapshot.cutters[0u].shapeType, s_SuiteCsgRayShapePlane);
+    EXPECT_EQ(context.snapshot.cutters.size(), 3u);
+
+    inputs[0u].worldMin = f32x3u(2.0f, 2.0f, 2.0f);
+    inputs[0u].worldMax = f32x3u(-2.0f, -2.0f, -2.0f);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 2u);
+}
+
+void VerifyCsgShadowSnapshot_CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCanOverlap(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    ASSERT_TRUE(SuiteRegisterCustomCsgShape(context));
+    Array<CsgShadowReceiverInput, 1> inputs = Array<CsgShadowReceiverInput, 1>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    const EntityID boxEntity = context.addCutter(s_CsgBoxShapeName);
+    const EntityID customEntity = context.addCutter(s_CsgShadowCustomShape);
+    ASSERT_TRUE(boxEntity.valid());
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    ASSERT_TRUE(context.snapshot.hasCsg);
+    ASSERT_EQ(context.snapshot.receiverRanges.size(), 1u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, s_SuiteCsgRayReceiverActive | s_SuiteCsgRayReceiverUnsupported);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 0u);
+    EXPECT_TRUE(context.snapshot.cutters.empty());
+
+    SuiteSetCutterTranslation(context, customEntity, 10.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, s_SuiteCsgRayReceiverActive);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 1u);
+}
+
+void VerifyCsgShadowSnapshot_CutterLimitFallsBackForTheWholeReceiverWithoutPartialSubtraction(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Array<CsgShadowReceiverInput, 1> inputs = Array<CsgShadowReceiverInput, 1>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    for(u32 index = 0u; index < s_SuiteCsgRayMaxCutters; ++index){
+        const EntityID cutterEntity = context.addCutter(s_CsgPlaneShapeName);
+        ASSERT_TRUE(cutterEntity.valid());
+    }
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    ASSERT_EQ(context.snapshot.cutters.size(), s_SuiteCsgRayMaxCutters);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, s_SuiteCsgRayReceiverActive);
+    const EntityID overflowCutter = context.addCutter(s_CsgPlaneShapeName);
+    ASSERT_TRUE(overflowCutter.valid());
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, s_SuiteCsgRayReceiverActive | s_SuiteCsgRayReceiverUnsupported);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 0u);
+    EXPECT_TRUE(context.snapshot.cutters.empty());
+}
+
+void VerifyCsgShadowSnapshot_MalformedAndUnregisteredCuttersFollowRasterSkipSemantics(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Array<CsgShadowReceiverInput, 1> inputs = Array<CsgShadowReceiverInput, 1>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    const EntityID planeEntity = context.addCutter(s_CsgPlaneShapeName);
+    const EntityID malformedEntity = context.addCutter(s_CsgBoxShapeName);
+    const EntityID missingEntity = context.addCutter(s_CsgShadowCustomShape);
+    ASSERT_TRUE(planeEntity.valid());
+    ASSERT_TRUE(missingEntity.valid());
+    context.testWorld.world.entity(malformedEntity).getComponent<CsgCutterComponent>().parameterBytes.push_back(0u);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    ASSERT_EQ(context.snapshot.cutters.size(), 1u);
+    EXPECT_EQ(context.snapshot.cutters[0u].shapeType, s_SuiteCsgRayShapePlane);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, s_SuiteCsgRayReceiverActive);
+}
+
+void VerifyCsgShadowSnapshot_RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    ASSERT_TRUE(SuiteRegisterCustomCsgShape(context));
+    Array<CsgShadowReceiverInput, 2> inputs = Array<CsgShadowReceiverInput, 2>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    inputs[1u] = MakeCsgReceiverInput(context.addReceiver(s_CsgShadowOtherGroup));
+    const EntityID firstCutter = context.addCutter(s_CsgBoxShapeName);
+    const EntityID secondCutter = context.addCutter(s_CsgSphereShapeName, s_CsgShadowOtherGroup);
+    ASSERT_TRUE(secondCutter.valid());
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    ASSERT_EQ(context.snapshot.receiverRanges.size(), 2u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 1u);
+    EXPECT_EQ(context.snapshot.receiverRanges[1u].firstCutter, 1u);
+    context.testWorld.world.entity(inputs[0u].entity).getComponent<StaticCsgMeshComponent>().enabled = false;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, 0u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].firstCutter, 0u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 0u);
+    EXPECT_EQ(context.snapshot.receiverRanges[1u].firstCutter, 0u);
+    EXPECT_EQ(context.snapshot.cutters.size(), 1u);
+
+    context.testWorld.world.entity(inputs[0u].entity).getComponent<StaticCsgMeshComponent>().enabled = true;
+    context.testWorld.world.entity(firstCutter).getComponent<CsgCutterComponent>().shapeType = s_CsgShadowCustomShape;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_NE(context.snapshot.receiverRanges[0u].flags & s_SuiteCsgRayReceiverUnsupported, 0u);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 0u);
+    context.testWorld.world.entity(firstCutter).getComponent<CsgCutterComponent>().shapeType = s_CsgBoxShapeName;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].flags, s_SuiteCsgRayReceiverActive);
+    EXPECT_EQ(context.snapshot.receiverRanges[0u].cutterCount, 1u);
+    EXPECT_EQ(context.snapshot.receiverRanges[1u].firstCutter, 1u);
+    EXPECT_EQ(context.snapshot.cutters.size(), 2u);
+}
+
+void VerifyCsgShadowSnapshot_HardwareRootExclusionAndDisabledReceiversClearCapturedState(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    const EntityID receiver = context.addReceiver();
+    const EntityID cutter = context.addCutter(s_CsgBoxShapeName);
+    ASSERT_TRUE(cutter.valid());
+    LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+    MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+    mesh.meshletPrimitiveIndexCount = 3u;
+    mesh.solidTriangleWords = s_OpenTriangleWords;
+    mesh.csgLocalBounds.minBounds = f32x3_i32(-2.0f, -2.0f, -2.0f, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
+    mesh.csgLocalBounds.maxBounds = f32x3_i32(2.0f, 2.0f, 2.0f, 0);
+    SuiteBeginLightSpaceCsgGather(state, context, 1u, false);
+    SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    ASSERT_TRUE(SuiteFinishLightSpaceCsgGather(context, state));
+    ASSERT_TRUE(state.snapshot.hasCsg);
+    ASSERT_GE(state.bytes.size(), s_SuiteCsgRangeMembershipOffset + 4u);
+    const u32 membershipOffset = ReadSuiteU32LittleEndian(state.bytes, s_SuiteCsgRangeMembershipOffset);
+    EXPECT_NE(membershipOffset, 0u);
+    EXPECT_EQ(cast<usize>(membershipOffset), state.bytes.size() - 4u);
+    ASSERT_LE(cast<usize>(membershipOffset) + 4u, state.bytes.size());
+    const u32 membershipWord = ReadSuiteU32LittleEndian(state.bytes, cast<usize>(membershipOffset));
+    EXPECT_EQ(membershipWord, s_OpenTriangleWords[0u]);
+    const u32 softwareRootSlot = 17u;
+    mesh.swBvhNodeHeapHandle = MakeSuiteStorageBufferDescriptor(softwareRootSlot);
+    SuiteBeginLightSpaceCsgGather(state, context, 1u, true);
+    SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    ASSERT_TRUE(SuiteFinishLightSpaceCsgGather(context, state));
+    EXPECT_EQ(state.instances[0u].meshRootSlot, u32.max);
+    SuiteBeginLightSpaceCsgGather(state, context, 1u, false);
+    SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    ASSERT_TRUE(SuiteFinishLightSpaceCsgGather(context, state));
+    EXPECT_EQ(state.instances[0u].meshRootSlot, softwareRootSlot);
+
+    context.testWorld.world.entity(cutter).getComponent<CsgCutterComponent>().active = false;
+    SuiteBeginLightSpaceCsgGather(state, context, 1u, false);
+    SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    ASSERT_TRUE(SuiteFinishLightSpaceCsgGather(context, state));
+    EXPECT_FALSE(state.snapshot.hasCsg);
+    EXPECT_EQ(state.snapshot.identity, 0u);
+    EXPECT_TRUE(state.bytes.empty());
+}
+
+void VerifyCsgShadowSnapshot_MissingSolidMembershipCannotPublishAnActiveRayContext(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistration = LoggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    const EntityID receiver = context.addReceiver();
+    ASSERT_TRUE(context.addCutter(s_CsgBoxShapeName).valid());
+    LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+    MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+    mesh.meshletPrimitiveIndexCount = 3u;
+    mesh.solidTriangleWords = EmptySuiteU32Span();
+    SuiteBeginLightSpaceCsgGather(state, context, 1u, false);
+    SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    EXPECT_FALSE(SuiteFinishLightSpaceCsgGather(context, state));
+    EXPECT_TRUE(state.bytes.empty());
+
+    Array<u32, 2> extraWords = Array<u32, 2>();
+    mesh.solidTriangleWords = AsSuiteU32Span(extraWords);
+    SuiteBeginLightSpaceCsgGather(state, context, 1u, false);
+    SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    EXPECT_FALSE(SuiteFinishLightSpaceCsgGather(context, state));
+    EXPECT_TRUE(state.bytes.empty());
+
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(SawCapturedError(logger, "CSG receiver has no valid cooked solid topology"));
+}
+
+void VerifyCsgShadowSnapshot_BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence(){
+    Array<SoftwareShadowCaptureCadenceEnum, 3> cadences = Array<SoftwareShadowCaptureCadenceEnum, 3>();
+    cadences[0u] = SoftwareShadowCaptureCadence::EveryFrame;
+    cadences[1u] = SoftwareShadowCaptureCadence::ReuseOneFrame;
+    cadences[2u] = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    Array<u32, 3> refreshIntervals = Array<u32, 3>();
+    refreshIntervals[0u] = 1u;
+    refreshIntervals[1u] = 2u;
+    refreshIntervals[2u] = 3u;
+    for(usize caseIndex = 0u; caseIndex < 3u; ++caseIndex){
+        const SoftwareShadowCaptureCadenceEnum cadence = cadences[caseIndex];
+        const u32 refreshInterval = refreshIntervals[caseIndex];
+        CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+        const EntityID receiver = context.addReceiver(s_CsgShadowReceiverGroup, true);
+        const EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+        ASSERT_TRUE(context.testWorld.world.entity(cutterEntity).hasComponent<CsgCutterComponent>());
+        LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+        MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+        mesh.runtimeMesh = true;
+        mesh.runtimeMeshVersion = 3u;
+        mesh.runtimeGeometryContentRevision = 7u;
+        mesh.meshletPrimitiveIndexCount = 3u;
+        mesh.solidTriangleWords = s_OpenTriangleWords;
+        Array<NwbRtInstanceMaterialGpu, 1> materials = Array<NwbRtInstanceMaterialGpu, 1>();
+        Array<InstanceGpuData, 1> instances = Array<InstanceGpuData, 1>();
+        LightSpaceCaptureHistory history = LightSpaceCaptureHistory();
+        u64 previousExact = 0u;
+        u64 previousContent = 0u;
+        for(u32 frame = 0u; frame < 7u; ++frame){
+            const f32 x = cast<f32>(frame) * 0.25f;
+            SuiteBeginLightSpaceCsgGather(state, context, 1u, true);
+            // Move only lane X.
+            SuiteSetCutterTranslation(context, cutterEntity, x, 0.0f, 0.0f);
+            SuiteUpdateInstancePitchAndX(x, instances[0u]);
+            SuiteAppendTranslatedXCsgReceiver(state, receiver, x, mesh);
+            ASSERT_TRUE(SuiteFinishLightSpaceCsgGather(context, state));
+            ASSERT_TRUE(state.snapshot.hasCsg);
+            ASSERT_TRUE(state.captureGeometryTrusted);
+            const u64 content = BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(state, materials, instances);
+            if(frame != 0u){
+                EXPECT_NE(state.snapshot.identity, previousExact);
+                EXPECT_EQ(content, previousContent);
+            }
+            previousExact = state.snapshot.identity;
+            previousContent = content;
+            history.beginFrame();
+            LightSpaceCaptureIdentity identity = LightSpaceCaptureIdentity();
+            identity.scene = content;
+            identity.lighting = 11u;
+            identity.layout = 13u;
+            identity.trusted = state.captureGeometryTrusted;
+            const LightSpaceCaptureTicket ticket = history.prepare(identity, cadence);
+            EXPECT_EQ(ticket.reuse, (frame % refreshInterval) != 0u);
+            if(!ticket.reuse)
+                history.recordCapture(ticket);
+            ASSERT_TRUE(history.accept(ticket));
+        }
+    }
+}
+
+b8 BuildSuiteCaptureReuseGather(
+    mut CsgShadowSnapshotContext context,
+    mut LightSpaceCsgState state,
+    in Span<EntityID> receivers,
+    in MeshRayTracingResourceSnapshot mesh
+){
+    SuiteBeginLightSpaceCsgGather(state, context, receivers.size(), false);
+    for(in EntityID receiver : receivers)
+        SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+    return SuiteFinishLightSpaceCsgGather(context, state);
+}
+
+LightSpaceCaptureIdentity MakeSuiteCaptureReuseIdentity(
+    in LightSpaceCsgState state,
+    in Span<NwbRtInstanceMaterialGpu> materials,
+    in Span<InstanceGpuData> instances,
+    in Span<u8> materialBytes
+){
+    LightSpaceCaptureIdentity out = LightSpaceCaptureIdentity();
+    out.scene = BuildSuiteLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes);
+    out.lighting = 11u;
+    out.layout = 13u;
+    out.trusted = state.captureGeometryTrusted;
+    return out;
+}
+
+void ExpectSuiteCaptureReuseRefresh(
+    mut CsgShadowSnapshotContext context,
+    mut LightSpaceCsgState state,
+    in Span<EntityID> receivers,
+    in MeshRayTracingResourceSnapshot mesh,
+    in Span<NwbRtInstanceMaterialGpu> materials,
+    in Span<InstanceGpuData> instances,
+    in Span<u8> materialBytes,
+    in Func<void()> change
+){
+    ASSERT_TRUE(BuildSuiteCaptureReuseGather(context, state, receivers, mesh));
+    ASSERT_TRUE(state.snapshot.hasCsg);
+    Array<SoftwareShadowCaptureCadenceEnum, 2> cadences = Array<SoftwareShadowCaptureCadenceEnum, 2>();
+    cadences[0u] = SoftwareShadowCaptureCadence::ReuseOneFrame;
+    cadences[1u] = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    Array<LightSpaceCaptureHistory, 2> histories = Array<LightSpaceCaptureHistory, 2>();
+    for(usize index = 0u; index < cadences.size(); ++index){
+        histories[index].beginFrame();
+        const LightSpaceCaptureTicket captured = histories[index].prepare(MakeSuiteCaptureReuseIdentity(state, materials, instances, materialBytes), cadences[index]);
+        histories[index].recordCapture(captured);
+        ASSERT_TRUE(histories[index].accept(captured));
+    }
+    change();
+    ASSERT_TRUE(BuildSuiteCaptureReuseGather(context, state, receivers, mesh));
+    for(usize index = 0u; index < cadences.size(); ++index){
+        histories[index].beginFrame();
+        EXPECT_FALSE(histories[index].prepare(MakeSuiteCaptureReuseIdentity(state, materials, instances, materialBytes), cadences[index]).reuse);
+    }
+}
+
+void VerifyCsgShadowSnapshot_CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Array<EntityID, 2> receivers = Array<EntityID, 2>();
+    receivers[0u] = context.addReceiver();
+    receivers[1u] = context.addReceiver();
+    const EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+    ASSERT_TRUE(context.testWorld.world.entity(cutterEntity).hasComponent<CsgCutterComponent>());
+    LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+    MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+    mesh.runtimeMesh = true;
+    mesh.runtimeMeshVersion = 3u;
+    mesh.runtimeGeometryContentRevision = 7u;
+    mesh.meshletPrimitiveIndexCount = 3u;
+    mesh.solidTriangleWords = s_OpenTriangleWords;
+    Array<NwbRtInstanceMaterialGpu, 2> materials = Array<NwbRtInstanceMaterialGpu, 2>();
+    Array<InstanceGpuData, 2> instances = Array<InstanceGpuData, 2>();
+    Array<u8, 4> materialBytes = Array<u8, 4>();
+    materialBytes[0u] = 1u;
+    materialBytes[1u] = 2u;
+    materialBytes[2u] = 3u;
+    materialBytes[3u] = 4u;
+
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut mesh]() -> void{
+        ++mesh.runtimeGeometryContentRevision;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut mesh]() -> void{
+        ++mesh.runtimeMeshVersion;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut mesh]() -> void{
+        mesh.meshletPrimitiveIndexCount += 3u;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut mesh]() -> void{
+        mesh.meshName = s_EcsCaseTestsCsgShadowReplacementMesh;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut mesh]() -> void{
+        mesh.runtimeLocalBoundsHeapHandle = MakeSuiteStorageBufferDescriptor(17u);
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut materials]() -> void{
+        materials[0u].surfaceDispatchId = 5u;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut materials]() -> void{
+        materials[0u].positionSlot = 9u;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut materials]() -> void{
+        materials[0u].flags = s_SuiteRtMaterialFlagTransparent;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut instances]() -> void{
+        ++instances[0u].translation.w;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut instances]() -> void{
+        ++instances[0u].geometryHeapSlots[0u];
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut materialBytes]() -> void{
+        ++materialBytes[0u];
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut context, in cutterEntity]() -> void{
+        SuiteSetCutterParameters(context, cutterEntity, VectorSingle(0.5f, 1.0f, 1.0f, 0.0f));
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut receivers]() -> void{
+        const EntityID firstReceiver = receivers[0u];
+        receivers[0u] = receivers[1u];
+        receivers[1u] = firstReceiver;
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut context]() -> void{
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    });
+    ExpectSuiteCaptureReuseRefresh(context, state, receivers, mesh, materials, instances, materialBytes, lambda[mut context, in cutterEntity]() -> void{
+        context.testWorld.world.entity(cutterEntity).getComponent<CsgCutterComponent>().active = false;
+    });
+}
+
+void VerifyCsgShadowSnapshot_UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture(){
+    Array<SoftwareShadowCaptureCadenceEnum, 2> cadences = Array<SoftwareShadowCaptureCadenceEnum, 2>();
+    cadences[0u] = SoftwareShadowCaptureCadence::ReuseOneFrame;
+    cadences[1u] = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    Array<u64, 4> revisions = Array<u64, 4>();
+    revisions[0u] = 7uLL;
+    revisions[1u] = 0uLL;
+    revisions[2u] = 0uLL;
+    revisions[3u] = 8uLL;
+    for(in SoftwareShadowCaptureCadenceEnum cadence : cadences){
+        CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+        const EntityID receiver = context.addReceiver(s_CsgShadowReceiverGroup, true);
+        const EntityID cutter = context.addCutter(s_CsgBoxShapeName);
+        ASSERT_TRUE(cutter.valid());
+        LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+        MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+        mesh.runtimeMesh = true;
+        mesh.meshletPrimitiveIndexCount = 3u;
+        mesh.solidTriangleWords = s_OpenTriangleWords;
+        Array<NwbRtInstanceMaterialGpu, 1> materials = Array<NwbRtInstanceMaterialGpu, 1>();
+        Array<InstanceGpuData, 1> instances = Array<InstanceGpuData, 1>();
+        LightSpaceCaptureHistory history = LightSpaceCaptureHistory();
+        for(in u64 revision : revisions){
+            mesh.runtimeGeometryContentRevision = revision;
+            SuiteBeginLightSpaceCsgGather(state, context, 1u, false);
+            SuiteAppendIdentityCsgReceiver(state, receiver, mesh);
+            ASSERT_TRUE(SuiteFinishLightSpaceCsgGather(context, state));
+            EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
+            const u64 sceneContent = BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(state, materials, instances);
+            LightSpaceCaptureIdentity identity = LightSpaceCaptureIdentity();
+            identity.scene = sceneContent;
+            identity.lighting = 11u;
+            identity.layout = 13u;
+            identity.trusted = state.captureGeometryTrusted;
+            history.beginFrame();
+            const LightSpaceCaptureTicket ticket = history.prepare(identity, cadence);
+            EXPECT_FALSE(ticket.reuse);
+            history.recordCapture(ticket);
+            ASSERT_TRUE(history.accept(ticket));
+        }
+    }
+}
+
+void VerifyCsgShadowSnapshot_IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Array<CsgShadowReceiverInput, 2> inputs = Array<CsgShadowReceiverInput, 2>();
+    inputs[0u] = MakeCsgReceiverInput(context.addReceiver());
+    inputs[1u] = MakeCsgReceiverInput(context.addReceiver(s_CsgShadowOtherGroup));
+    const EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    u64 identity = context.snapshot.identity;
+    EXPECT_NE(identity, 0u);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_EQ(context.snapshot.identity, identity);
+
+    SuiteSetCutterParameters(context, cutterEntity, VectorSingle(0.5f, 1.0f, 1.0f, 0.0f));
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_NE(context.snapshot.identity, identity);
+    identity = context.snapshot.identity;
+    SuiteSetCutterTranslation(context, cutterEntity, 0.5f, 0.0f, 0.0f);
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_NE(context.snapshot.identity, identity);
+    identity = context.snapshot.identity;
+
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_NE(context.snapshot.identity, identity);
+    identity = context.snapshot.identity;
+    const CsgShadowReceiverInput firstCopy = inputs[0u];
+    inputs[0u] = inputs[1u];
+    inputs[1u] = firstCopy;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_NE(context.snapshot.identity, identity);
+    identity = context.snapshot.identity;
+    inputs[1u].worldMin.x = inputs[1u].worldMin.x - 1.0f;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_NE(context.snapshot.identity, identity);
+
+    context.testWorld.world.entity(cutterEntity).getComponent<CsgCutterComponent>().receiverGroup = s_NameNone;
+    ASSERT_TRUE(SuiteBuildCsgSnapshot(context, inputs));
+    EXPECT_FALSE(context.snapshot.hasCsg);
+    EXPECT_EQ(context.snapshot.identity, 0u);
+}
+
+void VerifyCsgShadowSnapshot_FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    native(mut context){
+        using namespace NWB::Impl;
+        MeshSystem meshSystem(context.testWorld.arena, context.testWorld.world);
+        auto entity = context.testWorld.world.createEntity();
+        entity.addComponent<StaticCsgMeshComponent>().receiverGroup = s_CsgShadowReceiverGroup;
+        entity.addComponent<RendererComponent>();
+        entity.addComponent<MeshComponent>().mesh.virtualPath = s_EcsCaseTestsCsgShadowStaticCacheMesh;
+        entity.addComponent<Scene::TransformComponent>();
+        FrameCacheRuntimeProvider provider;
+        provider.receiver = entity.id();
+        meshSystem.registerRuntimeMeshProvider(provider);
+
+        const auto original = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+        ASSERT_TRUE(original.has_value());
+        const auto staticMesh = meshSystem.resolveRenderableMeshStatus(entity.id());
+        ASSERT_TRUE(staticMesh.has_value());
+        EXPECT_FALSE(staticMesh.value().runtime);
+
+        provider.attached = true;
+        EXPECT_TRUE(meshSystem.hasRuntimeMeshBinding(entity.id()));
+        EXPECT_FALSE(CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem).has_value());
+        provider.attached = false;
+        const auto restored = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+        ASSERT_TRUE(restored.has_value());
+        EXPECT_EQ(original.value(), restored.value());
+
+        provider.throwOnQuery = true;
+        EXPECT_THROW({ const auto throwingSignature = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem); EXPECT_FALSE(throwingSignature.has_value()); }, i32);
+        provider.throwOnQuery = false;
+        const auto afterFailure = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+        ASSERT_TRUE(afterFailure.has_value());
+        EXPECT_EQ(original.value(), afterFailure.value());
+        meshSystem.unregisterRuntimeMeshProvider(provider);
+    }
+}
+
+void VerifyEcsGraphics_CsgNonFiniteReceiverBoundsDisableAabbCulling(){
+    CsgReceiverCpuBounds posedReceiverBounds = CsgReceiverCpuBounds();
+    posedReceiverBounds.minBounds = f32x3_i32(-1.0f, -1.0f, -1.0f, s_CsgBoundsValidFlag);
+    posedReceiverBounds.maxBounds = f32x3_i32(1.0f, 1.0f, 1.0f, 0);
+
+    EXPECT_FALSE(CsgReceiverBoundsCanCull(posedReceiverBounds));
+
+    posedReceiverBounds.minBounds.w |= s_CsgBoundsFiniteFlag;
+    EXPECT_TRUE(CsgReceiverBoundsCanCull(posedReceiverBounds));
+}
+
+void VerifyEcsGraphics_CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection(){
+    ComputeOutputTestArena arena = ComputeOutputTestArena();
+    CsgShapeRegistry registry = CsgShapeRegistry(arena.arena);
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(registry));
+    const Expected<CsgShapeTypeInfo> foundShape = registry.findShapeType(s_CsgBoxShapeName);
+    ASSERT_TRUE(foundShape.has_value());
+    const CsgShapeTypeInfo shape = foundShape.value();
+    CsgBoxShapeParameters parameters = CsgBoxShapeParameters();
+    parameters.halfExtents = f32x4(0.25f, 0.125f, 0.5f, 0.0f);
+    CsgClipWorkBounds receiver = CsgClipWorkBounds();
+    receiver.minBounds = f32x4(-20.0f, -20.0f, -20.0f, 0.0f);
+    receiver.maxBounds = f32x4(-10.0f, -10.0f, -10.0f, 0.0f);
+    CsgClipWorkBounds work = CsgClipWorkBounds();
+    ASSERT_TRUE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver, work));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, 0.25f);
     EXPECT_FLOAT_EQ(work.minBounds.y, 0.125f);
@@ -1511,11 +1817,11 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     EXPECT_FLOAT_EQ(work.maxBounds.y, 0.375f);
     EXPECT_FLOAT_EQ(work.maxBounds.z, 2.5f);
     receiver.valid = true;
-    EXPECT_FALSE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, work));
+    EXPECT_FALSE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver, work));
     EXPECT_FALSE(work.valid);
-    receiver.minBounds = Float4(0.5f, 0.25f, 1.75f, 0.0f);
-    receiver.maxBounds = Float4(1.0f, 1.0f, 3.0f, 0.0f);
-    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, work));
+    receiver.minBounds = f32x4(0.5f, 0.25f, 1.75f, 0.0f);
+    receiver.maxBounds = f32x4(1.0f, 1.0f, 3.0f, 0.0f);
+    ASSERT_TRUE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver, work));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, 0.5f);
     EXPECT_FLOAT_EQ(work.minBounds.y, 0.25f);
@@ -1525,88 +1831,95 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     EXPECT_FLOAT_EQ(work.maxBounds.z, 2.5f);
 }
 
-
-TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds){
-    NWB::Tests::TestArena<> arena;
-    NWB::Impl::CsgShapeRegistry registry(arena.arena);
-    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    NWB::Impl::CsgShapeTypeInfo shape(arena.arena);
-    const auto foundShape2 = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
-    ASSERT_TRUE(foundShape2);
-    shape = *foundShape2;
-    NWB::Impl::CsgClipWorkBounds receiver;
-    NWB::Impl::CsgClipWorkBounds work;
-    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
+void VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds(){
+    ComputeOutputTestArena arena = ComputeOutputTestArena();
+    CsgShapeRegistry registry = CsgShapeRegistry(arena.arena);
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(registry));
+    const MatrixSingle identityMat = MatrixSingle(
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    );
+    const Expected<CsgShapeTypeInfo> foundShape2 = registry.findShapeType(s_CsgBoxShapeName);
+    ASSERT_TRUE(foundShape2.has_value());
+    CsgShapeTypeInfo shape = foundShape2.value();
+    CsgClipWorkBounds receiver = CsgClipWorkBounds();
+    CsgClipWorkBounds work = CsgClipWorkBounds();
+    ASSERT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
     ASSERT_TRUE(work.valid);
 
-    NWB::Impl::CsgBoxShapeParameters invalidParameters;
+    CsgBoxShapeParameters invalidParameters = CsgBoxShapeParameters();
     invalidParameters.halfExtents.x = 0.0f;
-    const BinaryByteView invalidParameterBytes(reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters));
-    EXPECT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), invalidParameterBytes, receiver, work));
+    EXPECT_TRUE(SuiteResolveCsgBoxWorkBounds(registry, shape, identityMat, invalidParameters, receiver, work));
     EXPECT_FALSE(work.valid);
-    receiver.minBounds = Float4(-2.0f, -2.0f, -2.0f, -2.0f);
-    receiver.maxBounds = Float4(2.0f, 2.0f, 2.0f, 2.0f);
+    receiver.minBounds = f32x4(-2.0f, -2.0f, -2.0f, -2.0f);
+    receiver.maxBounds = f32x4(2.0f, 2.0f, 2.0f, 2.0f);
     receiver.valid = true;
-    EXPECT_FALSE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), invalidParameterBytes, receiver, work));
+    EXPECT_FALSE(SuiteResolveCsgBoxWorkBounds(registry, shape, identityMat, invalidParameters, receiver, work));
     EXPECT_FALSE(work.valid);
 
-    const auto foundShape3 = registry.findShapeType(NWB::Impl::s_CsgPlaneShapeName);
-    ASSERT_TRUE(foundShape3);
-    shape = *foundShape3;
-    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
+    const Expected<CsgShapeTypeInfo> foundShape3 = registry.findShapeType(s_CsgPlaneShapeName);
+    ASSERT_TRUE(foundShape3.has_value());
+    shape = foundShape3.value();
+    ASSERT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, -2.0f);
     EXPECT_FLOAT_EQ(work.maxBounds.x, 2.0f);
     receiver.valid = false;
-    EXPECT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
+    EXPECT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
     EXPECT_FALSE(work.valid);
 
-    const auto foundShape4 = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
-    ASSERT_TRUE(foundShape4);
-    shape = *foundShape4;
-    NWB::Impl::CsgShapeTypeDesc custom = shape.desc;
-    custom.name = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgFiniteCustomCutter);
-    custom.shaderModule = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgFiniteCustomCutterEval);
+    const Expected<CsgShapeTypeInfo> foundShape4 = registry.findShapeType(s_CsgBoxShapeName);
+    ASSERT_TRUE(foundShape4.has_value());
+    shape = foundShape4.value();
+    CsgShapeTypeDesc custom = shape.desc;
+    custom.name = s_EcsCaseTestsCsgFiniteCustomCutter;
+    custom.shaderModule = s_EcsCaseTestsCsgFiniteCustomCutterEval;
     custom.shaderModuleInclude = "tests/csg/finite_custom_cutter_eval.slangi";
-    const auto customId = registry.registerShapeType(custom);
-    ASSERT_TRUE(customId);
-    const auto foundShape5 = registry.findShapeType(*customId);
-    ASSERT_TRUE(foundShape5);
-    shape = *foundShape5;
-    EXPECT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
+    const Expected<u32> customId = registry.registerShapeType(custom);
+    ASSERT_TRUE(customId.has_value());
+    const Expected<CsgShapeTypeInfo> foundShape5 = registry.findShapeType(customId.value());
+    ASSERT_TRUE(foundShape5.has_value());
+    shape = foundShape5.value();
+    EXPECT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
     EXPECT_FALSE(work.valid);
     receiver.valid = true;
-    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
+    ASSERT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, -1.0f);
     EXPECT_FLOAT_EQ(work.maxBounds.x, 1.0f);
 }
 
-
-TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections){
-    NWB::Impl::CsgFrameWorkRegion unknown;
-    const NWB::Impl::CsgWorkRect unknownRect = unknown.resolveRect(1001u, 701u);
+void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections(){
+    CsgFrameWorkRegion unknown = CsgFrameWorkRegion();
+    const CsgWorkRect unknownRect = unknown.resolveRect(1001u, 701u);
     EXPECT_EQ(unknownRect.minX, 0);
     EXPECT_EQ(unknownRect.minY, 0);
     EXPECT_EQ(unknownRect.maxX, 1001);
     EXPECT_EQ(unknownRect.maxY, 701);
 
-    NWB::Impl::CsgFrameWorkRegion crossing;
-    const SIMDMatrix projMat = MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f);
-    crossing.expandWorldBounds(projMat, VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), 1001u, 701u);
+    CsgFrameWorkRegion crossing = CsgFrameWorkRegion();
+    SuiteExpandPerspectiveCsgWorldBounds(crossing, VectorSingle(-1.0f, -1.0f, -1.0f, 0.0f), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(crossing.fullFrame);
     EXPECT_EQ(crossing.resolveRect(1001u, 701u).maxX, 1001);
 
-    NWB::Impl::CsgFrameWorkRegion invalid;
-    const SIMDMatrix identityMat = MatrixIdentity();
-    invalid.expandWorldBounds(identityMat, VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), 1001u, 701u);
+    const MatrixSingle identityMat = MatrixSingle(
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    );
+    CsgFrameWorkRegion invalid = CsgFrameWorkRegion();
+    SuiteExpandCsgWorldBounds(invalid, identityMat, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(invalid.fullFrame);
-    NWB::Impl::CsgFrameWorkRegion nonfinite;
-    nonfinite.expandWorldBounds(identityMat, VectorSet(-Limit<f32>::s_Infinity, -1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
+
+    CsgFrameWorkRegion nonfinite = CsgFrameWorkRegion();
+    SuiteExpandCsgWorldBounds(nonfinite, identityMat, VectorSingle(-bit_cast<f32>(0x7F800000u), -1.0f, 1.0f, 0.0f), VectorSingle(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(nonfinite.fullFrame);
 
-    NWB::Impl::CsgFrameWorkRegion large;
-    large.expandWorldBounds(identityMat, VectorSet(-1e20f, -0.25f, 1.0f, 0.0f), VectorSet(0.0f, 0.25f, 2.0f, 0.0f), 1000u, 600u);
+    CsgFrameWorkRegion large = CsgFrameWorkRegion();
+    SuiteExpandCsgWorldBounds(large, identityMat, VectorSingle(-1e20f, -0.25f, 1.0f, 0.0f), VectorSingle(0.0f, 0.25f, 2.0f, 0.0f), 1000u, 600u);
     ASSERT_TRUE(large.bounded());
     EXPECT_EQ(large.minX, 0u);
     EXPECT_EQ(large.maxX, 502u);
@@ -1615,17 +1928,53 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity, VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity)
+NWB_ADHD_GTEST(CausticLightSelectorTests, MissingInputsPreserveSlotsAndPointLightsCannotWin, VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCannotWin)
+NWB_ADHD_GTEST(CausticQualitySettings, RejectsUnsupportedPhotonGridDivisors, VerifyCausticQualitySettings_RejectsUnsupportedPhotonGridDivisors)
+NWB_ADHD_GTEST(CausticResolveActivityTests, PartialTilesReserveOneWordForEveryDispatchGroup, VerifyCausticResolveActivityTests_PartialTilesReserveOneWordForEveryDispatchGroup)
+NWB_ADHD_GTEST(CausticResolveActivityTests, InvalidExtentsNeverPublishLayout, VerifyCausticResolveActivityTests_InvalidExtentsNeverPublishLayout)
+NWB_ADHD_GTEST(CausticResolveActivityTests, LastRawWordMayEndAtTheUintAddressBoundary, VerifyCausticResolveActivityTests_LastRawWordMayEndAtTheUintAddressBoundary)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAllocations, VerifyCoincidentOpticalVolumes_AutomaticSelectionComparesBytesFromSeparateAllocations)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLengths, VerifyCoincidentOpticalVolumes_AutomaticSelectionKeepsDifferentByteValuesAndLengths)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSemantics, VerifyCoincidentOpticalVolumes_IdenticalMaterialGroupingKeepsDistinctMediumSemantics)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermutation, VerifyCoincidentOpticalVolumes_PriorityTiesUseFullEntityIdRegardlessOfInputPermutation)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries, VerifyCoincidentOpticalVolumes_GroupsMeshAndMaterialRemainIndependentBoundaries)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup, VerifyCoincidentOpticalVolumes_TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBoundaries, VerifyCoincidentOpticalVolumes_RotationAndScaleDifferencesPreserveDistinctBoundaries)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity, VerifyCoincidentOpticalVolumes_SignedZeroTransformLanesHaveTheSameIdentity)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGeometry, VerifyCoincidentOpticalVolumes_InvalidCandidatesCannotSuppressEachOtherOrValidGeometry)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChangeOrExpire, VerifyCoincidentOpticalVolumes_SelectionOwnsOnlyItsResultAfterBorrowedInputsChangeOrExpire)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives, VerifyCoincidentOpticalVolumes_NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, ResetEmptyAndSingleCandidateClearPriorSuppression, VerifyCoincidentOpticalVolumes_ResetEmptyAndSingleCandidateClearPriorSuppression)
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate, VerifyCoincidentOpticalVolumes_EmptyAndSingleCandidateFastPathsDoNotAllocate)
+NWB_ADHD_GTEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView, VerifyComputeEmulationLayoutTests_TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView)
+NWB_ADHD_GTEST(ComputeEmulationLayoutTests, RejectsInvalidSourceSizes, VerifyComputeEmulationLayoutTests_RejectsInvalidSourceSizes)
+NWB_ADHD_GTEST(ComputeEmulationLayoutTests, LastIndexWordMayEndAtTheUintAddressBoundary, VerifyComputeEmulationLayoutTests_LastIndexWordMayEndAtTheUintAddressBoundary)
+NWB_ADHD_GTEST(ComputeEmulationOutputResourceSet, EmptyPlansFailWithoutImporting, VerifyComputeEmulationOutputResourceSet_EmptyPlansFailWithoutImporting)
+NWB_ADHD_GTEST(AvboitComputeEmulationValidator, RejectsStrayAndOversizedSharedPhases, VerifyAvboitComputeEmulationValidator_RejectsStrayAndOversizedSharedPhases)
+NWB_ADHD_GTEST(CsgShaderVariantBuilderTests, RejectsMalformedSegmentsAndEmptyAssignmentValues, VerifyCsgShaderVariantBuilderTests_RejectsMalformedSegmentsAndEmptyAssignmentValues)
+NWB_ADHD_GTEST(CsgShadowSnapshot, EmptyAndDisabledReceiversKeepTheZeroCsgPath, VerifyCsgShadowSnapshot_EmptyAndDisabledReceiversKeepTheZeroCsgPath)
+NWB_ADHD_GTEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder, VerifyCsgShadowSnapshot_ResolvesGroupsAndMaterialPassesInShadowInstanceOrder)
+NWB_ADHD_GTEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds, VerifyCsgShadowSnapshot_CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds)
+NWB_ADHD_GTEST(CsgShadowSnapshot, CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCanOverlap, VerifyCsgShadowSnapshot_CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCanOverlap)
+NWB_ADHD_GTEST(CsgShadowSnapshot, CutterLimitFallsBackForTheWholeReceiverWithoutPartialSubtraction, VerifyCsgShadowSnapshot_CutterLimitFallsBackForTheWholeReceiverWithoutPartialSubtraction)
+NWB_ADHD_GTEST(CsgShadowSnapshot, MalformedAndUnregisteredCuttersFollowRasterSkipSemantics, VerifyCsgShadowSnapshot_MalformedAndUnregisteredCuttersFollowRasterSkipSemantics)
+NWB_ADHD_GTEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges, VerifyCsgShadowSnapshot_RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges)
+NWB_ADHD_GTEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedState, VerifyCsgShadowSnapshot_HardwareRootExclusionAndDisabledReceiversClearCapturedState)
+NWB_ADHD_GTEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext, VerifyCsgShadowSnapshot_MissingSolidMembershipCannotPublishAnActiveRayContext)
+NWB_ADHD_GTEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence, VerifyCsgShadowSnapshot_BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence)
+NWB_ADHD_GTEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges, VerifyCsgShadowSnapshot_CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges)
+NWB_ADHD_GTEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture, VerifyCsgShadowSnapshot_UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
+NWB_ADHD_GTEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder, VerifyCsgShadowSnapshot_IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder)
+NWB_ADHD_GTEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs, VerifyCsgShadowSnapshot_FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs)
+NWB_ADHD_GTEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling, VerifyEcsGraphics_CsgNonFiniteReceiverBoundsDisableAabbCulling)
+NWB_ADHD_GTEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection, VerifyEcsGraphics_CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection)
+NWB_ADHD_GTEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds, VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds)
+NWB_ADHD_GTEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections, VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

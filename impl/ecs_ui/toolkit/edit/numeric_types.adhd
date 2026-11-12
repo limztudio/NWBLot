@@ -9,6 +9,8 @@ const i64 s_NumericEditMaxI64 = 9223372036854775807ll;
 const i64 s_NumericEditMinI64 = -s_NumericEditMaxI64 - 1ll;
 const f64 s_NumericEditMaxF64 = 1.79769313486231570815e+308;
 const f64 s_NumericEditMinF64 = -s_NumericEditMaxF64;
+const i64 s_DefaultIntegerEditValue = 0ll;
+const f64 s_DefaultFloatEditValue = 0.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,6 +134,33 @@ NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds b
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 HasIntegerEditValueChanged(in i64 candidate, in i64 value){
+    return candidate != value;
+}
+
+b8 HasFloatEditBitsChanged(in f64 candidate, in f64 value){
+    return bit_cast<u64>(candidate) != bit_cast<u64>(value);
+}
+
+b8 HasCanonicalDraftChanged(in StringView formatted, in StringView currentDraft){
+    return formatted != currentDraft;
+}
+
+Expected<b8, ErrorCode> FinalizeCanonicalNumericDraft(in StringView formattedText, in b8 changed, in b8 draftUpdated, mut String outAcceptedDraft){
+    if(!draftUpdated)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    outAcceptedDraft.clear();
+    outAcceptedDraft.append(formattedText);
+    return changed;
+}
+
+b8 FinalizeNumericDraftTextUpdate(in b8 draftUpdated, mut u64 inOutRevision){
+    if(!draftUpdated)
+        return false;
+    AdvanceNonWrappingRevision(inOutRevision);
+    return true;
+}
 
 void MergeNumericEditResult(in NumericEditResult delta, mut NumericEditResult inOutResult){
     inOutResult.valid = inOutResult.valid && delta.valid;

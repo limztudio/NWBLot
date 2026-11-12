@@ -2,10 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_ui/toolkit/edit/numeric_model_operations.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/numeric_model_operations.adhd>
 
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <global/numeric_text.h>
 
 
@@ -27,7 +36,7 @@ public:
     explicit IntegerEditModel(Core::Alloc::GlobalArena& arena)
         : NumericEditModelBase(arena)
     {
-        initializeDefault(0);
+        initializeDefault(s_DefaultIntegerEditValue);
     }
 
 
@@ -35,6 +44,7 @@ public:
     [[nodiscard]] NumericParseStatus::Enum status(const IntegerBounds& bounds = {})const noexcept{
         return EvaluateIntegerDraftStatus(m_draft.text(), bounds);
     }
+
     // External replacements fence pending native/clipboard intentions even when the supplied value is unchanged.
     [[nodiscard]] b8 setValue(const i64 value){
         return assignAuthoritativeValue(value);
@@ -48,8 +58,10 @@ private:
             canonical,
             ValidateIntegerBounds,
             ParseIntegerDraft,
-            [](const i64 candidate, const i64 value)noexcept{ return candidate != value; });
+            HasIntegerEditValueChanged
+        );
     }
+
     [[nodiscard]] Expected<b8, ErrorCode> canonicalize(const i64 value){
         return canonicalizeWith(value, [](const i64 candidate, const Span<char> buffer)noexcept{ return FormatI64(candidate, buffer); });
     }
@@ -63,15 +75,10 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsUiToolkitEditIntegerModelAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

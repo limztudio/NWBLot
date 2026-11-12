@@ -7,6 +7,7 @@
 #include "binary_expression_checker.h"
 #include "borrow_lifetime_analyzer.h"
 #include "lambda_capture_analyzer.h"
+#include "type_layout_analyzer.h"
 
 
 NWB_ADHD_BEGIN
@@ -94,7 +95,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             if(lhsThisField && lhsThisField->type){
                 const MStringView baseFieldTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name);
                 const ParamPassingMode::Enum fieldRefMode = m_checker.m_symbols.resolveRefMode(lhsThisField->type);
-                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName))){
+                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseFieldTypeName))){
                     if(m_checker.isThisConstInScope(method, scope)){
                         m_checker.reportError(errors, expr.lhs->span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
                         ok = false;
@@ -108,7 +109,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             if(lhsLocal && lhsLocal->type && !lhsLocal->isParam){
                 const MStringView baseLocalTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsLocal->type->name);
                 const ParamPassingMode::Enum localRefMode = (lhsLocal->mode != ParamPassingMode::None) ? lhsLocal->mode : m_checker.m_symbols.resolveRefMode(lhsLocal->type);
-                if(localRefMode != ParamPassingMode::None && m_checker.m_symbols.findInterface(baseLocalTypeName))
+                if(localRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLocalTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLocalTypeName)))
                     lhsNeedsMut = false;
             }
         }
@@ -116,7 +117,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             lhsMemberOrIndexTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
             const ParamPassingMode::Enum lhsRefMode = m_checker.m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
             const MStringView baseLhsTypeName = lhsMemberOrIndexTypeRef ? m_checker.m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name) : MStringView{};
-            if(lhsRefMode != ParamPassingMode::None && m_checker.m_symbols.findInterface(baseLhsTypeName)){
+            if(lhsRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLhsTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLhsTypeName))){
                 lhsNeedsMut = false;
                 if(expr.lhs->lhs){
                     const b8 savedDeref = expr.lhs->lhs->derefNotNull;
@@ -132,10 +133,10 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     b8 rhsInClassArenaCtx = false;
     if(lhsThisField){
         const MStringView baseFieldTypeName = lhsThisField->type ? m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name) : MStringView{};
-        if(lhsThisField->type && SymbolTable::IsArenaBackedContainer(baseFieldTypeName))
+        if(lhsThisField->type && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*lhsThisField->type))
             rhsInClassArenaCtx = true;
         const ParamPassingMode::Enum fieldRefMode = lhsThisField->type ? m_checker.m_symbols.resolveRefMode(lhsThisField->type) : ParamPassingMode::None;
-        if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName))){
+        if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseFieldTypeName))){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
@@ -154,7 +155,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     }
     else if(lhsLocal && lhsLocal->type){
         const MStringView baseLocalTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsLocal->type->name);
-        if(expr.lhs->derefNotNull && m_checker.m_symbols.findInterface(baseLocalTypeName)){
+        if(expr.lhs->derefNotNull && (m_checker.m_symbols.findInterface(baseLocalTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLocalTypeName))){
             const ParamPassingMode::Enum localRefMode = (lhsLocal->mode == ParamPassingMode::Mut || m_checker.m_symbols.resolveRefMode(lhsLocal->type) == ParamPassingMode::Mut)
                 ? ParamPassingMode::Mut
                 : ParamPassingMode::In;
@@ -191,7 +192,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(const_cast<TypeRef*>(lhsMemberOrIndexTypeRef), expr.rhs);
         const ParamPassingMode::Enum lhsRefMode = m_checker.m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
         const MStringView baseLhsTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name);
-        if(lhsRefMode != ParamPassingMode::None && m_checker.m_symbols.findInterface(baseLhsTypeName)){
+        if(lhsRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLhsTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLhsTypeName))){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
@@ -231,31 +232,70 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             }
         }
         else if(expr.op == TokenType::Equal){
-            if(const TypeRef* lhsTargetTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope); lhsTargetTypeRef && !lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
-                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-                    const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(lhsTargetTypeRef->templateArgs[0].type->name);
-                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && expr.rhs->resolvedSimdType == valBase)
-                        expr.rhs->wrapInSimdResult = true;
+            if(const TypeRef* lhsTargetTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope)){
+                if(!lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
+                    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                        const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(lhsTargetTypeRef->templateArgs[0].type->name);
+                        if(SymbolTable::IsSimdRegisterVectorType(valBase) && expr.rhs->resolvedSimdType == valBase)
+                            expr.rhs->wrapInSimdResult = true;
+                    }
+                }
+                if(!expr.isNotNullRebind && !expr.rhs->wrapInSimdResult && expr.lhs->resolvedSimdType.empty() && m_checker.m_symbols.resolveRefMode(lhsTargetTypeRef) == ParamPassingMode::None){
+                    const TypeLayoutAnalyzer layoutAnalyzer(m_checker.m_symbols);
+                    const TypeRef* unwrappedLhs = m_checker.m_symbols.unwrapTypeAlias(lhsTargetTypeRef);
+                    const BuiltinGenericTypeInfo* lhsGenericInfo = unwrappedLhs ? FindBuiltinGenericType(unwrappedLhs->name) : nullptr;
+                    if(lhsGenericInfo && lhsGenericInfo->inlineLayoutKind == InlineLayoutKind::Optional && !unwrappedLhs->templateArgs.empty() && unwrappedLhs->templateArgs[0].type && layoutAnalyzer.requiresMotherArena(*unwrappedLhs->templateArgs[0].type)){
+                        const Expr* rootLhs = expr.lhs;
+                        while(rootLhs && (rootLhs->kind == ExprKind::MemberAccess || rootLhs->kind == ExprKind::Index))
+                            rootLhs = rootLhs->lhs;
+                        if(rootLhs && rootLhs->kind == ExprKind::ThisMember && ownerClass){
+                            expr.useAdhdOptionalClassAssign = true;
+                            ownerClass->needsClassArena = true;
+                        }
+                        else{
+                            expr.useAdhdOptionalScratchAssign = true;
+                            method.usesScratchArena = true;
+                            m_checker.m_activeParallelBlockUsesScratch = true;
+                        }
+                    }
+                    else if(layoutAnalyzer.requiresMotherArena(*lhsTargetTypeRef)){
+                        const ClassDecl* lhsCls = unwrappedLhs ? m_checker.m_symbols.findClass(unwrappedLhs->name) : nullptr;
+                        b8 hasCustomAssign = false;
+                        if(lhsCls){
+                            for(const MethodDecl* m : lhsCls->methods){
+                                if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal){
+                                    hasCustomAssign = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if(!hasCustomAssign)
+                            expr.useAdhdAssign = true;
+                    }
                 }
             }
         }
         const EnumDecl* lhsEnum = m_checker.m_symbols.findEnum(lhsType);
         const EnumDecl* rhsEnum = m_checker.m_symbols.findEnum(rhsType);
+        const BuiltinEnumInfo* lhsBuiltinEnum = (lhsEnum || m_checker.m_symbols.hasTypeSymbol(lhsType)) ? nullptr : FindBuiltinEnum(lhsType);
+        const BuiltinEnumInfo* rhsBuiltinEnum = (rhsEnum || m_checker.m_symbols.hasTypeSymbol(rhsType)) ? nullptr : FindBuiltinEnum(rhsType);
         if(OperatorSemantics::IsBitwiseFlagOperatorToken(expr.op)){
-            if((lhsEnum && !lhsEnum->isFlag) || (!m_checker.m_symbols.findClass(lhsType) && rhsEnum && !rhsEnum->isFlag)){
+            const b8 lhsNonFlag = (lhsEnum && !lhsEnum->isFlag) || (lhsBuiltinEnum && !lhsBuiltinEnum->isFlag);
+            const b8 rhsNonFlag = !m_checker.m_symbols.findClass(lhsType) && ((rhsEnum && !rhsEnum->isFlag) || (rhsBuiltinEnum && !rhsBuiltinEnum->isFlag));
+            if(lhsNonFlag || rhsNonFlag){
                 m_checker.reportError(errors, expr.span, "bitwise operators are only supported on 'flag' types, not 'enum' types");
                 ok = false;
             }
-            else if(lhsEnum && rhsEnum && lhsEnum != rhsEnum){
+            else if((lhsEnum && rhsEnum && lhsEnum != rhsEnum) || (lhsBuiltinEnum && rhsBuiltinEnum && lhsBuiltinEnum != rhsBuiltinEnum) || (lhsEnum && rhsBuiltinEnum) || (lhsBuiltinEnum && rhsEnum)){
                 m_checker.reportError(errors, expr.span, "cannot combine values of two different 'flag' types in a bitwise operation");
                 ok = false;
             }
         }
-        else if(lhsEnum && OperatorSemantics::IsArithmeticOrShiftAssignOperatorToken(expr.op)){
+        else if((lhsEnum || lhsBuiltinEnum) && OperatorSemantics::IsArithmeticOrShiftAssignOperatorToken(expr.op)){
             m_checker.reportError(errors, expr.span, "arithmetic and shift compound assignment operators are not supported on 'enum' or 'flag' types");
             ok = false;
         }
-        if(RequiresTCharAdaptation(lhsType))
+        if(!m_checker.m_symbols.hasTypeSymbol(lhsType) && RequiresTCharAdaptation(lhsType))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *expr.rhs);
         if(expr.op == TokenType::Equal && lhsType == "StringView"){
             if(BorrowLifetimeAnalyzer(m_checker).borrowsTemporaryStringOwner(ownerClass, &method, *expr.rhs, scope)){
@@ -306,3 +346,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "ast_common.h"
+#include "global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +138,14 @@ public:
         return TryParseBoolLiteral(text);
     }
 
+    [[nodiscard]] static constexpr b8 TryParseTopLevelNativeAttribute(const MStringView text, b8& outIsSource)noexcept{
+    #define NWB_ADHD_EXPORT_TOP_LEVEL_NATIVE_ATTRIBUTE(attrName, isSource) \
+        if(text == attrName){ outIsSource = isSource; return true; }
+    #include "../export_keywords.h"
+    #undef NWB_ADHD_EXPORT_TOP_LEVEL_NATIVE_ATTRIBUTE
+        return false;
+    }
+
     [[nodiscard]] static constexpr b8 TryParseEnumDeclKeyword(const MStringView text, b8* outIsFlag = nullptr)noexcept{
     #define NWB_ADHD_EXPORT_ENUM_DECL_KEYWORD(adhdKeyword, isFlag) \
         if(text == adhdKeyword){ \
@@ -158,5 +166,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

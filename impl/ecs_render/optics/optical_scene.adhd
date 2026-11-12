@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/optics/optical_scene_resources_and_upload.adhd>
+[header]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
 #include <impl/global.adhd.h>
 #include <impl/ecs_render/optics/types.adhd.h>
 #include <impl/assets/graphics/raytrace/optical_scene_constants.h>
@@ -98,22 +98,78 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderOpticsOpticalSceneAdhdModule(in u64 value){
-    return value != 0u;
+b8 ValidOpticalRuntimeBoundsHandle(in b8 hasBuffer, in b8 descriptorValid, in b8 isStorageBufferClass){
+    return hasBuffer && descriptorValid && isStorageBufferClass;
+}
+
+b8 MaterialParticipatesInOpticalVolumeSelection(in b8 transparent, in b8 refractive, in b8 closedBoundary){
+    return transparent && (refractive || closedBoundary);
+}
+
+usize ComputeOpticalRuntimeInputsByteSize(in usize runtimeCount, in usize inputByteSize){
+    return runtimeCount * inputByteSize;
+}
+
+usize ComputeOpticalResolvedSceneByteSize(in usize headerBytes, in usize instanceCount, in usize instanceBytes){
+    return headerBytes + instanceCount * instanceBytes;
+}
+
+b8 ValidOpticalBoundsFinalizeRecordState(
+    in b8 hasSource,
+    in b8 hasFinalize,
+    in b8 hasInputs,
+    in b8 commandIrCapture,
+    in b8 matchesQueue,
+    in b8 hasPipeline,
+    in b8 hasInputBuffer,
+    in b8 hasOutputBuffer,
+    in usize blobByteSize,
+    in usize expectedByteSize
+){
+    return
+        hasSource
+        && hasFinalize
+        && hasInputs
+        && !commandIrCapture
+        && matchesQueue
+        && hasPipeline
+        && hasInputBuffer
+        && hasOutputBuffer
+        && blobByteSize == expectedByteSize
+    ;
+}
+
+b8 ValidOpticalBoundsFinalizeDeclareInputs(
+    in b8 hasFinalize,
+    in b8 hasUploadBuffer,
+    in b8 sourceValid,
+    in usize inputCount,
+    in usize boundsBufferCount
+){
+    return hasFinalize && hasUploadBuffer && sourceValid && inputCount != 0u && inputCount == boundsBufferCount;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/optics/optical_scene.adhd.h>
+#include <impl/ecs_render/optics/optical_scene_internal.adhd.h>
 #include <impl/ecs_render/optics/task_graph_optical_scene_upload.adhd.h>
 #include <impl/ecs_render/optics/optical_bounds_evaluator.adhd.h>
 #include <impl/ecs_render/optics/optical_scene_identity_builder.adhd.h>
@@ -155,34 +211,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef NWB_IMPL_ECS_RENDER_OPTICS_OPTICAL_SCENE_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_OPTICS_OPTICAL_SCENE_INTERNAL_DECLS_H
-class OpticalBoundsFinalizeGraph final{
-public:
-    [[nodiscard]] static Expected<RayTracingOpticalSceneGraphBuffer> Declare(
-        const RayTracingOpticalSceneSnapshot& resources,
-        Core::GpuGraphResourceId source,
-        Core::GpuTaskId priorReadersDrained,
-        Core::GpuTaskGraph& graph,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-
-private:
-    struct Task;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(OpticalBoundaryMode::Unspecified == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED);
-static_assert(OpticalBoundaryMode::ClosedNested == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED);
-static_assert(OpticalBoundaryMode::ClosedPriority == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
-
 
 void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const b8 transparent, const SIMDVectorSingle boundsMin, const SIMDVectorSingle boundsMax, const b8 boundsValid){
     const RayTracingOpticalInstanceGpu instance = BuildRayTracingOpticalInstance(
@@ -205,7 +233,7 @@ void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entit
     const u32 instanceIndex = static_cast<u32>(instances.size());
     append(entity, renderer, true, VectorZero(), VectorZero(), false);
     // The CPU upload stays deliberately incomplete. Only the GPU finalizer can validate this contributor.
-    if(!boundsBuffer || !boundsDescriptor.valid() || boundsDescriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
+    if(!ValidOpticalRuntimeBoundsHandle(static_cast<b8>(boundsBuffer), boundsDescriptor.valid(), boundsDescriptor.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer))
         return;
     boundsCompleteExceptRuntime = staticComplete;
     if(runtimeBounds.empty())
@@ -272,7 +300,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         if(!materialResult)
             continue;
         const NotNull<MaterialSurfaceInfo*> material = *materialResult;
-        if(!material->transparent || (!material->refractive && !closed))
+        if(!MaterialParticipatesInOpticalVolumeSelection(material->transparent, material->refractive, closed))
             continue;
 
         const auto meshResult = meshSystemPtr->resolveRenderableMeshStatus(entity);
@@ -358,8 +386,10 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         descriptor = slot;
         return true;
     };
-    const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name(s_RenderNameRaytraceOpticalRuntimeInputs), false);
-    const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name(s_RenderNameRaytraceOpticalResolvedScene), true);
+    const usize inputBytes = ComputeOpticalRuntimeInputsByteSize(gather.runtimeBounds.size(), sizeof(RayTracingOpticalRuntimeInputGpu));
+    const usize outputBytes = ComputeOpticalResolvedSceneByteSize(NWB_RT_OPTICAL_SCENE_HEADER_BYTES, gather.instances.size(), NWB_RT_OPTICAL_INSTANCE_BYTES);
+    const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, inputBytes, Name(s_RenderNameRaytraceOpticalRuntimeInputs), false);
+    const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, outputBytes, Name(s_RenderNameRaytraceOpticalResolvedScene), true);
     if(!outputReady){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return MakeUnexpected(Failure{});
@@ -463,10 +493,22 @@ public:
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         const auto inputs = context.declarations.uploadBlobData(payload.inputUpload);
-        if(!payload.source || !payload.finalize || !inputs || context.commandIrCapture)
+        if(!payload.finalize)
             return false;
         const auto& resources = *payload.finalize;
-        if(context.queue != resources.queue || !resources.pipeline || !resources.inputBuffer || !resources.outputBuffer || inputs->size() != resources.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu))
+        const usize expectedBytes = ComputeOpticalRuntimeInputsByteSize(resources.inputs.size(), sizeof(RayTracingOpticalRuntimeInputGpu));
+        if(!ValidOpticalBoundsFinalizeRecordState(
+            static_cast<b8>(payload.source),
+            true,
+            static_cast<b8>(inputs),
+            context.commandIrCapture,
+            context.queue == resources.queue,
+            static_cast<b8>(resources.pipeline),
+            static_cast<b8>(resources.inputBuffer),
+            static_cast<b8>(resources.outputBuffer),
+            inputs ? inputs->size() : 0u,
+            expectedBytes
+        ))
             return false;
         commandList.endRenderPass();
         commandList.setBufferState(payload.source.get(), Core::ResourceStates::ShaderResource);
@@ -516,11 +558,15 @@ Expected<RayTracingOpticalSceneGraphBuffer> OpticalBoundsFinalizeGraph::Declare(
     Core::GpuTaskGraph& graph,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    if(!resources.finalize || !resources.uploadBuffer || !source.valid())
+    if(!ValidOpticalBoundsFinalizeDeclareInputs(
+        static_cast<b8>(resources.finalize),
+        static_cast<b8>(resources.uploadBuffer),
+        source.valid(),
+        resources.finalize ? resources.finalize->inputs.size() : 0u,
+        resources.finalize ? resources.finalize->boundsBuffers.size() : 0u
+    ))
         return MakeUnexpected(Failure{});
     const auto& finalize = *resources.finalize;
-    if(finalize.inputs.empty() || finalize.inputs.size() != finalize.boundsBuffers.size())
-        return MakeUnexpected(Failure{});
     const auto importCommon = [&](const Core::BufferHandle& buffer, const AStringView label) -> Expected<Core::GpuGraphResourceId>{
         if(!buffer || !buffer->getCreationDescription().keepInitialState || buffer->getCreationDescription().initialState != Core::ResourceStates::Common)
             return MakeUnexpected(Failure{});
@@ -602,7 +648,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

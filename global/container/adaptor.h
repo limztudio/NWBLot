@@ -5,11 +5,31 @@
 #pragma once
 
 
+#include <new>
+#include <optional>
+#include <tuple>
+#include <utility>
+
 #include <global/allocation_size.h>
 #include <global/assert.h>
 #include <global/limit.h>
 #include <global/type.h>
 #include <global/type_properties.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ArenaBase;
+
+template<typename T1, typename T2>
+class CompressedPair;
+
+template<typename T>
+concept LeadingArenaConstructible = requires{
+    typename RemoveCVRef_T<T>::uses_leading_arena_t;
+    requires IsSame_V<typename RemoveCVRef_T<T>::uses_leading_arena_t, ::ArenaBase>;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +75,200 @@ struct ArenaAllocatorTraits{
 
 usize CachelineSize()noexcept;
 [[nodiscard]] usize CacheAlignedAlignment(usize valueAlignment)noexcept;
+
+template<typename T>
+struct IsStdPair : FalseType{};
+
+template<typename K, typename V>
+struct IsStdPair<std::pair<K, V>> : TrueType{};
+
+template<typename T>
+struct IsCompressedPair : FalseType{};
+
+template<typename K, typename V>
+struct IsCompressedPair<::CompressedPair<K, V>> : TrueType{};
+
+template<typename T>
+struct IsStdOptional : FalseType{};
+
+template<typename V>
+struct IsStdOptional<std::optional<V>> : TrueType{};
+
+template<typename TargetT, typename... TupleArgs>
+[[nodiscard]] FOUNDATION_INLINE decltype(auto) AdaptTupleForArena(::ArenaBase& arena, std::tuple<TupleArgs...>&& tup){
+    if constexpr(::LeadingArenaConstructible<TargetT> && IsConstructible_V<TargetT, ::ArenaBase&, TupleArgs...>)
+        return std::tuple_cat(std::forward_as_tuple(arena), Move(tup));
+    else if constexpr(requires{
+        typename TargetT::allocator_type;
+        requires IsConstructible_V<typename TargetT::allocator_type, ::ArenaBase&>;
+        requires IsConstructible_V<TargetT, TupleArgs..., typename TargetT::allocator_type>;
+    })
+        return std::tuple_cat(Move(tup), std::make_tuple(typename TargetT::allocator_type(arena)));
+    else
+        return Move(tup);
+}
+
+template<typename U, typename... Args>
+FOUNDATION_INLINE void ConstructInArena(::ArenaBase& arena, U* const p, Args&&... args);
+
+template<typename K, typename V, typename KTuple, typename VTuple>
+FOUNDATION_INLINE void ConstructPairPiecewiseInArena(::ArenaBase& arena, std::pair<K, V>* const p, KTuple&& kTuple, VTuple&& vTuple){
+    using FirstRaw = RemoveConst_T<K>;
+    using SecondRaw = RemoveConst_T<V>;
+    ::new (static_cast<void*>(p)) std::pair<K, V>(
+        std::piecewise_construct,
+        AdaptTupleForArena<FirstRaw>(arena, Forward<KTuple>(kTuple)),
+        AdaptTupleForArena<SecondRaw>(arena, Forward<VTuple>(vTuple))
+    );
+}
+
+template<typename U, typename... Args>
+FOUNDATION_INLINE void ConstructInArena(::ArenaBase& arena, U* const p, Args&&... args){
+    if constexpr(IsStdPair<U>::value){
+        if constexpr(sizeof...(Args) == 3u){
+            auto allArgs = std::forward_as_tuple(Forward<Args>(args)...);
+            if constexpr(IsSame_V<RemoveCVRef_T<std::tuple_element_t<0u, decltype(allArgs)>>, std::piecewise_construct_t>){
+                ConstructPairPiecewiseInArena(arena, p, std::get<1u>(Move(allArgs)), std::get<2u>(Move(allArgs)));
+                return;
+            }
+        }
+        if constexpr(sizeof...(Args) == 2u){
+            auto allArgs = std::forward_as_tuple(Forward<Args>(args)...);
+            ConstructPairPiecewiseInArena(
+                arena,
+                p,
+                std::forward_as_tuple(std::get<0u>(Move(allArgs))),
+                std::forward_as_tuple(std::get<1u>(Move(allArgs)))
+            );
+        }
+        else if constexpr(sizeof...(Args) == 1u){
+            auto allArgs = std::forward_as_tuple(Forward<Args>(args)...);
+            using SrcRef = std::tuple_element_t<0u, decltype(allArgs)>;
+            if constexpr(IsStdPair<RemoveCVRef_T<SrcRef>>::value){
+                decltype(auto) src = std::get<0u>(Move(allArgs));
+                if constexpr(IsLValueReference_V<SrcRef>){
+                    ConstructPairPiecewiseInArena(arena, p, std::forward_as_tuple(src.first), std::forward_as_tuple(src.second));
+                }
+                else{
+                    ConstructPairPiecewiseInArena(arena, p, std::forward_as_tuple(Move(src.first)), std::forward_as_tuple(Move(src.second)));
+                }
+            }
+            else if constexpr(IsCompressedPair<RemoveCVRef_T<SrcRef>>::value){
+                decltype(auto) src = std::get<0u>(Move(allArgs));
+                if constexpr(IsLValueReference_V<SrcRef>){
+                    ConstructPairPiecewiseInArena(arena, p, std::forward_as_tuple(src.first()), std::forward_as_tuple(src.second()));
+                }
+                else{
+                    ConstructPairPiecewiseInArena(arena, p, std::forward_as_tuple(Move(src.first())), std::forward_as_tuple(Move(src.second())));
+                }
+            }
+            else{
+                ::new (static_cast<void*>(p)) U(Forward<Args>(args)...);
+            }
+        }
+        else if constexpr(sizeof...(Args) == 0u){
+            ConstructPairPiecewiseInArena(arena, p, std::tuple<>{}, std::tuple<>{});
+        }
+        else{
+            ::new (static_cast<void*>(p)) U(Forward<Args>(args)...);
+        }
+    }
+    else if constexpr(::LeadingArenaConstructible<U> && IsConstructible_V<U, ::ArenaBase&, Args...>){
+        ::new (static_cast<void*>(p)) U(arena, Forward<Args>(args)...);
+    }
+    else if constexpr(requires{
+        typename U::allocator_type;
+        requires IsConstructible_V<typename U::allocator_type, ::ArenaBase&>;
+        requires IsConstructible_V<U, Args..., typename U::allocator_type>;
+    }){
+        ::new (static_cast<void*>(p)) U(Forward<Args>(args)..., typename U::allocator_type(arena));
+    }
+    else if constexpr(requires{
+        typename U::container_type::allocator_type;
+        requires IsConstructible_V<typename U::container_type::allocator_type, ::ArenaBase&>;
+    }){
+        using ContAlloc = typename U::container_type::allocator_type;
+        if constexpr(sizeof...(Args) == 0u && IsConstructible_V<typename U::container_type, ContAlloc>)
+            ::new (static_cast<void*>(p)) U(typename U::container_type(ContAlloc(arena)));
+        else if constexpr(IsConstructible_V<U, Args..., ContAlloc>)
+            ::new (static_cast<void*>(p)) U(Forward<Args>(args)..., ContAlloc(arena));
+        else
+            ::new (static_cast<void*>(p)) U(Forward<Args>(args)...);
+    }
+    else if constexpr(
+        sizeof...(Args) == 1u
+        && requires{
+            typename U::allocator_type;
+            requires IsConstructible_V<typename U::allocator_type, ::ArenaBase&>;
+            requires IsConstructible_V<U, typename U::allocator_type>;
+        }
+    ){
+        auto allArgs = std::forward_as_tuple(Forward<Args>(args)...);
+        using SrcRef = std::tuple_element_t<0u, decltype(allArgs)>;
+        if constexpr(IsSame_V<RemoveCVRef_T<SrcRef>, U>){
+            decltype(auto) src = std::get<0u>(Move(allArgs));
+            if(!IsLValueReference_V<SrcRef> && src.get_allocator().arenaPtr() == &arena){
+                ::new (static_cast<void*>(p)) U(Forward<SrcRef>(src));
+            }
+            else{
+                ::new (static_cast<void*>(p)) U(typename U::allocator_type(arena));
+                if constexpr(requires{ p->reserve(src.size()); })
+                    p->reserve(src.size());
+                for(const auto& elem : src)
+                    p->insert(elem);
+            }
+        }
+        else{
+            ::new (static_cast<void*>(p)) U(Forward<Args>(args)...);
+        }
+    }
+    else if constexpr(IsStdOptional<U>::value && sizeof...(Args) == 1u){
+        using Inner = typename U::value_type;
+        auto allArgs = std::forward_as_tuple(Forward<Args>(args)...);
+        using SrcRef = std::tuple_element_t<0u, decltype(allArgs)>;
+        decltype(auto) src = std::get<0u>(Move(allArgs));
+        if constexpr(IsSame_V<RemoveCVRef_T<SrcRef>, U>){
+            if(!src.has_value()){
+                ::new (static_cast<void*>(p)) U();
+            }
+            else if constexpr(IsLValueReference_V<SrcRef>){
+                if constexpr(::LeadingArenaConstructible<Inner> && IsConstructible_V<Inner, ::ArenaBase&, const Inner&>)
+                    ::new (static_cast<void*>(p)) U(std::in_place, arena, *src);
+                else if constexpr(requires{ typename Inner::allocator_type; requires IsConstructible_V<typename Inner::allocator_type, ::ArenaBase&>; requires IsConstructible_V<Inner, const Inner&, typename Inner::allocator_type>; })
+                    ::new (static_cast<void*>(p)) U(std::in_place, *src, typename Inner::allocator_type(arena));
+                else
+                    ::new (static_cast<void*>(p)) U(src);
+            }
+            else{
+                if constexpr(::LeadingArenaConstructible<Inner> && IsConstructible_V<Inner, ::ArenaBase&, Inner&&>)
+                    ::new (static_cast<void*>(p)) U(std::in_place, arena, Move(*src));
+                else if constexpr(requires{ typename Inner::allocator_type; requires IsConstructible_V<typename Inner::allocator_type, ::ArenaBase&>; requires IsConstructible_V<Inner, Inner&&, typename Inner::allocator_type>; })
+                    ::new (static_cast<void*>(p)) U(std::in_place, Move(*src), typename Inner::allocator_type(arena));
+                else
+                    ::new (static_cast<void*>(p)) U(Move(src));
+            }
+        }
+        else if constexpr(!IsSame_V<RemoveCVRef_T<SrcRef>, std::nullopt_t> && ::LeadingArenaConstructible<Inner> && IsConstructible_V<Inner, ::ArenaBase&, SrcRef>){
+            ::new (static_cast<void*>(p)) U(std::in_place, arena, Forward<SrcRef>(src));
+        }
+        else if constexpr(
+            !IsSame_V<RemoveCVRef_T<SrcRef>, std::nullopt_t>
+            && requires{
+                typename Inner::allocator_type;
+                requires IsConstructible_V<typename Inner::allocator_type, ::ArenaBase&>;
+                requires IsConstructible_V<Inner, SrcRef, typename Inner::allocator_type>;
+            }
+        ){
+            ::new (static_cast<void*>(p)) U(std::in_place, Forward<SrcRef>(src), typename Inner::allocator_type(arena));
+        }
+        else{
+            ::new (static_cast<void*>(p)) U(Forward<SrcRef>(src));
+        }
+    }
+    else{
+        ::new (static_cast<void*>(p)) U(Forward<Args>(args)...);
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,6 +355,13 @@ public:
     }
 
     [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
+
+    template<typename U, typename... Args>
+        requires (IsSame_V<ArenaT, ::ArenaBase> || IsBaseOf_V<::ArenaBase, ArenaT>)
+    FOUNDATION_INLINE void construct(U* const p, Args&&... args){
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaAllocator cannot construct without an arena"));
+        AdaptorDetail::ConstructInArena(static_cast<::ArenaBase&>(*m_arena), p, Forward<Args>(args)...);
+    }
 
 
 private:
@@ -296,6 +517,13 @@ public:
 
     [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
 
+    template<typename U, typename... Args>
+        requires (IsSame_V<ArenaT, ::ArenaBase> || IsBaseOf_V<::ArenaBase, ArenaT>)
+    FOUNDATION_INLINE void construct(U* const p, Args&&... args){
+        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaAllocator cannot construct without an arena"));
+        AdaptorDetail::ConstructInArena(static_cast<::ArenaBase&>(*m_arena), p, Forward<Args>(args)...);
+    }
+
 
 private:
     ArenaT* m_arena;
@@ -317,4 +545,5 @@ inline b8 operator!=(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const Are
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

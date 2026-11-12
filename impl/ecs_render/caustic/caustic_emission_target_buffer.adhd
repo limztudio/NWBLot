@@ -2,52 +2,40 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/global.adhd.h>
-
-#include <core/graphics/rhi/device.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/runtime/runtime.h>
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
+#include <impl/ecs_render/caustic/rt_caustics_internal.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+class CausticEmissionTargetBuffer{
+    public KernelBufferHandle buffer = KernelBufferHandle();
+    public KernelGpuDescriptorHandle heapHandle = KernelGpuDescriptorHandle();
+    public usize capacity = 0u;
 
+    public b8 ensure(mut KernelGraphicsRuntime graphics, in usize targetCount){
+        if(HasLiveKernelBuffer(this.buffer) && this.capacity >= targetCount && this.heapHandle.valid()){
+            AssertCausticEmissionTargetStorageDescriptor(this.heapHandle);
+            return true;
+        }
+        return EnsureCausticEmissionTargetBufferStorage(graphics, targetCount, this.buffer, this.heapHandle, this.capacity);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void releaseDescriptor(mut KernelGraphicsRuntime graphics){
+        if(!this.heapHandle.valid())
+            return;
+        FreeCausticEmissionTargetDescriptor(graphics, this.heapHandle);
+        this.heapHandle = KernelGpuDescriptorHandle();
+    }
 
-
-class CausticEmissionTargetBuffer final{
-public:
-    [[nodiscard]] b8 ensure(Core::GraphicsRuntime& graphics, usize targetCount);
-    void releaseDescriptor(Core::GraphicsRuntime& graphics);
-    void reset()noexcept{ buffer.reset(); heapHandle = Core::GpuDescriptorHandle::Invalid(); capacity = 0u; }
-
-public:
-    Core::BufferHandle buffer;
-    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
-    usize capacity = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void reset(){
+        this.buffer.reset();
+        this.heapHandle = KernelGpuDescriptorHandle();
+        this.capacity = 0u;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderCausticCausticEmissionTargetBufferAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

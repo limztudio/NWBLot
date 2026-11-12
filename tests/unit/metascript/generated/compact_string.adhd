@@ -223,6 +223,168 @@ b8 AnyLaneGreater2Single(in VectorSingle lhs, in VectorSingle rhs){
     return lhs.x > rhs.x || lhs.y > rhs.y;
 }
 
+class GlobalExportEdgeHolder{
+    private Path m_root = "alpha";
+    private Path m_sub("beta");
+    private MemoryOrder m_order;
+    private AtomicFlag m_flag;
+
+    public b8 verifyEdgeCases(){
+        if(this.m_order != MemoryOrder::relaxed){
+            return false;
+        }
+        this.m_order = MemoryOrder::seq_cst;
+        const b8 firstSet = this.m_flag.testAndSet(this.m_order);
+        const b8 secondSet = this.m_flag.test(MemoryOrder::acquire);
+        if(firstSet || !secondSet){
+            return false;
+        }
+
+        Path leaf = "item.bin";
+        Path combined = this.m_root / this.m_sub / leaf;
+        String formatted = StringFormat("{0}|{1}|{2}", String("hdr"), combined.stem(), Name("probe"));
+        if(StringView(formatted) != "hdr|item|probe"){
+            return false;
+        }
+
+        if(!AddOverflows<u64>(u64.max, 1u) || AddOverflows<u64>(u64.max - 1u, 1u)){
+            return false;
+        }
+
+        const Sha256Digest emptyDigest = ComputeSha256(StringView(""));
+        const Expected<Sha256Digest> parsedDigest = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        if(!parsedDigest.has_value() || emptyDigest != parsedDigest.value() || emptyDigest.bytes[0u] != 0xe3u){
+            return false;
+        }
+
+        const Expected<Vector<usize>> boundaries = BuildGraphemeBoundaries("a\xf0\x9f\x91\x8b\xf0\x9f\x8f\xbbz");
+        if(!boundaries.has_value() || boundaries.value().size() != 4u || boundaries.value()[2u] != 9u){
+            return false;
+        }
+        return true;
+    }
+}
+
+b8 ExerciseGlobalExportEdgeCases(){
+    GlobalExportEdgeHolder holder = GlobalExportEdgeHolder();
+    return holder.verifyEdgeCases();
+}
+
+class ArenaGenericSlot<T>{
+    public T item = T();
+}
+
+class ArenaEdgeLeaf{
+    public String payload = "";
+    public ArenaGenericSlot<String> slot = ArenaGenericSlot<String>();
+}
+
+class ArenaEdgeBranch{
+    public ArenaEdgeLeaf leaf = ArenaEdgeLeaf();
+    public Vector<String> tags;
+    public HashMap<Name, String> hints;
+}
+
+class ArenaEdgeParameterizedMember{
+    public String label;
+    public ArenaEdgeParameterizedMember(in StringView tag){
+        this.label = StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ctor", tag);
+    }
+}
+
+[arena]
+class ArenaEdgeRoot{
+    public ArenaEdgeParameterizedMember constructedMember;
+    public ArenaEdgeBranch primary = ArenaEdgeBranch();
+    public Vector<ArenaEdgeBranch> history;
+    public HashMap<Name, String> registry;
+    public ArenaGenericSlot<u32> counter = ArenaGenericSlot<u32>();
+
+    public ArenaEdgeRoot(){
+        this.constructedMember = ArenaEdgeParameterizedMember("root_init");
+    }
+}
+
+void RecordTransientHintIntoMap(mut HashMap<Name, String> targetMap, in Name key, in StringView prefix){
+    String transientValue = StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_hint", prefix);
+    if(!targetMap.contains(key)){
+        targetMap.try_emplace(key, String(transientValue));
+    }
+    else{
+        targetMap.insert_or_assign(key, String(transientValue));
+    }
+}
+
+ArenaEdgeBranch MakeBorrowedArenaBranch(in StringView prefix){
+    ArenaEdgeBranch branch = ArenaEdgeBranch();
+    branch.leaf.payload = StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_leaf", prefix);
+    branch.leaf.slot.item = StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_slot", prefix);
+    branch.tags.push_back(StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_tag0", prefix));
+    RecordTransientHintIntoMap(branch.hints, Name("primary_hint"), prefix);
+    return branch;
+}
+
+void PopulateArenaRootFromTransientScratch(mut ArenaEdgeRoot root){
+    ArenaEdgeBranch transientBranch = MakeBorrowedArenaBranch("ephemeral");
+    transientBranch.tags.push_back(String("ephemeral_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_tag1"));
+    root.primary = transientBranch;
+    root.history.push_back(MakeBorrowedArenaBranch("archived"));
+    root.history.push_back(transientBranch);
+    RecordTransientHintIntoMap(root.registry, Name("entry"), "initial");
+    RecordTransientHintIntoMap(root.registry, Name("entry"), "overwritten");
+    root.counter.item = 2u;
+}
+
+usize ClobberTransientScratchScope(){
+    Vector<String> noise;
+    for(u32 i = 0u; i < 16u; ++i){
+        noise.push_back(StringFormat("noise_{0}_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", i));
+    }
+    return noise.size();
+}
+
+b8 ExerciseNestedMotherArenaAndScratchRebind(){
+    ArenaEdgeRoot root = ArenaEdgeRoot();
+    PopulateArenaRootFromTransientScratch(root);
+    if(ClobberTransientScratchScope() != 16u){
+        return false;
+    }
+    if(root.counter.item != 2u || root.history.size() != 2u || root.primary.tags.size() != 2u){
+        return false;
+    }
+    if(StringView(root.constructedMember.label) != "root_init_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ctor"){
+        return false;
+    }
+    if(!root.primary.hints.contains(Name("primary_hint")) || !root.registry.contains(Name("entry"))){
+        return false;
+    }
+    if(StringView(root.primary.hints.at(Name("primary_hint"))) != "ephemeral_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_hint"){
+        return false;
+    }
+    if(StringView(root.history[0u].hints.at(Name("primary_hint"))) != "archived_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_hint"){
+        return false;
+    }
+    if(StringView(root.registry.at(Name("entry"))) != "overwritten_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_hint"){
+        return false;
+    }
+    if(StringView(root.primary.leaf.payload) != "ephemeral_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_leaf"){
+        return false;
+    }
+    if(StringView(root.primary.leaf.slot.item) != "ephemeral_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_slot"){
+        return false;
+    }
+    if(StringView(root.primary.tags[1u]) != "ephemeral_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_tag1"){
+        return false;
+    }
+    if(StringView(root.history[0u].leaf.payload) != "archived_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_leaf"){
+        return false;
+    }
+    if(StringView(root.history[1u].tags[0u]) != "ephemeral_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_tag0"){
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/bake_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeAbsoluteGlyphBitmapPitch(in i32 pitch){
+    if(pitch < 0)
+        return cast<usize>(-pitch);
+    return cast<usize>(pitch);
+}
+
+u32 ComputeGlyphBitmapSourceRow(in i32 pitch, in u32 rows, in u32 y){
+    if(pitch < 0)
+        return rows - 1u - y;
+    return y;
+}
+
+b8 IsEmptyGlyphBitmap(in u32 width, in u32 rows){
+    return width == 0u || rows == 0u;
+}
+
+void LogBakeSdfRenderFailure(in b8 outline, in u32 glyphId, in i32 errorCode){
+    StringView modeText = "bitmap";
+    if(outline)
+        modeText = "outline";
+    error("font_builder: {} SDF failed for glyph {} (FreeType error {}); choose bitmap mode for intersecting outlines", modeText, glyphId, errorCode);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

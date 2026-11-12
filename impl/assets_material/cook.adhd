@@ -2,13 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_material/cook_shader_and_asset_emit.adhd>
+#include <impl/assets_material/bind.adhd>
+#include <impl/assets_material/material_shadow_dispatch.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
@@ -16,17 +23,131 @@ native{
 
 
 #include <impl/assets_material/asset.adhd.h>
-#include <impl/assets_material/bind.adhd.h>
+#include <impl/assets_material/bind_storage.adhd.h>
+#include <impl/assets_material/bind_typed_layout.adhd.h>
 #include <impl/assets_material/cook_types.adhd.h>
 
+#include <core/alloc/global.h>
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
+
+#include <global/algorithm.h>
+#include <global/not_null.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using MaterialCookArena = Core::Alloc::GlobalArena;
+using MaterialCookString = AString<MaterialCookArena>;
+
+template<typename T>
+using MaterialCookVector = Vector<T, MaterialCookArena>;
+
+template<typename T, typename V>
+using MaterialCookMap = HashMap<T, V, MaterialCookArena, Hasher<T>, EqualTo<T>>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MaterialBindEntry{
+    MaterialCookString source;
+    MaterialCookString virtualPath;
+    MaterialCookVector<MaterialBindStruct> structs;
+    MaterialCookVector<MaterialBindInstance> instances;
+
+
+public:
+    explicit MaterialBindEntry(MaterialCookArena& memoryArena)noexcept
+        : source(memoryArena)
+        , virtualPath(memoryArena)
+        , structs(memoryArena)
+        , instances(memoryArena)
+    {}
+
+
+public:
+    [[nodiscard]] const MaterialBindStruct* findStruct(const AStringView typeName)const noexcept{
+        const auto found = FindMaterialBindStructIndex(structs, typeName);
+        return found ? &structs[*found] : nullptr;
+    }
+    [[nodiscard]] const MaterialBindInstance* findInstance(const AStringView instanceName)const noexcept{
+        const auto found = FindMaterialBindInstanceIndex(instances, instanceName);
+        return found ? &instances[*found] : nullptr;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using MaterialBindParameterMap = MaterialCookMap<ACompactString, ACompactString>;
+using MaterialBindTypedLayoutBlockLookup = MaterialCookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
+using MaterialBindTypedLayoutParameterLookup = MaterialCookMap<ACompactString, MaterialBindTypedLayoutParameterLookupEntry>;
+
+struct MaterialBindTypedLayout{
+    const MaterialBindEntry* bindEntry = nullptr;
+    u64 layoutHash = 0u;
+    Material::TypedLayoutBlockVector typedLayoutBlocks;
+    Material::TypedLayoutFieldVector typedLayoutFields;
+    Material::TypedBlockByteVector typedBlockBytes;
+    MaterialBindTypedLayoutBlockLookup blockLookup;
+    MaterialBindTypedLayoutParameterLookup parameterLookup;
+
+
+public:
+    explicit MaterialBindTypedLayout(MaterialCookArena& memoryArena)
+        : typedLayoutBlocks(memoryArena)
+        , typedLayoutFields(memoryArena)
+        , typedBlockBytes(memoryArena)
+        , blockLookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
+        , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
+    {}
+};
+
+struct MaterialBindTypedLayoutCache{
+    MaterialCookVector<MaterialBindTypedLayout> entries;
+    MaterialCookMap<Name, usize> lookup;
+
+
+public:
+    explicit MaterialBindTypedLayoutCache(MaterialCookArena& memoryArena)
+        : entries(memoryArena)
+        , lookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
+    {}
+
+
+public:
+    void reserve(const usize count){
+        entries.reserve(count);
+        lookup.reserve(count);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache);
+NWB_INLINE void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
+    MaterialBindStorage{}.copyMaterialBindTypedLayoutDefaults(layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, outLayoutHash, outBlocks, outFields, outBlockBytes);
+}
+[[nodiscard]] b8 ApplyMaterialBindTypedLayoutParameters(
+    const MaterialBindTypedLayout& layout,
+    const Name& materialName,
+    const MaterialBindParameterMap& parameters,
+    Material::TypedBlockByteVector& inOutBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,6 +281,19 @@ public:
 );
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShadowSurfaceDispatchGenerator{
+public:
+    [[nodiscard]] Expected<Path> emit(
+        const Path& cacheDirectory,
+        AStringView configurationSafeName,
+        Span<const MaterialBindEntry> materialBindEntries,
+        Span<const MaterialCookEntry> materialEntries,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,31 +309,34 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMaterialCookAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_material/cook_private.adhd.h>
-#include <impl/assets_material/bind.adhd.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
 #include <impl/assets_material/material_avboit_shader_generator.adhd.h>
-#include <impl/assets_material/material_shadow_dispatch.adhd.h>
 #include <impl/assets_material/bind_parameter_application.adhd.h>
 #include <impl/assets_material/bind_source_emitter.adhd.h>
 #include <impl/assets_material/layout_validation.adhd.h>
@@ -216,6 +353,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace MaterialBindDetail{
 
@@ -292,7 +430,7 @@ static Expected<Core::Metascript::Document> ParseMaterialBindDocument(const Path
 static Expected<AStringView> ParseMaterialBindStringField(const Path& bindFilePath, const Core::Metascript::Value& map, const AStringView fieldName, const AStringView contextLabel){
     const Core::Metascript::Value* value = map.findField(fieldName);
     if(!value || !value->isString()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': {} field '{}' must be a string"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} field '{}' must be a string"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -310,7 +448,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
         return attributes;
 
     if(!attributesValue->isList()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': {} attributes must be a list"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attributes must be a list"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
         return MakeUnexpected(Failure{});
     }
 
@@ -318,24 +456,24 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
     attributes.reserve(attributeList.size());
     for(const Core::Metascript::Value& attributeValue : attributeList){
         if(!attributeValue.isMap()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': {} attribute entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attribute entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
             return MakeUnexpected(Failure{});
         }
 
-        MaterialBindAttribute attribute;
+        MaterialBindAttribute attribute(arena);
         const auto parsedName = ParseMaterialBindStringField(bindFilePath, attributeValue, s_MaterialBindNameKey, contextLabel);
         if(!parsedName)
             return MakeUnexpected(Failure{});
         attribute.name.assign(*parsedName);
         if(!IsAsciiIdentifier(attribute.name)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name), ConvertString(contextLabel));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name), ConvertString(contextLabel));
             return MakeUnexpected(Failure{});
         }
 
         const Core::Metascript::Value* argumentsValue = attributeValue.findField(s_MaterialBindArgumentsKey);
         if(argumentsValue){
             if(!argumentsValue->isList()){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': attribute '{}' arguments must be a list"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be a list"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
                 return MakeUnexpected(Failure{});
             }
 
@@ -343,7 +481,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
             attribute.arguments.reserve(argumentList.size());
             for(const Core::Metascript::Value& argumentValue : argumentList){
                 if(!argumentValue.isString()){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': attribute '{}' arguments must be strings"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be strings"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
                     return MakeUnexpected(Failure{});
                 }
 
@@ -363,10 +501,10 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
 
 
 static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePath, const AStringView bindFilePathText, const Core::Metascript::Value& fieldValue, const MaterialBindStruct& bindStruct, MaterialCookArena& arena){
-    MaterialBindField field;
+    MaterialBindField field(arena);
     MaterialBindSchemaValidator validator{};
     if(!fieldValue.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -383,7 +521,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField(s_MaterialBindAttributesKey), field.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
-    field.attributes = Move(*attributes);
+    ::AdhdAssign(field.attributes, Move(*attributes));
     if(!validator.validateMaterialBindFieldAttributes(bindFilePathText, bindStruct, field))
         return MakeUnexpected(Failure{});
 
@@ -395,32 +533,32 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
 
 
 static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFilePath, const AStringView bindFilePathText, const Core::Metascript::MStringView structName, const Core::Metascript::Value& structValue, MaterialCookArena& arena){
-    MaterialBindStruct bindStruct;
+    MaterialBindStruct bindStruct(arena);
     MaterialBindSchemaValidator validator{};
     if(!structValue.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
         return MakeUnexpected(Failure{});
     }
 
     bindStruct.name.assign(structName.data(), structName.size());
     if(!IsAsciiIdentifier(bindStruct.name)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField(s_MaterialBindAttributesKey), bindStruct.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
-    bindStruct.attributes = Move(*attributes);
+    ::AdhdAssign(bindStruct.attributes, Move(*attributes));
     if(!validator.validateMaterialBindStructAttributes(bindFilePathText, bindStruct))
         return MakeUnexpected(Failure{});
 
     const Core::Metascript::Value* fieldsValue = structValue.findField(s_MaterialBindFieldsKey);
     if(!fieldsValue || !fieldsValue->isList()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
     if(fieldsValue->asList().empty()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' must declare at least one field"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare at least one field"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -431,7 +569,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
             return MakeUnexpected(Failure{});
 
         if(bindStruct.hasField(AStringView(field->name))){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': duplicate field '{}.{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field->name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate field '{}.{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field->name));
             return MakeUnexpected(Failure{});
         }
 
@@ -450,7 +588,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 
     const auto& structsMap = doc.structs();
     if(structsMap.empty()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct declarations must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct declarations must not be empty"), PathToString<tchar>(bindFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -463,7 +601,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
     }
 
     Sort(structs.begin(), structs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs)noexcept{
-        return lhs.name < rhs.name;
+        return IsBeforeMaterialBindStructName(AStringView(lhs.name), AStringView(rhs.name));
     });
     return structs;
 }
@@ -476,7 +614,7 @@ static b8 ParseMaterialBindInstances(const Path& bindFilePath, const AStringView
     outEntry.instances.clear();
 
     if(doc.declarations().empty()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': instance declarations must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance declarations must not be empty"), PathToString<tchar>(bindFilePath));
         return false;
     }
 
@@ -487,7 +625,7 @@ static b8 ParseMaterialBindInstances(const Path& bindFilePath, const AStringView
         const AStringView instanceName(declaration.variable.data(), declaration.variable.size());
         const Core::Metascript::Value* instanceValue = doc.findVariable(instanceName);
         if(!instanceValue || !instanceValue->isNull()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), ConvertString(instanceName));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), ConvertString(instanceName));
             return false;
         }
 
@@ -506,7 +644,7 @@ b8 ApplyMaterialBindTypedLayoutParameterValue(
     Material::ResourceReferenceVector& outResourceReferences,
     Material::TypedBlockByteVector& inOutBlockBytes
 ){
-    const AStringView interfacePath = layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView("<unknown>");
+    const AStringView interfacePath = ResolveMaterialBindInterfacePathOrUnknown(layout.bindEntry != nullptr, layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView{});
     return MaterialBindParameterApplication{}.applyMaterialBindTypedLayoutParameterValueToStorage(
         interfacePath,
         layout.parameterLookup,
@@ -524,6 +662,10 @@ b8 ApplyMaterialBindTypedLayoutParameterValue(
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
     auto doc = MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena, scratchArena);
@@ -569,7 +711,7 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
     const auto cacheIt = inOutCache.lookup.find(materialInterface);
     if(cacheIt != inOutCache.lookup.end()){
         const usize cacheIndex = cacheIt.value();
-        FOUNDATION_ASSERT(cacheIndex < inOutCache.entries.size());
+        NWB_ASSERT(cacheIndex < inOutCache.entries.size());
         return MakeNotNull(&inOutCache.entries[cacheIndex]);
     }
 
@@ -579,17 +721,15 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
         return MakeUnexpected(Failure{});
 
     inOutCache.entries.reserve(cacheIndex + 1u);
-    if(!inOutCache.lookup.emplace(materialInterface, cacheIndex).second){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind typed layout: duplicate cache entry for interface '{}'"), ConvertString(materialInterface.resolvedText()));
+    if(!ValidateInsertedMaterialBindTypedLayoutCacheEntry(inOutCache.lookup.emplace(materialInterface, cacheIndex).second, materialInterface))
         return MakeUnexpected(Failure{});
-    }
 
     inOutCache.entries.push_back(Move(*layout));
     return MakeNotNull(&inOutCache.entries.back());
 }
 
 b8 ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout, const Name& materialName, const MaterialBindParameterMap& parameters, Material::TypedBlockByteVector& inOutBlockBytes, Material::ResourceReferenceVector& outResourceReferences){
-    const AStringView interfacePath = layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView("<unknown>");
+    const AStringView interfacePath = ResolveMaterialBindInterfacePathOrUnknown(layout.bindEntry != nullptr, layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView{});
     return MaterialBindParameterApplication{}.applyMaterialBindTypedLayoutParametersToStorage(
         interfacePath,
         layout.parameterLookup,
@@ -602,14 +742,23 @@ b8 ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout,
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

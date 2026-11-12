@@ -1,0 +1,2526 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/global.adhd>
+#include <utilities/fbx_to_nwb/asset_writer.adhd>
+#include <utilities/fbx_to_nwb/mesh_build.adhd>
+#include <utilities/fbx_to_nwb/source_mesh_streams.adhd>
+#include <utilities/fbx_to_nwb/mesh_stream_canonicalizer.adhd>
+#include <utilities/fbx_to_nwb/import.adhd>
+#include <utilities/fbx_to_nwb/scene.adhd>
+#include <utilities/fbx_to_nwb/fbx_cli_diagnostics.adhd>
+#include <utilities/fbx_to_nwb/import_prompts.adhd>
+#include <utilities/fbx_to_nwb/nwb_refresh_command.adhd>
+#include <utilities/fbx_to_nwb/command_line.adhd>
+#include <utilities/fbx_to_nwb/mesh_refresh.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/assets/paths.h>
+
+#include <global/allocation_size.h>
+#include <global/command_line.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * Impl::s_SkinInfluenceJointCount + sizeof(Float4U));
+static_assert(alignof(MeshSkinInfluence) <= alignof(f32));
+static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
+
+struct MeshSkinInfluenceEqual{
+public:
+    b8 operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept;
+};
+
+// Unaligned affine storage crosses the importer's persistent/SIMD boundary through LoadFloat()/StoreFloat().
+using JointMatrix = Float34U;
+static_assert(sizeof(JointMatrix) == sizeof(f32) * Impl::s_SkeletonJointMatrixFloatCount);
+static_assert(alignof(JointMatrix) == alignof(f32));
+static_assert(IsTriviallyCopyable_V<JointMatrix>);
+static_assert(IsTriviallyCopyable_V<SourceVertexRef>);
+static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
+
+struct SourceMeshStreams{
+    UtilityVector<Vec3> positions;
+    UtilityVector<Vec3> normals;
+    UtilityVector<Vec4> tangents;
+    UtilityVector<Vec2> uv0;
+    UtilityVector<Vec4> colors;
+    UtilityVector<MeshSkinInfluence> skin;
+    UtilityVector<SourceVertexRef> vertexRefs;
+    UtilityVector<u32> indices;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshBuildResult{
+    SourceMeshStreams mesh;
+    UtilityVector<ufbx_node*> skeletonJoints;
+    UtilityVector<JointMatrix> skeletonBindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
+    b8 sawVertexColors = false;
+    b8 sawVertexUvs = false;
+    SourceTangentReport tangentReport;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ImportOptions{
+    UtilityString inputPath;
+    UtilityString outputPath;
+    UtilityString assetType = UtilityString(s_DefaultOutputAssetTypeText);
+    UtilityString virtualRoot = UtilityString(s_DefaultVirtualRootText);
+    UtilityString meshSelector = UtilityString(s_DefaultMeshSelectorText);
+    UtilityString normalMode = UtilityString(s_DefaultNormalModeText);
+    UtilityString defaultColorText = UtilityString(s_DefaultColorText);
+    f64 scale = s_DefaultImportScale;
+    f64 triangleAreaLengthSquaredEpsilon = s_DefaultTriangleAreaLengthSquaredEpsilon;
+    b8 preserveSpace = false;
+    b8 includeHidden = false;
+    b8 bakeTransforms = true;
+    b8 importColors = true;
+    b8 flipWinding = false;
+    b8 separateAssets = false;
+    b8 refreshNwb = false;
+    b8 forceOverwrite = false;
+    b8 acceptDefaults = false;
+    b8 listMeshes = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshInstance{
+    ufbx_node* node = nullptr;
+    ufbx_mesh* mesh = nullptr;
+    usize index = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SceneHandle : NoCopy{
+public:
+    ufbx_scene* scene = nullptr;
+
+
+public:
+    SceneHandle()noexcept = default;
+    SceneHandle(SceneHandle&& other)noexcept
+        : scene(Exchange(other.scene, nullptr))
+    {}
+    ~SceneHandle()noexcept;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] constexpr AStringView UfbxStringView(const ufbx_string value)noexcept{
+    return (value.data && value.length != 0u) ? AStringView(value.data, value.length) : AStringView{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace FbxSkinDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ExportContext{
+    UtilityVector<ufbx_node*> joints;
+    UtilityVector<JointMatrix> bindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
+    UtilityScratchMap<NotNull<ufbx_node*>, u16> jointLookup;
+
+
+public:
+    explicit ExportContext(Core::Alloc::ScratchArena& scratchArena)
+        : jointLookup(scratchArena)
+    {}
+};
+
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, const ufbx_skin_deformer& skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& inOutContext);
+
+Expected<MeshSkinInfluence> LoadInfluence(const ufbx_skin_deformer& skin, Span<const u16> clusterJoints, u32 logicalVertex);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetWriterSkeletonDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SkeletonOutputData{
+    UtilityVector<ufbx_node*> joints;
+    UtilityVector<JointMatrix> bindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
+    UtilityVector<u16> oldToNewJointIndices;
+};
+
+struct PositionAlignedSkinnedMesh{
+    SourceMeshStreams mesh;
+    UtilityVector<MeshSkinInfluence> skin;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] ScratchString NodeName(const ufbx_node* node, usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<SkeletonOutputData> BuildSkeletonOutputData(Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
+UtilityVector<MeshInstance> CollectMeshInstances(const ufbx_scene& scene, b8 includeHidden);
+void PrintMeshInstances(Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena);
+Expected<UtilityVector<usize>> SelectMeshInstances(Span<const MeshInstance> instances, AStringView selector);
+Expected<MeshBuildResult> BuildMesh(
+    Span<const MeshInstance> instances,
+    Span<const usize> selection,
+    const ImportOptions& options,
+    b8 wantsSkinning,
+    const Vec4& defaultColor,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::Alloc::ScratchArena& scratchArena);
+
+b8 WriteNwbAsset(
+    const ScratchPath& outputPath,
+    const SourceMeshStreams& mesh,
+    AStringView assetTypeText,
+    AStringView virtualRoot,
+    b8 separateAssets,
+    Span<ufbx_node* const> skeletonJoints,
+    Span<const JointMatrix> skeletonBindPoseMatrices,
+    Span<const JointMatrix> inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+i32 Run(i32 argc, char** argv, Core::Alloc::ScratchArena& scratchArena, b8& prompted);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SourceMeshStreamCounts CountSourceMeshStreams(in SourceMeshStreams mesh){
+    return MakeSourceMeshStreamCounts(
+        mesh.positions.size(),
+        mesh.normals.size(),
+        mesh.tangents.size(),
+        mesh.uv0.size(),
+        mesh.colors.size(),
+        mesh.skin.size(),
+        mesh.vertexRefs.size(),
+        mesh.indices.size()
+    );
+}
+
+void ReserveSourceMeshStreamsCapacity(in usize estimatedTriangleCorners, in b8 wantsSkinning, mut SourceMeshStreams outMesh){
+    outMesh.positions.reserve(estimatedTriangleCorners);
+    outMesh.normals.reserve(estimatedTriangleCorners);
+    outMesh.uv0.reserve(estimatedTriangleCorners);
+    outMesh.colors.reserve(estimatedTriangleCorners);
+    outMesh.tangents.reserve(estimatedTriangleCorners);
+    outMesh.indices.reserve(estimatedTriangleCorners);
+    outMesh.vertexRefs.reserve(estimatedTriangleCorners);
+    if(wantsSkinning)
+        outMesh.skin.reserve(estimatedTriangleCorners);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/skin.adhd.h>
+#include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd.h>
+#include <impl/assets_mesh/cook_metadata.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/mesh/tangent_frame_rebuild.h>
+#include <core/metascript/lexer.h>
+#include <core/metascript/parser.h>
+
+#include <global/filesystem/crlf_output_stream.h>
+#include <global/simd/collision_triangle.h>
+#include <global/simd/frame.h>
+#include <global/terminal_entry.h>
+#include <global/text_replacements.h>
+
+#include <CLI.hpp>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MeshSkinInfluenceEqual::operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
+    return EqualMeshSkinInfluence(lhs, rhs);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace FbxSkinDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, const ufbx_skin_deformer& skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& inOutContext){
+    ::Vector<u16, Core::Alloc::ScratchArena> outClusterJoints(scratchArena);
+    const Expected<usize> reservedJointCountResult = ValidateFbxSkinClusterCount(skin.clusters.count, inOutContext.joints.size());
+    if(!reservedJointCountResult)
+        return MakeUnexpected(Failure{});
+
+    const usize reservedJointCount = *reservedJointCountResult;
+    inOutContext.joints.reserve(reservedJointCount);
+    inOutContext.bindPoseMatrices.reserve(reservedJointCount);
+    inOutContext.inverseBindMatrices.reserve(reservedJointCount);
+    outClusterJoints.reserve(skin.clusters.count);
+    const f64 inverseScale = ComputeFbxInverseScale(options.scale);
+    ufbx_matrix meshFromOutput = {};
+    meshFromOutput.m00 = inverseScale;
+    meshFromOutput.m11 = inverseScale;
+    meshFromOutput.m22 = inverseScale;
+    if(options.bakeTransforms){
+        const ufbx_matrix nodeMeshToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
+        meshFromOutput = ufbx_matrix_mul(&nodeMeshToWorldInverse, &meshFromOutput);
+    }
+    for(usize clusterIndex = 0u; clusterIndex < skin.clusters.count; ++clusterIndex){
+        ufbx_skin_cluster* cluster = skin.clusters.data[clusterIndex];
+        if(!cluster){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains a null cluster"));
+            return MakeUnexpected(Failure{});
+        }
+
+        if(!cluster->bone_node){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
+            return MakeUnexpected(Failure{});
+        }
+        const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
+        const Expected<SIMDMatrix> inverseBindValueResult = TryConvertFbxInverseBindMatrix(LoadUfbxMatrix(inverseBind), static_cast<f64>(ufbx_matrix_determinant(&inverseBind)));
+        if(!inverseBindValueResult)
+            return MakeUnexpected(Failure{});
+        const SIMDMatrix inverseBindValue = *inverseBindValueResult;
+
+        const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
+        const Expected<SIMDMatrix> bindPoseValueResult = TryConvertFbxBindPoseMatrix(LoadUfbxMatrix(bindPose));
+        if(!bindPoseValueResult)
+            return MakeUnexpected(Failure{});
+        const SIMDMatrix bindPoseValue = *bindPoseValueResult;
+
+        auto foundJoint = inOutContext.jointLookup.find(MakeNotNull(cluster->bone_node));
+        if(foundJoint != inOutContext.jointLookup.end()){
+            const usize jointIndex = static_cast<usize>(foundJoint.value());
+            NWB_ASSERT(jointIndex < inOutContext.inverseBindMatrices.size());
+            NWB_ASSERT(jointIndex < inOutContext.bindPoseMatrices.size());
+            const SIMDMatrix existingInverseBind = LoadFloat(inOutContext.inverseBindMatrices[jointIndex]);
+            if(!NearlyEqualFbxJointMatrices(existingInverseBind, inverseBindValue)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(ResolveFbxNodeDisplayName(cluster->bone_node != nullptr, UfbxStringView(cluster->bone_node->name))));
+                return MakeUnexpected(Failure{});
+            }
+            outClusterJoints.push_back(foundJoint.value());
+            continue;
+        }
+
+        if(!ValidateFbxNewSkeletonJointCapacity(inOutContext.joints.size()))
+            return MakeUnexpected(Failure{});
+
+        JointMatrix storedInverseBind{};
+        JointMatrix storedBindPose{};
+        StoreFloat(inverseBindValue, storedInverseBind);
+        StoreFloat(bindPoseValue, storedBindPose);
+        const u16 joint = static_cast<u16>(inOutContext.joints.size());
+        inOutContext.joints.push_back(cluster->bone_node);
+        inOutContext.bindPoseMatrices.push_back(storedBindPose);
+        inOutContext.inverseBindMatrices.push_back(storedInverseBind);
+        const auto inserted = inOutContext.jointLookup.emplace(MakeNotNull(cluster->bone_node), joint);
+        if(!inserted.second){
+            NWB_ASSERT(false);
+            return MakeUnexpected(Failure{});
+        }
+        outClusterJoints.push_back(joint);
+    }
+
+    return outClusterJoints;
+}
+
+Expected<MeshSkinInfluence> LoadInfluence(const ufbx_skin_deformer& skin, const Span<const u16> clusterJoints, const u32 logicalVertex){
+    MeshSkinInfluence result;
+    if(!ValidateFbxSkinLogicalVertex(logicalVertex, skin.vertices.count))
+        return MakeUnexpected(Failure{});
+
+    const ufbx_skin_vertex skinVertex = skin.vertices.data[logicalVertex];
+    if(!ValidateFbxSkinVertexWeightRange(skinVertex.weight_begin, skinVertex.num_weights, skin.weights.count))
+        return MakeUnexpected(Failure{});
+
+    f64 weightSum = 0.0;
+    u32 writtenInfluenceCount = 0u;
+    for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
+        if(ReachedSkinInfluenceJointLimit(writtenInfluenceCount))
+            break;
+
+        const ufbx_skin_weight& weight = skin.weights.data[skinVertex.weight_begin + weightOffset];
+        if(!TryAccumulateFbxSkinWeight(static_cast<f64>(weight.weight), weight.cluster_index, clusterJoints, writtenInfluenceCount, weightSum, result))
+            return MakeUnexpected(Failure{});
+    }
+
+    if(!TryNormalizeFbxSkinInfluenceWeights(weightSum, result))
+        return MakeUnexpected(Failure{});
+
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetWriterSkeletonDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
+    const AString<::ArenaBase> formatted = FormatFbxJointBaseName(scratchArena, node ? UfbxStringView(node->name) : AStringView{}, fallbackIndex);
+    return ScratchString(AStringView(formatted), scratchArena);
+}
+
+Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
+    SkeletonOutputData outData;
+
+    if(!ValidateSkeletonOutputInputCounts(joints.size(), bindPoseMatrices.size(), inverseBindMatrices.size()))
+        return MakeUnexpected(Failure{});
+
+    UtilityScratchMap<NotNull<const ufbx_node*>, usize> sourceJointLookup(scratchArena);
+    sourceJointLookup.reserve(joints.size());
+    UtilityScratchVector<ScratchString> sortNames(scratchArena);
+    sortNames.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        ufbx_node* joint = joints[jointIndex];
+        if(!joint){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
+            return MakeUnexpected(Failure{});
+        }
+        const auto inserted = sourceJointLookup.emplace(MakeNotNull<const ufbx_node*>(joint), jointIndex);
+        if(!inserted.second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
+            return MakeUnexpected(Failure{});
+        }
+        sortNames.push_back(NodeName(joint, jointIndex, scratchArena));
+    }
+
+    UtilityScratchVector<u32> parentIndices(scratchArena);
+    parentIndices.resize(joints.size(), Impl::s_MeshMissingStreamIndex);
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const ufbx_node* parent = joints[jointIndex]->parent;
+        if(!parent)
+            continue;
+
+        const auto foundParent = sourceJointLookup.find(MakeNotNull(parent));
+        if(foundParent != sourceJointLookup.end())
+            parentIndices[jointIndex] = static_cast<u32>(foundParent.value());
+    }
+
+    UtilityScratchVector<u32> parentDepths(scratchArena);
+    parentDepths.resize(joints.size(), 0u);
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const auto depth = TryComputeSkeletonJointHierarchyDepth(parentIndices, jointIndex);
+        if(!depth)
+            return MakeUnexpected(Failure{});
+        parentDepths[jointIndex] = *depth;
+    }
+
+    UtilityScratchVector<usize> sortedJointIndices(scratchArena);
+    sortedJointIndices.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
+        sortedJointIndices.push_back(jointIndex);
+    Sort(sortedJointIndices.begin(), sortedJointIndices.end(), [&parentDepths, &sortNames](const usize lhs, const usize rhs)noexcept{
+        return IsBeforeFbxSkeletonJointSortKey(parentDepths[lhs], parentDepths[rhs], AStringView(sortNames[lhs]), AStringView(sortNames[rhs]), lhs, rhs);
+    });
+
+    outData.oldToNewJointIndices.resize(joints.size(), 0u);
+    outData.joints.reserve(joints.size());
+    outData.bindPoseMatrices.reserve(bindPoseMatrices.size());
+    outData.inverseBindMatrices.reserve(inverseBindMatrices.size());
+
+    for(const usize oldJointIndex : sortedJointIndices){
+        const u32 parentIndex = parentIndices[oldJointIndex];
+        if(!Impl::IsFiniteSkeletonJointMatrix(LoadFloat(inverseBindMatrices[oldJointIndex]))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: inverse bind matrix for joint '{}' is not finite"), ConvertString(sortNames[oldJointIndex]));
+            return MakeUnexpected(Failure{});
+        }
+
+        const b8 hasParent = HasSkeletonJointParentIndex(parentIndex);
+        const SIMDMatrix parentGlobalBindPose = hasParent ? LoadFloat(bindPoseMatrices[parentIndex]) : SIMDMatrix{};
+        const auto localBindPoseMatrix = TryBuildFbxLocalBindPoseMatrix(LoadFloat(bindPoseMatrices[oldJointIndex]), hasParent, parentGlobalBindPose);
+        if(!localBindPoseMatrix){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), ConvertString(sortNames[oldJointIndex]));
+            return MakeUnexpected(Failure{});
+        }
+        JointMatrix localBindPose{};
+        StoreFloat(*localBindPoseMatrix, localBindPose);
+
+        outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
+        outData.joints.push_back(joints[oldJointIndex]);
+        outData.bindPoseMatrices.push_back(localBindPose);
+        outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
+    }
+
+    return outData;
+}
+
+Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena){
+    if(!ValidateSkinnedModelSourceMeshRefs(CountSourceMeshStreams(sourceMesh), sourceMesh.vertexRefs, sourceMesh.indices))
+        return MakeUnexpected(Failure{});
+
+    const auto aligned = BuildPositionAlignedSkinnedMeshStreams(scratchArena, sourceMesh.positions, sourceMesh.skin, sourceMesh.vertexRefs);
+    if(!aligned)
+        return MakeUnexpected(Failure{});
+
+    PositionAlignedSkinnedMesh result;
+    result.mesh.normals = sourceMesh.normals;
+    result.mesh.tangents = sourceMesh.tangents;
+    result.mesh.uv0 = sourceMesh.uv0;
+    result.mesh.colors = sourceMesh.colors;
+    result.mesh.indices = sourceMesh.indices;
+    result.mesh.positions.assign(aligned->positions.begin(), aligned->positions.end());
+    result.mesh.vertexRefs.assign(aligned->vertexRefs.begin(), aligned->vertexRefs.end());
+    result.skin.assign(aligned->positionSkin.begin(), aligned->positionSkin.end());
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_fbx_to_nwb_module{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshSkinInfluenceHasher{
+public:
+    usize operator()(const MeshSkinInfluence& value)const noexcept{
+        return HashMeshSkinInfluence(value);
+    }
+};
+
+using Vec2IndexMap = UtilityScratchMap<Vec2, u32>;
+using Vec3IndexMap = UtilityScratchMap<Vec3, u32>;
+using Vec4IndexMap = UtilityScratchMap<Vec4, u32>;
+using MeshSkinInfluenceIndexMap = UtilityScratchMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
+using SourceVertexRefIndexMap = UtilityScratchMap<SourceVertexRef, u32>;
+using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalRecord>;
+
+struct SourceMeshBuildContext{
+    SourceMeshStreams& mesh;
+    Core::Alloc::ScratchArena& scratchArena;
+    Vec3IndexMap positions;
+    Vec3IndexMap normals;
+    Vec4IndexMap tangents;
+    Vec2IndexMap uv0;
+    Vec4IndexMap colors;
+    MeshSkinInfluenceIndexMap skin;
+    SourceVertexRefIndexMap vertexRefs;
+
+
+public:
+    SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
+        : mesh(sourceMesh)
+        , scratchArena(sourceScratchArena)
+        , positions(sourceScratchArena)
+        , normals(sourceScratchArena)
+        , tangents(sourceScratchArena)
+        , uv0(sourceScratchArena)
+        , colors(sourceScratchArena)
+        , skin(sourceScratchArena)
+        , vertexRefs(sourceScratchArena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static b8 EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView assetKind){
+    const ScratchPath parentPath = outputPath.parentPath();
+    if(parentPath.empty())
+        return true;
+
+    const auto created = EnsureDirectories(parentPath);
+    if(created)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), ConvertString(assetKind), PathToString<tchar>(parentPath), ConvertString(created.error().message()));
+    return false;
+}
+
+template<typename WriteBodyFn>
+[[nodiscard]] static b8 WriteNwbTextFile(const ScratchPath& outputPath, const AStringView assetKind, WriteBodyFn&& writeBody){
+    if(!EnsureOutputDirectory(outputPath, assetKind))
+        return false;
+
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to open output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
+        return false;
+    }
+    CrlfOutputFileStream file(rawFile);
+    file.precision(s_OutputFloatPrecision);
+    if(!writeBody(file))
+        return false;
+
+    rawFile.close();
+    if(!file){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed while writing output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 AppendSkeletonBodyToString(
+    const AStringView variableName,
+    const Span<ufbx_node* const> joints,
+    const Span<const JointMatrix> bindPoseMatrices,
+    Core::Alloc::ScratchArena& scratchArena,
+    AString<>& out
+){
+    out.append(variableName);
+    out.append(".joints = [\n");
+
+    Vector<AString<::ArenaBase>> jointNames(QueryUtilityGlobalArena<s_UtilityArena>());
+    jointNames.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const AString<::ArenaBase> baseName = FormatFbxJointBaseName(scratchArena, joints[jointIndex] ? UfbxStringView(joints[jointIndex]->name) : AStringView{}, jointIndex);
+        jointNames.push_back(MakeUniqueFbxJointName(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(baseName), jointNames));
+    }
+
+    UtilityScratchMap<const ufbx_node*, usize> jointLookup(scratchArena);
+    jointLookup.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const auto inserted = jointLookup.emplace(joints[jointIndex], jointIndex);
+        if(!inserted.second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
+
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        b8 hasParent = false;
+        AStringView parentName{};
+        if(joints[jointIndex] && joints[jointIndex]->parent){
+            const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
+            if(foundParent != jointLookup.end()){
+                hasParent = true;
+                parentName = AStringView(jointNames[foundParent.value()]);
+            }
+        }
+        const JointMatrix& bindPose = bindPoseMatrices[jointIndex];
+        AppendSkeletonJointEntryText(
+            AStringView(jointNames[jointIndex]),
+            hasParent,
+            parentName,
+            bindPose.rows[0u],
+            bindPose.rows[1u],
+            bindPose.rows[2u],
+            out
+        );
+    }
+    out.append(s_FormatListCloseText);
+    return true;
+}
+
+static void AppendSkinBodyToString(
+    const AStringView variableName,
+    const AStringView meshName,
+    const AStringView skeletonName,
+    const Span<const MeshSkinInfluence> influences,
+    const Span<const JointMatrix> inverseBindMatrices,
+    const b8 quoteReferences,
+    AString<>& out
+){
+    AppendSkinAssetHeaderAndInfluencesText(variableName, meshName, skeletonName, influences, quoteReferences, out);
+    for(const JointMatrix& matrix : inverseBindMatrices){
+        out.append("    ");
+        AppendJointMatrixRowsText(matrix.rows[0u], matrix.rows[1u], matrix.rows[2u], "    ", out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(s_FormatListCloseText);
+}
+
+[[nodiscard]] static b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
+    if(!ValidatePlainMeshSourceSkin(CountSourceMeshStreams(mesh), mesh.vertexRefs, mesh.indices))
+        return false;
+
+    const AString<::ArenaBase> doc = BuildMeshAssetDocumentText(
+        outputPath.arena(),
+        mesh.positions,
+        mesh.normals,
+        mesh.tangents,
+        mesh.uv0,
+        mesh.colors,
+        mesh.vertexRefs,
+        mesh.indices
+    );
+    return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
+        file << AStringView(doc);
+        return true;
+    });
+}
+
+[[nodiscard]] static b8 WriteSkeletonAsset(
+    const ScratchPath& outputPath,
+    const Span<ufbx_node* const> joints,
+    const Span<const JointMatrix> bindPoseMatrices,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
+        AString<> doc(QueryUtilityGlobalArena<s_UtilityArena>());
+        doc.reserve(256u + joints.size() * 192u);
+        doc.append("skeleton asset;\n\n");
+        if(!AppendSkeletonBodyToString(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, doc))
+            return false;
+        file << AStringView(doc);
+        return true;
+    });
+}
+
+[[nodiscard]] static b8 WriteSkinAsset(
+    const ScratchPath& outputPath,
+    const AStringView meshName,
+    const AStringView skeletonName,
+    const Span<const MeshSkinInfluence> influences,
+    const Span<const JointMatrix> inverseBindMatrices
+){
+    if(influences.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: no skin influences were produced"));
+        return false;
+    }
+
+    AString<> doc(QueryUtilityGlobalArena<s_UtilityArena>());
+    doc.reserve(256u + influences.size() * 72u + inverseBindMatrices.size() * 160u);
+    doc.append("skin asset;\n\n");
+    AppendSkinBodyToString(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, doc);
+    return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
+        file << AStringView(doc);
+        return true;
+    });
+}
+
+[[nodiscard]] static b8 WriteModelAsset(
+    const ScratchPath& outputPath,
+    const AStringView meshName,
+    const Optional<AStringView> skinName,
+    const Optional<AStringView> skeletonName
+){
+    const b8 hasSkeletonAndSkin = skinName.has_value() && skeletonName.has_value();
+    const AString<::ArenaBase> doc = BuildModelAssetDocumentText(
+        outputPath.arena(),
+        meshName,
+        hasSkeletonAndSkin,
+        hasSkeletonAndSkin ? *skinName : AStringView{},
+        hasSkeletonAndSkin ? *skeletonName : AStringView{}
+    );
+    return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
+        file << AStringView(doc);
+        return true;
+    });
+}
+
+[[nodiscard]] static b8 WriteAssetBunch(
+    const ScratchPath& outputPath,
+    const SourceMeshStreams& mesh,
+    const Optional<AStringView> skinName,
+    const Optional<AStringView> skeletonName,
+    const Span<ufbx_node* const> skeletonJoints,
+    const Span<const JointMatrix> skeletonBindPoseMatrices,
+    const Span<const MeshSkinInfluence> skinInfluences,
+    const Span<const JointMatrix> inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, [&](CrlfOutputFileStream& file) -> b8{
+        AString<> doc(QueryUtilityGlobalArena<s_UtilityArena>());
+        doc.reserve(1024u + mesh.vertexRefs.size() * 48u + mesh.indices.size() * 8u);
+        doc.append("mesh mesh;\n\n");
+        AppendMeshAssetBodyText(
+            mesh.positions,
+            mesh.normals,
+            mesh.tangents,
+            mesh.uv0,
+            mesh.colors,
+            mesh.vertexRefs,
+            mesh.indices,
+            s_MeshAssetTypeText,
+            "",
+            doc
+        );
+
+        const b8 skinnedBunch = IsSkinnedAssetBunch(skinName.has_value(), skeletonName.has_value(), !skinInfluences.empty());
+        if(skinnedBunch){
+            doc.append(s_AssetSectionSeparatorText);
+            doc.append("skeleton skeleton;\n\n");
+            if(!AppendSkeletonBodyToString(s_SkeletonAssetTypeText, skeletonJoints, skeletonBindPoseMatrices, scratchArena, doc))
+                return false;
+
+            doc.append(s_AssetSectionSeparatorText);
+            doc.append("skin skin;\n\n");
+            AppendSkinBodyToString(s_SkinAssetTypeText, s_MeshAssetTypeText, s_SkeletonAssetTypeText, skinInfluences, inverseBindMatrices, false, doc);
+        }
+
+        AppendAssetBunchModelAndFooterText(skinnedBunch, doc);
+        file << AStringView(doc);
+        return true;
+    });
+}
+
+[[nodiscard]] static ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringView virtualRoot){
+    Core::Alloc::ScratchArena& scratchArena = outputPath.arena();
+    ScratchPath noExtension(scratchArena, outputPath);
+    noExtension.replaceExtension();
+    const auto genericNoExt = PathToGenericString(scratchArena, noExtension);
+    const auto filenameNoExt = PathToGenericString(scratchArena, noExtension.filenameView());
+    const AString<::ArenaBase> virtualPath = BuildFbxVirtualBasePath(scratchArena, AStringView(genericNoExt), AStringView(filenameNoExt), virtualRoot);
+    return ScratchString(AStringView(virtualPath), scratchArena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Value, typename Lookup>
+[[nodiscard]] static Expected<u32> InternSourceValue(const Value& value, const AStringView streamName, UtilityVector<Value>& inOutStream, Lookup& inOutLookup){
+    auto found = inOutLookup.find(value);
+    if(found != inOutLookup.end())
+        return found.value();
+
+    if(!HasSourceMeshStreamValueCapacity(inOutStream.size())){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
+        return MakeUnexpected(Failure{});
+    }
+
+    const u32 index = static_cast<u32>(inOutStream.size());
+    inOutStream.push_back(value);
+    const auto inserted = inOutLookup.emplace(value, index);
+    if(!inserted.second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    return index;
+}
+
+static void ReserveSourceMeshBuildContext(const usize estimatedTriangleCorners, const b8 wantsSkinning, SourceMeshBuildContext& inOutContext){
+    inOutContext.positions.reserve(estimatedTriangleCorners);
+    inOutContext.normals.reserve(estimatedTriangleCorners);
+    inOutContext.tangents.reserve(estimatedTriangleCorners);
+    inOutContext.uv0.reserve(estimatedTriangleCorners);
+    inOutContext.colors.reserve(estimatedTriangleCorners);
+    if(wantsSkinning)
+        inOutContext.skin.reserve(estimatedTriangleCorners);
+    inOutContext.vertexRefs.reserve(estimatedTriangleCorners);
+}
+
+static void DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+    inOutMesh.tangents.clear();
+    const Vector<SourceVertexRef, ::ArenaBase> compact = CompactSourceVertexRefsWithoutTangents(scratchArena, inOutMesh.vertexRefs, Span<u32>(inOutMesh.indices));
+    inOutMesh.vertexRefs.assign(compact.begin(), compact.end());
+}
+
+[[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+    using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
+
+    SourceTangentReport outTangentReport;
+    NWB_ASSERT(!inOutMesh.vertexRefs.empty());
+    NWB_ASSERT(!inOutMesh.indices.empty());
+    NWB_ASSERT((inOutMesh.indices.size() % Impl::s_MeshletTriangleIndexCount) == 0u);
+
+    UtilityScratchVector<RebuildVertex> rebuildVertices(scratchArena);
+    rebuildVertices.reserve(inOutMesh.vertexRefs.size());
+    for(const SourceVertexRef& ref : inOutMesh.vertexRefs){
+        NWB_ASSERT(ref.position < inOutMesh.positions.size());
+        NWB_ASSERT(ref.normal < inOutMesh.normals.size());
+        NWB_ASSERT(ref.uv0 < inOutMesh.uv0.size());
+
+        const Vec3& position = inOutMesh.positions[ref.position];
+        const Vec3& normal = inOutMesh.normals[ref.normal];
+        rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), inOutMesh.uv0[ref.uv0] });
+    }
+
+    UtilityScratchVector<u32> rebuildIndices(scratchArena);
+    rebuildIndices.reserve(inOutMesh.indices.size());
+    for(usize indexBase = 0u; indexBase < inOutMesh.indices.size(); indexBase += Impl::s_MeshletTriangleIndexCount){
+        const u32 i0 = inOutMesh.indices[indexBase + 0u];
+        const u32 i1 = inOutMesh.indices[indexBase + 1u];
+        const u32 i2 = inOutMesh.indices[indexBase + 2u];
+        NWB_ASSERT(i0 < rebuildVertices.size());
+        NWB_ASSERT(i1 < rebuildVertices.size());
+        NWB_ASSERT(i2 < rebuildVertices.size());
+        if(IsDegenerateSourceTriangleIndices(i0, i1, i2))
+            continue;
+
+        const SIMDVectorSingle p0 = LoadFloat(rebuildVertices[i0].position);
+        const SIMDVectorSingle p1 = LoadFloat(rebuildVertices[i1].position);
+        const SIMDVectorSingle p2 = LoadFloat(rebuildVertices[i2].position);
+        const SIMDVectorDouble areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
+        const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal));
+        if(!HasUsableSourceTriangleArea(areaLengthSquared, static_cast<f64>(::s_FrameDirectionEpsilon)))
+            continue;
+
+        rebuildIndices.push_back(i0);
+        rebuildIndices.push_back(i1);
+        rebuildIndices.push_back(i2);
+    }
+    if(rebuildIndices.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
+        return MakeUnexpected(Failure{});
+    }
+
+    const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildIndices, rebuildVertices);
+    if(!rebuildResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
+        return MakeUnexpected(Failure{});
+    }
+
+    Vec4IndexMap tangentLookup(scratchArena);
+    tangentLookup.reserve(inOutMesh.vertexRefs.size());
+    inOutMesh.tangents.clear();
+    for(usize vertexRefIndex = 0u; vertexRefIndex < inOutMesh.vertexRefs.size(); ++vertexRefIndex){
+        SourceVertexRef& ref = inOutMesh.vertexRefs[vertexRefIndex];
+        const Vec3& storedNormal = inOutMesh.normals[ref.normal];
+        const SIMDVectorSingle storedTangent = LoadFloat(rebuildVertices[vertexRefIndex].tangent);
+        const SIMDVectorSingle normal = ::FrameNormalizeDirection(LoadFloat(storedNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVectorSingle tangent = ::FrameResolveTangent(normal, VectorSetW(storedTangent, 0.0f), ::FrameFallbackTangent(normal));
+        if(!::FrameValidDirection(tangent)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
+            return MakeUnexpected(Failure{});
+        }
+
+        Vec4 generatedTangent;
+        StoreFloat(VectorSelect(tangent, ::FrameTangentHandedness(storedTangent, s_SIMDOne), s_SIMDMaskW), generatedTangent);
+        const auto tangentIndex = InternSourceValue(generatedTangent, Impl::s_VertexRefTangentName, inOutMesh.tangents, tangentLookup);
+        if(!tangentIndex)
+            return MakeUnexpected(tangentIndex.error());
+        ref.tangent = *tangentIndex;
+    }
+    outTangentReport.degenerateUvTriangleCount = rebuildResult->degenerateUvTriangleCount;
+    outTangentReport.fallbackTangentVertexCount = rebuildResult->fallbackTangentVertexCount;
+    outTangentReport.mode = ResolveGeneratedSourceTangentMode(usedDefaultUvs, rebuildResult->degenerateUvTriangleCount, rebuildResult->fallbackTangentVertexCount);
+    return outTangentReport;
+}
+
+[[nodiscard]] static Expected<u32> InternSourceCorner(const SourceTriangleCorner& corner, const b8 wantsSkinning, SourceMeshBuildContext& inOutContext){
+    SourceVertexRef ref;
+    const auto positionIndex = InternSourceValue(corner.position, Impl::s_VertexRefPositionName, inOutContext.mesh.positions, inOutContext.positions);
+    if(!positionIndex)
+        return MakeUnexpected(positionIndex.error());
+    ref.position = *positionIndex;
+    const auto normalIndex = InternSourceValue(corner.normal, Impl::s_VertexRefNormalName, inOutContext.mesh.normals, inOutContext.normals);
+    if(!normalIndex)
+        return MakeUnexpected(normalIndex.error());
+    ref.normal = *normalIndex;
+    if(corner.hasTangent){
+        const auto tangentIndex = InternSourceValue(corner.tangent, Impl::s_VertexRefTangentName, inOutContext.mesh.tangents, inOutContext.tangents);
+        if(!tangentIndex)
+            return MakeUnexpected(tangentIndex.error());
+        ref.tangent = *tangentIndex;
+    }
+    const auto uv0Index = InternSourceValue(corner.uv0, Impl::s_MeshUv0FieldNameView, inOutContext.mesh.uv0, inOutContext.uv0);
+    if(!uv0Index)
+        return MakeUnexpected(uv0Index.error());
+    ref.uv0 = *uv0Index;
+    const auto colorIndex = InternSourceValue(corner.color, Impl::s_VertexRefColorName, inOutContext.mesh.colors, inOutContext.colors);
+    if(!colorIndex)
+        return MakeUnexpected(colorIndex.error());
+    ref.color = *colorIndex;
+    if(wantsSkinning){
+        const auto skinIndex = InternSourceValue(corner.skin, s_SkinAssetTypeText, inOutContext.mesh.skin, inOutContext.skin);
+        if(!skinIndex)
+            return MakeUnexpected(skinIndex.error());
+        ref.skin = *skinIndex;
+    }
+
+    return InternSourceValue(ref, s_SourceVertexRefLabel, inOutContext.mesh.vertexRefs, inOutContext.vertexRefs);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename VisitTriangle>
+[[nodiscard]] static b8 VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const b8 flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices){
+    if(!EnsureTriangleIndexScratchCapacityCount(mesh.max_face_triangles, inOutTriangleIndices))
+        return false;
+    for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){
+        const ufbx_face face = mesh.faces.data[faceIndex];
+        if(face.num_indices < Impl::s_MeshletTriangleIndexCount)
+            continue;
+
+        const u32 triangleCount = ufbx_triangulate_face(inOutTriangleIndices.data(), inOutTriangleIndices.size(), &mesh, face);
+
+        for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
+            const usize baseIndex = static_cast<usize>(triangleIndex) * Impl::s_MeshletTriangleIndexCount;
+            Array<u32, Impl::s_MeshletTriangleIndexCount> cornerIndices = { inOutTriangleIndices[baseIndex + 0u], inOutTriangleIndices[baseIndex + 1u], inOutTriangleIndices[baseIndex + 2u] };
+            if(flipWinding)
+                Swap(cornerIndices[1u], cornerIndices[2u]);
+
+#if defined(NWB_DEBUG)
+            for(const u32 cornerIndex : cornerIndices)
+                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
+#endif
+
+            if(!visitTriangle(cornerIndices))
+                return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
+    ufbx_vec3 position = {};
+    if(options.bakeTransforms){
+        position = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position, cornerIndex);
+        if(wantsSkinning || mesh.skinned_is_local)
+            position = ufbx_transform_position(&node.geometry_to_world, position);
+    }
+    else
+        position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
+
+    return VectorScale(LoadUfbxVector(position), static_cast<f32>(options.scale));
+}
+
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
+    ufbx_vec3 normal = {};
+    if(options.bakeTransforms){
+        normal = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal, cornerIndex);
+        if(wantsSkinning || mesh.skinned_is_local)
+            normal = ufbx_transform_direction(&normalToWorld, normal);
+    }
+    else
+        normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
+
+    return Vector3TryNormalize(LoadUfbxVector(normal));
+}
+
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& geometryToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
+    if(!mesh.vertex_tangent.exists)
+        return MakeUnexpected(Failure{});
+
+    ufbx_vec3 tangent = ufbx_get_vertex_vec3(&mesh.vertex_tangent, cornerIndex);
+    if(ShouldTransformBakedDirection(options.bakeTransforms, wantsSkinning, mesh.skinned_is_local))
+        tangent = ufbx_transform_direction(&geometryToWorld, tangent);
+
+    const auto outputTangent = Vector3TryNormalize(LoadUfbxVector(tangent));
+    if(!outputTangent)
+        return MakeUnexpected(Failure{});
+
+    b8 hasBitangent = false;
+    SIMDVectorSingle outputBitangentVec = VectorZero();
+    if(mesh.vertex_bitangent.exists){
+        ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
+        if(ShouldTransformBakedDirection(options.bakeTransforms, wantsSkinning, mesh.skinned_is_local))
+            bitangent = ufbx_transform_direction(&geometryToWorld, bitangent);
+
+        const auto outputBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent));
+        if(outputBitangent){
+            hasBitangent = true;
+            outputBitangentVec = outputBitangent->value;
+        }
+    }
+
+    return SIMDVectorSingleResult{ ResolveImportedFbxTangent(normal, outputTangent->value, hasBitangent, outputBitangentVec) };
+}
+
+[[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
+    const ufbx_mesh& mesh,
+    const ufbx_node& node,
+    const ImportOptions& options,
+    const b8 wantsSkinning,
+    Core::Alloc::ScratchArena& scratchArena,
+    UtilityScratchVector<u32>& inOutTriangleIndices
+){
+    PositionNormalMap outNormals(scratchArena);
+    outNormals.reserve(mesh.num_vertices);
+
+    if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, [&](const Array<u32, Impl::s_MeshletTriangleIndexCount>& cornerIndices){
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> positions = {};
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex)
+            positions[triangleCornerIndex] = LoadCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
+
+        const SIMDVectorDouble areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
+        const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal64));
+        if(!HasUsableSourceTriangleArea(areaLengthSquared, options.triangleAreaLengthSquaredEpsilon))
+            return true;
+
+        const SIMDVectorSingle areaNormal = ConvertVectorDoubleToSingle(areaNormal64);
+        for(const SIMDVectorSingle position : positions){
+            const PositionKey key = MakePositionKey(position);
+            auto result = outNormals.emplace(key, PositionNormalRecord{});
+            PositionNormalRecord& normal = result.first.value();
+            StoreFloat(result.second ? areaNormal : VectorAdd(LoadFloat(normal.value), areaNormal), normal.value);
+        }
+        return true;
+    }, inOutTriangleIndices))
+        return MakeUnexpected(Failure{});
+
+    for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
+        const auto normal = Vector3TryNormalize(LoadFloat(it.value().value));
+        if(!normal){
+            NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
+            continue;
+        }
+        StoreFloat(normal->value, it.value().value);
+    }
+    return outNormals;
+}
+
+[[nodiscard]] static b8 AppendInstanceMesh(
+    const MeshInstance& instance,
+    const ImportOptions& options,
+    const b8 wantsSkinning,
+    const NormalMode::Enum normalMode,
+    const Vec4& defaultColor,
+    Core::Alloc::ScratchArena& scratchArena,
+    UtilityScratchVector<u32>& inOutTriangleIndices,
+    SourceMeshBuildContext& inOutMesh,
+    FbxSkinDetail::ExportContext& inOutSkinContext,
+    b8& inOutSawVertexColors,
+    b8& inOutSawVertexUvs,
+    b8& inOutUsedDefaultUvs
+){
+    ufbx_mesh* mesh = instance.mesh;
+    ufbx_node* node = instance.node;
+    if(!mesh || !node){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
+        return false;
+    }
+    if(!ValidateFbxMeshAttributes(mesh->vertex_position.exists, normalMode == NormalMode::Imported, mesh->vertex_normal.exists))
+        return false;
+
+    const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
+    const b8 importUvs = mesh->vertex_uv.exists;
+    const b8 importColors = options.importColors && mesh->vertex_color.exists;
+    const b8 importTangents = ShouldImportMeshTangents(normalMode, mesh->vertex_tangent.exists);
+    const ufbx_skin_deformer* skin = nullptr;
+    ::Vector<u16, Core::Alloc::ScratchArena> clusterJoints(scratchArena);
+    if(wantsSkinning){
+        if(!ValidateFbxSkinDeformerCount(mesh->skin_deformers.count))
+            return false;
+        skin = mesh->skin_deformers.data[0u];
+        if(!skin){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
+            return false;
+        }
+        auto jointMap = FbxSkinDetail::BuildClusterJointMap(instance, options, *skin, scratchArena, inOutSkinContext);
+        if(!jointMap)
+            return false;
+        clusterJoints = Move(*jointMap);
+    }
+
+    PositionNormalMap smoothNormals(scratchArena);
+    if(normalMode == NormalMode::Smooth){
+        auto normals = BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, scratchArena, inOutTriangleIndices);
+        if(!normals)
+            return false;
+        smoothNormals = Move(*normals);
+    }
+
+    return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, [&](const Array<u32, Impl::s_MeshletTriangleIndexCount>& cornerIndices){
+        Array<SourceTriangleCorner, Impl::s_MeshletTriangleIndexCount> triangleCorners = {};
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> trianglePositions = {};
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> triangleNormals = {};
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex){
+            const u32 cornerIndex = cornerIndices[triangleCornerIndex];
+            const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
+
+            SourceTriangleCorner corner;
+            const SIMDVectorSingle position = LoadCornerOutputPositionVector(*mesh, *node, options, wantsSkinning, cornerIndex);
+            trianglePositions[triangleCornerIndex] = position;
+
+            SIMDVectorSingle normal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+            if(normalMode == NormalMode::Imported){
+                const auto importedNormal = LoadCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+                if(!importedNormal){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: imported normal is invalid"));
+                    return false;
+                }
+                normal = importedNormal->value;
+            }
+            else if(normalMode == NormalMode::Smooth){
+                auto foundNormal = smoothNormals.find(MakePositionKey(position));
+                if(foundNormal == smoothNormals.end()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
+                    return false;
+                }
+                const auto generatedNormal = Vector3TryNormalize(LoadFloat(foundNormal.value().value));
+                if(!generatedNormal){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
+                    return false;
+                }
+                normal = generatedNormal->value;
+            }
+            triangleNormals[triangleCornerIndex] = normal;
+
+            if(importUvs){
+                const ufbx_vec2 sourceUv0 = ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex);
+                corner.uv0 = Vec2(static_cast<f32>(sourceUv0.x), static_cast<f32>(sourceUv0.y));
+                inOutSawVertexUvs = true;
+            }
+            else
+                inOutUsedDefaultUvs = true;
+
+            if(importColors){
+                const ufbx_vec4 sourceColor = ufbx_get_vertex_vec4(&mesh->vertex_color, cornerIndex);
+                corner.color = Vec4(static_cast<f32>(sourceColor.x), static_cast<f32>(sourceColor.y), static_cast<f32>(sourceColor.z), static_cast<f32>(sourceColor.w));
+                inOutSawVertexColors = true;
+            }
+            else
+                corner.color = defaultColor;
+
+            if(importTangents){
+                const auto importedTangent = LoadCornerOutputTangentVector(*mesh, node->geometry_to_world, options, wantsSkinning, cornerIndex, normal);
+                corner.hasTangent = importedTangent.has_value();
+                if(importedTangent)
+                    StoreFloat(importedTangent->value, corner.tangent);
+            }
+
+            if(wantsSkinning){
+                const auto influence = FbxSkinDetail::LoadInfluence(*skin, clusterJoints, logicalVertex);
+                if(!influence)
+                    return false;
+                corner.skin = *influence;
+            }
+
+            if(!IsFiniteSourceTriangleCornerValues(position, normal, corner, wantsSkinning)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
+                return false;
+            }
+
+            triangleCorners[triangleCornerIndex] = corner;
+        }
+
+        if(!::TriangleHasArea(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u], options.triangleAreaLengthSquaredEpsilon))
+            return true;
+
+        if(normalMode == NormalMode::Regenerate){
+            const SIMDVectorDouble faceNormal64 = BuildTriangleAreaNormal64(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u]);
+            const SIMDVectorSingle faceNormal = ConvertVectorDoubleToSingle(faceNormal64);
+            const auto normalizedFaceNormal = Vector3TryNormalize(faceNormal);
+            if(!normalizedFaceNormal){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
+                return false;
+            }
+            for(SIMDVectorSingle& normal : triangleNormals)
+                normal = normalizedFaceNormal->value;
+        }
+
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex){
+            SourceTriangleCorner& corner = triangleCorners[triangleCornerIndex];
+            StoreFloat(trianglePositions[triangleCornerIndex], corner.position);
+            StoreFloat(triangleNormals[triangleCornerIndex], corner.normal);
+            const auto vertexRefIndex = InternSourceCorner(corner, wantsSkinning, inOutMesh);
+            if(!vertexRefIndex)
+                return false;
+            inOutMesh.mesh.indices.push_back(*vertexRefIndex);
+        }
+        return true;
+    }, inOutTriangleIndices);
+}
+
+[[nodiscard]] static Expected<usize> EstimateSelectedTriangleCorners(const Span<const MeshInstance> instances, const Span<const usize> selection){
+    usize outTriangleCorners = 0u;
+    for(const usize instanceIndex : selection){
+        if(instanceIndex >= instances.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh index is out of range"));
+            return MakeUnexpected(Failure{});
+        }
+
+        const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
+        if(!mesh){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
+            return MakeUnexpected(Failure{});
+        }
+        if(!TryAccumulateFbxSelectedTriangleCorners(static_cast<usize>(mesh->num_triangles), outTriangleCorners))
+            return MakeUnexpected(Failure{});
+    }
+    return outTriangleCorners;
+}
+
+static void ApplyCanonicalizedStreams(const CanonicalizeMeshStreamsResult& canonicalized, SourceMeshStreams& inOutMesh){
+    if(canonicalized.compactedPositions)
+        inOutMesh.positions.assign(canonicalized.positions.begin(), canonicalized.positions.end());
+    if(canonicalized.compactedNormals)
+        inOutMesh.normals.assign(canonicalized.normals.begin(), canonicalized.normals.end());
+    if(canonicalized.compactedTangents)
+        inOutMesh.tangents.assign(canonicalized.tangents.begin(), canonicalized.tangents.end());
+    if(canonicalized.compactedUv0)
+        inOutMesh.uv0.assign(canonicalized.uv0.begin(), canonicalized.uv0.end());
+    if(canonicalized.compactedColors)
+        inOutMesh.colors.assign(canonicalized.colors.begin(), canonicalized.colors.end());
+    if(canonicalized.compactedSkin)
+        inOutMesh.skin.assign(canonicalized.skin.begin(), canonicalized.skin.end());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static ScratchString FormatUfbxError(const ufbx_error& error, Core::Alloc::ScratchArena& scratchArena){
+    Array<char, s_UfbxErrorBufferSize> buffer = {};
+    const usize written = ufbx_format_error(buffer.data(), buffer.size(), &error);
+    return ScratchString(buffer.data(), written, scratchArena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct TextReplacement{
+    usize begin = 0u;
+    usize end = 0u;
+    ScratchString text;
+};
+
+using TextReplacements = ::Vector<TextReplacement, Core::Alloc::ScratchArena>;
+
+struct SkinReference{
+    const Core::Metascript::Value* value = nullptr;
+    AStringView variableName;
+};
+
+[[nodiscard]] static b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
+        return false;
+    }
+
+    for(const auto& field : asset.asMap()){
+        const Core::Metascript::MStringView fieldName(field.first);
+        if(Impl::IsAllowedMeshAssetField(fieldName))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 ValidateRefreshMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
+    if(!Impl::MeshCookSourceStreams::ValidateSourceVertexRefStreams(
+        nwbFilePath,
+        Impl::s_MeshMetaKind,
+        Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()),
+        mesh.positions.size(),
+        mesh.normals.size(),
+        mesh.tangents.size(),
+        mesh.uv0.size(),
+        mesh.colors.size()
+    ))
+        return false;
+
+    if(!ValidatePlainRefreshMeshNoSkin(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    return Impl::MeshCookSourceStreams::ValidateSourceIndexStream(
+        nwbFilePath,
+        Impl::s_MeshMetaKind,
+        Span<const u32>(mesh.indices.data(), mesh.indices.size()),
+        mesh.vertexRefs.size()
+    );
+}
+
+[[nodiscard]] static Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName){
+    UtilityVector<MeshSkinInfluence> outInfluences;
+    if(!Impl::SkinInfluenceMetadataParser::Parse(nwbFilePath, skinAsset, Impl::s_MeshMetaKind, skinVariableName, false, outInfluences))
+        return MakeUnexpected(Failure{});
+    return outInfluences;
+}
+
+[[nodiscard]] static Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
+    if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
+        return MakeUnexpected(Failure{});
+    SourceMeshStreams mesh;
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshPositionsFieldNameView, scratchArena, mesh.positions))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshNormalsFieldNameView, scratchArena, mesh.normals))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshTangentsFieldNameView, scratchArena, mesh.tangents))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec2, s_Vector2ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshUv0FieldNameView, scratchArena, mesh.uv0))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshColorsFieldNameView, scratchArena, mesh.colors))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookSourceStreams::ParseSourceVertexRefsInto(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.vertexRefs))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshIndexMetadataParser::Parse(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.indices))
+        return MakeUnexpected(Failure{});
+    if(!ValidateRefreshMesh(nwbFilePath, mesh))
+        return MakeUnexpected(Failure{});
+    return mesh;
+}
+
+[[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
+    return value.isReference() && value.asReference() == variableName;
+}
+
+[[nodiscard]] static Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
+    AssignmentRange outRange;
+    Core::Metascript::Lexer lexer(source);
+    Core::Metascript::Token token = lexer.next();
+    b8 statementBegin = true;
+    b8 foundAssignment = false;
+    while(token.type != Core::Metascript::TokenType::EndOfFile){
+        if(token.type == Core::Metascript::TokenType::Error)
+            return MakeUnexpected(Failure{});
+
+        if(statementBegin && token.type == Core::Metascript::TokenType::Identifier && token.text == variableName){
+            token = lexer.next();
+            if(token.type == Core::Metascript::TokenType::Dot){
+                token = lexer.next();
+                if(token.type == Core::Metascript::TokenType::Identifier && token.text == fieldName){
+                    token = lexer.next();
+                    const b8 assignment = token.type == Core::Metascript::TokenType::Equal || token.type == Core::Metascript::TokenType::PlusEqual || token.type == Core::Metascript::TokenType::MinusEqual
+                        || token.type == Core::Metascript::TokenType::StarEqual || token.type == Core::Metascript::TokenType::SlashEqual;
+                    if(assignment){
+                        // Parsed values can combine assignments, but rewriting needs one authoritative literal list.
+                        if(foundAssignment || token.type != Core::Metascript::TokenType::Equal)
+                            return MakeUnexpected(Failure{});
+                        foundAssignment = true;
+                        token = lexer.next();
+                        if(token.type != Core::Metascript::TokenType::LeftBracket)
+                            return MakeUnexpected(Failure{});
+
+                        outRange.begin = static_cast<usize>(token.text.data() - source.data());
+                        usize depth = 1u;
+                        while(depth != 0u){
+                            token = lexer.next();
+                            if(token.type == Core::Metascript::TokenType::Error || token.type == Core::Metascript::TokenType::EndOfFile)
+                                return MakeUnexpected(Failure{});
+                            if(token.type == Core::Metascript::TokenType::LeftBracket)
+                                ++depth;
+                            else if(token.type == Core::Metascript::TokenType::RightBracket)
+                                --depth;
+                        }
+                        outRange.end = static_cast<usize>(token.text.data() - source.data()) + token.text.size();
+                        token = lexer.next();
+                        if(token.type != Core::Metascript::TokenType::Semicolon)
+                            return MakeUnexpected(Failure{});
+                    }
+                }
+            }
+        }
+
+        statementBegin = token.type == Core::Metascript::TokenType::Semicolon;
+        token = lexer.next();
+    }
+    if(!foundAssignment)
+        return MakeUnexpected(Failure{});
+    return outRange;
+}
+
+[[nodiscard]] static b8 AddReplacement(const AStringView source, const AStringView variableName, const AStringView fieldName, const AStringView replacementText, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements){
+    auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
+    if(!replacementResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
+        return false;
+    }
+
+    const AssignmentRange& range = *replacementResult;
+    inOutReplacements.push_back(TextReplacement{ range.begin, range.end, ScratchString(replacementText, scratchArena) });
+    return true;
+}
+
+[[nodiscard]] static Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName){
+    SkinReference result;
+
+    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
+        if(declaration.type != s_SkinAssetTypeText)
+            continue;
+
+        const Core::Metascript::MStringView skinVariable(declaration.variable);
+        const Core::Metascript::Value* skinAsset = doc.findVariable(skinVariable);
+        if(!skinAsset || !skinAsset->isMap())
+            continue;
+
+        const Core::Metascript::Value* meshField = skinAsset->findField(s_MeshAssetTypeText);
+        if(!meshField || !IsReferenceTo(*meshField, meshVariableName))
+            continue;
+
+        if(result.value){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), ConvertString(meshVariableName));
+            return MakeUnexpected(Failure{});
+        }
+
+        result.value = skinAsset;
+        result.variableName = skinVariable;
+    }
+
+    return result;
+}
+
+[[nodiscard]] static b8 AppendMeshReplacements(const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements){
+    if(DidMeshStreamCountChange(before.positions, after.positions.size())){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshVec3List(scratchArena, after.positions);
+        if(!AddReplacement(source, variableName, Impl::s_MeshPositionsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.normals, after.normals.size())){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshVec3List(scratchArena, after.normals);
+        if(!AddReplacement(source, variableName, Impl::s_MeshNormalsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.tangents, after.tangents.size())){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshVec4List(scratchArena, after.tangents);
+        if(!AddReplacement(source, variableName, Impl::s_MeshTangentsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.uv0, after.uv0.size())){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshVec2List(scratchArena, after.uv0);
+        if(!AddReplacement(source, variableName, Impl::s_MeshUv0FieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.colors, after.colors.size())){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshVec4List(scratchArena, after.colors);
+        if(!AddReplacement(source, variableName, Impl::s_MeshColorsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+
+    const b8 componentRefsChanged = DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after));
+    if(componentRefsChanged){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshVertexRefList(scratchArena, after.vertexRefs);
+        if(!AddReplacement(source, variableName, Impl::s_MeshVertexRefsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size())){
+        const AString<::ArenaBase> formatted = FormatMeshRefreshIndexList(scratchArena, after.indices);
+        if(!AddReplacement(source, variableName, Impl::s_MeshIndicesFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
+            return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] static Expected<ScratchString, ErrorCode> ReadMetascriptSource(const ScratchPath& nwbFilePath, Core::Alloc::ScratchArena& scratchArena){
+    ScratchString outText(scratchArena);
+    const auto read = ReadTextFile(nwbFilePath, outText);
+    if(!read)
+        return MakeUnexpected(read.error());
+
+    StripUtf8Bom(outText);
+    return outText;
+}
+
+[[nodiscard]] static Expected<Core::Metascript::Document> ParseMetascriptDocument(const ScratchPath& nwbFilePath, const AStringView text, Core::Metascript::MetaArena& arena){
+    Core::Metascript::Document outDoc(arena);
+    if(outDoc.parse(text))
+        return outDoc;
+
+    for(const Core::Metascript::ParseError& error : outDoc.errors()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), error.line, error.column, ConvertString(error.message));
+    }
+    return MakeUnexpected(Failure{});
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static i32 ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena){
+    if(IsCliParseExitSuccess(error.get_exit_code()))
+        return app.exit(error, NWB_COUT, NWB_CERR);
+
+    ScratchStringStream report(s_FileOpenWrite, scratchArena);
+    const i32 result = app.exit(error, report, report);
+    const ScratchString message = Move(report).str();
+    if(message.empty())
+        NWB_LOGGER_ERROR(NWB_TEXT("{}"), ConvertString(AStringView(error.what())));
+    else
+        NWB_LOGGER_ERROR(NWB_TEXT("{}"), ConvertString(message));
+    return result;
+}
+
+static i32 ExitValidation(const CLI::App& app, const AStringView option, const AStringView message, Core::Alloc::ScratchArena& scratchArena){
+    return ExitParseError(app, CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())), scratchArena);
+}
+
+[[nodiscard]] static Expected<UtilityString> PromptString(const AStringView label, const AStringView defaultValue, b8& inOutPrompted){
+    inOutPrompted = true;
+    NWB_COUT << label;
+    if(!defaultValue.empty())
+        NWB_COUT << " [" << defaultValue << "]";
+    NWB_COUT << ": ";
+
+    UtilityString line;
+    if(ReadTextLine(NWB_CIN, line))
+        line = TrimCopy(Move(line));
+    if(line.empty())
+        line = defaultValue;
+    if(line.empty())
+        return MakeUnexpected(Failure{});
+    return line;
+}
+
+[[nodiscard]] static b8 PromptBool(const AStringView label, const b8 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
+    inOutPrompted = true;
+    ScratchString line(scratchArena);
+    for(;;){
+        NWB_COUT << label << SelectPromptBoolSuffix(defaultValue);
+
+        line.clear();
+        if(!ReadTextLine(NWB_CIN, line))
+            return defaultValue;
+
+        if(TrimView(AStringView(line)).empty())
+            return defaultValue;
+        const auto value = ParseFbxConfirmText(AStringView(line));
+        if(value)
+            return *value;
+
+        NWB_COUT << "Please answer y or n.\n";
+    }
+}
+
+[[nodiscard]] static f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
+    inOutPrompted = true;
+    ScratchString line(scratchArena);
+    for(;;){
+        NWB_COUT << label << " [" << defaultValue << "]: ";
+
+        line.clear();
+        if(!ReadTextLine(NWB_CIN, line))
+            return defaultValue;
+
+        const AStringView trimmed = TrimView(AStringView(line));
+        if(trimmed.empty())
+            return defaultValue;
+
+        const auto parsed = ParseF64FromChars(trimmed);
+        if(parsed && IsValidFbxImportScale(*parsed))
+            return *parsed;
+
+        NWB_COUT << "Please enter a positive finite number.\n";
+    }
+}
+
+[[nodiscard]] static b8 ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
+    const auto exists = FileExistsNoFollow(outputPath);
+    if(!exists){
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
+        return false;
+    }
+    if(!*exists)
+        return true;
+    if(options.forceOverwrite)
+        return true;
+    if(options.acceptDefaults){
+        NWB_LOGGER_WARNING(NWB_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
+        return false;
+    }
+
+    return PromptBool("Output already exists. Overwrite it?", false, scratchArena, inOutPrompted);
+}
+
+[[nodiscard]] static b8 ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& inOutOptions, b8& inOutPrompted){
+    if(inOutOptions.inputPath.empty()){
+        if(inOutOptions.acceptDefaults){
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
+            return false;
+        }
+
+        auto input = PromptString("Input FBX or NWB path", {}, inOutPrompted);
+        if(!input){
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
+            return false;
+        }
+        inOutOptions.inputPath = Move(*input);
+    }
+    {
+        const AString<::ArenaBase> unquoted = UnquoteFbxInputText(scratchArena, AStringView(inOutOptions.inputPath));
+        inOutOptions.inputPath.assign(unquoted.data(), unquoted.size());
+    }
+
+    if(ShouldPromptPreserveSpace(presence.preserveSpace, inOutOptions.acceptDefaults, inOutOptions.listMeshes)){
+        const b8 convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, inOutPrompted);
+        inOutOptions.preserveSpace = !convertSpace;
+    }
+
+    return true;
+}
+
+[[nodiscard]] static b8 ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const MeshInstance> visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& inOutOptions, b8& inOutPrompted){
+    if(!presence.assetType && !inOutOptions.acceptDefaults){
+        const AString<::ArenaBase> prompt = FormatAssetTypePromptLabel(scratchArena);
+        auto assetType = PromptString(AStringView(prompt), inOutOptions.assetType, inOutPrompted);
+        if(!assetType)
+            return false;
+        inOutOptions.assetType = Move(*assetType);
+    }
+
+    if(!presence.mesh && !inOutOptions.acceptDefaults){
+        PrintMeshInstances(visibleInstances, scratchArena);
+        auto selector = PromptString("Mesh selector (all, first, index, node name, or mesh name)", inOutOptions.meshSelector, inOutPrompted);
+        if(!selector)
+            return false;
+        inOutOptions.meshSelector = Move(*selector);
+    }
+
+    if(!presence.output && !inOutOptions.acceptDefaults){
+        const auto defaultOutput = PathToGenericString(scratchArena, DefaultFbxOutputPath(scratchArena, AStringView(inOutOptions.inputPath)));
+        auto output = PromptString(s_OutputPathPromptLabel, defaultOutput, inOutPrompted);
+        if(!output)
+            return false;
+        inOutOptions.outputPath = Move(*output);
+    }
+    if(inOutOptions.outputPath.empty()){
+        const auto defaultOutput = PathToGenericString(scratchArena, DefaultFbxOutputPath(scratchArena, AStringView(inOutOptions.inputPath)));
+        inOutOptions.outputPath.assign(defaultOutput.data(), defaultOutput.size());
+    }
+    {
+        const AString<::ArenaBase> unquoted = UnquoteFbxInputText(scratchArena, AStringView(inOutOptions.outputPath));
+        inOutOptions.outputPath.assign(unquoted.data(), unquoted.size());
+    }
+
+    if(!presence.normalMode && !inOutOptions.acceptDefaults){
+        const AString<::ArenaBase> prompt = FormatNormalModePromptLabel(scratchArena);
+        auto normalMode = PromptString(AStringView(prompt), inOutOptions.normalMode, inOutPrompted);
+        if(!normalMode)
+            return false;
+        inOutOptions.normalMode = Move(*normalMode);
+    }
+
+    if(!presence.scale && !inOutOptions.acceptDefaults)
+        inOutOptions.scale = PromptDouble("Additional uniform scale", inOutOptions.scale, scratchArena, inOutPrompted);
+
+    if(!presence.local && !inOutOptions.acceptDefaults)
+        inOutOptions.bakeTransforms = PromptBool("Bake node transforms into the mesh?", inOutOptions.bakeTransforms, scratchArena, inOutPrompted);
+
+    if(!presence.ignoreColors && !inOutOptions.acceptDefaults)
+        inOutOptions.importColors = PromptBool("Import FBX vertex colors when present?", inOutOptions.importColors, scratchArena, inOutPrompted);
+
+    if(!presence.defaultColor && !inOutOptions.acceptDefaults){
+        auto colorText = PromptString("Default RGBA color for vertices without FBX color", inOutOptions.defaultColorText, inOutPrompted);
+        if(!colorText)
+            return false;
+        inOutOptions.defaultColorText = Move(*colorText);
+    }
+
+    if(!presence.flipWinding && !inOutOptions.acceptDefaults)
+        inOutOptions.flipWinding = PromptBool("Flip triangle winding?", inOutOptions.flipWinding, scratchArena, inOutPrompted);
+
+    return true;
+}
+
+static b8 ValidateAndCanonicalizeAssetType(UtilityString& inOutValue){
+    const auto parsed = ParseAssetTypeText(AStringView(inOutValue));
+    if(parsed){
+        inOutValue.assign(OutputAssetTypeText(*parsed));
+        return true;
+    }
+    const AString<::ArenaBase> normalized = NormalizeFbxOptionText(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(inOutValue));
+    inOutValue.assign(normalized.data(), normalized.size());
+    return false;
+}
+
+static b8 ValidateAndCanonicalizeNormalMode(UtilityString& inOutValue){
+    const auto parsed = ParseNormalModeText(AStringView(inOutValue));
+    if(parsed){
+        inOutValue.assign(NormalModeText(*parsed));
+        return true;
+    }
+    const AString<::ArenaBase> normalized = NormalizeFbxOptionText(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(inOutValue));
+    inOutValue.assign(normalized.data(), normalized.size());
+    return false;
+}
+
+[[nodiscard]] static Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){
+    FbxMeshSkinningSummary summary;
+    for(const usize instanceIndex : selection){
+        if(instanceIndex >= instances.size()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
+            return MakeUnexpected(Failure{});
+        }
+
+        const MeshInstance& instance = instances[instanceIndex];
+        summary.observe(instance.mesh && instance.mesh->skin_deformers.count != 0u);
+    }
+
+    return summary.resolve();
+}
+
+static i32 RunNwbRefreshCommand(
+    const CLI::App& app,
+    const OptionPresence& presence,
+    Core::Alloc::ScratchArena& scratchArena,
+    ImportOptions& inOutOptions,
+    b8& inOutPrompted
+){
+    if(inOutOptions.listMeshes)
+        return ExitValidation(app, s_FbxToNwbListMeshesFlag, "Only valid for FBX input.", scratchArena);
+
+    if(ShouldPromptRefreshOutputPath(presence.output, inOutOptions.acceptDefaults)){
+        auto output = PromptString(s_OutputPathPromptLabel, inOutOptions.inputPath, inOutPrompted);
+        if(!output)
+            return s_FbxToNwbExitFailure;
+        inOutOptions.outputPath = Move(*output);
+    }
+    if(inOutOptions.outputPath.empty())
+        inOutOptions.outputPath = inOutOptions.inputPath;
+    {
+        const AString<::ArenaBase> unquoted = UnquoteFbxInputText(scratchArena, AStringView(inOutOptions.outputPath));
+        inOutOptions.outputPath.assign(unquoted.data(), unquoted.size());
+    }
+
+    const ScratchPath outputPath(scratchArena, inOutOptions.outputPath);
+    if(outputPath.empty())
+        return ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
+    if(!ValidateOutputOverwrite(outputPath, inOutOptions, scratchArena, inOutPrompted))
+        return s_FbxToNwbExitFailure;
+
+    const ScratchPath inputPath(scratchArena, inOutOptions.inputPath);
+    const auto canonicalizeReport = RefreshNwbMeshAsset(inputPath, outputPath, scratchArena);
+    if(!canonicalizeReport)
+        return s_FbxToNwbExitFailure;
+
+    const auto outputText = PathToGenericString(scratchArena, outputPath);
+    const auto inputText = PathToGenericString(scratchArena, inputPath);
+    const AString<::ArenaBase> report = FormatNwbRefreshReport(scratchArena, AStringView(outputText), AStringView(inputText), *canonicalizeReport);
+    NWB_LOGGER_ESSENTIAL_INFO(ConvertString(AStringView(report)));
+    return s_FbxToNwbExitSuccess;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SceneHandle::~SceneHandle()noexcept{
+    if(scene){
+        ufbx_free_scene(scene);
+        scene = nullptr;
+    }
+}
+
+Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena){
+    SceneHandle outScene;
+    ufbx_load_opts loadOptions = {};
+    loadOptions.load_external_files = true;
+    loadOptions.ignore_missing_external_files = true;
+    loadOptions.generate_missing_normals = true;
+    loadOptions.normalize_normals = true;
+    loadOptions.clean_skin_weights = true;
+    loadOptions.evaluate_skinning = true;
+    loadOptions.evaluate_caches = true;
+    loadOptions.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_PRESERVE;
+
+    if(!options.preserveSpace){
+        loadOptions.target_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
+        loadOptions.target_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
+        loadOptions.target_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
+        loadOptions.target_unit_meters = s_TargetUnitMeters;
+    }
+
+    const ScratchPath nativeInputPath(scratchArena, options.inputPath);
+    const auto inputPath = PathToGenericString(scratchArena, nativeInputPath);
+    ufbx_error error = {};
+    outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
+    if(!outScene.scene){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), ConvertString(__hidden_fbx_to_nwb_module::FormatUfbxError(error, scratchArena)));
+        return MakeUnexpected(Failure{});
+    }
+
+    return outScene;
+}
+
+UtilityVector<MeshInstance> CollectMeshInstances(const ufbx_scene& scene, const b8 includeHidden){
+    UtilityVector<MeshInstance> instances;
+    instances.reserve(scene.nodes.count);
+    for(usize i = 0u; i < scene.nodes.count; ++i){
+        ufbx_node* node = scene.nodes.data[i];
+        if(!ShouldCollectMeshNode(node != nullptr, node != nullptr && node->mesh != nullptr, includeHidden, node != nullptr && node->visible))
+            continue;
+
+        MeshInstance instance;
+        instance.node = node;
+        instance.mesh = node->mesh;
+        instance.index = instances.size();
+        instances.push_back(instance);
+    }
+
+    return instances;
+}
+
+void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::ScratchArena&){
+    if(instances.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("No mesh instances found.\n"));
+        return;
+    }
+
+    AString<> report(QueryUtilityGlobalArena<s_UtilityArena>());
+    report.reserve(32u + instances.size() * 64u);
+    report.append("Mesh instances:\n");
+    for(const MeshInstance& instance : instances){
+        AppendFbxMeshInstanceLine(
+            instance.index,
+            instance.node != nullptr,
+            instance.node ? UfbxStringView(instance.node->name) : AStringView{},
+            instance.mesh ? UfbxStringView(instance.mesh->name) : AStringView{},
+            instance.mesh ? instance.mesh->num_triangles : 0u,
+            instance.node ? instance.node->visible : false,
+            report
+        );
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(ConvertString(AStringView(report)));
+}
+
+Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance> instances, const AStringView selector){
+    UtilityVector<usize> outSelection;
+    outSelection.reserve(ComputeMeshSelectionInitialCapacity(instances.size()));
+
+    const AStringView normalized = TrimView(selector);
+    if(normalized.empty() || EqualsAsciiIgnoreCase(normalized, s_DefaultMeshSelectorText)){
+        for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
+            outSelection.push_back(instanceIndex);
+        return outSelection;
+    }
+    if(EqualsAsciiIgnoreCase(normalized, s_FirstMeshSelectorText)){
+        if(instances.empty()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), ConvertString(selector));
+            return MakeUnexpected(Failure{});
+        }
+        outSelection.push_back(0u);
+        return outSelection;
+    }
+
+    const auto parsedIndex = TryParseMeshIndexSelector(normalized);
+    if(parsedIndex){
+        if(*parsedIndex >= instances.size()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), ConvertString(selector));
+            return MakeUnexpected(Failure{});
+        }
+        outSelection.push_back(*parsedIndex);
+        return outSelection;
+    }
+
+    UtilityVector<usize> partialSelection;
+    for(const MeshInstance& instance : instances){
+        if(EqualsAsciiIgnoreCase(UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(UfbxStringView(instance.mesh->name), normalized)){
+            outSelection.push_back(instance.index);
+        }
+        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(UfbxStringView(instance.node->name), normalized) || ContainsAsciiIgnoreCase(UfbxStringView(instance.mesh->name), normalized))){
+            if(partialSelection.empty())
+                partialSelection.reserve(instances.size());
+            partialSelection.push_back(instance.index);
+        }
+    }
+    if(!outSelection.empty())
+        return outSelection;
+    if(!partialSelection.empty()){
+        outSelection = Move(partialSelection);
+        return outSelection;
+    }
+
+    NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), ConvertString(selector));
+    return MakeUnexpected(Failure{});
+}
+
+Expected<MeshBuildResult> BuildMesh(
+    const Span<const MeshInstance> instances,
+    const Span<const usize> selection,
+    const ImportOptions& options,
+    const b8 wantsSkinning,
+    const Vec4& defaultColor,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    using namespace __hidden_fbx_to_nwb_module;
+
+    MeshBuildResult result;
+    const auto estimatedTriangleCorners = EstimateSelectedTriangleCorners(instances, selection);
+    if(!estimatedTriangleCorners)
+        return MakeUnexpected(Failure{});
+
+    const auto normalMode = ParseNormalModeText(options.normalMode);
+    if(!normalMode){
+        const AString<::ArenaBase> errorText = NormalModeErrorText(scratchArena);
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), ConvertString(AStringView(errorText)));
+        return MakeUnexpected(Failure{});
+    }
+
+    b8 usedDefaultUvs = false;
+    ReserveSourceMeshStreamsCapacity(*estimatedTriangleCorners, wantsSkinning, result.mesh);
+    SourceMeshBuildContext meshContext{ result.mesh, scratchArena };
+    ReserveSourceMeshBuildContext(*estimatedTriangleCorners, wantsSkinning, meshContext);
+
+    usize maxFaceTriangles = 0u;
+    for(const usize instanceIndex : selection)
+        maxFaceTriangles = Max(maxFaceTriangles, static_cast<usize>(instances[instanceIndex].mesh->max_face_triangles));
+    const auto triangleIndexCapacity = TryComputeTriangleIndexScratchCapacity(maxFaceTriangles);
+    if(!triangleIndexCapacity)
+        return MakeUnexpected(Failure{});
+    UtilityScratchVector<u32> triangleIndices(*triangleIndexCapacity, scratchArena);
+    FbxSkinDetail::ExportContext skinContext(scratchArena);
+    usize jointCapacity = 0u;
+    if(wantsSkinning){
+        for(const usize instanceIndex : selection){
+            NWB_ASSERT(instanceIndex < instances.size());
+            const ufbx_mesh* mesh = instances[instanceIndex].mesh;
+            if(mesh && mesh->skin_deformers.count == 1u && mesh->skin_deformers.data[0u]){
+                const usize clusterCount = mesh->skin_deformers.data[0u]->clusters.count;
+                jointCapacity = AccumulateFbxJointCapacity(jointCapacity, clusterCount);
+            }
+        }
+    }
+    skinContext.jointLookup.reserve(jointCapacity);
+    for(const usize instanceIndex : selection){
+        NWB_ASSERT(instanceIndex < instances.size());
+        if(!AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, scratchArena, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs))
+            return MakeUnexpected(Failure{});
+    }
+
+    if(result.mesh.indices.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
+        return MakeUnexpected(Failure{});
+    }
+    if(ShouldRegenerateSourceTangents(*normalMode, SourceVertexRefsHaveCompleteTangents(result.mesh.vertexRefs, result.mesh.tangents.size()))){
+        DropSourceMeshTangents(scratchArena, result.mesh);
+        const auto tangentReport = GenerateSourceMeshTangents(usedDefaultUvs, scratchArena, result.mesh);
+        if(!tangentReport)
+            return MakeUnexpected(Failure{});
+        result.tangentReport = *tangentReport;
+    }
+    if(wantsSkinning){
+        if(skinContext.joints.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
+            return MakeUnexpected(Failure{});
+        }
+        result.skeletonJoints = Move(skinContext.joints);
+        result.skeletonBindPoseMatrices = Move(skinContext.bindPoseMatrices);
+        result.inverseBindMatrices = Move(skinContext.inverseBindMatrices);
+    }
+
+    const auto canonicalized = CanonicalizeCanonicalMeshStreams(
+        scratchArena,
+        result.mesh.positions,
+        result.mesh.normals,
+        result.mesh.tangents,
+        result.mesh.uv0,
+        result.mesh.colors,
+        result.mesh.skin,
+        result.mesh.indices.size(),
+        Span<SourceVertexRef>(result.mesh.vertexRefs)
+    );
+    if(!canonicalized)
+        return MakeUnexpected(Failure{});
+    ApplyCanonicalizedStreams(*canonicalized, result.mesh);
+    return result;
+}
+
+Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_fbx_to_nwb_module;
+
+    SourceMeshCanonicalizeReport outReport;
+
+    auto sourceResult = ReadMetascriptSource(inputPath, scratchArena);
+    if(!sourceResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}': {}"), PathToString<tchar>(inputPath), ConvertString(sourceResult.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+    ScratchString& source = *sourceResult;
+    const b8 useCrlf = HasCrlfLineEndings(AStringView(source));
+
+    Core::Metascript::MetaArena metaArena(s_UtilityArena);
+    auto docResult = ParseMetascriptDocument(inputPath, source, metaArena);
+    if(!docResult)
+        return MakeUnexpected(Failure{});
+    const Core::Metascript::Document& doc = *docResult;
+
+    TextReplacements replacements(scratchArena);
+    const auto replacementCapacity = TryComputeMeshRefreshReplacementCapacity(doc.declarations().size());
+    if(!replacementCapacity)
+        return MakeUnexpected(Failure{});
+    replacements.reserve(*replacementCapacity);
+    b8 sawMesh = false;
+
+    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
+        if(!IsMeshRefreshDeclarationType(declaration.type))
+            continue;
+
+        sawMesh = true;
+
+        const AStringView meshVariableName(declaration.variable);
+        const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableName);
+        if(!meshValue){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), ConvertString(meshVariableName));
+            return MakeUnexpected(Failure{});
+        }
+
+        auto meshResult = ParseMeshValue(inputPath, meshVariableName, *meshValue, scratchArena);
+        if(!meshResult)
+            return MakeUnexpected(Failure{});
+        SourceMeshStreams& mesh = *meshResult;
+
+        SourceMeshCanonicalizeReport itemReport;
+
+        const auto skinReference = FindSkinForMesh(doc, meshVariableName);
+        if(!skinReference)
+            return MakeUnexpected(Failure{});
+        const AStringView skinVariableName = skinReference->variableName;
+        const Core::Metascript::Value* skinValue = skinReference->value;
+        if(skinValue){
+            auto influences = ParseSkinInfluences(inputPath, *skinValue, skinVariableName);
+            if(!influences)
+                return MakeUnexpected(Failure{});
+            const UtilityVector<MeshSkinInfluence>& skinInfluences = *influences;
+            const auto canonicalized = CanonicalizeSkinnedCanonicalMeshStreams(
+                scratchArena,
+                skinInfluences,
+                mesh.positions,
+                mesh.normals,
+                mesh.tangents,
+                mesh.uv0,
+                mesh.colors,
+                mesh.indices.size(),
+                Span<SourceVertexRef>(mesh.vertexRefs)
+            );
+            if(!canonicalized)
+                return MakeUnexpected(Failure{});
+            ApplyCanonicalizedStreams(*canonicalized, mesh);
+            itemReport = canonicalized->report;
+        }
+        else{
+            const auto canonicalized = CanonicalizeCanonicalMeshStreams(
+                scratchArena,
+                mesh.positions,
+                mesh.normals,
+                mesh.tangents,
+                mesh.uv0,
+                mesh.colors,
+                mesh.skin,
+                mesh.indices.size(),
+                Span<SourceVertexRef>(mesh.vertexRefs)
+            );
+            if(!canonicalized)
+                return MakeUnexpected(Failure{});
+            ApplyCanonicalizedStreams(*canonicalized, mesh);
+            itemReport = canonicalized->report;
+        }
+        if(!AppendMeshReplacements(source, meshVariableName, itemReport.before, mesh, scratchArena, replacements))
+            return MakeUnexpected(Failure{});
+
+        AccumulateReport(itemReport, outReport);
+    }
+
+    if(!sawMesh){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' contains no mesh declarations"), PathToString<tchar>(inputPath));
+        return MakeUnexpected(Failure{});
+    }
+
+    ApplyTextReplacements(Span<TextReplacement>(replacements), source);
+    NormalizeLineEndingsInPlace(source, useCrlf);
+
+    const auto written = WriteTextFile(outputPath, source);
+    if(!written){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to write output file '{}'"), PathToString<tchar>(outputPath));
+        return MakeUnexpected(Failure{});
+    }
+    return outReport;
+}
+
+b8 WriteNwbAsset(
+    const ScratchPath& outputPath,
+    const SourceMeshStreams& mesh,
+    const AStringView assetTypeText,
+    const AStringView virtualRoot,
+    const b8 separateAssets,
+    const Span<ufbx_node* const> skeletonJoints,
+    const Span<const JointMatrix> skeletonBindPoseMatrices,
+    const Span<const JointMatrix> inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    using namespace __hidden_fbx_to_nwb_module;
+
+    const auto assetTypeResult = ParseAssetTypeText(assetTypeText);
+    if(!assetTypeResult){
+        const AString<::ArenaBase> errorText = OutputAssetTypeErrorText(scratchArena);
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), ConvertString(AStringView(errorText)));
+        return false;
+    }
+
+    const OutputAssetType::Enum assetType = *assetTypeResult;
+    if(!ValidateFbxOutputMode(assetType, separateAssets, !mesh.skin.empty(), !skeletonJoints.empty(), !skeletonBindPoseMatrices.empty(), !inverseBindMatrices.empty()))
+        return false;
+
+    if(assetType == OutputAssetType::Mesh)
+        return WriteMeshAsset(outputPath, mesh);
+
+    const b8 skinnedModel = HasSkinnedModelStreams(!mesh.skin.empty(), !skeletonJoints.empty(), !inverseBindMatrices.empty());
+    const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
+    const ScratchPath meshPath = packageDirectory / s_MeshSplitFileName;
+    const ScratchString virtualBase = BuildVirtualBasePath(outputPath, virtualRoot);
+    const AString<::ArenaBase> meshName = BuildFbxSplitAssetName(scratchArena, AStringView(virtualBase), s_MeshNameSuffix);
+
+    if(assetType == OutputAssetType::Model){
+        if(skinnedModel){
+            const AString<::ArenaBase> skeletonName = BuildFbxSplitAssetName(scratchArena, AStringView(virtualBase), s_SkeletonNameSuffix);
+            const AString<::ArenaBase> skinName = BuildFbxSplitAssetName(scratchArena, AStringView(virtualBase), s_SkinNameSuffix);
+            return WriteModelAsset(outputPath, AStringView(meshName), AStringView(skinName), AStringView(skeletonName));
+        }
+        return WriteModelAsset(outputPath, AStringView(meshName), {}, {});
+    }
+
+    if(!skinnedModel){
+        if(assetType == OutputAssetType::Bunch && !separateAssets)
+            return WriteAssetBunch(outputPath, mesh, {}, {}, skeletonJoints, skeletonBindPoseMatrices, {}, inverseBindMatrices, scratchArena);
+
+        if(!WriteMeshAsset(meshPath, mesh))
+            return false;
+        return WriteModelAsset(outputPath, AStringView(meshName), {}, {});
+    }
+
+    if(!ValidateSplitSkinSourceCounts(mesh.skin.size(), skeletonJoints.size(), skeletonBindPoseMatrices.size(), inverseBindMatrices.size()))
+        return false;
+
+    auto skeletonResult = AssetWriterSkeletonDetail::BuildSkeletonOutputData(skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices, scratchArena);
+    if(!skeletonResult)
+        return false;
+    AssetWriterSkeletonDetail::SkeletonOutputData& skeletonOutput = *skeletonResult;
+
+    auto alignedMesh = AssetWriterSkeletonDetail::BuildPositionAlignedSkinnedMesh(mesh, scratchArena);
+    if(!alignedMesh)
+        return false;
+    SourceMeshStreams& splitMesh = alignedMesh->mesh;
+    UtilityVector<MeshSkinInfluence>& positionSkin = alignedMesh->skin;
+    for(MeshSkinInfluence& influence : positionSkin){
+        if(!RemapSkinInfluence(skeletonOutput.oldToNewJointIndices, influence))
+            return false;
+    }
+
+    const ScratchPath skeletonPath = packageDirectory / s_SkeletonSplitFileName;
+    const ScratchPath skinPath = packageDirectory / s_SkinSplitFileName;
+    const AString<::ArenaBase> skeletonName = BuildFbxSplitAssetName(scratchArena, AStringView(virtualBase), s_SkeletonNameSuffix);
+    const AString<::ArenaBase> skinName = BuildFbxSplitAssetName(scratchArena, AStringView(virtualBase), s_SkinNameSuffix);
+
+    if(assetType == OutputAssetType::Skeleton)
+        return WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena);
+    if(assetType == OutputAssetType::Skin)
+        return WriteSkinAsset(outputPath, AStringView(meshName), AStringView(skeletonName), positionSkin, skeletonOutput.inverseBindMatrices);
+    if(assetType == OutputAssetType::Bunch && !separateAssets)
+        return WriteAssetBunch(outputPath, splitMesh, AStringView(skinName), AStringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, positionSkin, skeletonOutput.inverseBindMatrices, scratchArena);
+
+    return
+        WriteMeshAsset(meshPath, splitMesh)
+        && WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena)
+        && WriteSkinAsset(skinPath, AStringView(meshName), AStringView(skeletonName), positionSkin, skeletonOutput.inverseBindMatrices)
+        && WriteModelAsset(outputPath, AStringView(meshName), AStringView(skinName), AStringView(skeletonName))
+    ;
+}
+
+i32 Run(const i32 argc, char** argv, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
+    using namespace __hidden_fbx_to_nwb_module;
+
+    ImportOptions options;
+    OptionPresence presence;
+
+    CLI::App app{ s_FbxToNwbAppName.data() };
+    app.set_help_flag(s_FbxToNwbHelpFlag.data(), "Show help");
+
+    AInteropString inputPath(options.inputPath.data(), options.inputPath.size());
+    AInteropString outputPathText(options.outputPath.data(), options.outputPath.size());
+    AInteropString assetType(options.assetType.data(), options.assetType.size());
+    AInteropString virtualRoot(options.virtualRoot.data(), options.virtualRoot.size());
+    AInteropString meshSelector(options.meshSelector.data(), options.meshSelector.size());
+    AInteropString normalMode(options.normalMode.data(), options.normalMode.size());
+    AInteropString defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
+
+    b8 local = false;
+    b8 ignoreColors = false;
+
+    app.add_option(s_FbxToNwbInputOption.data(), inputPath, "Input FBX file path");
+    CLI::Option& outputOption = *app.add_option(s_FbxToNwbOutputOption.data(), outputPathText, "Output NWB asset metadata path");
+    AInteropString assetTypeDescription = "Output asset type: ";
+    const AString<::ArenaBase> assetTypeOptions = OutputAssetTypeOptionsText(scratchArena);
+    assetTypeDescription.append(assetTypeOptions.data(), assetTypeOptions.size());
+    CLI::Option& assetTypeOption = *app.add_option(s_FbxToNwbAssetTypeOption.data(), assetType, assetTypeDescription);
+    app.add_option(s_FbxToNwbVirtualRootOption.data(), virtualRoot, "Virtual asset root used when output path is outside an assets directory");
+    CLI::Option& meshOption = *app.add_option(s_FbxToNwbMeshOption.data(), meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
+    CLI::Option& normalModeOption = *app.add_option(s_FbxToNwbNormalModeOption.data(), normalMode, "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals");
+    CLI::Option& scaleOption = *app.add_option(s_FbxToNwbScaleOption.data(), options.scale, "Additional uniform scale applied after import");
+    app.add_option(s_FbxToNwbTriangleAreaEpsilonOption.data(), options.triangleAreaLengthSquaredEpsilon, "Minimum squared triangle cross-product length kept during import");
+    CLI::Option& defaultColorOption = *app.add_option(s_FbxToNwbDefaultColorOption.data(), defaultColorText, "Default RGBA color, for example 1,1,1,1");
+    CLI::Option& preserveSpaceOption = *app.add_flag(s_FbxToNwbPreserveSpaceFlag.data(), options.preserveSpace, "Keep the FBX source axes and units");
+    CLI::Option& includeHiddenOption = *app.add_flag(s_FbxToNwbIncludeHiddenFlag.data(), options.includeHidden, "Include hidden FBX mesh nodes");
+    CLI::Option& localOption = *app.add_flag(s_FbxToNwbLocalFlag.data(), local, "Do not bake node transforms into mesh");
+    CLI::Option& ignoreColorsOption = *app.add_flag(s_FbxToNwbIgnoreColorsFlag.data(), ignoreColors, "Use the default color instead of FBX vertex colors");
+    CLI::Option& flipWindingOption = *app.add_flag(s_FbxToNwbFlipWindingFlag.data(), options.flipWinding, "Swap the second and third index of every triangle");
+    app.add_flag(s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    app.add_flag(s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
+    app.add_flag(s_FbxToNwbForceFlag.data(), options.forceOverwrite, "Overwrite an existing output file");
+    app.add_flag(s_FbxToNwbYesFlag.data(), options.acceptDefaults, "Use defaults for any import options that were not supplied");
+    app.add_flag(s_FbxToNwbListMeshesFlag.data(), options.listMeshes, "List importable mesh instances and exit");
+
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
+        app.parse(argc, argv);
+
+        options.inputPath.assign(inputPath.data(), inputPath.size());
+        options.outputPath.assign(outputPathText.data(), outputPathText.size());
+        options.assetType.assign(assetType.data(), assetType.size());
+        options.virtualRoot.assign(virtualRoot.data(), virtualRoot.size());
+        options.meshSelector.assign(meshSelector.data(), meshSelector.size());
+        options.normalMode.assign(normalMode.data(), normalMode.size());
+        options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
+
+        options.bakeTransforms = !local;
+        options.importColors = !ignoreColors;
+
+        presence.output = outputOption.count() > s_CliOptionPresentCount;
+        presence.assetType = assetTypeOption.count() > s_CliOptionPresentCount;
+        presence.mesh = meshOption.count() > s_CliOptionPresentCount;
+        presence.normalMode = normalModeOption.count() > s_CliOptionPresentCount;
+        presence.scale = scaleOption.count() > s_CliOptionPresentCount;
+        presence.defaultColor = defaultColorOption.count() > s_CliOptionPresentCount;
+        presence.preserveSpace = preserveSpaceOption.count() > s_CliOptionPresentCount;
+        presence.includeHidden = includeHiddenOption.count() > s_CliOptionPresentCount;
+        presence.local = localOption.count() > s_CliOptionPresentCount;
+        presence.ignoreColors = ignoreColorsOption.count() > s_CliOptionPresentCount;
+        presence.flipWinding = flipWindingOption.count() > s_CliOptionPresentCount;
+
+        if(!ConfigurePromptsBeforeLoad(presence, scratchArena, options, prompted))
+            return ExitValidation(app, s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
+
+        if(!IsValidFbxImportScale(options.scale))
+            return ExitValidation(app, s_FbxToNwbScaleOption, "Must be a positive finite number.", scratchArena);
+        if(!IsValidFbxTriangleAreaEpsilon(options.triangleAreaLengthSquaredEpsilon))
+            return ExitValidation(app, s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.", scratchArena);
+
+        const auto inputIsRegularFile = IsRegularFile(ScratchPath(scratchArena, options.inputPath));
+        if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), ConvertString(inputIsRegularFile.error().message()));
+            return s_FbxToNwbExitFailure;
+        }
+        if(!inputIsRegularFile || !*inputIsRegularFile)
+            return ExitValidation(app, s_FbxToNwbInputOption, "Input path must name an existing regular file.", scratchArena);
+
+        if(IsNwbRefreshInputPath(options.refreshNwb, AStringView(options.inputPath)))
+            return RunNwbRefreshCommand(app, presence, scratchArena, options, prompted);
+
+        auto scene = LoadScene(options, scratchArena);
+        if(!scene)
+            return s_FbxToNwbExitFailure;
+
+        if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
+            options.includeHidden = PromptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
+
+        UtilityVector<MeshInstance> instances = CollectMeshInstances(*scene->scene, options.includeHidden);
+        if(options.listMeshes){
+            PrintMeshInstances(instances, scratchArena);
+            return s_FbxToNwbExitSuccess;
+        }
+        if(instances.empty()){
+            if(options.includeHidden)
+                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
+            else
+                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
+            return s_FbxToNwbExitFailure;
+        }
+
+        if(!ConfigurePromptsAfterLoad(presence, instances, scratchArena, options, prompted))
+            return s_FbxToNwbExitFailure;
+
+        if(!ValidateAndCanonicalizeAssetType(options.assetType)){
+            const AString<::ArenaBase> errorText = OutputAssetTypeErrorText(scratchArena);
+            return ExitValidation(app, s_FbxToNwbAssetTypeOption, AStringView(errorText), scratchArena);
+        }
+        if(!ValidateAndCanonicalizeNormalMode(options.normalMode)){
+            const AString<::ArenaBase> errorText = NormalModeErrorText(scratchArena);
+            return ExitValidation(app, s_FbxToNwbNormalModeOption, AStringView(errorText), scratchArena);
+        }
+
+        const auto defaultColor = ParseFbxColorText(AStringView(options.defaultColorText));
+        if(!defaultColor)
+            return ExitValidation(app, s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.", scratchArena);
+
+        auto selectionResult = SelectMeshInstances(instances, options.meshSelector);
+        if(!selectionResult)
+            return ExitValidation(app, s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.", scratchArena);
+
+        const UtilityVector<usize>& selection = *selectionResult;
+        const auto assetTypeResult = ParseAssetTypeText(options.assetType);
+        if(!assetTypeResult){
+            const AString<::ArenaBase> errorText = OutputAssetTypeErrorText(scratchArena);
+            return ExitValidation(app, s_FbxToNwbAssetTypeOption, AStringView(errorText), scratchArena);
+        }
+        const OutputAssetType::Enum assetTypeValue = *assetTypeResult;
+        if(options.separateAssets && assetTypeValue != OutputAssetType::Bunch)
+            return ExitValidation(app, s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.", scratchArena);
+        b8 usesSkinning = false;
+        b8 wantsSkinning = false;
+        if(AssetTypeCanUseSkinning(assetTypeValue)){
+            const auto selectedUsesSkinning = SelectedMeshesUseSkinning(instances, selection);
+            if(!selectedUsesSkinning)
+                return s_FbxToNwbExitFailure;
+            usesSkinning = wantsSkinning = *selectedUsesSkinning;
+        }
+        if(AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning)
+            return ExitValidation(app, s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.", scratchArena);
+
+        const ScratchPath outputPath(scratchArena, options.outputPath);
+        if(outputPath.empty())
+            return ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
+        if(!ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
+            return s_FbxToNwbExitFailure;
+        if(options.separateAssets){
+            const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
+            if(!ValidateOutputOverwrite(packageDirectory / s_MeshSplitFileName, options, scratchArena, prompted))
+                return s_FbxToNwbExitFailure;
+            if(wantsSkinning && (!ValidateOutputOverwrite(packageDirectory / s_SkeletonSplitFileName, options, scratchArena, prompted)
+                || !ValidateOutputOverwrite(packageDirectory / s_SkinSplitFileName, options, scratchArena, prompted)))
+                return s_FbxToNwbExitFailure;
+        }
+
+        auto built = BuildMesh(instances, selection, options, wantsSkinning, *defaultColor, scratchArena);
+        if(!built)
+            return s_FbxToNwbExitFailure;
+        const SourceMeshStreams& mesh = built->mesh;
+        const UtilityVector<ufbx_node*>& skeletonJoints = built->skeletonJoints;
+        const UtilityVector<JointMatrix>& skeletonBindPoseMatrices = built->skeletonBindPoseMatrices;
+        const UtilityVector<JointMatrix>& inverseBindMatrices = built->inverseBindMatrices;
+        const b8 sawVertexColors = built->sawVertexColors;
+        const b8 sawVertexUvs = built->sawVertexUvs;
+        const SourceTangentReport& tangentReport = built->tangentReport;
+
+        if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices, scratchArena))
+            return s_FbxToNwbExitFailure;
+
+        const auto outputText = PathToGenericString(scratchArena, outputPath);
+        const AString<::ArenaBase> report = FormatFbxWriteCompletionReport(
+            scratchArena,
+            AStringView(outputText),
+            mesh.positions.size(),
+            mesh.normals.size(),
+            mesh.vertexRefs.size(),
+            mesh.indices.size(),
+            AStringView(options.assetType),
+            assetTypeValue,
+            options.separateAssets,
+            AStringView(options.normalMode),
+            sawVertexColors,
+            sawVertexUvs,
+            skeletonJoints.size(),
+            tangentReport
+        );
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(AStringView(report)));
+
+        return s_FbxToNwbExitSuccess;
+    }, [&](const CLI::ParseError& error){ return ExitParseError(app, error, scratchArena); }, [](){
+        NWB_LOGGER_ERROR(NWB_TEXT("FBX conversion terminated with an unexpected exception"));
+        return s_FbxToNwbEntryFailure;
+    });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

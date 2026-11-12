@@ -1,0 +1,490 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/paint_primitives.adhd>
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/asset.adhd.h>
+#include <impl/assets_font_atlas/asset.adhd.h>
+#include <impl/assets_texture/asset.adhd.h>
+#include <impl/ecs_ui/toolkit/builder.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/baked_atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+#include <impl/ecs_ui/toolkit/id.adhd.h>
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_glyph_sdf_tests{
+using ScopedTestTrace = ::NWB::Tests::ScopedTestTrace;
+using Rect = ::NWB::Impl::Ui::Rect;
+using Point = ::NWB::Impl::Ui::Point;
+using Color = ::NWB::Impl::Ui::Color;
+using Vertex = ::NWB::Impl::Ui::Vertex;
+using HitTarget = ::NWB::Impl::Ui::HitTarget;
+using PopupScope = ::NWB::Impl::Ui::PopupScope;
+using WidgetId = ::NWB::Impl::Ui::WidgetId;
+using WidgetRoot = ::NWB::Impl::Ui::WidgetRoot;
+using DrawCommand = ::NWB::Impl::Ui::DrawCommand;
+using DrawSnapshot = ::NWB::Impl::Ui::DrawSnapshot;
+using PopupOptions = ::NWB::Impl::Ui::PopupOptions;
+using ListOptions = ::NWB::Impl::Ui::ListOptions;
+using ListResult = ::NWB::Impl::Ui::ListResult;
+using ComboOptions = ::NWB::Impl::Ui::ComboOptions;
+using SearchComboOptions = ::NWB::Impl::Ui::SearchComboOptions;
+using ImageOptions = ::NWB::Impl::Ui::ImageOptions;
+using SliderOptions = ::NWB::Impl::Ui::SliderOptions;
+using SliderPlacement = ::NWB::Impl::Ui::SliderPlacement;
+using TextAreaOptions = ::NWB::Impl::Ui::TextAreaOptions;
+using EditBoxPlacement = ::NWB::Impl::Ui::EditBoxPlacement;
+using PlacedGlyph = ::NWB::Impl::Ui::PlacedGlyph;
+using NumericEditResult = ::NWB::Impl::Ui::NumericEditResult;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
+using UiSkin = ::NWB::Impl::UiSkin;
+using UiSkinAssetRef = ::NWB::Core::Assets::AssetRef<::NWB::Impl::UiSkin>;
+using UiSkinRegion = ::NWB::Impl::UiSkinRegion;
+using Font = ::NWB::Impl::Font;
+using UiFontAssetRef = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>;
+using FontAtlas = ::NWB::Impl::FontAtlas;
+using FontAtlasPayload = ::NWB::Impl::FontAtlasPayload;
+using FontAtlasGlyph = ::NWB::Impl::FontAtlasGlyph;
+using FontAtlasGroup = ::NWB::Impl::FontAtlasGroup;
+using Texture = ::NWB::Impl::Texture;
+using UiTextureAssetRef = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Texture>;
+using TextureMipLevel = ::NWB::Impl::TextureMipLevel;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
+using TextService = ::NWB::Impl::Ui::TextService;
+using TextLayout = ::NWB::Impl::Ui::TextLayout;
+using FontSource = ::NWB::Impl::Ui::FontSource;
+using FontMetrics = ::NWB::Impl::Ui::FontMetrics;
+using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
+using ShapedGlyph = ::NWB::Impl::Ui::ShapedGlyph;
+using ShapedRun = ::NWB::Impl::Ui::ShapedRun;
+using SharedFontFace = ::NWB::Impl::Ui::SharedFontFace;
+using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
+using SharedSdfAtlasPage = ::NWB::Impl::Ui::SharedSdfAtlasPage;
+using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
+using SharedBakedFontAtlas = ::NWB::Impl::Ui::SharedBakedFontAtlas;
+using GlyphPageBinding = ::NWB::Impl::Ui::GlyphPageBinding;
+using SdfAtlasPageBinding = ::NWB::Impl::Ui::SdfAtlasPageBinding;
+using AtlasGlyph = ::NWB::Impl::Ui::AtlasGlyph;
+using GlyphAtlas = ::NWB::Impl::Ui::GlyphAtlas;
+using GlyphBitmap = ::NWB::Impl::Ui::GlyphBitmap;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
+using InputRouter = ::NWB::Impl::Ui::InputRouter;
+using Context = ::NWB::Impl::Ui::Context;
+using Builder = ::NWB::Impl::Ui::Builder;
+using WidgetState = ::NWB::Impl::Ui::WidgetState;
+using PopupToken = ::NWB::Impl::Ui::PopupToken;
+using PopupState = ::NWB::Impl::Ui::PopupState;
+using ListState = ::NWB::Impl::Ui::ListState;
+using ComboState = ::NWB::Impl::Ui::ComboState;
+using ComboResult = ::NWB::Impl::Ui::ComboResult;
+using EditModel = ::NWB::Impl::Ui::EditModel;
+using EditBoxOptions = ::NWB::Impl::Ui::EditBoxOptions;
+using EditBoxResult = ::NWB::Impl::Ui::EditBoxResult;
+using EditBoxView = ::NWB::Impl::Ui::EditBoxView;
+using EditBoxStyle = ::NWB::Impl::Ui::EditBoxStyle;
+using EditBoxPaintFlags = ::NWB::Impl::Ui::EditBoxPaintFlags;
+using IListDataSource = ::NWB::Impl::Ui::IListDataSource;
+using IEditBoxHost = ::NWB::Impl::Ui::IEditBoxHost;
+using KeyEnum = ::NWB::Core::Key::Enum;
+namespace Key = ::NWB::Core::Key;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+namespace TextDirection = ::NWB::Impl::Ui::TextDirection;
+namespace LayoutSizePolicy = ::NWB::Impl::Ui::LayoutSizePolicy;
+using LayoutSizePolicyEnum = ::NWB::Impl::Ui::LayoutSizePolicy::Enum;
+namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
+using UiSkinDrawModeEnum = ::NWB::Impl::UiSkinDrawMode::Enum;
+namespace PopupPlacementSide = ::NWB::Impl::Ui::PopupPlacementSide;
+using PopupPlacementSideEnum = ::NWB::Impl::Ui::PopupPlacementSide::Enum;
+using ::NWB::Impl::Ui::TryMakeRootId;
+using ::NWB::Impl::Ui::TryMakeWidgetId;
+using ::NWB::Impl::Ui::TryMakeWidgetPartId;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> UiFixtureShaperFault{
+    None,
+    LeadingGap,
+    TrailingGap,
+    Overlap,
+    InconsistentGlyphEnd,
+    NonfinitePlacement,
+}
+
+enum<u8> UiFixtureNumericEventKind{
+    Text,
+    Key,
+    Preedit,
+    Action,
+}
+
+enum<u8> UiFixtureRadioMutation{
+    None,
+    Select,
+    SelectAwayBack,
+    Revision,
+    Replacement,
+    ResetBuilder,
+    PanelBuilder,
+    ClosePopup,
+}
+
+enum<u8> UiFixtureSearchFilterMode{
+    All,
+    Second,
+    Empty,
+}
+
+enum<u8> UiFixtureSliderCallbackMutation{
+    None,
+    SameValue,
+    AwayAndBack,
+    SetValue,
+    ResetBuilder,
+    PanelBuilder,
+    ClosePopup,
+}
+
+enum<u8> UiFixtureAreaEventKind{
+    Text,
+    Key,
+    Action,
+    Selection,
+}
+
+class UiFixtureSkinPaintSample{
+    public usize quads = 0u;
+    public Rect bounds = Rect();
+    public Color color = Color();
+    public f32 maximumU = 0.0f;
+}
+
+class UiFixtureAcceptedInputState<const usize Capacity>{
+    public Array<HitTarget, Capacity> targets;
+    public usize count = 0u;
+    public usize popupCount = 0u;
+    public u64 layoutGeneration = 0u;
+    public WidgetId focus = WidgetId();
+    public WidgetId capture = WidgetId();
+}
+
+Point CenterUiRect(in Rect bounds){
+    Point center = Point();
+    center.x = bounds.x + bounds.width * 0.5f;
+    center.y = bounds.y + bounds.height * 0.5f;
+    return center;
+}
+
+void ExpectUiRect(in Rect actual, in Rect expected){
+    EXPECT_FLOAT_EQ(actual.x, expected.x);
+    EXPECT_FLOAT_EQ(actual.y, expected.y);
+    EXPECT_FLOAT_EQ(actual.width, expected.width);
+    EXPECT_FLOAT_EQ(actual.height, expected.height);
+}
+
+void ExpectUiRectExact(in Rect actual, in Rect expected){
+    EXPECT_EQ(bit_cast<u32>(actual.x), bit_cast<u32>(expected.x));
+    EXPECT_EQ(bit_cast<u32>(actual.y), bit_cast<u32>(expected.y));
+    EXPECT_EQ(bit_cast<u32>(actual.width), bit_cast<u32>(expected.width));
+    EXPECT_EQ(bit_cast<u32>(actual.height), bit_cast<u32>(expected.height));
+}
+
+void ExpectUiHitTargetIdentity(in HitTarget actual, in HitTarget expected){
+    EXPECT_EQ(actual.id, expected.id);
+    EXPECT_EQ(actual.declarationGeneration, expected.declarationGeneration);
+    EXPECT_EQ(actual.control, expected.control);
+    EXPECT_EQ(actual.owner, expected.owner);
+    EXPECT_EQ(actual.enabled, expected.enabled);
+}
+
+void ExpectUiAcceptedTarget(in HitTarget after, in HitTarget before, in b8 checkOwnerDeclaration){
+    ExpectUiHitTargetIdentity(after, before);
+    if(checkOwnerDeclaration)
+        EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
+    EXPECT_EQ(after.popup, before.popup);
+    ExpectUiRect(after.rectangle, before.rectangle);
+    ExpectUiRect(after.clip, before.clip);
+}
+
+void ExpectUiDrawCommandFields(in DrawCommand actual, in DrawCommand expected){
+    EXPECT_EQ(actual.firstIndex, expected.firstIndex);
+    EXPECT_EQ(actual.indexCount, expected.indexCount);
+    EXPECT_EQ(actual.material, expected.material);
+    EXPECT_EQ(actual.glyphPageIndex, expected.glyphPageIndex);
+    EXPECT_EQ(actual.sdfPageIndex, expected.sdfPageIndex);
+    EXPECT_EQ(actual.textureImageIndex, expected.textureImageIndex);
+    EXPECT_EQ(actual.sdfChannel, expected.sdfChannel);
+    EXPECT_EQ(actual.layer, expected.layer);
+}
+
+void ExpectUiSameVertices(in DrawSnapshot actual, in DrawSnapshot expected){
+    for(usize index = 0u; index < actual.vertices().size(); ++index){
+        const Vertex a = actual.vertices()[index];
+        const Vertex e = expected.vertices()[index];
+        EXPECT_FLOAT_EQ(a.position.x, e.position.x);
+        EXPECT_FLOAT_EQ(a.position.y, e.position.y);
+        EXPECT_FLOAT_EQ(a.texCoord.x, e.texCoord.x);
+        EXPECT_FLOAT_EQ(a.texCoord.y, e.texCoord.y);
+        EXPECT_FLOAT_EQ(a.color.r, e.color.r);
+        EXPECT_FLOAT_EQ(a.color.g, e.color.g);
+        EXPECT_FLOAT_EQ(a.color.b, e.color.b);
+        EXPECT_FLOAT_EQ(a.color.a, e.color.a);
+    }
+}
+
+void ExpectUiSameDrawCommands(in DrawSnapshot actual, in DrawSnapshot expected){
+    for(usize index = 0u; index < actual.commands().size(); ++index){
+        const DrawCommand a = actual.commands()[index];
+        const DrawCommand e = expected.commands()[index];
+        ExpectUiDrawCommandFields(a, e);
+        ExpectUiRect(a.clip, e.clip);
+    }
+}
+
+void ExpectUiSameSnapshotHeader(in DrawSnapshot actual, in DrawSnapshot expected){
+    EXPECT_FLOAT_EQ(actual.displayMetrics().logicalWidth, expected.displayMetrics().logicalWidth);
+    EXPECT_FLOAT_EQ(actual.displayMetrics().logicalHeight, expected.displayMetrics().logicalHeight);
+    EXPECT_FLOAT_EQ(actual.displayMetrics().pixelScaleX, expected.displayMetrics().pixelScaleX);
+    EXPECT_FLOAT_EQ(actual.displayMetrics().pixelScaleY, expected.displayMetrics().pixelScaleY);
+    EXPECT_EQ(actual.skinBinding().skin, expected.skinBinding().skin);
+    EXPECT_EQ(actual.skinBinding().texture, expected.skinBinding().texture);
+    EXPECT_EQ(actual.skinBinding().generation, expected.skinBinding().generation);
+    EXPECT_EQ(actual.skinBinding().atlasWidth, expected.skinBinding().atlasWidth);
+    EXPECT_EQ(actual.skinBinding().atlasHeight, expected.skinBinding().atlasHeight);
+    EXPECT_FLOAT_EQ(actual.skinBinding().referenceDensity, expected.skinBinding().referenceDensity);
+}
+
+WidgetId RequireUiRootId(in WidgetRoot root){
+    const auto id = TryMakeRootId(root);
+    EXPECT_TRUE(id.has_value());
+    if(id.has_value())
+        return id.value();
+    return WidgetId();
+}
+
+WidgetId RequireUiWidgetId(in WidgetId parent, in AStringView stableKey){
+    const auto id = TryMakeWidgetId(parent, stableKey);
+    EXPECT_TRUE(id.has_value());
+    if(id.has_value())
+        return id.value();
+    return WidgetId();
+}
+
+WidgetId RequireUiWidgetPartId(in WidgetId parent, in u64 partKey){
+    const auto id = TryMakeWidgetPartId(parent, partKey);
+    EXPECT_TRUE(id.has_value());
+    if(id.has_value())
+        return id.value();
+    return WidgetId();
+}
+
+const AStringView s_UiFixtureParentPopupKey = "parent";
+const AStringView s_UiFixtureChildPopupKey = "child";
+
+PopupOptions MakeNestedParentPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 20.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 300.0f;
+    options.size.y = 380.0f;
+    return options;
+}
+
+PopupOptions MakeNestedChildPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 420.0f;
+    options.anchor.y = 60.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 24.0f;
+    options.size.x = 340.0f;
+    options.size.y = 380.0f;
+    return options;
+}
+
+PopupOptions MakeLargeLoanParentPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 20.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 340.0f;
+    options.size.y = 420.0f;
+    return options;
+}
+
+PopupOptions MakeLargeLoanChildPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 420.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 340.0f;
+    options.size.y = 420.0f;
+    return options;
+}
+
+ListOptions MakeLargeLoanListOptions(){
+    ListOptions options = ListOptions();
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 140.0f;
+    return options;
+}
+
+ImageOptions MakeFixedImageFixtureOptions(in f32 width, in f32 height){
+    ImageOptions options = ImageOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = width;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = height;
+    return options;
+}
+
+Expected<Rect> FindUiSkinSlotQuad(in DrawSnapshot snapshot, in u32 slot){
+    const f32 left = cast<f32>(slot) / 16.0f;
+    const f32 right = cast<f32>(slot + 1u) / 16.0f;
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material != PaintMaterial::Skin)
+            continue;
+        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
+            const Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+            const Vertex opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            if(first.texCoord.x == left && opposite.texCoord.x == right){
+                Rect bounds = Rect();
+                bounds.x = first.position.x;
+                bounds.y = first.position.y;
+                bounds.width = opposite.position.x - first.position.x;
+                bounds.height = opposite.position.y - first.position.y;
+                return bounds;
+            }
+        }
+    }
+    return MakeUnexpected(Failure());
+}
+
+Expected<UiFixtureSkinPaintSample> SampleUiSkinRegionPaint(in UiSkinRegion region, in u32 atlasWidthPx, in u32 atlasHeightPx, in DrawSnapshot snapshot){
+    const f32 atlasWidth = cast<f32>(atlasWidthPx);
+    const f32 atlasHeight = cast<f32>(atlasHeightPx);
+    const VectorSingle edges = VectorSingle(cast<f32>(region.rectangle.x), cast<f32>(region.rectangle.x + region.rectangle.width), cast<f32>(region.rectangle.y), cast<f32>(region.rectangle.y + region.rectangle.height));
+    const VectorSingle texCoordEdges = edges / VectorSingle(atlasWidth, atlasWidth, atlasHeight, atlasHeight);
+    const f32 leftU = texCoordEdges.x;
+    const f32 rightU = texCoordEdges.y;
+    const f32 topV = texCoordEdges.z;
+    const f32 bottomV = texCoordEdges.w;
+    UiFixtureSkinPaintSample candidate = UiFixtureSkinPaintSample();
+    VectorSingle origin = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle corner = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material != PaintMaterial::Skin)
+            continue;
+        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
+            const Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+            const Vertex opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            if(first.texCoord.x < leftU || opposite.texCoord.x > rightU || first.texCoord.y < topV || opposite.texCoord.y > bottomV)
+                continue;
+            const VectorSingle firstPosition = VectorSingle(first.position.x, first.position.y, 0.0f, 0.0f);
+            const VectorSingle oppositeCorner = VectorSingle(opposite.position.x, opposite.position.y, opposite.texCoord.x, 0.0f);
+            if(candidate.quads == 0u){
+                origin = firstPosition;
+                corner = VectorSingle(opposite.position.x, opposite.position.y, candidate.maximumU, 0.0f);
+                candidate.color = first.color;
+            }
+            origin = Min(origin, firstPosition);
+            corner = Max(corner, oppositeCorner);
+            ++candidate.quads;
+        }
+    }
+    if(candidate.quads == 0u)
+        return MakeUnexpected(Failure());
+    const VectorSingle size = corner - origin;
+    candidate.bounds.x = origin.x;
+    candidate.bounds.y = origin.y;
+    candidate.bounds.width = size.x;
+    candidate.bounds.height = size.y;
+    candidate.maximumU = corner.z;
+    return candidate;
+}
+
+UiSkinAssetRef MakeUiSkinAssetRef(in StringView path){
+    const Expected<Name> parsed = ParseName(path);
+    if(parsed.has_value())
+        return UiSkinAssetRef(parsed.value());
+    return UiSkinAssetRef();
+}
+
+UiTextureAssetRef MakeUiTextureAssetRef(in StringView path){
+    const Expected<Name> parsed = ParseName(path);
+    if(parsed.has_value())
+        return UiTextureAssetRef(parsed.value());
+    return UiTextureAssetRef();
+}
+
+UiFontAssetRef MakeUiFontAssetRef(in StringView path){
+    const Expected<Name> parsed = ParseName(path);
+    if(parsed.has_value())
+        return UiFontAssetRef(parsed.value());
+    return UiFontAssetRef();
+}
+
+usize CountUiSkinRegionQuads(in UiSkinRegion region, in u32 atlasWidthPx, in DrawSnapshot snapshot){
+    const f32 s_UvTolerance = 0.00000024f;
+    const f32 atlasWidth = cast<f32>(atlasWidthPx);
+    const VectorSingle edges = VectorSingle(cast<f32>(region.rectangle.x), cast<f32>(region.rectangle.x + region.rectangle.width), 0.0f, 0.0f) / VectorSingle(atlasWidth, atlasWidth, 1.0f, 1.0f);
+    usize count = 0u;
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material != PaintMaterial::Skin)
+            continue;
+        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
+            const Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+            const Vertex opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            const VectorSingle delta = Abs(VectorSingle(first.texCoord.x, opposite.texCoord.x, 0.0f, 0.0f) - edges);
+            if(delta.x <= s_UvTolerance && delta.y <= s_UvTolerance)
+                ++count;
+        }
+    }
+    return count;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

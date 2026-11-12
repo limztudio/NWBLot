@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
 
 #include <impl/ecs_mesh/runtime/types.adhd.h>
@@ -35,7 +41,7 @@ struct BufferFlags{
 };
 
 template<typename PayloadT>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags = {}){
+[[nodiscard]] NWB_INLINE Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags = {}){
     const auto payloadBytes = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(PayloadT));
     if(!payloadBytes)
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
@@ -60,14 +66,14 @@ template<typename PayloadT>
 }
 
 template<typename PayloadT>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags){
+[[nodiscard]] NWB_INLINE Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
 
     return SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
 }
 
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
+[[nodiscard]] NWB_INLINE Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& debugName,
@@ -106,15 +112,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsMeshRuntimeBufferUploadAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_scene/camera_types.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
 
@@ -54,7 +60,7 @@ public:
     }
 };
 
-[[nodiscard]] inline SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
+[[nodiscard]] NWB_INLINE SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
     const auto tryBuildSceneCameraView = [fallbackAspectRatio](const Core::ECS::EntityID entity, TransformComponent& transform, CameraComponent& camera)noexcept -> Expected<SceneCameraView>{
         const auto projection = TryResolveCameraComponentProjection(transform, camera, fallbackAspectRatio);
         if(!projection)
@@ -91,10 +97,9 @@ public:
     return {};
 }
 
-[[nodiscard]] inline Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
     auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<TransformComponent>();
-    transform.position = position;
+    cameraEntity.addComponent<TransformComponent>() = MakePositionTransformComponent(LoadFloat(position));
     cameraEntity.addComponent<CameraComponent>();
     return cameraEntity.id();
 }
@@ -107,15 +112,10 @@ NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsSceneCameraAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

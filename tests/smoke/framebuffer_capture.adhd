@@ -8,7 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 namespace Tests::Smoke{
@@ -86,9 +92,9 @@ public:
         , m_captureFrameCount(captureFrameCount)
     {
         if(m_outputPath.empty())
-            markFailed(FOUNDATION_TEXT("capture output path is empty"));
+            markFailed(NWB_TEXT("capture output path is empty"));
         if(m_captureFrameCount == 0u)
-            markFailed(FOUNDATION_TEXT("capture frame count must be greater than zero"));
+            markFailed(NWB_TEXT("capture frame count must be greater than zero"));
     }
 
     virtual ~FramebufferCapture()noexcept override{
@@ -105,7 +111,7 @@ public:
         Core::GraphicsRuntime& graphics = getGraphics();
         Core::IGpuTaskGraphPresentationContributor* const contributor = graphics.taskGraphPresentationContributor();
         if(contributor && contributor != this){
-            markFailed(FOUNDATION_TEXT("another task-graph presentation contributor is already registered"));
+            markFailed(NWB_TEXT("another task-graph presentation contributor is already registered"));
             return false;
         }
 
@@ -147,51 +153,64 @@ public:
         if(!acceptedToken.valid())
             return;
         if(!acceptedToken.hasPhysicalQueueIdentity()){
-            markFailed(FOUNDATION_TEXT("accepted readback submission has no physical queue identity"));
+            markFailed(NWB_TEXT("accepted readback submission has no physical queue identity"));
             requestTerminalQuit();
             return;
         }
 
         Core::GraphicsBackend::Device& device = getGraphics().getDevice();
         if(acceptedToken.deviceGeneration != device.getDeviceGeneration()){
-            markFailed(FOUNDATION_TEXT("accepted readback submission belongs to a stale graphics device"));
+            markFailed(NWB_TEXT("accepted readback submission belongs to a stale graphics device"));
             requestTerminalQuit();
             return;
         }
-        const Core::GpuPhysicalQueueId physicalQueue{ .index = acceptedToken.physicalQueueIndex, .deviceGeneration = acceptedToken.deviceGeneration, };
+        const Core::GpuPhysicalQueueId physicalQueue{ .index = acceptedToken.physicalQueueIndex, .deviceGeneration = acceptedToken.deviceGeneration };
         const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
         if(!completedValue){
-            markFailed(FOUNDATION_TEXT("failed to query readback submission completion"));
+            markFailed(NWB_TEXT("failed to query readback submission completion"));
             requestTerminalQuit();
             return;
         }
         if(*completedValue < acceptedToken.value)
             return;
         if(!m_readback){
-            markFailed(FOUNDATION_TEXT("accepted readback submission lost its staging texture"));
+            markFailed(NWB_TEXT("accepted readback submission lost its staging texture"));
             requestTerminalQuit();
             return;
         }
 
         const auto mapping = device.mapStagingTexture(*m_readback, Core::TextureSlice{}, Core::CpuAccessMode::Read);
         if(!mapping){
-            markFailed(FOUNDATION_TEXT("failed to map the completed readback staging texture"));
+            markFailed(NWB_TEXT("failed to map the completed readback staging texture"));
             requestTerminalQuit();
             return;
         }
 
-        Core::Alloc::ScratchArena scratchArena(__hidden_framebuffer_capture::s_BitmapScratchArena);
-        const b8 captureWritten = BitmapCaptureWriter(m_outputPath, m_captureDescription).write(MakeNotNull(static_cast<const u8*>(mapping->data)), mapping->rowPitch, scratchArena);
+        usize requiredSourceBytes = 0u;
+        b8 validSourceSpan = true;
+        if(m_captureDescription.width > 0u && m_captureDescription.height > 0u){
+            const auto lastRowOffset = TryMultiply<usize>(static_cast<usize>(m_captureDescription.height - 1u), mapping->rowPitch);
+            const auto rowBytes = TryMultiply<usize>(static_cast<usize>(m_captureDescription.width), s_BitmapSourceBytesPerPixel);
+            if(!lastRowOffset || !rowBytes || AddOverflows<usize>(*lastRowOffset, *rowBytes))
+                validSourceSpan = false;
+            else
+                requiredSourceBytes = *lastRowOffset + *rowBytes;
+        }
+        b8 captureWritten = false;
+        if(validSourceSpan && mapping->data){
+            const Span<const u8> sourceSpan(static_cast<const u8*>(mapping->data), requiredSourceBytes);
+            captureWritten = BitmapCaptureWriter(m_captureDescription).write(m_outputPath, sourceSpan, mapping->rowPitch);
+        }
         device.unmapStagingTexture(*m_readback);
         if(!captureWritten){
-            markFailed(FOUNDATION_TEXT("failed to write the framebuffer capture atomically"));
+            markFailed(NWB_TEXT("failed to write the framebuffer capture atomically"));
             requestTerminalQuit();
             return;
         }
 
         m_captureReady = true;
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: capture ready"));
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: capture ready"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
         if(m_options.quitWhenReady)
             requestTerminalQuit();
     }
@@ -214,12 +233,18 @@ public:
         return true;
     }
 
+    [[nodiscard]] b8 rearm(const AStringView outputPath)noexcept{
+        if(outputPath.empty())
+            return false;
+        return rearm(::Path<Core::Alloc::GlobalArena>(m_context.objectArena, outputPath));
+    }
+
     [[nodiscard]] b8 captureReady()const noexcept{ return m_captureReady; }
 
     [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
 
     void finish(){
-        FOUNDATION_ASSERT(m_captureReady);
+        NWB_ASSERT(m_captureReady);
         requestTerminalQuit();
     }
 
@@ -236,7 +261,7 @@ public:
 
         const Core::Texture* const backbuffer = getGraphics().getBackBuffer(0u);
         if(!backbuffer){
-            markFailed(FOUNDATION_TEXT("swap-chain texture is unavailable during capture resource setup"));
+            markFailed(NWB_TEXT("swap-chain texture is unavailable during capture resource setup"));
             return false;
         }
         return prepareReadback(backbuffer->getCreationDescription());
@@ -249,7 +274,8 @@ public:
         if(m_captureReady){
             m_readback.reset();
             m_captureDescription = {};
-        }else if(!m_skipped && !m_failed)
+        }
+        else if(!m_skipped && !m_failed)
             resetPendingReadback();
     }
 
@@ -266,11 +292,11 @@ public:
 
         if(!getGraphics().isSwapChainReadbackAvailable()){
             m_skipped = true;
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"));
             return true;
         }
         if(!frame.valid()){
-            markFailed(FOUNDATION_TEXT("renderer supplied an invalid acquired presentation frame"));
+            markFailed(NWB_TEXT("renderer supplied an invalid acquired presentation frame"));
             return true;
         }
 
@@ -289,7 +315,7 @@ public:
             return true;
 
         if(!stagingMatches(description)){
-            markFailed(FOUNDATION_TEXT("framebuffer readback staging texture was not prepared for the current swap chain"));
+            markFailed(NWB_TEXT("framebuffer readback staging texture was not prepared for the current swap chain"));
             return true;
         }
 
@@ -325,7 +351,7 @@ public:
             || frame.backBuffer.index != m_preparedFrame.backBuffer.index
             || frame.framebuffer != m_preparedFrame.framebuffer
         ){
-            markFailed(FOUNDATION_TEXT("presentation declaration no longer matches the prepared acquired frame"));
+            markFailed(NWB_TEXT("presentation declaration no longer matches the prepared acquired frame"));
             return MakeUnexpected(Failure{});
         }
 
@@ -339,7 +365,7 @@ public:
         const auto stagingHazardResult = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCaptureStaging))
             .setMarkerLabel("Framebuffer Capture Staging").setType(Core::GpuGraphResourceType::HazardDomain));
         if(!stagingHazardResult){
-            markFailed(FOUNDATION_TEXT("failed to declare the framebuffer staging hazard domain"));
+            markFailed(NWB_TEXT("failed to declare the framebuffer staging hazard domain"));
             return MakeUnexpected(Failure{});
         }
 
@@ -347,8 +373,8 @@ public:
 
         Core::GpuTaskDesc taskDesc;
         const Array<Core::GpuTaskResourceUse, 2> resourceUses = {
-            Core::GpuTaskResourceUse{ .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, },
-            Core::GpuTaskResourceUse{ .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write, },
+            Core::GpuTaskResourceUse{ .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read },
+            Core::GpuTaskResourceUse{ .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write },
         };
         taskDesc.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCapture)).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(Span(&previousTask, 1u)).setResourceUses(resourceUses);
         const auto readbackTask = graph.addTask<ReadbackTask>(
@@ -363,7 +389,7 @@ public:
                 .generation = m_completionState->generation,
             });
         if(!readbackTask){
-            markFailed(FOUNDATION_TEXT("failed to declare the framebuffer readback task"));
+            markFailed(NWB_TEXT("failed to declare the framebuffer readback task"));
             return MakeUnexpected(Failure{});
         }
 
@@ -378,7 +404,7 @@ private:
             return;
 
         m_failed = true;
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FramebufferCapture: {}"), reason);
+        NWB_LOGGER_ERROR(NWB_TEXT("FramebufferCapture: {}"), reason);
     }
 
     void requestTerminalQuit(){
@@ -416,12 +442,12 @@ private:
     }
 
     [[nodiscard]] b8 prepareReadback(const Core::TextureDesc& description){
-        if(!__hidden_framebuffer_capture::IsSupportedSdrFormat(description.format)){
-            markFailed(FOUNDATION_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
+        if(!IsSupportedFramebufferSdrFormat(description.format)){
+            markFailed(NWB_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
             return false;
         }
         if(description.width == 0u || description.height == 0u || description.depth != 1u || description.arraySize != 1u || description.mipLevels != 1u || description.sampleCount != 1u || description.dimension != Core::TextureDimension::Texture2D){
-            markFailed(FOUNDATION_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
+            markFailed(NWB_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
             return false;
         }
         if(stagingMatches(description))
@@ -435,7 +461,7 @@ private:
         else
             m_readback.reset();
         if(!readbackResult){
-            markFailed(FOUNDATION_TEXT("failed to allocate the matching framebuffer readback staging texture"));
+            markFailed(NWB_TEXT("failed to allocate the matching framebuffer readback staging texture"));
             return false;
         }
         return true;
@@ -463,102 +489,252 @@ private:
     b8 m_stopped = false;
 };
 
-struct SmokeCaptureSeries{
-    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> paths;
-    UniquePtr<FramebufferCapture> capture;
-
-public:
-    explicit SmokeCaptureSeries(Core::Alloc::GlobalArena& arena)noexcept
-        : paths(arena)
-    {}
-};
-
-class SmokeCaptureFactory{
-public:
-    explicit SmokeCaptureFactory(ProjectRuntimeContext& context)noexcept
-        : m_context(context)
-    {}
-
-public:
-    [[nodiscard]] Expected<UniquePtr<FramebufferCapture>> configure(
-        const TStringView projectName,
-        const u32 defaultFrameCount,
-        const FramebufferCaptureOptions& options,
-        Core::Alloc::ScratchArena& scratchArena
-    ){
-        const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-        if(!outputPath)
-            return UniquePtr<FramebufferCapture>{};
-
-        u32 captureFrameCount = defaultFrameCount;
-        const auto frameCountText = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-        if(frameCountText){
-            const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
-            if(!parsedFrameCount || *parsedFrameCount == 0u || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: capture frame count must be a positive u32"), projectName);
-                return MakeUnexpected(Failure{});
-            }
-            captureFrameCount = static_cast<u32>(*parsedFrameCount);
-        }
-
-        auto capture = MakeUnique<FramebufferCapture>(AStringView(outputPath->data(), outputPath->size()), captureFrameCount, m_context, options);
-        if(!capture || !capture->start())
-            return MakeUnexpected(Failure{});
-        return capture;
-    }
-
-    [[nodiscard]] Expected<UniquePtr<FramebufferCapture>> configure(
-        const TStringView projectName,
-        const u32 defaultFrameCount,
-        const FramebufferCaptureOptions& options
-    ){
-        Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-        return configure(projectName, defaultFrameCount, options, scratchArena);
-    }
-
-    [[nodiscard]] Expected<SmokeCaptureSeries> prepareSeries(const AStringView outputPath, const u32 sampleCount, const FramebufferCaptureOptions& options){
-        SmokeCaptureSeries result(m_context.objectArena);
-        result.paths.reserve(sampleCount);
-        for(u32 sample = 0u; sample < sampleCount; ++sample){
-            const auto path = sample + 1u == sampleCount ? SmokeEnvironmentString(outputPath, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", outputPath, sample);
-            result.paths.emplace_back(m_context.objectArena, AStringView(path));
-        }
-        result.capture = MakeUnique<FramebufferCapture>(Move(result.paths.front()), 1u, m_context, options);
-        if(!result.capture || !result.capture->start())
-            return MakeUnexpected(Failure{});
-        return result;
-    }
-
-private:
-    ProjectRuntimeContext& m_context;
-};
-
 using Core::ECS::World;
+using Core::Alloc::ScratchArena;
+
+[[nodiscard]] NWB_INLINE b8 StartNewSmokeFramebufferCapture(
+    const AStringView outputPath,
+    const u32 captureFrameCount,
+    ProjectRuntimeContext& context,
+    const FramebufferCaptureOptions& options,
+    UniquePtr<FramebufferCapture>& outCapture
+){
+    auto capture = MakeUnique<FramebufferCapture>(outputPath, captureFrameCount, context, options);
+    if(!capture || !capture->start())
+        return false;
+    outCapture = Move(capture);
+    return true;
+}
+
+NWB_INLINE void UpdateSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
+    if(capture)
+        capture->update();
+}
+
+NWB_INLINE void StopAndResetSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
+    if(capture){
+        capture->stop();
+        capture.reset();
+    }
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeFramebufferCaptureValid(const UniquePtr<FramebufferCapture>& capture)noexcept{
+    return static_cast<b8>(capture);
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeFramebufferCaptureReady(const UniquePtr<FramebufferCapture>& capture)noexcept{
+    return capture && capture->captureReady();
+}
+
+[[nodiscard]] NWB_INLINE u64 SmokeFramebufferCapturedFrameIndex(const UniquePtr<FramebufferCapture>& capture)noexcept{
+    return capture ? capture->capturedGraphicsFrameIndex() : Limit<u64>::s_Max;
+}
+
+NWB_INLINE void FinishSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
+    if(capture)
+        capture->finish();
+}
+
+[[nodiscard]] NWB_INLINE b8 RearmSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture, const AStringView outputPath)noexcept{
+    return capture && capture->rearm(outputPath);
+}
+
+NWB_INLINE void MoveSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& src, UniquePtr<FramebufferCapture>& dst)noexcept{
+    dst = Move(src);
+}
+
+NWB_INLINE void MoveSmokeFramebufferCapture(UniquePtr<FramebufferCapture>&& src, UniquePtr<FramebufferCapture>& dst)noexcept{
+    dst = Move(src);
+}
+
+template<typename OwnerT>
+[[nodiscard]] NWB_INLINE FramebufferCaptureOptions MakeSmokeCaptureOptions(
+    OwnerT& owner,
+    const u32 requiredWidth,
+    const u32 requiredHeight,
+    const b8 quitWhenReady = true
+)noexcept{
+    FramebufferCaptureOptions options{};
+    options.requiredWidth = requiredWidth;
+    options.requiredHeight = requiredHeight;
+    options.quitWhenReady = quitWhenReady;
+    options.predicateContext = &owner;
+    options.shouldCapture = +[](void* const ctx, const u64 frame)noexcept -> b8{
+        return MakeNotNull(static_cast<OwnerT*>(ctx))->shouldCaptureFrame(frame);
+    };
+    return options;
+}
 };
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u64 s_FramebufferCaptureMaxFrameCount = 4294967295u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SmokeCaptureSeries{
+    public Vector<String> paths;
+    public UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
+}
+
+class SmokeCaptureFactory{
+    public SmokeCaptureFactory(mut ProjectRuntimeContext context){
+        this.m_context = context;
+    }
+
+    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount, in FramebufferCaptureOptions options){
+        const Expected<String> outputPath = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+        if(!outputPath.has_value())
+            return UniquePtr<FramebufferCapture>();
+
+        u32 captureFrameCount = defaultFrameCount;
+        const Expected<String> frameCountText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+        if(frameCountText.has_value()){
+            const Expected<u64> parsedFrameCount = ParseU64(StringView(frameCountText.value()));
+            if(!parsedFrameCount.has_value() || parsedFrameCount.value() == 0u || parsedFrameCount.value() > s_FramebufferCaptureMaxFrameCount){
+                error("{}: capture frame count must be a positive u32", projectName);
+                return MakeUnexpected(Failure());
+            }
+            captureFrameCount = cast<u32>(parsedFrameCount.value());
+        }
+
+        const StringView pathView = StringView(outputPath.value());
+        UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
+        if(!StartNewSmokeFramebufferCapture(pathView, captureFrameCount, this.m_context, options, capture))
+            return MakeUnexpected(Failure());
+        return capture;
+    }
+
+    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount){
+        return this.configure(projectName, defaultFrameCount, FramebufferCaptureOptions());
+    }
+
+    public Expected<UniquePtr<FramebufferCapture>> configure(
+        in StringView projectName,
+        in u32 defaultFrameCount,
+        in FramebufferCaptureOptions options,
+        mut ScratchArena scratchArena
+    ){
+        return this.configure(projectName, defaultFrameCount, options);
+    }
+
+    public Expected<SmokeCaptureSeries> prepareSeries(in StringView outputPath, in u32 sampleCount, in FramebufferCaptureOptions options){
+        if(sampleCount == 0u)
+            return MakeUnexpected(Failure());
+
+        SmokeCaptureSeries result = SmokeCaptureSeries();
+        result.paths.reserve(sampleCount);
+        for(u32 sample = 0u; sample < sampleCount; ++sample){
+            String samplePath = String();
+            if(sample + 1u == sampleCount)
+                samplePath = String(outputPath);
+            else
+                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
+            result.paths.push_back(samplePath);
+        }
+
+        const StringView firstPath = StringView(result.paths[0u]);
+        if(!StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, result.capture))
+            return MakeUnexpected(Failure());
+        return result;
+    }
+
+    public b8 prepareSeriesInto(
+        in StringView outputPath,
+        in u32 sampleCount,
+        in FramebufferCaptureOptions options,
+        mut Vector<String> outPaths,
+        mut UniquePtr<FramebufferCapture> outCapture
+    ){
+        if(sampleCount == 0u)
+            return false;
+
+        outPaths.clear();
+        outPaths.reserve(sampleCount);
+        for(u32 sample = 0u; sample < sampleCount; ++sample){
+            String samplePath = String();
+            if(sample + 1u == sampleCount)
+                samplePath = String(outputPath);
+            else
+                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
+            outPaths.push_back(samplePath);
+        }
+
+        const StringView firstPath = StringView(outPaths[0u]);
+        return StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, outCapture);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+}
+
+b8 ConfigureSmokeFramebufferCapture(
+    mut ProjectRuntimeContext context,
+    in StringView projectName,
+    in u32 defaultFrameCount,
+    in FramebufferCaptureOptions options,
+    mut UniquePtr<FramebufferCapture> outCapture
+){
+    const Expected<String> outputPath = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+    if(!outputPath.has_value())
+        return true;
+
+    u32 captureFrameCount = defaultFrameCount;
+    const Expected<String> frameCountText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+    if(frameCountText.has_value()){
+        const Expected<u64> parsedFrameCount = ParseU64(StringView(frameCountText.value()));
+        if(!parsedFrameCount.has_value() || parsedFrameCount.value() == 0u || parsedFrameCount.value() > s_FramebufferCaptureMaxFrameCount){
+            error("{}: capture frame count must be a positive u32", projectName);
+            return false;
+        }
+        captureFrameCount = cast<u32>(parsedFrameCount.value());
+    }
+
+    return StartNewSmokeFramebufferCapture(StringView(outputPath.value()), captureFrameCount, context, options, outCapture);
+}
+
+b8 ConfigureSmokeFramebufferCapture(
+    mut ProjectRuntimeContext context,
+    in StringView projectName,
+    in u32 defaultFrameCount,
+    mut UniquePtr<FramebufferCapture> outCapture
+){
+    return ConfigureSmokeFramebufferCapture(context, projectName, defaultFrameCount, FramebufferCaptureOptions(), outCapture);
+}
+
 b8 TickSmokeWorld(in f32 delta, mut World world){
-    const auto updated = world.tick(delta);
-    if(!updated){
-        error("Project: world update rejected CPU work: {}", cast<u32>(updated.error()));
+    b8 succeeded = true;
+    u32 errorValue = 0u;
+    native(in delta, mut world, mut succeeded, mut errorValue){
+        const auto updated = world.tick(delta);
+        if(!updated){
+            succeeded = false;
+            errorValue = static_cast<u32>(updated.error());
+        }
+    }
+    if(!succeeded){
+        error("Project: world update rejected CPU work: {}", errorValue);
         return false;
     }
     return true;
 }
 
 b8 TickSmokeWorldWithCapture(in f32 delta, mut World world, mut UniquePtr<FramebufferCapture> capture){
-    native(mut capture){
-        if(capture)
-            capture->update();
-    }
+    UpdateSmokeFramebufferCapture(capture);
     return TickSmokeWorld(delta, world);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

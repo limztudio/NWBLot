@@ -50,6 +50,7 @@ b8 ConstructorArgumentChecker::check(ClassDecl* ownerClass, const TypeRef* targe
             && (
                 BuiltinTypeSemantics::IsScalarType(baseTargetName)
                 || m_checker.m_symbols.findEnum(baseTargetName) != nullptr
+                || FindBuiltinEnum(baseTargetName) != nullptr
                 || IsSingleValueCtorBuiltinType(baseTargetName)
             )
         ){
@@ -88,3 +89,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,8 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/task/gpu/task_desc.h>
@@ -27,11 +41,13 @@ namespace RendererTaskGraphDetail{
 // Large graph-owned compute effects may use an auxiliary physical queue only when the device-wide same-class policy is enabled.
 // Keep each successor on its first transport: one semantic packet while the compiler owns inter-packet waits.
 // Cross-family routing stays separately disabled here until an effect-specific ownership/performance decision promotes it.
-void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const b8 preserveDirectDependency = true)noexcept;
+NWB_INLINE void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const b8 preserveDirectDependency = true)noexcept{
+    ConfigureSameFamilyComputeEffectRoutingHint(preserveDirectDependency, scheduling);
+}
 
 // Cross-family routes stay second opt-in. The compiler checks resources against sharing contracts and lowers paired barriers.
-inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling)noexcept{
-    scheduling.allowCrossFamilySameClassQueueRouting = true;
+NWB_INLINE void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling)noexcept{
+    ConfigureCrossFamilyComputeEffectRoutingHint(scheduling);
 }
 
 [[nodiscard]] constexpr Core::GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(const b8 generatePhase)noexcept{
@@ -48,17 +64,34 @@ public:
 
 // Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
 // Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
-[[nodiscard]] Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept;
+[[nodiscard]] NWB_INLINE Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept{
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    return scheduling;
+}
 
 // Shared phase descriptors retain one ordered recording group while the compiler selects its compatible physical queue.
-void MakeSharedComputeEmulationPhaseTaskDesc(
+NWB_INLINE void MakeSharedComputeEmulationPhaseTaskDesc(
     const Name identity,
     const AStringView markerLabel,
     const Core::GpuTaskId& dependency,
     const Span<const Core::GpuTaskResourceUse> resourceUses,
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
     Core::GpuTaskDesc& desc
-)noexcept;
+)noexcept{
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(markerLabel)
+        .setScheduling(SharedComputeEmulationChainScheduling())
+        .setDependencies({ &dependency, 1u })
+        .setResourceUses(resourceUses)
+        .setResourceSetUses({ resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size() })
+    ;
+}
 
 #define NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES(phaseIdPrefix, phaseLabelPrefix) \
     const Array<Name, 10u> sharedPhaseIdentities = { \
@@ -100,15 +133,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderKernelTaskGraphSchedulingAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

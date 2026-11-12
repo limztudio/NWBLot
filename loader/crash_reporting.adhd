@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "runtime_constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView ResolveCrashUploadServerUrl(in b8 useStandaloneLogger, in StringView logAddress){
+    if(useStandaloneLogger)
+        return "";
+    return logAddress;
+}
+
+StringView SelectGpuDebugMetadataValue(in b8 enableGpuDebug){
+    if(enableGpuDebug)
+        return s_EnabledText;
+    return s_DisabledText;
+}
+
+b8 ShouldWarnOnGpuCrashDumpCapture(in b8 requestAccepted, in b8 packageWriteFailed){
+    return !requestAccepted || packageWriteFailed;
+}
+
+void ConfigureCrashReporting(
+    in b8 crashReportingInstalled,
+    in b8 useStandaloneLogger,
+    in StringView logAddress,
+    in StringView crashUploadToken,
+    in b8 enableGpuDebug,
+    in Func<b8(in StringView, in StringView)> setUploadDestination,
+    in Func<b8(in StringView, in StringView)> setMetadata
+){
+    if(!crashReportingInstalled){
+        error("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run");
+        return;
+    }
+
+    const StringView logServerUrl = ResolveCrashUploadServerUrl(useStandaloneLogger, logAddress);
+    const StringView gpuDebugText = SelectGpuDebugMetadataValue(enableGpuDebug);
+    if(!setUploadDestination(logServerUrl, crashUploadToken))
+        warning("Loader: failed to set crash upload destination");
+    if(!setMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
+        warning("Loader: failed to set 'runtime' crash metadata");
+    if(!setMetadata(s_GpuDebugCrashMetadataKey, gpuDebugText))
+        warning("Loader: failed to set 'gpu_debug' crash metadata");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

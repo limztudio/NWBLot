@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_values.adhd>
+#include <logger/server/minidump_image.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_Win32MissingDumpPrefix = "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=";
+const StringView s_Win32MissingDumpSuffix = " is missing or unreadable\n";
+const StringView s_Win32MissingThreadContextReport = "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=minidump has no usable thread context\n";
+const StringView s_Win32InvalidMemoryRangesReport = "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=minidump contains invalid memory ranges\n";
+const StringView s_Win32SymInitializeFailedReport = "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=SymInitializeW failed\n";
+const StringView s_Win32DecodedResolverPrefix = "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
+const StringView s_Win32MissingModuleListReport = "module_load=missing_module_list\n";
+const StringView s_Win32NoFramesDecodedLine = "<no frames decoded>\n";
+
+enum<u8> DumpMemoryRangeMatch{
+    Outside = 0,
+    PartialOverflow = 1,
+    Matched = 2,
+    kCount
+}
+
+b8 IsRepresentableDumpMemoryRange(in u64 begin, in u64 size){
+    return size <= u64.max - begin;
+}
+
+DumpMemoryRangeMatch ClassifyDumpMemoryRangeRead(in u64 rangeBegin, in u64 rangeSize, in u64 baseAddress, in u64 readSize, mut usize outOffset){
+    outOffset = 0u;
+    if(baseAddress < rangeBegin)
+        return DumpMemoryRangeMatch::Outside;
+    const u64 offset = baseAddress - rangeBegin;
+    if(offset >= rangeSize)
+        return DumpMemoryRangeMatch::Outside;
+    if(readSize > rangeSize - offset || offset > cast<u64>(usize.max))
+        return DumpMemoryRangeMatch::PartialOverflow;
+    outOffset = cast<usize>(offset);
+    return DumpMemoryRangeMatch::Matched;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

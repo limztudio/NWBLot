@@ -1,0 +1,147 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/asset_reference_text_writer.adhd>
+#include <utilities/fbx_to_nwb/text_write.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+String FormatFbxJointBaseName(in StringView rawName, in usize fallbackIndex){
+    String out;
+    if(!rawName.empty()){
+        out.assign(rawName);
+        return out;
+    }
+    out.reserve(24u);
+    out.append(s_JointFallbackNamePrefix);
+    AppendUnsignedU64Text(out, cast<u64>(fallbackIndex));
+    return out;
+}
+
+b8 IsUsedFbxJointName(in Span<String> usedNames, in StringView candidate){
+    for(in String used : usedNames){
+        if(cast<StringView>(used) == candidate)
+            return true;
+    }
+    return false;
+}
+
+String MakeUniqueFbxJointName(in StringView baseName, in Span<String> usedNames){
+    String name;
+    name.reserve(baseName.size() + s_UniqueNameSuffixReserve);
+    name.assign(baseName);
+
+    u32 suffix = 1u;
+    while(IsUsedFbxJointName(usedNames, name)){
+        name.clear();
+        StringAppendFormat(name, "{}_{}", baseName, suffix);
+        ++suffix;
+    }
+    return name;
+}
+
+void AppendSkinInfluenceJointsText(in MeshSkinInfluence skin, mut String out){
+    out.append("[");
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        if(i != 0u)
+            out.append(", ");
+        AppendUnsignedU64Text(out, cast<u64>(skin.joint[i]));
+    }
+    out.append("]");
+}
+
+void AppendSkinInfluenceWeightsText(in MeshSkinInfluence skin, mut String out){
+    out.append("[");
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        if(i != 0u)
+            out.append(", ");
+        AppendCleanFloatText(skin.weight[i], out);
+    }
+    out.append("]");
+}
+
+void AppendJointMatrixRowsText(
+    in Vec4 row0,
+    in Vec4 row1,
+    in Vec4 row2,
+    in StringView indent,
+    mut String out
+){
+    out.append(s_ListOpenText);
+    out.append(indent);
+    out.append("    ");
+    AppendVec4Text(row0, out);
+    out.append(s_EntrySuffixText);
+    out.append(indent);
+    out.append("    ");
+    AppendVec4Text(row1, out);
+    out.append(s_EntrySuffixText);
+    out.append(indent);
+    out.append("    ");
+    AppendVec4Text(row2, out);
+    out.append(s_EntrySuffixText);
+    out.append(indent);
+    out.append("]");
+}
+
+void AppendSkeletonJointEntryText(
+    in StringView jointName,
+    in b8 hasParent,
+    in StringView parentName,
+    in Vec4 row0,
+    in Vec4 row1,
+    in Vec4 row2,
+    mut String out
+){
+    out.append("    {\n");
+    out.append("        \"name\": ");
+    AppendAssetReferenceText(jointName, true, out);
+    out.append(s_EntrySuffixText);
+    if(hasParent){
+        out.append("        \"parent\": ");
+        AppendAssetReferenceText(parentName, true, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append("        \"local_bind_pose\": ");
+    AppendJointMatrixRowsText(row0, row1, row2, "        ", out);
+    out.append(s_EntrySuffixText);
+    out.append(s_TableEntryCloseText);
+}
+
+void AppendSkinAssetHeaderAndInfluencesText(
+    in StringView variableName,
+    in StringView meshName,
+    in StringView skeletonName,
+    in Span<MeshSkinInfluence> influences,
+    in b8 quoteReferences,
+    mut String out
+){
+    out.append(variableName);
+    out.append(".mesh = ");
+    AppendAssetReferenceText(meshName, quoteReferences, out);
+    out.append(s_StatementEndText);
+    out.append(variableName);
+    out.append(".skeleton = ");
+    AppendAssetReferenceText(skeletonName, quoteReferences, out);
+    out.append(s_StatementEndSectionText);
+
+    out.append(variableName);
+    out.append(".influences = [\n");
+    for(in MeshSkinInfluence influence : influences){
+        out.append("    { \"joints\": ");
+        AppendSkinInfluenceJointsText(influence, out);
+        out.append(", \"weights\": ");
+        AppendSkinInfluenceWeightsText(influence, out);
+        out.append(" },\n");
+    }
+    out.append(s_ListCloseSectionText);
+    out.append(variableName);
+    out.append(".inverse_bind_matrices = [\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

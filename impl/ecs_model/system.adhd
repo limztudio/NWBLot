@@ -2,9 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_model/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
-#include <impl/ecs_model/components.adhd.h>
-#include <impl/ecs_model/types.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <core/assets/ref.h>
 #include <core/ecs/system.h>
@@ -137,21 +146,46 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsModelSystemAdhdModule(in u64 value){
-    return value != 0u;
+void ResetModelRuntimeState(mut ModelRuntimeComponent outRuntime){
+    outRuntime.model = s_NameNone;
+    outRuntime.objectCount = 0u;
+}
+
+b8 MatchesModelObjectIdentity(in ModelObjectComponent object, in EntityID owner, in Name objectName){
+    return object.owner == owner && object.object == objectName;
+}
+
+MatrixSingle ComputeModelObjectWorldMatrix(in MatrixSingle parentMatrix, in MatrixSingle localMatrix){
+    return Mul(parentMatrix, localMatrix);
+}
+
+MatrixSingle ComputeModelJointAttachmentWorldMatrix(
+    in MatrixSingle parentMatrix,
+    in MatrixSingle jointMatrix,
+    in MatrixSingle localMatrix
+){
+    return Mul(Mul(parentMatrix, jointMatrix), localMatrix);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_model/asset.adhd.h>
 #include <impl/assets_skeleton/asset.adhd.h>
 #include <impl/ecs_mesh/components.adhd.h>
@@ -305,7 +339,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
     const Name modelName = component.model.name();
     auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext);
     if(!loadedModel){
-        runtime = ModelRuntimeComponent{};
+        ResetModelRuntimeState(runtime);
         return;
     }
 
@@ -333,7 +367,7 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
     }
 
     if(auto* runtime = m_world.tryGetComponent<ModelRuntimeComponent>(entity))
-        *runtime = ModelRuntimeComponent{};
+        ResetModelRuntimeState(*runtime);
 }
 
 b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime){
@@ -440,7 +474,7 @@ Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::Entity
     const SIMDMatrix localMatrix = LoadFloat(localTransform);
     entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    (void)Scene::TryDecomposeAndAssignTransformComponent(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, owner), localMatrix), transform);
+    (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(m_world, owner), localMatrix), transform);
     return entity;
 }
 
@@ -448,7 +482,7 @@ Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID own
     const auto objects = m_world.view<ModelObjectComponent>();
     for(auto it = objects.begin(); it != objects.end(); ++it){
         auto&& [entity, object] = *it;
-        if(object.owner == owner && object.object == objectName)
+        if(MatchesModelObjectIdentity(object, owner, objectName))
             return entity;
     }
     return Core::ECS::s_InvalidEntityId;
@@ -462,7 +496,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
             if(object.kind == ModelObjectKind::StaticMesh)
                 return;
 
-            (void)Scene::TryDecomposeAndAssignTransformComponent(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform)), transform);
+            (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform)), transform);
         });
 }
 
@@ -510,7 +544,7 @@ void ModelSystem::updateStaticMeshAttachments(){
 
         SIMDMatrix worldTransform{};
         if(!attachment.hasJointAttachment())
-            worldTransform = MatrixMultiply(parentMatrix, localMatrix);
+            worldTransform = ComputeModelObjectWorldMatrix(parentMatrix, localMatrix);
         else{
             SIMDMatrix jointMatrix{};
             if(queryCount > 1u){
@@ -528,7 +562,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                     return;
                 jointMatrix = *resolvedJointMatrix;
             }
-            worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
+            worldTransform = ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix);
         }
 
         (void)Scene::TryDecomposeAndAssignTransformComponent(worldTransform, transform);
@@ -543,7 +577,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

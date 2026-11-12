@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/statistics_types.adhd.h>
@@ -177,7 +183,7 @@ template<typename StateT>
 using StatisticsControlHandle = RefCountPtr< RefCounter<StateT>, ArenaRefDeleter<RefCounter<StateT>, Core::Alloc::GlobalArena> >;
 
 template<typename ControlT>
-[[nodiscard]] inline Expected<RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>> CreateStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
+[[nodiscard]] NWB_INLINE Expected<RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>> CreateStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
     using HandleT = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>;
     auto control = HandleT(NewArenaObject<ControlT>(arena, deviceGeneration), ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
     if(!control)
@@ -298,15 +304,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsRenderSharedStatisticsReadbackStateAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

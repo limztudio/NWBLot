@@ -16,6 +16,8 @@ const StringView s_TgaExtension = ".tga";
 const StringView s_QoiExtension = ".qoi";
 const StringView s_ExrExtension = ".exr";
 const StringView s_HdrExtension = ".hdr";
+const StringView s_NwbOutputExtension = ".nwb";
+const StringView s_TexOutputExtension = ".tex";
 const u32 s_ColorChannelCount = 4u;
 const f32 s_UastcHdrMaximum = 65216.0f;
 const f32 s_SrgbLinearSegmentScale = 12.92f;
@@ -46,6 +48,7 @@ const i32 s_TexConvExitSuccess = 0;
 const i32 s_TexConvExitFailure = 1;
 const i32 s_TexConvExitFatal = -1;
 const usize s_CompletionReportReserveSlack = 128u;
+const usize s_MetadataTextReserveBytes = 256u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +59,27 @@ enum<u8> AlphaSourceMode{
     Original,
     Constant,
     Image
+}
+
+enum<u8> TexConvDimension{
+    Texture2D = 0,
+    TextureCube = 1,
+    Texture3D = 2,
+    kCount
+}
+
+enum<u8> TexConvPayloadFormat{
+    UastcLdr4x4 = 0,
+    UastcHdr4x4 = 1,
+    kCount
+}
+
+enum<u8> TexConvAlphaMode{
+    Opaque = 0,
+    EmbeddedLdr = 1,
+    ConstantUnorm8 = 2,
+    SeparateUastcLdr4x4 = 3,
+    kCount
 }
 
 
@@ -167,13 +191,21 @@ b8 ValidateTexConvPlaneResolution(
 }
 
 VectorSingle SrgbToLinearRgb(in VectorSingle rgb){
-    VectorSingle result(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in rgb, mut result){
-        const ::SIMDVectorSingle linearPart = ::VectorScale(rgb, 1.0f / s_SrgbLinearSegmentScale);
-        const ::SIMDVectorSingle nonlinearPart = ::VectorPow(::VectorScale(::VectorAdd(rgb, ::VectorReplicate(s_SrgbOffset)), 1.0f / s_SrgbOffsetScale), ::VectorReplicate(s_SrgbDecodeExponent));
-        result = ::VectorSelect(nonlinearPart, linearPart, ::VectorLessOrEqual(rgb, ::VectorReplicate(s_SrgbLinearThreshold)));
-    }
-    return result;
+    const VectorSingle linearPart = rgb * VectorSingle(1.0f / s_SrgbLinearSegmentScale);
+    const VectorSingle nonlinearPart = Pow((rgb + VectorSingle(s_SrgbOffset)) * VectorSingle(1.0f / s_SrgbOffsetScale), VectorSingle(s_SrgbDecodeExponent));
+    f32 x = nonlinearPart.x;
+    if(rgb.x <= s_SrgbLinearThreshold)
+        x = linearPart.x;
+    f32 y = nonlinearPart.y;
+    if(rgb.y <= s_SrgbLinearThreshold)
+        y = linearPart.y;
+    f32 z = nonlinearPart.z;
+    if(rgb.z <= s_SrgbLinearThreshold)
+        z = linearPart.z;
+    f32 w = nonlinearPart.w;
+    if(rgb.w <= s_SrgbLinearThreshold)
+        w = linearPart.w;
+    return VectorSingle(x, y, z, w);
 }
 
 Expected<VectorSingle> TryPrepareTexConvLinearPixel(
@@ -205,18 +237,12 @@ b8 TryParseTexConvAlphaOption(
         error("tex_conv: --alpha expects an image path, white, or black.");
         return false;
     }
-    b8 isWhite = false;
-    b8 isBlack = false;
-    native(in alphaText, mut isWhite, mut isBlack){
-        isWhite = ::EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword);
-        isBlack = ::EqualsAsciiIgnoreCase(alphaText, s_AlphaBlackKeyword);
-    }
-    if(isWhite){
+    if(EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword)){
         outMode = AlphaSourceMode::Constant;
         outConstant = s_AlphaWhiteConstant;
         return true;
     }
-    if(isBlack){
+    if(EqualsAsciiIgnoreCase(alphaText, s_AlphaBlackKeyword)){
         outMode = AlphaSourceMode::Constant;
         outConstant = s_AlphaBlackConstant;
         return true;

@@ -8,17 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-namespace NWB::Impl{
-interface IShader;
-using MaterialStageShaderArray = Array<Core::Assets::AssetRef<IShader>, 14u>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 TryAssignMaterialResourceReferenceAsset(in MaterialResourceKind resourceKind, in Name resourceName, mut MaterialResourceReference reference){
     switch(resourceKind){
         case MaterialResourceKind::SampledImage2D:

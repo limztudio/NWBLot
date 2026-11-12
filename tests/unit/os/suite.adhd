@@ -1,24 +1,27 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "os_platform_text_and_pipe_cases.adhd"
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
 
-b8 OsSuiteReady(in u64 value){
-    return value != 0u;
-}
 
-native{
-// limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/os/text_input_service.h>
+[header]
+native{
 
-#include <tests/common/test_context.adhd.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/os/clipboard_service.h>
+#include <core/os/clipboard_text.h>
+#include <core/os/text_input_service.h>
+#include <core/os/text_input_text.h>
+
+#include <global/thread.h>
 
 #include <gtest/gtest.h>
 
@@ -26,13 +29,15 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_text_input_selection_tests{
+namespace __hidden_os_suite_support{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 using namespace NWB::Core;
+
+using GlobalString = AString<Alloc::GlobalArena>;
 
 class SelectionTextInput final : public QueuedTextInputService{
 public:
@@ -51,149 +56,25 @@ public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
 };
 
+struct SelectionTextInputContext{
+    NWB::Tests::TestArena<> arena;
+    SelectionTextInput service;
+    TextInputEvent event;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(TextInputSelection, ReverseSelectionHasTheSameOuterByteLimits){
-    NWB::Tests::TestArena arena;
-    SelectionTextInput service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto begun = service.begin({ {}, "abcDEFghi", 6u, 3u });
-    ASSERT_TRUE(begun);
-    const u64 revision = service.surroundingRevision(*begun);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 4u, 0u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 0u, 4u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
-    ASSERT_EQ(service.emitDeleteSurrounding(*begun, 3u, 3u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(*begun, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.deleteBeforeBytes, 3u);
-    EXPECT_EQ(event.deleteAfterBytes, 3u);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
-    EXPECT_EQ(service.poll(*begun, event), TextInputPollResult::Pending);
-}
-
-TEST(TextInputSelection, UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent){
-    NWB::Tests::TestArena arena;
-    SelectionTextInput service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto begun = service.begin({ {}, "abcDEFghi", 3u, 6u });
-    ASSERT_TRUE(begun);
-    const u64 revision = service.surroundingRevision(*begun);
-    ASSERT_EQ(service.updateSurrounding(*begun, "abcDEFghi", 3u, 6u), TextInputAdmission::Accepted);
-    const u64 currentRevision = service.surroundingRevision(*begun);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 2u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 2u, 1u, 0u, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
-    constexpr TextInputDeletionBasis::Enum s_InvalidBasis = static_cast<TextInputDeletionBasis::Enum>(255u);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 0u, 0u, currentRevision, s_InvalidBasis), TextInputAdmission::InvalidRange);
-    TextInputEvent event(arena.arena);
-    EXPECT_EQ(service.poll(*begun, event), TextInputPollResult::Pending);
-    EXPECT_EQ(service.activeSession(), *begun);
-    ASSERT_EQ(service.emitDeleteSurrounding(*begun, 2u, 1u, currentRevision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.poll(*begun, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.surroundingRevision, currentRevision);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
-    EXPECT_EQ(event.deleteBeforeBytes, 2u);
-    EXPECT_EQ(event.deleteAfterBytes, 1u);
-    EXPECT_EQ(service.poll(*begun, event), TextInputPollResult::Pending);
-}
-
-TEST(TextInputSelection, OuterUtf8EndpointsMustRemainScalarBoundaries){
-    NWB::Tests::TestArena arena;
-    SelectionTextInput service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto begun = service.begin({ {}, "a한DEF글z", 4u, 7u });
-    ASSERT_TRUE(begun);
-    const u64 revision = service.surroundingRevision(*begun);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 1u, 0u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(*begun, 0u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
-    ASSERT_EQ(service.emitDeleteSurrounding(*begun, 3u, 3u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(*begun, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.deleteBeforeBytes, 3u);
-    EXPECT_EQ(event.deleteAfterBytes, 3u);
-}
-
-TEST(TextInputSelection, PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutput){
-    NWB::Tests::TestArena outputArena;
-    TextInputEvent event(outputArena.arena);
-    TextInputSessionToken token;
-    {
-        NWB::Tests::TestArena nativeArena;
-        SelectionTextInput service(nativeArena.arena);
-        ASSERT_TRUE(service.setFocused(true));
-        const auto begun = service.begin({ {}, "abcDEFghi", 3u, 6u });
-        ASSERT_TRUE(begun);
-        const u64 revision = service.surroundingRevision(*begun);
-        token = *begun;
-        ASSERT_EQ(service.emitDeleteSurrounding(token, 2u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
-        ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
-        ASSERT_EQ(service.emitCommit(token, "X"), TextInputAdmission::Accepted);
-        ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Caret);
-        ASSERT_EQ(service.emitDeleteSurrounding(token, 0u, 0u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
-        ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-        ASSERT_TRUE(service.end(token));
-    }
-    EXPECT_EQ(event.token, token);
-    EXPECT_EQ(event.kind, TextInputEventKind::DeleteSurrounding);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
-    EXPECT_EQ(event.deleteBeforeBytes, 0u);
-    EXPECT_EQ(event.deleteAfterBytes, 0u);
-}
-
-TEST(TextInputSelection, DeletionPreservesThePreeditCommitOrderingBarrier){
-    NWB::Tests::TestArena arena;
-    SelectionTextInput service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto begun = service.begin({ {}, "abcDEFghi", 3u, 6u });
-    ASSERT_TRUE(begun);
-    const u64 revision = service.surroundingRevision(*begun);
-    ASSERT_EQ(service.emitPreedit(*begun, {}, 0u, 0u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitDeleteSurrounding(*begun, 2u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitCommit(*begun, "X"), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitPreedit(*begun, "next", 0u, 4u), TextInputAdmission::Accepted);
-    const Array<TextInputEventKind::Enum, 4u> kinds{ TextInputEventKind::Preedit, TextInputEventKind::DeleteSurrounding, TextInputEventKind::Commit, TextInputEventKind::Preedit };
-    TextInputEvent event(arena.arena);
-    u64 previousSequence = 0u;
-    for(const auto kind : kinds){
-        ASSERT_EQ(service.poll(*begun, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, kind);
-        EXPECT_GT(event.sequence, previousSequence);
-        EXPECT_EQ(event.deletionBasis, kind == TextInputEventKind::DeleteSurrounding ? TextInputDeletionBasis::Selection : TextInputDeletionBasis::Caret);
-        previousSequence = event.sequence;
-    }
-    EXPECT_EQ(service.poll(*begun, event), TextInputPollResult::Pending);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    SelectionTextInputContext()
+        : service(arena.arena)
+        , event(arena.arena)
+    {}
 };
 
+struct StandaloneTextInputEvent{
+    NWB::Tests::TestArena<> arena;
+    TextInputEvent event;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/os/clipboard_service.h>
-
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_clipboard_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
+    StandaloneTextInputEvent()
+        : event(arena.arena)
+    {}
+};
 
 class FakeClipboardService final : public QueuedClipboardService{
 public:
@@ -238,7 +119,7 @@ protected:
 
 
 public:
-    AString<Alloc::GlobalArena> m_text;
+    GlobalString m_text;
     Function<void()> m_onRead;
     ClipboardStatus::Enum m_readStatus = ClipboardStatus::Success;
     usize m_readCount = 0u;
@@ -249,258 +130,50 @@ private:
     ClipboardRequestToken m_nativeToken;
 };
 
+struct FakeClipboardContext{
+    NWB::Tests::TestArena<> arena;
+    FakeClipboardService service;
+    ClipboardCompletion completion;
+    GlobalString scratch;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Clipboard, RequestsCopyTextAndPublishOnlyWhenPumped){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    AString<Alloc::GlobalArena> input("Hello \xED\x95\x9C\xEA\xB8\x80 \xF0\x9F\x98\x80", arena.arena);
-    const AString<Alloc::GlobalArena> original = input;
-    const auto write = service.requestWriteText(ClipboardChannel::Clipboard, input);
-    ASSERT_TRUE(write);
-    input.assign("changed");
-    EXPECT_EQ(service.poll(*write, completion), ClipboardPollResult::Pending);
-    EXPECT_EQ(service.m_writeCount, 0u);
-    const auto read = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(read);
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.poll(*write, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(service.poll(*read, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, original);
-    EXPECT_EQ(completion.token, *read);
-    EXPECT_EQ(service.poll(*read, completion), ClipboardPollResult::InvalidRequest);
-}
-
-TEST(Clipboard, CancelPreventsPendingWritesAndRejectsReusedGenerations){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto canceledAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "discard");
-    ASSERT_TRUE(canceledAdmission);
-    const ClipboardRequestToken canceled = *canceledAdmission;
-    ASSERT_TRUE(service.cancel(canceled));
-    const auto currentAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "keep");
-    ASSERT_TRUE(currentAdmission);
-    const ClipboardRequestToken current = *currentAdmission;
-    EXPECT_NE(canceled.generation, current.generation);
-    EXPECT_EQ(service.poll(canceled, completion), ClipboardPollResult::InvalidRequest);
-    EXPECT_FALSE(service.cancel(canceled));
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_writeCount, 1u);
-    EXPECT_EQ(service.m_text, "keep");
-    ASSERT_TRUE(service.cancel(current));
-    EXPECT_EQ(service.poll(current, completion), ClipboardPollResult::InvalidRequest);
-    EXPECT_EQ(service.m_text, "keep");
-}
-
-TEST(Clipboard, ReusedSlotsKeepRequestOrdering){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto firstAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(firstAdmission);
-    const ClipboardRequestToken first = *firstAdmission;
-    const auto secondAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "second");
-    ASSERT_TRUE(secondAdmission);
-    const ClipboardRequestToken second = *secondAdmission;
-    ASSERT_TRUE(service.cancel(first));
-    const auto thirdAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(thirdAdmission);
-    const ClipboardRequestToken third = *thirdAdmission;
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.poll(second, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(service.poll(third, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, "second");
-}
-
-TEST(Clipboard, TokensCannotCrossServicesOrSurviveServiceRecreation){
-    NWB::Tests::TestArena arena;
-    ClipboardCompletion completion(arena.arena);
-    ClipboardRequestToken old;
-    {
-        FakeClipboardService previous(arena.arena);
-        const auto oldAdmission = previous.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(oldAdmission);
-        old = *oldAdmission;
-    }
-    FakeClipboardService service(arena.arena);
-    const auto currentAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(currentAdmission);
-    const ClipboardRequestToken current = *currentAdmission;
-    EXPECT_NE(old.service, current.service);
-    EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
-    EXPECT_FALSE(service.cancel(old));
-    EXPECT_EQ(service.poll({}, completion), ClipboardPollResult::InvalidRequest);
-}
-
-TEST(Clipboard, CanceledNativeCompletionCannotReachNewRequest){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto oldAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(oldAdmission);
-    const ClipboardRequestToken old = *oldAdmission;
-    ClipboardRequestToken current;
-    service.m_onRead = [&](){
-        EXPECT_TRUE(service.cancel(old));
-        const auto currentAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(currentAdmission);
-        current = *currentAdmission;
-        EXPECT_FALSE(service.pump());
-    };
-    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.pump()));
-    EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
-    EXPECT_EQ(service.poll(current, completion), ClipboardPollResult::Pending);
-    service.m_onRead = {};
-    service.m_text.assign("new completion");
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.poll(current, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, "new completion");
-}
-
-TEST(Clipboard, UnsupportedChannelsAndUnavailableReadsStayExplicit){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    EXPECT_FALSE(service.capabilities(ClipboardChannel::PrimarySelection).readText);
-    const auto primaryAdmission = service.requestReadText(ClipboardChannel::PrimarySelection);
-    ASSERT_TRUE(primaryAdmission);
-    const ClipboardRequestToken primary = *primaryAdmission;
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.poll(primary, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::Unsupported);
-    EXPECT_EQ(service.m_readCount, 0u);
-    service.m_readStatus = ClipboardStatus::Unavailable;
-    service.m_text.assign("must not escape failed read");
-    const auto unavailableAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(unavailableAdmission);
-    const ClipboardRequestToken unavailable = *unavailableAdmission;
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.poll(unavailable, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::Unavailable);
-    EXPECT_TRUE(completion.text.empty());
-}
-
-TEST(Clipboard, UnsupportedFactoryDoesNotAccessNativeClipboard){
-    NWB::Tests::TestArena arena;
-    auto serviceResult = CreateClipboardService(arena.arena, nullptr);
-    ASSERT_TRUE(serviceResult);
-    GlobalUniquePtr<IClipboardService> service = Move(*serviceResult);
-    ASSERT_TRUE(service);
-    EXPECT_FALSE(service->capabilities(ClipboardChannel::Clipboard).readText);
-    EXPECT_FALSE(service->capabilities(ClipboardChannel::Clipboard).writeText);
-    EXPECT_FALSE(service->capabilities(ClipboardChannel::PrimarySelection).readText);
-    const auto tokenAdmission = service->requestWriteText(ClipboardChannel::Clipboard, "unused");
-    ASSERT_TRUE(tokenAdmission);
-    const ClipboardRequestToken token = *tokenAdmission;
-    ASSERT_TRUE(service->pump());
-    ClipboardCompletion completion(arena.arena);
-    EXPECT_EQ(service->poll(token, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::Unsupported);
-}
-
-TEST(Clipboard, AdmissionBoundsOutstandingRequestsAndText){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    Array<ClipboardRequestToken, s_ClipboardMaxOutstandingRequests> tokens;
-    for(ClipboardRequestToken& token : tokens){
-        const auto request = service.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(request);
-        token = *request;
-    }
-    const auto queueFullRead = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_FALSE(queueFullRead);
-    EXPECT_EQ(queueFullRead.error(), ClipboardAdmission::QueueFull);
-    for(const ClipboardRequestToken token : tokens)
-        ASSERT_TRUE(service.cancel(token));
-    const auto invalidAdmission = service.requestWriteText(ClipboardChannel::Clipboard, AStringView("a\0b", 3u));
-    ASSERT_TRUE(invalidAdmission);
-    const ClipboardRequestToken invalid = *invalidAdmission;
-    ClipboardCompletion completion(arena.arena);
-    EXPECT_EQ(service.poll(invalid, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::InvalidText);
-    AString<Alloc::GlobalArena> oversized(s_ClipboardMaxTextBytes + 1u, 'x', arena.arena);
-    const auto largeAdmission = service.requestWriteText(ClipboardChannel::Clipboard, oversized);
-    ASSERT_TRUE(largeAdmission);
-    const ClipboardRequestToken large = *largeAdmission;
-    EXPECT_EQ(service.poll(large, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::TooLarge);
-    EXPECT_EQ(service.m_writeCount, 0u);
-}
-
-TEST(Clipboard, WrongThreadCallsNeverTouchRequestStorage){
-    NWB::Tests::TestArena arena;
-    FakeClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto tokenAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(tokenAdmission);
-    const ClipboardRequestToken token = *tokenAdmission;
-    Thread worker([&](){
-        EXPECT_FALSE(service.isOwnerThread());
-        const auto wrongThreadRead = service.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_FALSE(wrongThreadRead);
-        EXPECT_EQ(wrongThreadRead.error(), ClipboardAdmission::WrongThread);
-        const auto wrongThreadWrite = service.requestWriteText(ClipboardChannel::Clipboard, "ignored");
-        ASSERT_FALSE(wrongThreadWrite);
-        EXPECT_EQ(wrongThreadWrite.error(), ClipboardAdmission::WrongThread);
-        EXPECT_EQ(service.poll(token, completion), ClipboardPollResult::WrongThread);
-        EXPECT_FALSE(service.cancel(token));
-        EXPECT_FALSE(service.pump());
-    });
-    worker.join();
-    ASSERT_FALSE(::testing::Test::HasFatalFailure());
-    EXPECT_EQ(service.poll(token, completion), ClipboardPollResult::Pending);
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.poll(token, completion), ClipboardPollResult::Completed);
-}
-
-TEST(Clipboard, ConsumedCompletionOutlivesServiceAndItsArena){
-    NWB::Tests::TestArena outputArena;
-    ClipboardCompletion completion(outputArena.arena);
-    {
-        NWB::Tests::TestArena serviceArena;
-        FakeClipboardService service(serviceArena.arena);
-        service.m_text.assign("owned result");
-        const auto tokenAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(tokenAdmission);
-        const ClipboardRequestToken token = *tokenAdmission;
-        ASSERT_TRUE(service.pump());
-        EXPECT_EQ(service.poll(token, completion), ClipboardPollResult::Completed);
-    }
-    EXPECT_EQ(completion.text, "owned result");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    FakeClipboardContext()
+        : service(arena.arena)
+        , completion(arena.arena)
+        , scratch(arena.arena)
+    {}
 };
 
+struct StandaloneClipboardCompletion{
+    NWB::Tests::TestArena<> arena;
+    ClipboardCompletion completion;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    StandaloneClipboardCompletion()
+        : completion(arena.arena)
+    {}
+};
 
+struct UnsupportedClipboardContext{
+    NWB::Tests::TestArena<> arena;
+    GlobalUniquePtr<IClipboardService> service;
+    ClipboardCompletion completion;
+    b8 factorySucceeded = false;
 
-#include <core/os/clipboard_service.h>
+    UnsupportedClipboardContext()
+        : completion(arena.arena)
+    {
+        auto result = CreateClipboardService(arena.arena, nullptr);
+        if(result){
+            factorySucceeded = true;
+            service = Move(*result);
+        }
+    }
 
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_clipboard_async_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
+    [[nodiscard]] b8 hasService()const noexcept{ return service != nullptr; }
+    [[nodiscard]] ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept{ return service->capabilities(channel); }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWriteText(const ClipboardChannel::Enum channel, const AStringView text){ return service->requestWriteText(channel, text); }
+    [[nodiscard]] b8 pump(){ return service->pump(); }
+    [[nodiscard]] ClipboardPollResult::Enum poll(const ClipboardRequestToken token){ return service->poll(token, completion); }
+};
 
 class DelayedClipboardService final : public QueuedClipboardService{
 public:
@@ -543,7 +216,7 @@ protected:
 
 
 public:
-    AString<Alloc::GlobalArena> m_startedText;
+    GlobalString m_startedText;
     Function<void()> m_onStart;
     Function<void()> m_onCancel;
     ClipboardRequestToken m_nativeToken;
@@ -552,316 +225,31 @@ public:
     usize m_cancelCount = 0u;
 };
 
+struct DelayedClipboardContext{
+    NWB::Tests::TestArena<> arena;
+    DelayedClipboardService service;
+    ClipboardCompletion completion;
+    GlobalString scratch;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(ClipboardAsync, PendingNativeRequestPreservesFifoAndCopiedWriteInput){
-    NWB::Tests::TestArena arena;
-    DelayedClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto firstAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(firstAdmission);
-    const ClipboardRequestToken first = *firstAdmission;
-    AString<Alloc::GlobalArena> input("copied write", arena.arena);
-    const auto secondAdmission = service.requestWriteText(ClipboardChannel::Clipboard, input);
-    ASSERT_TRUE(secondAdmission);
-    const ClipboardRequestToken second = *secondAdmission;
-    const auto thirdAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(thirdAdmission);
-    const ClipboardRequestToken third = *thirdAdmission;
-    input.assign("changed caller input");
-
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_nativeToken, first);
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_startCount, 1u);
-    EXPECT_EQ(service.poll(second, completion), ClipboardPollResult::Pending);
-    ASSERT_TRUE(service.deliver(first, ClipboardStatus::Success, "first result"));
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_nativeToken, second);
-    EXPECT_EQ(service.m_nativeOperation, ClipboardOperation::WriteText);
-    EXPECT_EQ(service.m_startedText, "copied write");
-    ASSERT_TRUE(service.deliver(second, ClipboardStatus::Success));
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_nativeToken, third);
-    EXPECT_EQ(service.m_startCount, 3u);
-    ASSERT_TRUE(service.deliver(third, ClipboardStatus::Success, "third result"));
-
-    ASSERT_EQ(service.poll(first, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, "first result");
-    ASSERT_EQ(service.poll(second, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.operation, ClipboardOperation::WriteText);
-    EXPECT_TRUE(completion.text.empty());
-    ASSERT_EQ(service.poll(third, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, "third result");
-}
-
-TEST(ClipboardAsync, CancellationReleasesFifoAndLateNativeRepliesCannotCompleteReplacement){
-    NWB::Tests::TestArena arena;
-    DelayedClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto oldAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(oldAdmission);
-    const ClipboardRequestToken old = *oldAdmission;
-    const auto nextAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "next");
-    ASSERT_TRUE(nextAdmission);
-    const ClipboardRequestToken next = *nextAdmission;
-    ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.cancel(old));
-    EXPECT_EQ(service.m_cancelCount, 1u);
-    const auto replacementAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(replacementAdmission);
-    const ClipboardRequestToken replacement = *replacementAdmission;
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_nativeToken, next);
-    EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success, "stale bytes"));
-    EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
-    ASSERT_TRUE(service.deliver(next, ClipboardStatus::Success));
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_nativeToken, replacement);
-    EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success, "stale bytes"));
-    EXPECT_EQ(service.poll(replacement, completion), ClipboardPollResult::Pending);
-    ASSERT_TRUE(service.deliver(replacement, ClipboardStatus::Success, "replacement bytes"));
-    ASSERT_EQ(service.poll(replacement, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, "replacement bytes");
-}
-
-TEST(ClipboardAsync, CancellationInvalidatesTokenBeforeReentrantNativeCleanup){
-    NWB::Tests::TestArena arena;
-    DelayedClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto oldAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(oldAdmission);
-    const ClipboardRequestToken old = *oldAdmission;
-    ASSERT_TRUE(service.pump());
-    ClipboardRequestToken replacement;
-    b8 observedCancellation = false;
-    service.m_onCancel = [&](){
-        if(observedCancellation)
-            return;
-        observedCancellation = true;
-        EXPECT_FALSE(service.cancel(old));
-        EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
-        EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success, "late during cancellation"));
-        const auto replacementAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(replacementAdmission);
-        replacement = *replacementAdmission;
-    };
-
-    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.cancel(old)));
-    EXPECT_TRUE(observedCancellation);
-    EXPECT_EQ(service.m_cancelCount, 1u);
-    ASSERT_TRUE(replacement.valid());
-    EXPECT_EQ(service.poll(replacement, completion), ClipboardPollResult::Pending);
-    service.m_onCancel = {};
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_nativeToken, replacement);
-    ASSERT_TRUE(service.deliver(replacement, ClipboardStatus::Success, "survives cleanup"));
-    ASSERT_EQ(service.poll(replacement, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.text, "survives cleanup");
-}
-
-TEST(ClipboardAsync, ReentrantStartCancellationDefersNewGenerationToNextPump){
-    NWB::Tests::TestArena arena;
-    DelayedClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto oldAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "old input");
-    ASSERT_TRUE(oldAdmission);
-    const ClipboardRequestToken old = *oldAdmission;
-    ClipboardRequestToken replacement;
-    service.m_onStart = [&](){
-        if(service.m_nativeToken != old)
-            return;
-        ASSERT_TRUE(service.cancel(old));
-        const auto replacementAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "new input");
-        ASSERT_TRUE(replacementAdmission);
-        replacement = *replacementAdmission;
-        EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success));
-        EXPECT_FALSE(service.pump());
-    };
-
-    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.pump()));
-    EXPECT_EQ(service.m_startCount, 1u);
-    EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
-    EXPECT_EQ(service.poll(replacement, completion), ClipboardPollResult::Pending);
-    service.m_onStart = {};
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.m_startCount, 2u);
-    EXPECT_EQ(service.m_nativeToken, replacement);
-    EXPECT_EQ(service.m_startedText, "new input");
-    ASSERT_TRUE(service.deliver(replacement, ClipboardStatus::Success));
-}
-
-TEST(ClipboardAsync, DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes){
-    NWB::Tests::TestArena arena;
-    DelayedClipboardService service(arena.arena);
-    ClipboardCompletion completion(arena.arena);
-    const auto invalidAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(invalidAdmission);
-    const ClipboardRequestToken invalid = *invalidAdmission;
-    ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(invalid, ClipboardStatus::Success, "\xF0\x9F"));
-    ASSERT_EQ(service.poll(invalid, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::InvalidText);
-    EXPECT_TRUE(completion.text.empty());
-
-    const auto validAdmission = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_TRUE(validAdmission);
-    const ClipboardRequestToken valid = *validAdmission;
-    ASSERT_TRUE(service.pump());
-    AString<Alloc::GlobalArena> reply("\xED\x95\x9C\xF0\x9F\x98\x80", arena.arena);
-    ASSERT_TRUE(service.deliver(valid, ClipboardStatus::Success, reply));
-    reply.assign("changed source");
-    ASSERT_EQ(service.poll(valid, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(completion.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
-    EXPECT_FALSE(service.deliver(valid, ClipboardStatus::Success, "duplicate reply"));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    DelayedClipboardContext()
+        : service(arena.arena)
+        , completion(arena.arena)
+        , scratch(arena.arena)
+    {}
 };
 
+struct ClipboardTextTestContext{
+    NWB::Tests::TestArena<> arena;
+    ClipboardTextAccumulator accumulator;
+    GlobalString first;
+    GlobalString second;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/os/clipboard_text.h>
-
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_clipboard_text_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
-
-TEST(ClipboardText, Utf8RejectsMalformedUnicodeAndEmbeddedNull){
-    EXPECT_EQ(ValidateClipboardUtf8Text({}), ClipboardStatus::Success);
-    EXPECT_EQ(ValidateClipboardUtf8Text("\xF4\x8F\xBF\xBF"), ClipboardStatus::Success);
-    const Array<AStringView, 7u> invalid = { "\x80", "\xC0\xAF", "\xE0\x80\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xF0\x9F", AStringView("before\0after", 12u), };
-    for(const AStringView text : invalid)
-        EXPECT_EQ(ValidateClipboardUtf8Text(text), ClipboardStatus::InvalidText);
-}
-
-TEST(ClipboardText, IncrementalChunksCanSplitUnicodeUntilFinalValidation){
-    NWB::Tests::TestArena arena;
-    ClipboardTextAccumulator accumulator(arena.arena);
-    EXPECT_EQ(accumulator.appendBytes("\xED"), ClipboardStatus::Success);
-    EXPECT_EQ(ValidateClipboardUtf8Text(accumulator.text()), ClipboardStatus::InvalidText);
-    EXPECT_EQ(accumulator.appendBytes("\x95\x9C\xF0\x9F"), ClipboardStatus::Success);
-    EXPECT_EQ(ValidateClipboardUtf8Text(accumulator.text()), ClipboardStatus::InvalidText);
-    EXPECT_EQ(accumulator.appendBytes("\x98\x80"), ClipboardStatus::Success);
-    EXPECT_EQ(ValidateClipboardUtf8Text(accumulator.text()), ClipboardStatus::Success);
-    EXPECT_EQ(accumulator.text(), "\xED\x95\x9C\xF0\x9F\x98\x80");
-}
-
-TEST(ClipboardText, IncrementalFailuresDiscardBytesAndRemainStickyUntilClear){
-    NWB::Tests::TestArena arena;
-    ClipboardTextAccumulator accumulator(arena.arena);
-    ASSERT_EQ(accumulator.appendBytes("prefix"), ClipboardStatus::Success);
-    EXPECT_EQ(accumulator.appendBytes(AStringView("a\0b", 3u)), ClipboardStatus::InvalidText);
-    EXPECT_TRUE(accumulator.text().empty());
-    EXPECT_EQ(accumulator.appendBytes("ignored"), ClipboardStatus::InvalidText);
-    EXPECT_TRUE(accumulator.text().empty());
-    accumulator.clear();
-    EXPECT_EQ(accumulator.appendBytes("fresh"), ClipboardStatus::Success);
-    EXPECT_EQ(accumulator.text(), "fresh");
-}
-
-TEST(ClipboardText, ByteLimitIsInclusiveAndBoundsIncrementalAccumulation){
-    NWB::Tests::TestArena arena;
-    AString<Alloc::GlobalArena> maximum(s_ClipboardMaxTextBytes, 'x', arena.arena);
-    EXPECT_EQ(ValidateClipboardUtf8Text(maximum), ClipboardStatus::Success);
-    ClipboardTextAccumulator accumulator(arena.arena);
-    ASSERT_EQ(accumulator.appendBytes(maximum), ClipboardStatus::Success);
-    EXPECT_EQ(accumulator.text().size(), s_ClipboardMaxTextBytes);
-    EXPECT_EQ(accumulator.appendBytes("x"), ClipboardStatus::TooLarge);
-    EXPECT_TRUE(accumulator.text().empty());
-    EXPECT_EQ(accumulator.appendBytes("ignored"), ClipboardStatus::TooLarge);
-    maximum.push_back('x');
-    EXPECT_EQ(ValidateClipboardUtf8Text(maximum), ClipboardStatus::TooLarge);
-    accumulator.clear();
-    EXPECT_EQ(accumulator.appendBytes("fresh"), ClipboardStatus::Success);
-}
-
-TEST(ClipboardText, Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput){
-    NWB::Tests::TestArena arena;
-    AString<Alloc::GlobalArena> utf8(arena.arena);
-    AString<Alloc::GlobalArena> latin1(arena.arena);
-    const AStringView source("\x80\xFF", 2u);
-    ASSERT_EQ(DecodeClipboardLatin1(source, utf8), ClipboardStatus::Success);
-    EXPECT_EQ(utf8, "\xC2\x80\xC3\xBF");
-    ASSERT_EQ(EncodeClipboardLatin1(utf8, latin1), ClipboardStatus::Success);
-    EXPECT_EQ(latin1, source);
-    EXPECT_EQ(EncodeClipboardLatin1(AStringView("\xC4\x80\xFF", 3u), latin1), ClipboardStatus::InvalidText);
-    EXPECT_TRUE(latin1.empty());
-    EXPECT_EQ(EncodeClipboardLatin1("\xE2\x98\x83", latin1), ClipboardStatus::Unsupported);
-    EXPECT_TRUE(latin1.empty());
-    EXPECT_EQ(DecodeClipboardLatin1(AStringView("a\0b", 3u), utf8), ClipboardStatus::InvalidText);
-    EXPECT_TRUE(utf8.empty());
-}
-
-TEST(ClipboardText, Latin1ConversionAcceptsAliasedOutputAndSubviews){
-    NWB::Tests::TestArena arena;
-    AString<Alloc::GlobalArena> text(AStringView("\x80\xFF", 2u), arena.arena);
-    ASSERT_EQ(DecodeClipboardLatin1(AStringView(text), text), ClipboardStatus::Success);
-    EXPECT_EQ(text, "\xC2\x80\xC3\xBF");
-    ASSERT_EQ(EncodeClipboardLatin1(AStringView(text), text), ClipboardStatus::Success);
-    EXPECT_EQ(AStringView(text), AStringView("\x80\xFF", 2u));
-
-    text.assign("prefix\xC2\x80");
-    const AStringView suffix = AStringView(text).substr(6u);
-    ASSERT_EQ(EncodeClipboardLatin1(suffix, text), ClipboardStatus::Success);
-    EXPECT_EQ(AStringView(text), AStringView("\x80", 1u));
-}
-
-TEST(ClipboardText, Latin1ExpansionCannotExceedUtf8ByteLimit){
-    NWB::Tests::TestArena arena;
-    AString<Alloc::GlobalArena> input(s_ClipboardMaxTextBytes / 2u + 1u, static_cast<char>(0xFFu), arena.arena);
-    AString<Alloc::GlobalArena> output("stale bytes", arena.arena);
-    EXPECT_EQ(DecodeClipboardLatin1(input, output), ClipboardStatus::TooLarge);
-    EXPECT_TRUE(output.empty());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    ClipboardTextTestContext()
+        : accumulator(arena.arena)
+        , first(arena.arena)
+        , second(arena.arena)
+    {}
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/os/text_input_service.h>
-
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_text_input_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
 
 class FakeTextInputService final : public QueuedTextInputService{
 public:
@@ -919,7 +307,7 @@ protected:
 
 
 public:
-    AString<Alloc::GlobalArena> m_nativeSurrounding;
+    GlobalString m_nativeSurrounding;
     Function<void()> m_onStart;
     Function<void()> m_onCaret;
     Function<void()> m_onSurrounding;
@@ -931,386 +319,88 @@ public:
     b8 m_supported = true;
 };
 
+struct FakeTextInputContext{
+    NWB::Tests::TestArena<> arena;
+    FakeTextInputService service;
+    FakeTextInputService foreign;
+    TextInputEvent event;
+    GlobalString scratch;
+    GlobalString secondScratch;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    FakeTextInputContext()
+        : service(arena.arena)
+        , foreign(arena.arena)
+        , event(arena.arena)
+        , scratch(arena.arena)
+        , secondScratch(arena.arena)
+    {}
+};
 
+struct UnsupportedTextInputContext{
+    NWB::Tests::TestArena<> arena;
+    GlobalUniquePtr<ITextInputService> service;
+    b8 factorySucceeded = false;
 
-TEST(TextInput, BeginRequiresFocusCapabilityAndOnlyOneActiveSession){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    const auto unavailableBegin = service.begin({});
-    ASSERT_FALSE(unavailableBegin);
-    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
-    ASSERT_TRUE(service.setFocused(true));
-    service.m_supported = false;
-    const auto unsupportedBegin = service.begin({});
-    ASSERT_FALSE(unsupportedBegin);
-    EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
-    service.m_supported = true;
-    const auto first = service.begin({});
-    ASSERT_TRUE(first);
-    ASSERT_TRUE(first->valid());
-    EXPECT_EQ(service.activeSession(), *first);
-    const auto busyBegin = service.begin({});
-    ASSERT_FALSE(busyBegin);
-    EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
-    ASSERT_TRUE(service.end(*first));
-    EXPECT_FALSE(service.activeSession().valid());
+    UnsupportedTextInputContext(){
+        auto result = CreateTextInputService(arena.arena, nullptr);
+        if(result){
+            factorySucceeded = true;
+            service = Move(*result);
+        }
+    }
+
+    [[nodiscard]] b8 hasService()const noexcept{ return service.get() != nullptr; }
+    [[nodiscard]] TextInputCapabilities capabilities()const noexcept{ return service->capabilities(); }
+    [[nodiscard]] b8 setFocused(const b8 focused){ return service->setFocused(focused); }
+    [[nodiscard]] Expected<TextInputSessionToken, TextInputAdmission::Enum> beginEmpty(){ return service->begin({}); }
+};
+
+struct EncodedCodePointBuffer{
+    Array<char, s_Utf8MaxSequenceBytes> bytes = {};
+
+    [[nodiscard]] Expected<usize, TextInputAdmission::Enum> encode(const u32 codePoint)noexcept{
+        return EncodeTextInputCodePoint(codePoint, bytes);
+    }
+
+    [[nodiscard]] AStringView view(const usize length)const noexcept{
+        return AStringView(bytes.data(), length);
+    }
+};
+
+[[nodiscard]] NWB_INLINE TextInputSessionDesc MakeEmptySessionDesc()noexcept{
+    return TextInputSessionDesc{};
 }
 
-TEST(TextInput, InputsAndPolledEventsOwnCopiedUtf8Bytes){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    AString<Alloc::GlobalArena> surrounding("A\xED\x95\x9C\xF0\x9F\x98\x80", arena.arena);
-    const auto tokenAdmission = service.begin({ {}, surrounding, 1u, 4u });
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    ASSERT_TRUE(token.valid());
-    surrounding.assign("changed caller input");
-    EXPECT_EQ(service.surroundingText(), "A\xED\x95\x9C\xF0\x9F\x98\x80");
-    EXPECT_EQ(service.m_nativeSurrounding, service.surroundingText());
-    AString<Alloc::GlobalArena> input("\xED\x95\x9C\xF0\x9F\x98\x80", arena.arena);
-    ASSERT_EQ(service.emitCommit(token, input), TextInputAdmission::Accepted);
-    input.assign("changed event input");
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
-    EXPECT_EQ(event.token, token);
-    EXPECT_EQ(event.kind, TextInputEventKind::Commit);
-    ASSERT_EQ(service.emitCommit(token, "next"), TextInputAdmission::Accepted);
-    EXPECT_EQ(event.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
+[[nodiscard]] NWB_INLINE TextInputSessionDesc MakeSessionDesc(const AStringView surrounding, const usize anchorByte, const usize caretByte)noexcept{
+    return TextInputSessionDesc{ {}, surrounding, anchorByte, caretByte };
 }
 
-TEST(TextInput, EndRejectsLateEventsForeignTokensAndReusedGenerations){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    FakeTextInputService foreign(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    ASSERT_TRUE(foreign.setFocused(true));
-    const auto oldAdmission = service.begin({});
-    ASSERT_TRUE(oldAdmission);
-    const TextInputSessionToken old = *oldAdmission;
-    const auto otherAdmission = foreign.begin({});
-    ASSERT_TRUE(otherAdmission);
-    const TextInputSessionToken other = *otherAdmission;
-    ASSERT_EQ(service.emitCommit(old, "queued"), TextInputAdmission::Accepted);
-    ASSERT_TRUE(service.end(old));
-    const auto currentAdmission = service.begin({});
-    ASSERT_TRUE(currentAdmission);
-    const TextInputSessionToken current = *currentAdmission;
-    ASSERT_TRUE(current.valid());
-    EXPECT_NE(old.generation, current.generation);
-    EXPECT_NE(other.service, current.service);
-    TextInputEvent event(arena.arena);
-    EXPECT_EQ(service.poll(old, event), TextInputPollResult::InvalidSession);
-    EXPECT_EQ(service.poll(other, event), TextInputPollResult::InvalidSession);
-    EXPECT_EQ(service.emitCommit(old, "late"), TextInputAdmission::InvalidSession);
-    EXPECT_EQ(service.emitCommit(other, "foreign"), TextInputAdmission::InvalidSession);
-    EXPECT_FALSE(service.end(old));
-    EXPECT_EQ(service.poll(current, event), TextInputPollResult::Pending);
+[[nodiscard]] NWB_INLINE TextInputRect MakeTextInputRect(const i32 x, const i32 y, const i32 width, const i32 height)noexcept{
+    return TextInputRect{ x, y, width, height };
 }
 
-TEST(TextInput, FocusLossReplacesQueuedWorkWithOneTerminalCancellation){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    ASSERT_EQ(service.emitCommit(token, "unconsumed"), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
-    ASSERT_TRUE(service.setFocused(false));
-    EXPECT_FALSE(service.activeSession().valid());
-    EXPECT_EQ(service.m_endCount, 1u);
-    EXPECT_EQ(service.emitCommit(token, "stale"), TextInputAdmission::InvalidSession);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-    EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
-    EXPECT_TRUE(event.text.empty());
-    EXPECT_EQ(service.poll(token, event), TextInputPollResult::InvalidSession);
-    const auto unavailableBegin = service.begin({});
-    ASSERT_FALSE(unavailableBegin);
-    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto resumed = service.begin({});
-    ASSERT_TRUE(resumed);
-    EXPECT_TRUE(resumed->valid());
+[[nodiscard]] NWB_INLINE TextInputDeletionBasis::Enum MakeInvalidDeletionBasis()noexcept{
+    return static_cast<TextInputDeletionBasis::Enum>(255u);
 }
 
-TEST(TextInput, NewSessionInvalidatesUnpolledCancellation){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto oldAdmission = service.begin({});
-    ASSERT_TRUE(oldAdmission);
-    const TextInputSessionToken old = *oldAdmission;
-    ASSERT_TRUE(service.cancelSession(old, TextInputCancelReason::NativeCancelled));
-    const auto currentAdmission = service.begin({});
-    ASSERT_TRUE(currentAdmission);
-    const TextInputSessionToken current = *currentAdmission;
-    TextInputEvent event(arena.arena);
-    EXPECT_EQ(service.poll(old, event), TextInputPollResult::InvalidSession);
-    EXPECT_EQ(service.poll(current, event), TextInputPollResult::Pending);
+[[nodiscard]] NWB_INLINE TextInputChangeCause::Enum MakeInvalidChangeCause()noexcept{
+    return static_cast<TextInputChangeCause::Enum>(255u);
 }
 
-TEST(TextInput, ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({ {}, "abc", 1u, 1u });
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    const u64 revision = service.surroundingRevision(token);
-    ASSERT_EQ(service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitPreedit(token, "final draft", 11u, 11u, false), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitCommit(token, "committed"), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitPreedit(token, "new", 3u, 3u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitDeleteSurrounding(token, 1u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitPreedit(token, "last", 4u, 4u), TextInputAdmission::Accepted);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.text, "final draft");
-    EXPECT_FALSE(event.caretVisible);
-    u64 lastSequence = event.sequence;
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.kind, TextInputEventKind::Commit);
-    EXPECT_EQ(event.text, "committed");
-    EXPECT_GT(event.sequence, lastSequence);
-    lastSequence = event.sequence;
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.text, "new");
-    EXPECT_GT(event.sequence, lastSequence);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.kind, TextInputEventKind::DeleteSurrounding);
-    EXPECT_EQ(event.deleteBeforeBytes, 1u);
-    EXPECT_EQ(event.deleteAfterBytes, 1u);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.text, "last");
-    EXPECT_EQ(service.poll(token, event), TextInputPollResult::Pending);
+NWB_INLINE void FillGlobalString(GlobalString& target, const usize count, const u8 byteValue){
+    target.assign(count, static_cast<char>(byteValue));
 }
 
-TEST(TextInput, QueueOverflowCancelsInsteadOfApplyingPartialCommittedText){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    for(usize index = 0u; index < s_TextInputMaxEvents; ++index)
-        ASSERT_EQ(service.emitCommit(token, "x"), TextInputAdmission::Accepted);
-    EXPECT_EQ(service.emitCommit(token, "overflow"), TextInputAdmission::QueueFull);
-    EXPECT_FALSE(service.activeSession().valid());
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-    EXPECT_EQ(event.cancelReason, TextInputCancelReason::Overflow);
-    EXPECT_EQ(service.poll(token, event), TextInputPollResult::InvalidSession);
+NWB_INLINE void AssignGlobalString(GlobalString& target, const AStringView value){
+    target.assign(value.data(), value.size());
 }
 
-TEST(TextInput, QueuedByteBudgetCancelsEvenBelowEventCountLimit){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    AString<Alloc::GlobalArena> text(arena.arena);
-    text.assign(s_TextInputMaxEventTextBytes, 'x');
-    for(usize index = 0u; index < s_TextInputMaxQueuedTextBytes / text.size(); ++index)
-        ASSERT_EQ(service.emitCommit(token, text), TextInputAdmission::Accepted);
-    EXPECT_EQ(service.emitCommit(token, "x"), TextInputAdmission::QueueFull);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.cancelReason, TextInputCancelReason::Overflow);
+NWB_INLINE void AppendByteGlobalString(GlobalString& target, const u8 byteValue){
+    target.push_back(static_cast<char>(byteValue));
 }
 
-TEST(TextInput, InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndRevision){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({ {}, "A\xED\x95\x9C" "B", 4u, 4u });
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    ASSERT_TRUE(token.valid());
-    EXPECT_EQ(service.updateSurrounding(token, "bad\xF0\x9F", 0u, 0u), TextInputAdmission::InvalidText);
-    EXPECT_EQ(service.updateSurrounding(token, "\xED\x95\x9C", 1u, 3u), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.surroundingText(), "A\xED\x95\x9C" "B");
-    EXPECT_EQ(service.surroundingCaretByte(), 4u);
-    EXPECT_EQ(service.surroundingRevision(token), 1u);
-    const u64 revision = service.surroundingRevision(token);
-    EXPECT_EQ(service.updateCaret(token, { 0, 0, 0, 1 }), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.caretRect().width, 1);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 1u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 5u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 2u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
-    ASSERT_EQ(service.emitDeleteSurrounding(token, 3u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.surroundingRevision, 1u);
-    ASSERT_EQ(service.updateSurrounding(token, "updated", 0u, 0u), TextInputAdmission::Accepted);
-    EXPECT_EQ(service.surroundingRevision(token), 2u);
-    const u64 currentRevision = service.surroundingRevision(token);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 1u, currentRevision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
-}
-
-TEST(TextInput, MalformedNativeTextAndPreeditSelectionsCannotEnterQueue){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    EXPECT_EQ(service.emitCommit(token, AStringView("a\0b", 3u)), TextInputAdmission::InvalidText);
-    EXPECT_EQ(service.emitPreedit(token, "\xED\x95\x9C", 1u, 3u), TextInputAdmission::InvalidRange);
-    AString<Alloc::GlobalArena> large(arena.arena);
-    large.assign(s_TextInputMaxEventTextBytes + 1u, 'x');
-    EXPECT_EQ(service.emitCommit(token, large), TextInputAdmission::TooLarge);
-    EXPECT_EQ(service.activeSession(), token);
-    TextInputEvent event(arena.arena);
-    EXPECT_EQ(service.poll(token, event), TextInputPollResult::Pending);
-}
-
-TEST(TextInput, CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    service.m_onEnd = [&](const TextInputSessionToken ended){
-        EXPECT_EQ(ended, token);
-        EXPECT_EQ(service.emitCommit(ended, "reentrant late"), TextInputAdmission::InvalidSession);
-        const auto busyBegin = service.begin({});
-        ASSERT_FALSE(busyBegin);
-        EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
-        EXPECT_FALSE(service.end(ended));
-    };
-    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeCancelled)));
-    EXPECT_EQ(service.m_endCount, 1u);
-    service.m_onEnd = {};
-    const auto resumed = service.begin({});
-    ASSERT_TRUE(resumed);
-    ASSERT_TRUE(resumed->valid());
-}
-
-TEST(TextInput, NativeStartFailureRetiresTokenAndAnyEarlyEvent){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    TextInputSessionToken failed;
-    service.m_onStart = [&](){
-        failed = service.activeSession();
-        EXPECT_EQ(service.emitCommit(failed, "early event"), TextInputAdmission::Accepted);
-    };
-    service.m_startAdmission = TextInputAdmission::NativeFailure;
-    const auto nativeFailureBegin = service.begin({});
-    ASSERT_FALSE(nativeFailureBegin);
-    EXPECT_EQ(nativeFailureBegin.error(), TextInputAdmission::NativeFailure);
-    EXPECT_FALSE(service.activeSession().valid());
-    TextInputEvent event(arena.arena);
-    EXPECT_EQ(service.poll(failed, event), TextInputPollResult::InvalidSession);
-    EXPECT_EQ(service.m_endCount, 1u);
-}
-
-TEST(TextInput, WrongThreadCannotMutateOrPollOwnerSession){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    Thread worker([&](){
-        TextInputEvent event(arena.arena);
-        EXPECT_FALSE(service.isOwnerThread());
-        EXPECT_FALSE(service.activeSession().valid());
-        EXPECT_EQ(service.surroundingRevision(token), 0u);
-        const auto wrongThreadBegin = service.begin({});
-        ASSERT_FALSE(wrongThreadBegin);
-        EXPECT_EQ(wrongThreadBegin.error(), TextInputAdmission::WrongThread);
-        EXPECT_EQ(service.emitCommit(token, "wrong thread"), TextInputAdmission::WrongThread);
-        EXPECT_EQ(service.poll(token, event), TextInputPollResult::WrongThread);
-        EXPECT_EQ(service.updateCaret(token, {}), TextInputAdmission::WrongThread);
-        EXPECT_EQ(service.updateSurrounding(token, {}, 0u, 0u), TextInputAdmission::WrongThread);
-        EXPECT_FALSE(service.setFocused(false));
-        EXPECT_FALSE(service.end(token));
-    });
-    worker.join();
-    ASSERT_FALSE(::testing::Test::HasFatalFailure());
-    EXPECT_EQ(service.activeSession(), token);
-    TextInputEvent event(arena.arena);
-    EXPECT_EQ(service.poll(token, event), TextInputPollResult::Pending);
-}
-
-TEST(TextInput, NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput){
-    NWB::Tests::TestArena arena;
-    auto serviceResult = CreateTextInputService(arena.arena, nullptr);
-    ASSERT_TRUE(serviceResult);
-    const GlobalUniquePtr<ITextInputService> service = Move(*serviceResult);
-    ASSERT_NE(service.get(), nullptr);
-    EXPECT_FALSE(service->capabilities().commit);
-    EXPECT_FALSE(service->capabilities().preedit);
-    EXPECT_FALSE(service->capabilities().surrounding);
-    EXPECT_FALSE(service->capabilities().deleteSurrounding);
-    ASSERT_TRUE(service->setFocused(true));
-    const auto unsupportedBegin = service->begin({});
-    ASSERT_FALSE(unsupportedBegin);
-    EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
-}
-
-TEST(TextInput, ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    service.m_onCaret = [&](){
-        EXPECT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeFailure));
-    };
-    EXPECT_EQ(service.updateCaret(token, { 20, 30, 2, 18 }), TextInputAdmission::NativeFailure);
-    EXPECT_FALSE(service.activeSession().valid());
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-    EXPECT_EQ(event.cancelReason, TextInputCancelReason::NativeFailure);
-}
-
-TEST(TextInput, ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    service.m_onSurrounding = [&](){
-        EXPECT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeFailure));
-    };
-    EXPECT_EQ(service.updateSurrounding(token, "replacement", 2u, 4u), TextInputAdmission::NativeFailure);
-    EXPECT_FALSE(service.activeSession().valid());
-    EXPECT_EQ(service.surroundingRevision(token), 0u);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-    EXPECT_EQ(event.cancelReason, TextInputCancelReason::NativeFailure);
-}
-
-
-TEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState){
-    NWB::Tests::TestArena arena;
-    FakeTextInputService service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto tokenAdmission = service.begin({});
-    ASSERT_TRUE(tokenAdmission);
-    const TextInputSessionToken token = *tokenAdmission;
-    ASSERT_EQ(service.updateSurrounding(token, "local change", 0u, 12u), TextInputAdmission::Accepted);
-    const u64 revision = service.surroundingRevision(token);
-    EXPECT_EQ(service.updateSurrounding(token, "invalid", 0u, 0u, static_cast<TextInputChangeCause::Enum>(255u)), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.surroundingText(), "local change");
-    EXPECT_EQ(service.surroundingRevision(token), revision);
-    EXPECT_EQ(service.m_nativeCause, TextInputChangeCause::Other);
+[[nodiscard]] NWB_INLINE AStringView ViewGlobalString(const GlobalString& source)noexcept{
+    return AStringView(source);
 }
 
 
@@ -1319,72 +409,1057 @@ TEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState
 
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/os/text_input_text.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_text_input_text_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+namespace NWB::Tests::OS{
 using namespace NWB::Core;
 
+using ClipboardAdmissionEnum = NWB::Core::ClipboardAdmission::Enum;
+using ClipboardChannelEnum = NWB::Core::ClipboardChannel::Enum;
+using ClipboardOperationEnum = NWB::Core::ClipboardOperation::Enum;
+using ClipboardPollResultEnum = NWB::Core::ClipboardPollResult::Enum;
+using ClipboardStatusEnum = NWB::Core::ClipboardStatus::Enum;
+
+using TextInputAdmissionEnum = NWB::Core::TextInputAdmission::Enum;
+using TextInputCancelReasonEnum = NWB::Core::TextInputCancelReason::Enum;
+using TextInputChangeCauseEnum = NWB::Core::TextInputChangeCause::Enum;
+using TextInputDeletionBasisEnum = NWB::Core::TextInputDeletionBasis::Enum;
+using TextInputEventKindEnum = NWB::Core::TextInputEventKind::Enum;
+using TextInputPollResultEnum = NWB::Core::TextInputPollResult::Enum;
+
+using __hidden_os_suite_support::GlobalString;
+using __hidden_os_suite_support::SelectionTextInput;
+using __hidden_os_suite_support::SelectionTextInputContext;
+using __hidden_os_suite_support::StandaloneTextInputEvent;
+using __hidden_os_suite_support::FakeClipboardService;
+using __hidden_os_suite_support::FakeClipboardContext;
+using __hidden_os_suite_support::StandaloneClipboardCompletion;
+using __hidden_os_suite_support::UnsupportedClipboardContext;
+using __hidden_os_suite_support::DelayedClipboardService;
+using __hidden_os_suite_support::DelayedClipboardContext;
+using __hidden_os_suite_support::ClipboardTextTestContext;
+using __hidden_os_suite_support::FakeTextInputService;
+using __hidden_os_suite_support::FakeTextInputContext;
+using __hidden_os_suite_support::UnsupportedTextInputContext;
+using __hidden_os_suite_support::EncodedCodePointBuffer;
+using __hidden_os_suite_support::MakeEmptySessionDesc;
+using __hidden_os_suite_support::MakeSessionDesc;
+using __hidden_os_suite_support::MakeTextInputRect;
+using __hidden_os_suite_support::MakeInvalidDeletionBasis;
+using __hidden_os_suite_support::MakeInvalidChangeCause;
+using __hidden_os_suite_support::FillGlobalString;
+using __hidden_os_suite_support::AssignGlobalString;
+using __hidden_os_suite_support::AppendByteGlobalString;
+using __hidden_os_suite_support::ViewGlobalString;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul){
-    EXPECT_EQ(ValidateTextInputUtf8({}, 100u), TextInputAdmission::Accepted);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits(){
+    SelectionTextInputContext ctx = SelectionTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = ctx.service.begin(MakeSessionDesc("abcDEFghi", 6u, 3u));
+    ASSERT_TRUE(begun.has_value());
+    const TextInputSessionToken token = begun.value();
+    const u64 revision = ctx.service.surroundingRevision(token);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 4u, 0u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 4u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
+    ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 3u, 3u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.deleteBeforeBytes, 3u);
+    EXPECT_EQ(ctx.event.deleteAfterBytes, 3u);
+    EXPECT_EQ(ctx.event.deletionBasis, TextInputDeletionBasis::Selection);
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInputSelection_UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent(){
+    SelectionTextInputContext ctx = SelectionTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = ctx.service.begin(MakeSessionDesc("abcDEFghi", 3u, 6u));
+    ASSERT_TRUE(begun.has_value());
+    const TextInputSessionToken token = begun.value();
+    const u64 revision = ctx.service.surroundingRevision(token);
+    ASSERT_EQ(ctx.service.updateSurrounding(token, "abcDEFghi", 3u, 6u), TextInputAdmission::Accepted);
+    const u64 currentRevision = ctx.service.surroundingRevision(token);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 2u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 2u, 1u, 0u, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 0u, currentRevision, MakeInvalidDeletionBasis()), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+    EXPECT_EQ(ctx.service.activeSession(), token);
+    ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 2u, 1u, currentRevision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.surroundingRevision, currentRevision);
+    EXPECT_EQ(ctx.event.deletionBasis, TextInputDeletionBasis::Selection);
+    EXPECT_EQ(ctx.event.deleteBeforeBytes, 2u);
+    EXPECT_EQ(ctx.event.deleteAfterBytes, 1u);
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInputSelection_OuterUtf8EndpointsMustRemainScalarBoundaries(){
+    SelectionTextInputContext ctx = SelectionTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = ctx.service.begin(MakeSessionDesc("a\xED\x95\x9C\x44\x45\x46\xEA\xB8\x80z", 4u, 7u));
+    ASSERT_TRUE(begun.has_value());
+    const TextInputSessionToken token = begun.value();
+    const u64 revision = ctx.service.surroundingRevision(token);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 1u, 0u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::InvalidRange);
+    ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 3u, 3u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.deleteBeforeBytes, 3u);
+    EXPECT_EQ(ctx.event.deleteAfterBytes, 3u);
+}
+
+void VerifyTextInputSelection_PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutput(){
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    TextInputSessionToken token = TextInputSessionToken();
+    {
+        SelectionTextInputContext ctx = SelectionTextInputContext();
+        ASSERT_TRUE(ctx.service.setFocused(true));
+        const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = ctx.service.begin(MakeSessionDesc("abcDEFghi", 3u, 6u));
+        ASSERT_TRUE(begun.has_value());
+        token = begun.value();
+        const u64 revision = ctx.service.surroundingRevision(token);
+        ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 2u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
+        ASSERT_EQ(ctx.service.poll(token, out.event), TextInputPollResult::Event);
+        EXPECT_EQ(out.event.deletionBasis, TextInputDeletionBasis::Selection);
+        ASSERT_EQ(ctx.service.emitCommit(token, "X"), TextInputAdmission::Accepted);
+        ASSERT_EQ(ctx.service.poll(token, out.event), TextInputPollResult::Event);
+        EXPECT_EQ(out.event.deletionBasis, TextInputDeletionBasis::Caret);
+        ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 0u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
+        ASSERT_EQ(ctx.service.poll(token, out.event), TextInputPollResult::Event);
+        ASSERT_TRUE(ctx.service.end(token));
+    }
+    EXPECT_EQ(out.event.token, token);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::DeleteSurrounding);
+    EXPECT_EQ(out.event.deletionBasis, TextInputDeletionBasis::Selection);
+    EXPECT_EQ(out.event.deleteBeforeBytes, 0u);
+    EXPECT_EQ(out.event.deleteAfterBytes, 0u);
+}
+
+void VerifyTextInputSelection_DeletionPreservesThePreeditCommitOrderingBarrier(){
+    SelectionTextInputContext ctx = SelectionTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = ctx.service.begin(MakeSessionDesc("abcDEFghi", 3u, 6u));
+    ASSERT_TRUE(begun.has_value());
+    const TextInputSessionToken token = begun.value();
+    const u64 revision = ctx.service.surroundingRevision(token);
+    ASSERT_EQ(ctx.service.emitPreedit(token, StringView(), 0u, 0u), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 2u, 1u, revision, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitCommit(token, "X"), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitPreedit(token, "next", 0u, 4u), TextInputAdmission::Accepted);
+
+    FixedVector<TextInputEventKindEnum, 4> kinds = FixedVector<TextInputEventKindEnum, 4>();
+    kinds.push_back(TextInputEventKind::Preedit);
+    kinds.push_back(TextInputEventKind::DeleteSurrounding);
+    kinds.push_back(TextInputEventKind::Commit);
+    kinds.push_back(TextInputEventKind::Preedit);
+
+    u64 previousSequence = 0u;
+    for(in TextInputEventKindEnum kind : kinds){
+        ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+        EXPECT_EQ(ctx.event.kind, kind);
+        EXPECT_GT(ctx.event.sequence, previousSequence);
+        TextInputDeletionBasisEnum expectedBasis = TextInputDeletionBasis::Caret;
+        if(kind == TextInputEventKind::DeleteSurrounding){
+            expectedBasis = TextInputDeletionBasis::Selection;
+        }
+        EXPECT_EQ(ctx.event.deletionBasis, expectedBasis);
+        previousSequence = ctx.event.sequence;
+    }
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyClipboard_RequestsCopyTextAndPublishOnlyWhenPumped(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    AssignGlobalString(ctx.scratch, "Hello \xED\x95\x9C\xEA\xB8\x80 \xF0\x9F\x98\x80");
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> write = ctx.service.requestWriteText(ClipboardChannel::Clipboard, ViewGlobalString(ctx.scratch));
+    ASSERT_TRUE(write.has_value());
+    AssignGlobalString(ctx.scratch, "changed");
+    EXPECT_EQ(ctx.service.poll(write.value(), ctx.completion), ClipboardPollResult::Pending);
+    EXPECT_EQ(ctx.service.m_writeCount, 0u);
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> read = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(read.has_value());
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.poll(write.value(), ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(ctx.service.poll(read.value(), ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "Hello \xED\x95\x9C\xEA\xB8\x80 \xF0\x9F\x98\x80");
+    EXPECT_EQ(ctx.completion.token, read.value());
+    EXPECT_EQ(ctx.service.poll(read.value(), ctx.completion), ClipboardPollResult::InvalidRequest);
+}
+
+void VerifyClipboard_CancelPreventsPendingWritesAndRejectsReusedGenerations(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> canceledAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "discard");
+    ASSERT_TRUE(canceledAdmission.has_value());
+    const ClipboardRequestToken canceled = canceledAdmission.value();
+    ASSERT_TRUE(ctx.service.cancel(canceled));
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> currentAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "keep");
+    ASSERT_TRUE(currentAdmission.has_value());
+    const ClipboardRequestToken current = currentAdmission.value();
+    EXPECT_NE(canceled.generation, current.generation);
+    EXPECT_EQ(ctx.service.poll(canceled, ctx.completion), ClipboardPollResult::InvalidRequest);
+    EXPECT_FALSE(ctx.service.cancel(canceled));
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_writeCount, 1u);
+    EXPECT_EQ(ctx.service.m_text, "keep");
+    ASSERT_TRUE(ctx.service.cancel(current));
+    EXPECT_EQ(ctx.service.poll(current, ctx.completion), ClipboardPollResult::InvalidRequest);
+    EXPECT_EQ(ctx.service.m_text, "keep");
+}
+
+void VerifyClipboard_ReusedSlotsKeepRequestOrdering(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> firstAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(firstAdmission.has_value());
+    const ClipboardRequestToken first = firstAdmission.value();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> secondAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "second");
+    ASSERT_TRUE(secondAdmission.has_value());
+    const ClipboardRequestToken second = secondAdmission.value();
+    ASSERT_TRUE(ctx.service.cancel(first));
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> thirdAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(thirdAdmission.has_value());
+    const ClipboardRequestToken third = thirdAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.poll(second, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.service.poll(third, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "second");
+}
+
+void VerifyClipboard_TokensCannotCrossServicesOrSurviveServiceRecreation(){
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    ClipboardRequestToken old = ClipboardRequestToken();
+    {
+        FakeClipboardContext previous = FakeClipboardContext();
+        const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> oldAdmission = previous.service.requestReadText(ClipboardChannel::Clipboard);
+        ASSERT_TRUE(oldAdmission.has_value());
+        old = oldAdmission.value();
+    }
+    FakeClipboardContext currentCtx = FakeClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> currentAdmission = currentCtx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(currentAdmission.has_value());
+    const ClipboardRequestToken current = currentAdmission.value();
+    EXPECT_NE(old.service, current.service);
+    EXPECT_EQ(currentCtx.service.poll(old, out.completion), ClipboardPollResult::InvalidRequest);
+    EXPECT_FALSE(currentCtx.service.cancel(old));
+    EXPECT_EQ(currentCtx.service.poll(ClipboardRequestToken(), out.completion), ClipboardPollResult::InvalidRequest);
+}
+
+void VerifyClipboard_CanceledNativeCompletionCannotReachNewRequest(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> oldAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(oldAdmission.has_value());
+    const ClipboardRequestToken old = oldAdmission.value();
+    ClipboardRequestToken current = ClipboardRequestToken();
+    native(mut ctx, in old, mut current){
+        ctx.service.m_onRead = [&]() {
+            EXPECT_TRUE(ctx.service.cancel(old));
+            const auto currentAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+            ASSERT_TRUE(currentAdmission);
+            current = *currentAdmission;
+            EXPECT_FALSE(ctx.service.pump());
+        };
+        ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(ctx.service.pump()));
+        ctx.service.m_onRead = {};
+    }
+    EXPECT_EQ(ctx.service.poll(old, ctx.completion), ClipboardPollResult::InvalidRequest);
+    EXPECT_EQ(ctx.service.poll(current, ctx.completion), ClipboardPollResult::Pending);
+    AssignGlobalString(ctx.service.m_text, "new completion");
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.poll(current, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "new completion");
+}
+
+void VerifyClipboard_UnsupportedChannelsAndUnavailableReadsStayExplicit(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    EXPECT_FALSE(ctx.service.capabilities(ClipboardChannel::PrimarySelection).readText);
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> primaryAdmission = ctx.service.requestReadText(ClipboardChannel::PrimarySelection);
+    ASSERT_TRUE(primaryAdmission.has_value());
+    const ClipboardRequestToken primary = primaryAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.poll(primary, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::Unsupported);
+    EXPECT_EQ(ctx.service.m_readCount, 0u);
+    ctx.service.m_readStatus = ClipboardStatus::Unavailable;
+    AssignGlobalString(ctx.service.m_text, "must not escape failed read");
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> unavailableAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(unavailableAdmission.has_value());
+    const ClipboardRequestToken unavailable = unavailableAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.poll(unavailable, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::Unavailable);
+    EXPECT_TRUE(ctx.completion.text.empty());
+}
+
+void VerifyClipboard_UnsupportedFactoryDoesNotAccessNativeClipboard(){
+    UnsupportedClipboardContext ctx = UnsupportedClipboardContext();
+    ASSERT_TRUE(ctx.factorySucceeded);
+    ASSERT_TRUE(ctx.hasService());
+    EXPECT_FALSE(ctx.capabilities(ClipboardChannel::Clipboard).readText);
+    EXPECT_FALSE(ctx.capabilities(ClipboardChannel::Clipboard).writeText);
+    EXPECT_FALSE(ctx.capabilities(ClipboardChannel::PrimarySelection).readText);
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = ctx.requestWriteText(ClipboardChannel::Clipboard, "unused");
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const ClipboardRequestToken token = tokenAdmission.value();
+    ASSERT_TRUE(ctx.pump());
+    EXPECT_EQ(ctx.poll(token), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::Unsupported);
+}
+
+void VerifyClipboard_AdmissionBoundsOutstandingRequestsAndText(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    Vector<ClipboardRequestToken> tokens = Vector<ClipboardRequestToken>();
+    for(usize index = 0u; index < s_ClipboardMaxOutstandingRequests; ++index){
+        const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> request = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+        ASSERT_TRUE(request.has_value());
+        tokens.push_back(request.value());
+    }
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> queueFullRead = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_FALSE(queueFullRead.has_value());
+    EXPECT_EQ(queueFullRead.error(), ClipboardAdmission::QueueFull);
+    for(in ClipboardRequestToken token : tokens){
+        ASSERT_TRUE(ctx.service.cancel(token));
+    }
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> invalidAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, StringView("a\0b", 3u));
+    ASSERT_TRUE(invalidAdmission.has_value());
+    const ClipboardRequestToken invalid = invalidAdmission.value();
+    EXPECT_EQ(ctx.service.poll(invalid, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::InvalidText);
+    FillGlobalString(ctx.scratch, s_ClipboardMaxTextBytes + 1u, 0x78u);
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> largeAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, ViewGlobalString(ctx.scratch));
+    ASSERT_TRUE(largeAdmission.has_value());
+    const ClipboardRequestToken large = largeAdmission.value();
+    EXPECT_EQ(ctx.service.poll(large, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::TooLarge);
+    EXPECT_EQ(ctx.service.m_writeCount, 0u);
+}
+
+void VerifyClipboard_WrongThreadCallsNeverTouchRequestStorage(){
+    FakeClipboardContext ctx = FakeClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const ClipboardRequestToken token = tokenAdmission.value();
+    native(mut ctx, in token){
+        Thread worker([&]() {
+            EXPECT_FALSE(ctx.service.isOwnerThread());
+            const auto wrongThreadRead = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+            ASSERT_FALSE(wrongThreadRead);
+            EXPECT_EQ(wrongThreadRead.error(), ClipboardAdmission::WrongThread);
+            const auto wrongThreadWrite = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "ignored");
+            ASSERT_FALSE(wrongThreadWrite);
+            EXPECT_EQ(wrongThreadWrite.error(), ClipboardAdmission::WrongThread);
+            EXPECT_EQ(ctx.service.poll(token, ctx.completion), ClipboardPollResult::WrongThread);
+            EXPECT_FALSE(ctx.service.cancel(token));
+            EXPECT_FALSE(ctx.service.pump());
+        });
+        worker.join();
+        ASSERT_FALSE(::testing::Test::HasFatalFailure());
+    }
+    EXPECT_EQ(ctx.service.poll(token, ctx.completion), ClipboardPollResult::Pending);
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.poll(token, ctx.completion), ClipboardPollResult::Completed);
+}
+
+void VerifyClipboard_ConsumedCompletionOutlivesServiceAndItsArena(){
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    {
+        FakeClipboardContext ctx = FakeClipboardContext();
+        AssignGlobalString(ctx.service.m_text, "owned result");
+        const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+        ASSERT_TRUE(tokenAdmission.has_value());
+        const ClipboardRequestToken token = tokenAdmission.value();
+        ASSERT_TRUE(ctx.service.pump());
+        EXPECT_EQ(ctx.service.poll(token, out.completion), ClipboardPollResult::Completed);
+    }
+    EXPECT_EQ(out.completion.text, "owned result");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyClipboardAsync_PendingNativeRequestPreservesFifoAndCopiedWriteInput(){
+    DelayedClipboardContext ctx = DelayedClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> firstAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(firstAdmission.has_value());
+    const ClipboardRequestToken first = firstAdmission.value();
+    AssignGlobalString(ctx.scratch, "copied write");
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> secondAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, ViewGlobalString(ctx.scratch));
+    ASSERT_TRUE(secondAdmission.has_value());
+    const ClipboardRequestToken second = secondAdmission.value();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> thirdAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(thirdAdmission.has_value());
+    const ClipboardRequestToken third = thirdAdmission.value();
+    AssignGlobalString(ctx.scratch, "changed caller input");
+
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_nativeToken, first);
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_startCount, 1u);
+    EXPECT_EQ(ctx.service.poll(second, ctx.completion), ClipboardPollResult::Pending);
+    ASSERT_TRUE(ctx.service.deliver(first, ClipboardStatus::Success, "first result"));
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_nativeToken, second);
+    EXPECT_EQ(ctx.service.m_nativeOperation, ClipboardOperation::WriteText);
+    EXPECT_EQ(ctx.service.m_startedText, "copied write");
+    ASSERT_TRUE(ctx.service.deliver(second, ClipboardStatus::Success));
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_nativeToken, third);
+    EXPECT_EQ(ctx.service.m_startCount, 3u);
+    ASSERT_TRUE(ctx.service.deliver(third, ClipboardStatus::Success, "third result"));
+
+    ASSERT_EQ(ctx.service.poll(first, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "first result");
+    ASSERT_EQ(ctx.service.poll(second, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.operation, ClipboardOperation::WriteText);
+    EXPECT_TRUE(ctx.completion.text.empty());
+    ASSERT_EQ(ctx.service.poll(third, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "third result");
+}
+
+void VerifyClipboardAsync_CancellationReleasesFifoAndLateNativeRepliesCannotCompleteReplacement(){
+    DelayedClipboardContext ctx = DelayedClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> oldAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(oldAdmission.has_value());
+    const ClipboardRequestToken old = oldAdmission.value();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> nextAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "next");
+    ASSERT_TRUE(nextAdmission.has_value());
+    const ClipboardRequestToken next = nextAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    ASSERT_TRUE(ctx.service.cancel(old));
+    EXPECT_EQ(ctx.service.m_cancelCount, 1u);
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> replacementAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(replacementAdmission.has_value());
+    const ClipboardRequestToken replacement = replacementAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_nativeToken, next);
+    EXPECT_FALSE(ctx.service.deliver(old, ClipboardStatus::Success, "stale bytes"));
+    EXPECT_EQ(ctx.service.poll(old, ctx.completion), ClipboardPollResult::InvalidRequest);
+    ASSERT_TRUE(ctx.service.deliver(next, ClipboardStatus::Success));
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_nativeToken, replacement);
+    EXPECT_FALSE(ctx.service.deliver(old, ClipboardStatus::Success, "stale bytes"));
+    EXPECT_EQ(ctx.service.poll(replacement, ctx.completion), ClipboardPollResult::Pending);
+    ASSERT_TRUE(ctx.service.deliver(replacement, ClipboardStatus::Success, "replacement bytes"));
+    ASSERT_EQ(ctx.service.poll(replacement, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "replacement bytes");
+}
+
+void VerifyClipboardAsync_CancellationInvalidatesTokenBeforeReentrantNativeCleanup(){
+    DelayedClipboardContext ctx = DelayedClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> oldAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(oldAdmission.has_value());
+    const ClipboardRequestToken old = oldAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    ClipboardRequestToken replacement = ClipboardRequestToken();
+    b8 observedCancellation = false;
+    native(mut ctx, in old, mut replacement, mut observedCancellation){
+        ctx.service.m_onCancel = [&]() {
+            if(observedCancellation)
+                return;
+            observedCancellation = true;
+            EXPECT_FALSE(ctx.service.cancel(old));
+            EXPECT_EQ(ctx.service.poll(old, ctx.completion), ClipboardPollResult::InvalidRequest);
+            EXPECT_FALSE(ctx.service.deliver(old, ClipboardStatus::Success, "late during cancellation"));
+            const auto replacementAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+            ASSERT_TRUE(replacementAdmission);
+            replacement = *replacementAdmission;
+        };
+        ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(ctx.service.cancel(old)));
+        ctx.service.m_onCancel = {};
+    }
+    EXPECT_TRUE(observedCancellation);
+    EXPECT_EQ(ctx.service.m_cancelCount, 1u);
+    ASSERT_TRUE(replacement.valid());
+    EXPECT_EQ(ctx.service.poll(replacement, ctx.completion), ClipboardPollResult::Pending);
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_nativeToken, replacement);
+    ASSERT_TRUE(ctx.service.deliver(replacement, ClipboardStatus::Success, "survives cleanup"));
+    ASSERT_EQ(ctx.service.poll(replacement, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.text, "survives cleanup");
+}
+
+void VerifyClipboardAsync_ReentrantStartCancellationDefersNewGenerationToNextPump(){
+    DelayedClipboardContext ctx = DelayedClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> oldAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "old input");
+    ASSERT_TRUE(oldAdmission.has_value());
+    const ClipboardRequestToken old = oldAdmission.value();
+    ClipboardRequestToken replacement = ClipboardRequestToken();
+    native(mut ctx, in old, mut replacement){
+        ctx.service.m_onStart = [&]() {
+            if(ctx.service.m_nativeToken != old)
+                return;
+            ASSERT_TRUE(ctx.service.cancel(old));
+            const auto replacementAdmission = ctx.service.requestWriteText(ClipboardChannel::Clipboard, "new input");
+            ASSERT_TRUE(replacementAdmission);
+            replacement = *replacementAdmission;
+            EXPECT_FALSE(ctx.service.deliver(old, ClipboardStatus::Success));
+            EXPECT_FALSE(ctx.service.pump());
+        };
+        ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(ctx.service.pump()));
+        ctx.service.m_onStart = {};
+    }
+    EXPECT_EQ(ctx.service.m_startCount, 1u);
+    EXPECT_EQ(ctx.service.poll(old, ctx.completion), ClipboardPollResult::InvalidRequest);
+    EXPECT_EQ(ctx.service.poll(replacement, ctx.completion), ClipboardPollResult::Pending);
+    ASSERT_TRUE(ctx.service.pump());
+    EXPECT_EQ(ctx.service.m_startCount, 2u);
+    EXPECT_EQ(ctx.service.m_nativeToken, replacement);
+    EXPECT_EQ(ctx.service.m_startedText, "new input");
+    ASSERT_TRUE(ctx.service.deliver(replacement, ClipboardStatus::Success));
+}
+
+void VerifyClipboardAsync_DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes(){
+    DelayedClipboardContext ctx = DelayedClipboardContext();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> invalidAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(invalidAdmission.has_value());
+    const ClipboardRequestToken invalid = invalidAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    ASSERT_TRUE(ctx.service.deliver(invalid, ClipboardStatus::Success, "\xF0\x9F"));
+    ASSERT_EQ(ctx.service.poll(invalid, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::InvalidText);
+    EXPECT_TRUE(ctx.completion.text.empty());
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> validAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(validAdmission.has_value());
+    const ClipboardRequestToken valid = validAdmission.value();
+    ASSERT_TRUE(ctx.service.pump());
+    AssignGlobalString(ctx.scratch, "\xED\x95\x9C\xF0\x9F\x98\x80");
+    ASSERT_TRUE(ctx.service.deliver(valid, ClipboardStatus::Success, ViewGlobalString(ctx.scratch)));
+    AssignGlobalString(ctx.scratch, "changed source");
+    ASSERT_EQ(ctx.service.poll(valid, ctx.completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(ctx.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(ctx.completion.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
+    EXPECT_FALSE(ctx.service.deliver(valid, ClipboardStatus::Success, "duplicate reply"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyClipboardText_Utf8RejectsMalformedUnicodeAndEmbeddedNull(){
+    EXPECT_EQ(ValidateClipboardUtf8Text(StringView()), ClipboardStatus::Success);
+    EXPECT_EQ(ValidateClipboardUtf8Text("\xF4\x8F\xBF\xBF"), ClipboardStatus::Success);
+    FixedVector<StringView, 7> invalid = FixedVector<StringView, 7>();
+    invalid.push_back("\x80");
+    invalid.push_back("\xC0\xAF");
+    invalid.push_back("\xE0\x80\xAF");
+    invalid.push_back("\xED\xA0\x80");
+    invalid.push_back("\xF4\x90\x80\x80");
+    invalid.push_back("\xF0\x9F");
+    invalid.push_back(StringView("before\0after", 12u));
+    for(in StringView text : invalid){
+        EXPECT_EQ(ValidateClipboardUtf8Text(text), ClipboardStatus::InvalidText);
+    }
+}
+
+void VerifyClipboardText_IncrementalChunksCanSplitUnicodeUntilFinalValidation(){
+    ClipboardTextTestContext ctx = ClipboardTextTestContext();
+    EXPECT_EQ(ctx.accumulator.appendBytes("\xED"), ClipboardStatus::Success);
+    EXPECT_EQ(ValidateClipboardUtf8Text(ViewGlobalString(ctx.accumulator.text())), ClipboardStatus::InvalidText);
+    EXPECT_EQ(ctx.accumulator.appendBytes("\x95\x9C\xF0\x9F"), ClipboardStatus::Success);
+    EXPECT_EQ(ValidateClipboardUtf8Text(ViewGlobalString(ctx.accumulator.text())), ClipboardStatus::InvalidText);
+    EXPECT_EQ(ctx.accumulator.appendBytes("\x98\x80"), ClipboardStatus::Success);
+    EXPECT_EQ(ValidateClipboardUtf8Text(ViewGlobalString(ctx.accumulator.text())), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.accumulator.text(), "\xED\x95\x9C\xF0\x9F\x98\x80");
+}
+
+void VerifyClipboardText_IncrementalFailuresDiscardBytesAndRemainStickyUntilClear(){
+    ClipboardTextTestContext ctx = ClipboardTextTestContext();
+    ASSERT_EQ(ctx.accumulator.appendBytes("prefix"), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.accumulator.appendBytes(StringView("a\0b", 3u)), ClipboardStatus::InvalidText);
+    EXPECT_TRUE(ctx.accumulator.text().empty());
+    EXPECT_EQ(ctx.accumulator.appendBytes("ignored"), ClipboardStatus::InvalidText);
+    EXPECT_TRUE(ctx.accumulator.text().empty());
+    ctx.accumulator.clear();
+    EXPECT_EQ(ctx.accumulator.appendBytes("fresh"), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.accumulator.text(), "fresh");
+}
+
+void VerifyClipboardText_ByteLimitIsInclusiveAndBoundsIncrementalAccumulation(){
+    ClipboardTextTestContext ctx = ClipboardTextTestContext();
+    FillGlobalString(ctx.first, s_ClipboardMaxTextBytes, 0x78u);
+    EXPECT_EQ(ValidateClipboardUtf8Text(ViewGlobalString(ctx.first)), ClipboardStatus::Success);
+    ASSERT_EQ(ctx.accumulator.appendBytes(ViewGlobalString(ctx.first)), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.accumulator.text().size(), s_ClipboardMaxTextBytes);
+    EXPECT_EQ(ctx.accumulator.appendBytes("x"), ClipboardStatus::TooLarge);
+    EXPECT_TRUE(ctx.accumulator.text().empty());
+    EXPECT_EQ(ctx.accumulator.appendBytes("ignored"), ClipboardStatus::TooLarge);
+    AppendByteGlobalString(ctx.first, 0x78u);
+    EXPECT_EQ(ValidateClipboardUtf8Text(ViewGlobalString(ctx.first)), ClipboardStatus::TooLarge);
+    ctx.accumulator.clear();
+    EXPECT_EQ(ctx.accumulator.appendBytes("fresh"), ClipboardStatus::Success);
+}
+
+void VerifyClipboardText_Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput(){
+    ClipboardTextTestContext ctx = ClipboardTextTestContext();
+    const StringView source = StringView("\x80\xFF", 2u);
+    ASSERT_EQ(DecodeClipboardLatin1(source, ctx.first), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.first, "\xC2\x80\xC3\xBF");
+    ASSERT_EQ(EncodeClipboardLatin1(ViewGlobalString(ctx.first), ctx.second), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.second, source);
+    EXPECT_EQ(EncodeClipboardLatin1(StringView("\xC4\x80\xFF", 3u), ctx.second), ClipboardStatus::InvalidText);
+    EXPECT_TRUE(ctx.second.empty());
+    EXPECT_EQ(EncodeClipboardLatin1("\xE2\x98\x83", ctx.second), ClipboardStatus::Unsupported);
+    EXPECT_TRUE(ctx.second.empty());
+    EXPECT_EQ(DecodeClipboardLatin1(StringView("a\0b", 3u), ctx.first), ClipboardStatus::InvalidText);
+    EXPECT_TRUE(ctx.first.empty());
+}
+
+void VerifyClipboardText_Latin1ConversionAcceptsAliasedOutputAndSubviews(){
+    ClipboardTextTestContext ctx = ClipboardTextTestContext();
+    AssignGlobalString(ctx.first, StringView("\x80\xFF", 2u));
+    ASSERT_EQ(DecodeClipboardLatin1(ViewGlobalString(ctx.first), ctx.first), ClipboardStatus::Success);
+    EXPECT_EQ(ctx.first, "\xC2\x80\xC3\xBF");
+    ASSERT_EQ(EncodeClipboardLatin1(ViewGlobalString(ctx.first), ctx.first), ClipboardStatus::Success);
+    EXPECT_EQ(ViewGlobalString(ctx.first), StringView("\x80\xFF", 2u));
+
+    AssignGlobalString(ctx.first, "prefix\xC2\x80");
+    const StringView suffix = ViewGlobalString(ctx.first).substr(6u);
+    ASSERT_EQ(EncodeClipboardLatin1(suffix, ctx.first), ClipboardStatus::Success);
+    EXPECT_EQ(ViewGlobalString(ctx.first), StringView("\x80", 1u));
+}
+
+void VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit(){
+    ClipboardTextTestContext ctx = ClipboardTextTestContext();
+    FillGlobalString(ctx.first, s_ClipboardMaxTextBytes / 2u + 1u, 0xFFu);
+    AssignGlobalString(ctx.second, "stale bytes");
+    EXPECT_EQ(DecodeClipboardLatin1(ViewGlobalString(ctx.first), ctx.second), ClipboardStatus::TooLarge);
+    EXPECT_TRUE(ctx.second.empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyTextInput_BeginRequiresFocusCapabilityAndOnlyOneActiveSession(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_FALSE(unavailableBegin.has_value());
+    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    ctx.service.m_supported = false;
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unsupportedBegin = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_FALSE(unsupportedBegin.has_value());
+    EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
+    ctx.service.m_supported = true;
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> first = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(first.value().valid());
+    EXPECT_EQ(ctx.service.activeSession(), first.value());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> busyBegin = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_FALSE(busyBegin.has_value());
+    EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
+    ASSERT_TRUE(ctx.service.end(first.value()));
+    EXPECT_FALSE(ctx.service.activeSession().valid());
+}
+
+void VerifyTextInput_InputsAndPolledEventsOwnCopiedUtf8Bytes(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    AssignGlobalString(ctx.scratch, "A\xED\x95\x9C\xF0\x9F\x98\x80");
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeSessionDesc(ViewGlobalString(ctx.scratch), 1u, 4u));
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    ASSERT_TRUE(token.valid());
+    AssignGlobalString(ctx.scratch, "changed caller input");
+    EXPECT_EQ(ctx.service.surroundingText(), "A\xED\x95\x9C\xF0\x9F\x98\x80");
+    EXPECT_EQ(ctx.service.m_nativeSurrounding, ctx.service.surroundingText());
+    AssignGlobalString(ctx.secondScratch, "\xED\x95\x9C\xF0\x9F\x98\x80");
+    ASSERT_EQ(ctx.service.emitCommit(token, ViewGlobalString(ctx.secondScratch)), TextInputAdmission::Accepted);
+    AssignGlobalString(ctx.secondScratch, "changed event input");
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
+    EXPECT_EQ(ctx.event.token, token);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::Commit);
+    ASSERT_EQ(ctx.service.emitCommit(token, "next"), TextInputAdmission::Accepted);
+    EXPECT_EQ(ctx.event.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
+}
+
+void VerifyTextInput_EndRejectsLateEventsForeignTokensAndReusedGenerations(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    ASSERT_TRUE(ctx.foreign.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> oldAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(oldAdmission.has_value());
+    const TextInputSessionToken old = oldAdmission.value();
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> otherAdmission = ctx.foreign.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(otherAdmission.has_value());
+    const TextInputSessionToken other = otherAdmission.value();
+    ASSERT_EQ(ctx.service.emitCommit(old, "queued"), TextInputAdmission::Accepted);
+    ASSERT_TRUE(ctx.service.end(old));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> currentAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(currentAdmission.has_value());
+    const TextInputSessionToken current = currentAdmission.value();
+    ASSERT_TRUE(current.valid());
+    EXPECT_NE(old.generation, current.generation);
+    EXPECT_NE(other.service, current.service);
+    EXPECT_EQ(ctx.service.poll(old, ctx.event), TextInputPollResult::InvalidSession);
+    EXPECT_EQ(ctx.service.poll(other, ctx.event), TextInputPollResult::InvalidSession);
+    EXPECT_EQ(ctx.service.emitCommit(old, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(ctx.service.emitCommit(other, "foreign"), TextInputAdmission::InvalidSession);
+    EXPECT_FALSE(ctx.service.end(old));
+    EXPECT_EQ(ctx.service.poll(current, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInput_FocusLossReplacesQueuedWorkWithOneTerminalCancellation(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    ASSERT_EQ(ctx.service.emitCommit(token, "unconsumed"), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
+    ASSERT_TRUE(ctx.service.setFocused(false));
+    EXPECT_FALSE(ctx.service.activeSession().valid());
+    EXPECT_EQ(ctx.service.m_endCount, 1u);
+    EXPECT_EQ(ctx.service.emitCommit(token, "stale"), TextInputAdmission::InvalidSession);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(ctx.event.cancelReason, TextInputCancelReason::FocusLost);
+    EXPECT_TRUE(ctx.event.text.empty());
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::InvalidSession);
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_FALSE(unavailableBegin.has_value());
+    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> resumed = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(resumed.has_value());
+    EXPECT_TRUE(resumed.value().valid());
+}
+
+void VerifyTextInput_NewSessionInvalidatesUnpolledCancellation(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> oldAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(oldAdmission.has_value());
+    const TextInputSessionToken old = oldAdmission.value();
+    ASSERT_TRUE(ctx.service.cancelSession(old, TextInputCancelReason::NativeCancelled));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> currentAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(currentAdmission.has_value());
+    const TextInputSessionToken current = currentAdmission.value();
+    EXPECT_EQ(ctx.service.poll(old, ctx.event), TextInputPollResult::InvalidSession);
+    EXPECT_EQ(ctx.service.poll(current, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInput_ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeSessionDesc("abc", 1u, 1u));
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    const u64 revision = ctx.service.surroundingRevision(token);
+    ASSERT_EQ(ctx.service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitPreedit(token, "final draft", 11u, 11u, false), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitCommit(token, "committed"), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitPreedit(token, "new", 3u, 3u), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 1u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.emitPreedit(token, "last", 4u, 4u), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.text, "final draft");
+    EXPECT_FALSE(ctx.event.caretVisible);
+    u64 lastSequence = ctx.event.sequence;
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::Commit);
+    EXPECT_EQ(ctx.event.text, "committed");
+    EXPECT_GT(ctx.event.sequence, lastSequence);
+    lastSequence = ctx.event.sequence;
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.text, "new");
+    EXPECT_GT(ctx.event.sequence, lastSequence);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::DeleteSurrounding);
+    EXPECT_EQ(ctx.event.deleteBeforeBytes, 1u);
+    EXPECT_EQ(ctx.event.deleteAfterBytes, 1u);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.text, "last");
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInput_QueueOverflowCancelsInsteadOfApplyingPartialCommittedText(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    for(usize index = 0u; index < s_TextInputMaxEvents; ++index){
+        ASSERT_EQ(ctx.service.emitCommit(token, "x"), TextInputAdmission::Accepted);
+    }
+    EXPECT_EQ(ctx.service.emitCommit(token, "overflow"), TextInputAdmission::QueueFull);
+    EXPECT_FALSE(ctx.service.activeSession().valid());
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(ctx.event.cancelReason, TextInputCancelReason::Overflow);
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::InvalidSession);
+}
+
+void VerifyTextInput_QueuedByteBudgetCancelsEvenBelowEventCountLimit(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    FillGlobalString(ctx.scratch, s_TextInputMaxEventTextBytes, 0x78u);
+    for(usize index = 0u; index < s_TextInputMaxQueuedTextBytes / ctx.scratch.size(); ++index){
+        ASSERT_EQ(ctx.service.emitCommit(token, ViewGlobalString(ctx.scratch)), TextInputAdmission::Accepted);
+    }
+    EXPECT_EQ(ctx.service.emitCommit(token, "x"), TextInputAdmission::QueueFull);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.cancelReason, TextInputCancelReason::Overflow);
+}
+
+void VerifyTextInput_InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndRevision(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const StringView initialText = "\x41\xED\x95\x9C\x42";
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeSessionDesc(initialText, 4u, 4u));
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    ASSERT_TRUE(token.valid());
+    EXPECT_EQ(ctx.service.updateSurrounding(token, "bad\xF0\x9F", 0u, 0u), TextInputAdmission::InvalidText);
+    EXPECT_EQ(ctx.service.updateSurrounding(token, "\xED\x95\x9C", 1u, 3u), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.surroundingText(), initialText);
+    EXPECT_EQ(ctx.service.surroundingCaretByte(), 4u);
+    EXPECT_EQ(ctx.service.surroundingRevision(token), 1u);
+    const u64 revision = ctx.service.surroundingRevision(token);
+    EXPECT_EQ(ctx.service.updateCaret(token, MakeTextInputRect(0, 0, 0, 1)), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.caretRect().width, 1);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 1u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 5u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 2u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    ASSERT_EQ(ctx.service.emitDeleteSurrounding(token, 3u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.surroundingRevision, 1u);
+    ASSERT_EQ(ctx.service.updateSurrounding(token, "updated", 0u, 0u), TextInputAdmission::Accepted);
+    EXPECT_EQ(ctx.service.surroundingRevision(token), 2u);
+    const u64 currentRevision = ctx.service.surroundingRevision(token);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.emitDeleteSurrounding(token, 0u, 1u, currentRevision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
+}
+
+void VerifyTextInput_MalformedNativeTextAndPreeditSelectionsCannotEnterQueue(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    EXPECT_EQ(ctx.service.emitCommit(token, StringView("a\0b", 3u)), TextInputAdmission::InvalidText);
+    EXPECT_EQ(ctx.service.emitPreedit(token, "\xED\x95\x9C", 1u, 3u), TextInputAdmission::InvalidRange);
+    FillGlobalString(ctx.scratch, s_TextInputMaxEventTextBytes + 1u, 0x78u);
+    EXPECT_EQ(ctx.service.emitCommit(token, ViewGlobalString(ctx.scratch)), TextInputAdmission::TooLarge);
+    EXPECT_EQ(ctx.service.activeSession(), token);
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInput_CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    native(mut ctx, in token){
+        ctx.service.m_onEnd = [&](const TextInputSessionToken ended) {
+            EXPECT_EQ(ended, token);
+            EXPECT_EQ(ctx.service.emitCommit(ended, "reentrant late"), TextInputAdmission::InvalidSession);
+            const auto busyBegin = ctx.service.begin({});
+            ASSERT_FALSE(busyBegin);
+            EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
+            EXPECT_FALSE(ctx.service.end(ended));
+        };
+        ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(ctx.service.cancelSession(token, TextInputCancelReason::NativeCancelled)));
+        ctx.service.m_onEnd = {};
+    }
+    EXPECT_EQ(ctx.service.m_endCount, 1u);
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> resumed = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(resumed.has_value());
+    ASSERT_TRUE(resumed.value().valid());
+}
+
+void VerifyTextInput_NativeStartFailureRetiresTokenAndAnyEarlyEvent(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    TextInputSessionToken failed = TextInputSessionToken();
+    native(mut ctx, mut failed){
+        ctx.service.m_onStart = [&]() {
+            failed = ctx.service.activeSession();
+            EXPECT_EQ(ctx.service.emitCommit(failed, "early event"), TextInputAdmission::Accepted);
+        };
+    }
+    ctx.service.m_startAdmission = TextInputAdmission::NativeFailure;
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> nativeFailureBegin = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_FALSE(nativeFailureBegin.has_value());
+    EXPECT_EQ(nativeFailureBegin.error(), TextInputAdmission::NativeFailure);
+    EXPECT_FALSE(ctx.service.activeSession().valid());
+    EXPECT_EQ(ctx.service.poll(failed, ctx.event), TextInputPollResult::InvalidSession);
+    EXPECT_EQ(ctx.service.m_endCount, 1u);
+}
+
+void VerifyTextInput_WrongThreadCannotMutateOrPollOwnerSession(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    native(mut ctx, in token){
+        Thread worker([&]() {
+            TextInputEvent threadEvent(ctx.arena.arena);
+            EXPECT_FALSE(ctx.service.isOwnerThread());
+            EXPECT_FALSE(ctx.service.activeSession().valid());
+            EXPECT_EQ(ctx.service.surroundingRevision(token), 0u);
+            const auto wrongThreadBegin = ctx.service.begin({});
+            ASSERT_FALSE(wrongThreadBegin);
+            EXPECT_EQ(wrongThreadBegin.error(), TextInputAdmission::WrongThread);
+            EXPECT_EQ(ctx.service.emitCommit(token, "wrong thread"), TextInputAdmission::WrongThread);
+            EXPECT_EQ(ctx.service.poll(token, threadEvent), TextInputPollResult::WrongThread);
+            EXPECT_EQ(ctx.service.updateCaret(token, {}), TextInputAdmission::WrongThread);
+            EXPECT_EQ(ctx.service.updateSurrounding(token, {}, 0u, 0u), TextInputAdmission::WrongThread);
+            EXPECT_FALSE(ctx.service.setFocused(false));
+            EXPECT_FALSE(ctx.service.end(token));
+        });
+        worker.join();
+        ASSERT_FALSE(::testing::Test::HasFatalFailure());
+    }
+    EXPECT_EQ(ctx.service.activeSession(), token);
+    EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
+}
+
+void VerifyTextInput_NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput(){
+    UnsupportedTextInputContext ctx = UnsupportedTextInputContext();
+    ASSERT_TRUE(ctx.factorySucceeded);
+    ASSERT_TRUE(ctx.hasService());
+    EXPECT_FALSE(ctx.capabilities().commit);
+    EXPECT_FALSE(ctx.capabilities().preedit);
+    EXPECT_FALSE(ctx.capabilities().surrounding);
+    EXPECT_FALSE(ctx.capabilities().deleteSurrounding);
+    ASSERT_TRUE(ctx.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unsupportedBegin = ctx.beginEmpty();
+    ASSERT_FALSE(unsupportedBegin.has_value());
+    EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
+}
+
+void VerifyTextInput_ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    native(mut ctx, in token){
+        ctx.service.m_onCaret = [&]() {
+            EXPECT_TRUE(ctx.service.cancelSession(token, TextInputCancelReason::NativeFailure));
+        };
+    }
+    EXPECT_EQ(ctx.service.updateCaret(token, MakeTextInputRect(20, 30, 2, 18)), TextInputAdmission::NativeFailure);
+    EXPECT_FALSE(ctx.service.activeSession().valid());
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(ctx.event.cancelReason, TextInputCancelReason::NativeFailure);
+}
+
+void VerifyTextInput_ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    native(mut ctx, in token){
+        ctx.service.m_onSurrounding = [&]() {
+            EXPECT_TRUE(ctx.service.cancelSession(token, TextInputCancelReason::NativeFailure));
+        };
+    }
+    EXPECT_EQ(ctx.service.updateSurrounding(token, "replacement", 2u, 4u), TextInputAdmission::NativeFailure);
+    EXPECT_FALSE(ctx.service.activeSession().valid());
+    EXPECT_EQ(ctx.service.surroundingRevision(token), 0u);
+    ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
+    EXPECT_EQ(ctx.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(ctx.event.cancelReason, TextInputCancelReason::NativeFailure);
+}
+
+void VerifyTextInput_UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState(){
+    FakeTextInputContext ctx = FakeTextInputContext();
+    ASSERT_TRUE(ctx.service.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const TextInputSessionToken token = tokenAdmission.value();
+    ASSERT_EQ(ctx.service.updateSurrounding(token, "local change", 0u, 12u), TextInputAdmission::Accepted);
+    const u64 revision = ctx.service.surroundingRevision(token);
+    EXPECT_EQ(ctx.service.updateSurrounding(token, "invalid", 0u, 0u, MakeInvalidChangeCause()), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.surroundingText(), "local change");
+    EXPECT_EQ(ctx.service.surroundingRevision(token), revision);
+    EXPECT_EQ(ctx.service.m_nativeCause, TextInputChangeCause::Other);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyTextInputText_ValidatesStrictUtf8AndEmbeddedNul(){
+    EXPECT_EQ(ValidateTextInputUtf8(StringView(), 100u), TextInputAdmission::Accepted);
     EXPECT_EQ(ValidateTextInputUtf8("\xC0\x80", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\xE0\x80\x80", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\xED\xA0\x80", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\xF4\x90\x80\x80", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\xF0\x9F", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\x80", 100u), TextInputAdmission::InvalidText);
-    EXPECT_EQ(ValidateTextInputUtf8(AStringView("a\0b", 3u), 100u), TextInputAdmission::InvalidText);
+    EXPECT_EQ(ValidateTextInputUtf8(StringView("a\0b", 3u), 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("four", 3u), TextInputAdmission::TooLarge);
 }
 
-TEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars){
-    constexpr AStringView s_Text = "A\xED\x95\x9C\xF0\x9F\x98\x80";
-    for(const usize index : { 0u, 1u, 4u, 8u })
-        EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, index));
-    for(const usize index : { 2u, 3u, 5u, 6u, 7u, 9u })
-        EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, index));
+void VerifyTextInputText_BoundariesUseBytesForBmpAndSupplementaryScalars(){
+    const StringView text = "A\xED\x95\x9C\xF0\x9F\x98\x80";
+    FixedVector<usize, 4> validIndices = FixedVector<usize, 4>();
+    validIndices.push_back(0u);
+    validIndices.push_back(1u);
+    validIndices.push_back(4u);
+    validIndices.push_back(8u);
+    for(in usize index : validIndices){
+        EXPECT_TRUE(IsUtf8ScalarBoundary(text, index));
+    }
+
+    FixedVector<usize, 6> invalidIndices = FixedVector<usize, 6>();
+    invalidIndices.push_back(2u);
+    invalidIndices.push_back(3u);
+    invalidIndices.push_back(5u);
+    invalidIndices.push_back(6u);
+    invalidIndices.push_back(7u);
+    invalidIndices.push_back(9u);
+    for(in usize index : invalidIndices){
+        EXPECT_FALSE(IsUtf8ScalarBoundary(text, index));
+    }
 }
 
-TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins){
-    EXPECT_TRUE(IsTextInputCaretRectValid({ -20, -10, 2, 20 }));
-    EXPECT_TRUE(IsTextInputCaretRectValid({ Limit<i32>::s_Max - 1, Limit<i32>::s_Max - 1, 1, 1 }));
-    EXPECT_FALSE(IsTextInputCaretRectValid({ 0, 0, 0, 1 }));
-    EXPECT_FALSE(IsTextInputCaretRectValid({ 0, 0, 1, -1 }));
-    EXPECT_FALSE(IsTextInputCaretRectValid({ Limit<i32>::s_Max, 0, 1, 1 }));
-    EXPECT_FALSE(IsTextInputCaretRectValid({ 0, Limit<i32>::s_Max - 10, 1, 11 }));
+void VerifyTextInputText_CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins(){
+    EXPECT_TRUE(IsTextInputCaretRectValid(MakeTextInputRect(-20, -10, 2, 20)));
+    EXPECT_TRUE(IsTextInputCaretRectValid(MakeTextInputRect(i32.max - 1, i32.max - 1, 1, 1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(0, 0, 0, 1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(0, 0, 1, -1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(i32.max, 0, 1, 1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(0, i32.max - 10, 1, 11)));
 }
 
-TEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength){
-    Array<char, s_Utf8MaxSequenceBytes> bytes = {};
-    const auto length = EncodeTextInputCodePoint(0x1f600u, bytes);
-    ASSERT_TRUE(length);
-    EXPECT_EQ(AStringView(bytes.data(), *length), "\xF0\x9F\x98\x80");
-    const auto invalid0 = EncodeTextInputCodePoint(0u, bytes);
-    ASSERT_FALSE(invalid0);
+void VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength(){
+    EncodedCodePointBuffer buffer = EncodedCodePointBuffer();
+    const Expected<usize, TextInputAdmissionEnum> length = buffer.encode(0x1f600u);
+    ASSERT_TRUE(length.has_value());
+    EXPECT_EQ(buffer.view(length.value()), "\xF0\x9F\x98\x80");
+    const Expected<usize, TextInputAdmissionEnum> invalid0 = buffer.encode(0u);
+    ASSERT_FALSE(invalid0.has_value());
     EXPECT_EQ(invalid0.error(), TextInputAdmission::InvalidText);
-    const auto invalidd800 = EncodeTextInputCodePoint(0xd800u, bytes);
-    ASSERT_FALSE(invalidd800);
+    const Expected<usize, TextInputAdmissionEnum> invalidd800 = buffer.encode(0xd800u);
+    ASSERT_FALSE(invalidd800.has_value());
     EXPECT_EQ(invalidd800.error(), TextInputAdmission::InvalidText);
-    const auto invalid110000 = EncodeTextInputCodePoint(0x110000u, bytes);
-    ASSERT_FALSE(invalid110000);
+    const Expected<usize, TextInputAdmissionEnum> invalid110000 = buffer.encode(0x110000u);
+    ASSERT_FALSE(invalid110000.has_value());
     EXPECT_EQ(invalid110000.error(), TextInputAdmission::InvalidText);
 }
 
@@ -1392,10 +1467,60 @@ TEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST(TextInputSelection, ReverseSelectionHasTheSameOuterByteLimits, VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits)
+NWB_ADHD_GTEST(TextInputSelection, UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent, VerifyTextInputSelection_UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent)
+NWB_ADHD_GTEST(TextInputSelection, OuterUtf8EndpointsMustRemainScalarBoundaries, VerifyTextInputSelection_OuterUtf8EndpointsMustRemainScalarBoundaries)
+NWB_ADHD_GTEST(TextInputSelection, PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutput, VerifyTextInputSelection_PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutput)
+NWB_ADHD_GTEST(TextInputSelection, DeletionPreservesThePreeditCommitOrderingBarrier, VerifyTextInputSelection_DeletionPreservesThePreeditCommitOrderingBarrier)
+
+NWB_ADHD_GTEST(Clipboard, RequestsCopyTextAndPublishOnlyWhenPumped, VerifyClipboard_RequestsCopyTextAndPublishOnlyWhenPumped)
+NWB_ADHD_GTEST(Clipboard, CancelPreventsPendingWritesAndRejectsReusedGenerations, VerifyClipboard_CancelPreventsPendingWritesAndRejectsReusedGenerations)
+NWB_ADHD_GTEST(Clipboard, ReusedSlotsKeepRequestOrdering, VerifyClipboard_ReusedSlotsKeepRequestOrdering)
+NWB_ADHD_GTEST(Clipboard, TokensCannotCrossServicesOrSurviveServiceRecreation, VerifyClipboard_TokensCannotCrossServicesOrSurviveServiceRecreation)
+NWB_ADHD_GTEST(Clipboard, CanceledNativeCompletionCannotReachNewRequest, VerifyClipboard_CanceledNativeCompletionCannotReachNewRequest)
+NWB_ADHD_GTEST(Clipboard, UnsupportedChannelsAndUnavailableReadsStayExplicit, VerifyClipboard_UnsupportedChannelsAndUnavailableReadsStayExplicit)
+NWB_ADHD_GTEST(Clipboard, UnsupportedFactoryDoesNotAccessNativeClipboard, VerifyClipboard_UnsupportedFactoryDoesNotAccessNativeClipboard)
+NWB_ADHD_GTEST(Clipboard, AdmissionBoundsOutstandingRequestsAndText, VerifyClipboard_AdmissionBoundsOutstandingRequestsAndText)
+NWB_ADHD_GTEST(Clipboard, WrongThreadCallsNeverTouchRequestStorage, VerifyClipboard_WrongThreadCallsNeverTouchRequestStorage)
+NWB_ADHD_GTEST(Clipboard, ConsumedCompletionOutlivesServiceAndItsArena, VerifyClipboard_ConsumedCompletionOutlivesServiceAndItsArena)
+
+NWB_ADHD_GTEST(ClipboardAsync, PendingNativeRequestPreservesFifoAndCopiedWriteInput, VerifyClipboardAsync_PendingNativeRequestPreservesFifoAndCopiedWriteInput)
+NWB_ADHD_GTEST(ClipboardAsync, CancellationReleasesFifoAndLateNativeRepliesCannotCompleteReplacement, VerifyClipboardAsync_CancellationReleasesFifoAndLateNativeRepliesCannotCompleteReplacement)
+NWB_ADHD_GTEST(ClipboardAsync, CancellationInvalidatesTokenBeforeReentrantNativeCleanup, VerifyClipboardAsync_CancellationInvalidatesTokenBeforeReentrantNativeCleanup)
+NWB_ADHD_GTEST(ClipboardAsync, ReentrantStartCancellationDefersNewGenerationToNextPump, VerifyClipboardAsync_ReentrantStartCancellationDefersNewGenerationToNextPump)
+NWB_ADHD_GTEST(ClipboardAsync, DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes, VerifyClipboardAsync_DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes)
+
+NWB_ADHD_GTEST(ClipboardText, Utf8RejectsMalformedUnicodeAndEmbeddedNull, VerifyClipboardText_Utf8RejectsMalformedUnicodeAndEmbeddedNull)
+NWB_ADHD_GTEST(ClipboardText, IncrementalChunksCanSplitUnicodeUntilFinalValidation, VerifyClipboardText_IncrementalChunksCanSplitUnicodeUntilFinalValidation)
+NWB_ADHD_GTEST(ClipboardText, IncrementalFailuresDiscardBytesAndRemainStickyUntilClear, VerifyClipboardText_IncrementalFailuresDiscardBytesAndRemainStickyUntilClear)
+NWB_ADHD_GTEST(ClipboardText, ByteLimitIsInclusiveAndBoundsIncrementalAccumulation, VerifyClipboardText_ByteLimitIsInclusiveAndBoundsIncrementalAccumulation)
+NWB_ADHD_GTEST(ClipboardText, Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput, VerifyClipboardText_Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput)
+NWB_ADHD_GTEST(ClipboardText, Latin1ConversionAcceptsAliasedOutputAndSubviews, VerifyClipboardText_Latin1ConversionAcceptsAliasedOutputAndSubviews)
+NWB_ADHD_GTEST(ClipboardText, Latin1ExpansionCannotExceedUtf8ByteLimit, VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit)
+
+NWB_ADHD_GTEST(TextInput, BeginRequiresFocusCapabilityAndOnlyOneActiveSession, VerifyTextInput_BeginRequiresFocusCapabilityAndOnlyOneActiveSession)
+NWB_ADHD_GTEST(TextInput, InputsAndPolledEventsOwnCopiedUtf8Bytes, VerifyTextInput_InputsAndPolledEventsOwnCopiedUtf8Bytes)
+NWB_ADHD_GTEST(TextInput, EndRejectsLateEventsForeignTokensAndReusedGenerations, VerifyTextInput_EndRejectsLateEventsForeignTokensAndReusedGenerations)
+NWB_ADHD_GTEST(TextInput, FocusLossReplacesQueuedWorkWithOneTerminalCancellation, VerifyTextInput_FocusLossReplacesQueuedWorkWithOneTerminalCancellation)
+NWB_ADHD_GTEST(TextInput, NewSessionInvalidatesUnpolledCancellation, VerifyTextInput_NewSessionInvalidatesUnpolledCancellation)
+NWB_ADHD_GTEST(TextInput, ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion, VerifyTextInput_ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion)
+NWB_ADHD_GTEST(TextInput, QueueOverflowCancelsInsteadOfApplyingPartialCommittedText, VerifyTextInput_QueueOverflowCancelsInsteadOfApplyingPartialCommittedText)
+NWB_ADHD_GTEST(TextInput, QueuedByteBudgetCancelsEvenBelowEventCountLimit, VerifyTextInput_QueuedByteBudgetCancelsEvenBelowEventCountLimit)
+NWB_ADHD_GTEST(TextInput, InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndRevision, VerifyTextInput_InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndRevision)
+NWB_ADHD_GTEST(TextInput, MalformedNativeTextAndPreeditSelectionsCannotEnterQueue, VerifyTextInput_MalformedNativeTextAndPreeditSelectionsCannotEnterQueue)
+NWB_ADHD_GTEST(TextInput, CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry, VerifyTextInput_CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry)
+NWB_ADHD_GTEST(TextInput, NativeStartFailureRetiresTokenAndAnyEarlyEvent, VerifyTextInput_NativeStartFailureRetiresTokenAndAnyEarlyEvent)
+NWB_ADHD_GTEST(TextInput, WrongThreadCannotMutateOrPollOwnerSession, VerifyTextInput_WrongThreadCannotMutateOrPollOwnerSession)
+NWB_ADHD_GTEST(TextInput, NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput, VerifyTextInput_NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput)
+NWB_ADHD_GTEST(TextInput, ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent, VerifyTextInput_ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent)
+NWB_ADHD_GTEST(TextInput, ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent, VerifyTextInput_ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent)
+NWB_ADHD_GTEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState, VerifyTextInput_UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState)
+
+NWB_ADHD_GTEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul, VerifyTextInputText_ValidatesStrictUtf8AndEmbeddedNul)
+NWB_ADHD_GTEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars, VerifyTextInputText_BoundariesUseBytesForBmpAndSupplementaryScalars)
+NWB_ADHD_GTEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins, VerifyTextInputText_CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins)
+NWB_ADHD_GTEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength, VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

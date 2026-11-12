@@ -7,332 +7,974 @@
 #include <tests/smoke/framebuffer_capture.adhd>
 #include <tests/smoke/smoke_project_helpers.adhd>
 #include <tests/smoke/smoke_scene_helpers.adhd>
-
-native{
-#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
-#include <impl/ecs_ui/paint_context.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
-#include <core/alloc/general.h>
-#include <core/input/module.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <engine_namespace.h>
-#include <global/array.h>
-#include <global/simd/vector_arithmetic.h>
-#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/context_menu.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
-#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
-#include <core/common/log.h>
-#include <global/simdmath.h>
-#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
-#include <loader/project_entry.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
-#include <impl/ecs_ui/toolkit/images/image_loader.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
-#include <global/hash_utils.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <global/simd/vector.h>
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <global/simplemath.h>
-#include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
-#include <global/text_utils.h>
-#include <global/assert.h>
-#include <global/bit.h>
-#include <impl/ecs_ui/layer_system.adhd.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/task/gpu/persistent_state.h>
-#include <global/termination.h>
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_ui_skin/types.adhd.h>
-#include <core/ecs/entity.h>
-#include <core/graphics/runtime/runtime.h>
-#include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
+#include <impl/ecs_ui/paint_context.adhd>
+#include <impl/ecs_ui/layer_system.adhd>
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
+#include <impl/ecs_ui/toolkit/images/image_loader.adhd>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list.adhd>
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd>
+#include <impl/ecs_ui/toolkit/widgets/context_menu.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd>
+#include <impl/ecs_ui/toolkit/widgets/label.adhd>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd>
+#include <impl/assets_scene/asset.adhd>
+#include <impl/assets_ui_skin/types.adhd>
+#include <impl/assets_graphics/bindless/runtime_abi.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <engine_namespace.h>
+
+#include <core/alloc/general.h>
+#include <core/common/log.h>
+#include <core/ecs/entity.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/input/module.h>
+#include <core/os/clipboard.h>
+#include <core/task/gpu/persistent_state.h>
+#include <loader/project_entry.adhd.h>
+
+#include <global/array.h>
+#include <global/assert.h>
+#include <global/bit.h>
+#include <global/hash_utils.h>
+#include <global/simd/vector.h>
+#include <global/simd/vector_arithmetic.h>
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+#include <global/termination.h>
+#include <global/text_utils.h>
 
 
 NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace Tests::Smoke{
+
+using Core::Alloc::GlobalArena;
+using Core::Assets::AssetManager;
+using Core::ClipboardCompletion;
+using Core::ClipboardRequestToken;
+using Core::IClipboardService;
+using Core::IInputEventHandler;
+using Core::InputDispatcher;
+using Core::KeyboardInputResult;
+namespace Key = Core::Key;
+namespace InputAction = Core::InputAction;
+using ClipboardAdmissionEnum = Core::ClipboardAdmission::Enum;
+using ClipboardPollResultEnum = Core::ClipboardPollResult::Enum;
+namespace ClipboardAdmission = Core::ClipboardAdmission;
+namespace ClipboardChannel = Core::ClipboardChannel;
+namespace ClipboardPollResult = Core::ClipboardPollResult;
+namespace ClipboardOperation = Core::ClipboardOperation;
+namespace ClipboardStatus = Core::ClipboardStatus;
+
 using Impl::UiPaintContext;
+using Impl::UiLayerSystem;
+namespace UiLayerPresentation = Impl::UiLayerPresentation;
+
+using Impl::Ui::Builder;
+using Impl::Ui::CalculateScrollRowBounds;
+using Impl::Ui::ComboOptions;
+using Impl::Ui::ComboResult;
+using Impl::Ui::ComboState;
+using Impl::Ui::ContainerOptions;
+using Impl::Ui::ContextMenuOptions;
+using Impl::Ui::ContextMenuResult;
+using Impl::Ui::ContextMenuState;
+using Impl::Ui::EditBoxOptions;
+using Impl::Ui::EditBoxPlacement;
+using Impl::Ui::EditBoxRange;
+using Impl::Ui::EditBoxResult;
+using Impl::Ui::EditBoxState;
+using Impl::Ui::EditBoxView;
+using Impl::Ui::EditCaretGeometry;
+using Impl::Ui::EditModel;
+using Impl::Ui::FloatBounds;
+using Impl::Ui::FloatEditModel;
+using Impl::Ui::FloatEditOptions;
+using Impl::Ui::HitTarget;
+using Impl::Ui::IListDataSource;
+using Impl::Ui::ISearchableListDataSource;
+using Impl::Ui::ImageOptions;
+using Impl::Ui::InputBindings;
+using Impl::Ui::InputKeyBinding;
+using Impl::Ui::InputRouter;
+using Impl::Ui::IntegerEditModel;
+using Impl::Ui::IntegerEditOptions;
+using Impl::Ui::Label;
+using Impl::Ui::ListOptions;
+using Impl::Ui::ListResult;
+using Impl::Ui::ListState;
+using Impl::Ui::NumericEditBoxResult;
+using Impl::Ui::NumericEditResult;
+using Impl::Ui::PaintBuilder;
+using Impl::Ui::PopupToken;
+using Impl::Ui::PopupOptions;
+using Impl::Ui::PopupPlacement;
+using Impl::Ui::PopupScope;
+using Impl::Ui::PopupState;
+using Impl::Ui::ProgressOptions;
+using Impl::Ui::ProgressStyle;
+using Impl::Ui::RadioGroupChoicePlacement;
+using Impl::Ui::RadioGroupOptions;
+using Impl::Ui::RadioGroupPlacement;
+using Impl::Ui::RadioGroupResult;
+using Impl::Ui::RadioGroupState;
+using Impl::Ui::ResolveVisibleWindowBounds;
+using Impl::Ui::ResolveWindowCollapseBounds;
+using Impl::Ui::ResolveWindowContentBounds;
+using Impl::Ui::ResolveWindowResizeBounds;
+using Impl::Ui::ScrollPlacement;
+using Impl::Ui::ScrollViewportPlacement;
+using Impl::Ui::SearchComboOptions;
+using Impl::Ui::SearchComboResult;
+using Impl::Ui::SearchComboState;
+using Impl::Ui::SeparatorOptions;
+using Impl::Ui::ShapeRequest;
+using Impl::Ui::SharedGlyphPage;
+using Impl::Ui::SharedImageSource;
+using Impl::Ui::SharedSdfAtlasPage;
+using Impl::Ui::SliderOptions;
+using Impl::Ui::SliderPlacement;
+using Impl::Ui::SliderState;
+using Impl::Ui::StoreRect;
+using Impl::Ui::TextAreaOptions;
+using Impl::Ui::TextAreaState;
+using Impl::Ui::TextService;
+using Impl::Ui::TooltipOptions;
+using Impl::Ui::TooltipState;
+using Impl::Ui::TryIntersectUiRects;
+using Impl::Ui::WidgetOptions;
+using Impl::Ui::WindowMetrics;
+using Impl::Ui::WindowOptions;
+using Impl::Ui::WindowState;
+
+using Impl::Ui::EditLimits;
+namespace EditTextMode = Impl::Ui::EditTextMode;
+namespace GpuCommandRecordingMode = Impl::Ui::GpuCommandRecordingMode;
+namespace InputCommand = Impl::Ui::InputCommand;
+namespace LayoutSizePolicy = Impl::Ui::LayoutSizePolicy;
+namespace NumericBoundsPolicy = Impl::Ui::NumericBoundsPolicy;
+namespace PopupPlacementSide = Impl::Ui::PopupPlacementSide;
+namespace TextLayoutStatus = Impl::Ui::TextLayoutStatus;
+namespace UiRectPrecision = Impl::Ui::UiRectPrecision;
+
+using ::ComputeFnv32TextHash;
+using ::PackFourCharTag;
+using ::TerminateInvariant;
+
+inline constexpr i32 s_SmokeKeyTab = Core::Key::Tab;
+inline constexpr i32 s_SmokeKeyQ = Core::Key::Q;
+inline constexpr i32 s_SmokeKeyW = Core::Key::W;
+inline constexpr i32 s_SmokeKeyR = Core::Key::R;
+inline constexpr i32 s_SmokeKeyT = Core::Key::T;
+inline constexpr i32 s_SmokeKeyF4 = Core::Key::F4;
+inline constexpr i32 s_SmokeKeyF5 = Core::Key::F5;
+inline constexpr i32 s_SmokeKeyF6 = Core::Key::F6;
+inline constexpr i32 s_SmokeKeyF7 = Core::Key::F7;
+inline constexpr i32 s_SmokeKeyF8 = Core::Key::F8;
+inline constexpr i32 s_SmokeKeyF9 = Core::Key::F9;
+inline constexpr i32 s_SmokeKeyF10 = Core::Key::F10;
+inline constexpr i32 s_SmokeKeyF11 = Core::Key::F11;
+inline constexpr i32 s_SmokeKeyF12 = Core::Key::F12;
+inline constexpr i32 s_SmokeActionPress = Core::InputAction::Press;
+
+struct SmokeArenaRef final{
+    Core::Alloc::GlobalArena* ptr = nullptr;
+    SmokeArenaRef()noexcept = default;
+    explicit SmokeArenaRef(Core::Alloc::GlobalArena& arena)noexcept : ptr(&arena){}
+};
+
+struct SmokeClipboardRef final{
+    Core::IClipboardService* ptr = nullptr;
+    SmokeClipboardRef()noexcept = default;
+    explicit SmokeClipboardRef(Core::IClipboardService& clipboard)noexcept : ptr(&clipboard){}
+
+    [[nodiscard]] b8 valid()const noexcept{ return ptr != nullptr; }
+
+    [[nodiscard]] b8 cancel(const Core::ClipboardRequestToken token)const{
+        return ptr != nullptr && ptr->cancel(token);
+    }
+
+    [[nodiscard]] Expected<Core::ClipboardRequestToken, Core::ClipboardAdmission::Enum> requestWriteText(
+        const Core::ClipboardChannel::Enum channel,
+        const AStringView text
+    )const{
+        if(ptr == nullptr)
+            return MakeUnexpected(Core::ClipboardAdmission::WrongThread);
+        return ptr->requestWriteText(channel, text);
+    }
+
+    [[nodiscard]] Core::ClipboardPollResult::Enum poll(const Core::ClipboardRequestToken token, Core::ClipboardCompletion& completion)const{
+        if(ptr == nullptr)
+            return Core::ClipboardPollResult::InvalidRequest;
+        return ptr->poll(token, completion);
+    }
+};
+
+[[nodiscard]] NWB_INLINE b8 SmokePopupMatchesParentGeneration(
+    const Impl::Ui::InputRouter& input,
+    const Impl::Ui::PopupToken& popup,
+    const u64 parentGen
+)noexcept{
+    const Impl::Ui::PopupScope* const scope = input.popupScope(popup);
+    return scope != nullptr && scope->parent.instanceGeneration == parentGen;
+}
+
+[[nodiscard]] NWB_INLINE b8 CreateSmokeTextAtlasPages(
+    Core::Alloc::GlobalArena& arena,
+    const Span<const u8> coverageBytes,
+    const Array<Array<u8, 192u>, 4u>& sdfBytes,
+    Impl::Ui::SharedGlyphPage& outCoverage,
+    Array<Impl::Ui::SharedSdfAtlasPage, 4u>& outSdf
+){
+    constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
+    constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
+
+    const Impl::Ui::GlyphPageBinding coverageBinding{
+        .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
+        .fontGeneration = 1u,
+        .atlasIdentity = s_CoverageAtlasIdentity,
+        .generation = 1u,
+        .index = static_cast<u32>(Impl::Ui::s_GlyphAtlasMaxPages - 1u),
+        .width = 12u,
+        .height = 4u
+    };
+    Impl::Ui::GlyphPage::Pixels coveragePixels(arena);
+    coveragePixels.assign(coverageBytes.begin(), coverageBytes.end());
+    auto coverageResult = Impl::Ui::CreateGlyphPage(arena, coverageBinding, Move(coveragePixels));
+    if(coverageResult)
+        outCoverage = Move(*coverageResult);
+
+    b8 allSdfValid = true;
+    for(u32 channels = 1u; channels <= 4u; ++channels){
+        const Impl::Ui::SdfAtlasPageBinding sdfBinding{
+            .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
+            .fontGeneration = 1u,
+            .atlasIdentity = s_CoverageAtlasIdentity,
+            .generation = 1u,
+            .index = channels - 1u,
+            .width = 12u,
+            .height = 4u,
+            .channelCount = channels,
+            .spreadPixels = 8u
+        };
+        const usize byteCount = 48u * static_cast<usize>(channels);
+        Impl::Ui::SdfAtlasPage::Pixels sdfPixels(arena);
+        sdfPixels.assign(sdfBytes[channels - 1u].data(), sdfBytes[channels - 1u].data() + byteCount);
+        auto pageResult = Impl::Ui::CreateSdfAtlasPage(arena, sdfBinding, Move(sdfPixels));
+        if(pageResult)
+            outSdf[channels - 1u] = Move(*pageResult);
+        if(!outSdf[channels - 1u])
+            allSdfValid = false;
+    }
+
+    return static_cast<b8>(outCoverage) && allSdfValid;
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeImageSourceValid(const Impl::Ui::SharedImageSource& source)noexcept{
+    return static_cast<b8>(source);
+}
+
+[[nodiscard]] NWB_INLINE u32 SmokeImageSourceWidth(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->texture().width() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE u32 SmokeImageSourceHeight(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->texture().height() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE u64 SmokeImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->generation() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE Name SmokeImageSourceIdentityName(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->identity().name() : Name{};
+}
+
+NWB_INLINE void ResetSmokeImageSource(Impl::Ui::SharedImageSource& source)noexcept{
+    source.reset();
+}
+
+NWB_INLINE void LoadSmokeSkinImageSources(
+    Core::Alloc::GlobalArena& arena,
+    Core::Assets::AssetManager& assets,
+    const Name& alternateSkinName,
+    Impl::Ui::SharedImageSource& outDefault,
+    Impl::Ui::SharedImageSource& outAlternate
+){
+    auto loadSkinSource = [&](const Core::Assets::AssetRef<Impl::UiSkin>& skinRef) -> Expected<Impl::Ui::SharedImageSource>{
+        if(!skinRef.valid())
+            return MakeUnexpected(Failure{});
+        const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), NWB_TEXT("UiTextureImageSmokeScene"));
+        if(!skin || !*skin || !(*skin)->texture().valid())
+            return MakeUnexpected(Failure{});
+        return Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
+    };
+
+    Impl::ActiveSceneSubsystems sceneSubsystems(arena);
+    if(sceneSubsystems.loadProjectStartScene(assets)){
+        if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
+            auto loadedDefault = loadSkinSource(uiSubsystem->basicSkin);
+            if(loadedDefault)
+                outDefault = Move(*loadedDefault);
+        }
+        auto loadedAlternate = loadSkinSource(sceneSubsystems.findSceneAsset<Impl::UiSkin>(alternateSkinName));
+        if(loadedAlternate)
+            outAlternate = Move(*loadedAlternate);
+    }
+}
+
+[[nodiscard]] NWB_INLINE Impl::Ui::SharedImageSource CloneSmokeImageSourcePayload(
+    const SmokeArenaRef& arenaRef,
+    const Impl::Ui::SharedImageSource& identitySource,
+    const Impl::Ui::SharedImageSource& payloadSource
+){
+    if(arenaRef.ptr == nullptr || !identitySource || !payloadSource)
+        return {};
+    Core::Alloc::GlobalArena& arena = *arenaRef.ptr;
+    const Impl::Texture& payload = payloadSource->texture();
+    Impl::Texture replacement(arena, identitySource->identity().name());
+    Impl::Texture::MipLevelVector mipLevels(arena);
+    mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
+    Core::Assets::AssetBytes bytes(arena);
+    bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
+    replacement.setPayload(
+        payload.width(),
+        payload.height(),
+        Move(mipLevels),
+        Move(bytes),
+        payload.dimension(),
+        payload.depth(),
+        payload.payloadFormat(),
+        payload.alphaMode(),
+        payload.alphaConstantUnorm8()
+    );
+    auto nextSource = Impl::Ui::MakeImageSource(arena, replacement);
+    if(!nextSource)
+        return {};
+    return Move(*nextSource);
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[[nodiscard]] NWB_INLINE StringView FormatSmokeRowLabel(const u64 rowKey, Array<char, 32u>& outBuffer)noexcept{
+    if(rowKey == 0u)
+        return {};
+    outBuffer[0] = 'R';
+    outBuffer[1] = 'o';
+    outBuffer[2] = 'w';
+    outBuffer[3] = ' ';
+    Array<char, s_UsizeDecimalDigitCount> digits{};
+    const AStringView formatted = FormatDecimal(rowKey, digits);
+    NWB_MEMCPY(outBuffer.data() + 4u, outBuffer.size() - 4u, formatted.data(), formatted.size());
+    return { outBuffer.data(), 4u + formatted.size() };
+}
 
 
-// Arithmetic row lookup keeps the fixture independent of total row count and allocates labels on demand.
+template<typename BoxT>
+using SharedSmokeBox = RefCountPtr<RefCounter<BoxT>, ArenaRefDeleter<RefCounter<BoxT>, Core::Alloc::GlobalArena>>;
+
+template<typename SceneT>
+class SmokeSceneBox : NoCopy{
+public:
+    template<typename... Args>
+        requires ::LeadingArenaConstructible<SceneT>
+    explicit SmokeSceneBox(::ArenaBase& motherArena, Args&&... args)
+        : scene(motherArena, Forward<Args>(args)...)
+    {}
+
+    template<typename... Args>
+        requires (!::LeadingArenaConstructible<SceneT>)
+    explicit SmokeSceneBox(Args&&... args)
+        : scene(Forward<Args>(args)...)
+    {}
+
+
+public:
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context){ return scene.paint(context); }
+
+
+public:
+    SceneT scene;
+};
+
+template<typename SceneT>
+class SmokeInputSceneBox : public Core::IInputEventHandler, NoCopy{
+public:
+    template<typename... Args>
+        requires ::LeadingArenaConstructible<SceneT>
+    explicit SmokeInputSceneBox(Core::InputDispatcher& input, ::ArenaBase& motherArena, Args&&... args)
+        : scene(motherArena, Forward<Args>(args)...)
+        , m_input(input)
+    {
+        m_input.addHandlerToBack(*this);
+    }
+
+    template<typename... Args>
+        requires (!::LeadingArenaConstructible<SceneT>)
+    explicit SmokeInputSceneBox(Core::InputDispatcher& input, Args&&... args)
+        : scene(Forward<Args>(args)...)
+        , m_input(input)
+    {
+        m_input.addHandlerToBack(*this);
+    }
+
+    virtual ~SmokeInputSceneBox()noexcept override{
+        m_input.removeHandler(*this);
+    }
+
+
+public:
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context){ return scene.paint(context); }
+
+    virtual Core::KeyboardInputResult keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept override{
+        return scene.keyboardUpdate(key, scancode, action, mods);
+    }
+
+
+public:
+    SceneT scene;
+
+
+private:
+    Core::InputDispatcher& m_input;
+};
+
+template<typename SceneT, typename... Args>
+[[nodiscard]] SharedSmokeBox<SmokeSceneBox<SceneT>> CreateSmokeSceneBox(Core::Alloc::GlobalArena& arena, Args&&... args){
+    if constexpr(::LeadingArenaConstructible<SceneT>){
+        return SharedSmokeBox<SmokeSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
+    else{
+        return SharedSmokeBox<SmokeSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
+}
+
+template<typename SceneT, typename... Args>
+[[nodiscard]] SharedSmokeBox<SmokeInputSceneBox<SceneT>> CreateSmokeInputSceneBox(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Args&&... args){
+    if constexpr(::LeadingArenaConstructible<SceneT>){
+        return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
+    else{
+        return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
+}
+
+
 class UiListSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
 public:
-    virtual u64 instanceGeneration()const noexcept override{ return 1u; }
-
-    virtual u64 revision()const noexcept override{ return m_revision; }
-
-    virtual u64 rowCount()const noexcept override{ return m_removed == 0u ? 100000u : 99999u; }
-    virtual u64 key(u64 index)const noexcept override;
-    virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
-    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
-    virtual StringView text(u64 index)const noexcept override;
-    virtual b8 enabled(u64 index)const noexcept override;
+    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
+    virtual u64 revision()const noexcept override{ return m_state.revision(); }
+    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
+    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readRowKey(index), m_label); }
+    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
 
 
 public:
-    void reverse()noexcept;
-    void remove(u64 keyValue)noexcept;
-    void beginFrame()noexcept{ m_labelReads = 0u; }
-
-    [[nodiscard]] b8 reversed()const noexcept{ return m_reversed; }
-
-    [[nodiscard]] u64 removedKey()const noexcept{ return m_removed; }
-
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
+    void reverse()noexcept{ m_state.reverse(); }
+    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
+    void beginFrame()noexcept{ m_state.beginFrame(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
+    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
 
 
 private:
-    u64 m_revision = 1u;
-    u64 m_removed = 0u;
-    b8 m_reversed = false;
+    mutable UiListSmokeSourceState m_state;
     mutable Array<char, 32u> m_label{};
-    mutable u32 m_labelReads = 0u;
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// This wrapper changes source lifetime and emptiness without storing the 100000 arithmetic rows.
 class UiComboSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
 public:
-    virtual u64 instanceGeneration()const noexcept override{ return m_generation; }
-
-    virtual u64 revision()const noexcept override{ return m_revision + m_rows.revision(); }
-
-    virtual u64 rowCount()const noexcept override{ return m_empty ? 0u : m_rows.rowCount(); }
-
-    virtual u64 key(u64 index)const noexcept override{ return m_empty ? 0u : m_rows.key(index); }
-
-    virtual Expected<u64> indexOf(u64 key)const noexcept override{ return m_empty ? MakeUnexpected(Failure{}) : m_rows.indexOf(key); }
-    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
-    virtual StringView text(u64 index)const noexcept override{ return m_empty ? StringView{} : m_rows.text(index); }
-
-    virtual b8 enabled(u64 index)const noexcept override{ return !m_empty && m_rows.enabled(index); }
+    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
+    virtual u64 revision()const noexcept override{ return m_state.revision(); }
+    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
+    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readRowKey(index), m_label); }
+    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
 
 
 public:
-    void reverse()noexcept{ m_rows.reverse(); }
-
-    void remove(u64 key)noexcept{ m_rows.remove(key); }
-
-    void beginFrame()noexcept{ m_rows.beginFrame(); }
-
-    void toggleEmpty()noexcept;
-
-    void replace()noexcept{ ++m_generation; }
-
-    [[nodiscard]] b8 reversed()const noexcept{ return m_rows.reversed(); }
-
-    [[nodiscard]] u64 removedKey()const noexcept{ return m_rows.removedKey(); }
-
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_rows.labelReads(); }
+    void reverse()noexcept{ m_state.reverse(); }
+    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
+    void beginFrame()noexcept{ m_state.beginFrame(); }
+    void toggleEmpty()noexcept{ m_state.toggleEmpty(); }
+    void replace()noexcept{ m_state.replace(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
+    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
 
 
 private:
-    UiListSmokeSource m_rows;
-    u64 m_generation = 1u;
-    u64 m_revision = 1u;
-    b8 m_empty = false;
+    mutable UiComboSmokeSourceState m_state;
+    mutable Array<char, 32u> m_label{};
 };
 
 
+class UiNestedPopupSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
+private:
+    class View final : public Impl::Ui::IListDataSource, NoCopy{
+    public:
+        explicit View(UiNestedPopupSmokeSourceState& state)noexcept : m_state(state){}
+
+
+    public:
+        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+        virtual u64 revision()const noexcept override{ return m_state.viewRevision(); }
+        virtual u64 rowCount()const noexcept override{ return m_state.viewRowCount(); }
+        virtual u64 key(const u64 index)const noexcept override{ return m_state.viewKey(index); }
+        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.viewIndexOf(keyValue); }
+        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.viewFindEnabled(start, reverse); }
+        virtual StringView text(const u64 index)const noexcept override{ return m_state.readViewText(index); }
+        virtual b8 enabled(const u64 index)const noexcept override{ return m_state.viewEnabled(index); }
+
+
+    private:
+        UiNestedPopupSmokeSourceState& m_state;
+    };
+
+
+public:
+    explicit UiNestedPopupSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state){}
+
+
+public:
+    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
+    virtual u64 revision()const noexcept override{ return m_state.revision(); }
+    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
+    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return m_state.readText(index); }
+    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
+    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{ return m_state.filter(query); }
+    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
+
+
+public:
+    void beginFrame()noexcept{ m_state.beginFrame(); }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
+
+
+private:
+    mutable UiNestedPopupSmokeSourceState m_state;
+    View m_view;
+};
+
+
+class UiPopupToolsSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
+public:
+    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
+    virtual u64 revision()const noexcept override{ return m_state.revision(); }
+    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
+    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return m_state.readText(index); }
+    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
+
+
+public:
+    void reverse()noexcept{ m_state.reverse(); }
+    void replace()noexcept{ m_state.replace(); }
+    void beginFrame()noexcept{ m_state.beginFrame(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
+
+
+private:
+    mutable UiPopupToolsSmokeSourceState m_state;
+};
+
+
+class UiRadioGroupSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ invalidateText(); return m_state.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ invalidateText(); return m_state.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ invalidateText(); return m_state.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ invalidateText(); return m_state.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ invalidateText(); return m_state.indexOf(keyValue); }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverseValue)const noexcept override{ invalidateText(); return m_state.findEnabled(start, reverseValue); }
+
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
+        invalidateText();
+        const StringView label = m_state.readText(index);
+        if(label.empty())
+            return {};
+        NWB_MEMCPY(m_label.data(), m_label.size(), label.data(), label.size());
+        return { m_label.data(), label.size() };
+    }
+
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ invalidateText(); return m_state.enabled(index); }
+
+
+public:
+    void reverse()noexcept{ m_state.reverse(); }
+    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
+    void replace()noexcept{ m_state.replace(); }
+    void beginFrame()noexcept{ m_state.beginFrame(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
+    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
+
+
+private:
+    void invalidateText()const noexcept{ m_label.fill('?'); }
+
+
+private:
+    mutable UiRadioGroupSmokeSourceState m_state;
+    mutable Array<char, 32u> m_label{};
+};
+
+
+class UiSearchComboSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
+private:
+    class View final : public Impl::Ui::IListDataSource, NoCopy{
+    public:
+        explicit View(UiSearchComboSmokeSourceState& state, Array<char, 32u>& label)noexcept : m_state(state), m_label(label){}
+
+
+    public:
+        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+        virtual u64 revision()const noexcept override{ return m_state.viewRevision(); }
+        virtual u64 rowCount()const noexcept override{ return m_state.viewRowCount(); }
+        virtual u64 key(const u64 index)const noexcept override{ return m_state.viewKey(index); }
+        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.viewIndexOf(keyValue); }
+        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.viewFindEnabled(start, reverse); }
+        virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readViewRowKey(index), m_label); }
+        virtual b8 enabled(const u64 index)const noexcept override{ return m_state.viewEnabled(index); }
+
+
+    private:
+        UiSearchComboSmokeSourceState& m_state;
+        Array<char, 32u>& m_label;
+    };
+
+
+public:
+    explicit UiSearchComboSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state, m_label){}
+
+
+public:
+    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
+    virtual u64 revision()const noexcept override{ return m_state.revision(); }
+    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
+    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
+    virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readRowKey(index), m_label); }
+    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
+    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{ return m_state.filter(query); }
+    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
+
+
+public:
+    void reverse()noexcept{ m_state.reverse(); }
+    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
+    void beginFrame()noexcept{ m_state.beginFrame(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
+    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
+
+
+private:
+    mutable UiSearchComboSmokeSourceState m_state;
+    mutable Array<char, 32u> m_label{};
+    View m_view;
+};
+
+};
+NWB_END
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reconstruct a single-line fixture's selection from the canonical geometry for its framebuffer probe.
-[[nodiscard]] Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxPlacement& placement, f32 fontSize);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Point MakeSmokePoint(in f32 x, in f32 y){
+    Point point();
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+EdgeInsets MakeUniformSmokeInsets(in f32 value){
+    EdgeInsets insets();
+    insets.left = value;
+    insets.top = value;
+    insets.right = value;
+    insets.bottom = value;
+    return insets;
+}
+
+WidgetOptions MakeFixedHeightSmokeWidget(in f32 height){
+    WidgetOptions options();
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = height;
+    return options;
+}
+
+WidgetOptions MakeFixedSmokeWidget(in f32 width, in f32 height){
+    WidgetOptions options();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = width;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = height;
+    return options;
+}
+
+WidgetOptions MakeFixedEnabledSmokeWidget(in f32 width, in f32 height, in b8 enabled){
+    WidgetOptions options = MakeFixedSmokeWidget(width, height);
+    options.enabled = enabled;
+    return options;
+}
+
+WidgetOptions MakeStretchWidthSmokeWidget(in f32 height){
+    WidgetOptions options();
+    options.width.policy = LayoutSizePolicy::Stretch;
+    options.width.value = 1.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = height;
+    return options;
+}
 
 // Admit only marker grids whose integer coordinates are exact in FP32.
-template<usize Count, u32 Origin, u32 Step>
-[[nodiscard]] inline Array<f32, Count> BuildSmokeMarkerPositions()noexcept{
-    constexpr u32 s_ExactIntegerLimit = 1u << 24u;
-    static_assert(Count > 0u && Step > 0u);
-    static_assert(Origin <= s_ExactIntegerLimit && Step <= s_ExactIntegerLimit);
-    static_assert(Count - 1u <= (s_ExactIntegerLimit - Origin) / Step);
+Array<f32, Count> BuildSmokeMarkerPositions<const usize Count>(in u32 origin, in u32 step){
+    const u32 exactIntegerLimit = 16777216u;
+    [essential] assert(Count > 0u && step > 0u, "Smoke marker grid requires positive count and step");
+    [essential] assert(origin <= exactIntegerLimit && step <= exactIntegerLimit && Count - 1u <= cast<usize>((exactIntegerLimit - origin) / step), "Smoke marker grid exceeds exact FP32 integer limit");
 
-    Array<f32, Count> positions{};
+    Array<f32, Count> positions;
+    const VectorSingle stepVec(cast<f32>(step));
+    const VectorSingle originVec(cast<f32>(origin));
     usize index = 0u;
-    for(; index < Count; index += 4u){
-        // Repeating the last real index pads a partial packet without reading beyond the fixed grid or adding any floating effects.
-        const SIMDVectorSingle coordinates = VectorMultiplyAddExpression(
-            VectorSet(static_cast<f32>(index), static_cast<f32>(index + 1u < Count ? index + 1u : Count - 1u), static_cast<f32>(index + 2u < Count ? index + 2u : Count - 1u), static_cast<f32>(index + 3u < Count ? index + 3u : Count - 1u)),
-            VectorReplicate(static_cast<f32>(Step)), VectorReplicate(static_cast<f32>(Origin))
-        );
-        positions[index] = VectorGetX(coordinates);
+    while(index < Count){
+        usize idx1 = Count - 1u;
         if(index + 1u < Count)
-            positions[index + 1u] = VectorGetY(coordinates);
+            idx1 = index + 1u;
+        usize idx2 = Count - 1u;
         if(index + 2u < Count)
-            positions[index + 2u] = VectorGetZ(coordinates);
+            idx2 = index + 2u;
+        usize idx3 = Count - 1u;
         if(index + 3u < Count)
-            positions[index + 3u] = VectorGetW(coordinates);
+            idx3 = index + 3u;
+        const VectorSingle indices(cast<f32>(index), cast<f32>(idx1), cast<f32>(idx2), cast<f32>(idx3));
+        const VectorSingle coordinates = indices * stepVec + originVec;
+        positions[index] = coordinates.x;
+        if(index + 1u < Count)
+            positions[index + 1u] = coordinates.y;
+        if(index + 2u < Count)
+            positions[index + 2u] = coordinates.z;
+        if(index + 3u < Count)
+            positions[index + 3u] = coordinates.w;
+        index += 4u;
     }
     return positions;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void PaintUiLayerSmokeScene(Impl::UiPaintContext& context)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Source>
-[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const b8 reverse)noexcept(
-    noexcept(static_cast<b8>(start >= source.rowCount()))
-    && noexcept(static_cast<b8>(start + 1u >= source.rowCount()))
-    && noexcept(static_cast<b8>(source.enabled(start)))
-    && noexcept(static_cast<b8>(source.enabled(DeclVal<u64&>())))
-){
-    u64 index = 0u;
-    if(start >= source.rowCount())
-        return MakeUnexpected(Failure{});
-    if(source.enabled(start)){
-        index = start;
-        return index;
+// Reconstruct a single-line fixture's selection from the canonical geometry for its framebuffer probe.
+Rect CaptureEditSelection(mut EditBoxView view, mut TextService text, in EditModel model, in EditBoxPlacement placement, in f32 fontSize){
+    [essential] assert(model.textMode() == EditTextMode::SingleLine, "Single-line edit selection capture expected");
+    const b8 captured = view.snapshot(model);
+    [essential] assert(captured, "Edit box snapshot failed");
+    const EditBoxRange range = view.selectionRange();
+    if(range.begin == range.end || placement.content.width <= 0.0f || placement.content.height <= 0.0f)
+        return Rect();
+    ShapeRequest request();
+    request.fontSize = fontSize;
+    const b8 shaped = view.shape(text, request) == TextLayoutStatus::Success;
+    [essential] assert(shaped, "Edit box shaping failed");
+    const Expected<Rect> candidate = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
+    [essential] assert(candidate.has_value(), "Edit box selection range query failed");
+    Rect selection = candidate.value();
+    if(selection.width > 0.0f){
+        const VectorSingle origin = VectorSingle(selection.x, selection.y, 0.0f, 0.0f) + VectorSingle(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f);
+        selection.x = origin.x;
+        selection.y = origin.y;
     }
-    if(reverse){
-        if(start == 0u)
-            return MakeUnexpected(Failure{});
-        index = start - 1u;
-    }
-    else{
-        if(start + 1u >= source.rowCount())
-            return MakeUnexpected(Failure{});
-        index = start + 1u;
-    }
-    return source.enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+    return selection;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+Rect CaptureEditSelection(mut GlobalArena arena, mut TextService text, in EditModel model, in EditBoxPlacement placement, in f32 fontSize){
+    EditBoxView view(arena);
+    return CaptureEditSelection(view, text, model, placement, fontSize);
+}
 
 // Compute expected row height from the accepted content extent.
-[[nodiscard]] Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, u64 index)noexcept;
-
-[[nodiscard]] Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, u64 index)noexcept;
-
-void LogSmokeRect(TStringView tag, u32 sequence, TStringView name, const Impl::Ui::Rect& rectangle);
-
-void ObserveSmokeDisplay(TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged);
-
-template<typename ValuesT>
-inline void PaintSingleSmokeValueMarkers(const ValuesT& values, const u32 sequence, Impl::UiPaintContext& context){
-    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<ValuesT> + 1u, 12u, 20u>();
-    const f32 y = context.display.logicalHeight - 20.0f;
-    for(usize index = 0u; index <= values.size(); ++index){
-        const u32 value = index == values.size() ? sequence : values[index];
-        context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));
-    }
+Expected<Rect> SmokeListRowBounds(in ScrollPlacement placement, in u64 index){
+    if(placement.rowCount == 0u)
+        return MakeUnexpected(Failure());
+    const f32 height = cast<f32>(cast<f64>(placement.contentHeight) / cast<f64>(placement.rowCount));
+    return CalculateScrollRowBounds(index, placement, height);
 }
 
-template<u32 Step, u32 Width, u32 Height = 12u, u32 BottomOffset = 20u, typename ValuesT>
-inline void PaintKeyedSmokeValueMarkers(const ValuesT& values, const u64 sequence, Impl::UiPaintContext& context){
-    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, Step>();
-    const f32 y = context.display.logicalHeight - static_cast<f32>(BottomOffset);
-    for(usize index = 0u; index <= values.size(); ++index){
-        const u64 value = index == values.size() ? sequence : values[index];
-        for(u32 part = 0u; part < 2u; ++part){
-            const usize marker = index * 2u + part;
-            context.paint.fillRect({ positions[marker], y, static_cast<f32>(Width), static_cast<f32>(Height) }, EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
+Rect VisibleSmokeListRow(in ScrollPlacement placement, in u64 index){
+    const Expected<Rect> rectangle = SmokeListRowBounds(placement, index);
+    if(!rectangle.has_value())
+        return Rect();
+    const Expected<Rect> visible = TryIntersectUiRects(rectangle.value(), placement.contentClip, UiRectPrecision::PreciseExtents);
+    if(visible.has_value())
+        return visible.value();
+    return Rect();
 }
 
-// Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.
-template<typename ValuesT, typename BitsT>
-inline void PaintSmokeValueMarkers(const ValuesT& values, const BitsT& bits, const u64 sequence, Impl::UiPaintContext& context){
-    const f32 y = context.display.logicalHeight - 18.0f;
-    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<ValuesT> * 2u + TupleSize_V<BitsT> * 6u + 2u, 12u, 12u>();
-    usize marker = 0u;
-    for(const u64 value : values){
-        for(u32 part = 0u; part < 2u; ++part){
-            context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
-    for(const u64 bit : bits){
-        for(u32 part = 0u; part < 6u; ++part){
-            context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(bit >> (part * 12u)));
-        }
-    }
-    for(u32 part = 0u; part < 2u; ++part){
-        context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(sequence >> (part * 12u)));
-    }
+void LogSmokeRect(in StringView tag, in u64 sequence, in StringView name, in Rect rectangle){
+    [essential] info(
+        "{}: geometry sequence={} {}={},{},{},{}"
+        , tag
+        , sequence
+        , name
+        , rectangle.x
+        , rectangle.y
+        , rectangle.width
+        , rectangle.height
+    );
 }
 
-[[nodiscard]] inline b8 SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right)noexcept{
+void LogSmokeRect(in StringView tag, in u32 sequence, in StringView name, in Rect rectangle){
+    LogSmokeRect(tag, cast<u64>(sequence), name, rectangle);
+}
+
+void ObserveSmokeDisplay(in StringView tag, in DisplayMetrics display, mut DisplayMetrics inOutLastDisplay, mut b8 inOutDisplayChanged){
+    if(
+        inOutLastDisplay.logicalWidth == display.logicalWidth
+        && inOutLastDisplay.logicalHeight == display.logicalHeight
+        && inOutLastDisplay.pixelScaleX == display.pixelScaleX
+        && inOutLastDisplay.pixelScaleY == display.pixelScaleY
+    )
+        return;
+    inOutLastDisplay = display;
+    inOutDisplayChanged = true;
+    [essential] info(
+        "{}: display logical={}x{} scale={}x{}"
+        , tag
+        , display.logicalWidth
+        , display.logicalHeight
+        , display.pixelScaleX
+        , display.pixelScaleY
+    );
+}
+
+b8 SameSmokePlacement(in EditBoxPlacement left, in EditBoxPlacement right){
     return SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content) && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll;
 }
 
-void LogSmokeEditGeometry(TStringView tag, u32 sequence, TStringView field, const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection);
+void LogSmokeEditGeometry(in StringView tag, in u32 sequence, in StringView field, in EditBoxPlacement placement, in Rect selection){
+    const Rect bounds = placement.bounds;
+    const Rect content = placement.content;
+    const Rect caret = placement.caret;
+    [essential] info(
+        "{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}"
+        , tag
+        , sequence
+        , field
+        , bounds.x
+        , bounds.y
+        , bounds.width
+        , bounds.height
+        , content.x
+        , content.y
+        , content.width
+        , content.height
+    );
+    [essential] info(
+        "{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}"
+        , tag
+        , sequence
+        , field
+        , caret.x
+        , caret.y
+        , caret.width
+        , caret.height
+        , selection.x
+        , selection.y
+        , selection.width
+        , selection.height
+        , placement.scroll
+    );
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-template<typename RectanglesT, typename IncludeIndexT>
-[[nodiscard]] inline PassiveSmokeTargetObservation ObservePassiveSmokeTargets(
-    const Impl::Ui::InputRouter& input,
-    const u64 parentGeneration,
-    const u64 childGeneration,
-    const usize beginIndex,
-    const usize endIndex,
-    const IncludeIndexT& includeIndex,
-    RectanglesT& rectangles
-)noexcept(
-    noexcept(rectangles[DeclVal<u32&>()] = DeclVal<const Impl::Ui::Rect&>())
-    && noexcept(static_cast<b8>(!includeIndex(DeclVal<usize&>()) || rectangles[DeclVal<usize&>()].width == 0.0f))
-    && noexcept(SameSmokeRect(DeclVal<const Impl::Ui::Rect&>(), rectangles[DeclVal<usize&>()]))
+PassiveSmokeTargetObservation ObservePassiveSmokeTargets(
+    in InputRouter input,
+    in u64 parentGeneration,
+    in u64 childGeneration,
+    in usize beginIndex,
+    in usize endIndex,
+    in usize excludedA,
+    in usize excludedB,
+    in usize excludedC,
+    mut Span<SnapshotRect> rectangles
 ){
-    PassiveSmokeTargetObservation observation;
+    PassiveSmokeTargetObservation observation();
     u32 rootButton = 0u;
-    for(const Impl::Ui::HitTarget& target : input.targets()){
+    for(in HitTarget target : input.targets()){
         u32 code = 0u;
         if(target.activatable && !target.popup.valid() && rootButton < 2u){
             rectangles[rootButton] = target.rectangle;
             code = rootButton + 1u;
             ++rootButton;
         }
-        else if(target.activatable && target.popup.instanceGeneration == parentGeneration)
+        else if(target.activatable && target.popup.instanceGeneration == parentGeneration){
             code = 3u;
-        else if(target.activatable && target.popup.instanceGeneration == childGeneration)
+        }
+        else if(target.activatable && target.popup.instanceGeneration == childGeneration){
             code = 4u;
+        }
         if(target.id == input.focus())
             observation.focusCode = code;
         for(usize index = beginIndex; index < endIndex; ++index){
-            if(!includeIndex(index) || rectangles[index].width == 0.0f)
+            if(index == excludedA || index == excludedB || index == excludedC || rectangles[index].width == 0.0f)
                 continue;
             if(SameSmokeRect(target.rectangle, rectangles[index]))
                 ++observation.passiveTargets;
@@ -341,141 +983,105 @@ template<typename RectanglesT, typename IncludeIndexT>
     return observation;
 }
 
-template<typename SnapshotT, typename StateChangedT>
-[[nodiscard]] inline PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(const StateChangedT& stateChanged, SnapshotT& current, SnapshotT& snapshot)noexcept(
-    noexcept(DeclVal<void(*)(const Impl::Ui::DisplayMetrics&)noexcept>()(snapshot.display))
-    && noexcept(DeclVal<void(*)(b8)noexcept>()(
-        current.display.logicalWidth != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalWidth
-        || current.display.logicalHeight != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalHeight
-        || current.display.pixelScaleX != DeclVal<const Impl::Ui::DisplayMetrics&>().pixelScaleX
-        || current.display.pixelScaleY != DeclVal<const Impl::Ui::DisplayMetrics&>().pixelScaleY
-    ))
-    && noexcept(DeclVal<void(*)(b8)noexcept>()(stateChanged()))
-    && noexcept(static_cast<b8>(DeclVal<usize&>() < current.rectangles.size()))
-    && noexcept(SameSmokeRect(current.rectangles[DeclVal<usize&>()], snapshot.rectangles[DeclVal<usize&>()]))
-    && noexcept(static_cast<b8>(snapshot.sequence != 0u && !b8{} && !b8{}))
-    && noexcept(current.sequence = snapshot.sequence + 1u)
-    && noexcept(snapshot = current)
+PassiveSmokeTargetObservation ObservePassiveSmokeTargets(
+    in InputRouter input,
+    in u64 parentGeneration,
+    in u64 childGeneration,
+    in usize beginIndex,
+    in usize endIndex,
+    in usize excludedIndex,
+    mut Span<SnapshotRect> rectangles
 ){
-    const Impl::Ui::DisplayMetrics& previous = snapshot.display;
-    const b8 displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
-    b8 changed = stateChanged();
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        changed |= !SameSmokeRect(current.rectangles[index], snapshot.rectangles[index]);
-    if(snapshot.sequence != 0u && !changed && !displayChanged)
-        return {};
-    current.sequence = snapshot.sequence + 1u;
-    snapshot = current;
-    return { .published = true, .displayChanged = displayChanged };
+    return ObservePassiveSmokeTargets(
+        input,
+        parentGeneration,
+        childGeneration,
+        beginIndex,
+        endIndex,
+        excludedIndex,
+        excludedIndex,
+        excludedIndex,
+        rectangles
+    );
 }
 
-[[nodiscard]] b8 HandlePassiveSmokeKeyboard(i32 key, i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept;
-
-template<typename ValuesT>
-inline void PaintPassiveSmokeValueMarkers(const ValuesT& values, const u64 sequence, Impl::UiPaintContext& context){
-    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(values, sequence, context);
+PassiveSmokeSnapshotUpdate EvaluatePassiveSmokeSnapshotChange(
+    in b8 stateChanged,
+    in DisplayMetrics currentDisplay,
+    in DisplayMetrics previousDisplay,
+    in Span<SnapshotRect> currentRectangles,
+    in Span<SnapshotRect> previousRectangles,
+    in u64 previousSequence
+){
+    const b8 displayChanged = currentDisplay.logicalWidth != previousDisplay.logicalWidth
+        || currentDisplay.logicalHeight != previousDisplay.logicalHeight
+        || currentDisplay.pixelScaleX != previousDisplay.pixelScaleX
+        || currentDisplay.pixelScaleY != previousDisplay.pixelScaleY;
+    const b8 changed = stateChanged || !SameSmokeRectSpan(currentRectangles, previousRectangles);
+    if(previousSequence != 0u && !changed && !displayChanged)
+        return PassiveSmokeSnapshotUpdate();
+    PassiveSmokeSnapshotUpdate update();
+    update.published = true;
+    update.displayChanged = displayChanged;
+    return update;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<u64> UiComboSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
-    if(m_empty)
-        return MakeUnexpected(Failure{});
-    return m_rows.findEnabled(start, reverse);
-}
-
-void UiComboSmokeSource::toggleEmpty()noexcept{
-    m_empty = !m_empty;
-    ++m_revision;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxPlacement& placement, const f32 fontSize){
-    using namespace Impl::Ui;
-    FOUNDATION_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
-    EditBoxView view(arena);
-    const b8 captured = view.snapshot(model);
-    FOUNDATION_FATAL_ASSERT(captured);
-    const EditBoxRange range = view.selectionRange();
-    if(range.begin == range.end || placement.content.width <= 0.0f || placement.content.height <= 0.0f)
-        return {};
-    const b8 shaped = view.shape(text, { .fontSize = fontSize }) == TextLayoutStatus::Success;
-    FOUNDATION_FATAL_ASSERT(shaped);
-    auto selection = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
-    FOUNDATION_FATAL_ASSERT(selection.has_value());
-    if(selection->width > 0.0f){
-        const SIMDVectorSingle origin = VectorAdd(VectorSet(selection->x, selection->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
-        selection->x = VectorGetX(origin);
-        selection->y = VectorGetY(origin);
+PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(in b8 stateChanged, mut UiImageSnapshot current, mut UiImageSnapshot snapshot){
+    const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
+        stateChanged,
+        current.display,
+        snapshot.display,
+        current.rectangles,
+        snapshot.rectangles,
+        snapshot.sequence
+    );
+    if(update.published){
+        current.sequence = snapshot.sequence + 1u;
+        snapshot = current;
     }
-    return *selection;
+    return update;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 UiListSmokeSource::key(const u64 index)const noexcept{
-    const u64 count = rowCount();
-    return index < count ? UiWidgetTests::ArithmeticFixtureRowKey(count, m_removed, m_reversed, index) : 0u;
+PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(in b8 stateChanged, mut UiProgressSnapshot current, mut UiProgressSnapshot snapshot){
+    const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
+        stateChanged,
+        current.display,
+        snapshot.display,
+        current.rectangles,
+        snapshot.rectangles,
+        snapshot.sequence
+    );
+    if(update.published){
+        current.sequence = snapshot.sequence + 1u;
+        snapshot = current;
+    }
+    return update;
 }
 
-Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const noexcept{
-    return UiWidgetTests::FindArithmeticFixtureRowIndex(rowCount(), m_removed, m_reversed, keyValue);
+PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(in b8 stateChanged, mut UiTextureImageSnapshot current, mut UiTextureImageSnapshot snapshot){
+    const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
+        stateChanged,
+        current.display,
+        snapshot.display,
+        current.rectangles,
+        snapshot.rectangles,
+        snapshot.sequence
+    );
+    if(update.published){
+        current.sequence = snapshot.sequence + 1u;
+        snapshot = current;
+    }
+    return update;
 }
 
-Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
-    return FindAdjacentEnabledRow(*this, start, reverse);
-}
-
-StringView UiListSmokeSource::text(const u64 index)const noexcept{
-    ++m_labelReads;
-    const u64 rowKey = key(index);
-    if(rowKey == 0u)
-        return {};
-    m_label[0] = 'R';
-    m_label[1] = 'o';
-    m_label[2] = 'w';
-    m_label[3] = ' ';
-    Array<char, s_UsizeDecimalDigitCount> digits{};
-    const AStringView formatted = FormatDecimal(rowKey, digits);
-    FOUNDATION_MEMCPY(m_label.data() + 4u, m_label.size() - 4u, formatted.data(), formatted.size());
-    return { m_label.data(), 4u + formatted.size() };
-}
-
-b8 UiListSmokeSource::enabled(const u64 index)const noexcept{
-    return index < rowCount() && key(index) != 5u;
-}
-
-void UiListSmokeSource::reverse()noexcept{
-    m_reversed = !m_reversed;
-    ++m_revision;
-}
-
-void UiListSmokeSource::remove(const u64 keyValue)noexcept{
-    if(keyValue == 0u || keyValue > 100000u || keyValue == m_removed)
-        return;
-    m_removed = keyValue;
-    ++m_revision;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 HandlePassiveSmokeKeyboard(const i32 key, const i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept{
-    if(key != Core::Key::F4 && key != Core::Key::F5)
+b8 HandlePassiveSmokeKeyboard(in i32 key, in i32 action, mut b8 phase, mut PopupState parent, mut PopupState child){
+    if(key != s_SmokeKeyF4 && key != s_SmokeKeyF5)
         return false;
-    if(action != Core::InputAction::Press)
+    if(action != s_SmokeActionPress)
         return true;
-    if(key == Core::Key::F4)
+    if(key == s_SmokeKeyF4){
         phase = !phase;
+    }
     else if(parent.isOpen()){
         child.close();
         parent.close();
@@ -487,52 +1093,110 @@ b8 HandlePassiveSmokeKeyboard(const i32 key, const i32 action, b8& phase, Impl::
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
-    if(placement.rowCount == 0u)
-        return MakeUnexpected(Failure{});
-    const f32 height = static_cast<f32>(static_cast<f64>(placement.contentHeight) / static_cast<f64>(placement.rowCount));
-    return Impl::Ui::CalculateScrollRowBounds(index, placement, height);
+void PaintSingleSmokeValueMarkers(in Span<u32> values, in u32 sequence, mut UiPaintContext context){
+    const f32 y = context.display.logicalHeight - 20.0f;
+    for(usize index = 0u; index <= values.size(); ++index){
+        u32 value = sequence;
+        if(index < values.size())
+            value = values[index];
+        const f32 x = cast<f32>(12u + cast<u32>(index) * 20u);
+        context.paint.fillRect(Rect(x, y, 14.0f, 12.0f), EncodeSmokeColor(value));
+    }
 }
 
-Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
-    const auto rectangle = SmokeListRowBounds(placement, index);
-    if(!rectangle)
-        return {};
-    const auto visible = Impl::Ui::TryIntersectUiRects(*rectangle, placement.contentClip, Impl::Ui::UiRectPrecision::PreciseExtents);
-    return visible ? *visible : Impl::Ui::Rect{};
+void PaintKeyedSmokeValueMarkers(
+    in Span<u64> values,
+    in u64 sequence,
+    in u32 step,
+    in u32 width,
+    in u32 height,
+    in u32 bottomOffset,
+    mut UiPaintContext context
+){
+    const f32 y = context.display.logicalHeight - cast<f32>(bottomOffset);
+    const f32 w = cast<f32>(width);
+    const f32 h = cast<f32>(height);
+    for(usize index = 0u; index <= values.size(); ++index){
+        u64 value = sequence;
+        if(index < values.size())
+            value = values[index];
+        for(u32 part = 0u; part < 2u; ++part){
+            const usize marker = index * 2u + cast<usize>(part);
+            const f32 x = cast<f32>(12u + cast<u32>(marker) * step);
+            context.paint.fillRect(Rect(x, y, w, h), EncodeSmokeColor(value >> (part * 12u)));
+        }
+    }
 }
 
-void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+void PaintKeyedSmokeValueMarkersDefault(in Span<u64> values, in u64 sequence, in u32 step, in u32 width, mut UiPaintContext context){
+    PaintKeyedSmokeValueMarkers(values, sequence, step, width, 12u, 20u, context);
 }
 
-void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged){
-    if(inOutLastDisplay.logicalWidth == display.logicalWidth && inOutLastDisplay.logicalHeight == display.logicalHeight && inOutLastDisplay.pixelScaleX == display.pixelScaleX && inOutLastDisplay.pixelScaleY == display.pixelScaleY)
+void PaintPassiveSmokeValueMarkers(in Span<u64> values, in u64 sequence, mut UiPaintContext context){
+    PaintKeyedSmokeValueMarkers(values, sequence, 12u, 8u, 8u, 18u, context);
+}
+
+// Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.
+void PaintSmokeValueMarkers(in Span<u64> values, in Span<u64> bits, in u64 sequence, mut UiPaintContext context){
+    const f32 y = context.display.logicalHeight - 18.0f;
+    u32 marker = 0u;
+    for(in u64 value : values){
+        for(u32 part = 0u; part < 2u; ++part){
+            const f32 x = cast<f32>(12u + marker * 12u);
+            context.paint.fillRect(Rect(x, y, 8.0f, 8.0f), EncodeSmokeColor(value >> (part * 12u)));
+            ++marker;
+        }
+    }
+    for(in u64 bit : bits){
+        for(u32 part = 0u; part < 6u; ++part){
+            const f32 x = cast<f32>(12u + marker * 12u);
+            context.paint.fillRect(Rect(x, y, 8.0f, 8.0f), EncodeSmokeColor(bit >> (part * 12u)));
+            ++marker;
+        }
+    }
+    for(u32 part = 0u; part < 2u; ++part){
+        const f32 x = cast<f32>(12u + marker * 12u);
+        context.paint.fillRect(Rect(x, y, 8.0f, 8.0f), EncodeSmokeColor(sequence >> (part * 12u)));
+        ++marker;
+    }
+}
+
+void PaintUiLayerSmokeScene(mut UiPaintContext context){
+    const VectorSingle extent(context.display.logicalWidth, context.display.logicalHeight, context.display.logicalWidth, context.display.logicalHeight);
+
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.08f, 0.28f, 0.20f), Color(0.0f, 0.0f, 1.0f, 1.0f));
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.12f, 0.12f, 0.20f, 0.12f), Color(1.0f, 0.0f, 0.0f, 0.5f));
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.34f, 0.08f, 0.16f, 0.20f), Color(1.0f, 0.0f, 0.0f, 0.5f));
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.54f, 0.08f, 0.18f, 0.20f), Color(0.25f, 0.25f, 0.25f, 1.0f));
+    if(!context.paint.drawRegion(s_UiSmokeNameWhite, ScaleSmokeSceneRect(extent, 0.76f, 0.08f, 0.20f, 0.20f), Color(0.1f, 0.8f, 0.2f, 0.5f))){
+        error("UiLayerSmokeProject: white sprite is absent from the default atlas");
         return;
-    inOutLastDisplay = display;
-    inOutDisplayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: display logical={}x{} scale={}x{}"), tag, display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
-}
+    }
 
-void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, const TStringView field, const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection){
-    const auto& bounds = placement.bounds;
-    const auto& content = placement.content;
-    const auto& caret = placement.caret;
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}"), tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height, content.x, content.y, content.width, content.height);
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
-        , tag, sequence, field, caret.x, caret.y, caret.width, caret.height
-        , selection.x, selection.y, selection.width, selection.height, placement.scroll
-    );
-}
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.38f, 0.28f, 0.26f), Color(0.0f, 0.2f, 0.3f, 1.0f));
+    context.paint.pushClip(ScaleSmokeSceneRect(extent, 0.10f, 0.44f, 0.16f, 0.12f));
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.38f, 0.28f, 0.26f), Color(0.0f, 1.0f, 0.0f, 1.0f));
+    context.paint.pushClip(ScaleSmokeSceneRect(extent, 0.14f, 0.42f, 0.16f, 0.16f));
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.04f, 0.38f, 0.28f, 0.26f), Color(1.0f, 0.0f, 0.0f, 1.0f));
+    if(!context.paint.popClip() || !context.paint.popClip()){
+        error("UiLayerSmokeProject: nested clip stack became unbalanced");
+        return;
+    }
 
+    if(
+        !context.paint.drawRegion(s_UiSmokeNamePanelNormal, ScaleSmokeSceneRect(extent, 0.36f, 0.40f, 0.26f, 0.24f))
+        || !context.paint.drawRegion(s_UiSmokeNameButtonNormal, ScaleSmokeSceneRect(extent, 0.66f, 0.40f, 0.13f, 0.14f))
+        || !context.paint.drawRegion(s_UiSmokeNameButtonHover, ScaleSmokeSceneRect(extent, 0.82f, 0.40f, 0.14f, 0.14f))
+    ){
+        error("UiLayerSmokeProject: named nine-slice regions are absent from the default atlas");
+        return;
+    }
 
-
-};
-NWB_END
+    context.paint.fillRect(ScaleSmokeSceneRect(extent, 0.64f, 0.64f, 0.16f, 0.16f), Color(0.0f, 0.1f, 0.2f, 1.0f));
+    if(!context.paint.drawRegion(s_UiSmokeNameComboArrow, ScaleSmokeSceneRect(extent, 0.68f, 0.68f, 0.08f, 0.08f)))
+        error("UiLayerSmokeProject: combo arrow sprite is absent from the default atlas");
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

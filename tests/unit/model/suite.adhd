@@ -7,7 +7,17 @@
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_model/asset.adhd.h>
 #include <impl/ecs_model/system.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
@@ -41,24 +51,20 @@ public:
 
 
 public:
-    virtual b8 readAssetBinary(const Name& virtualPath, Core::Assets::AssetBytes& outBinary)const noexcept override;
+    virtual b8 readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept override{
+        outBinary.clear();
+        ++readCount;
+        return false;
+    }
 };
 
 struct RuntimeContext{
-    static constexpr AStringView s_ModelPath = "tests/model_runtime/model";
-
-
 public:
     Tests::EcsTestWorld testWorld;
     Core::Assets::AssetRegistry registry{ testWorld.arena };
     EmptyAssetSource source;
     Core::Assets::AssetManager assetManager{ testWorld.arena, registry, source };
     Impl::ModelSystem system{ testWorld.arena, testWorld.world, assetManager };
-
-
-public:
-    [[nodiscard]] Core::ECS::EntityID makeOwner();
-    [[nodiscard]] Core::ECS::EntityID makeObject(Core::ECS::EntityID owner);
 };
 
 
@@ -77,7 +83,10 @@ namespace Tests::ModelCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using EmptyAssetSource = ModelTests::EmptyAssetSource;
 using RuntimeContext = ModelTests::RuntimeContext;
+using AssetBytes = Core::Assets::AssetBytes;
+using Entity = Core::ECS::Entity;
 using World = Core::ECS::World;
 using Model = Impl::Model;
 using ModelComponent = Impl::ModelComponent;
@@ -103,11 +112,18 @@ namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const StringView s_ModelPath = "tests/model_runtime/model";
 
 SkeletonJointMatrix MakeTranslation(in f32 x){
     SkeletonJointMatrix matrix = MatrixIdentity<f32x3x4>();
@@ -115,17 +131,37 @@ SkeletonJointMatrix MakeTranslation(in f32 x){
     return matrix;
 }
 
-b8 HasComponentPresent<T>(in World world, in EntityID entity){
-    b8 present = false;
-    native(in world, in entity, mut present){
-        present = world.tryGetComponent<T>(entity) != nullptr;
+b8 HasComponentPresent<T>(mut World world, in EntityID entity){
+    return world.entity(entity).hasComponent<T>();
+}
+
+EntityID MakeModelRuntimeOwner(mut RuntimeContext context){
+    Entity entity = context.testWorld.world.createEntity();
+    mut ModelComponent component = entity.addComponent<ModelComponent>();
+    component.model = AssetRef<Model>(s_ModelPath);
+    mut ModelRuntimeComponent runtime = entity.addComponent<ModelRuntimeComponent>();
+    runtime.model = component.model.name();
+    entity.addComponent<TransformComponent>();
+    return entity.id();
+}
+
+EntityID MakeModelRuntimeObject(in EntityID owner, mut RuntimeContext context){
+    Entity entity = context.testWorld.world.createEntity();
+    mut ModelObjectComponent object = entity.addComponent<ModelObjectComponent>();
+    object.owner = owner;
+    object.model = Name(s_ModelPath);
+    object.object = Name(s_ModelFixtureNameObject);
+    entity.addComponent<TransformComponent>();
+    if(HasComponentPresent<ModelRuntimeComponent>(context.testWorld.world, owner)){
+        mut ModelRuntimeComponent runtime = context.testWorld.world.entity(owner).getComponent<ModelRuntimeComponent>();
+        ++runtime.objectCount;
     }
-    return present;
+    return entity.id();
 }
 
 EntityID MakeSkeleton(mut RuntimeContext context, in EntityID owner, in usize jointCount, in f32 jointTranslation, in f32 objectTranslation){
     mut World world = context.testWorld.world;
-    const EntityID skeleton = context.makeObject(owner);
+    const EntityID skeleton = MakeModelRuntimeObject(owner, context);
     mut ModelObjectComponent object = world.entity(skeleton).getComponent<ModelObjectComponent>();
     object.kind = ModelObjectKind::Skeleton;
     object.localTransform = MakeTranslation(objectTranslation);
@@ -151,7 +187,7 @@ EntityID MakeSkeleton(mut RuntimeContext context, in EntityID owner, in usize jo
 }
 
 EntityID MakeAttachment(mut RuntimeContext context, in EntityID owner, in EntityID parent, in u32 jointIndex, in f32 localTranslation){
-    const EntityID entity = context.makeObject(owner);
+    const EntityID entity = MakeModelRuntimeObject(owner, context);
     mut ModelStaticMeshAttachmentComponent attachment = context.testWorld.world.entity(entity).addComponent<ModelStaticMeshAttachmentComponent>();
     attachment.parentEntity = parent;
     attachment.parentJointIndex = jointIndex;
@@ -175,7 +211,7 @@ void SetTwoJointPalette(mut SkeletonPoseComponent pose, in f32 firstX, in f32 se
 void VerifyModelAttachmentRevalidatesPoseAndParent(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID owner = context.makeOwner();
+    const EntityID owner = MakeModelRuntimeOwner(context);
     const EntityID parent = MakeSkeleton(context, owner, 2u, 1.0f, 5.0f);
     const EntityID replacement = MakeSkeleton(context, owner, 2u, 4.0f, 10.0f);
     const EntityID attached = MakeAttachment(context, owner, parent, 1u, 2.0f);
@@ -204,7 +240,7 @@ void VerifyModelAttachmentRevalidatesPoseAndParent(){
 void VerifyModelAttachmentInvalidUnrequestedJoints(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID owner = context.makeOwner();
+    const EntityID owner = MakeModelRuntimeOwner(context);
     const EntityID parent = MakeSkeleton(context, owner, 2u);
     const EntityID attached = MakeAttachment(context, owner, parent, 0u, 2.0f);
     world.entity(attached).getComponent<TransformComponent>().position.x = 123.0f;
@@ -223,7 +259,7 @@ void VerifyModelAttachmentInvalidUnrequestedJoints(){
 void VerifyModelAttachmentPreservesTransformWriteOrder(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID owner = context.makeOwner();
+    const EntityID owner = MakeModelRuntimeOwner(context);
     world.entity(owner).getComponent<TransformComponent>().position.x = 10.0f;
     const EntityID first = MakeAttachment(context, owner, s_InvalidEntityId, Impl::s_SkeletonInvalidJointIndex, 2.0f);
     const EntityID second = MakeAttachment(context, owner, first, Impl::s_SkeletonInvalidJointIndex, 3.0f);
@@ -247,7 +283,7 @@ void VerifyModelAttachmentPreservesTransformWriteOrder(){
 void VerifyModelAttachmentGroupedQueriesRejectShrunkPalettes(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID owner = context.makeOwner();
+    const EntityID owner = MakeModelRuntimeOwner(context);
     const EntityID parent = MakeSkeleton(context, owner, 2u);
     const EntityID firstJoint = MakeAttachment(context, owner, parent, 0u);
     const EntityID secondJoint = MakeAttachment(context, owner, parent, 1u);
@@ -283,7 +319,7 @@ void VerifyModelAttachmentGroupedQueriesRejectShrunkPalettes(){
 void VerifyModelAttachmentSingleQueryRejectsMissingBounds(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID owner = context.makeOwner();
+    const EntityID owner = MakeModelRuntimeOwner(context);
     const EntityID parent = MakeSkeleton(context, owner, 2u);
     const EntityID attached = MakeAttachment(context, owner, parent, 1u);
     ASSERT_TRUE(context.system.update(world, 0.0f));
@@ -305,7 +341,7 @@ void VerifyModelAttachmentSingleQueryRejectsMissingBounds(){
 void VerifyModelAttachmentInterleavedParentsKeepGenerations(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID owner = context.makeOwner();
+    const EntityID owner = MakeModelRuntimeOwner(context);
     const EntityID firstParent = MakeSkeleton(context, owner, 2u, 1.0f);
     const EntityID secondParent = MakeSkeleton(context, owner, 2u, 3.0f);
     const EntityID first = MakeAttachment(context, owner, firstParent, 1u);
@@ -333,8 +369,8 @@ void VerifyModelAttachmentInterleavedParentsKeepGenerations(){
 void VerifyModelRuntimeRemovingMultipleModelsDestroysObjects(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID retainedOwner = context.makeOwner();
-    const EntityID retainedObject = context.makeObject(retainedOwner);
+    const EntityID retainedOwner = MakeModelRuntimeOwner(context);
+    const EntityID retainedObject = MakeModelRuntimeObject(retainedOwner, context);
     const EntityID unrelated = world.createEntity().id();
     Vector<EntityID> removedOwners = Vector<EntityID>();
     removedOwners.reserve(4u);
@@ -346,10 +382,10 @@ void VerifyModelRuntimeRemovingMultipleModelsDestroysObjects(){
     counts[2u] = 64u;
     counts[3u] = 3u;
     for(in usize objectCount : counts){
-        const EntityID owner = context.makeOwner();
+        const EntityID owner = MakeModelRuntimeOwner(context);
         removedOwners.push_back(owner);
         for(usize objectIndex = 0u; objectIndex < objectCount; ++objectIndex)
-            removedObjects.push_back(context.makeObject(owner));
+            removedObjects.push_back(MakeModelRuntimeObject(owner, context));
         world.entity(owner).removeComponent<ModelComponent>();
     }
 
@@ -376,12 +412,12 @@ void VerifyModelRuntimeRemovingMultipleModelsDestroysObjects(){
 void VerifyModelRuntimeInvalidBindingsAndRemovedModels(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID invalidOwner = context.makeOwner();
-    const EntityID invalidObject = context.makeObject(invalidOwner);
-    const EntityID removedOwner = context.makeOwner();
-    const EntityID removedObject = context.makeObject(removedOwner);
-    const EntityID retainedOwner = context.makeOwner();
-    const EntityID retainedObject = context.makeObject(retainedOwner);
+    const EntityID invalidOwner = MakeModelRuntimeOwner(context);
+    const EntityID invalidObject = MakeModelRuntimeObject(invalidOwner, context);
+    const EntityID removedOwner = MakeModelRuntimeOwner(context);
+    const EntityID removedObject = MakeModelRuntimeObject(removedOwner, context);
+    const EntityID retainedOwner = MakeModelRuntimeOwner(context);
+    const EntityID retainedObject = MakeModelRuntimeObject(retainedOwner, context);
     world.entity(invalidOwner).getComponent<ModelComponent>().model.reset();
     world.entity(removedOwner).removeComponent<ModelComponent>();
 
@@ -399,11 +435,11 @@ void VerifyModelRuntimeInvalidBindingsAndRemovedModels(){
 void VerifyModelRuntimePrunesDestroyedOwnerGeneration(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID oldOwner = context.makeOwner();
-    const EntityID oldObject = context.makeObject(oldOwner);
+    const EntityID oldOwner = MakeModelRuntimeOwner(context);
+    const EntityID oldObject = MakeModelRuntimeObject(oldOwner, context);
     world.destroyEntity(oldOwner);
-    const EntityID replacementOwner = context.makeOwner();
-    const EntityID replacementObject = context.makeObject(replacementOwner);
+    const EntityID replacementOwner = MakeModelRuntimeOwner(context);
+    const EntityID replacementObject = MakeModelRuntimeObject(replacementOwner, context);
     ASSERT_EQ(oldOwner.index(), replacementOwner.index());
     ASSERT_NE(oldOwner.generation(), replacementOwner.generation());
 
@@ -419,9 +455,9 @@ void VerifyModelRuntimePrunesDestroyedOwnerGeneration(){
 void VerifyModelRuntimeSteadyStatePerformsNoBackingAllocs(){
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID retainedOwner = context.makeOwner();
-    const EntityID retainedObject = context.makeObject(retainedOwner);
-    const EntityID emptyOwner = context.makeOwner();
+    const EntityID retainedOwner = MakeModelRuntimeOwner(context);
+    const EntityID retainedObject = MakeModelRuntimeObject(retainedOwner, context);
+    const EntityID emptyOwner = MakeModelRuntimeOwner(context);
     world.entity(emptyOwner).getComponent<ModelComponent>().model.reset();
     context.system.syncModelRuntimes();
     const ArenaMemoryStats before = HeapBackingMemoryStats();
@@ -440,10 +476,10 @@ void VerifyModelRuntimeFailedReplacementClearsOnlyThatOwner(){
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     RuntimeContext context = RuntimeContext();
     mut World world = context.testWorld.world;
-    const EntityID changedOwner = context.makeOwner();
-    const EntityID changedObject = context.makeObject(changedOwner);
-    const EntityID retainedOwner = context.makeOwner();
-    const EntityID retainedObject = context.makeObject(retainedOwner);
+    const EntityID changedOwner = MakeModelRuntimeOwner(context);
+    const EntityID changedObject = MakeModelRuntimeObject(changedOwner, context);
+    const EntityID retainedOwner = MakeModelRuntimeOwner(context);
+    const EntityID retainedObject = MakeModelRuntimeObject(retainedOwner, context);
     world.entity(changedOwner).getComponent<ModelComponent>().model = AssetRef<Model>(Name("tests/model_runtime/missing"));
 
     context.system.syncModelRuntimes();
@@ -463,59 +499,9 @@ void VerifyModelRuntimeFailedReplacementClearsOnlyThatOwner(){
     EXPECT_EQ(context.source.readCount, 2u);
 }
 
-native{
-NWB_BEGIN
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace ModelTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 EmptyAssetSource::readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept{
-    outBinary.clear();
-    ++readCount;
-    return false;
-}
-
-Core::ECS::EntityID RuntimeContext::makeOwner(){
-    auto entity = testWorld.world.createEntity();
-    auto& component = entity.addComponent<Impl::ModelComponent>();
-    component.model = Core::Assets::AssetRef<Impl::Model>(s_ModelPath);
-    auto& runtime = entity.addComponent<Impl::ModelRuntimeComponent>();
-    runtime.model = component.model.name();
-    entity.addComponent<Impl::Scene::TransformComponent>();
-    return entity.id();
-}
-
-Core::ECS::EntityID RuntimeContext::makeObject(const Core::ECS::EntityID owner){
-    auto entity = testWorld.world.createEntity();
-    auto& object = entity.addComponent<Impl::ModelObjectComponent>();
-    object.owner = owner;
-    object.model = Name(s_ModelPath);
-    object.object = Name(NWB::Tests::ModelCases::s_ModelFixtureNameObject);
-    entity.addComponent<Impl::Scene::TransformComponent>();
-    if(auto* const runtime = testWorld.world.tryGetComponent<Impl::ModelRuntimeComponent>(owner))
-        ++runtime->objectCount;
-    return entity.id();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-}
 
 NWB_ADHD_GTEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate, VerifyModelAttachmentRevalidatesPoseAndParent)
 NWB_ADHD_GTEST(ModelAttachment, InvalidUnrequestedJointsRejectWholePoseAndRecover, VerifyModelAttachmentInvalidUnrequestedJoints)

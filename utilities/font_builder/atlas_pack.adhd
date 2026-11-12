@@ -1,0 +1,78 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/font_atlas_packer.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ComputeGuardedGlyphExtent(in u32 extent){
+    return extent + s_GlyphGuardExtent;
+}
+
+u32 ComputePackedLogicalPageCount(in b8 orderEmpty, in u32 lastPage){
+    if(orderEmpty)
+        return 0u;
+    return lastPage + 1u;
+}
+
+usize ComputeGroupPixelCapacity(in u32 extent){
+    return cast<usize>(extent) * cast<usize>(extent) * cast<usize>(s_FontAtlasMaxChannelCount);
+}
+
+void SiftDownDrawableGlyphOrder(in Span<FontAtlasGlyph> glyphs, in usize rootIndex, in usize endIndex, mut Vector<u32> inOutOrder){
+    FontAtlasPacker packer;
+    usize root = rootIndex;
+    while(root * 2u + 1u < endIndex){
+        const usize leftChild = root * 2u + 1u;
+        usize swapIndex = root;
+        if(packer.packOrderBefore(glyphs[cast<usize>(inOutOrder[swapIndex])], glyphs[cast<usize>(inOutOrder[leftChild])]))
+            swapIndex = leftChild;
+        const usize rightChild = leftChild + 1u;
+        if(rightChild < endIndex && packer.packOrderBefore(glyphs[cast<usize>(inOutOrder[swapIndex])], glyphs[cast<usize>(inOutOrder[rightChild])]))
+            swapIndex = rightChild;
+        if(swapIndex == root)
+            return;
+        const u32 tmp = inOutOrder[root];
+        inOutOrder[root] = inOutOrder[swapIndex];
+        inOutOrder[swapIndex] = tmp;
+        root = swapIndex;
+    }
+}
+
+Vector<u32> BuildSortedDrawableGlyphOrder(in Span<FontAtlasGlyph> glyphs){
+    Vector<u32> order;
+    order.reserve(glyphs.size());
+    for(usize index = 0u; index < glyphs.size(); ++index){
+        if(glyphs[index].drawable != 0u)
+            order.push_back(cast<u32>(index));
+    }
+    const usize count = order.size();
+    if(count <= 1u)
+        return order;
+
+    for(usize start = count / 2u; start > 0u; --start)
+        SiftDownDrawableGlyphOrder(glyphs, start - 1u, count, order);
+
+    for(usize end = count - 1u; end > 0u; --end){
+        const u32 tmp = order[end];
+        order[end] = order[0u];
+        order[0u] = tmp;
+        SiftDownDrawableGlyphOrder(glyphs, 0u, end, order);
+    }
+    return order;
+}
+
+void LogAtlasPackCapacityExhausted(in u32 glyphId, in u32 width, in u32 height, in u32 extent, in u32 maxGroups){
+    error("font_builder: capacity exhausted at glyph {} footprint {}x{} in {}x{} / {} groups; increase extent or lower ppem", glyphId, width, height, extent, extent, maxGroups);
+}
+
+void LogAtlasPackSummary(in usize glyphCount, in u32 logicalPages, in usize groupCount){
+    info("font_builder: packed {} glyphs into {} logical pages / {} compact groups", glyphCount, logicalPages, groupCount);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,89 +2,63 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderDeferredLightingAndCompositeAdhdModule(in u64 value){
-    return value != 0u;
+u32 ComputeDeferredDispatchGroupCount(in u32 extent, in u32 groupSize){
+    return DivideUpWrapping(extent, groupSize);
+}
+
+u64 ComputeSceneLightBufferByteSize(in usize recordByteSize, in usize maxLights){
+    return cast<u64>(recordByteSize * maxLights);
+}
+
+b8 CanRenderDeferredLightingWithHistory(in b8 useLaggedLightingHistory, in b8 laggedHistoryValid){
+    return !useLaggedLightingHistory || laggedHistoryValid;
+}
+
+u32 SelectDeferredPresentOutputLayerSlot(in b8 valid, in u32 slot, in u32 invalidSlot){
+    if(valid)
+        return slot;
+    return invalidSlot;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/global.adhd.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <core/graphics/api.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
-#include <core/common/log.h>
-#include <impl/ecs_render/kernel/task_graph_queue_lookup.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/deferred/deferred_internal.adhd.h>
 #include <impl/ecs_render/deferred/deferred_system.adhd.h>
-#include <impl/ecs_render/csg/format_private.adhd.h>
-#include <impl/ecs_render/csg/work_region.adhd.h>
-#include <impl/ecs_render/deferred/format_private.adhd.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_render/caustic/rt_caustic_state.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/shadow/rt_shadow_state.adhd.h>
-#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_target_builder.adhd.h>
-#include <impl/ecs_render/avboit/avboit_system.adhd.h>
-#include <impl/ecs_render/csg/csg_system.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_target_builder.adhd.h>
-#include <global/atomic_identity.h>
-#include <impl/assets_graphics/deferred_subsystem.adhd.h>
 #include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
 #include <impl/ecs_render/kernel/renderer_format_private.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/material/renderer_render_state_private.adhd.h>
 #include <impl/ecs_render/shader/shader_system.adhd.h>
+#include <impl/ecs_render/shared/frame_push_constants.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/renderer_scene_private.adhd.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets_graphics/components.adhd.h>
-#include <core/graphics/shader_archive.h>
-#include <global/algorithm.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/ecs_render/material/renderer_render_state_private.adhd.h>
-#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <impl/ecs_render/deferred/import_types.adhd.h>
-#include <impl/ecs_render/deferred/prefix_scene_upload_builder.adhd.h>
-#include <impl/ecs_render/deferred/deferred_system.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/deferred/task_graph_prefix_tasks.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/mesh/task_graph_prefix_tasks.adhd.h>
-#include <global/simd/memory.h>
-#include <impl/ecs_render/deferred/opaque_upload_chain_builder.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/material/material_system.adhd.h>
-#include <impl/ecs_render/material/material_typed_private.adhd.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <global/limit.h>
-#include <impl/ecs_render/deferred/opaque_gbuffer_material_resources.adhd.h>
-#include <impl/ecs_render/material/task_graph_resource_sets.adhd.h>
-#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd.h>
-#include <impl/ecs_render/csg/types.adhd.h>
-#include <impl/ecs_render/shared/frame_push_constants.adhd.h>
-#include <impl/ecs_render/deferred/opaque_compute_emulation_planner.adhd.h>
-#include <impl/ecs_render/deferred/opaque_compute_emulation_producers.adhd.h>
-#include <impl/ecs_render/deferred/opaque_shared_compute_emulation_chain.adhd.h>
-#include <impl/ecs_render/deferred/task_graph_suffix_builder.adhd.h>
-#include <impl/ecs_render/deferred/task_graph_present_task.adhd.h>
-#include <impl/ecs_render/deferred/task_graph_gbuffer_task.adhd.h>
+#include <impl/assets_graphics/deferred_subsystem.adhd.h>
+#include <impl/assets_shader/asset.adhd.h>
+
+#include <core/common/log.h>
+#include <core/graphics/api.h>
 #include <core/graphics/backend_selection.h>
-#include <impl/ecs_render/deferred/post_gbuffer_normalize_builder.adhd.h>
-#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
-#include <impl/ecs_render/deferred/lighting_stage_builder.adhd.h>
-#include <impl/ecs_render/deferred/frame_tail_builder.adhd.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,294 +67,7 @@ native{
 NWB_IMPL_BEGIN
 
 
-
-#ifndef NWB_IMPL_ECS_RENDER_DEFERRED_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_DEFERRED_INTERNAL_DECLS_H
-struct DeferredBindlessDescriptorSources{
-    Core::Sampler& sampler;
-    Core::Sampler& avboitLinearSampler;
-    Core::Buffer& sceneShadingBuffer;
-    Core::Buffer& lightBuffer;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Registers every deferred frame target in the global descriptor heap, in the fixed order the slot table expects.
-class DeferredBindlessDescriptorRegistrar final : NoCopy{
-public:
-    DeferredBindlessDescriptorRegistrar(Core::GpuDescriptorHeap& heap, DeferredFrameTargets& targets, const DeferredBindlessDescriptorSources& sources)noexcept
-        : m_heap(heap)
-        , m_targets(targets)
-        , m_bindless(targets.bindless)
-        , m_sources(sources)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<void> registerAll();
-
-
-private:
-    [[nodiscard]] Expected<void> registerLightingTargets();
-    [[nodiscard]] Expected<void> registerTransparencyTargets();
-    [[nodiscard]] Expected<void> registerSceneBuffers();
-    [[nodiscard]] Expected<void> registerCsgIntervalTargets();
-    [[nodiscard]] Expected<void> registerCausticResolveTargets();
-    [[nodiscard]] Expected<void> registerSoftShadowTargets();
-
-
-private:
-    Core::GpuDescriptorHeap& m_heap;
-    DeferredFrameTargets& m_targets;
-    DeferredBindlessFrameResources& m_bindless;
-    const DeferredBindlessDescriptorSources& m_sources;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredSystem;
-struct DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Record>
-[[nodiscard]] b8 RecordDeferredGraphTask(RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Core::CommandList& commandList, Record&& record)noexcept(
-    noexcept(record(deferredSystem, targets, commandList))
-    && IsNothrowConvertible_V<decltype(record(deferredSystem, targets, commandList)), b8>
-){
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
-    return record(deferredSystem, targets, commandList);
-}
-
-// The payload overload takes references: deferred system, frame targets, timing ticket; missing bindings fail.
-template<typename Payload, typename Record>
-[[nodiscard]] b8 RecordDeferredGraphTask(const Payload& payload, Core::CommandList& commandList, Record&& record)noexcept(noexcept(RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record)))){
-    return RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportResult;
-
-
-class DeferredCsgTextureImports final{
-public:
-    void capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets);
-    [[nodiscard]] b8 valid()const noexcept;
-    void publish(DeferredGraphResourceImportResult& result)const noexcept;
-
-
-private:
-    Expected<Core::GpuGraphResourceId> m_csgCapBackNormal = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgIntervalDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgIntervalId = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverEventData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverEventCount = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverSpanData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverSpanCount = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalCapNormal = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalCount = MakeUnexpected(Failure{});
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportResult;
-
-
-class DeferredAvboitResourceImports final{
-public:
-    void capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets, b8 clearTargets);
-    [[nodiscard]] b8 validRefractionInputs()const noexcept;
-    [[nodiscard]] b8 validRefractionSpecular()const noexcept;
-    [[nodiscard]] b8 validAvboitInputs()const noexcept;
-    void publish(DeferredGraphResourceImportResult& result)const noexcept;
-
-
-private:
-    Expected<Core::GpuGraphResourceId> m_avboitLowRaster = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitAccumColor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitAccumExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionNormalIor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionTintCoverage = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionInstance = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionSpecularRoughness = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionResolve = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitForegroundColor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitForegroundExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitTransmittance = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitCoverage = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitDepthWarp = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitControl = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitExtinctionOverflow = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitMaterialDomain = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitCsgDomain = MakeUnexpected(Failure{});
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FrameTimingEndGraphTask{
-    // Frame timing must end on the same primary physical queue that recorded its beginning.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
-
-
-public:
-    // The transaction owns the timing reservation opened by the frame-timing prelude.
-    struct Payload{
-        Core::GpuTimingFrameTransaction& frameTimingTransaction;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        return payload.frameTimingTransaction.recordEnd(commandList);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FrameRecoveryGraphTask{
-    // Frame timing must end on the same primary physical queue that recorded its beginning.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
-
-
-public:
-    // The transaction owns the timing reservation this recovery tail may retire.
-    // The armed/retire flags are caller-owned outputs the tail clears.
-    struct Payload{
-        Core::GpuTimingFrameTransaction& frameTimingTransaction;
-        b8& armed;
-        b8& retiresFrameTiming;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        return payload.armed && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList));
-    }
-
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.armed && payload.retiresFrameTiming && !payload.frameTimingTransaction.confirmEndSubmission(token, false)){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: failed to retire frame recovery timing query"));
-            payload.frameTimingTransaction.discard();
-        }
-        payload.armed = false;
-        payload.retiresFrameTiming = false;
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        if(payload.armed)
-            payload.frameTimingTransaction.discard();
-        payload.armed = false;
-        payload.retiresFrameTiming = false;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct PostGbufferNormalizeGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    // The raytracing system, timing-ticket slot, and shadow task slot are required.
-    // Async timing stays optional: timing spans one packet on the compute route.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        const Core::GpuTaskId& shadowVisibilityTask;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
-        if(!shadowVisibilityQueue)
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
-        if(shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
-            (*payload.asyncPrefixTiming)->finishTiming(commandList);
-            payload.asyncPrefixTiming->reset();
-        }
-        return true;
-    }
-
-    static void Accepted(Payload& payload, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-        payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-#endif
-
 
 
 namespace __hidden_deferred_lighting{
@@ -426,8 +113,8 @@ public:
 
 
 SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(const f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept{
-    FOUNDATION_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    FOUNDATION_ASSERT(m_deferredState.m_lightBuffer);
+    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    NWB_ASSERT(m_deferredState.m_lightBuffer);
     SceneShadingBufferUploads uploads{};
 
     Array<f32, NWB_SCENE_MAX_LIGHTS> causticLightImportance{};
@@ -485,7 +172,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
         return false;
     }
 
@@ -504,7 +191,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         else
             m_deferredState.m_sceneShadingBuffer.reset();
         if(!sceneShadingBufferResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene shading buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene shading buffer"));
             return false;
         }
     }
@@ -512,7 +199,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     if(!m_deferredState.m_lightBuffer){
         Core::BufferDesc lightBufferDesc;
         lightBufferDesc
-            .setByteSize(static_cast<u64>(sizeof(SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
+            .setByteSize(ComputeSceneLightBufferByteSize(sizeof(SceneLightGpuData), NWB_SCENE_MAX_LIGHTS))
             .setStructStride(sizeof(SceneLightGpuData))
             .setDebugName(s_SceneLightBufferName)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
@@ -524,19 +211,19 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         else
             m_deferredState.m_lightBuffer.reset();
         if(!lightBufferResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene light buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene light buffer"));
             return false;
         }
     }
 
     // Local layout carries the heap slot plus the swap-chain mode.
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredLightingPushConstants), Core::ShaderType::Compute, m_deferredState.m_lightingBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
         return false;
     }
 
     if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting sampler"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
 
@@ -555,7 +242,7 @@ b8 RendererDeferredSystem::createDeferredLightingPipeline(){
         return true;
 
     if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), m_deferredState.m_lightingComputeShader, m_deferredState.m_lightingBindingLayout, false, m_deferredState.m_lightingPipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
     }
 
@@ -569,10 +256,10 @@ Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Co
 }
 
 b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, const b8 useLaggedLightingHistory){
-    FOUNDATION_ASSERT(m_deferredState.m_lightingPipeline);
+    NWB_ASSERT(m_deferredState.m_lightingPipeline);
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory ? &targets.laggedLightingHistory : nullptr;
-    if(useLaggedLightingHistory && (!laggedHistory || !laggedHistory->valid()))
+    if(!CanRenderDeferredLightingWithHistory(useLaggedLightingHistory, laggedHistory && laggedHistory->valid()))
         return false;
 
     const Core::GpuDescriptorHandle resourceSlots = laggedHistory ? laggedHistory->slotsBufferDescriptor : targets.bindless.slotsBufferDescriptor;
@@ -588,8 +275,8 @@ b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList
     const DeferredLightingPushConstants pushConstants = ResolveDeferredLightingPushConstants(resourceSlots.slot(), m_graphics.isHDR10OutputActive());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
-    const u32 groupCountX = DivideUpWrapping(targets.width, NWB_DEFERRED_LIGHTING_GROUP_SIZE);
-    const u32 groupCountY = DivideUpWrapping(targets.height, NWB_DEFERRED_LIGHTING_GROUP_SIZE);
+    const u32 groupCountX = ComputeDeferredDispatchGroupCount(targets.width, NWB_DEFERRED_LIGHTING_GROUP_SIZE);
+    const u32 groupCountY = ComputeDeferredDispatchGroupCount(targets.height, NWB_DEFERRED_LIGHTING_GROUP_SIZE);
     commandList.dispatch(groupCountX, groupCountY, 1u);
     return true;
 }
@@ -644,22 +331,22 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
         return false;
     }
 
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredCompositePushConstants), Core::ShaderType::Compute, m_deferredState.m_compositeComputeBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
         return false;
     }
 
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredPresentPushConstants), Core::ShaderType::Pixel, m_deferredState.m_presentBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
         return false;
     }
 
     if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite sampler"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
     }
 
@@ -683,7 +370,7 @@ b8 RendererDeferredSystem::createDeferredCompositePipeline(){
         return true;
 
     if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), m_deferredState.m_compositeComputeShader, m_deferredState.m_compositeComputeBindingLayout, false, m_deferredState.m_compositeComputePipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
         return false;
     }
 
@@ -716,7 +403,7 @@ b8 RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& pres
     else
         m_deferredState.m_presentPipeline.reset();
     if(!presentPipelineResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred presentation pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation pipeline"));
         return false;
     }
 
@@ -735,9 +422,8 @@ Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
         __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .reflectionInputs = reflectionInputs, });
 }
 
-
 b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs){
-    FOUNDATION_ASSERT(m_deferredState.m_compositeComputePipeline);
+    NWB_ASSERT(m_deferredState.m_compositeComputePipeline);
 
     // Boundary states are graph-owned; this thunk holds only composite commands.
 
@@ -753,17 +439,17 @@ b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandLis
         reflectionInputs
     );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    const u32 groupCountX = DivideUpWrapping(targets.width, NWB_DEFERRED_COMPOSITE_GROUP_SIZE);
-    const u32 groupCountY = DivideUpWrapping(targets.height, NWB_DEFERRED_COMPOSITE_GROUP_SIZE);
+    const u32 groupCountX = ComputeDeferredDispatchGroupCount(targets.width, NWB_DEFERRED_COMPOSITE_GROUP_SIZE);
+    const u32 groupCountY = ComputeDeferredDispatchGroupCount(targets.height, NWB_DEFERRED_COMPOSITE_GROUP_SIZE);
     commandList.dispatch(groupCountX, groupCountY, 1u);
     return true;
 }
 
 b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage){
-    FOUNDATION_ASSERT(presentationFrame.valid());
-    FOUNDATION_ASSERT(m_deferredState.m_presentPipeline);
+    NWB_ASSERT(presentationFrame.valid());
+    NWB_ASSERT(m_deferredState.m_presentPipeline);
     Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
-    FOUNDATION_ASSERT(
+    NWB_ASSERT(
         presentationFramebuffer.getDescription().colorAttachments.size() == 1u
         && presentationFramebuffer.getDescription().colorAttachments[0].texture == presentationFrame.backBuffer.texture.get()
         && m_deferredState.m_presentPipeline->getFramebufferInfo() == presentationFramebuffer.getFramebufferInfo()
@@ -795,7 +481,7 @@ b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList,
         targets.bindless.slotsBufferDescriptor.slot(),
         m_graphics.isHDR10OutputActive(),
         m_deferredState.m_presentationSettings,
-        outputLayerImage.valid() ? outputLayerImage.slot() : Core::GpuDescriptorHandle::s_Invalid
+        SelectDeferredPresentOutputLayerSlot(outputLayerImage.valid(), outputLayerImage.slot(), Core::GpuDescriptorHandle::s_Invalid)
     );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
@@ -810,386 +496,14 @@ b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::declare(const DeferredGraphResourceImportInputs& inputs)const{
-    DeferredGraphResourceImportResult result{};
-
-    DeferredFrameTargets& deferredTargets = inputs.targets;
-    const DeferredLightingGraphResources& deferredLightingResources = inputs.lightingResources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = inputs.meshViewSnapshot;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources = inputs.rayTracingResources;
-    const DeferredLaggedLightingHistoryResources* const history = inputs.history;
-    const DeferredLaggedLightingHistoryResources* const captureHistory = inputs.captureHistory;
-    const b8 clearAvboitTargets = inputs.clearAvboitTargets;
-    const b8 capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
-    const b8 hasCsgFrameWork = inputs.hasCsgFrameWork;
-
-    // Outputs begin with a graph-owned write; fresh resources start Undefined.
-    const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return RendererTaskGraphDetail::ImportExternalTexture(m_graph, texture, identity, label, Core::ResourceStates::Unknown);
-    };
-    const auto importCurrentBindlessSlots = [&](const Name& identity, const AStringView label){
-        return RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.bindless.slotsBuffer, identity, label);
-    };
-
-    Expected<Core::GpuGraphResourceId> albedoResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> normalResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> worldPositionResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> specularRoughnessResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> depthResult = MakeUnexpected(Failure{});
-    DeferredCsgTextureImports csgTextureImports;
-    DeferredAvboitResourceImports avboitImports;
-    Expected<Core::GpuGraphResourceId> shadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> causticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> surfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentShadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentCausticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentSurfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> opaqueColorResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> sceneShadingResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> lightsResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> meshViewResult = MakeUnexpected(Failure{});
-    Expected<Optional<Core::GpuGraphResourceId>> materialInstancesResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> materialTypedResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgReceiverRangesResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgCuttersResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgClipContextSlotsResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Core::GpuGraphResourceId> bindlessSlotsResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentBindlessSlotsResult = MakeUnexpected(Failure{});
-    Expected<Optional<Core::GpuGraphResourceId>> materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Core::GpuGraphResourceId> historyCopyShadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyCausticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopySurfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyDestinationShadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyDestinationCausticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyDestinationSurfelIrradianceResult = MakeUnexpected(Failure{});
-
-    albedoResult = importFirstWriteTexture(deferredTargets.albedo, Name(s_DeferredImportNameRenderDeferredLightingAlbedo), "G-Buffer Albedo");
-    normalResult = importFirstWriteTexture(deferredTargets.normal, Name(s_DeferredImportNameRenderDeferredLightingNormal), "G-Buffer Normal");
-    worldPositionResult = importFirstWriteTexture(deferredTargets.worldPosition, Name(s_DeferredImportNameRenderDeferredLightingWorldPosition), "G-Buffer World Position");
-    specularRoughnessResult = importFirstWriteTexture(deferredTargets.specularRoughness, Name(s_DeferredImportNameRenderDeferredLightingSpecularRoughness), "G-Buffer Specular Roughness");
-    depthResult = importFirstWriteTexture(deferredTargets.depth, Name(s_DeferredImportNameRenderDeferredLightingDepth), "G-Buffer Depth");
-
-    // CSG working set is declared only for frames with CSG work; wider target lifecycle stays in native producers.
-    if(hasCsgFrameWork)
-        csgTextureImports.capture(m_graph, deferredTargets);
-    shadowVisibilityResult = RendererTaskGraphDetail::ImportExternalTexture(
-        m_graph, history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name(s_DeferredImportNameRenderDeferredLightingShadowVisibility), history ? "Lagged Shadow Visibility" : RendererGpuPassText::s_ShadowVisibilityLabel
-    );
-    causticIrradianceResult = RendererTaskGraphDetail::ImportExternalTexture(
-        m_graph, history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name(s_DeferredImportNameRenderDeferredLightingCausticIrradiance), history ? "Lagged Caustic Irradiance" : s_CausticIrradianceLabel
-    );
-    surfelIrradianceResult = RendererTaskGraphDetail::ImportExternalTexture(
-        m_graph, history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name(s_DeferredImportNameRenderDeferredLightingSurfelIrradiance), history ? "Lagged Surfel Irradiance" : s_SurfelIrradianceLabel
-    );
-    currentShadowVisibilityResult = !history
-        ? shadowVisibilityResult
-        : RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.shadowVisibility, Name(s_DeferredImportNameRenderDeferredShadowVisibilityCurrentOutput), RendererGpuPassText::s_ShadowVisibilityLabel);
-    currentCausticIrradianceResult = !history ? causticIrradianceResult : RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.causticIrradiance, Name(s_DeferredImportNameRenderDeferredEffectsCurrentCausticIrradiance), s_CausticIrradianceLabel);
-    currentSurfelIrradianceResult = !history ? surfelIrradianceResult : RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.surfelIrradiance, Name(s_DeferredImportNameRenderDeferredSurfelGiCurrentIrradiance), s_SurfelIrradianceLabel);
-    opaqueColorResult = importFirstWriteTexture(deferredTargets.opaqueColor, Name(s_DeferredImportNameRenderDeferredLightingOpaqueColor), "Opaque Color");
-    sceneShadingResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredLightingResources.sceneShadingBuffer, Name(s_DeferredImportNameRenderDeferredLightingSceneShading), "Scene Shading");
-    lightsResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredLightingResources.lightBuffer, Name(s_DeferredImportNameRenderDeferredLightingLights), "Lights");
-    meshViewResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, meshViewBufferSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel);
-    if(frameBindings.instanceBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, frameBindings.instanceBuffer, Name(s_DeferredImportNameRenderDeferredMaterialInstances), "Material Instances");
-        if(!importedResource)
-            materialInstancesResult = MakeUnexpected(importedResource.error());
-        else
-            materialInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(frameBindings.materialTypedBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, frameBindings.materialTypedBuffer, Name(s_DeferredImportNameRenderDeferredMaterialTyped), "Material Typed Data");
-        if(!importedResource)
-            materialTypedResult = MakeUnexpected(importedResource.error());
-        else
-            materialTypedResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.receiverRanges){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.receiverRanges, Name(s_DeferredImportNameRenderDeferredCsgReceiverRanges), "CSG Receiver Ranges");
-        if(!importedResource)
-            csgReceiverRangesResult = MakeUnexpected(importedResource.error());
-        else
-            csgReceiverRangesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.cutters){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.cutters, Name(s_DeferredImportNameRenderDeferredCsgCutters), "CSG Cutters");
-        if(!importedResource)
-            csgCuttersResult = MakeUnexpected(importedResource.error());
-        else
-            csgCuttersResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.clipContextSlots){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.clipContextSlots, Name(s_DeferredImportNameRenderDeferredCsgClipContextSlots), "CSG Clip Context Slots");
-        if(!importedResource)
-            csgClipContextSlotsResult = MakeUnexpected(importedResource.error());
-        else
-            csgClipContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.intervalSampleState){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.intervalSampleState, Name(s_DeferredImportNameRenderDeferredCsgIntervalSampleState), "CSG Interval Sample State");
-        if(!importedResource)
-            csgIntervalSampleStateResult = MakeUnexpected(importedResource.error());
-        else
-            csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    bindlessSlotsResult = history
-        ? RendererTaskGraphDetail::ImportExternalBuffer(m_graph, history->slotsBuffer, s_LightingBindlessSlotsName, "Lagged Deferred Bindless Slots")
-        : importCurrentBindlessSlots(s_LightingBindlessSlotsName, s_DeferredBindlessSlotsLabel);
-    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name(s_DeferredImportNameRenderDeferredCompositeBindlessSlots), s_DeferredBindlessSlotsLabel);
-    if(rayTracingGraphResources.materialContextSlotsBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, rayTracingGraphResources.materialContextSlotsBuffer, Name(s_DeferredImportNameRenderDeferredMaterialContextSlots), "Ray Trace Material Context Slots");
-        if(!importedResource)
-            materialContextSlotsResult = MakeUnexpected(importedResource.error());
-        else
-            materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-
-    // History copy declared after Present; reuse active-lighting identities for copy destinations.
-    if(capturesLaggedLightingHistory){
-        historyCopyShadowVisibilityResult = currentShadowVisibilityResult;
-        historyCopyCausticIrradianceResult = currentCausticIrradianceResult;
-        historyCopySurfelIrradianceResult = history ? currentSurfelIrradianceResult : surfelIrradianceResult;
-        historyCopyDestinationShadowVisibilityResult = history ? shadowVisibilityResult : importFirstWriteTexture(captureHistory->shadowVisibility, Name(s_DeferredImportNameRenderLaggedHistoryCopyHistoryShadowVisibility), "History Shadow Visibility");
-        historyCopyDestinationCausticIrradianceResult = history ? causticIrradianceResult : importFirstWriteTexture(captureHistory->causticIrradiance, Name(s_DeferredImportNameRenderLaggedHistoryCopyHistoryCausticIrradiance), "History Caustic Irradiance");
-        historyCopyDestinationSurfelIrradianceResult = history ? surfelIrradianceResult : importFirstWriteTexture(captureHistory->surfelIrradiance, Name(s_DeferredImportNameRenderLaggedHistoryCopyHistorySurfelIrradiance), "History Surfel Irradiance");
-    }
-
-    // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
-    avboitImports.capture(m_graph, deferredTargets, clearAvboitTargets);
-    if(
-        !csgIntervalSampleStateResult
-        || !materialInstancesResult
-        || !materialTypedResult
-        || !csgReceiverRangesResult
-        || !csgCuttersResult
-        || !csgClipContextSlotsResult
-        || !avboitImports.validRefractionInputs()
-        || !albedoResult
-        || !normalResult
-        || !worldPositionResult
-        || !specularRoughnessResult
-        || !avboitImports.validRefractionSpecular()
-        || !depthResult
-        || (hasCsgFrameWork && !csgTextureImports.valid())
-        || !shadowVisibilityResult
-        || !causticIrradianceResult
-        || !surfelIrradianceResult
-        || !currentShadowVisibilityResult
-        || !currentCausticIrradianceResult
-        || !currentSurfelIrradianceResult
-        || !opaqueColorResult
-        || !sceneShadingResult
-        || !lightsResult
-        || !meshViewResult
-        || !bindlessSlotsResult
-        || !currentBindlessSlotsResult
-        || (rayTracingGraphResources.materialContextSlotsBuffer && !materialContextSlotsResult)
-        || (capturesLaggedLightingHistory && (
-            !historyCopyShadowVisibilityResult
-            || !historyCopyCausticIrradianceResult
-            || !historyCopySurfelIrradianceResult
-            || !historyCopyDestinationShadowVisibilityResult
-            || !historyCopyDestinationCausticIrradianceResult
-            || !historyCopyDestinationSurfelIrradianceResult
-        ))
-        || !avboitImports.validAvboitInputs()
-    )
-        return MakeUnexpected(Failure{});
-
-    result.albedo = *albedoResult;
-    result.normal = *normalResult;
-    result.worldPosition = *worldPositionResult;
-    result.specularRoughness = *specularRoughnessResult;
-    result.depth = *depthResult;
-    if(hasCsgFrameWork)
-        csgTextureImports.publish(result);
-    result.shadowVisibility = *shadowVisibilityResult;
-    result.causticIrradiance = *causticIrradianceResult;
-    result.surfelIrradiance = *surfelIrradianceResult;
-    result.currentShadowVisibility = *currentShadowVisibilityResult;
-    result.currentCausticIrradiance = *currentCausticIrradianceResult;
-    result.currentSurfelIrradiance = *currentSurfelIrradianceResult;
-    result.opaqueColor = *opaqueColorResult;
-    result.sceneShading = *sceneShadingResult;
-    result.lights = *lightsResult;
-    result.meshView = *meshViewResult;
-    if(*materialInstancesResult)
-        result.materialInstances = **materialInstancesResult;
-    if(*materialTypedResult)
-        result.materialTyped = **materialTypedResult;
-    if(*csgReceiverRangesResult)
-        result.csgReceiverRanges = **csgReceiverRangesResult;
-    if(*csgCuttersResult)
-        result.csgCutters = **csgCuttersResult;
-    if(*csgClipContextSlotsResult)
-        result.csgClipContextSlots = **csgClipContextSlotsResult;
-    if(*csgIntervalSampleStateResult)
-        result.csgIntervalSampleState = **csgIntervalSampleStateResult;
-    result.bindlessSlots = *bindlessSlotsResult;
-    result.currentBindlessSlots = *currentBindlessSlotsResult;
-    if(*materialContextSlotsResult)
-        result.materialContextSlots = **materialContextSlotsResult;
-    if(capturesLaggedLightingHistory){
-        result.historyCopyShadowVisibility = *historyCopyShadowVisibilityResult;
-        result.historyCopyCausticIrradiance = *historyCopyCausticIrradianceResult;
-        result.historyCopySurfelIrradiance = *historyCopySurfelIrradianceResult;
-        result.historyCopyDestinationShadowVisibility = *historyCopyDestinationShadowVisibilityResult;
-        result.historyCopyDestinationCausticIrradiance = *historyCopyDestinationCausticIrradianceResult;
-        result.historyCopyDestinationSurfelIrradiance = *historyCopyDestinationSurfelIrradianceResult;
-    }
-    avboitImports.publish(result);
-    result.csgPeelSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);
-    result.csgReceiverEventDataSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgReceiverEventLayerCount);
-    result.csgReceiverEventCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
-    result.csgReceiverSpanDataSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgReceiverSpanLayerCount);
-    result.csgReceiverSpanCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
-    result.csgRemovedIntervalSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgRemovedIntervalLayerCount);
-    result.csgRemovedIntervalCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void DeferredAvboitResourceImports::capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets, const b8 clearTargets){
-    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return clearTargets
-            ? RendererTaskGraphDetail::ImportExternalTexture(graph, texture, identity, label, Core::ResourceStates::Unknown)
-            : RendererTaskGraphDetail::ImportExternalTexture(graph, texture, identity, label)
-        ;
-    };
-    m_avboitLowRaster = importTexture(deferredTargets.avboit.lowRasterTarget, Name(s_DeferredImportNameRenderAvboitLowRaster), "AVBOIT Low Raster");
-    m_avboitAccumColor = importTexture(deferredTargets.avboit.accumColor, Name(s_DeferredImportNameRenderAvboitAccumColor), "AVBOIT Accumulated Color");
-    m_avboitAccumExtinction = importTexture(deferredTargets.avboit.accumExtinction, Name(s_DeferredImportNameRenderAvboitAccumExtinction), "AVBOIT Accumulated Extinction");
-    m_refractionDepth = importTexture(deferredTargets.avboit.refractionDepth, Name(s_DeferredImportNameRenderAvboitRefractionDepth), "AVBOIT refractionDepth");
-    m_refractionNormalIor = importTexture(deferredTargets.avboit.refractionNormalIor, Name(s_DeferredImportNameRenderAvboitRefractionNormalIor), "AVBOIT refractionNormalIor");
-    m_refractionTintCoverage = importTexture(deferredTargets.avboit.refractionTintCoverage, Name(s_DeferredImportNameRenderAvboitRefractionTintCoverage), "AVBOIT refractionTintCoverage");
-    m_refractionInstance = importTexture(deferredTargets.avboit.refractionInstance, Name(s_DeferredImportNameRenderAvboitRefractionInstance), "AVBOIT refractionInstance");
-    m_refractionSpecularRoughness = importTexture(deferredTargets.avboit.refractionSpecularRoughness, Name(s_DeferredImportNameRenderAvboitRefractionSpecularRoughness), "AVBOIT Refraction Specular Roughness");
-    m_refractionResolve = importTexture(deferredTargets.avboit.refractionResolve, Name(s_DeferredImportNameRenderAvboitRefractionResolve), "AVBOIT refractionResolve");
-    m_avboitForegroundColor = importTexture(deferredTargets.avboit.foregroundAccumColor, Name(s_DeferredImportNameRenderAvboitAvboitForegroundColor), "AVBOIT avboitForegroundColor");
-    m_avboitForegroundExtinction = importTexture(deferredTargets.avboit.foregroundAccumExtinction, Name(s_DeferredImportNameRenderAvboitAvboitForegroundExtinction), "AVBOIT avboitForegroundExtinction");
-    m_avboitTransmittance = importTexture(deferredTargets.avboit.transmittanceTexture, Name(s_DeferredImportNameRenderAvboitTransmittance), "AVBOIT Transmittance");
-    m_avboitCoverage = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.coverageBuffer, Name(s_DeferredImportNameRenderAvboitCoverage), "AVBOIT Coverage");
-    m_avboitDepthWarp = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.depthWarpBuffer, Name(RendererGpuPassText::s_AvboitDepthWarpName), RendererGpuPassText::s_AvboitDepthWarpLabel);
-    m_avboitControl = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.controlBuffer, Name(s_DeferredImportNameRenderAvboitControl), "AVBOIT Control");
-    m_avboitExtinction = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.extinctionBuffer, Name(RendererGpuPassText::s_AvboitExtinctionName), RendererGpuPassText::s_AvboitExtinctionLabel);
-    m_avboitExtinctionOverflow = RendererTaskGraphDetail::ImportExternalBuffer(graph, deferredTargets.avboit.extinctionOverflowBuffer, Name(s_DeferredImportNameRenderAvboitExtinctionOverflow), "AVBOIT Extinction Overflow");
-    m_avboitMaterialDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name(s_DeferredImportNameRenderAvboitMaterialDomain), "Transparent Materials and Geometry"));
-    m_avboitCsgDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name(s_DeferredImportNameRenderAvboitCsgDomain), RendererGpuPassText::s_TransparentCsgIntervalsLabel));
-}
-
-b8 DeferredAvboitResourceImports::validRefractionInputs()const noexcept{
-    return
-        m_refractionDepth.has_value()
-        && m_refractionNormalIor.has_value()
-        && m_refractionTintCoverage.has_value()
-        && m_refractionInstance.has_value()
-        && m_refractionResolve.has_value()
-        && m_avboitForegroundColor.has_value()
-        && m_avboitForegroundExtinction.has_value()
-    ;
-}
-
-b8 DeferredAvboitResourceImports::validRefractionSpecular()const noexcept{
-    return m_refractionSpecularRoughness.has_value();
-}
-
-b8 DeferredAvboitResourceImports::validAvboitInputs()const noexcept{
-    return
-        m_avboitLowRaster.has_value()
-        && m_avboitAccumColor.has_value()
-        && m_avboitAccumExtinction.has_value()
-        && m_avboitTransmittance.has_value()
-        && m_avboitCoverage.has_value()
-        && m_avboitDepthWarp.has_value()
-        && m_avboitControl.has_value()
-        && m_avboitExtinction.has_value()
-        && m_avboitExtinctionOverflow.has_value()
-        && m_avboitMaterialDomain.has_value()
-        && m_avboitCsgDomain.has_value()
-    ;
-}
-
-void DeferredAvboitResourceImports::publish(DeferredGraphResourceImportResult& result)const noexcept{
-    result.avboitLowRaster = *m_avboitLowRaster;
-    result.avboitAccumColor = *m_avboitAccumColor;
-    result.avboitAccumExtinction = *m_avboitAccumExtinction;
-    result.refractionDepth = *m_refractionDepth;
-    result.refractionNormalIor = *m_refractionNormalIor;
-    result.refractionTintCoverage = *m_refractionTintCoverage;
-    result.refractionInstance = *m_refractionInstance;
-    result.refractionSpecularRoughness = *m_refractionSpecularRoughness;
-    result.refractionResolve = *m_refractionResolve;
-    result.avboitForegroundColor = *m_avboitForegroundColor;
-    result.avboitForegroundExtinction = *m_avboitForegroundExtinction;
-    result.avboitTransmittance = *m_avboitTransmittance;
-    result.avboitCoverage = *m_avboitCoverage;
-    result.avboitDepthWarp = *m_avboitDepthWarp;
-    result.avboitControl = *m_avboitControl;
-    result.avboitExtinction = *m_avboitExtinction;
-    result.avboitExtinctionOverflow = *m_avboitExtinctionOverflow;
-    result.avboitMaterialDomain = *m_avboitMaterialDomain;
-    result.avboitCsgDomain = *m_avboitCsgDomain;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void DeferredCsgTextureImports::capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets){
-    m_csgCapBackNormal = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgCapBackNormal, Name(s_DeferredImportNameRenderDeferredCsgCapBackNormal), "CSG Cap Back Normal");
-    m_csgIntervalDepth = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgIntervalDepth, Name(s_DeferredImportNameRenderDeferredCsgIntervalDepth), "CSG Interval Depth");
-    m_csgIntervalId = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgIntervalId, Name(s_DeferredImportNameRenderDeferredCsgIntervalId), "CSG Interval ID");
-    m_csgReceiverEventData = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgReceiverEventData, Name(s_DeferredImportNameRenderDeferredCsgReceiverEventData), "CSG Receiver Event Data");
-    m_csgReceiverEventCount = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgReceiverEventCount, Name(s_DeferredImportNameRenderDeferredCsgReceiverEventCount), "CSG Receiver Event Count");
-    m_csgReceiverSpanData = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgReceiverSpanData, Name(s_DeferredImportNameRenderDeferredCsgReceiverSpanData), "CSG Receiver Span Data");
-    m_csgReceiverSpanCount = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgReceiverSpanCount, Name(s_DeferredImportNameRenderDeferredCsgReceiverSpanCount), "CSG Receiver Span Count");
-    m_csgRemovedIntervalDepth = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalDepth, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalDepth), "CSG Removed Interval Depth");
-    m_csgRemovedIntervalCapNormal = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalCapNormal, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalCapNormal), "CSG Removed Interval Cap Normal");
-    m_csgRemovedIntervalData = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalData, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalData), "CSG Removed Interval Data");
-    m_csgRemovedIntervalCount = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalCount, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalCount), "CSG Removed Interval Count");
-}
-
-b8 DeferredCsgTextureImports::valid()const noexcept{
-    return
-        m_csgCapBackNormal.has_value()
-        && m_csgIntervalDepth.has_value()
-        && m_csgIntervalId.has_value()
-        && m_csgReceiverEventData.has_value()
-        && m_csgReceiverEventCount.has_value()
-        && m_csgReceiverSpanData.has_value()
-        && m_csgReceiverSpanCount.has_value()
-        && m_csgRemovedIntervalDepth.has_value()
-        && m_csgRemovedIntervalCapNormal.has_value()
-        && m_csgRemovedIntervalData.has_value()
-        && m_csgRemovedIntervalCount.has_value()
-    ;
-}
-
-void DeferredCsgTextureImports::publish(DeferredGraphResourceImportResult& result)const noexcept{
-    result.csgCapBackNormal = *m_csgCapBackNormal;
-    result.csgIntervalDepth = *m_csgIntervalDepth;
-    result.csgIntervalId = *m_csgIntervalId;
-    result.csgReceiverEventData = *m_csgReceiverEventData;
-    result.csgReceiverEventCount = *m_csgReceiverEventCount;
-    result.csgReceiverSpanData = *m_csgReceiverSpanData;
-    result.csgReceiverSpanCount = *m_csgReceiverSpanCount;
-    result.csgRemovedIntervalDepth = *m_csgRemovedIntervalDepth;
-    result.csgRemovedIntervalCapNormal = *m_csgRemovedIntervalCapNormal;
-    result.csgRemovedIntervalData = *m_csgRemovedIntervalData;
-    result.csgRemovedIntervalCount = *m_csgRemovedIntervalCount;
-}
-
-
 NWB_IMPL_END
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

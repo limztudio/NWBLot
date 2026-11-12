@@ -7,6 +7,7 @@
 #include "nwb_reflection_emitter.h"
 
 #include <core/metascript/adhd/sema/asset_type_analyzer.h>
+#include <core/metascript/adhd/sema/type_layout_analyzer.h>
 #include <core/metascript/adhd/sema/type_resolver.h>
 
 
@@ -339,6 +340,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
         return;
     }
     else if(IsDeserializableClass(symbols.findClass(elemName))){
+        const b8 elemNeedsArena = TypeLayoutAnalyzer(symbols).isNonRootMotherArenaType(elemType);
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append("{ if(!");
         out.append(elemAccessor.data(), elemAccessor.size());
@@ -346,7 +348,10 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
         if(isPushContainer){
             out.append("this->");
             out.append(fieldName.data(), fieldName.size());
-            out.append(isForwardList ? ".emplace_front(); if(!this->" : ".emplace_back(); if(!this->");
+            if(elemNeedsArena)
+                out.append(isForwardList ? ".emplace_front(__adhd_nwb_arena); if(!this->" : ".emplace_back(__adhd_nwb_arena); if(!this->");
+            else
+                out.append(isForwardList ? ".emplace_front(); if(!this->" : ".emplace_back(); if(!this->");
             out.append(fieldName.data(), fieldName.size());
             out.append(isForwardList ? ".front().deserializeNwb(" : ".back().deserializeNwb(");
             out.append(elemAccessor.data(), elemAccessor.size());
@@ -384,7 +389,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
     }
 }
 
-void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, const MStringView innerName, const SymbolTable& symbols){
+void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, const MStringView innerName, const TypeRef& innerType, const SymbolTable& symbols){
     if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, fieldName, innerName, symbols, true))
         return;
     if(SymbolTable::IsSimdStorageMatrixType(innerName)){
@@ -399,10 +404,11 @@ void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, 
         out.append(" = __m; }\r\n");
     }
     else if(IsDeserializableClass(symbols.findClass(innerName))){
+        const b8 innerNeedsArena = TypeLayoutAnalyzer(symbols).isNonRootMotherArenaType(innerType);
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
-        out.append(".emplace(); if(!this->");
+        out.append(innerNeedsArena ? ".emplace(__adhd_nwb_arena); if(!this->" : ".emplace(); if(!this->");
         out.append(fieldName.data(), fieldName.size());
         out.append("->deserializeNwb(*__f)){ this->");
         out.append(fieldName.data(), fieldName.size());
@@ -429,6 +435,13 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         if(isEnumKey || RequiresNwbNameAdmission(keyName))
             out.append(" }");
     };
+    const auto emitMapIndexedTarget = [&](){
+        out.append("(::AdhdMapIndex(this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.append(", ");
+        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
+        out.append("))");
+    };
 
     if(symbols.findEnum(valName)){
         EmitNwbFieldFindPrefix(out, fieldName);
@@ -438,11 +451,9 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         emitKeyGuardOpen();
         out.append("if(__v.isString()){ if(const auto __e = ");
         out.append(valName.data(), valName.size());
-        out.append("::parseNamedEnum(__v.asString())) this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
-        out.append("] = *__e; }");
+        out.append("::parseNamedEnum(__v.asString())) ");
+        emitMapIndexedTarget();
+        out.append(" = *__e; }");
         emitKeyGuardClose();
         out.append(" } }\r\n");
     }
@@ -453,11 +464,8 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
         emitKeyGuardOpen();
         EmitNwbValueAdmissionGuard(out, valName, "__v");
-        out.append("this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
-        out.append("] = ");
+        emitMapIndexedTarget();
+        out.append(" = ");
         EmitNwbValueConversionExpr(out, valName, "__v", valType, symbols);
         out.push_back(';');
         emitKeyGuardClose();
@@ -469,11 +477,9 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         out.append(fieldName.data(), fieldName.size());
         out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
         emitKeyGuardOpen();
-        out.append("if(!__v.isMap() || !this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
-        out.append("].deserializeNwb(__v)) return false;");
+        out.append("if(!__v.isMap() || !");
+        emitMapIndexedTarget();
+        out.append(".deserializeNwb(__v)) return false;");
         emitKeyGuardClose();
         out.append(" } }\r\n");
     }
@@ -484,11 +490,8 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
         emitKeyGuardOpen();
         EmitNwbListSizeContinueGuard(out, "__v", simdLanes);
-        out.append("this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
-        out.append("] = ");
+        emitMapIndexedTarget();
+        out.append(" = ");
         EmitNwbSimdVectorCtorExpr(out, valName, simdLanes, "__v.asList()");
         out.push_back(';');
         emitKeyGuardClose();
@@ -503,11 +506,8 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         emitKeyGuardOpen();
         EmitNwbListSizeContinueGuard(out, "__v", elemCount);
         EmitNwbSimdMatrixLocalInit(out, valName, "__v.asList()", "__i");
-        out.append("this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
-        out.append("] = __m;");
+        emitMapIndexedTarget();
+        out.append(" = __m;");
         emitKeyGuardClose();
         out.append(" } }\r\n");
     }
@@ -550,13 +550,17 @@ void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const FieldDecl* const> fields)const{
+void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 classNeedsArena)const{
     using namespace __hidden_adhd_reflection_emitter_nwb;
 
     out.append("    template<typename NwbValue>\r\n");
     out.append("    [[nodiscard]] b8 deserializeNwb(const NwbValue& inMap)noexcept{\r\n");
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
+    if(!decl.isSerialize && (decl.isArenaOwner || classNeedsArena)){
+        out.append("        [[maybe_unused]] ::ArenaBase& __adhd_nwb_arena = ");
+        out.append(decl.isArenaOwner ? "static_cast<::ArenaBase&>(s_ClassArena);\r\n" : "(*this->__adhd_arena);\r\n");
+    }
     for(const FieldDecl* field : fields){
         if(!field || !IsFieldReflected(*field) || !field->type)
             continue;
@@ -586,7 +590,7 @@ void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<con
         }
         else if(IsOptionalContainerType(tname) && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type){
             const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
-            EmitNwbOptionalFieldDeserialize(out, field->name, innerName, m_symbols);
+            EmitNwbOptionalFieldDeserialize(out, field->name, innerName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type), m_symbols);
         }
         else if(IsReflectedMapContainerType(tname) && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u && resolvedFieldType->templateArgs[0].type && resolvedFieldType->templateArgs[1].type){
             const MStringView keyName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);

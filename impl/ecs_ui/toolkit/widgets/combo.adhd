@@ -2,7 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "combo_style.adhd.h"
 #include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
@@ -144,18 +150,18 @@ public:
     [[nodiscard]] static ListState& Preview(ComboState& state)noexcept{ return state.m_list; }
 };
 
-inline void ComboState::select(const u64 key)noexcept{
+NWB_INLINE void ComboState::select(const u64 key)noexcept{
     m_inputGeneration = NextIdentity();
     m_selectedKey = key;
     ComboBehavior::Close(*this);
 }
 
-inline void ComboState::open()noexcept{
+NWB_INLINE void ComboState::open()noexcept{
     m_inputGeneration = NextIdentity();
     ComboBehavior::Open(*this);
 }
 
-inline void ComboState::close()noexcept{
+NWB_INLINE void ComboState::close()noexcept{
     m_inputGeneration = NextIdentity();
     ComboBehavior::Close(*this);
 }
@@ -168,15 +174,10 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ImplEcsUiToolkitWidgetsComboAdhdModule(in u64 value){
-    return value != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

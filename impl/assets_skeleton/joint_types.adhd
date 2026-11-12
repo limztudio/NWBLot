@@ -2,14 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <core/alloc/scratch.h>
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Stored vectors are affine matrix rows; the implicit fourth row is (0, 0, 0, 1).
 type SkeletonJointMatrix = f32x3x4;
 const u32 s_SkeletonInvalidJointIndex = 4294967295u;
@@ -60,10 +52,12 @@ class SkeletonJointBinary{
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
-native{
-namespace NWB::Impl{
-using ScratchSkeletonNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
-};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SkeletonJointMatrix MakeIdentitySkeletonJointMatrix(){
+    return SkeletonJointMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
 SkeletonHeaderBinary MakeSkeletonHeaderBinary(in u64 jointCount){
@@ -101,10 +95,10 @@ SkeletonJoint UnpackSkeletonJointBinary(in SkeletonJointBinary jointBinary){
 void CollectSkeletonJointNameHashes(
     in usize jointCount,
     in HashMap<Name, u32> jointIndices,
-    mut ScratchSkeletonNameHashVector outJointNameHashes
+    mut Span<NameHash> outJointNameHashes
 ){
-    outJointNameHashes.clear();
-    outJointNameHashes.resize(jointCount);
+    for(usize i = 0u; i < jointCount && i < outJointNameHashes.size(); ++i)
+        outJointNameHashes[i] = NameHash();
     for(in auto jointLookup : jointIndices)
         outJointNameHashes[cast<usize>(jointLookup.second)] = jointLookup.first.hash();
 }

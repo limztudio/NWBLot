@@ -1,0 +1,75 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateTemporarySequenceNotOverflowed(in u64 sequence){
+    if(sequence != u64.max)
+        return true;
+
+    error("ShaderCook: compiler temporary sequence overflow");
+    return false;
+}
+
+b8 ValidateCompilerRequestHasDependencies(in StringView shaderName, in b8 dependenciesEmpty){
+    if(!dependenciesEmpty)
+        return true;
+
+    error("ShaderCook: compiler request for '{}' has no resolved source dependencies", shaderName);
+    return false;
+}
+
+usize AdvanceLineScanBegin(in usize lineEnd, in usize textSize){
+    if(lineEnd < textSize)
+        return lineEnd + 1u;
+    return lineEnd;
+}
+
+b8 IsSlangCompilerDependencyPath(in Span<Path> dependencies, in Path candidate){
+    for(in Path dependency : dependencies){
+        if(dependency == candidate)
+            return true;
+    }
+    return false;
+}
+
+String FormatCompilerOverlayRootKey(in StringView prefix, in StringView hexDigits, in StringView rootText, in usize capacity){
+    String rootKey(prefix);
+    rootKey.reserve(capacity);
+    for(usize i = 0u; i < rootText.size(); ++i){
+        const u8 byteVal = rootText[i];
+        rootKey.push_back(hexDigits[cast<usize>(byteVal >> 4u)]);
+        rootKey.push_back(hexDigits[cast<usize>(byteVal & 15u)]);
+    }
+    return rootKey;
+}
+
+b8 ValidateNonEmptyCompilerVersionText(in StringView compilerPathText, in StringView versionText){
+    if(!TrimView(versionText).empty())
+        return true;
+
+    error("ShaderCook: configured compiler '{}' returned empty version text", compilerPathText);
+    return false;
+}
+
+b8 IsExternallyPlannedMacroInclude(in Span<StringView> externallyPlannedMacroIncludes, in StringView includeName){
+    for(in StringView name : externallyPlannedMacroIncludes){
+        if(name == includeName)
+            return true;
+    }
+    return false;
+}
+
+b8 NextSourceDependencyLine(in StringView sourceView, mut usize inOutLineBegin, mut StringView outLine){
+    if(inOutLineBegin >= sourceView.size())
+        return false;
+
+    const Expected<StringView> nextLine = NextTextLine(sourceView, inOutLineBegin);
+    if(!nextLine.has_value())
+        return false;
+    outLine = nextLine.value();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

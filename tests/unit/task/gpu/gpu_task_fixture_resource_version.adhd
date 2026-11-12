@@ -1,0 +1,227 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/task/gpu/gpu_task_fixture_compile.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuResVersionProducerUses{
+    public GpuTaskResourceUse resourceUse = GpuTaskResourceUse();
+    public GpuTaskResourceVersionUse versionUse = GpuTaskResourceVersionUse();
+}
+
+class GpuResVersionConsumerUses{
+    public GpuTaskResourceUse resourceUse = GpuTaskResourceUse();
+    public GpuTaskResourceVersionUse versionUse = GpuTaskResourceVersionUse();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskResourceRange GpuResVersionBufferRange(in u64 byteOffset, in u64 byteSize){
+    GpuTaskResourceRange range = GpuTaskResourceRange();
+    range.bufferRange = BufferRange(byteOffset, byteSize);
+    return range;
+}
+
+Expected<GpuGraphResourceId> GpuResVersionAddBuffer(mut GpuTaskGraph graph, in Name identity){
+    GpuGraphResourceDesc desc = GpuGraphResourceDesc();
+    desc.setIdentity(identity);
+    desc.setMarkerLabel("Resource Version Buffer");
+    desc.setType(GpuGraphResourceType::Buffer);
+    desc.setInitialState(ResourceStates::Common);
+    return graph.importResource(desc);
+}
+
+Expected<GpuGraphResourceVersionId> GpuResVersionAddVersionRange(
+    mut GpuTaskGraph graph,
+    in GpuGraphResourceId resource,
+    in GpuGraphResourceVersionOriginEnum origin,
+    in GpuTaskResourceRange range
+){
+    GpuGraphResourceVersionDesc desc = GpuGraphResourceVersionDesc();
+    desc.setResource(resource);
+    desc.setRange(range);
+    desc.setOrigin(origin);
+    return graph.declareResourceVersion(desc);
+}
+
+Expected<GpuGraphResourceVersionId> GpuResVersionAddVersion(
+    mut GpuTaskGraph graph,
+    in GpuGraphResourceId resource,
+    in GpuGraphResourceVersionOriginEnum origin
+){
+    return GpuResVersionAddVersionRange(graph, resource, origin, GpuResVersionBufferRange(0u, 64u));
+}
+
+GpuTaskResourceUse GpuResVersionResourceUse(
+    in GpuGraphResourceId resource,
+    in GpuTaskResourceRange range,
+    in ResourceStatesMask state,
+    in GpuTaskResourceAccessEnum access
+){
+    GpuTaskResourceUse use = GpuTaskResourceUse();
+    use.resource = resource;
+    use.range = range;
+    use.requiredState = state;
+    use.access = access;
+    return use;
+}
+
+GpuTaskResourceVersionUse GpuResVersionUse(in GpuGraphResourceVersionId version, in GpuTaskResourceVersionRoleEnum role){
+    GpuTaskResourceVersionUse use = GpuTaskResourceVersionUse();
+    use.version = version;
+    use.role = role;
+    return use;
+}
+
+GpuResVersionProducerUses GpuResVersionMakeProducerUsesRange(
+    in GpuGraphResourceId resource,
+    in GpuGraphResourceVersionId version,
+    in GpuTaskResourceRange range
+){
+    GpuResVersionProducerUses out = GpuResVersionProducerUses();
+    out.resourceUse = GpuResVersionResourceUse(resource, range, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write);
+    out.versionUse = GpuResVersionUse(version, GpuTaskResourceVersionRole::Produce);
+    return out;
+}
+
+GpuResVersionProducerUses GpuResVersionMakeProducerUses(in GpuGraphResourceId resource, in GpuGraphResourceVersionId version){
+    return GpuResVersionMakeProducerUsesRange(resource, version, GpuResVersionBufferRange(0u, 64u));
+}
+
+GpuResVersionConsumerUses GpuResVersionMakeConsumerUsesRange(
+    in GpuGraphResourceId resource,
+    in GpuGraphResourceVersionId version,
+    in GpuTaskResourceRange range
+){
+    GpuResVersionConsumerUses out = GpuResVersionConsumerUses();
+    out.resourceUse = GpuResVersionResourceUse(resource, range, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read);
+    out.versionUse = GpuResVersionUse(version, GpuTaskResourceVersionRole::Consume);
+    return out;
+}
+
+GpuResVersionConsumerUses GpuResVersionMakeConsumerUses(in GpuGraphResourceId resource, in GpuGraphResourceVersionId version){
+    return GpuResVersionMakeConsumerUsesRange(resource, version, GpuResVersionBufferRange(0u, 64u));
+}
+
+b8 GpuResVersionCompile(
+    mut GpuTaskGraphAnalysis analysis,
+    mut GpuTaskGraphQueueAssignments assignments,
+    mut GpuCompiledGraph compiledGraph,
+    mut ScratchArena scratchArena,
+    in GpuTaskGraph graph
+){
+    Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
+    queues[0u] = GraphicsQueue();
+    return Compile(analysis, assignments, compiledGraph, scratchArena, graph, MakeTopology(queues));
+}
+
+void GpuResVersionExpectClosedCycle(in GpuTaskGraphAnalysis analysis){
+    const Span<GpuTaskId> cyclePath = analysis.cyclePath();
+    const Span<GpuTaskDependencyEdge> cycleEdges = analysis.cycleEdges();
+    ASSERT_GE(cyclePath.size(), 3u);
+    EXPECT_EQ(cyclePath[0u], cyclePath[cyclePath.size() - 1u]);
+    ASSERT_EQ(cycleEdges.size(), cyclePath.size() - 1u);
+    for(usize edgeIndex = 0u; edgeIndex < cycleEdges.size(); ++edgeIndex){
+        EXPECT_EQ(cycleEdges[edgeIndex].producer, cyclePath[edgeIndex]);
+        EXPECT_EQ(cycleEdges[edgeIndex].consumer, cyclePath[edgeIndex + 1u]);
+    }
+}
+
+b8 GpuResVersionHasEdge(
+    in GpuTaskGraphAnalysis analysis,
+    in GpuTaskId producer,
+    in GpuTaskId consumer,
+    in GpuGraphResourceId resource,
+    in GpuGraphResourceVersionId version,
+    in GpuTaskHazardTypeEnum hazard
+){
+    const Span<GpuTaskDependencyEdge> edges = analysis.inferredEdges();
+    for(in GpuTaskDependencyEdge edge : edges){
+        if(edge.producer == producer && edge.consumer == consumer && edge.resource == resource && edge.resourceVersion == version && edge.hazard == hazard)
+            return true;
+    }
+    return false;
+}
+
+void GpuResVersionExpectDiagnosticMatchesCycleEdge(in GpuTaskGraphAnalysis analysis){
+    const GpuTaskGraphAnalysisDiagnostic diagnostic = analysis.diagnostic();
+    ASSERT_TRUE(diagnostic.resource.valid());
+    ASSERT_TRUE(diagnostic.resourceVersion.valid());
+    b8 matched = false;
+    const Span<GpuTaskDependencyEdge> cycleEdges = analysis.cycleEdges();
+    for(in GpuTaskDependencyEdge edge : cycleEdges){
+        if(
+            edge.producer == diagnostic.relatedTask
+            && edge.consumer == diagnostic.task
+            && edge.resource == diagnostic.resource
+            && edge.resourceVersion == diagnostic.resourceVersion
+            && (edge.hazard == GpuTaskHazardType::VersionDependency || edge.hazard == GpuTaskHazardType::VersionLifetime)
+        ){
+            matched = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(matched);
+}
+
+void GpuResVersionExpectInvalidBoundUse(
+    in Name identity,
+    in GpuGraphResourceVersionOriginEnum origin,
+    in GpuTaskResourceRange versionRange,
+    in GpuTaskResourceRange physicalRange,
+    in GpuTaskResourceAccessEnum access,
+    in GpuTaskResourceVersionRoleEnum role
+){
+    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+
+    TestArena testArena = TestArena();
+    GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
+    const Expected<GpuGraphResourceId> resourceResult = GpuResVersionAddBuffer(graph, identity);
+    ASSERT_TRUE(resourceResult.has_value());
+    const GpuGraphResourceId resource = resourceResult.value();
+    const Expected<GpuGraphResourceVersionId> versionResult = GpuResVersionAddVersionRange(graph, resource, origin, versionRange);
+    ASSERT_TRUE(versionResult.has_value());
+    const GpuGraphResourceVersionId version = versionResult.value();
+
+    ResourceStatesMask state = ResourceStates::UnorderedAccess;
+    if(access == GpuTaskResourceAccess::Read)
+        state = ResourceStates::ShaderResource;
+
+    Array<GpuTaskResourceUse, 1> resourceUses = Array<GpuTaskResourceUse, 1>();
+    resourceUses[0u] = GpuResVersionResourceUse(resource, physicalRange, state, access);
+    Array<GpuTaskResourceVersionUse, 1> versionUses = Array<GpuTaskResourceVersionUse, 1>();
+    versionUses[0u] = GpuResVersionUse(version, role);
+    const Expected<GpuTaskId> taskResult = AddTask(
+        identity,
+        "Resource Version Task",
+        Span<GpuTaskId>(),
+        resourceUses,
+        Span<GpuTaskResourceSetUse>(),
+        versionUses,
+        Span<GpuExternalCompletionId>(),
+        graph
+    );
+    ASSERT_TRUE(taskResult.has_value());
+    const GpuTaskId task = taskResult.value();
+    ASSERT_TRUE(resource.valid());
+    ASSERT_TRUE(version.valid());
+    ASSERT_TRUE(task.valid());
+
+    GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
+    EXPECT_EQ(analysis.diagnostic().task, task);
+    EXPECT_EQ(analysis.diagnostic().resource, resource);
+    EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

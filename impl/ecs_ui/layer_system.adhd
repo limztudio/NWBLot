@@ -2,15 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_box_host_impl.adhd>
+#include <impl/ecs_ui/layer_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/components.adhd.h>
-#include <impl/ecs_ui/layer_types.adhd.h>
 #include <impl/ecs_ui/paint_context.adhd.h>
 #include <impl/ecs_ui/edit_box_host.adhd.h>
 #include <impl/ecs_ui/skin_selection.adhd.h>
@@ -34,7 +39,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_UiLayerSystemOwnerName = FOUNDATION_TEXT("UiLayerSystem");
+inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
 
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
 class UiLayerSystem final
@@ -153,21 +158,55 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiLayerSystemAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsValidUiDisplayScale(in f32 scaleX, in f32 scaleY){
+    return IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f;
+}
+
+b8 ShouldSuppressControlCharInput(in b8 hasControlModifier, in b8 hasAltModifier){
+    return hasControlModifier && !hasAltModifier;
+}
+
+b8 ShouldBlockRoutedCommandText(in b8 isCommandDown, in b8 hasCommand, in b8 allowText){
+    return isCommandDown && hasCommand && !allowText;
+}
+
+u8 ResolveUiPointerPressOwner(
+    in b8 nativeActive,
+    in b8 wouldConsumePointer,
+    in b8 hasPopup,
+    in b8 hitTargetValid
+){
+    b8 consumed = hasPopup || hitTargetValid;
+    if(nativeActive)
+        consumed = wouldConsumePointer;
+    if(consumed)
+        return cast<u8>(UiInputOwner::Custom);
+    return cast<u8>(UiInputOwner::Scene);
+}
+
+b8 CanBeginUiLayerPaintFrame(in b8 resourcesReady, in b8 rendererHasPendingFrame, in b8 contextReady){
+    return resourcesReady && !rendererHasPendingFrame && !contextReady;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
@@ -255,7 +294,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
         m_renderer.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem<UiSubsystem>()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
         return false;
     }
 
@@ -283,7 +322,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
     }
 
     f32 scaleX = 1.0f;
@@ -317,13 +356,13 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
         return;
     if(!m_renderer.renderStandalone(m_graphics.acquiredPresentationFrame())){
         // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: standalone UI presentation failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: standalone UI presentation failed"));
         m_graphics.requestDeviceRecreation();
     }
 }
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
-    FOUNDATION_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
+    NWB_ASSERT(IsValidUiDisplayScale(scaleX, scaleY));
     m_frameDelta.clear();
     abandonPendingFrame(true);
     m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
@@ -442,7 +481,7 @@ b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
     synchronizeNativeInput();
     m_editHost.collectNative();
     if(m_editHost.hasTextFocus()){
-        if((mods & Core::InputModifier::Control) != 0 && (mods & Core::InputModifier::Alt) == 0)
+        if(ShouldSuppressControlCharInput((mods & Core::InputModifier::Control) != 0, (mods & Core::InputModifier::Alt) != 0))
             return true;
         return m_editHost.character(unicode);
     }
@@ -480,8 +519,12 @@ b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i3
     if(action == Core::InputAction::Press && m_pressedButtons == 0u){
         const b8 acceptsSource = m_context.input().acceptsPointerSource(Ui::s_NativePointerSource);
         const b8 nativeActive = m_context.input().activePointerSource() == Ui::s_NativePointerSource;
-        const b8 consumed = nativeActive ? m_context.input().wouldConsumePointer(m_pointer) : m_context.input().hasPopup() || m_context.input().hitTest(m_pointer).valid();
-        m_pointerOwner = consumed ? UiInputOwner::Custom : UiInputOwner::Scene;
+        m_pointerOwner = ResolveUiPointerPressOwner(
+            nativeActive,
+            nativeActive && m_context.input().wouldConsumePointer(m_pointer),
+            m_context.input().hasPopup(),
+            !nativeActive && m_context.input().hitTest(m_pointer).valid()
+        );
         if(acceptsSource && m_pointerOwner != UiInputOwner::Custom)
             m_context.input().clearFocus();
     }
@@ -583,7 +626,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queue(event);
     if(!normalized){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         resetNormalizedInput();
         return;
     }
@@ -592,7 +635,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     m_editHost.input(*normalized, previousCapture, submit);
     if(blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
-        *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;
+        *blockText = ShouldBlockRoutedCommandText(normalized->type == Ui::InputEventType::CommandDown, normalized->command != Ui::InputCommand::None, normalized->allowText);
     }
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
@@ -604,7 +647,7 @@ void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consume
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queuePointer(input);
     if(!normalized){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
         resetNormalizedInput();
         return;
     }
@@ -629,7 +672,7 @@ void UiLayerSystem::synchronizeNativeInput(){
 Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_unused]] Core::ECS::World& world, const f32 delta){
     m_frameDelta.add(delta);
     synchronizeInput();
-    if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
+    if(!CanBeginUiLayerPaintFrame(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready()))
         return {};
     AdvanceUiLayerFrameGeneration(m_frameGeneration);
     const UiSkin& skin = *MakeNotNull(Core::Assets::CastAsset<UiSkin>(m_skinAsset.get()));
@@ -639,7 +682,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     const f32 frameDelta = m_frameDelta.consume();
     m_editHost.beginFrame(m_frameGeneration, m_display);
     if(m_editHost.takeClipboardFailure())
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: clipboard publication failed"));
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation, Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
@@ -662,12 +705,12 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
             break;
     }
     if(!m_context.finishFrame()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
         return {};
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         abandonPendingFrame();
         abandon.release();
         return {};
@@ -694,7 +737,7 @@ void UiLayerSystem::synchronizeInput(){
         const auto status = m_renderer.lastAcceptedPresentationStatus();
         if(status == Core::PresentationReceiptStatus::Accepted){
             const b8 committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
-            FOUNDATION_FATAL_ASSERT(committed);
+            NWB_FATAL_ASSERT(committed);
             m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }
         else if(status == Core::PresentationReceiptStatus::Rejected)
@@ -711,7 +754,10 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

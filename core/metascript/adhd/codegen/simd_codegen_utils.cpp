@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -40,6 +41,9 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
     "::VectorDoubleSplatZ(",
     "::VectorDoubleSplatW(",
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -135,38 +139,6 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     out.append("))");
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 [[nodiscard]] MStringView SimdRegisterCppType(const MStringView simdType)noexcept{
     if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType); vecInfo && !vecInfo->regCppType.empty())
         return vecInfo->regCppType;
@@ -214,6 +186,14 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 
 [[nodiscard]] b8 IsSimdScalarReductionFunction(const MStringView callee)noexcept{
     return !MapSimdScalarReductionSuffix(callee).empty();
+}
+
+[[nodiscard]] b8 IsSimdZeroPreservingCall(const MStringView callee)noexcept{
+#define NWB_ADHD_EXPORT_SIMD_ZERO_PRESERVING_CALL(adhdName) \
+    if(callee == adhdName) return true;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_ZERO_PRESERVING_CALL
+    return false;
 }
 
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const b8 isDouble)noexcept{
@@ -272,26 +252,6 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -299,4 +259,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -133,29 +133,17 @@ Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(in S
         return MakeUnexpected(Failure());
 
     const usize dotPos = dotIndex.value();
-    Name resolvedParameterName = s_NameNone;
-    Name resolvedBlockName = s_NameNone;
-    Name resolvedFieldName = s_NameNone;
-    b8 validNames = false;
-    native(in parameterName, in dotPos, mut resolvedParameterName, mut resolvedBlockName, mut resolvedFieldName, mut validNames){
-        const auto name = Name::FromText(parameterName);
-        const auto blockName = Name::FromText(parameterName.substr(0u, dotPos));
-        const auto fieldName = Name::FromText(parameterName.substr(dotPos + 1u));
-        if(name && blockName && fieldName){
-            resolvedParameterName = *name;
-            resolvedBlockName = *blockName;
-            resolvedFieldName = *fieldName;
-            validNames = true;
-        }
-    }
-    if(!validNames){
+    const Expected<Name> name = ParseName(parameterName);
+    const Expected<Name> blockName = ParseName(parameterName.substr(0u, dotPos));
+    const Expected<Name> fieldName = ParseName(parameterName.substr(dotPos + 1u));
+    if(!name.has_value() || !blockName.has_value() || !fieldName.has_value()){
         error("MaterialInstanceComponent: parameter '{}' contains an embedded null", parameterName);
         return MakeUnexpected(Failure());
     }
     MaterialInstanceParameterNames result;
-    result.parameterName = resolvedParameterName;
-    result.blockName = resolvedBlockName;
-    result.fieldName = resolvedFieldName;
+    result.parameterName = name.value();
+    result.blockName = blockName.value();
+    result.fieldName = fieldName.value();
     return result;
 }
 
@@ -178,6 +166,41 @@ b8 SetMaterialMutableParameter(
     const MaterialInstanceParameter parameter = BuildMaterialInstanceParameter(names.value(), fieldType, value);
     return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
+
+u32x4u PackMaterialInstanceF32(in f32 value){
+    return u32x4u(BitCast<u32>(value), 0u, 0u, 0u);
+}
+
+u32x4u PackMaterialInstanceHalfBits(in u16 value){
+    return u32x4u(cast<u32>(value), 0u, 0u, 0u);
+}
+
+u32x4u PackMaterialInstanceFloat4(in VectorSingle value){
+    return u32x4u(BitCast<u32>(value.x), BitCast<u32>(value.y), BitCast<u32>(value.z), BitCast<u32>(value.w));
+}
+
+u32x4u PackMaterialInstanceHalf4U(in f16x4u value){
+    return u32x4u(
+        cast<u32>(value.x) | (cast<u32>(value.y) << 16u),
+        cast<u32>(value.z) | (cast<u32>(value.w) << 16u),
+        0u,
+        0u
+    );
+}
+
+f16x4u ConvertMaterialInstanceHalf4(in VectorSingle value){
+    return f16x4u(
+        ConvertFloatToHalf(value.x),
+        ConvertFloatToHalf(value.y),
+        ConvertFloatToHalf(value.z),
+        ConvertFloatToHalf(value.w)
+    );
+}
+
+void LogMissingMaterialInstanceComponent(in EntityID entity){
+    error("MaterialInstanceComponent: entity {} has no material instance component", entity.id);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

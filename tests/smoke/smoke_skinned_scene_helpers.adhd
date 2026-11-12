@@ -4,7 +4,17 @@
 
 #include "smoke_scene_helpers.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_model/asset.adhd.h>
 #include <impl/assets_skeleton/asset.adhd.h>
 #include <impl/ecs_mesh/skinning/system.adhd.h>
@@ -22,8 +32,44 @@ using Core::Alloc::GlobalArena;
 using Core::Assets::AssetManager;
 using Impl::SkeletonJointMatrix;
 using ModelObjectKindEnum = Impl::ModelObjectKind::Enum;
+namespace ModelObjectKind = Impl::ModelObjectKind;
 using SkeletonJointMatrixVector = Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>;
+
+[[nodiscard]] NWB_INLINE Impl::MeshSkinningSystem& SmokeMeshSkinningSystemRef(Core::ECS::World& world)noexcept{
+    return *MakeNotNull(world.getSystem<Impl::MeshSkinningSystem>());
+}
+
+[[nodiscard]] NWB_INLINE b8 HasSmokeMeshSkinningSystem(Core::ECS::World& world)noexcept{
+    return world.getSystem<Impl::MeshSkinningSystem>() != nullptr;
+}
+
+[[nodiscard]] NWB_INLINE AStringView DefaultSmokeSkinnedLabel()noexcept{
+    return "SmokeSkinnedScene";
+}
+
+template<typename JointContainerT>
+[[nodiscard]] NWB_INLINE b8 SetSmokeSkeletonLocalJoints(
+    const Core::ECS::EntityID entity,
+    const JointContainerT& joints,
+    Core::ECS::World& world
+)noexcept{
+    auto* const pose = world.tryGetComponent<Impl::SkeletonPoseComponent>(entity);
+    if(!pose || pose->localJoints.size() != joints.size())
+        return false;
+    for(usize index = 0u; index < joints.size(); ++index)
+        pose->localJoints[index] = joints[index];
+    return true;
+}
+
+class SmokeRenderQualitySettings;
+[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(AStringView projectName, const SmokeRenderQualitySettings& baseSettings, ProjectRuntimeContext& context);
+[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(AStringView projectName, ProjectRuntimeContext& context);
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -36,8 +82,8 @@ class SmokeTintedModelEntityResult{
 }
 
 void AddSmokeSkinnedRenderSystems(mut World world, mut ProjectRuntimeContext context, in SmokeRenderQualitySettings baseSettings){
-    native{
-        const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
+    const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
+    native(in systems, mut world, mut context){
         world.addSystem<Impl::ModelSystem>(world, context.assetManager, Impl::CreateModelObjectRendererHooks());
         auto& meshSkinningSystem = world.addSystem<Impl::MeshSkinningSystem>(world, context.graphics, context.assetManager, systems.mesh, context.shaderPathResolver);
 
@@ -51,97 +97,152 @@ void AddSmokeSkinnedRenderSystems(mut World world, mut ProjectRuntimeContext con
     AddSmokeSkinnedRenderSystems(world, context, SmokeRenderQualitySettings());
 }
 
-NotNullUniquePtr<World> CreateSmokeSkinnedRenderWorldOrDie(in TStringView projectName, in SmokeRenderQualitySettings baseSettings, mut ProjectRuntimeContext context){
-    native{
-        auto world = CreateSmokeWorldOrDie(projectName, context);
-        AddSmokeSkinnedRenderSystems(*world, context, baseSettings);
-        return world;
-    }
-}
-
 Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
     in SmokeModelRef modelRef,
-    in TStringView projectName,
+    in StringView projectName,
     in Name preferredSkeletonObject,
     in b8 requireInvertibleBindPose,
     mut GlobalArena arena,
     mut AssetManager assetManager
 ){
-    native{
+    b8 failedModelLoad = false;
+    b8 failedModelType = false;
+    b8 failedNoSkeleton = false;
+    b8 failedSkeletonLoad = false;
+    b8 failedSkeletonType = false;
+    b8 failedEmptyJoints = false;
+    b8 failedInvalidBindPose = false;
+    SkeletonJointMatrixVector bindJoints = SkeletonJointMatrixVector(arena);
+    native(
+        in modelRef,
+        in preferredSkeletonObject,
+        in requireInvertibleBindPose,
+        mut assetManager,
+        mut bindJoints,
+        mut failedModelLoad,
+        mut failedModelType,
+        mut failedNoSkeleton,
+        mut failedSkeletonLoad,
+        mut failedSkeletonType,
+        mut failedEmptyJoints,
+        mut failedInvalidBindPose
+    ){
         const auto loadedModelAsset = assetManager.loadSync(Impl::Model::AssetTypeName(), modelRef.name());
         if(!loadedModelAsset){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to load model for skeleton bind joints"), projectName);
-            return MakeUnexpected(Failure{});
+            failedModelLoad = true;
         }
-        FOUNDATION_ASSERT(*loadedModelAsset);
-        const auto* model = Core::Assets::CastAsset<Impl::Model>(loadedModelAsset->get());
-        if(!model){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: loaded model has unexpected type"), projectName);
-            return MakeUnexpected(Failure{});
-        }
-
-        const Impl::ModelSkeletonObject* skeletonObject = nullptr;
-        if(preferredSkeletonObject){
-            for(const Impl::ModelSkeletonObject& object : model->skeletonObjects()){
-                if(object.name == preferredSkeletonObject){
-                    skeletonObject = &object;
-                    break;
+        else{
+            NWB_ASSERT(*loadedModelAsset);
+            const auto* model = Core::Assets::CastAsset<Impl::Model>(loadedModelAsset->get());
+            if(!model){
+                failedModelType = true;
+            }
+            else{
+                const Impl::ModelSkeletonObject* skeletonObject = nullptr;
+                if(preferredSkeletonObject){
+                    for(const Impl::ModelSkeletonObject& object : model->skeletonObjects()){
+                        if(object.name == preferredSkeletonObject){
+                            skeletonObject = &object;
+                            break;
+                        }
+                    }
+                }
+                if(!skeletonObject && !model->skeletonObjects().empty())
+                    skeletonObject = &model->skeletonObjects().front();
+                if(!skeletonObject || !skeletonObject->skeleton.valid()){
+                    failedNoSkeleton = true;
+                }
+                else{
+                    const auto loadedSkeletonAsset = assetManager.loadSync(Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name());
+                    if(!loadedSkeletonAsset){
+                        failedSkeletonLoad = true;
+                    }
+                    else{
+                        NWB_ASSERT(*loadedSkeletonAsset);
+                        const auto* skeleton = Core::Assets::CastAsset<Impl::Skeleton>(loadedSkeletonAsset->get());
+                        if(!skeleton){
+                            failedSkeletonType = true;
+                        }
+                        else if(skeleton->joints().empty()){
+                            failedEmptyJoints = true;
+                        }
+                        else{
+                            bindJoints.reserve(skeleton->joints().size());
+                            for(const Impl::SkeletonJoint& joint : skeleton->joints()){
+                                if(requireInvertibleBindPose && !MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), Impl::s_SkeletonAffineEpsilon, Impl::s_SkeletonJointDeterminantEpsilon)){
+                                    failedInvalidBindPose = true;
+                                    break;
+                                }
+                                bindJoints.push_back(joint.localBindPose);
+                            }
+                        }
+                    }
                 }
             }
         }
-        if(!skeletonObject && !model->skeletonObjects().empty())
-            skeletonObject = &model->skeletonObjects().front();
-        if(!skeletonObject || !skeletonObject->skeleton.valid()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: model has no skeleton object"), projectName);
-            return MakeUnexpected(Failure{});
-        }
-
-        const auto loadedSkeletonAsset = assetManager.loadSync(Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name());
-        if(!loadedSkeletonAsset){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to load skeleton for bind joints"), projectName);
-            return MakeUnexpected(Failure{});
-        }
-        FOUNDATION_ASSERT(*loadedSkeletonAsset);
-        const auto* skeleton = Core::Assets::CastAsset<Impl::Skeleton>(loadedSkeletonAsset->get());
-        if(!skeleton){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: loaded skeleton has unexpected type"), projectName);
-            return MakeUnexpected(Failure{});
-        }
-        if(skeleton->joints().empty()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: skeleton has no joints"), projectName);
-            return MakeUnexpected(Failure{});
-        }
-
-        Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> bindJoints{arena};
-        bindJoints.reserve(skeleton->joints().size());
-        for(const Impl::SkeletonJoint& joint : skeleton->joints()){
-            if(requireInvertibleBindPose && !MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), Impl::s_SkeletonAffineEpsilon, Impl::s_SkeletonJointDeterminantEpsilon)){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: skeleton contains an invalid bind pose"), projectName);
-                return MakeUnexpected(Failure{});
-            }
-            bindJoints.push_back(joint.localBindPose);
-        }
-        return bindJoints;
     }
+    if(failedModelLoad){
+        error("{}: failed to load model for skeleton bind joints", projectName);
+        return MakeUnexpected(Failure());
+    }
+    if(failedModelType){
+        error("{}: loaded model has unexpected type", projectName);
+        return MakeUnexpected(Failure());
+    }
+    if(failedNoSkeleton){
+        error("{}: model has no skeleton object", projectName);
+        return MakeUnexpected(Failure());
+    }
+    if(failedSkeletonLoad){
+        error("{}: failed to load skeleton for bind joints", projectName);
+        return MakeUnexpected(Failure());
+    }
+    if(failedSkeletonType){
+        error("{}: loaded skeleton has unexpected type", projectName);
+        return MakeUnexpected(Failure());
+    }
+    if(failedEmptyJoints){
+        error("{}: skeleton has no joints", projectName);
+        return MakeUnexpected(Failure());
+    }
+    if(failedInvalidBindPose){
+        error("{}: skeleton contains an invalid bind pose", projectName);
+        return MakeUnexpected(Failure());
+    }
+    return bindJoints;
+}
+
+Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
+    in SmokeModelRef modelRef,
+    in Name preferredSkeletonObject,
+    in b8 requireInvertibleBindPose,
+    mut GlobalArena arena,
+    mut AssetManager assetManager
+){
+    return LoadSmokeSkeletonBindJoints(
+        modelRef,
+        DefaultSmokeSkinnedLabel(),
+        preferredSkeletonObject,
+        requireInvertibleBindPose,
+        arena,
+        assetManager
+    );
 }
 
 void DestroySmokeSkinnedRenderWorld(mut ProjectRuntimeContext context, mut NotNullUniquePtr<World> world){
     if(!world.owner())
         return;
 
-    native{
+    native(mut context, mut world){
         Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(world->getSystem<Impl::MeshSkinningSystem>());
         context.graphics.removeRenderPass(meshSkinningSystem);
-    }
-
-    native{
         RemoveSmokeRendererSystem(context, *world);
     }
     FinishDestroyingSmokeWorld(context, world);
 }
 
 void SyncSmokeModelRuntimes(mut World world){
-    native{
+    native(mut world){
         Impl::ModelSystem& modelSystem = *MakeNotNull(world.getSystem<Impl::ModelSystem>());
         modelSystem.syncModelRuntimes();
     }
@@ -151,55 +252,75 @@ SmokeTintedModelEntityResult CreateTintedModelEntity(
     in SmokeModelRef model,
     in SmokeMaterialRef material,
     in NameTextAscii materialInterfacePath,
-    in Float4 colorTint,
-    in Float4 position,
-    in Float4 scale,
+    in VectorSingle colorTint,
+    in VectorSingle position,
+    in VectorSingle scale,
     mut World world
 ){
     const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(material, materialInterfacePath, position, scale, world);
-    native{
+    native(in setup, in model, mut world){
         auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
         modelComponent.model = model;
     }
-    SmokeTintedModelEntityResult result;
+    SmokeTintedModelEntityResult result = SmokeTintedModelEntityResult();
     result.entity = setup.entity;
-    result.tintApplied = ApplySmokeMaterialTint(setup, colorTint, AStringView("runtime.color_tint"), world);
+    result.tintApplied = ApplySmokeMaterialTint(setup, colorTint, "runtime.color_tint", world);
     return result;
 }
 
 EntityID FindSpawnedModelObject(in EntityID owner, in Name objectName, in ModelObjectKindEnum objectKind, mut World world){
-    native{
-        Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
+    EntityID result = s_InvalidEntityId;
+    native(in owner, in objectName, in objectKind, mut world, mut result){
         world.view<Impl::ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, Impl::ModelObjectComponent& object)noexcept{
             if(result.valid())
                 return;
             if(object.owner == owner && object.object == objectName && object.kind == objectKind)
                 result = entity;
         });
-        return result;
     }
+    return result;
 }
 
-void AnimateSkinningBenchmarkPoses(mut World world, in Span<EntityID> entities, in Span<SkeletonJointMatrix> bindJoints, in f32 timeSeconds, in b8 staticPreview){
-        for(usize entityIndex = 0u; entityIndex < entities.size(); ++entityIndex){
-            native{
-                auto* pose = world.tryGetComponent<NWB::Impl::SkeletonPoseComponent>(entities[entityIndex]);
-                if(!pose)
-                    continue;
-                AnimateSkinningBenchmarkPoseJoints(bindJoints, static_cast<u32>(entityIndex), timeSeconds, staticPreview, pose->localJoints);
-            }
+void AnimateSkinningBenchmarkPoses(mut World world, in Span<EntityID> entities, in Span<f32x3x4> bindJoints, in f32 timeSeconds, in b8 staticPreview){
+    for(usize entityIndex = 0u; entityIndex < entities.size(); ++entityIndex){
+        const EntityID entity = entities[entityIndex];
+        const u32 seedIndex = cast<u32>(entityIndex);
+        native(mut world, in entity, in bindJoints, in seedIndex, in timeSeconds, in staticPreview){
+            if(auto* pose = world.tryGetComponent<NWB::Impl::SkeletonPoseComponent>(entity))
+                AnimateSkinningBenchmarkPoseJoints(bindJoints, seedIndex, timeSeconds, staticPreview, pose->localJoints);
         }
-}
-
-native{
-namespace NWB::Tests::Smoke{
-struct SkinningBenchmarkPoseAnimator final{
-    static void Animate(Core::ECS::World& world, const Span<const Core::ECS::EntityID> entities, const Span<const Impl::SkeletonJointMatrix> bindJoints, const f32 timeSeconds, const b8 staticPreview){
-        AnimateSkinningBenchmarkPoses(world, entities, bindJoints, timeSeconds, staticPreview);
     }
-};
-};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(const AStringView projectName, const SmokeRenderQualitySettings& baseSettings, ProjectRuntimeContext& context){
+    auto world = CreateSmokeWorldOrDie(projectName, context);
+    AddSmokeSkinnedRenderSystems(*world, context, baseSettings);
+    return world;
+}
+
+NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
+    return CreateSmokeSkinnedRenderWorldOrDie(projectName, SmokeRenderQualitySettings(), context);
+}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

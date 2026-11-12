@@ -2,17 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <core/graphics/rhi/shader.h>
-namespace NWB::Tests::AssetsGraphicsFixture{
-using ShaderStageMask = ::NWB::Core::ShaderType::Mask;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_AssetInputNameProjectSamplersFailing = "project/samplers/failing";
 const Name s_AssetInputNameRoot = "root";
 const Name s_AssetInputNameReplacement = "replacement";
@@ -198,11 +187,6 @@ class ShaderMetadataCase{
     public StringView shaderAssetType = "";
     public StringView fields = "";
     public b8 accepted = false;
-}
-
-class SpirvModelStageCase{
-    public ShaderStageMask stage = ShaderStageMask();
-    public u32 model = 0u;
 }
 
 

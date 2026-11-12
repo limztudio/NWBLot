@@ -8,19 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <core/alloc/scratch.h>
-
-namespace NWB::Impl{
-using ScratchSubsystemNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
-using ScratchSubsystemFieldCountVector = Vector<u64, Core::Alloc::ScratchArena>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SubsystemBinaryCodec{
     private SubsystemHeaderBinary makeHeader(
         in NameHash subsystemTypeHash,
@@ -119,13 +106,14 @@ class SubsystemBinaryCodec{
         return true;
     }
 
-    public b8 read(
+    public b8 readCounts(
         in Span<u8> binary,
         in Name assetType,
         in usize expectedFieldCount,
-        mut ScratchSubsystemNameHashVector outSubsystemHashes,
-        mut ScratchSubsystemFieldCountVector outFieldCounts,
-        mut ScratchSubsystemNameHashVector outAssetHashes
+        mut usize outCursor,
+        mut usize outSubsystemCount,
+        mut usize outFieldCount,
+        mut usize outAssetCount
     )const{
         usize cursor = 0u;
         const Expected<SubsystemHeaderBinary> headerResult = ReadPOD<SubsystemHeaderBinary>(binary, cursor);
@@ -146,53 +134,66 @@ class SubsystemBinaryCodec{
             return false;
         }
         const usize subsystemCount = cast<usize>(header.subsystemCount);
-        if(!CanReadBytes(binary, cursor, subsystemCount * s_SubsystemNameHashBinaryBytes) || !CanStoreValueCount(outSubsystemHashes, subsystemCount)){
+        if(!CanReadBytes(binary, cursor, subsystemCount * s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: malformed 'subsystems' payload");
             return false;
         }
-        outSubsystemHashes.clear();
-        outSubsystemHashes.reserve(subsystemCount);
-        for(usize i = 0u; i < subsystemCount; ++i){
-            const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outSubsystemHashes.push_back(item.value());
-        }
+        const usize afterSubsystems = cursor + subsystemCount * s_SubsystemNameHashBinaryBytes;
 
         if(header.fieldCount > cast<u64>(usize.max / s_SubsystemFieldCountBinaryBytes)){
             error("ISubsystem::loadBinary failed: 'field counts' payload byte size overflows");
             return false;
         }
         const usize fieldCount = cast<usize>(header.fieldCount);
-        if(!CanReadBytes(binary, cursor, fieldCount * s_SubsystemFieldCountBinaryBytes) || !CanStoreValueCount(outFieldCounts, fieldCount)){
+        if(!CanReadBytes(binary, afterSubsystems, fieldCount * s_SubsystemFieldCountBinaryBytes)){
             error("ISubsystem::loadBinary failed: malformed 'field counts' payload");
             return false;
         }
-        outFieldCounts.clear();
-        outFieldCounts.reserve(fieldCount);
-        for(usize i = 0u; i < fieldCount; ++i){
-            const Expected<u64> item = ReadPOD<u64>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outFieldCounts.push_back(item.value());
-        }
+        const usize afterFieldCounts = afterSubsystems + fieldCount * s_SubsystemFieldCountBinaryBytes;
 
         if(header.assetCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: 'assets' payload byte size overflows");
             return false;
         }
         const usize assetCount = cast<usize>(header.assetCount);
-        if(!CanReadBytes(binary, cursor, assetCount * s_SubsystemNameHashBinaryBytes) || !CanStoreValueCount(outAssetHashes, assetCount)){
+        if(!CanReadBytes(binary, afterFieldCounts, assetCount * s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: malformed 'assets' payload");
             return false;
         }
-        outAssetHashes.clear();
-        outAssetHashes.reserve(assetCount);
-        for(usize i = 0u; i < assetCount; ++i){
+
+        outCursor = cursor;
+        outSubsystemCount = subsystemCount;
+        outFieldCount = fieldCount;
+        outAssetCount = assetCount;
+        return true;
+    }
+
+    public b8 readPayloads(
+        in Span<u8> binary,
+        in usize initialCursor,
+        in u64 expectedAssetCount,
+        mut Span<NameHash> outSubsystemHashes,
+        mut Span<u64> outFieldCounts,
+        mut Span<NameHash> outAssetHashes
+    )const{
+        usize cursor = initialCursor;
+        for(usize i = 0u; i < outSubsystemHashes.size(); ++i){
             const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
             if(!item.has_value())
                 return false;
-            outAssetHashes.push_back(item.value());
+            outSubsystemHashes[i] = item.value();
+        }
+        for(usize i = 0u; i < outFieldCounts.size(); ++i){
+            const Expected<u64> item = ReadPOD<u64>(binary, cursor);
+            if(!item.has_value())
+                return false;
+            outFieldCounts[i] = item.value();
+        }
+        for(usize i = 0u; i < outAssetHashes.size(); ++i){
+            const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
+            if(!item.has_value())
+                return false;
+            outAssetHashes[i] = item.value();
         }
 
         if(cursor != binary.size()){
@@ -200,11 +201,10 @@ class SubsystemBinaryCodec{
             return false;
         }
 
-        return this.validateFieldElementCountSum(outFieldCounts, header.assetCount);
+        return this.validateFieldElementCountSum(outFieldCounts, expectedAssetCount);
     }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

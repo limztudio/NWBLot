@@ -201,7 +201,7 @@ template<typename ArenaT>
     ScratchArena scratch{Name(s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch)};
     return Contains(result.message, ConvertString(scratch, asciiNeedle));
 #else
-    return Contains(result.message, TStringView(asciiNeedle.data(), asciiNeedle.size()));
+    return Contains(result.message, TStringView(asciiNeedle));
 #endif
 }
 
@@ -602,7 +602,7 @@ static b8 ManifestContainsStringValue(GlobalArena& arena, const AStringView mani
     needle += "\": \"";
     needle += value;
     needle += "\"";
-    return Contains(manifest, AStringView(needle.data(), needle.size()));
+    return Contains(manifest, AStringView(needle));
 }
 
 static b8 TriggerPackageContains(GlobalArena& arena, const CrashTestPath& packageDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
@@ -670,7 +670,7 @@ static CrashTestPath ObservedReportPath(GlobalArena& arena, const CrashTestPath&
     fileName += ".";
     fileName += suffix;
     WriteConvertedText<char>(out, basePath.extensionView());
-    return basePath.parentPath() / AStringView(fileName.data(), fileName.size());
+    return basePath.parentPath() / AStringView(fileName);
 }
 
 void PreserveObservedReport(GlobalArena& arena, const AStringView report, const AStringView suffix){
@@ -874,4 +874,5 @@ FOUNDATION_NOINLINE void CaptureRecoverableErrorForCrashObservation(const AStrin
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

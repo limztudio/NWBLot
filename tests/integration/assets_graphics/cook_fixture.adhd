@@ -191,7 +191,7 @@ FOUNDATION_INLINE b8 WriteGlobalTextFile(const Path& filePath, const AStringView
 }
 
 [[nodiscard]] inline constexpr AStringView ViewTestString(const TestAString& text)noexcept{
-    return AStringView(text.data(), text.size());
+    return AStringView(text);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Path JoinGraphicsPathImpl(const Path& base, const AStringView child){
@@ -735,7 +735,7 @@ FOUNDATION_INLINE void PrepareAssetPathWorkload(const usize directoryCount, cons
 
 template<typename StringT>
 [[nodiscard]] inline constexpr AStringView ViewArenaString(const StringT& text)noexcept{
-    return AStringView(text.data(), text.size());
+    return AStringView(text);
 }
 
 template<typename StringT>
@@ -1169,7 +1169,7 @@ FOUNDATION_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDi
             const auto filenameText = PathToString(cacheDirectory.arena(), filename);
             EXPECT_FALSE(true) << filenameText;
 #else
-            EXPECT_FALSE(true) << AStringView(filename.data(), filename.size());
+            EXPECT_FALSE(true) << AStringView(filename);
 #endif
         }
     }
@@ -3352,4 +3352,5 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

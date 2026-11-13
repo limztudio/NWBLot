@@ -159,7 +159,7 @@ void VerifyLogClientShutdown_ShutdownInterruptsBackoffAfterRepeatedTemporaryFail
         {
             LogClient client;
             const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-            const b8 initialized = client.init(AStringView(url.data(), url.size()));
+            const b8 initialized = client.init(AStringView(url));
             EXPECT_TRUE(initialized);
             if(initialized){
                 EnqueueClientAscii(client, "retry payload");
@@ -228,7 +228,7 @@ void ExerciseOversizedMessageClient(mut ShutdownCaptureServer server, in u16 por
     native(mut holder){
         Log::LogString message(holder.client.arena());
         message.resize(Log::s_MaxLogMessageUploadBytes / sizeof(tchar) + 1u, static_cast<tchar>('x'));
-        holder.client.enqueue(TStringView(message.data(), message.size()));
+        holder.client.enqueue(TStringView(message));
     }
     EnqueueClientAscii(holder.client, "later payload");
     for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
@@ -335,7 +335,7 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
         CrashTestText expectedAbortCode(arena);
         expectedAbortCode += "\"reason_code\": ";
         AppendDecimalText(static_cast<u64>(SIGABRT), expectedAbortCode);
-        EXPECT_FALSE(PendingDirectoryContainsManifestTexts(arena, pendingDirectory, AStringView("\"reason_kind\": \"signal\""), AStringView(expectedAbortCode.data(), expectedAbortCode.size())));
+        EXPECT_FALSE(PendingDirectoryContainsManifestTexts(arena, pendingDirectory, AStringView("\"reason_kind\": \"signal\""), AStringView(expectedAbortCode)));
 
         const auto assertPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, expectedAssertCategory, "false", AStringView(), s_TestSourceFilename);
         EXPECT_TRUE(assertPackageDirectory);
@@ -848,4 +848,5 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageDoesNotWrapSymbolOffset){ VerifyLogge
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

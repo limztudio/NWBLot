@@ -530,7 +530,7 @@ b8 BuildTestTextLogPayload(in LogTypeEnum type, in StringView message, mut Scrat
         const auto converted = ConvertString(scratchArena, message);
         return Core::Telemetry::BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
 #else
-        return Core::Telemetry::BuildTextLogPayload(type, TStringView(message.data(), message.size()), scratchArena, outPayload);
+        return Core::Telemetry::BuildTextLogPayload(type, TStringView(message), scratchArena, outPayload);
 #endif
     }
 }
@@ -542,7 +542,7 @@ b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in Str
         const auto converted = ConvertString(scratchArena, message);
         return Core::Telemetry::RecordTextLog(recorder, type, TStringView(converted), frameIndex, streamId);
 #else
-        return Core::Telemetry::RecordTextLog(recorder, type, TStringView(message.data(), message.size()), frameIndex, streamId);
+        return Core::Telemetry::RecordTextLog(recorder, type, TStringView(message), frameIndex, streamId);
 #endif
     }
 }
@@ -2050,4 +2050,5 @@ NWB_ADHD_GTEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentit
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -106,7 +106,7 @@ public:
 
 public:
     [[nodiscard]] AStringView documentView()const noexcept{
-        return AStringView(m_document.data(), m_document.size());
+        return AStringView(m_document);
     }
 
     [[nodiscard]] b8 prepareDocument(const Point scroll = {});
@@ -378,15 +378,15 @@ using ::PackFourCharTag;
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UiTextAreaPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
-    return AStringView(item.text.data(), item.text.size());
+    return AStringView(item.text);
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UiTextAreaActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
-    return AStringView(text.data(), text.size());
+    return AStringView(text);
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UiTextAreaResolutionText(const ::NWB::UiTextAreaTests::AreaResolution& item)noexcept{
-    return AStringView(item.text.data(), item.text.size());
+    return AStringView(item.text);
 }
 
 TextAreaOptions MakeUiTextAreaScrollOptions()noexcept;
@@ -1902,4 +1902,5 @@ NWB_ADHD_GTEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblin
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

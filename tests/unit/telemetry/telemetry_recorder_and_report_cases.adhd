@@ -1675,7 +1675,7 @@ void VerifyTelemetry_TextLogPayloadRetainsPlatformInvalidUnicodeConversion(){
         constexpr Array<tchar, 3> s_Message = { static_cast<tchar>(0xc0u), static_cast<tchar>(0xafu), static_cast<tchar>('X') };
         expected = { 0xc0u, 0xafu, static_cast<u8>('X') };
 #endif
-        built = BuildTextLogPayload(LogType::Info, TStringView(s_Message.data(), s_Message.size()), testArena.scratchArena, payload);
+        built = BuildTextLogPayload(LogType::Info, TStringView(s_Message), testArena.scratchArena, payload);
     }
     ASSERT_TRUE(built);
     CheckTextLogPayload(payload, expected);
@@ -1801,4 +1801,5 @@ NWB_ADHD_GTEST(Telemetry, TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes,
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

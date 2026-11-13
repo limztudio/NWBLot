@@ -530,7 +530,7 @@ void VerifyGlobal_AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirec
         atomicUpdateSucceeded = StagedFileWriter(firstFile).writeTextAtomic(AStringView("updated_atomically"));
         ::AString<NWB::Core::Alloc::GlobalArena> readBack(testArena.arena);
         readBackOk = ReadTextFile(firstFile, readBack).has_value();
-        updatedText.assign(AStringView(readBack.data(), readBack.size()));
+        updatedText.assign(AStringView(readBack));
         removedRoot = RemoveAllIfExists(root).has_value();
     }
 
@@ -622,7 +622,7 @@ void VerifyGlobal_ProcessArgumentValidationPreservesExistingOutput(){
 #endif
 
         const Array<char, 3u> invalidArgument = { 'a', '\0', 'b' };
-        const Array<AStringView, 2u> arguments = { "unused_program", AStringView(invalidArgument.data(), invalidArgument.size()) };
+        const Array<AStringView, 2u> arguments = { "unused_program", AStringView(invalidArgument) };
         embeddedNullRunAccepted = RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)).has_value();
         emptyArgvRunAccepted = RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)).has_value();
         NWB::Tests::TestAString output(testArena.arena);
@@ -934,7 +934,7 @@ void VerifyGlobal_RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStream
 
         NWB::Tests::TestAString output;
         readBackOk = ReadTextFile(outputPath, output).has_value();
-        capturedCombined.assign(AStringView(output.data(), output.size()));
+        capturedCombined.assign(AStringView(output));
         removedRoot = RemoveAllIfExists(root).has_value();
 #else
         static_cast<void>(binSh);
@@ -976,7 +976,7 @@ void VerifyGlobal_SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols(){
             resolvedPidMatches = currentProcessId.has_value() && (*currentProcessId)() == ::GetCurrentProcessId();
 
             const Array<char, 3u> invalidSymbol = { 'G', '\0', 'e' };
-            const auto invalid = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol.data(), invalidSymbol.size()));
+            const auto invalid = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol));
             invalidSymbolRejected = !invalid && invalid.error().code == MakeErrorCode(ErrorCondition::invalid_argument);
             const auto missing = library.resolve<CurrentProcessIdFn>(testArena.arena, "nwb_missing_symbol_bec2119d19ec4c48");
             missingSymbolRejected = !missing && missing.error().code.value() != 0;
@@ -1136,4 +1136,5 @@ TEST(Global, SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

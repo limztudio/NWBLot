@@ -328,7 +328,7 @@ void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndE
         outputPathView = AStringView(outputText);
 #else
         const auto text = outputPath.native();
-        outputPathView = AStringView(text.data(), text.size());
+        outputPathView = AStringView(text);
 #endif
     }
     EXPECT_FALSE(outputPathView.empty());
@@ -530,4 +530,5 @@ NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerR
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

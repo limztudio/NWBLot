@@ -89,11 +89,11 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
-    return AStringView(result.generatedHeader.data(), result.generatedHeader.size());
+    return AStringView(result.generatedHeader);
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView GeneratedSourceView(const CompileResult& result)noexcept{
-    return AStringView(result.generatedSource.data(), result.generatedSource.size());
+    return AStringView(result.generatedSource);
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView FirstErrorMessage(const CompileResult& result)noexcept{
@@ -101,7 +101,7 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView MStringAsView(const MString& text)noexcept{
-    return AStringView(text.data(), text.size());
+    return AStringView(text);
 }
 
 [[nodiscard]] FOUNDATION_INLINE usize UnitClassCount(const CompileResult& result)noexcept{
@@ -157,7 +157,7 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UnitIncludedAdhdFileView(const CompileResult& result, const usize idx)noexcept{
-    return AStringView(result.unit.includedAdhdFiles[idx].data(), result.unit.includedAdhdFiles[idx].size());
+    return AStringView(result.unit.includedAdhdFiles[idx]);
 }
 
 [[nodiscard]] FOUNDATION_INLINE usize UnitResolvedIncludedFileCount(const CompileResult& result)noexcept{
@@ -165,7 +165,7 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UnitResolvedIncludedFileView(const CompileResult& result, const usize idx)noexcept{
-    return AStringView(result.unit.resolvedIncludedFiles[idx].data(), result.unit.resolvedIncludedFiles[idx].size());
+    return AStringView(result.unit.resolvedIncludedFiles[idx]);
 }
 
 inline constexpr MStringView s_SuiteDedupAdhdSource =
@@ -1912,4 +1912,5 @@ NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentV
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

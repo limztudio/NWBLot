@@ -67,7 +67,7 @@ public:
 
 public:
     [[nodiscard]] AStringView denseView()const noexcept{
-        return AStringView(m_dense.data(), m_dense.size());
+        return AStringView(m_dense);
     }
 
     [[nodiscard]] b8 seedModel();
@@ -399,11 +399,11 @@ FOUNDATION_INLINE void ExpectUiMultilineViewPlacement(const ::NWB::Impl::Ui::Edi
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UiTextScrollPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
-    return AStringView(item.text.data(), item.text.size());
+    return AStringView(item.text);
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView UiTextScrollActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
-    return AStringView(text.data(), text.size());
+    return AStringView(text);
 }
 };
 
@@ -1643,4 +1643,5 @@ NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, AuxiliaryTokenRestorationPreservesM
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

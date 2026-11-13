@@ -700,7 +700,7 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
             threads[i] = Thread([&, i](){
                 ScratchArena scratchArena{ Name(s_AssetCaseTestsMetadataRegistryConcurrentTokens) };
                 ScratchString text(tokens[i], scratchArena);
-                RegisterNonStandaloneAssetType(s_NameNone, AStringView(text.data(), text.size()));
+                RegisterNonStandaloneAssetType(s_NameNone, AStringView(text));
                 text.assign("overwritten");
             });
         }
@@ -1123,4 +1123,5 @@ TEST(AssetsGraphics, MeshletScoreRetainsOrderingAtFloatPrecisionBoundary){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

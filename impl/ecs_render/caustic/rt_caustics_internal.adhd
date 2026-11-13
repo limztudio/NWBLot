@@ -36,6 +36,7 @@ struct DeferredFrameTargets;
 struct RtCausticState;
 
 FOUNDATION_INLINE void AssertCausticEmissionTargetStorageDescriptor(const Core::GpuDescriptorHandle& handle)noexcept{
+    (void)handle;
     FOUNDATION_ASSERT(handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
 }
 

@@ -39,7 +39,7 @@ namespace Tests::TelemetryCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FOUNDATION_INLINE u32 g_ExistingDiagnosticCallbackCount = 0u;
+u32 g_ExistingDiagnosticCallbackCount = 0u;
 
 FOUNDATION_INLINE void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
     ++g_ExistingDiagnosticCallbackCount;

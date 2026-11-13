@@ -34,7 +34,7 @@ struct TrianglePairVectors{
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> second{};
 };
 
-FOUNDATION_INLINE volatile u64 s_ChecksumSink = 0u;
+volatile u64 s_ChecksumSink = 0u;
 
 FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);

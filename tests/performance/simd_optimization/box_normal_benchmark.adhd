@@ -18,7 +18,7 @@ native{
 namespace SimdOptimizationBenchmark{
 namespace BoxNormalKernels{
 
-FOUNDATION_INLINE volatile u64 s_ChecksumSink = 0u;
+volatile u64 s_ChecksumSink = 0u;
 
 [[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);

@@ -88,6 +88,7 @@ public:
 static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle) + 2u * sizeof(Core::BufferHandle) + 2u * sizeof(Core::GpuDescriptorHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
 
 FOUNDATION_INLINE void ValidateAvboitPushConstantTargets(const AvboitFrameTargets& targets)noexcept{
+    (void)targets;
     FOUNDATION_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
     FOUNDATION_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
 }

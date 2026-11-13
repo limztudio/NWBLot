@@ -55,7 +55,7 @@ using NWB::Tests::s_SIMDMemoryHandlerFailureExitCode;
 using NWB::Tests::s_SIMDMemoryReturnedExitCode;
 
 inline constexpr usize s_Alignment = 64u;
-FOUNDATION_INLINE volatile u64 g_Checksum = 0u;
+volatile u64 g_Checksum = 0u;
 
 struct AlignedBytes final{
     NotNull<void*> storage;

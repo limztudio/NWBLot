@@ -275,6 +275,7 @@ static void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirecto
 
 // Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
 static void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
+    (void)arena;
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
     if(!regularCapture){

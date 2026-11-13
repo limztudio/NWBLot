@@ -485,7 +485,6 @@ NWB_ADHD_EXPORT_NWB_VALUE_TYPE("Name",          ".isString()",  ".asString()",  
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("String",         "StringView", false)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("CompactString",  "StringView", false)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("Vector",         "Span",       true)
-NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("ParallelVector", "Span",       true)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("Array",          "Span",       true)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("FixedVector",    "Span",       true)
 

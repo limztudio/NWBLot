@@ -32,6 +32,11 @@
 #define NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_FUNCTION_WIDE
+#define NWB_ADHD_EXPORT_FUNCTION_WIDE(adhdName, cppExportName, arity, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule, arg9Rule, arg10Rule, arg11Rule, arg12Rule, arg13Rule, arg14Rule, arg15Rule, arg16Rule, arg17Rule, arg18Rule, arg19Rule)
+#define NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
 #define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL(adhdName)
 #define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL_AUTO_UNDEF
@@ -92,6 +97,11 @@
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
+#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE(receiverTypeName, methodName, arity, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
+#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_BUILTIN_FIELD
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText)
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF
@@ -119,13 +129,24 @@ NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MatrixSingleArg, "",      false, "MatrixSingle
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(NameHashValue, "",       false, "NameHash", false, false, "built-in function argument must be NameHash")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutNameHashValue, "",    true,  "NameHash", false, false, "built-in function argument must be a mutable NameHash variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(NameValue,     "",       false, "Name",     false, false, "built-in function argument must be Name")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TexturePayloadDimensionValue, "", false, "TexturePayloadDimension", false, false, "built-in function argument must be TexturePayloadDimension")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TexturePayloadFormatValue, "", false, "TexturePayloadFormat", false, false, "built-in function argument must be TexturePayloadFormat")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TextureAlphaModeValue, "", false, "TextureAlphaMode", false, false, "built-in function argument must be TextureAlphaMode")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(F64Scalar, "", false, "f64", false, false, "built-in function argument must be f64")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BoolScalar, "", false, "b8", false, false, "built-in function argument must be b8")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(U64Scalar, "", false, "u64", false, false, "built-in function argument must be u64")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(U32Scalar, "", false, "u32", false, false, "built-in function argument must be u32")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(F32Scalar, "", false, "f32", false, false, "built-in function argument must be f32")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(NumericScalar, "", false, "", false, false, "built-in function argument must be a numeric scalar")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutF32Scalar, "", true, "f32", false, false, "built-in function argument must be a mutable f32 variable")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutF64Scalar, "", true, "f64", false, false, "built-in function argument must be a mutable f64 variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutByteFixedVector, "", true, "FixedVector", false, false, "built-in function argument must be a mutable FixedVector<u8, N>")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ByteSpan,   "",           false, "Span",  false, false, "built-in function argument must be Span<u8>")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ReadableByteSequence, "Span", false, "", false, false, "built-in function argument must be a contiguous u8 sequence")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutableByteSequence, "Span", true, "", false, false, "built-in function argument must be a mutable contiguous u8 sequence")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutableU32Sequence, "Span", true, "", false, false, "built-in function argument must be a mutable contiguous u32 sequence")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutableU64Sequence, "Span", true, "", false, false, "built-in function argument must be a mutable contiguous u64 sequence")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutableU64Array64, "", true, "Array", false, false, "built-in function argument must be a mutable Array<u64, 64>")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(UsizeSpan,  "",           false, "Span",  false, false, "built-in function argument must be Span<usize>")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutAny,             "",           true,  "",                      false, false, "built-in function argument must be a mutable variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutString,          "",           true,  "String",                false, false, "built-in function argument must be a mutable String variable")
@@ -135,6 +156,7 @@ NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TimerValue,         "",           false, "Time
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutTimerValue,      "",           true,  "Timer",                 false, false, "built-in function argument must be a mutable Timer variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(FpEnvValue,         "",           false, "FloatingPointEnvironment", false, false, "built-in function argument must be FloatingPointEnvironment")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(CpuPlacementValue,  "",           false, "CpuWorkerPlacement",    false, false, "built-in function argument must be CpuWorkerPlacement")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(CpuAffinityValue, "", false, "CpuAffinity", false, false, "built-in function argument must be CpuAffinity")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(DiagnosticRecordValue, "",        false, "DiagnosticEventRecord", false, false, "built-in function argument must be DiagnosticEventRecord")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(I32Scalar,          "i32",        false, "",                      false, true,  "built-in function argument must be an integer type")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(I64Scalar,          "i64",        false, "",                      false, true,  "built-in function argument must be an integer type")
@@ -241,10 +263,12 @@ NWB_ADHD_EXPORT_FUNCTION("UpdateFnv64Byte",     "::UpdateFnv64Byte",            
 NWB_ADHD_EXPORT_FUNCTION("UpdateFnv64U32",      "::UpdateFnv64U32LittleEndian", 2u, FixedType, "u64", "", Integer, Integer, Any)
 NWB_ADHD_EXPORT_FUNCTION("UpdateFnv64U64",      "::UpdateFnv64U64LittleEndian", 2u, FixedType, "u64", "", Integer, Integer, Any)
 NWB_ADHD_EXPORT_FUNCTION("FoldNameHash64", "::FoldNameHash64", 1u, FixedType, "u64", "", NameHashValue, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("ComputeNameHash", "::ComputeNameHash<char>", 1u, 1u, FixedType, "Expected", "NameHash", "", "NameTextError", "<global/name_hash.h>", false, false, false, TextView, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION("UpdateFnv64NameHash", "::UpdateFnv64NameHash",        2u, FixedType, "u64", "", Integer, NameHashValue, Any)
 NWB_ADHD_EXPORT_FUNCTION("EqualF32x4Bits", "::Vector4EqualInt", 2u, FixedType, "b8", "", VectorSingleArg, VectorSingleArg, Any)
 NWB_ADHD_EXPORT_FUNCTION("HashCombineF32x4", "::HashCombineF32x4", 2u, FixedType, "void", "", VectorSingleArg, MutUsize, Any)
 NWB_ADHD_EXPORT_FUNCTION("PackUnorderedU32Pair", "::PackUnorderedU32Pair", 2u, FixedType, "u64", "", Integer, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("PackFourCharTag", "::PackFourCharTag", 4u, 4u, FixedType, "u32", "", "", "", "<global/bit.h>", false, false, false, Integer, Integer, Integer, Integer, Any)
 
 NWB_ADHD_EXPORT_FUNCTION_CALL("TrimView",               "::TrimView",               1u, 1u, FixedType,      "StringView", "", "", "", "", false, false, false, None, false, true, false, StringView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("TrimLeftView",           "::TrimLeftView",           1u, 1u, FixedType,      "StringView", "", "", "", "", false, false, false, None, false, true, false, StringView, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -328,6 +352,10 @@ NWB_ADHD_EXPORT_FUNCTION_EX("ComputeFnv32TextHash",          "::ComputeFnv32Text
 NWB_ADHD_EXPORT_FUNCTION_EX("UpdateFnv64TextCanonical",      "::UpdateFnv64TextCanonical<char>",            2u, 2u, FixedType,        "u64",                       "",         "",          "",                      "",                                    false, false, false, Integer,               TextView,  Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("UpdateFnv64TextExact",          "::UpdateFnv64TextExact<char>",                2u, 2u, FixedType,        "u64",                       "",         "",          "",                      "",                                    false, false, false, Integer,               TextView,  Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("IsAsciiDigit",                  "::IsAsciiDigit",                              1u, 1u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, Integer,               Any,       Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("IsHexDigit", "::IsHexDigit", 1u, 1u, FixedType, "b8", "", "", "", "<global/text_utils.h>", false, false, false, Integer, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("HexDigitValue", "::HexDigitValue", 1u, 1u, FixedType, "u32", "", "", "", "<global/text_utils.h>", false, false, false, Integer, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("IsBinaryDigit", "::IsBinaryDigit", 1u, 1u, FixedType, "b8", "", "", "", "<global/text_utils.h>", false, false, false, Integer, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("IsOctalDigit", "::IsOctalDigit", 1u, 1u, FixedType, "b8", "", "", "", "<global/text_utils.h>", false, false, false, Integer, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("IsAsciiLower",                  "::IsAsciiLower",                              1u, 1u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, Integer,               Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("IsAsciiUpper",                  "::IsAsciiUpper",                              1u, 1u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, Integer,               Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("IsAsciiAlphaNumeric",           "::IsAsciiAlphaNumeric",                       1u, 1u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, Integer,               Any,       Any, Any, Any)
@@ -414,7 +442,7 @@ NWB_ADHD_EXPORT_FUNCTION_EX("UpdateAtomicMaxRelaxed",        "::UpdateAtomicMaxR
 NWB_ADHD_EXPORT_FUNCTION_EX("DecrementAtomicOrTerminate",    "::DecrementAtomicOrTerminate",                1u, 1u, FixedType,        "u64",                       "",         "",          "",                      "",                                    false, false, false, MutAny,                Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("AtomicThreadFence",             "::AtomicThreadFence",                         1u, 1u, FixedType,        "void",                      "",         "",          "",                      "",                                    false, false, false, Any,                   Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("AtomicSignalFence",             "::AtomicSignalFence",                         1u, 1u, FixedType,        "void",                      "",         "",          "",                      "",                                    false, false, false, Any,                   Any,       Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_EX("QueryCpuCoreCount",             "::QueryCpuCoreCount",                         1u, 1u, FixedType,        "u32",                       "",         "",          "",                      "<global/cpu_topology.h>",             false, false, false, Any,                   Any,       Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_EX("QueryCpuCoreCount",             "::QueryCpuCoreCount",                         1u, 1u, FixedType,        "u32",                       "",         "",          "",                      "<global/cpu_topology.h>",             false, false, false, CpuAffinityValue,                   Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("SetCurrentThreadCpuPlacement",  "::SetCurrentThreadCpuPlacement",              1u, 1u, FixedType,        "b8",                        "",         "",          "",                      "<global/cpu_topology.h>",             false, false, false, CpuPlacementValue,     Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("GetFloatingPointEnvironment",   "::GetFloatingPointEnvironment",               0u, 0u, FixedType,        "Expected",                  "FloatingPointEnvironment", "", "",               "<global/floating_point_environment.h>",false, false, false, Any,                  Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("HoldFloatingPointExceptions",   "::HoldFloatingPointExceptions",               0u, 0u, FixedType,        "Expected",                  "FloatingPointEnvironment", "", "",               "<global/floating_point_environment.h>",false, false, false, Any,                  Any,       Any, Any, Any)
@@ -551,7 +579,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("AddStringTableTextReserveBytes", "::AddStringTabl
 NWB_ADHD_EXPORT_FUNCTION_CALL("AlignUpCheckedSize", "::AlignUpCheckedSize", 2u, 2u, FixedType, "Expected", "usize", "", "", "", false, false, false, None, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Alignment", "::Alignment", 2u, 2u, FixedType, "usize", "", "", "", "", false, false, false, None, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("AlignmentPowerOfTwo", "::AlignmentPowerOfTwo", 2u, 2u, FixedType, "usize", "", "", "", "", false, false, false, None, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("AlphaModeText", "::TextureFormat::AlphaModeText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("AlphaModeText", "::TextureFormat::AlphaModeText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TextureAlphaModeValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Base64DecodedSize", "::Base64DecodedSize", 2u, 2u, FixedType, "Expected", "usize", "", "", "<global/base64.h>", false, false, false, None, false, false, false, TextView, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("BoolToYesNoText", "::BoolToYesNoText", 1u, 1u, FixedType, "StringView", "", "", "", "", false, false, false, None, false, false, false, BoolScalar, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("BoundingBoxContainedByValue", "::BoundingBox::ContainedByValue", 8u, 8u, FixedType, "ContainmentType", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any)
@@ -622,10 +650,8 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("BuildTriangleAreaNormal64", "::BuildTriangleAreaN
 NWB_ADHD_EXPORT_FUNCTION_CALL("BytesMatch", "::BytesMatch", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("CanEnableDebugRuntime", "::CanEnableDebugRuntime", 0u, 0u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeBalancedPartitionRange", "::ComputeBalancedPartitionRange", 4u, 4u, FixedType, "BalancedPartitionRange", "", "", "", "<global/range_partition.h>", false, false, false, None, false, false, false, Integer, Integer, Integer, Integer, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeCompleteMipCount", "::TextureFormat::ComputeCompleteMipCount", 4u, 4u, FixedType, "Expected", "u32", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Integer, Integer, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeExpectedPayloadByteCount", "::TextureFormat::ComputeExpectedPayloadByteCount", 2u, 2u, FixedType, "Expected", "u64", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeMipPlaneBlockLayout", "::TextureFormat::ComputeMipPlaneBlockLayout", 3u, 3u, FixedType, "Expected", "TextureMipPlaneBlockLayout", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Integer, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeMipSliceCount", "::TextureFormat::ComputeMipSliceCount", 2u, 2u, FixedType, "Expected", "u32", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeOnlineF64Statistics", "::ComputeOnlineF64Statistics", 1u, 1u, FixedType, "OnlineF64Statistics", "", "", "", "<global/statistics.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeSha1Text", "::ComputeSha1Text", 1u, 1u, FixedType, "Sha1Digest", "", "", "", "<global/sha1.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ConvertVectorDoubleToSingle", "::ConvertVectorDoubleToSingle", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -634,7 +660,6 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("CurrentAbiName", "::CurrentAbiName", 0u, 0u, Fixe
 NWB_ADHD_EXPORT_FUNCTION_CALL("DecodeUtf16SurrogatePair", "::DecodeUtf16SurrogatePair", 2u, 2u, FixedType, "u32", "", "", "", "", false, false, false, None, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("DecodeUtf8CodePoint", "::DecodeUtf8CodePoint", 1u, 1u, FixedType, "Expected", "DecodedUtf8CodePoint", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("DecodeUtf8Scalar", "::DecodeUtf8Scalar", 1u, 1u, FixedType, "Expected", "DecodedUtf8CodePoint", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("DimensionText", "::TextureFormat::DimensionText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ExtractLeadingIdentifier", "::ExtractLeadingIdentifier", 1u, 1u, FixedType, "StringView", "", "", "", "", false, false, false, None, false, true, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FindLineKeyValue", "::FindLineKeyValue", 2u, 2u, FixedType, "Expected", "StringView", "", "", "", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FindLineKeyValueU64", "::FindLineKeyValueU64", 2u, 2u, FixedType, "Expected", "u64", "", "", "", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
@@ -658,6 +683,30 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("FrustumDoubleIntersectsPlane", "::FrustumDoubleTe
 NWB_ADHD_EXPORT_FUNCTION_CALL("FrustumDoubleIntersectsSphere", "::FrustumDoubleTests::IntersectsSphere", 9u, 9u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, VectorDoubleArg)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FrustumIntersectsPlane", "::FrustumTests::IntersectsPlane", 9u, 9u, FixedType, "PlaneIntersectionType", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, VectorSingleArg)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FrustumIntersectsSphere", "::FrustumTests::IntersectsSphere", 9u, 9u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, VectorSingleArg)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumTransformMatrix", "::FrustumTests::Transform", 17u, "void", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, MatrixSingleArg, MutVectorSingleArg, MutVectorSingleArg, MutF32Scalar, MutF32Scalar, MutF32Scalar, MutF32Scalar, MutF32Scalar, MutF32Scalar, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumTransformSrt", "::FrustumTests::Transform", 19u, "void", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, MutVectorSingleArg, MutVectorSingleArg, MutF32Scalar, MutF32Scalar, MutF32Scalar, MutF32Scalar, MutF32Scalar, MutF32Scalar, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumContainsTriangle", "::FrustumTests::ContainsTriangle", 11u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumIntersectsRay", "::FrustumTests::IntersectsRay", 10u, "Expected", "f32", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumContainedBy", "::FrustumTests::ContainedBy", 14u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumContainsBox", "::FrustumTests::ContainsBox", 10u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumContainsOrientedBox", "::FrustumTests::ContainsOrientedBox", 11u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumContainsFrustum", "::FrustumTests::ContainsFrustum", 16u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumIntersectsBox", "::FrustumTests::IntersectsBox", 10u, "b8", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumIntersectsOrientedBox", "::FrustumTests::IntersectsOrientedBox", 11u, "b8", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumIntersectsFrustum", "::FrustumTests::IntersectsFrustum", 16u, "b8", "", "<global/simd/bounding_frustum_tests.h>", VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorSingleArg, VectorSingleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleTransformMatrix", "::FrustumDoubleTests::Transform", 17u, "void", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, MatrixDoubleArg, MutVectorDoubleArg, MutVectorDoubleArg, MutF64Scalar, MutF64Scalar, MutF64Scalar, MutF64Scalar, MutF64Scalar, MutF64Scalar, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleTransformSrt", "::FrustumDoubleTests::Transform", 19u, "void", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, MutVectorDoubleArg, MutVectorDoubleArg, MutF64Scalar, MutF64Scalar, MutF64Scalar, MutF64Scalar, MutF64Scalar, MutF64Scalar, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleContainsTriangle", "::FrustumDoubleTests::ContainsTriangle", 11u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleIntersectsRay", "::FrustumDoubleTests::IntersectsRay", 10u, "Expected", "f64", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleContainedBy", "::FrustumDoubleTests::ContainedBy", 14u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleContainsBox", "::FrustumDoubleTests::ContainsBox", 10u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleContainsOrientedBox", "::FrustumDoubleTests::ContainsOrientedBox", 11u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleContainsFrustum", "::FrustumDoubleTests::ContainsFrustum", 16u, "ContainmentType", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleIntersectsBox", "::FrustumDoubleTests::IntersectsBox", 10u, "b8", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleIntersectsOrientedBox", "::FrustumDoubleTests::IntersectsOrientedBox", 11u, "b8", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("FrustumDoubleIntersectsFrustum", "::FrustumDoubleTests::IntersectsFrustum", 16u, "b8", "", "<global/simd/bounding_frustum_tests.h>", VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, VectorDoubleArg, VectorDoubleArg, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("MatrixSet", "::MatrixSet", 16u, "MatrixSingle", "", "<global/simd/matrix_construct.h>", NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_WIDE("MatrixDoubleSet", "::MatrixDoubleSet", 16u, "MatrixDouble", "", "<global/simd/matrix_construct.h>", NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, NumericScalar, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("GetLocalTime", "::GetLocalTime", 0u, 0u, FixedType, "Expected", "LocalTime", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("HasMatchingOuterParens", "::HasMatchingOuterParens", 1u, 1u, FixedType, "b8", "", "", "", "<global/source_text.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("HasVisibleRectIntersection", "::HasVisibleRectIntersection", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
@@ -670,7 +719,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("IntersectRectValue", "::IntersectRectValue", 2u, 
 NWB_ADHD_EXPORT_FUNCTION_CALL("IntersectRectValuePreservingExtent", "::IntersectRectValuePreservingExtent", 2u, 2u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsConstantEvaluated", "::IsConstantEvaluated", 0u, 0u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsEscapedQuoteAt", "::IsEscapedQuoteAt", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, TextView, Integer, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsHdrTexturePayloadFormat", "::IsHdrTexturePayloadFormat", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsHdrTexturePayloadFormat", "::IsHdrTexturePayloadFormat", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadFormatValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsMissingOrInvalidPathLookupError", "::IsMissingOrInvalidPathLookupError", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsRelativeSlashPathWithoutDotSegments", "::IsRelativeSlashPathWithoutDotSegments", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsSafeArchiveRelativePath", "::IsSafeArchiveRelativePath", 1u, 1u, FixedType, "b8", "", "", "", "<global/filesystem/archive.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -680,13 +729,16 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("IsUnicodeSurrogate", "::IsUnicodeSurrogate", 1u, 
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsUtf16HighSurrogate", "::IsUtf16HighSurrogate", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsUtf16LowSurrogate", "::IsUtf16LowSurrogate", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsUtf8Continuation", "::IsUtf8Continuation", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureDimension", "::IsValidTextureDimension", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadDimensionValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("DimensionText", "::TextureFormat::DimensionText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadDimensionValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureResolution", "::TextureFormat::IsValidTextureResolution", 4u, 4u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadDimensionValue, Integer, Integer, Integer, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureDescriptor", "::TextureFormat::IsValidTextureDescriptor", 7u, 7u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadFormatValue, TexturePayloadDimensionValue, Integer, Integer, Integer, TextureAlphaModeValue, Integer, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeCompleteMipCount", "::TextureFormat::ComputeCompleteMipCount", 4u, 4u, FixedType, "Expected", "u32", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadDimensionValue, Integer, Integer, Integer, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeMipSliceCount", "::TextureFormat::ComputeMipSliceCount", 2u, 2u, FixedType, "Expected", "u32", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadDimensionValue, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaConstant", "::TextureFormat::IsValidTextureAlphaConstant", 2u, 2u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaMode", "::IsValidTextureAlphaMode", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaMode", "::IsValidTextureAlphaMode", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TextureAlphaModeValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaTransport", "::TextureFormat::IsValidTextureAlphaTransport", 2u, 2u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureDescriptor", "::TextureFormat::IsValidTextureDescriptor", 7u, 7u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Integer, Integer, Integer, Any, Integer, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureDimension", "::IsValidTextureDimension", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTexturePayloadFormat", "::IsValidTexturePayloadFormat", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureResolution", "::TextureFormat::IsValidTextureResolution", 4u, 4u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Integer, Integer, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTexturePayloadFormat", "::IsValidTexturePayloadFormat", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadFormatValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsZeroHash", "::IsZeroHash", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, NameHashValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("LessNameHash", "::LessNameHash", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, NameHashValue, NameHashValue, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("LoadHalf", "::LoadHalf", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -745,7 +797,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("ParseF64FromChars", "::ParseF64FromChars", 1u, 1u
 NWB_ADHD_EXPORT_FUNCTION_CALL("ParseFiniteF32ViaF64", "::ParseFiniteF32ViaF64", 1u, 1u, FixedType, "Expected", "f32", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ParseLinuxProcessMemoryMapLine", "::ParseLinuxProcessMemoryMapLine", 1u, 1u, FixedType, "Expected", "LinuxProcessMemoryMapEntry", "", "", "<global/process_memory_map.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ParseNameText", "::ParseNameText", 1u, 1u, FixedType, "Expected", "Name", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("PayloadFormatText", "::TextureFormat::PayloadFormatText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("PayloadFormatText", "::TextureFormat::PayloadFormatText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, TexturePayloadFormatValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("PlaneDistance", "::PlaneTests::Distance", 2u, 2u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("PlaneDoubleDistance", "::PlaneDoubleTests::Distance", 2u, 2u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("PlaneDoubleFromPointNormal", "::PlaneDoubleTests::FromPointNormal", 3u, 3u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any)
@@ -776,7 +828,11 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("QuaternionRotationNormal", "::QuaternionRotationN
 NWB_ADHD_EXPORT_FUNCTION_CALL("QuaternionRotationRollPitchYaw", "::QuaternionRotationRollPitchYaw", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("QueryCurrentThreadId", "::QueryCurrentThreadId", 0u, 0u, FixedType, "ThreadId", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ReadFirstIdentifierAfterCComments", "::ReadFirstIdentifierAfterCComments", 1u, 1u, FixedType, "StringView", "", "", "", "<global/source_text.h>", false, false, false, None, false, true, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("ReadU16BigEndian", "::ReadU16BigEndian", 1u, 2u, FixedType, "Expected", "u16", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ReadU16BigEndian", "::ReadU16BigEndian", 1u, 2u, FixedType, "Expected", "u16", "", "", "", false, false, false, None, false, false, false, ReadableByteSequence, Integer, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("FindDisjointRoot", "::FindDisjointRoot", 2u, 2u, FixedType, "u32", "", "", "", "<global/disjoint_set.h>", false, false, false, None, false, false, false, Integer, MutableU32Sequence, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("JoinDisjointSets", "::JoinDisjointSets", 4u, 4u, FixedType, "void", "", "", "", "<global/disjoint_set.h>", false, false, false, None, false, false, false, Integer, Integer, MutableU32Sequence, MutableByteSequence, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SymmetrizeDenseBitMatrix", "::SymmetrizeDenseBitMatrix", 3u, 3u, FixedType, "void", "", "", "", "<global/bit_matrix.h>", false, false, false, None, false, false, false, MutableU64Sequence, Integer, Integer, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("TransposeBitMatrix64", "::TransposeBitMatrix64", 1u, 1u, FixedType, "void", "", "", "", "<global/bit_matrix.h>", false, false, false, None, false, false, false, MutableU64Array64, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("RecordHeapMemoryAllocation", "::RecordHeapMemoryAllocation", 1u, 1u, FixedType, "void", "", "", "", "", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("RecordHeapMemoryDeallocation", "::RecordHeapMemoryDeallocation", 1u, 1u, FixedType, "void", "", "", "", "", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("RecordHeapMemoryReallocation", "::RecordHeapMemoryReallocation", 2u, 2u, FixedType, "void", "", "", "", "", false, false, false, None, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
@@ -851,7 +907,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3LengthSq", "::Vector3LengthSq", 1u, 1u, Fi
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3LessOrEqual", "::Vector3LessOrEqual", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3MaxComponent", "::Vector3MaxComponent", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3Normalize", "::Vector3Normalize", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3NormalizeOr", "::Vector3NormalizeOr", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3NormalizeOr", "::Vector3NormalizeOr", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, F32Scalar, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3Refract", "::Vector3Refract", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3RefractV", "::Vector3RefractV", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector3TransformNormal", "::Vector3TransformNormal", 2u, 2u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, MatrixSingleArg, Any, Any, Any, Any, Any, Any, Any)
@@ -870,7 +926,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4LessOrEqual", "::Vector4LessOrEqual", 2u, 
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4MaxComponent", "::Vector4MaxComponent", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4NearEqual", "::Vector4NearEqual", 3u, 3u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4Normalize", "::Vector4Normalize", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4NormalizeOr", "::Vector4NormalizeOr", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4NormalizeOr", "::Vector4NormalizeOr", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, F32Scalar, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4NotEqualInt", "::Vector4NotEqualInt", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4Refract", "::Vector4Refract", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("Vector4RefractV", "::Vector4RefractV", 3u, 3u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorSingleArg, VectorSingleArg, VectorSingleArg, Any, Any, Any, Any, Any, Any)
@@ -923,7 +979,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3LengthSq", "::VectorDouble3LengthSq"
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3LessOrEqual", "::VectorDouble3LessOrEqual", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3MaxComponent", "::VectorDouble3MaxComponent", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3Normalize", "::VectorDouble3Normalize", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3NormalizeOr", "::VectorDouble3NormalizeOr", 3u, 3u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3NormalizeOr", "::VectorDouble3NormalizeOr", 3u, 3u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, F64Scalar, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3ReciprocalLength", "::VectorDouble3ReciprocalLength", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3ReciprocalLengthEst", "::VectorDouble3ReciprocalLengthEst", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble3Refract", "::VectorDouble3Refract", 3u, 3u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any)
@@ -952,7 +1008,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4LessOrEqual", "::VectorDouble4LessOr
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4MaxComponent", "::VectorDouble4MaxComponent", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4NearEqual", "::VectorDouble4NearEqual", 3u, 3u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4Normalize", "::VectorDouble4Normalize", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4NormalizeOr", "::VectorDouble4NormalizeOr", 3u, 3u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4NormalizeOr", "::VectorDouble4NormalizeOr", 3u, 3u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, F64Scalar, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4NotEqualInt", "::VectorDouble4NotEqualInt", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4ReciprocalLength", "::VectorDouble4ReciprocalLength", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("VectorDouble4ReciprocalLengthEst", "::VectorDouble4ReciprocalLengthEst", 1u, 1u, FixedType, "VectorDouble", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -1261,6 +1317,30 @@ NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleIntersectsPlane")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleIntersectsSphere")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumIntersectsPlane")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumIntersectsSphere")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("MatrixSet")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("MatrixDoubleSet")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumTransformMatrix")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumTransformSrt")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumContainsTriangle")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumIntersectsRay")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumContainedBy")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumContainsBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumContainsOrientedBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumContainsFrustum")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumIntersectsBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumIntersectsOrientedBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumIntersectsFrustum")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleTransformMatrix")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleTransformSrt")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleContainsTriangle")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleIntersectsRay")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleContainedBy")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleContainsBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleContainsOrientedBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleContainsFrustum")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleIntersectsBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleIntersectsOrientedBox")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("FrustumDoubleIntersectsFrustum")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("HasVisibleRectIntersection")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("InsetRectValue")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("InsetRectValuePreservingExtent")
@@ -2386,6 +2466,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_XYZW", "::VectorComponentMask::s_XYZW", "u32"
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF
 #endif
 
+#ifdef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
+#endif
+
 #ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
@@ -2439,6 +2524,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_XYZW", "::VectorComponentMask::s_XYZW", "u32"
 #ifdef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_REF
+#endif
+
+#ifdef NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_WIDE
 #endif
 
 #ifdef NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF

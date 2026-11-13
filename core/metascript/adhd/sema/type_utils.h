@@ -254,6 +254,13 @@ struct BuiltinReceiverMethodInfo{
     b8 returnsReference;
 };
 
+struct BuiltinReceiverSignatureInfo{
+    MStringView receiverTypeName;
+    MStringView methodName;
+    Array<BuiltinFunctionArgRule::Enum, 9> argRules;
+    u8 arity;
+};
+
 struct BuiltinFieldInfo{
     MStringView receiverTypeName;
     MStringView fieldName;
@@ -291,7 +298,7 @@ struct BuiltinFunctionInfo{
     b8 returnsBorrowedView;
     b8 rejectsSimdStorage;
     b8 returnsReference;
-    Array<BuiltinFunctionArgRule::Enum, 9> argRules;
+    Array<BuiltinFunctionArgRule::Enum, 20> argRules;
 };
 
 struct BuiltinGlobalConstantInfo{
@@ -332,6 +339,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 FindBuiltinFixedLayout(MStringView name, usize& outSize, usize& outAlign)noexcept;
 [[nodiscard]] const BuiltinMemberMethodInfo* FindBuiltinMemberMethod(MStringView name)noexcept;
 [[nodiscard]] const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(MStringView receiverTypeName, MStringView methodName)noexcept;
+[[nodiscard]] const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(MStringView receiverTypeName, MStringView methodName)noexcept;
 [[nodiscard]] const BuiltinFieldInfo* FindBuiltinField(MStringView receiverTypeName, MStringView fieldName)noexcept;
 [[nodiscard]] const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(BuiltinFunctionArgRule::Enum rule)noexcept;
 [[nodiscard]] const BuiltinFunctionInfo* FindBuiltinFunction(MStringView name)noexcept;

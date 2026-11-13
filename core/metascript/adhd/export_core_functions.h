@@ -32,6 +32,11 @@
 #define NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_FUNCTION_WIDE
+#define NWB_ADHD_EXPORT_FUNCTION_WIDE(adhdName, cppExportName, arity, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule, arg9Rule, arg10Rule, arg11Rule, arg12Rule, arg13Rule, arg14Rule, arg15Rule, arg16Rule, arg17Rule, arg18Rule, arg19Rule)
+#define NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
 #define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL(adhdName)
 #define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL_AUTO_UNDEF
@@ -92,6 +97,11 @@
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
+#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE(receiverTypeName, methodName, arity, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
+#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_BUILTIN_FIELD
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText)
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF
@@ -138,7 +148,17 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("BuildFrameGraphPayload", "::NWB::Core::Telemetry:
 NWB_ADHD_EXPORT_FUNCTION_CALL("BuildPerfMemoryPayload", "::NWB::Core::Telemetry::BuildPerfMemoryPayload", 5u, 5u, FixedType, "b8", "", "", "", "<core/telemetry/perf.h>", false, false, false, None, false, false, false, NameValue, TextView, Any, Any, MutAny, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("BuildPerfTimingPayload", "::NWB::Core::Telemetry::BuildPerfTimingPayload", 5u, 5u, FixedType, "b8", "", "", "", "<core/telemetry/perf.h>", false, false, false, None, false, false, false, Any, NameValue, TextView, Any, MutAny, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("BuildVirtualPathName", "::NWB::Core::ShaderArchive::BuildVirtualPathName", 3u, 3u, FixedType, "Expected", "Name", "", "", "<core/graphics/shader_archive.h>", false, false, false, None, false, false, false, NameValue, TextView, NameValue, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("CaptureCrashDump", "::NWB::Core::Crash::CaptureCrashDump", 0u, 2u, FixedType, "CrashDumpResult", "", "", "", "<core/crash/module.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BlendFactorValue, "", false, "BlendFactor", false, false, "built-in function argument must be BlendFactor")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BlendOpValue, "", false, "BlendOp", false, false, "built-in function argument must be BlendOp")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ColorMaskValue, "", false, "ColorMask", false, false, "built-in function argument must be ColorMask")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BlendStateRenderTargetValue, "", false, "BlendStateRenderTarget", false, false, "built-in function argument must be BlendStateRenderTarget")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(CrashGpuDumpKindValue, "", false, "CrashGpuCrashDumpKind", false, false, "built-in function argument must be CrashGpuCrashDumpKind")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(AdhdExprKindValue, "", false, "AdhdExprKind", false, false, "built-in function argument must be AdhdExprKind")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(AdhdStmtKindValue, "", false, "AdhdStmtKind", false, false, "built-in function argument must be AdhdStmtKind")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MetascriptTokenTypeValue, "", false, "MetascriptTokenType", false, false, "built-in function argument must be MetascriptTokenType")
+NWB_ADHD_EXPORT_FUNCTION_CALL("CaptureCrashDump", "::NWB::Core::Crash::CaptureCrashDump", 0u, 2u, FixedType, "CrashDumpResult", "", "", "", "<core/crash/module.h>", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("CaptureGpuCrashDump", "::NWB::Core::Crash::CaptureGpuCrashDump", 1u, 3u, FixedType, "CrashDumpResult", "", "", "", "<core/crash/module.h>", false, false, false, None, false, false, false, TextView, TextView, CrashGpuDumpKindValue, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ValidateGpuCommandIrStream", "::NWB::Core::ValidateGpuCommandIrStream", 1u, 1u, FixedType, "GpuCommandIrStreamValidationResult", "", "", "", "<core/task/gpu/capture/command_ir.h>", false, false, false, BinaryByteViewArg0, false, false, false, ReadableByteSequence, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("CaptureFlagForEventKind", "::NWB::Core::Telemetry::CaptureFlagForEventKind", 1u, 1u, FixedType, "TelemetryCaptureFlag", "", "", "", "<core/telemetry/event.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("CheckPairedSourceExtension", "::NWB::Core::Assets::CheckPairedSourceExtension", 5u, 5u, FixedType, "b8", "", "", "", "<core/assets/metadata_fields.h>", false, false, false, None, false, false, false, PathValue, TextView, TextView, TextView, MutAny, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ClearRuntimeSymbols", "::NWB::Core::Common::NameSymbols::ClearRuntimeSymbols", 0u, 0u, FixedType, "void", "", "", "", "<core/common/name_symbols.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -158,6 +178,69 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("EncodeClipboardLatin1", "::NWB::Core::EncodeClipb
 NWB_ADHD_EXPORT_FUNCTION_CALL("EncodeEvent", "::NWB::Core::Telemetry::EncodeEvent", 2u, 2u, FixedType, "b8", "", "", "", "<core/telemetry/codec.h>", false, false, false, None, false, false, false, Any, MutAny, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("EncodeEventStream", "::NWB::Core::Telemetry::EncodeEventStream", 2u, 2u, FixedType, "b8", "", "", "", "<core/telemetry/codec.h>", false, false, false, None, false, false, false, Any, MutAny, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("EntryCount", "::NWB::Core::Common::NameSymbols::EntryCount", 0u, 0u, FixedType, "usize", "", "", "", "<core/common/name_symbols.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("HasAdhdExtension", "::NWB::Core::Metascript::Adhd::HasAdhdExtension", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/ast/ast_common.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsLiteralExprKind", "::NWB::Core::Metascript::Adhd::IsLiteralExprKind", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/ast/ast_expr.h>", false, false, false, None, false, false, false, AdhdExprKindValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsAlwaysRvalueExprKind", "::NWB::Core::Metascript::Adhd::IsAlwaysRvalueExprKind", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/ast/ast_expr.h>", false, false, false, None, false, false, false, AdhdExprKindValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("LookupFixedLiteralExprTypeName", "::NWB::Core::Metascript::Adhd::LookupFixedLiteralExprTypeName", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/ast/ast_expr.h>", false, false, false, None, false, false, false, AdhdExprKindValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsTerminalJumpStmtKind", "::NWB::Core::Metascript::Adhd::IsTerminalJumpStmtKind", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/ast/ast_stmt.h>", false, false, false, None, false, false, false, AdhdStmtKindValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsSequentialLoopStmtKind", "::NWB::Core::Metascript::Adhd::IsSequentialLoopStmtKind", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/ast/ast_stmt.h>", false, false, false, None, false, false, false, AdhdStmtKindValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapSimdAssignToBinaryOp", "::NWB::Core::Metascript::Adhd::MapSimdAssignToBinaryOp", 1u, 1u, FixedType, "MetascriptTokenType", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, MetascriptTokenTypeValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdBinaryScalarOpSymbol", "::NWB::Core::Metascript::Adhd::SimdBinaryScalarOpSymbol", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, MetascriptTokenTypeValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsSimdIntLaneFallbackBinaryOp", "::NWB::Core::Metascript::Adhd::IsSimdIntLaneFallbackBinaryOp", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, MetascriptTokenTypeValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapSimdBitwiseBinaryIntrinsic", "::NWB::Core::Metascript::Adhd::MapSimdBitwiseBinaryIntrinsic", 2u, 2u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, MetascriptTokenTypeValue, BoolScalar, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsRegisterPromotableSimdType", "::NWB::Core::Metascript::Adhd::IsRegisterPromotableSimdType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsDoubleSimdType", "::NWB::Core::Metascript::Adhd::IsDoubleSimdType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsIntSimdType", "::NWB::Core::Metascript::Adhd::IsIntSimdType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsSignedIntSimdType", "::NWB::Core::Metascript::Adhd::IsSignedIntSimdType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IntSimdLaneType", "::NWB::Core::Metascript::Adhd::IntSimdLaneType", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IntSimdRawWordType", "::NWB::Core::Metascript::Adhd::IntSimdRawWordType", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, BoolScalar, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdLaneCallSuffix", "::NWB::Core::Metascript::Adhd::SimdLaneCallSuffix", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdSplatIntrinsic", "::NWB::Core::Metascript::Adhd::SimdSplatIntrinsic", 2u, 2u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, Integer, BoolScalar, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdInPlaceLaneMaskConstant", "::NWB::Core::Metascript::Adhd::SimdInPlaceLaneMaskConstant", 2u, 2u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, Integer, BoolScalar, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdInPlaceSignFlipMaskConstant", "::NWB::Core::Metascript::Adhd::SimdInPlaceSignFlipMaskConstant", 2u, 2u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, Integer, BoolScalar, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdComponentMaskConstant", "::NWB::Core::Metascript::Adhd::SimdComponentMaskConstant", 2u, 2u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, Integer, BoolScalar, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdRegisterCppType", "::NWB::Core::Metascript::Adhd::SimdRegisterCppType", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdLoadFunctionCpp", "::NWB::Core::Metascript::Adhd::SimdLoadFunctionCpp", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("SimdStoreFunctionCpp", "::NWB::Core::Metascript::Adhd::SimdStoreFunctionCpp", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapBuiltinMathFunction", "::NWB::Core::Metascript::Adhd::MapBuiltinMathFunction", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapSimdRegisterCall", "::NWB::Core::Metascript::Adhd::MapSimdRegisterCall", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapSimdScalarReductionSuffix", "::NWB::Core::Metascript::Adhd::MapSimdScalarReductionSuffix", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsSimdScalarReductionFunction", "::NWB::Core::Metascript::Adhd::IsSimdScalarReductionFunction", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsSimdZeroPreservingCall", "::NWB::Core::Metascript::Adhd::IsSimdZeroPreservingCall", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapSimdUnaryFloatIntrinsic", "::NWB::Core::Metascript::Adhd::MapSimdUnaryFloatIntrinsic", 2u, 2u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, TextView, BoolScalar, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MapSwizzleCharToLane", "::NWB::Core::Metascript::Adhd::MapSwizzleCharToLane", 1u, 1u, FixedType, "u32", "", "", "", "<core/metascript/adhd/codegen/simd_codegen_utils.h>", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("HasBuiltinEnumEntry", "::NWB::Core::Metascript::Adhd::HasBuiltinEnumEntry", 2u, 2u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsArenaFirstCtorType", "::NWB::Core::Metascript::Adhd::IsArenaFirstCtorType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("OmitsArenaInCtorType", "::NWB::Core::Metascript::Adhd::OmitsArenaInCtorType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidBuiltinVectorOrMatrixCtorArity", "::NWB::Core::Metascript::Adhd::IsValidBuiltinVectorOrMatrixCtorArity", 2u, 2u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Integer, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsBorrowViewType", "::NWB::Core::Metascript::Adhd::IsBorrowViewType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsNonSerializableBuiltinType", "::NWB::Core::Metascript::Adhd::IsNonSerializableBuiltinType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsSingleValueCtorBuiltinType", "::NWB::Core::Metascript::Adhd::IsSingleValueCtorBuiltinType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("NeedsBraceDefaultFieldInit", "::NWB::Core::Metascript::Adhd::NeedsBraceDefaultFieldInit", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsStringLikeType", "::NWB::Core::Metascript::Adhd::IsStringLikeType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsOwningStringType", "::NWB::Core::Metascript::Adhd::IsOwningStringType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("HasMutableStringElements", "::NWB::Core::Metascript::Adhd::HasMutableStringElements", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsStringByteAccessorMethod", "::NWB::Core::Metascript::Adhd::IsStringByteAccessorMethod", 2u, 2u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsStringReceiverBorrowViewMethod", "::NWB::Core::Metascript::Adhd::IsStringReceiverBorrowViewMethod", 2u, 2u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsBuiltinStringViewBorrowFunction", "::NWB::Core::Metascript::Adhd::IsBuiltinStringViewBorrowFunction", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsContainerOrWrapperValueAccessMethod", "::NWB::Core::Metascript::Adhd::IsContainerOrWrapperValueAccessMethod", 3u, 3u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, TextView, BoolScalar, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsNwbMapKeyType", "::NWB::Core::Metascript::Adhd::IsNwbMapKeyType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("RequiresTCharAdaptation", "::NWB::Core::Metascript::Adhd::RequiresTCharAdaptation", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsImplicitlyConvertibleBuiltinType", "::NWB::Core::Metascript::Adhd::IsImplicitlyConvertibleBuiltinType", 2u, 2u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("DoesImplicitConversionPropagateFirstTypeArg", "::NWB::Core::Metascript::Adhd::DoesImplicitConversionPropagateFirstTypeArg", 2u, 2u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsNonThreadSafeContainer", "::NWB::Core::Metascript::Adhd::IsNonThreadSafeContainer", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsFixedArrayContainerType", "::NWB::Core::Metascript::Adhd::IsFixedArrayContainerType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsOptionalContainerType", "::NWB::Core::Metascript::Adhd::IsOptionalContainerType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsAtomicGenericType", "::NWB::Core::Metascript::Adhd::IsAtomicGenericType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsAssetHandleType", "::NWB::Core::Metascript::Adhd::IsAssetHandleType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsReflectedLinearContainerType", "::NWB::Core::Metascript::Adhd::IsReflectedLinearContainerType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsReflectedMapContainerType", "::NWB::Core::Metascript::Adhd::IsReflectedMapContainerType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsNonCopyableBaseInterfaceName", "::NWB::Core::Metascript::Adhd::IsNonCopyableBaseInterfaceName", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsMoveOnlyTypeName", "::NWB::Core::Metascript::Adhd::IsMoveOnlyTypeName", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("HasBuiltinSimdRegisterField", "::NWB::Core::Metascript::Adhd::HasBuiltinSimdRegisterField", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsOverAlignedBuiltinType", "::NWB::Core::Metascript::Adhd::IsOverAlignedBuiltinType", 1u, 1u, FixedType, "b8", "", "", "", "<core/metascript/adhd/sema/type_utils.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("StripAdhdExtension", "::NWB::Core::Metascript::Adhd::StripAdhdExtension", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/ast/ast_common.h>", false, false, false, None, false, true, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ExtractAdhdFileStem", "::NWB::Core::Metascript::Adhd::ExtractAdhdFileStem", 1u, 1u, FixedType, "StringView", "", "", "", "<core/metascript/adhd/ast/ast_common.h>", false, false, false, None, false, true, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FindVirtualPath", "::NWB::Core::ShaderArchive::FindVirtualPath", 4u, 4u, FixedType, "Expected", "Name", "", "", "<core/graphics/shader_archive.h>", false, false, false, None, false, false, false, Any, NameValue, TextView, NameValue, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ForQueueClass", "::NWB::Core::ResourceQueueSharing::ForQueueClass", 1u, 1u, FixedType, "ResourceQueueSharing", "", "", "", "<core/graphics/rhi/queue_sharing.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FrameGraphStatisticsValidatorAccumulatePacketSubmissionStatistics", "::NWB::Core::Telemetry::FrameGraphStatisticsValidator::AccumulatePacketSubmissionStatistics", 3u, 3u, FixedType, "b8", "", "", "", "<core/telemetry/frame_graph_statistics_validator.h>", false, false, false, None, false, false, false, Any, Any, MutAny, Any, Any, Any, Any, Any, Any)
@@ -359,7 +442,27 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BindlessLayoutDesc", "setDescriptorSetIndex
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BindlessLayoutDesc", "setLayoutType", "BindlessLayoutDesc", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BindlessLayoutDesc", "setMaxCapacity", "BindlessLayoutDesc", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BindlessLayoutDesc", "setVisibility", "BindlessLayoutDesc", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendState", "setRenderTarget", "BlendState", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendState", "usesConstantColor", "b8", "", "", true, false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "enableBlend", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setSrcBlend", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setDestBlend", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setBlendOp", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setSrcBlendAlpha", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setDestBlendAlpha", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setBlendOpAlpha", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "setColorWriteMask", "BlendStateRenderTarget", "", "", true, true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("BlendStateRenderTarget", "usesConstantColor", "b8", "", "", true, false)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendState", "setRenderTarget", 2u, Integer, BlendStateRenderTargetValue, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "enableBlend", 0u, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setSrcBlend", 1u, BlendFactorValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setDestBlend", 1u, BlendFactorValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setBlendOp", 1u, BlendOpValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setSrcBlendAlpha", 1u, BlendFactorValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setDestBlendAlpha", 1u, BlendFactorValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setBlendOpAlpha", 1u, BlendOpValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "setColorWriteMask", 1u, ColorMaskValue, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("BlendStateRenderTarget", "usesConstantColor", 0u, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("Box", "depth", "i32", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("Box", "height", "i32", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("Box", "width", "i32", "", "", true, false)
@@ -1686,6 +1789,15 @@ NWB_ADHD_EXPORT_BUILTIN_FIELD("BindlessLayoutDesc", "descriptorSetIndex", "u32",
 NWB_ADHD_EXPORT_BUILTIN_FIELD("BindlessLayoutDesc", "visibility", "ShaderTypeMask", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("BindlessLayoutDesc", "layoutType", "BindlessLayoutType", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendState", "alphaToCoverageEnable", "b8", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendState", "targets", "Array", "BlendStateRenderTarget", "8u")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "srcBlend", "BlendFactor", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "destBlend", "BlendFactor", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "blendOp", "BlendOp", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "srcBlendAlpha", "BlendFactor", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "destBlendAlpha", "BlendFactor", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "blendOpAlpha", "BlendOp", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "colorWriteMask", "ColorMask", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("BlendStateRenderTarget", "blendEnable", "b8", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("Box", "minX", "i32", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("Box", "maxX", "i32", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("Box", "minY", "i32", "", "")
@@ -1806,6 +1918,10 @@ NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashCapturePolicy", "captureLoggerErrors", "b8",
 NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashCapturePolicy", "captureLoggerFatals", "b8", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashCapturePolicy", "maxDiagnosticDumpsPerProcess", "u32", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashCapturePolicy", "maxDiagnosticDumpsPerSite", "u32", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashConfig", "spoolDirectory", "Path", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashConfig", "spoolRetention", "CrashSpoolRetentionConfig", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashConfig", "capturePolicy", "CrashCapturePolicy", "", "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashConfig", "dumpDetailMode", "CrashDumpDetailMode", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashDumpResult", "status", "CrashDumpStatus", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashSpoolRetentionConfig", "maxPendingPackages", "usize", "", "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("CrashSpoolRetentionConfig", "maxUploadedPackages", "usize", "", "")
@@ -4353,6 +4469,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_WindowsPlatformName", "::NWB::Core::Crash::s_
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF
 #endif
 
+#ifdef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
+#endif
+
 #ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
@@ -4406,6 +4527,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_WindowsPlatformName", "::NWB::Core::Crash::s_
 #ifdef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_REF
+#endif
+
+#ifdef NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_WIDE
 #endif
 
 #ifdef NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF

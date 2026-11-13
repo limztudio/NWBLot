@@ -5,7 +5,10 @@
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 #include "callable_argument_checker.h"
+#include "concrete_type_analyzer.h"
+#include "const_eval.h"
 #include "lambda_capture_analyzer.h"
+#include "type_comparator.h"
 #include "type_resolver.h"
 
 
@@ -18,6 +21,7 @@ b8 CallableArgumentChecker::check(
     const MethodDecl* targetCallable,
     const ClassDecl* targetOwnerCls,
     const TypeRef* recvTypeRef,
+    const BuiltinReceiverSignatureInfo* builtinReceiverSignature,
     const Span<const TypeArg> callTemplateArgs,
     const TypeRef* invokedFuncType,
     const ScopedVarInfo* localCallable,
@@ -40,6 +44,10 @@ b8 CallableArgumentChecker::check(
         m_checker.reportError(errors, errSpan, "wrong number of arguments in lambda call");
         ok = false;
     }
+    if(builtinReceiverSignature && arguments.size() != builtinReceiverSignature->arity){
+        m_checker.reportError(errors, errSpan, "wrong number of arguments in built-in method call");
+        ok = false;
+    }
     for(usize i = 0u; i < arguments.size(); ++i){
         Expr* arg = arguments[i];
         if(!arg)
@@ -47,12 +55,12 @@ b8 CallableArgumentChecker::check(
         b8 paramIsMut = false;
         TypeRef* expectedParamTypeRef = nullptr;
         MStringView expectedParamType;
-        const BuiltinFunctionInfo* builtinFnInfo = (!recvTypeRef && !calledMemberName.empty())
+        const BuiltinFunctionInfo* builtinFnInfo = (!recvTypeRef && !builtinReceiverSignature && !calledMemberName.empty())
             ? FindBuiltinFunction(calledMemberName)
             : nullptr;
-        const BuiltinFunctionArgRuleInfo* builtinArgRule = (builtinFnInfo && i < builtinFnInfo->argRules.size())
-            ? FindBuiltinFunctionArgRule(builtinFnInfo->argRules[i])
-            : nullptr;
+        const BuiltinFunctionArgRuleInfo* builtinArgRule = (builtinReceiverSignature && i < builtinReceiverSignature->argRules.size())
+            ? FindBuiltinFunctionArgRule(builtinReceiverSignature->argRules[i])
+            : ((builtinFnInfo && i < builtinFnInfo->argRules.size()) ? FindBuiltinFunctionArgRule(builtinFnInfo->argRules[i]) : nullptr);
         if(targetCallable && i < targetCallable->params.size()){
             paramIsMut = (targetCallable->params[i].mode == ParamPassingMode::Mut);
             if(targetCallable->params[i].type){
@@ -169,13 +177,32 @@ b8 CallableArgumentChecker::check(
                 && (BuiltinTypeSemantics::IsBuiltinTypeName(actualArgType) || m_checker.m_symbols.hasTypeSymbol(actualArgType));
             b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && isKnownAdhdType && actualArgType != builtinArgRule->requiredExactType)
                 || (builtinArgRule->requiresStringLike && isKnownAdhdType && !(builtinArgRule->isMut ? IsOwningStringType(actualArgType) : IsStringLikeType(actualArgType)))
-                || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType));
+                || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType))
+                || (builtinArgRule->rule == BuiltinFunctionArgRule::NumericScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsNumericScalarType(actualArgType));
             if(!typeMismatch && (builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan || builtinArgRule->rule == BuiltinFunctionArgRule::ByteSpan || builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector)){
                 const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
                 const usize expectedArguments = builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector ? 2u : 1u;
                 const TypeRef* elementType = containerType && containerType->templateArgs.size() == expectedArguments && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
                 const MStringView requiredElement = builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan ? MStringView("usize") : MStringView("u8");
                 typeMismatch = !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != requiredElement;
+            }
+            const b8 checksByteSequence = builtinArgRule->rule == BuiltinFunctionArgRule::ReadableByteSequence || builtinArgRule->rule == BuiltinFunctionArgRule::MutableByteSequence;
+            const b8 checksU32Sequence = builtinArgRule->rule == BuiltinFunctionArgRule::MutableU32Sequence;
+            const b8 checksU64Sequence = builtinArgRule->rule == BuiltinFunctionArgRule::MutableU64Sequence;
+            if(!typeMismatch && isKnownAdhdType && (checksByteSequence || checksU32Sequence || checksU64Sequence)){
+                const b8 isContiguous = actualArgType == builtinArgRule->expectedParamType || DoesImplicitConversionPropagateFirstTypeArg(actualArgType, builtinArgRule->expectedParamType);
+                const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                const TypeRef* elementType = containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
+                const MStringView requiredElement = checksU32Sequence ? MStringView("u32") : (checksU64Sequence ? MStringView("u64") : MStringView("u8"));
+                typeMismatch = !isContiguous || !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != requiredElement;
+            }
+            if(!typeMismatch && isKnownAdhdType && builtinArgRule->rule == BuiltinFunctionArgRule::MutableU64Array64){
+                const TypeRef* arrayType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                const TypeRef* elementType = arrayType && arrayType->templateArgs.size() == 2u && arrayType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(arrayType->templateArgs[0].type) : nullptr;
+                const MStringView countText = arrayType && arrayType->templateArgs.size() == 2u ? arrayType->templateArgs[1].constantOrTypeName() : MStringView{};
+                const b8 dependentCount = HasConstValueTemplateParam(ownerClass, &method, countText);
+                typeMismatch = !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != "u64"
+                    || (!dependentCount && !AreConstantTemplateArgsEquivalent(countText, "64", m_checker.m_symbols));
             }
             if(typeMismatch){
                 m_checker.reportError(errors, arg->span, builtinArgRule->errorMessage);
@@ -187,6 +214,38 @@ b8 CallableArgumentChecker::check(
             if(!actualArgType.empty() && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType)){
                 m_checker.reportError(errors, arg->span, "arguments to 'substr' must have integer types");
                 ok = false;
+            }
+        }
+        if(expectedParamTypeRef && !m_checker.m_symbols.hasTypeSymbol(expectedParamType) && FindBuiltinGenericType(expectedParamType) && IsBorrowViewType(expectedParamType)){
+            const TypeRef* actualRef = nullptr;
+            const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actualRef);
+            if(!m_checker.m_symbols.hasTypeSymbol(actualArgType) && FindBuiltinGenericType(actualArgType)){
+                const b8 canBorrow = actualArgType == expectedParamType || DoesImplicitConversionPropagateFirstTypeArg(actualArgType, expectedParamType);
+                if(!canBorrow){
+                    m_checker.reportError(errors, arg->span, "argument cannot be converted to the required borrowed view");
+                    ok = false;
+                }
+                else{
+                    const TypeRef* expectedView = m_checker.m_symbols.unwrapTypeAlias(expectedParamTypeRef);
+                    const TypeRef* actualContainer = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                    const TypeRef* expectedElement = expectedView && !expectedView->templateArgs.empty() ? m_checker.m_symbols.unwrapTypeAlias(expectedView->templateArgs[0].type) : nullptr;
+                    const TypeRef* actualElement = actualContainer && !actualContainer->templateArgs.empty() ? m_checker.m_symbols.unwrapTypeAlias(actualContainer->templateArgs[0].type) : nullptr;
+                    const ConcreteTypeAnalyzer concrete(m_checker.m_symbols);
+                    const auto isFullyConcrete = [&](const auto& self, const TypeRef* type)->b8{
+                        type = type ? m_checker.m_symbols.unwrapTypeAlias(type) : nullptr;
+                        if(!type || !concrete.isConcreteTypeRef(*type))
+                            return false;
+                        for(const TypeArg& typeArg : type->templateArgs){
+                            if(typeArg.type && !self(self, typeArg.type))
+                                return false;
+                        }
+                        return true;
+                    };
+                    if(isFullyConcrete(isFullyConcrete, expectedElement) && isFullyConcrete(isFullyConcrete, actualElement) && !TypeComparator(m_checker.m_symbols).areEquivalent(actualElement, expectedElement)){
+                        m_checker.reportError(errors, arg->span, "argument element type does not match the required borrowed view");
+                        ok = false;
+                    }
+                }
             }
         }
         if(!expectedParamType.empty() && m_checker.m_symbols.findInterface(expectedParamType)){

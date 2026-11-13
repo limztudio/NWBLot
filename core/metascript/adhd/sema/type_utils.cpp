@@ -130,6 +130,13 @@ inline constexpr BuiltinReceiverMethodInfo s_BuiltinReceiverMethods[] = {
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD
 };
 
+inline constexpr BuiltinReceiverSignatureInfo s_BuiltinReceiverSignatures[] = {
+#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE(receiverTypeName, methodName, arity, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
+    BuiltinReceiverSignatureInfo{ receiverTypeName, methodName, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule }, arity },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
+};
+
 inline constexpr BuiltinFieldInfo s_BuiltinFields[] = {
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText) \
     BuiltinFieldInfo{ receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText },
@@ -144,6 +151,8 @@ inline constexpr BuiltinFunctionArgRuleInfo s_BuiltinFunctionArgRules[] = {
 #undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
 };
 
+static_assert(BuiltinFunctionArgRule::Any == 0u);
+
 inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
     BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
@@ -155,7 +164,10 @@ inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
     BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::callLowering, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule } },
 #define NWB_ADHD_EXPORT_FUNCTION_REF(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule) \
     BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", requiredHeader, arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, (BuiltinFunctionReturnRule::returnRule == BuiltinFunctionReturnRule::CallTemplateArg0), false, false, true, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
+#define NWB_ADHD_EXPORT_FUNCTION_WIDE(adhdName, cppExportName, arity, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule, arg9Rule, arg10Rule, arg11Rule, arg12Rule, arg13Rule, arg14Rule, arg15Rule, arg16Rule, arg17Rule, arg18Rule, arg19Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", requiredHeader, arity, arity, BuiltinFunctionReturnRule::FixedType, BuiltinCallLowering::None, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule, BuiltinFunctionArgRule::arg9Rule, BuiltinFunctionArgRule::arg10Rule, BuiltinFunctionArgRule::arg11Rule, BuiltinFunctionArgRule::arg12Rule, BuiltinFunctionArgRule::arg13Rule, BuiltinFunctionArgRule::arg14Rule, BuiltinFunctionArgRule::arg15Rule, BuiltinFunctionArgRule::arg16Rule, BuiltinFunctionArgRule::arg17Rule, BuiltinFunctionArgRule::arg18Rule, BuiltinFunctionArgRule::arg19Rule } },
 #include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION_WIDE
 #undef NWB_ADHD_EXPORT_FUNCTION_REF
 #undef NWB_ADHD_EXPORT_FUNCTION_CALL
 #undef NWB_ADHD_EXPORT_FUNCTION_EX
@@ -320,6 +332,14 @@ const BuiltinMemberMethodInfo* FindBuiltinMemberMethod(const MStringView name)no
 
 const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(const MStringView receiverTypeName, const MStringView methodName)noexcept{
     for(const BuiltinReceiverMethodInfo& info : __hidden_adhd_type_utils::s_BuiltinReceiverMethods){
+        if(info.receiverTypeName == receiverTypeName && info.methodName == methodName)
+            return &info;
+    }
+    return nullptr;
+}
+
+const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(const MStringView receiverTypeName, const MStringView methodName)noexcept{
+    for(const BuiltinReceiverSignatureInfo& info : __hidden_adhd_type_utils::s_BuiltinReceiverSignatures){
         if(info.receiverTypeName == receiverTypeName && info.methodName == methodName)
             return &info;
     }

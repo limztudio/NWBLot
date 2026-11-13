@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
 #include "binary_expression_checker.h"
@@ -288,6 +289,16 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         const EnumDecl* rhsEnum = m_checker.m_symbols.findEnum(rhsType);
         const BuiltinEnumInfo* lhsBuiltinEnum = (lhsEnum || m_checker.m_symbols.hasTypeSymbol(lhsType)) ? nullptr : FindBuiltinEnum(lhsType);
         const BuiltinEnumInfo* rhsBuiltinEnum = (rhsEnum || m_checker.m_symbols.hasTypeSymbol(rhsType)) ? nullptr : FindBuiltinEnum(rhsType);
+        if(expr.op == TokenType::Equal && (lhsEnum || lhsBuiltinEnum)){
+            const b8 differentEnums = (lhsEnum && rhsEnum && lhsEnum != rhsEnum)
+                || (lhsBuiltinEnum && rhsBuiltinEnum && lhsBuiltinEnum != rhsBuiltinEnum)
+                || (lhsEnum && rhsBuiltinEnum) || (lhsBuiltinEnum && rhsEnum);
+            const b8 rhsIsBuiltinScalar = !rhsEnum && !rhsBuiltinEnum && !m_checker.m_symbols.hasTypeSymbol(rhsType) && BuiltinTypeSemantics::IsScalarType(rhsType);
+            if(differentEnums || rhsIsBuiltinScalar){
+                m_checker.reportError(errors, expr.span, "cannot assign a different enum or scalar type to an enum or flag");
+                ok = false;
+            }
+        }
         if(OperatorSemantics::IsBitwiseFlagOperatorToken(expr.op)){
             const b8 lhsNonFlag = (lhsEnum && !lhsEnum->isFlag) || (lhsBuiltinEnum && !lhsBuiltinEnum->isFlag);
             const b8 rhsNonFlag = !m_checker.m_symbols.findClass(lhsType) && ((rhsEnum && !rhsEnum->isFlag) || (rhsBuiltinEnum && !rhsBuiltinEnum->isFlag));

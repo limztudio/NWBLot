@@ -35,6 +35,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     const MethodDecl* targetCallable = nullptr;
     const ClassDecl* targetOwnerCls = nullptr;
     const TypeRef* recvTypeRef = nullptr;
+    const BuiltinReceiverSignatureInfo* builtinReceiverSignature = nullptr;
     MStringView calledMemberName;
     const BuiltinReceiverMethodInfo* targetBuiltinRecvInfo = nullptr;
     const BuiltinMemberMethodInfo* targetBuiltinMemberInfo = nullptr;
@@ -233,6 +234,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 : (isAssetClassObj
                     ? FindBuiltinReceiverMethod("IAsset", mName)
                     : (isSystemClassObj ? FindBuiltinReceiverMethod("ISystem", mName) : nullptr));
+            if(!isUserObjType && builtinRecvInfo)
+                builtinReceiverSignature = FindBuiltinReceiverSignature(objType, mName);
             if(!builtinRecvInfo && targetCls){
                 for(const TypeRef* iface : targetCls->implementedInterfaces){
                     if(!iface)
@@ -523,6 +526,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         targetCallable,
         targetOwnerCls,
         recvTypeRef,
+        builtinReceiverSignature,
         expr.callTemplateArgs,
         invokedFuncType,
         localCallable,

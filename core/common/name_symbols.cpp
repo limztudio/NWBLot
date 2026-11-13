@@ -106,7 +106,7 @@ public:
 
     [[nodiscard]] b8 loadLine(const AStringView line, Alloc::ScratchArena& scratchArena){
         auto record = NameSymbolDocument::Decode(line, scratchArena);
-        return record && insert(record->hash, AStringView(record->text.data(), record->text.size()));
+        return record && insert(record->hash, AStringView(record->text));
     }
 
 
@@ -137,7 +137,7 @@ private:
         Vector<NameSymbolDocumentView, Alloc::ScratchArena> records(scratchArena);
         records.reserve(m_symbols.size());
         for(const auto& symbol : m_symbols)
-            records.push_back(NameSymbolDocumentView{ symbol.first, AStringView(symbol.second.data(), symbol.second.size()) });
+            records.push_back(NameSymbolDocumentView{ symbol.first, AStringView(symbol.second) });
 
         Sort(records.begin(), records.end(), [](const NameSymbolDocumentView& lhs, const NameSymbolDocumentView& rhs)noexcept{
             return LessNameHash(lhs.hash, rhs.hash);

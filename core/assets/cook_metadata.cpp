@@ -36,7 +36,7 @@ namespace __hidden_cook_metadata{
     Core::Metascript::Document doc(cookArena);
     if(!doc.parse(metaText)){
         for(const Core::Metascript::ParseError& err : doc.errors()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message.data(), err.message.size())));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message)));
         }
         return MakeUnexpected(Failure{});
     }

@@ -716,7 +716,7 @@ b8 CrashIngestWorker::enqueue(const Path& path, [[maybe_unused]] Core::Alloc::Sc
     if(!CanFitPendingCrashUploadPath(pathText.size()))
         return false;
 
-    CopyFixedBuffer(upload.path, AStringView(pathText.data(), pathText.size()));
+    CopyFixedBuffer(upload.path, AStringView(pathText));
     m_uploads.emplace(upload);
     m_semaphore.release();
     return true;
@@ -994,7 +994,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
     const AStringView urlView(url);
     const auto handler = MakeNotNull(static_cast<ServerHttpHandler*>(serverContext));
     const auto thisPtr = MakeNotNull(&handler->m_server);
-    if(IsReadinessProbeRequest(methodView, urlView, AStringView(handler->m_readinessToken.data(), handler->m_readinessToken.size()))){
+    if(IsReadinessProbeRequest(methodView, urlView, AStringView(handler->m_readinessToken))){
         auto* response = MHD_create_response_from_buffer(handler->m_readinessToken.size(), handler->m_readinessToken.data(), MHD_RESPMEM_MUST_COPY);
         if(!response)
             return MHD_NO;
@@ -1264,4 +1264,5 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

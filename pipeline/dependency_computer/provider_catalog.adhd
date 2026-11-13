@@ -351,7 +351,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
             if(!assetDeclaration)
                 continue;
-            const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
+            const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type));
             if(!documentAssetType)
                 return MakeUnexpected(Failure{});
             if(!MatchesExpectedAssetType(*documentAssetType, assetType, dependencyRegistry))
@@ -450,7 +450,7 @@ static void CollectValuePathHints(const Core::Metascript::Value& value, Dependen
     if(!value.isMap())
         return;
     for(const auto& [key, fieldValue] : value.asMap()){
-        hints.record(AStringView(key.data(), key.size()));
+        hints.record(AStringView(key));
         CollectValuePathHints(fieldValue, hints);
     }
 }
@@ -584,7 +584,7 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
             LogMissingMetadataAssetDeclaration(Assets::AssetPathsDetail::NativeTextView(files[fileIndex].filePath.native(), convertedPath));
             return MakeUnexpected(Failure{});
         }
-        const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
+        const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type));
         if(!documentAssetType)
             return MakeUnexpected(Failure{});
         const auto assetValue = Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(files[fileIndex].filePath, *document, s_DiagnosticPrefix);
@@ -651,4 +651,5 @@ NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

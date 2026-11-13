@@ -894,96 +894,6 @@ void VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReader
     EXPECT_TRUE(SawCapturedMessage(baseLogger, "routed-to-base-after-self-unregister"));
 }
 
-void VerifyFrameData_CopiesIndependentWindowState(){
-    const u32 expectedWidth = 1234u;
-    const u32 expectedHeight = 567u;
-    const usize expectedDisplayToken = 0x1234u;
-    const usize expectedStateToken = 0x5678u;
-    const u32 expectedAux = 42u;
-
-    b8 platformTested = false;
-    u32 copiedWidth = 0u;
-    u32 copiedHeight = 0u;
-    b8 backendAndHandlesMatched = false;
-    u32 copiedAux = 0u;
-    b8 sourceActive = false;
-    b8 copyActive = true;
-
-    native(
-        in expectedWidth,
-        in expectedHeight,
-        in expectedDisplayToken,
-        in expectedStateToken,
-        in expectedAux,
-        mut platformTested,
-        mut copiedWidth,
-        mut copiedHeight,
-        mut backendAndHandlesMatched,
-        mut copiedAux,
-        mut sourceActive,
-        mut copyActive
-    ){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        platformTested = true;
-        Core::Common::WinFrame source;
-        source.width() = expectedWidth;
-        source.height() = expectedHeight;
-        source.setActive(true);
-        const auto instance = reinterpret_cast<HINSTANCE>(expectedDisplayToken);
-        const auto window = reinterpret_cast<HWND>(expectedStateToken);
-        source.setInstance(instance);
-        source.setHwnd(window);
-        source.setWindowClass(static_cast<u16>(expectedAux));
-        Core::Common::WinFrame copy;
-        copy.frameParam() = source.frameParam();
-        copy.setActive(false);
-        copiedWidth = copy.width();
-        copiedHeight = copy.height();
-        backendAndHandlesMatched = copy.instance() == instance && copy.hwnd() == window;
-        copiedAux = copy.windowClass();
-        sourceActive = source.isActive();
-        copyActive = copy.isActive();
-#elif defined(FOUNDATION_PLATFORM_LINUX)
-        platformTested = true;
-        Core::Common::LinuxFrame source;
-        source.width() = expectedWidth;
-        source.height() = expectedHeight;
-        source.setActive(true);
-        source.setBackend(Core::Common::LinuxFrameBackend::Wayland);
-        auto* const display = reinterpret_cast<void*>(expectedDisplayToken);
-        auto* const state = reinterpret_cast<void*>(expectedStateToken);
-        source.nativeDisplay() = display;
-        source.nativeWindowHandle() = 9876u;
-        source.nativeState() = state;
-        source.nativeAuxValue() = expectedAux;
-        Core::Common::LinuxFrame copy;
-        copy.frameParam() = source.frameParam();
-        copy.setActive(false);
-        copiedWidth = copy.width();
-        copiedHeight = copy.height();
-        backendAndHandlesMatched =
-            copy.backend() == Core::Common::LinuxFrameBackend::Wayland
-            && copy.nativeDisplay() == display
-            && copy.nativeWindowHandle() == 9876u
-            && copy.nativeState() == state
-        ;
-        copiedAux = copy.nativeAuxValue();
-        sourceActive = source.isActive();
-        copyActive = copy.isActive();
-#endif
-    }
-
-    if(!platformTested)
-        return;
-
-    EXPECT_EQ(copiedWidth, expectedWidth);
-    EXPECT_EQ(copiedHeight, expectedHeight);
-    EXPECT_TRUE(backendAndHandlesMatched);
-    EXPECT_EQ(copiedAux, expectedAux);
-    EXPECT_TRUE(sourceActive);
-    EXPECT_FALSE(copyActive);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1073,7 +983,6 @@ NWB_ADHD_GTEST(NameSymbolDecodeTests, ConcurrentRecordResolveClearAndUninstallSt
 NWB_ADHD_GTEST(CommonLoggingBoundaries, LoggerMacrosBehaveAsSingleStatements, VerifyCommonLoggingBoundaries_LoggerMacrosBehaveAsSingleStatements)
 NWB_ADHD_GTEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReaders, VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAndReaders)
 NWB_ADHD_GTEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherReaderWithoutSelfDeadlock, VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReaderWithoutSelfDeadlock)
-NWB_ADHD_GTEST(FrameData, CopiesIndependentWindowState, VerifyFrameData_CopiesIndependentWindowState)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

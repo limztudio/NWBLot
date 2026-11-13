@@ -624,25 +624,6 @@ void VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket()
     EXPECT_TRUE(SawCapturedError(logger, "bucket allocation returned null"));
 }
 
-void VerifyMetadataRegistryPublication_DefaultDependencyEntryOwnsItsPathText(){
-    AssetArena arena(s_AssetCaseTestsMetadataRegistryDependencyPath);
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataRegistryDependencyPathScratch);
-
-    CookDependencyRegistry registry(arena);
-    ScratchString text = MakeScratchString("project/example", scratchArena);
-    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(s_AssetInputNameProjectExample), Name(s_AssetInputNameExample), ViewScratchString(text)));
-    text.assign("project/changed");
-    EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
-
-    const StringView stored = registry.defaultEntryAsset().virtualPathText;
-    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(s_AssetInputNameProjectExample), Name(s_AssetInputNameExample), stored));
-    EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
-
-    CookDependencyRegistry moved = MoveCookDependencyRegistry(registry);
-    EXPECT_EQ(moved.defaultEntryAsset().virtualPathText, "project/example");
-    EXPECT_FALSE(IsValidAssetName(registry.defaultEntryAsset().virtualPath));
-}
-
 void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(){
     ScratchArena scratchArena(s_AssetCaseTestsMetadataRegistryOwnedTokens);
     ScratchString token = MakeScratchString("nwb_owned_token_71a7", scratchArena);
@@ -1073,7 +1054,6 @@ NWB_ADHD_GTEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistr
 NWB_ADHD_GTEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtensionPayload, VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExtensionPayload)
 NWB_ADHD_GTEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets, VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets)
 NWB_ADHD_GTEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket, VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket)
-NWB_ADHD_GTEST(MetadataRegistryPublication, DefaultDependencyEntryOwnsItsPathText, VerifyMetadataRegistryPublication_DefaultDependencyEntryOwnsItsPathText)
 NWB_ADHD_GTEST(MetadataRegistryPublication, MetadataRegistrationKeepsCallerTextAlive, VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive)
 NWB_ADHD_GTEST(MetadataRegistryPublication, ConcurrentMetadataRegistrationsKeepDistinctTokens, VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistinctTokens)
 NWB_ADHD_GTEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover, VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover)

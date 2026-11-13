@@ -290,7 +290,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 ## 6. Type and API usage
 - Prefer project scalar aliases (`u32`, `u64`, `usize`, `f32`, etc.) from `global/type.h`.
 - If a helper needs `Core::Alloc::ScratchArena`, take the scratch arena from the caller instead of constructing a local arena inside the helper.
-  Put the actual scratch arena at the first owning caller for that operation and thread it through lower helpers so repeated helper calls reuse the same arena allocation.
+  Put the actual scratch arena at the first owning caller for that operation. Thread it through lower helpers. Then repeated helper calls reuse the same arena allocation.
 - Prefer explicit casts (`static_cast`) over C-style casts.
 - Use `checked_cast` for pointer downcasts in internal engine code.
 - `[[nodiscard]]` is used on important query/accessor return values.

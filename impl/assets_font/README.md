@@ -30,7 +30,7 @@ The FON2 authoring container retains exact shaping SFNT bytes and compact image 
 
 SFNT bytes must be nonempty and at most 32 MiB. Directories must have 1..256 distinct tables whose ranges stay inside the source buffer. Required outline and metrics tables are checked before FreeType opens the face. Native validation uses the source buffer's explicit asset arena for temporary allocations.
 
-The cooked Font runtime payload remains a packed 24-byte `FON1` header followed by exactly its declared SFNT bytes. Runtime loading accepts only the current payload version and checks reserved flags, face index, byte count, SFNT structure, and native face admission before replacing existing state. FON2 authoring files are consumed by the source cooker rather than the runtime asset loader. Glyph rasterization remains a UI text-service operation.
+The cooked Font runtime payload remains a packed 24-byte `FON1` header followed by exactly its declared SFNT bytes. Runtime loading accepts only the current payload version. It checks reserved flags, face index, byte count, SFNT structure, and native face admission before replacing existing state. FON2 authoring files are consumed by the source cooker rather than the runtime asset loader. Glyph rasterization remains a UI text-service operation.
 
 ## Dependencies
 

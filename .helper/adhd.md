@@ -2,9 +2,9 @@
 
 Authoritative guide for structuring and writing `.adhd` files in NWBLot. Every `.adhd` file is compiled by `adhd_compiler` (`core/metascript/adhd/`) into generated `.adhd.h` and `.adhd.cpp` C++ sources.
 
-A file containing only literal `Name` constants uses a minimal global header. A file containing only numeric, boolean, or `StringView` constants may use a minimal global header when the values are literals or simple arithmetic using earlier numeric constants. Casts, built-in limits, mixed `Name` and scalar constants, and other declarations keep the standard generated dependencies.
+A file containing only literal `Name` constants uses a minimal global header. A file with only numeric, boolean, or `StringView` constants may use a minimal global header. This applies when the values are literals or simple arithmetic using earlier numeric constants. Casts, built-in limits, mixed `Name` and scalar constants, and other declarations keep the standard generated dependencies.
 
-When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The compiler rejects tabs, line breaks, unsupported punctuation, paths starting with `~` or ending in `:` or `\`, and a backslash immediately before `#`, `:`, or `$`. It preserves ordinary backslashes and backslashes before spaces. Rejection leaves existing outputs unchanged.
+When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The compiler rejects tabs, line breaks, and unsupported punctuation. It also rejects paths starting with `~` or ending in `:` or `\`. It also rejects a backslash immediately before `#`, `:`, or `$`. It preserves ordinary backslashes and backslashes before spaces. Rejection leaves existing outputs unchanged.
 
 ---
 
@@ -39,12 +39,9 @@ When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 #include <impl/ecs_ui/toolkit/id.adhd>
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const f32 s_DefaultPadding = 4.0f;
 
@@ -86,7 +83,6 @@ class ElementBox{
 f32 ComputePaddedWidth(in ElementBox box){
     return box.width + s_DefaultPadding * 2.0f;
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

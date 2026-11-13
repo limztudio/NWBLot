@@ -31,7 +31,9 @@ A separator does not receive focus or activation. Its way picks a flat or tall s
 `BuilderScopeFrame` owns transient layout, declarations, borrowed control loans and the active window/popup state. `Builder` retains shared text, paint, skin, styles and edit services. Ended popup child frames retain their layout and control loans at stable arena-owned addresses until the outermost popup ends.
 
 - `window_style.adhd` owns initialization, dragging, resizing, viewport constraints, candidate validation, skin-derived metrics, and chrome/content geometry.
+
 - `builder_window.cpp` owns window declaration, balanced content arrangement, chrome painting and matching hit targets.
+
 - `widget_builder_controls.cpp` and `builder.cpp` own divider declaration and arranged content painting.
 
 ## Keyed lists and scrolling
@@ -40,7 +42,7 @@ A separator does not receive focus or activation. Its way picks a flat or tall s
 
 The component derives uniform row height from display-scale visual text bounds, resolved row padding and the maximum skin-state minimum. Applications set the viewport dimensions and navigation options, without a row-height parameter or measurement callback. A kept max grows as taller seen rows show up. It rests when its true set/form, mark/shape rule, row style/skin size, or DPI changes. Bounded provisional visible intervals are preflighted until the shared estimate settles. Growth can exclude initially measured rows from the final painted/published interval. Content-sized viewports preflight their natural provisional viewport before parent arrangement. Prepared rows retain their copied layouts and full visual bounds until painting, so intrinsic preflight and final painting share each row measurement. Sorted row lookup avoids rescanning previously prepared rows. Final painting walks the accepted interval once. The final visible interval and its scroll geometry use the same resolved height. No full-dataset measurement pass is required. Text is unwrapped, so LF/CRLF line breaks affect height while width clips text without invalidating the vertical metric cache.
 
-The source supplies nonzero unique keys, a unique nonzero instance generation, and a nonzero revision advanced whenever order, count, text or enabled state changes. Generations and revisions must not be reused for a different dataset state. `indexOf()` resolves a key and `findEnabled()` searches inclusively in one direction without wrapping. Implement these efficiently. The toolkit does not scan the full dataset. Row text may use a temporary buffer valid until the next source call. The list immediately shapes and copies it before borrowing another row.
+The source supplies nonzero unique keys. It supplies a unique nonzero instance generation. It supplies a nonzero revision advanced whenever order, count, text or enabled state changes. Generations and revisions must not be reused for a different dataset state. `indexOf()` resolves a key and `findEnabled()` searches inclusively in one direction without wrapping. Implement these efficiently. The toolkit does not scan the full dataset. Row text may use a temporary buffer valid until the next source call. The list immediately shapes and copies it before borrowing another row.
 
 Selection and navigation cursor are stable keys. Reordering preserves valid enabled keys and ensures the cursor's new index is visible. Removal or disabling clears the affected key. Replacing an established source instance clears selection, cursor and offset. `ListResult::selectionChanged` reports selected-key changes, while `activated` reports a row pointer release or matching Enter/Space release. Escape cancels a held activation before release. Up/Down skip disabled rows. Home/End select an enabled endpoint. PageUp/PageDown use the displayed viewport's row count. `selectOnNavigate=false` moves the cursor without committing selection, as used by combo previews and context-menu commands. An empty list or a list without an enabled cursor consumes Submit as a no-op.
 
@@ -76,7 +78,7 @@ Typing, selection, undo/redo, Home/End and clipboard use the shared edit box. Up
 
 ## Tooltip and context-menu attachments
 
-Declare `Builder::tooltip(key, anchorKey, text, state, options)` or `Builder::contextMenu(key, anchorKey, source, state, options)` after its anchor item, while still in that item's container scope. `anchorKey` names a preceding item in the same container. It cannot address an item in an outer container, a future item or a separator. The attachment has its own stable key and retained declaration lifetime. Keep each application-owned state instance alive through the enclosing end. One state may own only one attachment per frame, including across panels and roots.
+Declare `Builder::tooltip(key, anchorKey, text, state, options)` or `Builder::contextMenu(key, anchorKey, source, state, options)` after its anchor item. Stay in that item's container scope. `anchorKey` names a preceding item in the same container. It cannot address an item in an outer container, a future item or a separator. The attachment has its own stable key and retained declaration lifetime. Keep each application-owned state instance alive through the enclosing end. One state may own only one attachment per frame, including across panels and roots.
 
 `tooltip()` returns declaration success, including while the help is hidden. `TooltipState::visible()` and `placement()` expose prepared visibility and geometry. Hover must refer to an enabled anchor in the accepted input layout with a known pointer and focused native window. A new eligible hover starts at zero. Contiguous updates supplied by `Builder::setDeltaSeconds()` reach `TooltipOptions::delaySeconds`. While Zero delay appears immediately. Leaving, disabling, holding a pointer button/capture, native focus loss, changing options or recreating the attachment restarts the delay. Candidate clipping or a higher popup also suppresses help.
 
@@ -90,7 +92,7 @@ Provide an `IListDataSource` with the same nonzero unique stable keys, instance/
 
 ## Enclosing-scope loans
 
-Ordinary lists, combo fields/results and context menus all retain their state and source loans through every later deferred source callback in the same enclosing `endPanel()`, `endWindow()` or outermost `endPopup()` family. Painting an earlier control does not release its loan. Search queries and tooltip state remain borrowed through that end as well. Apply explicit application edits, source revisions or command side effects after that enclosing scope ends. Source callbacks must not mutate another borrowed state, query or dataset.
+Ordinary lists, combo fields/results and context menus all retain their state and source loans. This holds through every later deferred source callback in the same enclosing `endPanel()`, `endWindow()` or outermost `endPopup()` family. Painting an earlier control does not release its loan. Search queries and tooltip state remain borrowed through that end as well. Apply explicit application edits, source revisions or command side effects after that enclosing scope ends. Source callbacks must not mutate another borrowed state, query or dataset.
 
 Before releasing any loans, Builder validates all source snapshots and then checks every model/input epoch without calling source code. A later callback that changes an already painted list, combo or menu therefore rejects the candidate frame while preserving the application mutation. Reentrant Builder reset, declaration, scope ending or configuration mutation during a source/edit-host callback also rejects the candidate before clearing borrowed storage. Held draw notes and took marks keep held paint plus copied keys, marks, and shape. So they take no app state or true store past card work.
 
@@ -99,7 +101,6 @@ Before releasing any loans, Builder validates all source snapshots and then chec
 A visible `beginPopup()` can open within another user popup, including its current row/column. Child end restores the exact parent container, and controls declared afterward retain their original parent identity and layout. A closed child begin returns false and opens no scope. Keep all popup state, list/source, editor, query and annotation loans alive through the outermost popup end. Apply command side effects after that end succeeds.
 
 Builder draws surviving popup families only at the outermost end. Closing or reopening an ancestor during the body suppresses its old descendants before deferred callbacks. A model/source mutation during drawing rejects the candidate and stops later stale subtree work. The eight-scope frame bound counts plain user popups and open combo/search/menu children together. Exact parent-opening bindings retire stale child openings on the next declaration. Explicitly advancing a child opening lets it bind to a new parent. Layers are reserved in declaration order, so an earlier automatic menu/combo remains below a later user child even though painting is deferred.
-
 
 ## Multiline text area
 
@@ -111,8 +112,7 @@ The stack `TextAreaNavigationResolver` freshly shapes the event-position model f
 
 TextAreaState, declaration, resolver, paint and loan validation have separate owners/sources. Layout remains hard-line LTR. soft wrapping and paragraph bidi are later capabilities. Wheel input and draggable scrollbars operate on both axes. `wheelLines` defaults to three; positive horizontal wheel input moves right and positive vertical input moves up. `scrollbarStyle()` supplies replaceable atlas names and metrics. Read-only fields retain scrolling; disabled fields publish no active scrollbar parts.
 
-The reusable `CalculateScrollViewportPlacement` in `scrollbar_style.adhd` reserves both bars through coupled visibility, clamps offsets and computes thumbs in f64. Text-area input uses complete copied model/state/policy/viewport stamps. Geometry changes retire queued scrolling before application. Ordinary offset repaint preserves drag baselines. A scrollbar press focuses its editor without starting text selection. Track release pages by the accepted viewport. Explicit wheel/thumb scrolling suppresses automatic caret reveal until a later accepted text, selection or ownership intent. Edit events and scroll events have separate queues: when edits change the document first, older copied scrolling is retired and caret reveal takes precedence.
-
+The reusable `CalculateScrollViewportPlacement` in `scrollbar_style.adhd` reserves both bars through coupled visibility, clamps offsets and computes thumbs in f64. Text-area input uses complete copied model/state/policy/viewport stamps. Geometry changes retire queued scrolling before application. Ordinary offset repaint preserves drag baselines. A scrollbar press focuses its editor without starting text selection. Track release pages by the accepted viewport. Explicit wheel/thumb scrolling suppresses automatic caret reveal until a later accepted text, selection or ownership intent. Edit events and scroll events have separate queues. When edits change the document first, older copied scrolling is retired. Caret reveal takes precedence.
 
 ## Radio groups
 
@@ -124,7 +124,6 @@ The group has one Tab stop. Up/Left and Down/Right wrap through enabled choices.
 
 `Builder::radioGroupStyle()` selects radio.normal/hover/pressed/checked/disabled/mark and optional focus.overlay. Missing radio imagery uses explicit checkbox fallbacks. Absent hover/pressed/disabled frames use the normal frame with independent tints. A checked choice always uses its checked frame and mark, including when disabled. Metrics are stable across states and frozen with each declaration. Public select/reset intents retire copied input even when their values are unchanged. Internal navigation preserves its input lifetime while advancing revision. Separate state, behavior, layout, frame, declaration, loan and paint files own these responsibilities.
 
-
 ## Sliders
 
 `Builder::slider(key, state, options)` declares a continuous horizontal `f64` slider. Keep its `SliderState` alive and avoid public setters until the enclosing panel/window or outermost popup ends. The boolean return validates declaration; read `state.value()` and `state.result()` after a successful scope end. Each attempted unique declaration clears its previous result, and only final callback-free loan validation publishes a valid result. A failed scope can have applied input before a later sibling failure. Result invalidity does not promise value rollback.
@@ -133,13 +132,11 @@ The group has one Tab stop. Up/Left and Down/Right wrap through enabled choices.
 
 The track seeks on pointer down. A thumb press retains the exact accepted `f64` baseline and grab offset. A stationary press preserves earlier key changes, and returning after an applied movement restores the original bits. Stable geometry, clipping, bounds, steps, enabled policy and accepted public setter intents retire old capture/actions before input is applied. Offset-only repaint preserves the press. `sliderStyle()` selects slider.track and slider.thumb.normal/hover/pressed/disabled with explicit scrollbar fallbacks, independent tints and optional focus.overlay. Semantic sprite padding does not replace the widget's own padding. Atlas minimum and slice dimensions can grow stable metrics.
 
-
 ## Progress bars
 
 `Builder::progress(key, fraction, options)` copies a finite `f64` fraction and its resolved skin style at declaration. Finite values outside 0..1 clamp visually. Nonfinite values reject the candidate. The application owns its value, and may change that value or later styles after declaration without changing the earlier item. A progress bar has no state loan, Tab stop, activation, pointer capture or control token. Tooltips and context menus can attach through the same passive annotation target policy as labels.
 
 `ProgressOptions` defaults to stretch width and minimum height 32. `progressStyle()` selects progress.track and progress.fill, with explicit scrollbar fallbacks, independent linear tints and optional content padding. Track padding and region minima can increase the dimensions. Only pixel slice borders divide by reference density. A partial fill draws a fraction-sized nine-slice canvas. For an amount narrower than its minimum, the painter reveals a clipped minimum-sized canvas, preserving the authored borders. Zero emits only the track. Full progress uses exact content endpoints.
-
 
 ## Atlas images
 
@@ -152,3 +149,4 @@ Frozen paint retains the skin binding and copied UV/geometry through the existin
 `Builder::image(key, source, options)` accepts an immutable `SharedImageSource` created by `MakeImageSource()` or `LoadImageSource()`. It retains that exact source and copies width/height policies and tint at declaration, including inside nested user popups. The caller may release or replace its handle and change its options before the enclosing scope ends. Frozen paint snapshots retain the CPU source independently. The Renderer pins its matching GPU version through final consumption.
 
 Content size is the source texture's texel extent in logical units. Skin reference density, region padding and nine-slice minima do not affect it. Fixed/Stretch dimensions use the normal image layout. Engine images sample the full normalized UV rectangle. Cropped UV painting is available through `PaintBuilder::drawImage()`. Null sources and invalid sizing/tint reject the candidate. Empty or fully transparent images remain valid without consuming an image binding. Like atlas images, they are passive. Optional help/menu annotations use the existing nonfocusable image target.
+

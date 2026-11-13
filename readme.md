@@ -1,6 +1,6 @@
 # NWBLot
 
-NWBLot is a C++ engine with a Vulkan graphics backend, an asset cooker, runtime loader, ECS renderer, developer tools, automated tests, and a runnable Testbed. CMake, Ninja, and LLVM/Clang are the supported build stack.
+NWBLot is a C++ engine. It has a Vulkan graphics backend, an asset cooker, a runtime loader, and an ECS renderer. It also has developer tools, automated tests, and a runnable Testbed. CMake, Ninja, and LLVM/Clang are the supported build stack.
 
 ## Supported targets
 
@@ -95,7 +95,7 @@ Use `--with-profile` to start the log server with a launched application. Use `-
 
 CMake defines the corresponding configuration macro directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for configuration-specific code. First-party headers do not infer NWB modes from `DEBUG`, `_DEBUG`, `NDEBUG`, or `_NDEBUG`; external compiler/runtime uses of those spellings remain separate.
 
-Use the exact lowercase configuration names `dbg`, `opt`, and `fin`. A single-config build tree defaults an omitted or empty `CMAKE_BUILD_TYPE` to `dbg` and rejects every other nonempty name, including `Debug`, `Release`, `OFF`, `0`, and case variants. Multi-config presets expose the same canonical names. Imported third-party libraries may map those names to their vendor `Debug`/`Release` artifacts; the project configuration names remain unchanged.
+Use the exact lowercase configuration names `dbg`, `opt`, and `fin`. A single-config build tree defaults an omitted or empty `CMAKE_BUILD_TYPE` to `dbg`. It rejects every other nonempty name, including `Debug`, `Release`, `OFF`, `0`, and case variants. Multi-config presets expose the same canonical names. Imported third-party libraries may map those names to their vendor `Debug`/`Release` artifacts. The project configuration names remain unchanged.
 
 Configure trees are written below `__cmake/build/<configure-preset>/`. Runtime artifacts use these roots:
 
@@ -110,9 +110,9 @@ Shader metadata declares its physical type, such as `compute_shader asset;` or `
 
 GPU payload packing preserves live numerical values and uses actual compiled sizes and shared CPU/shader contracts. See [GPU payload packing](docs/gpu_payload_packing.md) for the current compact layouts, recooking requirements, and verification procedures.
 
-String pooling applies to C/C++ literals on every target through Clang's normal literal pooling; clang-cl also receives `/GF`. `NWB_OBFUSCATE_STRING_LITERALS=ON` is the default. The compiler pipeline pools and encodes eligible literals that survive optimization, then one decoder per executable or shared library restores their bytes before application static initialization. `constexpr StringView` declarations retain compile-time evaluation and direct pointer/length access, with no per-access decode checks or string allocations.
+String pooling applies to C/C++ literals on every target through Clang's normal literal pooling. `clang-cl` also receives `/GF`. `NWB_OBFUSCATE_STRING_LITERALS=ON` is the default. The compiler pipeline pools and encodes eligible literals that survive optimization. Then one decoder per executable or shared library restores their bytes before application static initialization. `constexpr StringView` declarations retain compile-time evaluation and direct pointer/length access. They add no per-access decode checks or string allocations.
 
-Obfuscation requires a Ninja or Makefiles generator, Python 3.8 or newer, and a matching LLVM C API shared library that Python can load on the compiler host. Configuration discovers and validates the library, or accepts its path through `-D NWB_LLVM_C_LIBRARY=<path>`; missing tools, mismatched versions, and competing compiler/linker launchers fail configuration. Set `-D NWB_OBFUSCATE_STRING_LITERALS=OFF` to retain ordinary pooling without encoding. Encoded records add startup work, headers, alignment, and writable memory. Pooling savings depend on the workload. Decoded text remains readable in memory, and named arrays, identity-sensitive objects, optimized immediates, debug data, and name-symbol data are outside the transformation's coverage. See [the launcher guide](launcher/README.md#string-literal-pooling-and-obfuscation) for configuration examples and limitations.
+Obfuscation requires a Ninja or Makefiles generator. It also requires Python 3.8 or newer. It also requires a matching LLVM C API shared library that Python can load on the compiler host. Configuration discovers and validates the library. It also accepts its path through `-D NWB_LLVM_C_LIBRARY=<path>`. Missing tools, mismatched versions, and competing compiler/linker launchers fail configuration. Set `-D NWB_OBFUSCATE_STRING_LITERALS=OFF` to retain ordinary pooling without encoding. Encoded records add startup work, headers, alignment, and writable memory. Pooling savings depend on the workload. Decoded text remains readable in memory. Named arrays, identity-sensitive objects, optimized immediates, debug data, and name-symbol data are outside the transformation's coverage. See [the launcher guide](launcher/README.md#string-literal-pooling-and-obfuscation) for configuration examples and limitations.
 
 ## Rendering portability
 
@@ -120,7 +120,7 @@ Graphics providers are selected at compile time. The `NWB_GRAPHICS_BACKEND` CMak
 
 Graphics consumers and tests use neutral contracts from `core/graphics/rhi/` and the narrow headers under `core/graphics/backend_selection/`. `backend_selection.h` selects the full context; `backend_selection/backend.h` selects public device and resource definitions. Native Vulkan headers stay behind the provider and selection boundary. Graphics tests live under `tests/` and exercise public contracts after normal backend selection. Provider-specific tests, private provider fixtures, and production test hooks are prohibited. Selection preserves concrete calls and resource layouts without adding runtime dispatch, per-resource storage, or allocations. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture) for ownership and include boundaries.
 
-The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 disables native mesh shaders by default. Eligible engine meshes use persistent indexed raster. While Geometry paths without a compatible indexed archive stage use compute emulation. A qualified adapter can opt into native mesh shaders before graphics instance creation.
+The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 disables native mesh shaders by default. Eligible engine meshes use persistent indexed raster. Geometry paths without a compatible indexed archive stage use compute emulation. A qualified adapter can opt into native mesh shaders before graphics instance creation.
 
 The runtime texture loader selects formats according to device support, including BC and ASTC-capable GPUs. `tex_conv` writes raw linear UASTC blocks to `.tex` and the format, dimension, resolution, and alpha layout to its same-basename `.nwb` pair. Texture cooking derives the checked mip layout from that metadata and packages the raw blocks. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
 
@@ -130,7 +130,7 @@ NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature m
 
 Root `engine_namespace.h` owns the engine namespace wrappers. Engine domains reach them through their own umbrella headers. Testbed owns `CoolStuff/Testbed/namespace.h` for `namespace Testbed`; its classes and helpers belong there, while the required loader entry adapter functions remain in `NWB`. Projects include the engine APIs they use and receive engine namespace definitions transitively. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture#namespace-ownership) and [Project API](https://github.com/limztudio/NWBLot/wiki/Project-API#namespace-ownership) for the ownership boundaries.
 
-Project-owned abstract interfaces retain the lowercase `interface` annotation supplied by `global/compile.h`, which expands portably to `struct` when an external SDK has not defined it. Their virtual methods retain the declared ownership, lifetime, and exception contracts.
+Project-owned abstract interfaces retain the lowercase `interface` annotation supplied by `global/compile.h`. It expands portably to `struct` when an external SDK has not defined it. Their virtual methods retain the declared ownership, lifetime, and exception contracts.
 
 ## Source and dependency registration
 

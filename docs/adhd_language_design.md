@@ -12,7 +12,7 @@
 - **Core Guarantees**:
   1. **Zero manual allocator boilerplate**: Every class/component owns a static arena for persistent member allocations; functions use a local `ScratchArena` for temporary allocations.
   2. **First-class Reflection**: Every `class`, `interface`, `enum`, member field, and method is reflected for `.nwb` asset cooking, binary serialization, and ECS inspection.
-  3. **SIMD Alignment & Optimal Memory Layout**: All SIMD types are strictly aligned (never unaligned `*U`), and the `adhd` compiler automatically reorders class members to minimize padding.
+  3. **SIMD Alignment & Optimal Memory Layout**: All SIMD types are strictly aligned (never unaligned `*U`). The `adhd` compiler automatically reorders class members to minimize padding.
   4. **Explicit Mutability & Access**: Mandatory member access determiners (`public`, `private`, `protected`) and parameter passing determiners (`in`, `mut`).
   5. **Built-in Parallel Multithreading**: First-class `parallel_for` and `parallel` blocks integrated with `Core::CpuTaskScheduler`.
 
@@ -231,7 +231,7 @@
   - **Extended `InplaceFunction<InlineStorageSize, Signature = void()>` & Automatic Compiler `Func<...>` Lowering**:
  - `global/inplace_function.h` is extended to `template<usize InlineStorageSize, typename Signature = void()> class InplaceFunction` (copyable when captures are copyable, `const`-invocable via `operator()(Args...) const`, with a `0`-byte specialization `InplaceFunction<0, Ret(Args...)>`).
  - Programmers only write `Func<Ret(in A, mut B)>` in `.adhd`; the compiler automatically chooses the lowering based on capture flow analysis:
- 1. **Stateless Path (No Captures Flow In)**: Lowers to `InplaceFunction<0, Ret(Args...)>` (`8` bytes, copyable, zero wrapper overhead, and implicitly convertible to a raw C function pointer `Ret(*)(Args...) noexcept`).
+ 1. **Stateless Path (No Captures Flow In)**: Lowers to `InplaceFunction<0, Ret(Args...)>` (`8` bytes, copyable, and zero wrapper overhead). It is implicitly convertible to a raw C function pointer `Ret(*)(Args...) noexcept`.
  2. **Stateful Path (Captures Flow In)**: When a `lambda[in ..., mut ...](...)` flows into `Func<...>`, the compiler lowers it to `InplaceFunction<64, Ret(Args...)>`.
  - **Primitive Scalar `in` ABI Rule**: Primitive scalars (`b8`, `i8`..`u64`, `isize`, `usize`, `f32`, `f64`) lower `in` to pass-by-value (`u32`, `f32`) while non-scalars (`f32x4`, `class`, `String`) lower `in` to `const T&`, so `Func<...>` signatures match C/C++ function pointer ABIs directly.
   - **No `Move` Keyword (Rust-Style Borrowing & Automatic Last-Use Move)**:

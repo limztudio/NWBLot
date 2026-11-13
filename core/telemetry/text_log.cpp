@@ -101,7 +101,7 @@ b8 BuildTextLogPayload(const Common::LogType::Enum type, TStringView message, Al
         if(sourceAddress >= payloadAddress && sourceAddress - payloadAddress < outPayload.capacity()){
             TString<Alloc::ScratchArena>& alias = aliasedMessage.emplace(scratchArena);
             alias.assign(message.data(), message.size());
-            message = TStringView(alias.data(), alias.size());
+            message = TStringView(alias);
         }
     }
 

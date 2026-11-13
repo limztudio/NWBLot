@@ -16,17 +16,17 @@ NWB_TELEMETRY_BEGIN
 
 
 void TextLogCaptureLogger::enqueue(Common::LogString&& str, const Common::LogType::Enum type){
-    capture(TStringView(str.data(), str.size()), type);
+    capture(TStringView(str), type);
     if(Common::ILogger* const forwardLogger = m_forwardLogger.load(MemoryOrder::acquire)){
         if(&str.get_allocator().arena() == &forwardLogger->arena())
             forwardLogger->enqueue(Move(str), type);
         else
-            forwardLogger->enqueue(Common::LogString(TStringView(str.data(), str.size()), forwardLogger->arena()), type);
+            forwardLogger->enqueue(Common::LogString(TStringView(str), forwardLogger->arena()), type);
     }
 }
 
 void TextLogCaptureLogger::enqueue(const Common::LogString& str, const Common::LogType::Enum type){
-    capture(TStringView(str.data(), str.size()), type);
+    capture(TStringView(str), type);
     if(Common::ILogger* const forwardLogger = m_forwardLogger.load(MemoryOrder::acquire))
         forwardLogger->enqueue(str, type);
 }

@@ -87,7 +87,7 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const In& 
 
 template<typename ArenaT>
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const TString<ArenaT>& message){
-    logger.enqueue(LogString(TStringView(message.data(), message.size()), logger.arena()), type);
+    logger.enqueue(LogString(TStringView(message), logger.arena()), type);
 }
 
 template<typename In>

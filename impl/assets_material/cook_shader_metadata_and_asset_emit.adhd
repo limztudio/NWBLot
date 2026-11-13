@@ -49,6 +49,31 @@ b8 ValidateNonEmptyMaterialCookInterface(in StringView materialVirtualPath, in S
     return false;
 }
 
+Expected<b8> ParseMaterialBoolProperty(in Path nwbFilePath, in MetascriptValue asset, in StringView fieldName){
+    b8 isInteger = false;
+    i64 integerValue = 0;
+    const b8 found = asset.visitField(
+        fieldName,
+        lambda[mut isInteger, mut integerValue](in MetascriptValue propertyValue) -> void{
+            if(propertyValue.isInteger()){
+                isInteger = true;
+                integerValue = propertyValue.asInteger();
+            }
+        }
+    );
+    if(!found){
+        error("Material meta '{}': '{}' is required and must be 0 or 1", PathToString(nwbFilePath), fieldName);
+        return MakeUnexpected(Failure());
+    }
+    if(isInteger){
+        const Expected<b8> converted = TryConvertMaterialBoolInteger(integerValue);
+        if(converted.has_value())
+            return converted.value();
+    }
+    error("Material meta '{}': '{}' must be 0 or 1", PathToString(nwbFilePath), fieldName);
+    return MakeUnexpected(Failure());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -433,21 +458,6 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
     return normalized;
 }
 
-static Expected<b8> ParseMaterialBoolProperty(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
-    const auto* propertyValue = asset.findField(fieldName);
-    if(!propertyValue){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': '{}' is required and must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    if(propertyValue->isInteger()){
-        const Expected<b8> converted = TryConvertMaterialBoolInteger(propertyValue->asInteger());
-        if(converted)
-            return *converted;
-    }
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-    return MakeUnexpected(Failure{});
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -725,12 +735,11 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
 
 
 b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    static constexpr TStringView s_SerializeFailureContext = FOUNDATION_TEXT("MaterialAssetCodec::serialize");
-    if(!checkSerializeAssetType(asset, s_SerializeFailureContext))
+    if(!checkSerializeAssetType(asset, s_MaterialSerializeContextText))
         return false;
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.validatePayload(s_SerializeFailureContext, s_MaterialSerializeContextText))
+    if(!material.validatePayload(s_MaterialSerializeContextText, s_MaterialSerializeContextText))
         return false;
     return MaterialBinaryWriter().serialize(
         AStringView(material.shaderVariant()),

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "assert.h"
 #include "atomic.h"
 #include "compressed_pair.h"
 #include "smart_ptr.h"
@@ -277,6 +278,13 @@ public:
     void swap(this_type& x)noexcept{ m_pair.swap(x.m_pair); }
 
     pointer get()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
+
+    [[nodiscard]] b8 valid()const noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((m_pair.first() != pointer())))){ return (m_pair.first() != pointer()); }
+
+    [[nodiscard]] typename AddLValueReference<T>::type deref()const noexcept(IsPointer_V<pointer>){
+        FOUNDATION_ASSERT_MSG(m_pair.first() != pointer(), "RefCountPtr requires non-null pointer");
+        return *m_pair.first();
+    }
 
     deleter_type& getDeleter()noexcept{ return m_pair.second(); }
 

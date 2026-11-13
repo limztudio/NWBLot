@@ -103,45 +103,41 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             return true;
         }
         if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(callee)){
-            switch(fnInfo->callLowering){
-            case BuiltinCallLowering::BinaryByteViewArg0:{
-                if(!expr.arguments.empty() && expr.arguments[0]){
-                    out.append((fnInfo->prependsScratchArena || expr.arguments.size() > 1u) ? "([&](const auto& __adhd_bytes)" : "([](const auto& __adhd_bytes)");
-                    out.append("noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ");
+            if(fnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg0 || fnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg1){
+                const usize byteViewArgIdx = (fnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg0) ? 0u : 1u;
+                if(expr.arguments.size() > byteViewArgIdx && expr.arguments[byteViewArgIdx]){
                     out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
+                    if(!expr.callTemplateArgs.empty())
+                        m_emitter.m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
                     out.push_back('(');
+                    b8 hasArg = false;
                     if(fnInfo->prependsScratchArena){
                         const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
                         out.append(arenaExpr.data(), arenaExpr.size());
-                        out.append(", ");
+                        hasArg = true;
                     }
-                    out.append("::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }");
-                    for(usize i = 1u; i < expr.arguments.size(); ++i){
-                        out.append(", ");
-                        if(expr.arguments[i])
+                    for(usize i = 0u; i < expr.arguments.size(); ++i){
+                        if(hasArg)
+                            out.append(", ");
+                        hasArg = true;
+                        if(i == byteViewArgIdx){
+                            out.append("([](const auto& __adhd_bytes)noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }; }else{ const ::AStringView __adhd_sv(__adhd_bytes); return ::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_sv.data()), __adhd_sv.size() }; } }(");
+                            if(expr.arguments[i])
+                                m_emitter.emitExpr(out, *expr.arguments[i]);
+                            out.append("))");
+                        }
+                        else if(expr.arguments[i]){
                             m_emitter.emitExpr(out, *expr.arguments[i]);
+                        }
                     }
-                    out.append("); }else{ const ::AStringView __adhd_sv(__adhd_bytes); return ");
-                    out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
-                    out.push_back('(');
-                    if(fnInfo->prependsScratchArena){
-                        const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
-                        out.append(arenaExpr.data(), arenaExpr.size());
-                        out.append(", ");
-                    }
-                    out.append("::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_sv.data()), __adhd_sv.size() }");
-                    for(usize i = 1u; i < expr.arguments.size(); ++i){
-                        out.append(", ");
-                        if(expr.arguments[i])
-                            m_emitter.emitExpr(out, *expr.arguments[i]);
-                    }
-                    out.append("); } }(");
-                    m_emitter.emitExpr(out, *expr.arguments[0]);
-                    out.append("))");
+                    out.push_back(')');
                     return true;
                 }
-                break;
             }
+            switch(fnInfo->callLowering){
+            case BuiltinCallLowering::BinaryByteViewArg0:
+            case BuiltinCallLowering::BinaryByteViewArg1:
+                break;
             case BuiltinCallLowering::StagedWriteTextAtomic:{
                 if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                     out.append("(::StagedFileWriter(");

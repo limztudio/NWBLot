@@ -26,6 +26,7 @@ struct FramebufferAttachment{
 
 public:
     constexpr FramebufferAttachment& setTexture(Texture* t)noexcept{ texture = t; return *this; }
+    constexpr FramebufferAttachment& setTexture(Texture& t)noexcept{ texture = &t; return *this; }
 
     constexpr FramebufferAttachment& setSubresources(TextureSubresourceSet value)noexcept{ subresources = value; return *this; }
 
@@ -50,14 +51,18 @@ public:
     constexpr FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
 
     constexpr FramebufferDesc& addColorAttachment(Texture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(Texture& texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
 
     constexpr FramebufferDesc& addColorAttachment(Texture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(Texture& texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
 
     constexpr FramebufferDesc& setDepthAttachment(const FramebufferAttachment& d)noexcept{ depthAttachment = d; return *this; }
 
     constexpr FramebufferDesc& setDepthAttachment(Texture* texture)noexcept{ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(Texture& texture)noexcept{ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
 
     constexpr FramebufferDesc& setDepthAttachment(Texture* texture, TextureSubresourceSet subresources)noexcept{ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(Texture& texture, TextureSubresourceSet subresources)noexcept{ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
 
 };
 

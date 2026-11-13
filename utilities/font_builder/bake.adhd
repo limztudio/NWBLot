@@ -437,7 +437,7 @@ private:
 
 [[nodiscard]] static b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
     ::ArenaBase& arena = payload.positioningTables.get_allocator().arena();
-    auto tables = Impl::CopyFontAtlasPositioningTables(font.bytes(), payload.faceIndex, payload.sourceGlyphCount, arena);
+    auto tables = Impl::CopyFontAtlasPositioningTables(arena, font.bytes(), payload.faceIndex, payload.sourceGlyphCount);
     if(!tables)
         return false;
     payload.positioningTables = Move(*tables);

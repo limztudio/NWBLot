@@ -115,6 +115,9 @@ public:
     void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor* contributor)noexcept{
         m_taskGraphPresentationContributor = contributor;
     }
+    void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor& contributor)noexcept{
+        m_taskGraphPresentationContributor = &contributor;
+    }
 
     void clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept;
 
@@ -125,6 +128,9 @@ public:
     // Pre-output layers declare independent producers and join only at final display composition.
     void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor* contributor)noexcept{
         m_taskGraphOutputLayerContributor = contributor;
+    }
+    void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor& contributor)noexcept{
+        m_taskGraphOutputLayerContributor = &contributor;
     }
 
     void clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept;
@@ -157,6 +163,9 @@ public:
 
     [[nodiscard]] TStringView getWindowTitle()const noexcept{ return m_windowTitle; }
     void setWindowTitle(TStringView title);
+#if defined(FOUNDATION_UNICODE)
+    void setWindowTitle(AStringView title);
+#endif
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
     // Valid only while Graphics is preparing, rendering, or presenting one successfully acquired frame.

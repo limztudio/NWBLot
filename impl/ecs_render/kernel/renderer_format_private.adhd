@@ -56,13 +56,11 @@ namespace ECSRenderDetail{
     Core::SamplerDesc samplerDesc;
     samplerDesc.setAllFilters(linearFiltering).setAllAddressModes(Core::SamplerAddressMode::Clamp);
     auto samplerResult = device.createSampler(samplerDesc);
-    if(samplerResult)
+    if(samplerResult){
         sampler = Move(*samplerResult);
-    else
-        sampler.reset();
-    if(samplerResult)
         return true;
-
+    }
+    sampler.reset();
     return false;
 }
 

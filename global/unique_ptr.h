@@ -236,6 +236,13 @@ public:
 
 
 public:
+    [[nodiscard]] b8 valid()const noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
+
+    [[nodiscard]] typename AddLValueReference<T>::type deref()const noexcept(IsPointer_V<pointer>){
+        FOUNDATION_ASSERT_MSG(get() != pointer(), "UniquePtr requires non-null pointer");
+        return *get();
+    }
+
     void swap(this_type& x)noexcept{ base_type::swapStorage(x); }
 };
 template<typename T, typename Deleter>
@@ -317,6 +324,8 @@ public:
 
 
 public:
+    [[nodiscard]] b8 valid()const noexcept(noexcept(this->m_owner.valid())){ return this->m_owner.valid(); }
+
     void swap(this_type& x)noexcept{ base_type::swapStorage(x); }
 };
 
@@ -367,6 +376,10 @@ public:
 
 public:
     [[nodiscard]] pointer get()const noexcept(noexcept(m_owner.get())){ return m_owner.get(); }
+
+    [[nodiscard]] b8 valid()const noexcept(noexcept(this->m_owner.valid())){ return this->m_owner.valid(); }
+
+    [[nodiscard]] typename AddLValueReference<element_type>::type deref()const noexcept(noexcept(*m_owner)){ return *m_owner; }
 
     [[nodiscard]] owner_type& owner()noexcept{ return m_owner; }
 

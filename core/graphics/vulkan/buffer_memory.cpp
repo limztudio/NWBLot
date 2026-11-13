@@ -154,6 +154,30 @@ void Device::unmapBuffer(Buffer& buffer){
     }
 }
 
+b8 Device::readMappedBufferBytes(Buffer& buffer, void* const outData, const usize byteSize, const u64 srcOffsetBytes){
+    const u64 bufferByteSize = buffer.getDescription().byteSize;
+    if(srcOffsetBytes > bufferByteSize || byteSize > bufferByteSize - srcOffsetBytes){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to read mapped buffer: requested byte range exceeds buffer size"));
+        return false;
+    }
+    if(byteSize > 0u && !outData){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to read mapped buffer: output destination is null"));
+        return false;
+    }
+
+    const Expected<void*> mapped = mapBuffer(buffer, CpuAccessMode::Read);
+    if(!mapped)
+        return false;
+    if(!*mapped){
+        unmapBuffer(buffer);
+        return false;
+    }
+    if(byteSize > 0u)
+        FOUNDATION_MEMCPY(outData, byteSize, static_cast<const u8*>(*mapped) + srcOffsetBytes, byteSize);
+    unmapBuffer(buffer);
+    return true;
+}
+
 Expected<MemoryRequirements> Device::getBufferMemoryRequirements(Buffer& buffer){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));

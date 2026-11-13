@@ -44,6 +44,7 @@ int RunPipelineTool(const int argc, char** argv){
         compileOptions.includeDirectories = Move(options.includeDirectories);
         compileOptions.outputDirectory = Move(options.outputPath);
         compileOptions.customNamespace = Move(options.customNamespace);
+        compileOptions.namespaceMapPath = Move(options.namespaceMapPath);
         compileOptions.depfilePath = Move(options.depfilePath);
         return AdhdCompiler::CompileAdhd(compileOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
     }, arena, scratchArena);

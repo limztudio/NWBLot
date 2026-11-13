@@ -8,6 +8,7 @@
 #include "callable_argument_checker.h"
 #include "callable_template_deduction.h"
 
+#include "borrow_lifetime_analyzer.h"
 #include "lambda_capture_analyzer.h"
 #include "type_layout_analyzer.h"
 #include "type_resolver.h"
@@ -35,6 +36,9 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     const ClassDecl* targetOwnerCls = nullptr;
     const TypeRef* recvTypeRef = nullptr;
     MStringView calledMemberName;
+    const BuiltinReceiverMethodInfo* targetBuiltinRecvInfo = nullptr;
+    const BuiltinMemberMethodInfo* targetBuiltinMemberInfo = nullptr;
+    MStringView targetBuiltinRecvObjType;
     const ScopedVarInfo* localCallable = nullptr;
     ScopedVarInfo tempInlineLambdaVar;
     const TypeRef* invokedFuncType = nullptr;
@@ -66,6 +70,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(localCallable && localCallable->type)
                     invokedFuncType = m_symbols.unwrapTypeAlias(localCallable->type);
             }
+            if(targetCallable)
+                expr.lhs->resolvedCppNamespace = targetCallable->cppNamespace;
             if(targetCallable || localCallable){
                 expr.isUserCallableCall = true;
             }
@@ -191,6 +197,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(inheritedRecvInfo){
                     recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeName);
                     recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeArgName);
+                    recordBuiltinTypeHeader(inheritedRecvInfo->returnNestedTypeArgName);
                     recordBuiltinTypeHeader(inheritedRecvInfo->returnErrorTypeName);
                     if(isConstThis && inheritedRecvInfo->isMutating){
                         reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
@@ -241,9 +248,15 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             const BuiltinMemberMethodInfo* builtinMemberInfo = isUserObjType ? nullptr : FindBuiltinMemberMethod(mName);
             const b8 isMutatingContainerOp = builtinRecvInfo ? builtinRecvInfo->isMutating : (builtinMemberInfo && builtinMemberInfo->isMutating);
             if(builtinRecvInfo){
+                targetBuiltinRecvInfo = builtinRecvInfo;
                 recordBuiltinTypeHeader(builtinRecvInfo->returnTypeName);
                 recordBuiltinTypeHeader(builtinRecvInfo->returnTypeArgName);
+                recordBuiltinTypeHeader(builtinRecvInfo->returnNestedTypeArgName);
                 recordBuiltinTypeHeader(builtinRecvInfo->returnErrorTypeName);
+            }
+            else if(!isUserObjType && builtinMemberInfo){
+                targetBuiltinMemberInfo = builtinMemberInfo;
+                targetBuiltinRecvObjType = objType;
             }
             if(
                 !targetCls
@@ -444,7 +457,26 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         const b8 isCtorOrTypeConstruction = (targetCallable && targetCallable->isConstructor && expr.lhs && expr.lhs->kind == ExprKind::Identifier)
             || (!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier
                 && isConstructibleTypeName(expr.lhs->text, m_symbols.resolveBaseTypeName(expr.lhs->text)));
-        if(isCtorOrTypeConstruction || expr.isBuiltinCall){
+        const BuiltinFunctionInfo* builtinFn = (expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier)
+            ? FindBuiltinFunction(expr.lhs->text)
+            : nullptr;
+        const b8 isBuiltinFnRefReturn = (builtinFn && builtinFn->returnsReference);
+        if(isCtorOrTypeConstruction || (expr.isBuiltinCall && !isBuiltinFnRefReturn)){
+            reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
+            ok = false;
+        }
+        else if(targetBuiltinRecvInfo && targetBuiltinRecvInfo->returnsReference && expr.lhs && expr.lhs->lhs && BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, &method, *expr.lhs->lhs, scope)){
+            reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
+            ok = false;
+        }
+        else if(
+            targetBuiltinMemberInfo
+            && targetBuiltinMemberInfo->methodName == "deref"
+            && (targetBuiltinRecvObjType == "UniquePtr" || targetBuiltinRecvObjType == "NotNullUniquePtr" || targetBuiltinRecvObjType == "RefCountPtr")
+            && expr.lhs
+            && expr.lhs->lhs
+            && BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, &method, *expr.lhs->lhs, scope)
+        ){
             reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
             ok = false;
         }

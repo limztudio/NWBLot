@@ -74,11 +74,11 @@ void EmitTypedAssetBaseType(MString& out, const ClassDecl& decl, const SymbolTab
 
 void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     if(!decl.subsystemTypeName.empty()){
-        AssetClassHeaderEmitter(m_symbols).emitSubsystem(out, decl);
+        AssetClassHeaderEmitter(m_symbols, m_typeEmitter).emitSubsystem(out, decl);
         return;
     }
 
-    ReflectionEmitter reflectionEmitter(m_symbols);
+    ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
     const b8 packClass = decl.isSerialize && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(decl.orderedFields);
 
     if(packClass)
@@ -220,7 +220,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         return;
 
     const ClassDecl& decl = *inst.templateDecl;
-    ReflectionEmitter reflectionEmitter(m_symbols);
+    ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
     const b8 packClass = decl.isSerialize && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(inst.orderedFields);
 
     if(packClass)
@@ -264,7 +264,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
                 out.push_back(' ');
                 out.append(param.name.data(), param.name.size());
                 out.append(" = ");
-                out.append(valText.data(), valText.size());
+                m_typeEmitter.emitConstantTextCpp(out, valText);
                 out.append(";\r\n");
             }
             else if(arg.type){

@@ -57,27 +57,6 @@ NWB_FBX_TO_NWB_BEGIN
 
 inline constexpr Name s_UtilityArena = "utilities/fbx_to_nwb/utility";
 
-using NWB::Impl::SkinInfluence4;
-using NWB::Impl::ValidateSourceStreamIndexWithContext;
-using NWB::Impl::s_MeshletTriangleIndexCount;
-using NWB::Impl::s_MeshMissingStreamIndex;
-using NWB::Impl::s_SkinInfluenceJointCount;
-using NWB::Impl::s_VertexRefPositionName;
-using NWB::Impl::s_VertexRefNormalName;
-using NWB::Impl::s_VertexRefTangentName;
-using NWB::Impl::s_MeshUv0FieldNameView;
-using NWB::Impl::s_VertexRefColorName;
-using NWB::Impl::s_MeshPositionsFieldNameView;
-using NWB::Impl::s_MeshNormalsFieldNameView;
-using NWB::Impl::s_MeshTangentsFieldNameView;
-using NWB::Impl::s_MeshColorsFieldNameView;
-using NWB::Impl::s_MeshVertexRefsFieldNameView;
-using NWB::Impl::s_MeshIndicesFieldNameView;
-using NWB::Impl::IsFiniteSkeletonJointMatrix;
-using NWB::Impl::IsFiniteSkeletonJointRow;
-using NWB::Impl::s_SkeletonJointMatrixFloatCount;
-using NWB::Impl::s_SkeletonJointMatrixRowCount;
-
 using UtilityString = DefaultAString<Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
 using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 using ScratchString = ::AString<Core::Alloc::ScratchArena>;

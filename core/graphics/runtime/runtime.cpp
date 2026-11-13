@@ -360,6 +360,13 @@ void GraphicsRuntime::setWindowTitle(const TStringView title){
     m_windowTitle = title;
 }
 
+#if defined(FOUNDATION_UNICODE)
+void GraphicsRuntime::setWindowTitle(const AStringView title){
+    const GraphicsTString converted = ConvertString(m_allocator.getObjectArena(), title);
+    setWindowTitle(TStringView(converted));
+}
+#endif
+
 void GraphicsRuntime::setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData){
     m_pointerScaleChangedCallback = callback;
     m_pointerScaleChangedUserData = userData;

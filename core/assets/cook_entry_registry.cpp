@@ -32,7 +32,8 @@ namespace CookEntryRegistryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+template<typename AssetKindArg>
+b8 RegisterParsedVirtualPathImpl(const AssetKindArg& assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
     if(!virtualPath)
         return true;
 
@@ -44,7 +45,8 @@ b8 RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPat
     return false;
 }
 
-b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+template<typename AssetKindArg>
+b8 RegisterCookedVirtualPathImpl(const AssetKindArg& assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
     if(!virtualPath){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: invalid {} virtual path"), assetKind);
         return false;
@@ -58,11 +60,60 @@ b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPat
     return false;
 }
 
+b8 RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+    return RegisterParsedVirtualPathImpl(assetKind, virtualPath, inOutSeenVirtualPathHashes);
+}
+
+b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+    return RegisterCookedVirtualPathImpl(assetKind, virtualPath, inOutSeenVirtualPathHashes);
+}
+
+#if defined(FOUNDATION_UNICODE)
+b8 RegisterParsedVirtualPath(const AStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+    return RegisterParsedVirtualPathImpl(ConvertString(assetKind), virtualPath, inOutSeenVirtualPathHashes);
+}
+
+b8 RegisterCookedVirtualPath(const AStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+    return RegisterCookedVirtualPathImpl(ConvertString(assetKind), virtualPath, inOutSeenVirtualPathHashes);
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(FOUNDATION_UNICODE)
+namespace __hidden_cook_entry_registry{
+
+
+template<typename Fn>
+b8 WithConvertedAssetKind(const AStringView assetKind, Fn&& fn){
+    ScratchArena scratchArena(AssetsArenaScope::s_CookEntryRegistryScratch);
+    const TString convertedAssetKind = ConvertString(scratchArena, assetKind);
+    return fn(TStringView(convertedAssetKind));
+}
+
+
+};
+
+b8 ICookedAssetWriter::writeCookedAsset(const AStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec, const CookEntrySourceLocation& location){
+    return __hidden_cook_entry_registry::WithConvertedAssetKind(assetKind, [&](const TStringView convertedAssetKind){
+        return writeCookedAsset(convertedAssetKind, virtualPath, asset, codec, location);
+    });
+}
+
+b8 ICookedAssetWriter::writeCachedCookedAsset(const AStringView assetKind, const Name& virtualPath, const IAssetCodec& codec, const Span<const u8> payloadBytes){
+    return __hidden_cook_entry_registry::WithConvertedAssetKind(assetKind, [&](const TStringView convertedAssetKind){
+        return writeCachedCookedAsset(convertedAssetKind, virtualPath, codec, payloadBytes);
+    });
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

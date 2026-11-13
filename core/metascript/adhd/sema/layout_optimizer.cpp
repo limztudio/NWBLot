@@ -102,7 +102,7 @@ inline constexpr usize s_BareExpectedFallbackBytes = 24u;
     }
 
     if(const ClassDecl* subCls = symbols.findClass(name)){
-        if(!subCls->implementedInterfaces.empty()){
+        if(symbols.hasPolymorphicInterface(*subCls)){
             outReason = "'[serialize]' class cannot contain non-transient polymorphic class members implementing an interface";
             return false;
         }
@@ -220,7 +220,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
                     markFieldArenaUsage(*clonedField->type, *clonedField, *inst->templateDecl, inst->needsClassArena);
             }
             const b8 hasMotherArenaPointer = !inst->templateDecl->isSerialize && !inst->templateDecl->usesStaticClassArena() && inst->templateDecl->subsystemTypeName.empty() && inst->needsClassArena;
-            finalizeClassFieldLayouts(inst->templateDecl->isSerialize, !inst->templateDecl->implementedInterfaces.empty(), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
+            finalizeClassFieldLayouts(inst->templateDecl->isSerialize, m_symbols.hasPolymorphicBase(*inst->templateDecl), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
             if(inst->totalSize != prevSize || inst->totalAlign != prevAlign || inst->needsClassArena != prevArena)
                 changed = true;
         }
@@ -385,7 +385,7 @@ void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& f
 }
 
 b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){
-    if(classDecl.isSerialize && !classDecl.implementedInterfaces.empty()){
+    if(classDecl.isSerialize && m_symbols.hasPolymorphicInterface(classDecl)){
         ReportAdhdDiagnostic(m_arena, errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");
         return false;
     }
@@ -419,7 +419,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
     }
 
     const b8 hasMotherArenaPointer = !classDecl.isSerialize && !classDecl.usesStaticClassArena() && classDecl.subsystemTypeName.empty() && classDecl.needsClassArena;
-    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty() || !classDecl.assetTypeName.empty() || !classDecl.systemTypeName.empty(), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
+    finalizeClassFieldLayouts(classDecl.isSerialize, m_symbols.hasPolymorphicBase(classDecl), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }
 

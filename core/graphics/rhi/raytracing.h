@@ -153,8 +153,10 @@ struct RayTracingGeometryTriangles{
 
 public:
     constexpr RayTracingGeometryTriangles& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setIndexBuffer(Buffer& value)noexcept{ indexBuffer = &value; return *this; }
 
     constexpr RayTracingGeometryTriangles& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setVertexBuffer(Buffer& value)noexcept{ vertexBuffer = &value; return *this; }
 
     constexpr RayTracingGeometryTriangles& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
 
@@ -178,6 +180,7 @@ struct RayTracingGeometryAABBs{
 
 public:
     constexpr RayTracingGeometryAABBs& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
+    constexpr RayTracingGeometryAABBs& setBuffer(Buffer& value)noexcept{ buffer = &value; return *this; }
 
     constexpr RayTracingGeometryAABBs& setOffset(u64 value)noexcept{ offset = value; return *this; }
 
@@ -204,8 +207,10 @@ struct RayTracingGeometrySpheres{
 
 public:
     constexpr RayTracingGeometrySpheres& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
+    constexpr RayTracingGeometrySpheres& setIndexBuffer(Buffer& value)noexcept{ indexBuffer = &value; return *this; }
 
     constexpr RayTracingGeometrySpheres& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
+    constexpr RayTracingGeometrySpheres& setVertexBuffer(Buffer& value)noexcept{ vertexBuffer = &value; return *this; }
 
     constexpr RayTracingGeometrySpheres& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
 
@@ -253,8 +258,10 @@ struct RayTracingGeometryLss{
 
 public:
     constexpr RayTracingGeometryLss& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
+    constexpr RayTracingGeometryLss& setIndexBuffer(Buffer& value)noexcept{ indexBuffer = &value; return *this; }
 
     constexpr RayTracingGeometryLss& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
+    constexpr RayTracingGeometryLss& setVertexBuffer(Buffer& value)noexcept{ vertexBuffer = &value; return *this; }
 
     constexpr RayTracingGeometryLss& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
 
@@ -346,6 +353,7 @@ public:
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value)noexcept{ flags = value; return *this; }
 
     constexpr RayTracingInstanceDesc& setBottomLevelAS(RayTracingAccelStruct* value)noexcept{ bottomLevelAS = value; return *this; }
+    constexpr RayTracingInstanceDesc& setBottomLevelAS(RayTracingAccelStruct& value)noexcept{ bottomLevelAS = &value; return *this; }
 };
 static_assert(sizeof(RayTracingInstanceDesc) == RayTracingInstanceDesc::s_ByteSize, "sizeof(InstanceDesc) is supposed to be 64 bytes");
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(RayTracingInstanceDesc));

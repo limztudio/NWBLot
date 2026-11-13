@@ -39,7 +39,7 @@ static b8 RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
         FOUNDATION_TEXT("sampler"),
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+            return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.scratchArena);
         },
         nullptr,
         [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSamplerAsset(entry, arena); },

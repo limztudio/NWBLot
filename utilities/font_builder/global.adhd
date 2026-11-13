@@ -43,22 +43,6 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
-using NWB::Impl::s_PreparedFontExtension;
-using NWB::Impl::s_FontAtlasMinBakePpem;
-using NWB::Impl::s_FontAtlasMaxBakePpem;
-using NWB::Impl::s_FontAtlasMinSpreadPixels;
-using NWB::Impl::s_FontAtlasMaxSpreadPixels;
-using NWB::Impl::s_FontAtlasMaxExtent;
-using NWB::Impl::s_FontAtlasMaxGroupCount;
-using NWB::Impl::s_FontAtlasMaxChannelCount;
-using NWB::Impl::s_FontAtlasMaxGlyphCount;
-using NWB::Impl::s_FontAtlasMaxPixelBytes;
-using NWB::Impl::s_FontAtlasRasterModeBitmap;
-using NWB::Impl::s_FontAtlasRasterModeOutline;
-using NWB::Impl::ComputeFontAtlasGlyphPlaneBounds;
-using NWB::Impl::FontAtlasGlyph;
-using NWB::Impl::FontAtlasGroupCompactBounds;
-namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

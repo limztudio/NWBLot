@@ -1,6 +1,5 @@
 set(_nwb_ecs_render_component_adhd_sources
     "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/avboit/geometry_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/graph_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/phase_identities.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/types.adhd"

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/asset.adhd>
+#include <impl/assets_font_atlas/asset.adhd>
 #include "package_name_cases.adhd"
 
 
@@ -33,14 +35,6 @@ namespace NWB::Tests::FontPackageCases{
 using AssetArena = Core::Assets::AssetArena;
 using AssetBytes = Core::Assets::AssetBytes;
 using ScratchArena = Core::Alloc::ScratchArena;
-using Impl::Font;
-using Impl::FontAtlas;
-using Impl::FontAtlasPayload;
-using Impl::SerializeFontAtlasPayload;
-using Impl::ValidateFontAtlasSourceMatch;
-using Impl::s_FontAtlasKernTag;
-using Impl::s_FontAtlasGposTag;
-using Impl::s_FontAtlasGdefTag;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,10 +65,10 @@ StringView TableTag(in u32 tag){
     return "";
 }
 
-b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
+b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload){
     if(!EnsureDirectories(directory).has_value())
         return false;
-    const Expected<AssetBytes> binary = SerializeFontAtlasPayload(payload, arena, scratch);
+    const Expected<Vector<u8>> binary = SerializeFontAtlasPayload(payload);
     return binary.has_value() && WriteBinaryFile(directory / "atlas.bin", binary.value());
 }
 
@@ -89,7 +83,7 @@ b8 WritePositioningTableFile(in Path directory, in StringView tag, in Span<u8> b
 }
 
 b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
-    if(!WriteAtlasHeaderBinary(directory, payload, arena, scratch))
+    if(!WriteAtlasHeaderBinary(directory, payload))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
         if(!WriteGroupPixelsFile(directory, index, payload.groups[index].pixels))

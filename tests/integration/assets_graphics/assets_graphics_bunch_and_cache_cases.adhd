@@ -160,24 +160,20 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
         const StringView secondPathView = formattedSecond;
         for(usize iteration = 0u; iteration < 16u; ++iteration){
             {
-                ExpandedAssetMetadataVector output(scratch);
-                {
-                    Expected<ExpandedAssetMetadataVector> expandedResult = ExpandBunchWithScratch(fixture.assetRoot, virtualRootView, filePath, fixture.document, scratch);
-                    ASSERT_TRUE(expandedResult.has_value());
-                    output = expandedResult.value();
-                }
-                ASSERT_EQ(output.size(), 2u);
-                EXPECT_EQ(output[0u].virtualPath, secondIdentity);
-                EXPECT_EQ(output[1u].virtualPath, firstIdentity);
-                ASSERT_TRUE(HasMetaField(output[0u].value, "nested"));
-                ASSERT_TRUE(GetMetaField(output[0u].value, "nested").isList());
-                ASSERT_EQ(GetMetaField(output[0u].value, "nested").asList().size(), 1u);
-                ASSERT_TRUE(HasMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget));
-                ASSERT_TRUE(GetMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget).isString());
-                EXPECT_EQ(GetMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget).asString(), firstPathView);
-                ASSERT_TRUE(HasMetaField(output[1u].value, s_FieldTarget));
-                ASSERT_TRUE(GetMetaField(output[1u].value, s_FieldTarget).isString());
-                EXPECT_EQ(GetMetaField(output[1u].value, s_FieldTarget).asString(), secondPathView);
+                const Expected<ExpandedAssetMetadataVector> expandedResult = ExpandBunchWithScratch(fixture.assetRoot, virtualRootView, filePath, fixture.document, scratch);
+                ASSERT_TRUE(expandedResult.has_value());
+                ASSERT_EQ(expandedResult.value().size(), 2u);
+                EXPECT_EQ(expandedResult.value()[0u].virtualPath, secondIdentity);
+                EXPECT_EQ(expandedResult.value()[1u].virtualPath, firstIdentity);
+                ASSERT_TRUE(HasMetaField(expandedResult.value()[0u].value, "nested"));
+                ASSERT_TRUE(GetMetaField(expandedResult.value()[0u].value, "nested").isList());
+                ASSERT_EQ(GetMetaField(expandedResult.value()[0u].value, "nested").asList().size(), 1u);
+                ASSERT_TRUE(HasMetaField(GetMetaField(expandedResult.value()[0u].value, "nested").asList()[0u], s_FieldTarget));
+                ASSERT_TRUE(GetMetaField(GetMetaField(expandedResult.value()[0u].value, "nested").asList()[0u], s_FieldTarget).isString());
+                EXPECT_EQ(GetMetaField(GetMetaField(expandedResult.value()[0u].value, "nested").asList()[0u], s_FieldTarget).asString(), firstPathView);
+                ASSERT_TRUE(HasMetaField(expandedResult.value()[1u].value, s_FieldTarget));
+                ASSERT_TRUE(GetMetaField(expandedResult.value()[1u].value, s_FieldTarget).isString());
+                EXPECT_EQ(GetMetaField(expandedResult.value()[1u].value, s_FieldTarget).asString(), secondPathView);
             }
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, retainedMetadata.usedBytes);
             EXPECT_TRUE(sentinel.intact());

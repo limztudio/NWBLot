@@ -177,6 +177,47 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename Container>
+concept GpuContiguousContainer = requires(const RemoveCVRef_T<Container>& container){
+    { container.data() };
+    static_cast<usize>(container.size());
+} && IsPointer_V<decltype(static_cast<const RemoveCVRef_T<Container>*>(nullptr)->data())>;
+
+template<typename Container>
+using GpuContiguousElement_T = RemoveCV_T<RemovePointer_T<decltype(static_cast<const RemoveCVRef_T<Container>*>(nullptr)->data())>>;
+
+template<typename Container>
+concept GpuContiguousPodContainer = GpuContiguousContainer<Container>
+    && !IsSame_V<void, GpuContiguousElement_T<Container>>
+    && IsTriviallyCopyable_V<GpuContiguousElement_T<Container>>;
+
+template<typename Container, typename Element>
+concept GpuContiguousTypedContainer = GpuContiguousContainer<Container>
+    && IsSame_V<GpuContiguousElement_T<Container>, Element>;
+
+template<typename Container>
+concept GpuMutableContiguousPodContainer = GpuContiguousPodContainer<Container>
+    && IsPointer_V<decltype(static_cast<RemoveReference_T<Container>*>(nullptr)->data())>
+    && !IsConst_V<RemovePointer_T<decltype(static_cast<RemoveReference_T<Container>*>(nullptr)->data())>>;
+
+template<typename T>
+concept GpuPodValue = !IsPointer_V<RemoveCVRef_T<T>>
+    && !IsSame_V<RemoveCVRef_T<T>, decltype(nullptr)>
+    && IsTriviallyCopyable_V<RemoveCVRef_T<T>>
+    && !requires(const RemoveCVRef_T<T>& container){
+        container.data();
+        container.size();
+    };
+
+template<GpuContiguousContainer Container>
+[[nodiscard]] constexpr usize ContiguousContainerByteSize(const Container& container)noexcept{
+    return static_cast<usize>(container.size()) * sizeof(GpuContiguousElement_T<Container>);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 

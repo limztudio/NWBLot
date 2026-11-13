@@ -340,11 +340,11 @@ static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
 }
 
 static void ReleaseTextureAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
-    ReleaseAssetCache(resources.textureAssetCache, [&](TextureGpuResource& resource){ TextureAssetLoader::Release(graphics, resource); });
+    ReleaseAssetCache(resources.textureAssetCache, [&](TextureGpuResource& resource){ ReleaseTextureGpuResource(graphics, resource); });
 }
 
 static void ReleaseSamplerAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
-    ReleaseAssetCache(resources.samplerAssetCache, [&](SamplerGpuResource& resource){ SamplerAssetLoader::Release(graphics, resource); });
+    ReleaseAssetCache(resources.samplerAssetCache, [&](SamplerGpuResource& resource){ ReleaseSamplerGpuResource(graphics, resource); });
 }
 
 static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
@@ -381,7 +381,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         graphics.getDevice().getDescriptorHeap(),
         &TextureGpuResource::sampledImageHeapHandle,
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
-            if(!TextureAssetLoader::Load(assetRef, assetPath, s_RendererAssetOwnerName, graphics, assetManager, outResource))
+            if(!LoadTextureGpuResource(assetRef, assetPath, s_RendererAssetOwnerName, graphics, assetManager, outResource))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
                 LogIncompatibleTexture2dDimension(assetPath);
@@ -403,7 +403,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         graphics.getDevice().getDescriptorHeap(),
         &SamplerGpuResource::samplerHeapHandle,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
-            return SamplerAssetLoader::Load(assetRef, assetPath, s_RendererAssetOwnerName, graphics, assetManager, outResource);
+            return LoadSamplerGpuResource(assetRef, assetPath, s_RendererAssetOwnerName, graphics, assetManager, outResource);
         });
     if(!samplerResourceResult)
         return MakeUnexpected(samplerResourceResult.error());

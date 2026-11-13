@@ -240,6 +240,19 @@ template<typename PayloadT>
     return FinalizeRuntimeBufferUpload(Move(buffer), instance, label, outBuffer);
 }
 
+template<typename HandleMapT, typename InstanceMapT>
+[[nodiscard]] auto* FindInstanceByHandle(HandleMapT& handleToEntity, InstanceMapT& instances, const RuntimeMeshHandle handle)noexcept{
+    const Expected<Core::ECS::EntityID> foundEntity = TryFindRuntimeMeshEntityByHandle(handleToEntity, handle.value);
+    using ResultPtr = decltype(&instances.find(*foundEntity).value());
+    if(!foundEntity)
+        return static_cast<ResultPtr>(nullptr);
+
+    const auto foundInstance = instances.find(*foundEntity);
+    if(foundInstance == instances.end())
+        return static_cast<ResultPtr>(nullptr);
+    return &foundInstance.value();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -249,6 +262,14 @@ template<typename PayloadT>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)noexcept{
+    return __hidden_runtime_cache_storage::FindInstanceByHandle(m_handleToEntity, m_instances, handle);
+}
+
+const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
+    return __hidden_runtime_cache_storage::FindInstanceByHandle(m_handleToEntity, m_instances, handle);
+}
 
 const Mesh& MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const noexcept{
     const auto asset = MakeNotNull(Core::Assets::CastAsset<Mesh>(meshAsset.get()));
@@ -300,17 +321,6 @@ void MeshSkinningRuntimeCache::clear()noexcept{
     m_handleToEntity.clear();
     m_instances.clear();
     m_sources.clear();
-}
-
-const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
-    const Expected<Core::ECS::EntityID> foundEntity = TryFindRuntimeMeshEntityByHandle(m_handleToEntity, handle.value);
-    if(!foundEntity)
-        return nullptr;
-
-    const auto foundInstance = m_instances.find(*foundEntity);
-    if(foundInstance == m_instances.end())
-        return nullptr;
-    return &foundInstance.value();
 }
 
 b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena, SkinnedMeshBindingComponent& component){

@@ -115,6 +115,110 @@ namespace __hidden_compile{
 }
 
 
+struct NamespacePathHash{
+    using is_transparent = void;
+
+    [[nodiscard]] usize operator()(const Core::Metascript::MStringView view)const noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        usize h = static_cast<usize>(14695981039346656037ull);
+        for(const Core::Metascript::MChar ch : view){
+            h ^= static_cast<usize>(static_cast<u8>(Canonicalize(ch)));
+            h *= static_cast<usize>(1099511628211ull);
+        }
+        return h;
+#else
+        return TransparentStringHash<Core::Metascript::MString>{}(view);
+#endif
+    }
+    [[nodiscard]] usize operator()(const Core::Metascript::MString& str)const noexcept{
+        return (*this)(Core::Metascript::MStringView(str.data(), str.size()));
+    }
+};
+
+struct NamespacePathEqual{
+    using is_transparent = void;
+
+    [[nodiscard]] b8 operator()(const Core::Metascript::MStringView lhs, const Core::Metascript::MStringView rhs)const noexcept{
+        return SameGenericPrefixText(lhs, rhs);
+    }
+    [[nodiscard]] b8 operator()(const Core::Metascript::MString& lhs, const Core::Metascript::MString& rhs)const noexcept{
+        return SameGenericPrefixText(lhs, rhs);
+    }
+    [[nodiscard]] b8 operator()(const Core::Metascript::MString& lhs, const Core::Metascript::MStringView rhs)const noexcept{
+        return SameGenericPrefixText(lhs, rhs);
+    }
+    [[nodiscard]] b8 operator()(const Core::Metascript::MStringView lhs, const Core::Metascript::MString& rhs)const noexcept{
+        return SameGenericPrefixText(lhs, rhs);
+    }
+};
+
+using NamespaceMap = HashMap<
+    Core::Metascript::MString,
+    Core::Metascript::MString,
+    Core::Metascript::MetaArena,
+    NamespacePathHash,
+    NamespacePathEqual
+>;
+
+[[nodiscard]] Core::Metascript::MString NormalizeNamespaceMapKey(const Core::Metascript::MStringView rawPath, Core::Metascript::MetaArena& arena){
+    using namespace Core::Metascript;
+
+    const Path<MetaArena> raw(arena, rawPath);
+    Path<MetaArena> normalized(arena);
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    const auto nativeText = raw.native();
+    const b8 hasDriveAbs = raw.isAbsolute() || (nativeText.size() >= 3u && nativeText[1u] == FOUNDATION_TEXT(':') && (nativeText[2u] == FOUNDATION_TEXT('/') || nativeText[2u] == FOUNDATION_TEXT('\\')));
+#else
+    const b8 hasDriveAbs = raw.isAbsolute();
+#endif
+    if(hasDriveAbs){
+        normalized = raw.lexicallyNormal();
+    }
+    else{
+        const auto resolved = ResolveComparisonPath(raw);
+        normalized = resolved ? *resolved : raw.lexicallyNormal();
+    }
+    return PathToGenericString<MChar>(arena, normalized);
+}
+
+[[nodiscard]] b8 LoadNamespaceMap(const Core::Metascript::MStringView mapPath, Core::Metascript::MetaArena& arena, NamespaceMap& outMap){
+    using namespace Core::Metascript;
+
+    MString content(arena);
+    if(!ReadTextFile(Path<MetaArena>(arena, mapPath), content)){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to read namespace map '{}'"), ConvertString(mapPath));
+        return false;
+    }
+
+    const MStringView text(content.data(), content.size());
+    usize pos = 0u;
+    while(pos < text.size()){
+        usize lineEnd = text.find('\n', pos);
+        if(lineEnd == MStringView::npos)
+            lineEnd = text.size();
+        MStringView line = text.substr(pos, lineEnd - pos);
+        if(!line.empty() && line.back() == '\r')
+            line = line.substr(0u, line.size() - 1u);
+        pos = lineEnd + 1u;
+        if(line.empty())
+            continue;
+
+        const usize tabPos = line.find('\t');
+        if(tabPos == MStringView::npos){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: invalid namespace map entry '{}' in '{}'"), ConvertString(line), ConvertString(mapPath));
+            return false;
+        }
+        const MStringView pathPart = line.substr(0u, tabPos);
+        const MStringView nsPart = line.substr(tabPos + 1u);
+        if(!nsPart.empty() && !pathPart.empty()){
+            MString key = NormalizeNamespaceMapKey(pathPart, arena);
+            outMap.insert_or_assign(Move(key), MString(nsPart.data(), nsPart.size(), arena));
+        }
+    }
+    return true;
+}
+
+
 class FilesystemIncludeResolver final : public Core::Metascript::IIncludeResolver{
 private:
     struct ResolveResult{
@@ -127,9 +231,15 @@ private:
 
 
 public:
-    FilesystemIncludeResolver(const Path<Core::Metascript::MetaArena>& currentFileDir, const Span<const Core::Metascript::MString> includeDirs, Core::Metascript::MetaArena& arena)
+    FilesystemIncludeResolver(
+        const Path<Core::Metascript::MetaArena>& currentFileDir,
+        const Span<const Core::Metascript::MString> includeDirs,
+        const NamespaceMap* namespaceMap,
+        Core::Metascript::MetaArena& arena
+    )
         : m_resolvedParentDirs(arena)
         , m_includeDirs(includeDirs)
+        , m_namespaceMap(namespaceMap)
     {
         m_resolvedParentDirs.push_back(currentFileDir);
     }
@@ -198,11 +308,20 @@ public:
         if(m_resolvedParentDirs.size() > 1u)
             m_resolvedParentDirs.pop_back();
     }
+    [[nodiscard]] virtual Core::Metascript::MStringView resolveIncludeNamespace(const Core::Metascript::MStringView resolvedKey)const noexcept override{
+        if(!m_namespaceMap || resolvedKey.empty())
+            return {};
+        const auto it = m_namespaceMap->find(resolvedKey);
+        if(it == m_namespaceMap->end())
+            return {};
+        return Core::Metascript::MStringView(it.value().data(), it.value().size());
+    }
 
 
 private:
     Core::Metascript::MVector<Path<Core::Metascript::MetaArena>> m_resolvedParentDirs;
     Span<const Core::Metascript::MString> m_includeDirs;
+    const NamespaceMap* m_namespaceMap = nullptr;
 };
 
 
@@ -290,6 +409,14 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     generatedHeaders.reserve(options.inputs.size());
     generatedSources.reserve(options.inputs.size());
 
+    __hidden_compile::NamespaceMap namespaceMap(0, __hidden_compile::NamespacePathHash(), __hidden_compile::NamespacePathEqual(), arena);
+    const __hidden_compile::NamespaceMap* activeNamespaceMap = nullptr;
+    if(!options.namespaceMapPath.empty()){
+        if(!__hidden_compile::LoadNamespaceMap(options.namespaceMapPath, arena, namespaceMap))
+            return false;
+        activeNamespaceMap = &namespaceMap;
+    }
+
     for(usize inputIndex = 0u; inputIndex < options.inputs.size(); ++inputIndex){
         const MString& inputPathText = options.inputs[inputIndex];
         const MStringView inputView = inputPathText;
@@ -302,7 +429,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         }
 
         const Path<MetaArena> parentDir = inputPaths[inputIndex].parentPath();
-        __hidden_compile::FilesystemIncludeResolver resolver(parentDir, options.includeDirectories, arena);
+        __hidden_compile::FilesystemIncludeResolver resolver(parentDir, options.includeDirectories, activeNamespaceMap, arena);
         const MString virtualPath = __hidden_compile::DeriveVirtualCompilePath(inputPath, inputPaths[inputIndex], inputView, options.includeDirectories, arena);
 
         Adhd::CompileResult result(arena);

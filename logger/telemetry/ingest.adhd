@@ -206,14 +206,14 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     }
 
     const auto uploadStem = __hidden_telemetry_ingest::MakeTelemetryUploadStem(scratchArena);
-    result.rawPath = rawDirectory / uploadStem;
-    result.rawPath.replaceExtension(s_LogTelemetryIngestRawStreamFileExtension);
-    result.jsonPath = reportDirectory / uploadStem;
-    result.jsonPath.replaceExtension(s_LogTelemetryIngestJsonFileExtension);
-    result.perfCsvPath = reportDirectory / uploadStem;
-    result.perfCsvPath.replaceExtension(s_LogTelemetryIngestPerfCsvFileExtension);
-    result.graphPath = reportDirectory / uploadStem;
-    result.graphPath.replaceExtension(s_LogTelemetryIngestGraphFileExtension);
+    const auto assignUploadPath = [&](auto& outPath, const auto& directory, const auto extension){
+        outPath = directory / uploadStem;
+        outPath.replaceExtension(extension);
+    };
+    assignUploadPath(result.rawPath, rawDirectory, s_LogTelemetryIngestRawStreamFileExtension);
+    assignUploadPath(result.jsonPath, reportDirectory, s_LogTelemetryIngestJsonFileExtension);
+    assignUploadPath(result.perfCsvPath, reportDirectory, s_LogTelemetryIngestPerfCsvFileExtension);
+    assignUploadPath(result.graphPath, reportDirectory, s_LogTelemetryIngestGraphFileExtension);
 
     const auto rawPublication = PublishNewFileDurable(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
     result.storedRaw = rawPublication.published;

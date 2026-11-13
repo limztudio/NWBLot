@@ -249,11 +249,13 @@ private:
 };
 
 void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* timing);
+void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>& timing);
 
 // Closes only the marker half of a split scope before its ending timestamp is published.
 // A marker failure discards that unpublished timing scope.
 // After finishTiming(), callers must instead roll back through the owning ticket.
 [[nodiscard]] b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>* timing);
+[[nodiscard]] b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>& timing);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

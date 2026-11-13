@@ -19,8 +19,9 @@ NWB_ADHD_BEGIN
 
 class ReflectionEmitter final{
 public:
-    explicit ReflectionEmitter(const SymbolTable& symbols)noexcept
+    ReflectionEmitter(const SymbolTable& symbols, const CppTypeEmitter& typeEmitter)noexcept
         : m_symbols(symbols)
+        , m_typeEmitter(typeEmitter)
     {}
 
 
@@ -38,6 +39,7 @@ private:
 
 private:
     const SymbolTable& m_symbols;
+    const CppTypeEmitter& m_typeEmitter;
 };
 
 

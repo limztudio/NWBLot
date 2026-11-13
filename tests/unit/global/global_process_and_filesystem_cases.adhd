@@ -288,10 +288,10 @@ void VerifyGlobal_PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdv
         NWB::Tests::TestArena<> testArena;
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
         const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("C:\\"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\xED\x95\x9C\xEA\xB8\x80"), FOUNDATION_TEXT("File.TXT") };
+        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("C:\\"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\ud55c\uae00"), FOUNDATION_TEXT("File.TXT") };
 #else
         const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("/"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\xED\x95\x9C\xEA\xB8\x80"), FOUNDATION_TEXT("File.TXT") };
+        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("/"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\ud55c\uae00"), FOUNDATION_TEXT("File.TXT") };
 #endif
         auto componentIt = path.begin();
         const TStringView first = componentIt.nativeComponent();

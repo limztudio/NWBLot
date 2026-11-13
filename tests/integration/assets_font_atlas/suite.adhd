@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/asset.adhd>
+#include <impl/assets_font/sfnt_directory.adhd>
+#include <impl/assets_font_atlas/asset.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/font_fixture.adhd>
 #include <tests/common/test_context.adhd>
@@ -22,10 +25,8 @@ native{
 #include <tests/common/floating_point_environment_guard.adhd.h>
 
 #include <impl/assets_font/cook.adhd.h>
-#include <impl/assets_font_atlas/types.adhd.h>
 
 #include <gtest/gtest.h>
-#include <impl/assets_font_atlas/asset.adhd.h>
 #include <impl/assets_font_atlas/cook.adhd.h>
 
 #include <core/assets/bunch/cook.h>
@@ -72,35 +73,13 @@ using MetascriptDocument = Core::Metascript::Document;
 using MetascriptValue = Core::Metascript::Value;
 using Core::Assets::RegisterAutoCollectedCookEntryTypes;
 using Core::Assets::AssetsBunchCook::ExpandAssetBunch;
-using Impl::Font;
 using Impl::FontCookEntry;
-using Impl::FontAtlas;
 using Impl::FontAtlasAssetCodec;
 using Impl::FontAtlasCookEntry;
-using Impl::FontAtlasGlyph;
-using Impl::FontAtlasGroup;
-using Impl::FontAtlasPayload;
-using Impl::FontAtlasPositioningTable;
-using Impl::FontSfntDirectory;
-using Impl::FontSfntTable;
 using Impl::BuildFontAtlasAsset;
-using Impl::DeserializeFontAtlasPayload;
 using Impl::ParseFontAtlasCookMetadataValue;
 using Impl::ParseFontCookMetadata;
 using Impl::ParseFontCookMetadataValue;
-using Impl::ReadFontSfntDirectory;
-using Impl::SerializeFontAtlasPayload;
-using Impl::ValidateFontAtlasPayload;
-using Impl::ValidateFontAtlasSourceMatch;
-using Impl::s_FontAtlasBinaryGlyphBytes;
-using Impl::s_FontAtlasBinaryHeaderBytes;
-using Impl::s_FontAtlasBinaryVersion;
-using Impl::s_FontAtlasGdefTag;
-using Impl::s_FontAtlasGposTag;
-using Impl::s_FontAtlasKernTag;
-using Impl::s_FontAtlasMaxExtent;
-using Impl::s_FontSfntHeadTag;
-using Impl::s_FontSfntMaxpTag;
 
 inline constexpr auto s_BreakOnFatal = Core::Common::LoggerBreakPolicy::BreakOnFatal;
 inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
@@ -108,30 +87,6 @@ inline constexpr f32 s_InfinityF32 = Limit<f32>::s_Infinity;
 inline constexpr f64 s_InfinityF64 = Limit<f64>::s_Infinity;
 inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
 inline constexpr AStringView s_RepoRoot = NWB_REPO_ROOT;
-
-inline constexpr Array<u8, 24u> s_DefaultKernBytes = {
-    0x00u, 0x00u, 0x00u, 0x01u, 0x00u, 0x00u, 0x00u, 0x14u,
-    0x00u, 0x01u, 0x00u, 0x01u, 0x00u, 0x06u, 0x00u, 0x00u,
-    0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x01u, 0xffu, 0xecu,
-};
-
-inline constexpr Array<usize, 15u> s_CorruptAtlasOffsets = {
-    0u,
-    4u,
-    8u,
-    12u,
-    112u,
-    120u,
-    136u,
-    152u,
-    156u,
-    160u,
-    s_FontAtlasBinaryHeaderBytes + 48u,
-    s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes,
-    s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 4u,
-    s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 8u,
-    s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 12u,
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,27 +185,29 @@ FontAtlasPayload MakePayload(mut AtlasTestArena testArena){
     payload.positioningTables.emplace_back(testArena.arena);
     mut FontAtlasPositioningTable table = payload.positioningTables.back();
     table.tag = s_FontAtlasKernTag;
-    table.bytes.resize(s_DefaultKernBytes.size());
-    for(usize index = 0u; index < s_DefaultKernBytes.size(); ++index)
-        table.bytes[index] = s_DefaultKernBytes[index];
+    table.bytes.resize(24u, 0u);
+    table.bytes[3u] = 0x01u;
+    table.bytes[7u] = 0x14u;
+    table.bytes[9u] = 0x01u;
+    table.bytes[11u] = 0x01u;
+    table.bytes[13u] = 0x06u;
+    table.bytes[21u] = 0x01u;
+    table.bytes[22u] = 0xffu;
+    table.bytes[23u] = 0xecu;
     table.sha256 = ComputeSha256(table.bytes);
     return payload;
 }
 
 b8 SerializePayloadInto(in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch, mut AssetBytes outBinary){
-    Expected<AssetBytes> result = SerializeFontAtlasPayload(payload, arena, scratch);
-    if(!result.has_value())
-        return false;
-    outBinary = result.value();
-    return true;
+    return SerializeFontAtlasPayloadInto(payload, outBinary);
 }
 
 b8 CanSerializePayload(in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
-    return SerializeFontAtlasPayload(payload, arena, scratch).has_value();
+    return SerializeFontAtlasPayload(payload).has_value();
 }
 
 b8 DeserializePayloadInto(in AssetBytes binary, mut AssetArena arena, mut ScratchArena scratch, mut FontAtlasPayload outPayload){
-    Expected<FontAtlasPayload> result = DeserializeFontAtlasPayload(binary, arena, scratch);
+    Expected<FontAtlasPayload> result = DeserializeFontAtlasPayload(binary);
     if(!result.has_value())
         return false;
     outPayload = result.value();
@@ -258,7 +215,7 @@ b8 DeserializePayloadInto(in AssetBytes binary, mut AssetArena arena, mut Scratc
 }
 
 b8 CanDeserializePayload(in AssetBytes binary, mut AssetArena arena, mut ScratchArena scratch){
-    return DeserializeFontAtlasPayload(binary, arena, scratch).has_value();
+    return DeserializeFontAtlasPayload(binary).has_value();
 }
 
 b8 BuildAtlasInto(in FontAtlasCookEntry entry, mut AssetArena arena, mut ScratchArena scratch, mut FontAtlas outAtlas){
@@ -406,7 +363,7 @@ void VerifyAssetsFontAtlas_BuildOwnsGlyphsGroupsAndPositioningInCallerArena(){
     ASSERT_TRUE(BuildAtlasInto(entry, resultArena, testArena.scratchArena, built));
     EXPECT_EQ(built.virtualPath(), entry.virtualPath);
     native(in built, in resultArena){
-        const FontAtlasPayload& payload = built.payload();
+        const NWB::Impl::FontAtlasPayload& payload = built.payload();
         EXPECT_EQ(&payload.glyphs.get_allocator().arena(), &resultArena);
         EXPECT_EQ(&payload.groups.get_allocator().arena(), &resultArena);
         EXPECT_EQ(&payload.positioningTables.get_allocator().arena(), &resultArena);
@@ -457,8 +414,25 @@ void VerifyAssetsFontAtlas_MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas(){
     ASSERT_TRUE(SerializePayloadInto(payload, testArena.arena, testArena.scratchArena, valid));
     FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
     ASSERT_TRUE(atlas.loadBinary(valid));
-    for(usize index = 0u; index < s_CorruptAtlasOffsets.size(); ++index){
-        const usize offset = s_CorruptAtlasOffsets[index];
+    const usize glyphTableEnd = cast<usize>(s_FontAtlasBinaryHeaderBytes) + 5u * cast<usize>(s_FontAtlasBinaryGlyphBytes);
+    Vector<usize> corruptAtlasOffsets(testArena.scratchArena);
+    corruptAtlasOffsets.push_back(0u);
+    corruptAtlasOffsets.push_back(4u);
+    corruptAtlasOffsets.push_back(8u);
+    corruptAtlasOffsets.push_back(12u);
+    corruptAtlasOffsets.push_back(112u);
+    corruptAtlasOffsets.push_back(120u);
+    corruptAtlasOffsets.push_back(136u);
+    corruptAtlasOffsets.push_back(152u);
+    corruptAtlasOffsets.push_back(156u);
+    corruptAtlasOffsets.push_back(160u);
+    corruptAtlasOffsets.push_back(cast<usize>(s_FontAtlasBinaryHeaderBytes) + 48u);
+    corruptAtlasOffsets.push_back(glyphTableEnd);
+    corruptAtlasOffsets.push_back(glyphTableEnd + 4u);
+    corruptAtlasOffsets.push_back(glyphTableEnd + 8u);
+    corruptAtlasOffsets.push_back(glyphTableEnd + 12u);
+    for(usize index = 0u; index < corruptAtlasOffsets.size(); ++index){
+        const usize offset = corruptAtlasOffsets[index];
         const ScopedTestTrace trace(offset);
         AssetBytes invalid = CopyAtlasBytes(valid, testArena.arena);
         WriteLittleU32At(invalid, offset, u32.max);

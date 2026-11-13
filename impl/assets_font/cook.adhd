@@ -60,7 +60,7 @@ template<typename FileArenaT>
 [[nodiscard]] FOUNDATION_INLINE Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
     return ParseFontCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena);
 }
-[[nodiscard]] Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,15 +192,10 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
     return entry;
 }
 
-Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena){
+Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena){
     Font candidate(arena, entry.virtualPath);
-    if(&entry.fontBytes.get_allocator().arena() == &arena){
-        candidate.setFontBytes(Move(entry.fontBytes), entry.faceIndex);
-    }
-    else{
-        Core::Assets::AssetBytes bytes(entry.fontBytes.begin(), entry.fontBytes.end(), arena);
-        candidate.setFontBytes(Move(bytes), entry.faceIndex);
-    }
+    Vector<u8, ::ArenaBase> bytes(entry.fontBytes.begin(), entry.fontBytes.end(), arena);
+    candidate.setFontBytes(bytes, entry.faceIndex);
     if(!candidate.validatePayload())
         return MakeUnexpected(Failure{});
     return candidate;

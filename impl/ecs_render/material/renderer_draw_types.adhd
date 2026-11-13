@@ -198,6 +198,8 @@ public:
     [[nodiscard]] constexpr b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
 };
 
+using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
+
 struct MaterialPassDrawItemPartitions{
     MaterialPassDrawItems regular;
     MaterialPassDrawItems csg;

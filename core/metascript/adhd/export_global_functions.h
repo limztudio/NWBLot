@@ -27,6 +27,11 @@
 #define NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_FUNCTION_REF
+#define NWB_ADHD_EXPORT_FUNCTION_REF(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule)
+#define NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
 #define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL(adhdName)
 #define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL_AUTO_UNDEF
@@ -75,6 +80,16 @@
 #ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_REF(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_REF_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_BUILTIN_FIELD
@@ -607,8 +622,10 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("BuildTriangleAreaNormal64", "::BuildTriangleAreaN
 NWB_ADHD_EXPORT_FUNCTION_CALL("BytesMatch", "::BytesMatch", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("CanEnableDebugRuntime", "::CanEnableDebugRuntime", 0u, 0u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeBalancedPartitionRange", "::ComputeBalancedPartitionRange", 4u, 4u, FixedType, "BalancedPartitionRange", "", "", "", "<global/range_partition.h>", false, false, false, None, false, false, false, Integer, Integer, Integer, Integer, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeCompleteMipCount", "::TextureFormat::ComputeCompleteMipCount", 4u, 4u, FixedType, "Expected", "u32", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Integer, Integer, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeExpectedPayloadByteCount", "::TextureFormat::ComputeExpectedPayloadByteCount", 2u, 2u, FixedType, "Expected", "u64", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Integer, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeMipPlaneBlockLayout", "::TextureFormat::ComputeMipPlaneBlockLayout", 3u, 3u, FixedType, "Expected", "TextureMipPlaneBlockLayout", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Integer, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeMipSliceCount", "::TextureFormat::ComputeMipSliceCount", 2u, 2u, FixedType, "Expected", "u32", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeOnlineF64Statistics", "::ComputeOnlineF64Statistics", 1u, 1u, FixedType, "OnlineF64Statistics", "", "", "", "<global/statistics.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ComputeSha1Text", "::ComputeSha1Text", 1u, 1u, FixedType, "Sha1Digest", "", "", "", "<global/sha1.h>", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ConvertVectorDoubleToSingle", "::ConvertVectorDoubleToSingle", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, VectorDoubleArg, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -617,6 +634,7 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("CurrentAbiName", "::CurrentAbiName", 0u, 0u, Fixe
 NWB_ADHD_EXPORT_FUNCTION_CALL("DecodeUtf16SurrogatePair", "::DecodeUtf16SurrogatePair", 2u, 2u, FixedType, "u32", "", "", "", "", false, false, false, None, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("DecodeUtf8CodePoint", "::DecodeUtf8CodePoint", 1u, 1u, FixedType, "Expected", "DecodedUtf8CodePoint", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("DecodeUtf8Scalar", "::DecodeUtf8Scalar", 1u, 1u, FixedType, "Expected", "DecodedUtf8CodePoint", "", "", "", false, false, false, None, false, false, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("DimensionText", "::TextureFormat::DimensionText", 1u, 1u, FixedType, "StringView", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("ExtractLeadingIdentifier", "::ExtractLeadingIdentifier", 1u, 1u, FixedType, "StringView", "", "", "", "", false, false, false, None, false, true, false, TextView, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FindLineKeyValue", "::FindLineKeyValue", 2u, 2u, FixedType, "Expected", "StringView", "", "", "", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("FindLineKeyValueU64", "::FindLineKeyValueU64", 2u, 2u, FixedType, "Expected", "u64", "", "", "", false, false, false, None, false, false, false, TextView, TextView, Any, Any, Any, Any, Any, Any, Any)
@@ -665,7 +683,10 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("IsUtf8Continuation", "::IsUtf8Continuation", 1u, 
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaConstant", "::TextureFormat::IsValidTextureAlphaConstant", 2u, 2u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaMode", "::IsValidTextureAlphaMode", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureAlphaTransport", "::TextureFormat::IsValidTextureAlphaTransport", 2u, 2u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureDescriptor", "::TextureFormat::IsValidTextureDescriptor", 7u, 7u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Integer, Integer, Integer, Any, Integer, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureDimension", "::IsValidTextureDimension", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTexturePayloadFormat", "::IsValidTexturePayloadFormat", 1u, 1u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsValidTextureResolution", "::TextureFormat::IsValidTextureResolution", 4u, 4u, FixedType, "b8", "", "", "", "<global/texture_payload.h>", false, false, false, None, false, false, false, Any, Integer, Integer, Integer, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("IsZeroHash", "::IsZeroHash", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, NameHashValue, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("LessNameHash", "::LessNameHash", 2u, 2u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, false, NameHashValue, NameHashValue, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("LoadHalf", "::LoadHalf", 1u, 1u, FixedType, "VectorSingle", "", "", "", "", false, false, false, None, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
@@ -1758,6 +1779,7 @@ NWB_ADHD_EXPORT_MEMBER_METHOD("hash",                    false, false, false, fa
 NWB_ADHD_EXPORT_MEMBER_METHOD("empty",                   false, false, false, false, FixedType,              "b8")
 NWB_ADHD_EXPORT_MEMBER_METHOD("has_value",               false, false, false, false, FixedType,              "b8")
 NWB_ADHD_EXPORT_MEMBER_METHOD("valid",                   false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("deref",                   false, false, false, false, FirstTypeArg,           "")
 NWB_ADHD_EXPORT_MEMBER_METHOD("contains",                false, false, false, false, FixedType,              "b8")
 NWB_ADHD_EXPORT_MEMBER_METHOD("starts_with",             false, false, false, false, FixedType,              "b8")
 NWB_ADHD_EXPORT_MEMBER_METHOD("ends_with",               false, false, false, false, FixedType,              "b8")
@@ -2354,6 +2376,16 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_XYZW", "::VectorComponentMask::s_XYZW", "u32"
 #undef NWB_ADHD_EXPORT_BUILTIN_FIELD
 #endif
 
+#ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED
+#endif
+
+#ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF
+#endif
+
 #ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
@@ -2402,6 +2434,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_XYZW", "::VectorComponentMask::s_XYZW", "u32"
 #ifdef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC
+#endif
+
+#ifdef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_REF
 #endif
 
 #ifdef NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF

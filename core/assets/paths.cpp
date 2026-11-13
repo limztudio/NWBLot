@@ -44,20 +44,6 @@ Expected<ACompactString> ExtractAssetVirtualRoot(const AStringView virtualPath, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
-    const auto virtualPathText = AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, scratchArena, scratchArena);
-    if(!virtualPathText)
-        return MakeUnexpected(Failure{});
-
-    const auto virtualPath = Name::FromText(AStringView(*virtualPathText));
-    if(!virtualPath){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
-        return MakeUnexpected(Failure{});
-    }
-
-    return *virtualPath;
-}
-
 b8 HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
     const auto virtualRoot = AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)

@@ -290,7 +290,7 @@ using namespace Core::Metascript;
     const auto& matrixList = (*matrices)->asList();
     values.reserve(matrixList.size());
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
-        const auto matrix = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_SkinInverseBindMatricesField);
+        const auto matrix = ParseSkeletonJointMatrixValue(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_SkinInverseBindMatricesField);
         if(!matrix)
             return MakeUnexpected(Failure{});
 

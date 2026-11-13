@@ -174,6 +174,8 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
                 ok = false;
             }
         }
+        else if(IsNonCopyableBaseInterfaceName(baseName)){
+        }
         else{
             reportError(errors, iface.span, "unknown base interface name");
             ok = false;
@@ -362,7 +364,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         if(!m_symbols.findInterface(ifaceName)){
             const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceName);
-            const b8 isBuiltinInterface = builtinObj && builtinObj->isPolymorphicBase;
+            const b8 isBuiltinInterface = IsNonCopyableBaseInterfaceName(ifaceName) || (builtinObj && builtinObj->isPolymorphicBase);
             if(
                 (!isBuiltinInterface && !m_hasTopLevelNativeBlocks)
                 || m_symbols.findEnum(ifaceName)
@@ -484,7 +486,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     if(!ifaceType)
                         continue;
                     const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
-                    if(!m_symbols.findInterface(ifaceName)){
+                    if(!m_symbols.findInterface(ifaceName) && !IsNonCopyableBaseInterfaceName(ifaceName)){
                         matchesInterface = true;
                         break;
                     }

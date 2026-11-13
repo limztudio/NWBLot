@@ -22,9 +22,7 @@ native{
 #include <core/task/gpu/types.h>
 #include <impl/ecs_render/shared/frame_push_constants.adhd.h>
 namespace NWB::Impl{
-struct MaterialPassDrawItemsView;
 using ReadbackQueueToken = Core::QueueSubmissionToken;
-using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
 using AvboitGeometryResourceSetId = Core::GpuGraphResourceSetId;
 using AvboitGraphResourceId = Core::GpuGraphResourceId;
 using AvboitGraphTaskId = Core::GpuTaskId;

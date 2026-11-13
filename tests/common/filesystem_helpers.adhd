@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "gtest_macros.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const u32 s_DefaultDirectoryPollMilliseconds = 10u;
 const u32 s_MinimumDirectoryPollMilliseconds = 1u;
 
@@ -39,6 +45,24 @@ Expected<b8, ErrorCode> WaitForDirectory(in Path path, in u32 timeoutMillisecond
 
 Expected<b8, ErrorCode> WaitForDirectory(in Path path, in u32 timeoutMilliseconds){
     return WaitForDirectory(path, timeoutMilliseconds, s_DefaultDirectoryPollMilliseconds);
+}
+
+void ExpectPathExists(in Path path, in b8 expected){
+    const Expected<b8, ErrorCode> query = FileExists(path);
+    ASSERT_TRUE(query.has_value());
+    EXPECT_EQ(query.value(), expected);
+}
+
+void ExpectIsDirectory(in Path path, in b8 expected){
+    const Expected<b8, ErrorCode> query = IsDirectory(path);
+    ASSERT_TRUE(query.has_value());
+    EXPECT_EQ(query.value(), expected);
+}
+
+void ExpectIsRegularFile(in Path path, in b8 expected){
+    const Expected<b8, ErrorCode> query = IsRegularFile(path);
+    ASSERT_TRUE(query.has_value());
+    EXPECT_EQ(query.value(), expected);
 }
 
 

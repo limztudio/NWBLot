@@ -81,6 +81,7 @@ if(NWB_BUILD_TESTS)
 endif()
 
 nwb_finalize_string_literals()
+nwb_finalize_adhd_namespaces()
 
 message(STATUS "Configured NWBLot for ${CMAKE_SYSTEM_NAME} (${NWB_OUTPUT_ARCH}) with ${NWB_COMPILER_DESCRIPTION}")
 message(STATUS "Artifact output root: ${NWB_OUTPUT_ROOT}")

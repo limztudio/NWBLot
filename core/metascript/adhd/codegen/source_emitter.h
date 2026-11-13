@@ -35,6 +35,8 @@ public:
 public:
     [[nodiscard]] MString emitSource(const TranslationUnit& unit, MStringView headerIncludePath, MStringView namespacePath)const;
 
+    void setCurrentNamespace(const MStringView namespacePath)const noexcept{ m_typeEmitter.setCurrentNamespace(namespacePath); }
+
     void setActiveOwnerClassContext(const ClassDecl* ownerClass, const b8 ownerNeedsArena)const noexcept{
         m_activeOwnerClass = ownerClass;
         m_activeOwnerNeedsArena = ownerNeedsArena;

@@ -184,8 +184,10 @@ public:
 public:
     // Optional initial-state handoff; its producer must execute first.
     void open(const CommandListResourceStateHandoff* initialStates = nullptr);
+    void open(const CommandListResourceStateHandoff& initialStates){ open(&initialStates); }
     // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
+    void close(CommandListResourceStateHandoff& finalStates){ close(&finalStates); }
     // False when no submit-ready command buffer is owned.
     [[nodiscard]] b8 hasCommandBuffer()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
@@ -225,16 +227,43 @@ public:
     void commitBarriers();
 
     void setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false);
+    void setTextureState(Texture& textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false){
+        setTextureState(&textureResource, subresources, stateBits, forceMemoryDependency);
+    }
     void setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false, BufferRange range = s_EntireBuffer);
+    void setBufferState(Buffer& bufferResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false, BufferRange range = s_EntireBuffer){
+        setBufferState(&bufferResource, stateBits, forceMemoryDependency, range);
+    }
     void setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false);
+    void setAccelStructState(RayTracingAccelStruct& accelStructResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false){
+        setAccelStructState(&accelStructResource, stateBits, forceMemoryDependency);
+    }
     // Exports an exclusive resource to an ordered physical consumer queue.
     void releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
+    void releaseTextureOwnership(Texture& textureResource, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue){
+        releaseTextureOwnership(&textureResource, subresources, destinationQueue);
+    }
     void releaseBufferOwnership(Buffer* bufferResource, CommandQueue::Enum destinationQueue, BufferRange range = s_EntireBuffer);
+    void releaseBufferOwnership(Buffer& bufferResource, CommandQueue::Enum destinationQueue, BufferRange range = s_EntireBuffer){
+        releaseBufferOwnership(&bufferResource, destinationQueue, range);
+    }
     void releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
+    void releaseTextureOwnership(Texture& textureResource, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue){
+        releaseTextureOwnership(&textureResource, subresources, destinationQueue);
+    }
     void releaseBufferOwnership(Buffer* bufferResource, GpuPhysicalQueueId destinationQueue, BufferRange range = s_EntireBuffer);
+    void releaseBufferOwnership(Buffer& bufferResource, GpuPhysicalQueueId destinationQueue, BufferRange range = s_EntireBuffer){
+        releaseBufferOwnership(&bufferResource, destinationQueue, range);
+    }
 
     void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
+    void setPermanentTextureState(Texture& texture, ResourceStates::Mask stateBits){
+        setPermanentTextureState(&texture, stateBits);
+    }
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
+    void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask stateBits){
+        setPermanentBufferState(&buffer, stateBits);
+    }
 
     void clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor);
     void clearTextureRectFloat(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
@@ -274,13 +303,41 @@ public:
     void copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice);
     // Fallible variants let graph recorders reject a packet instead of claiming a lifecycle when staging or preflight fails.
     [[nodiscard]] b8 tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
+    template<GpuPodValue T>
+    [[nodiscard]] b8 tryWriteBuffer(Buffer& buffer, const T& data, u64 destOffsetBytes = 0){
+        return tryWriteBuffer(buffer, &data, sizeof(T), destOffsetBytes);
+    }
+    template<GpuContiguousPodContainer Container>
+    [[nodiscard]] b8 tryWriteBuffer(Buffer& buffer, const Container& data, u64 destOffsetBytes = 0){
+        return tryWriteBuffer(buffer, data.data(), ContiguousContainerByteSize(data), destOffsetBytes);
+    }
     void writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
+    template<GpuPodValue T>
+    void writeBuffer(Buffer& buffer, const T& data, u64 destOffsetBytes = 0){
+        writeBuffer(buffer, &data, sizeof(T), destOffsetBytes);
+    }
+    template<GpuContiguousPodContainer Container>
+    void writeBuffer(Buffer& buffer, const Container& data, u64 destOffsetBytes = 0){
+        writeBuffer(buffer, data.data(), ContiguousContainerByteSize(data), destOffsetBytes);
+    }
     void clearBufferUInt(Buffer& buffer, u32 clearValue);
     void copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes);
     [[nodiscard]] b8 tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic);
+    template<GpuContiguousPodContainer Container>
+    [[nodiscard]] b8 tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const Container& data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic){
+        return tryWriteTexture(dest, arraySlice, mipLevel, data.data(), rowPitch, depthPitch, aspect);
+    }
     void resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources);
 
     void setPushConstants(const void* data, usize byteSize);
+    template<GpuPodValue T>
+    void setPushConstants(const T& data){
+        setPushConstants(&data, sizeof(T));
+    }
+    template<GpuContiguousPodContainer Container>
+    void setPushConstants(const Container& data){
+        setPushConstants(data.data(), ContiguousContainerByteSize(data));
+    }
 
     void setGraphicsState(const GraphicsState& state);
     void draw(const DrawArguments& args);
@@ -298,9 +355,35 @@ public:
     void setRayTracingState(const RayTracingState& state);
     void dispatchRays(const RayTracingDispatchRaysArguments& args);
     void buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* geometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
+    void buildBottomLevelAccelStruct(RayTracingAccelStruct& accelStructResource, const RayTracingGeometryDesc* geometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildBottomLevelAccelStruct(&accelStructResource, geometries, numGeometries, buildFlags);
+    }
+    void buildBottomLevelAccelStruct(RayTracingAccelStruct& accelStructResource, const RayTracingGeometryDesc& geometry, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildBottomLevelAccelStruct(&accelStructResource, &geometry, 1u, buildFlags);
+    }
+    template<GpuContiguousTypedContainer<RayTracingGeometryDesc> Container>
+    void buildBottomLevelAccelStruct(RayTracingAccelStruct& accelStructResource, const Container& geometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildBottomLevelAccelStruct(&accelStructResource, geometries.data(), geometries.size(), buildFlags);
+    }
     void buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* instances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
+    void buildTopLevelAccelStruct(RayTracingAccelStruct& accelStructResource, const RayTracingInstanceDesc* instances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildTopLevelAccelStruct(&accelStructResource, instances, numInstances, buildFlags);
+    }
+    void buildTopLevelAccelStruct(RayTracingAccelStruct& accelStructResource, const RayTracingInstanceDesc& instance, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildTopLevelAccelStruct(&accelStructResource, &instance, 1u, buildFlags);
+    }
+    template<GpuContiguousTypedContainer<RayTracingInstanceDesc> Container>
+    void buildTopLevelAccelStruct(RayTracingAccelStruct& accelStructResource, const Container& instances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildTopLevelAccelStruct(&accelStructResource, instances.data(), instances.size(), buildFlags);
+    }
     void buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc);
+    void buildOpacityMicromap(RayTracingOpacityMicromap& opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
+        buildOpacityMicromap(&opacityMicromapResource, ommDesc);
+    }
     void buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* accelStructResource, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
+    void buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct& accelStructResource, Buffer& instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None){
+        buildTopLevelAccelStructFromBuffer(&accelStructResource, &instanceBuffer, instanceBufferOffset, numInstances, buildFlags);
+    }
     void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc);
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
@@ -324,16 +407,49 @@ public:
 #endif
 
     void setEnableUavBarriersForTexture(Texture* texture, b8 enableBarriers);
+    void setEnableUavBarriersForTexture(Texture& texture, b8 enableBarriers){
+        setEnableUavBarriersForTexture(&texture, enableBarriers);
+    }
     void setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarriers);
+    void setEnableUavBarriersForBuffer(Buffer& buffer, b8 enableBarriers){
+        setEnableUavBarriersForBuffer(&buffer, enableBarriers);
+    }
     void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
+    void beginTrackingTextureState(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+        beginTrackingTextureState(&texture, subresources, stateBits);
+    }
     void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
+    void beginTrackingBufferState(Buffer& buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer){
+        beginTrackingBufferState(&buffer, stateBits, range);
+    }
     void seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
+    void seedBufferState(Buffer& buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer){
+        seedBufferState(&buffer, stateBits, range);
+    }
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)noexcept;
+    ResourceStates::Mask getTextureSubresourceState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)noexcept{
+        return getTextureSubresourceState(&texture, arraySlice, mipLevel);
+    }
     ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
+    ResourceStates::Mask getBufferState(Buffer& buffer, BufferRange range = s_EntireBuffer)noexcept{
+        return getBufferState(&buffer, range);
+    }
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture& texture)const noexcept{
+        return getPermanentTextureState(&texture);
+    }
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer& buffer)const noexcept{
+        return getPermanentBufferState(&buffer);
+    }
     [[nodiscard]] b8 hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] b8 hasExplicitTextureSubresourceState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept{
+        return hasExplicitTextureSubresourceState(&texture, arraySlice, mipLevel);
+    }
     [[nodiscard]] b8 hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, b8 requireKnown = false)const noexcept;
+    [[nodiscard]] b8 hasExplicitBufferState(Buffer& buffer, BufferRange range = s_EntireBuffer, b8 requireKnown = false)const noexcept{
+        return hasExplicitBufferState(&buffer, range, requireKnown);
+    }
 
     Device& getDevice()noexcept{ return m_device; }
 

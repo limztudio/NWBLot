@@ -111,8 +111,21 @@ public:
     [[nodiscard]] MStringView asReference()const noexcept;
     [[nodiscard]] const ListType& asList()const noexcept;
     [[nodiscard]] ListType& asList()noexcept;
+    [[nodiscard]] Span<const Value> listView()const noexcept{
+        return isList() ? Span<const Value>(asList().data(), asList().size()) : Span<const Value>{};
+    }
     [[nodiscard]] const MapType& asMap()const noexcept;
     [[nodiscard]] MapType& asMap()noexcept;
+    template<typename Visitor>
+    b8 forEachMapEntry(Visitor&& visitor)const{
+        if(!isMap())
+            return false;
+        for(const auto& [key, entry] : asMap()){
+            if(!InvokeBoolVisitor(visitor, MStringView(key), entry))
+                return false;
+        }
+        return true;
+    }
 
     void setInteger(i64 val)noexcept;
     void setDouble(f64 val)noexcept;
@@ -123,6 +136,25 @@ public:
 
     Value& field(MStringView name);
     [[nodiscard]] const Value* findField(MStringView name)const noexcept;
+    [[nodiscard]] b8 hasField(MStringView name)const noexcept{ return findField(name) != nullptr; }
+    template<typename Visitor>
+    b8 visitField(MStringView name, Visitor&& visitor)const{
+        return VisitOptionalValue(findField(name), visitor);
+    }
+
+    template<typename Visitor, typename... Args>
+    static b8 InvokeBoolVisitor(Visitor&& visitor, Args&&... args){
+        if constexpr(IsSame_V<decltype(visitor(args...)), b8>)
+            return visitor(args...);
+        else{
+            visitor(args...);
+            return true;
+        }
+    }
+    template<typename TargetT, typename Visitor>
+    static b8 VisitOptionalValue(const TargetT* value, Visitor&& visitor){
+        return value ? InvokeBoolVisitor(visitor, *value) : false;
+    }
 
     void append(Value&& val);
 

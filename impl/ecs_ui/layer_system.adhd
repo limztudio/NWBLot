@@ -56,7 +56,6 @@ using UiPoint = Ui::Point;
 using UiInputEvent = Ui::InputEvent;
 using UiPointerInput = Ui::PointerInput;
 using UiGpuCommandRecordingMode = Ui::GpuCommandRecordingMode::Enum;
-using BoolPtr = b8*;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -152,9 +151,9 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private void collectRoots();
     private void synchronizeInput();
     private void routeInput(in UiInputEvent event);
-    private void routeInput(in UiInputEvent event, in BoolPtr blockText);
+    private void routeInput(in UiInputEvent event, mut b8 outBlockText);
     private void routePointerInput(in UiPointerInput input);
-    private void routePointerInput(in UiPointerInput input, in BoolPtr consumed);
+    private void routePointerInput(in UiPointerInput input, mut b8 outConsumed);
     private void synchronizeNativeInput();
     private void abandonPendingFrame();
     private void abandonPendingFrame(in b8 resetUi);
@@ -495,7 +494,10 @@ Core::Assets::AssetRef<UiSkin> UiLayerSystem::resolveSkin(const Core::Assets::As
         event.alt = (mods & Core::InputModifier::Alt) != 0;
         event.super = (mods & Core::InputModifier::Super) != 0;
         event.repeat = !isRelease && (action == Core::InputAction::Repeat || held);
-        routeInput(event, isRelease ? nullptr : &m_blockCommandChars);
+        if(isRelease)
+            routeInput(event);
+        else
+            routeInput(event, m_blockCommandChars);
     }
     const b8 routerClaimsKey = m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key);
     b8 consumed = false;
@@ -532,7 +534,7 @@ b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
     }
     event.phase = Ui::PointerPhase::Move;
     b8 consumed = false;
-    routePointerInput(event, &consumed);
+    routePointerInput(event, consumed);
     return consumed || (m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Custom);
 }
 
@@ -605,7 +607,7 @@ b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset)noexcep
     event.scrollY = yoffset;
     event.hoverCapable = true;
     b8 consumed = false;
-    routePointerInput(event, &consumed);
+    routePointerInput(event, consumed);
     return consumed || m_pointerOwner == UiInputOwner::Custom;
 }
 
@@ -650,12 +652,12 @@ b8 UiLayerSystem::wantsPointer()const noexcept{
 }
 
 void UiLayerSystem::routeInput(const Ui::InputEvent& event)noexcept{
-    routeInput(event, nullptr);
+    b8 unusedBlockText = false;
+    routeInput(event, unusedBlockText);
 }
 
-void UiLayerSystem::routeInput(const Ui::InputEvent& event, const BoolPtr& blockText)noexcept{
-    if(blockText)
-        *blockText = false;
+void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8& outBlockText)noexcept{
+    outBlockText = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queue(event);
@@ -667,20 +669,18 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, const BoolPtr& block
     const b8 submit = m_editHost.prepareSubmit(*normalized);
     const Ui::InputRoutingResult result = m_context.input().process();
     m_editHost.input(*normalized, previousCapture, submit);
-    if(blockText){
-        // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
-        *blockText = ShouldBlockRoutedCommandText(normalized->type == Ui::InputEventType::CommandDown, normalized->command != Ui::InputCommand::None, normalized->allowText);
-    }
+    // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
+    outBlockText = ShouldBlockRoutedCommandText(normalized->type == Ui::InputEventType::CommandDown, normalized->command != Ui::InputCommand::None, normalized->allowText);
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
 
 void UiLayerSystem::routePointerInput(const Ui::PointerInput& input)noexcept{
-    routePointerInput(input, nullptr);
+    b8 unusedConsumed = false;
+    routePointerInput(input, unusedConsumed);
 }
 
-void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, const BoolPtr& consumed)noexcept{
-    if(consumed)
-        *consumed = false;
+void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8& outConsumed)noexcept{
+    outConsumed = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queuePointer(input);
@@ -693,8 +693,7 @@ void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, const BoolP
     if(result.pointerRouted)
         m_editHost.input(*normalized, previousCapture, false);
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
-    if(consumed)
-        *consumed = result.pointerConsumed;
+    outConsumed = result.pointerConsumed;
 }
 
 void UiLayerSystem::synchronizeNativeInput()noexcept{

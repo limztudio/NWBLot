@@ -178,7 +178,20 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, AStringView virtualRoot, const Path& sourceOrMetaPath, Alloc::ScratchArena& scratchArena);
+template<typename RootArenaT, typename SourceArenaT>
+[[nodiscard]] inline Expected<Name> BuildDerivedAssetVirtualPath(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
+    const auto virtualPathText = AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, scratchArena, scratchArena);
+    if(!virtualPathText)
+        return MakeUnexpected(Failure{});
+
+    const auto virtualPath = Name::FromText(AStringView(*virtualPathText));
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
+        return MakeUnexpected(Failure{});
+    }
+
+    return *virtualPath;
+}
 [[nodiscard]] b8 HasReservedAssetVirtualRoot(AStringView virtualPath, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<Path> ResolveVirtualAssetPath(Span<const ResolvedAssetRoot> assetRoots, AStringView virtualPath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena);

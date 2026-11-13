@@ -1,0 +1,351 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font_atlas/model.adhd>
+#include <impl/assets_font_atlas/binary_glyph_reader.adhd>
+#include <impl/assets_font_atlas/positioning_validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_FontAtlasValidatePayloadContext = "FontAtlas::validatePayload";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeFontAtlasInitialBinaryBytes(in u32 headerBytes, in u32 glyphBytes, in usize glyphCount){
+    return cast<usize>(headerBytes) + glyphCount * cast<usize>(glyphBytes);
+}
+
+usize AccumulateFontAtlasChunkBytes(in usize currentBytes, in u32 chunkHeaderBytes, in usize chunkPayloadBytes){
+    return currentBytes + cast<usize>(chunkHeaderBytes) + chunkPayloadBytes;
+}
+
+b8 HasConsumedExactFontAtlasBinaryPayload(in usize cursor, in usize totalBytes){
+    return cursor == totalBytes;
+}
+
+void LogFontAtlasBinaryDeserializeFailed(){
+    error("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content");
+}
+
+b8 ValidateFontAtlasIdentityAndFace(in b8 hasFont, in b8 hasNonZeroDigest, in u32 faceIndex){
+    if(hasFont && hasNonZeroDigest && faceIndex == 0u)
+        return true;
+
+    error("FontAtlas validation failed: missing font identity/hash or unsupported face");
+    return false;
+}
+
+b8 ValidateFontAtlasPositioningTableCount(in usize count, in usize maxCount){
+    if(count <= maxCount)
+        return true;
+
+    error("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF");
+    return false;
+}
+
+b8 ValidateFontAtlasExportedPositioningTableMatch(in b8 matched){
+    if(matched)
+        return true;
+
+    error("FontAtlas source match failed: original positioning tables differ or are missing");
+    return false;
+}
+
+b8 ValidateFontAtlasMatchedPositioningTableCount(in usize matched, in usize exportedCount){
+    if(matched == exportedCount)
+        return true;
+
+    error("FontAtlas source match failed: atlas contains a positioning table absent from the font");
+    return false;
+}
+
+Sha256Digest ComputePositioningTableSha256(in Span<u8> tableBytes){
+    return ComputeSha256(tableBytes);
+}
+
+b8 ReadFontAtlasSha256Digest(in Span<u8> bytes, mut usize cursor, mut Sha256Digest outDigest){
+    const usize digestBytes = cast<usize>(s_Sha256DigestByteCount);
+    if(!CanReadBytes(bytes, cursor, digestBytes))
+        return false;
+    for(usize index = 0u; index < digestBytes; ++index){
+        outDigest.bytes[index] = bytes[cursor];
+        ++cursor;
+    }
+    return true;
+}
+
+b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
+    for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
+        in FontAtlasGroup group = payload.groups[groupIndex];
+        if(!ValidateFontAtlasGroupGuardedOverlap(
+            payload.glyphs,
+            cast<u32>(groupIndex),
+            group.width,
+            group.height,
+            group.channelCount,
+            payload.guardTexels
+        ))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateFontAtlasPayload(in FontAtlasPayload payload, mut ScratchArena scratchArena){
+    if(!ValidateFontAtlasIdentityAndFace(payload.font.valid(), IsFontAtlasDigestNonZero(payload.fontSha256.bytes), payload.faceIndex))
+        return false;
+    if(!ValidateFontAtlasHeaderParameters(
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        payload.glyphs.size(),
+        payload.bakePpem,
+        payload.spreadPixels,
+        payload.guardTexels,
+        payload.rasterMode,
+        payload.ascenderUnits,
+        payload.descenderUnits,
+        payload.lineGapUnits,
+        payload.groups.size()
+    ))
+        return false;
+    u64 pixelBytes = 0u;
+    for(in FontAtlasGroup group : payload.groups){
+        if(!ValidateFontAtlasGroupPixelChunk(
+            group.width,
+            group.height,
+            group.channelCount,
+            group.pixels,
+            group.sha256.bytes,
+            pixelBytes
+        ))
+            return false;
+    }
+    const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
+    for(usize index = 0u; index < payload.glyphs.size(); ++index){
+        in FontAtlasGlyph glyph = payload.glyphs[index];
+        if(!ValidateFontAtlasGlyphRecord(glyph, index, payload.groups.size(), unitsPerPixel))
+            return false;
+        if(glyph.drawable == 0u)
+            continue;
+        in FontAtlasGroup group = payload.groups[glyph.group];
+        if(!ValidateFontAtlasGlyphGroupRect(glyph, index, group.width, group.height, group.channelCount, payload.guardTexels))
+            return false;
+    }
+    if(!CheckFontAtlasGuardedOverlap(payload))
+        return false;
+    if(!ValidateFontAtlasPositioningTableCount(payload.positioningTables.size(), cast<usize>(s_FontAtlasMaxPositioningTableCount)))
+        return false;
+    u64 positioningBytes = 0u;
+    u32 previousTag = 0u;
+    for(in FontAtlasPositioningTable table : payload.positioningTables){
+        if(!ValidateFontAtlasPositioningTableEntry(
+            table.tag,
+            table.bytes,
+            table.sha256.bytes,
+            payload.sourceGlyphCount,
+            previousTag,
+            positioningBytes
+        ))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
+    FontSfntDirectory directory = FontSfntDirectory();
+    if(!ValidateFontAtlasSourceHeaderAndMetrics(
+        payload.font.name(),
+        font.virtualPath(),
+        payload.faceIndex,
+        font.faceIndex(),
+        font.fontBytes(),
+        payload.fontSha256.bytes,
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        directory
+    ))
+        return false;
+    usize matched = 0u;
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const Expected<FontSfntTable> sourceTable = directory.table(cast<usize>(index));
+        if(!sourceTable.has_value())
+            return false;
+        const FontSfntTable tableEntry = sourceTable.value();
+        const u32 tag = tableEntry.tag;
+        if(!IsFontAtlasPositioningTableTag(tag) || tableEntry.bytes.empty())
+            continue;
+        b8 matchedTable = false;
+        for(in FontAtlasPositioningTable exported : payload.positioningTables){
+            if(exported.tag == tag){
+                matchedTable = AreFontAtlasByteSpansEqual(exported.bytes, tableEntry.bytes);
+                break;
+            }
+        }
+        if(!ValidateFontAtlasExportedPositioningTableMatch(matchedTable))
+            return false;
+        ++matched;
+    }
+    return ValidateFontAtlasMatchedPositioningTableCount(matched, payload.positioningTables.size());
+}
+
+Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Span<u8> fontBytes, in u32 faceIndex, in u32 sourceGlyphCount){
+    if(faceIndex != 0u)
+        return MakeUnexpected(Failure());
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
+    if(!directory.has_value())
+        return MakeUnexpected(Failure());
+    Array<u32, s_FontAtlasMaxPositioningTableCount> tags;
+    tags[0u] = s_FontAtlasGdefTag;
+    tags[1u] = s_FontAtlasGposTag;
+    tags[2u] = s_FontAtlasKernTag;
+    Vector<FontAtlasPositioningTable> tables = Vector<FontAtlasPositioningTable>();
+    tables.reserve(cast<usize>(s_FontAtlasMaxPositioningTableCount));
+    u64 totalBytes = 0u;
+    for(in u32 tag : tags){
+        const Expected<Span<u8>> sourceBytesResult = FindFontAtlasSourcePositioningTableBytes(directory.value(), tag, sourceGlyphCount, totalBytes);
+        if(!sourceBytesResult.has_value())
+            return MakeUnexpected(Failure());
+        const Span<u8> sourceBytes = sourceBytesResult.value();
+        if(sourceBytes.empty())
+            continue;
+        tables.emplace_back();
+        mut FontAtlasPositioningTable table = tables.back();
+        table.tag = tag;
+        table.bytes.reserve(sourceBytes.size());
+        for(in u8 b : sourceBytes)
+            table.bytes.push_back(b);
+        table.sha256 = ComputePositioningTableSha256(table.bytes);
+    }
+    return tables;
+}
+
+b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPayload, mut ScratchArena scratchArena){
+    usize cursor = 0u;
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords;
+    if(!TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor, identityQwords))
+        return false;
+    NameHash identity = NameHash();
+    for(usize lane = 0u; lane < cast<usize>(s_NameHashLaneCount); ++lane)
+        identity.qwords[lane] = identityQwords[lane];
+    outPayload.font.virtualPath = Name(identity);
+    if(!ReadFontAtlasSha256Digest(bytes, cursor, outPayload.fontSha256))
+        return false;
+    const Expected<FontAtlasBinaryDecodedHeader> headerResult = TryReadFontAtlasBinaryHeaderTail(bytes, cursor);
+    if(!headerResult.has_value())
+        return false;
+    const FontAtlasBinaryDecodedHeader header = headerResult.value();
+    outPayload.faceIndex = header.faceIndex;
+    outPayload.unitsPerEm = header.unitsPerEm;
+    outPayload.sourceGlyphCount = header.sourceGlyphCount;
+    outPayload.bakePpem = header.bakePpem;
+    outPayload.spreadPixels = header.spreadPixels;
+    outPayload.guardTexels = header.guardTexels;
+    outPayload.ascenderUnits = header.ascenderUnits;
+    outPayload.descenderUnits = header.descenderUnits;
+    outPayload.lineGapUnits = header.lineGapUnits;
+    outPayload.rasterMode = header.rasterMode;
+    if(!TryReadFontAtlasGlyphs(bytes, header.glyphCount, cursor, outPayload.glyphs))
+        return false;
+    outPayload.groups.clear();
+    outPayload.groups.reserve(cast<usize>(header.groupCount));
+    u64 pixelBytes = 0u;
+    for(u32 index = 0u; index < header.groupCount; ++index){
+        outPayload.groups.emplace_back();
+        mut FontAtlasGroup group = outPayload.groups.back();
+        u32 byteCount = 0u;
+        if(!TryReadFontAtlasGroupHeader(bytes, cursor, group.width, group.height, group.channelCount, byteCount))
+            return false;
+        if(!ReadFontAtlasSha256Digest(bytes, cursor, group.sha256))
+            return false;
+        if(!ValidateFontAtlasBinaryGroupChunk(group.width, group.height, group.channelCount, byteCount, pixelBytes, cursor, bytes.size()))
+            return false;
+        if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, group.pixels))
+            return false;
+        pixelBytes += cast<u64>(byteCount);
+    }
+    outPayload.positioningTables.clear();
+    outPayload.positioningTables.reserve(cast<usize>(header.tableCount));
+    u64 tableBytes = 0u;
+    for(u32 index = 0u; index < header.tableCount; ++index){
+        outPayload.positioningTables.emplace_back();
+        mut FontAtlasPositioningTable table = outPayload.positioningTables.back();
+        u32 byteCount = 0u;
+        if(!TryReadFontAtlasTableHeader(bytes, cursor, table.tag, byteCount))
+            return false;
+        if(!ReadFontAtlasSha256Digest(bytes, cursor, table.sha256))
+            return false;
+        if(!ValidateFontAtlasBinaryTableChunk(byteCount, tableBytes, cursor, bytes.size()))
+            return false;
+        if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, table.bytes))
+            return false;
+        tableBytes += cast<u64>(byteCount);
+    }
+    return HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) && ValidateFontAtlasPayload(outPayload, scratchArena);
+}
+
+b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
+    ScratchArena scratchArena(s_AssetsFontAtlasSerializeArena);
+    if(!ValidateFontAtlasPayload(payload, scratchArena))
+        return false;
+    usize size = ComputeFontAtlasInitialBinaryBytes(s_FontAtlasBinaryHeaderBytes, s_FontAtlasBinaryGlyphBytes, payload.glyphs.size());
+    for(in FontAtlasGroup group : payload.groups)
+        size = AccumulateFontAtlasChunkBytes(size, s_FontAtlasBinaryGroupHeaderBytes, group.pixels.size());
+    for(in FontAtlasPositioningTable table : payload.positioningTables)
+        size = AccumulateFontAtlasChunkBytes(size, s_FontAtlasBinaryTableHeaderBytes, table.bytes.size());
+    outBinary.clear();
+    outBinary.reserve(size);
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords;
+    const NameHash identity = payload.font.name().hash();
+    for(usize lane = 0u; lane < cast<usize>(s_NameHashLaneCount); ++lane)
+        identityQwords[lane] = identity.qwords[lane];
+    AppendFontAtlasBinaryPreambleAndIdentity(identityQwords, outBinary);
+    for(usize index = 0u; index < cast<usize>(s_Sha256DigestByteCount); ++index)
+        outBinary.push_back(payload.fontSha256.bytes[index]);
+    AppendFontAtlasBinaryHeaderTail(
+        payload.faceIndex,
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        payload.bakePpem,
+        payload.spreadPixels,
+        payload.guardTexels,
+        payload.rasterMode,
+        payload.ascenderUnits,
+        payload.descenderUnits,
+        payload.lineGapUnits,
+        cast<u32>(payload.glyphs.size()),
+        cast<u32>(payload.groups.size()),
+        cast<u32>(payload.positioningTables.size()),
+        outBinary
+    );
+    AppendFontAtlasGlyphsBinary(payload.glyphs, outBinary);
+    for(in FontAtlasGroup group : payload.groups)
+        AppendFontAtlasGroupChunk(group.width, group.height, group.channelCount, group.sha256.bytes, group.pixels, outBinary);
+    for(in FontAtlasPositioningTable table : payload.positioningTables)
+        AppendFontAtlasTableChunk(table.tag, table.sha256.bytes, table.bytes, outBinary);
+    return true;
+}
+
+Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){
+    Vector<u8> binary = Vector<u8>();
+    if(!SerializeFontAtlasPayloadInto(payload, binary))
+        return MakeUnexpected(Failure());
+    return binary;
+}
+
+Expected<FontAtlasPayload> DeserializeFontAtlasPayload(in Span<u8> binary){
+    ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
+    FontAtlasPayload payload = FontAtlasPayload();
+    if(!DeserializeFontAtlasBinaryInto(binary, payload, scratchArena)){
+        LogFontAtlasBinaryDeserializeFailed();
+        return MakeUnexpected(Failure());
+    }
+    return payload;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

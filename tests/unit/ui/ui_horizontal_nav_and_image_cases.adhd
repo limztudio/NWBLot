@@ -325,7 +325,7 @@ public:
     }
 
     [[nodiscard]] b8 sawError(const StringView substring)const{
-        return m_logger.sawErrorContaining(substring);
+        return m_logger.sawErrorContainingUtf8(substring);
     }
 
     [[nodiscard]] b8 payloadDisjointFromSource(const SharedImageSource& image)const noexcept{

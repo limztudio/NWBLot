@@ -101,6 +101,7 @@ struct Stmt{
     MVector<MStringView> parallelDependencies;
     MVector<NativeBinding> nativeBindings;
     MStringView nativeCode;
+    MStringView cppNamespace;
 
     ParallelCoreKind::Enum parallelCore = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum parallelPriority = ParallelPriorityKind::Normal;

@@ -78,6 +78,7 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
         m_app.add_option(s_PipelineIncludeDirOption.data(), m_includeDirectories, "Include search directories");
         m_app.add_option(s_PipelineDepfileOption.data(), m_depfilePath, "Output Makefile-style dependency file");
         m_app.add_option(s_PipelineNamespaceOption.data(), m_customNamespace, "Generated C++ enclosing namespace");
+        m_app.add_option(s_PipelineNamespaceMapOption.data(), m_namespaceMapPath, "Optional tab-delimited map of source paths to C++ namespaces");
     }
 }
 
@@ -98,6 +99,7 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         || !__hidden_pipeline_command_line::AssignText(m_outputPath, options.outputPath)
         || !__hidden_pipeline_command_line::AssignText(m_depfilePath, options.depfilePath)
         || !__hidden_pipeline_command_line::AssignText(m_customNamespace, options.customNamespace)
+        || !__hidden_pipeline_command_line::AssignText(m_namespaceMapPath, options.namespaceMapPath)
     )
         return MakeUnexpected(Failure{});
     if(options.outputPath.empty()){

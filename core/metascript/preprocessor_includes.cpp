@@ -35,6 +35,21 @@ b8 PreprocessorIncludes::containsOffset(const usize offset)const noexcept{
     return false;
 }
 
+MStringView PreprocessorIncludes::includedFileAtOffset(const usize offset)const noexcept{
+    for(const IncludedByteRange& range : m_includedByteRanges){
+        if(offset >= range.startOffset && offset < range.endOffset && range.resolvedFileIndex < m_resolvedIncludedFiles.size())
+            return MStringView(m_resolvedIncludedFiles[range.resolvedFileIndex].data(), m_resolvedIncludedFiles[range.resolvedFileIndex].size());
+    }
+    return {};
+}
+
+MStringView PreprocessorIncludes::resolveNamespaceAtOffset(const usize offset)const noexcept{
+    const MStringView fileKey = includedFileAtOffset(offset);
+    if(fileKey.empty() || !m_includeResolver)
+        return {};
+    return m_includeResolver->resolveIncludeNamespace(fileKey);
+}
+
 
 b8 PreprocessorIncludes::process(Preprocessor& owner, const MStringView rest, const u32 line, const u32 depth, const MStringView currentFileKey, MString& outProcessed){
     if(rest.size() < 3u){
@@ -102,6 +117,7 @@ b8 PreprocessorIncludes::process(Preprocessor& owner, const MStringView rest, co
     }
 
     m_includedSet.emplace(MString(resolvedKey.data(), resolvedKey.size(), m_arena), true);
+    const usize fileIndex = m_resolvedIncludedFiles.size();
     m_resolvedIncludedFiles.push_back(MString(resolvedKey.data(), resolvedKey.size(), m_arena));
 
     const usize startOffset = outProcessed.size();
@@ -111,8 +127,7 @@ b8 PreprocessorIncludes::process(Preprocessor& owner, const MStringView rest, co
     m_includeResolver->popIncludeScope();
     if(!ok)
         return false;
-    if(depth == 0u)
-        m_includedByteRanges.push_back(IncludedByteRange{startOffset, outProcessed.size()});
+    m_includedByteRanges.push_back(IncludedByteRange{startOffset, outProcessed.size(), fileIndex});
     return true;
 }
 

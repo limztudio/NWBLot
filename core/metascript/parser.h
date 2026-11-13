@@ -76,6 +76,11 @@ public:
 
     [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
     [[nodiscard]] Value* findVariable(MStringView name)noexcept;
+    [[nodiscard]] b8 hasVariable(MStringView name)const noexcept{ return findVariable(name) != nullptr; }
+    template<typename Visitor>
+    b8 visitVariable(MStringView name, Visitor&& visitor)const{
+        return Value::VisitOptionalValue(findVariable(name), visitor);
+    }
     [[nodiscard]] const Declaration* findDeclaration(MStringView name)const noexcept;
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
     [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }

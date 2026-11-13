@@ -36,6 +36,16 @@ public:
 
 
 public:
+    void setCurrentNamespace(MStringView namespacePath)const noexcept{ m_currentNamespace = namespacePath; }
+    [[nodiscard]] const SymbolTable& symbols()const noexcept{ return m_symbols; }
+    [[nodiscard]] MStringView resolveCrossNamespace(MStringView declNamespace)const noexcept{
+        if(declNamespace.empty() || declNamespace == m_currentNamespace)
+            return {};
+        return declNamespace;
+    }
+    void appendQualifiedName(MString& out, MStringView declNamespace, MStringView symbolName)const;
+    void emitConstantTextCpp(MString& out, MStringView text)const;
+    void emitTypeArgCpp(MString& out, const TypeArg& arg)const;
     void emitTypeCpp(MString& out, const TypeRef& type)const;
     void emitReturnTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, MStringView arenaExpr)const;
@@ -50,6 +60,7 @@ public:
 
 private:
     const SymbolTable& m_symbols;
+    mutable MStringView m_currentNamespace;
 };
 
 

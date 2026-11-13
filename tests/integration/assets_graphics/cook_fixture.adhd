@@ -2640,7 +2640,7 @@ b8 EmitAvboitExtinctionShaders(in GraphicsTestPath cacheDirectory, in StringView
 }
 
 b8 ParseTestSamplerCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document, mut TestArena testArena, mut ScratchArena scratchArena){
-    return ParseSamplerCookMetadata(assetRoot, virtualRoot, metadataPath, document, testArena.arena, scratchArena).has_value();
+    return ParseSamplerCookMetadata(assetRoot, virtualRoot, metadataPath, document, scratchArena).has_value();
 }
 
 b8 AccumulateInheritedShaderDefineReserve(in usize incomingCount, mut usize reserveCount){

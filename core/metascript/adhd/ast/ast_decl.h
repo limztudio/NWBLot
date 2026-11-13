@@ -34,6 +34,7 @@ struct EnumDecl{
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
+    MStringView cppNamespace;
     b8 isFlag = false;
     b8 isImported = false;
 
@@ -53,6 +54,7 @@ struct TypeAliasDecl{
     MVector<TemplateParamDecl> templateParams;
     TypeRef* aliasedType = nullptr;
     SourceSpan span;
+    MStringView cppNamespace;
     b8 isImported = false;
 
 
@@ -118,6 +120,7 @@ struct MethodDecl{
     b8 usesTaskScope = false;
     b8 injectsCallerArena = false;
     b8 hasSynthesizedArenaParams = false;
+    MStringView cppNamespace;
     b8 isImported = false;
 
 
@@ -142,6 +145,7 @@ struct InterfaceDecl{
     MVector<MethodDecl*> methods;
     MStringView assetTypeName;
     SourceSpan span;
+    MStringView cppNamespace;
     b8 isImported = false;
 
 
@@ -175,6 +179,7 @@ struct ClassDecl{
     b8 isReflect = false;
     b8 isArenaOwner = false;
     b8 needsClassArena = false;
+    MStringView cppNamespace;
     b8 isImported = false;
 
 

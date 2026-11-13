@@ -194,8 +194,8 @@ void VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNa
         hasNativeContext = nativeContext != nullptr;
         if(hasNativeContext){
             NWB::Core::Win32TextInputContextGuard context(self.m_window, nativeContext);
-            firstRelease = context.release();
-            secondRelease = context.release();
+            firstRelease = context.release().has_value();
+            secondRelease = context.release().has_value();
         }
 #endif
     }

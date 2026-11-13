@@ -21,6 +21,7 @@ NWB_ASSETS_BEGIN
 
 
 template<typename PathArenaT, typename MetadataValue, typename IsAllowedField>
+requires requires(IsAllowedField& fn, const AStringView field){ fn(field); }
 [[nodiscard]] inline b8 ValidateMetadataAssetFields(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, IsAllowedField&& isAllowedField){
     for(const auto& field : asset.asMap()){
         const auto& fieldName = field.first;
@@ -35,7 +36,7 @@ template<typename PathArenaT, typename MetadataValue, typename IsAllowedField>
 }
 
 template<typename PathArenaT, typename MetadataValue>
-[[nodiscard]] inline b8 ValidateMetadataAssetFields(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const InitializerList<AStringView> allowedFields){
+[[nodiscard]] inline b8 ValidateMetadataAssetFields(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const Span<const AStringView> allowedFields = {}){
     return ValidateMetadataAssetFields(nwbFilePath, asset, diagnosticPrefix, [allowedFields](const AStringView fieldName)noexcept{
         for(const AStringView allowedField : allowedFields){
             if(fieldName == allowedField)
@@ -45,14 +46,19 @@ template<typename PathArenaT, typename MetadataValue>
     });
 }
 
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline b8 ValidateMetadataAssetFields(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const InitializerList<AStringView> allowedFields){
+    return ValidateMetadataAssetFields(nwbFilePath, asset, diagnosticPrefix, Span<const AStringView>(allowedFields.begin(), allowedFields.size()));
+}
+
 struct MetadataStringField{
     AStringView text;
     b8 present = false;
 };
 
 
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<MetadataStringField> ReadMetadataStringField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<MetadataStringField> ReadMetadataStringField(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     MetadataStringField result;
 
     const auto* fieldValue = object.findField(fieldName);
@@ -86,8 +92,8 @@ template<typename MetadataValue>
     return TryFiniteF32FromF64(value.toDouble());
 }
 
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Value(const Path& nwbFilePath, const MetadataValue& value, const AStringView diagnosticPrefix, const AStringView fieldName){
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Value(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& value, const AStringView diagnosticPrefix, const AStringView fieldName){
     const auto decoded = TryDecodeMetadataFiniteF32(value);
     if(decoded)
         return decoded;
@@ -101,8 +107,8 @@ template<typename MetadataValue>
     return MakeUnexpected(Failure{});
 }
 
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Field(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Field(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     const auto* fieldValue = object.findField(fieldName);
     if(!fieldValue){
         if(!required)
@@ -114,8 +120,8 @@ template<typename MetadataValue>
     return ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldName);
 }
 
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<Name> ReadMetadataNameField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<Name> ReadMetadataNameField(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
     if(!text)
         return MakeUnexpected(text.error());
@@ -131,8 +137,8 @@ template<typename MetadataValue>
     return *name;
 }
 
-template<typename AssetT, typename MetadataValue>
-[[nodiscard]] inline Expected<AssetRef<AssetT>> ReadMetadataAssetRefField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
+template<typename AssetT, typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<AssetRef<AssetT>> ReadMetadataAssetRefField(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     const auto assetName = ReadMetadataNameField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
     if(!assetName)
         return MakeUnexpected(assetName.error());
@@ -144,8 +150,8 @@ template<typename AssetT, typename MetadataValue>
     return ref;
 }
 
-template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
-[[nodiscard]] inline b8 ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
+template<typename SourceStringT, typename MetadataDocument, typename ParseDocument, typename PathArenaT>
+[[nodiscard]] inline b8 ParseMetadataDocumentText(const ::Path<PathArenaT>& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
     if(!ReadTextFile(filePath, ioText)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': failed to read source text"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath));
         return false;
@@ -161,10 +167,19 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
     return true;
 }
 
-[[nodiscard]] b8 CheckPairedSourceExtension(const Path& nwbFilePath, AStringView sourcePath, AStringView expectedExtension, AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena);
+namespace Detail{
 
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataListField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName){
+[[nodiscard]] b8 CheckPairedSourceExtensionNative(TStringView nwbFilePathText, AStringView sourcePath, AStringView expectedExtension, AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena);
+
+}
+
+template<typename PathArenaT>
+[[nodiscard]] inline b8 CheckPairedSourceExtension(const ::Path<PathArenaT>& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
+    return Detail::CheckPairedSourceExtensionNative(nwbFilePath.native(), sourcePath, expectedExtension, diagnosticPrefix, scratchArena);
+}
+
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataListField(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName){
     const auto* fieldValue = object.findField(fieldName);
     if(fieldValue && fieldValue->isList())
         return MakeNotNull(fieldValue);
@@ -173,8 +188,18 @@ template<typename MetadataValue>
     return MakeUnexpected(Failure{});
 }
 
-template<typename CookEntryT>
-[[nodiscard]] inline b8 AssignCookEntryVirtualPath(const Name& virtualPath, const Path& nwbFilePath, const AStringView diagnosticPrefix, CookEntryT& outEntry){
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline Expected<Span<const MetadataValue>> ReadMetadataListField(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName){
+    const auto listValue = FindMetadataListField(nwbFilePath, object, diagnosticPrefix, fieldName);
+    if(!listValue)
+        return MakeUnexpected(listValue.error());
+
+    const auto& list = listValue.value().get()->asList();
+    return Span<const MetadataValue>(list.data(), list.size());
+}
+
+template<typename CookEntryT, typename PathArenaT>
+[[nodiscard]] inline b8 AssignCookEntryVirtualPath(const Name& virtualPath, const ::Path<PathArenaT>& nwbFilePath, const AStringView diagnosticPrefix, CookEntryT& outEntry){
     outEntry.virtualPath = virtualPath;
     if(outEntry.virtualPath)
         return true;
@@ -183,8 +208,8 @@ template<typename CookEntryT>
     return false;
 }
 
-template<typename MetadataValue>
-[[nodiscard]] inline b8 CheckMetadataAssetMap(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix){
+template<typename PathArenaT, typename MetadataValue>
+[[nodiscard]] inline b8 CheckMetadataAssetMap(const ::Path<PathArenaT>& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix){
     if(asset.isMap())
         return true;
 
@@ -192,8 +217,8 @@ template<typename MetadataValue>
     return false;
 }
 
-template<typename MetadataDocument, typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
+template<typename MetadataDocument, typename MetadataValue, typename PathArenaT>
+[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetValue(const ::Path<PathArenaT>& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
     const auto* asset = doc.findVariable(s_MetadataAssetVariable);
     if(!asset){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': missing asset declaration '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_MetadataAssetVariable));
@@ -202,8 +227,8 @@ template<typename MetadataDocument, typename MetadataValue>
     return MakeNotNull(asset);
 }
 
-template<typename MetadataDocument, typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetMapValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
+template<typename MetadataDocument, typename MetadataValue, typename PathArenaT>
+[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetMapValue(const ::Path<PathArenaT>& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
     const auto asset = FindMetadataAssetValue<MetadataDocument, MetadataValue>(nwbFilePath, doc, diagnosticPrefix);
     if(!asset)
         return MakeUnexpected(asset.error());
@@ -212,9 +237,24 @@ template<typename MetadataDocument, typename MetadataValue>
     return *asset;
 }
 
-template<typename NamedEnumT, typename MetadataValue>
+template<typename PathArenaT, typename MetadataDocument, typename Visitor>
+inline b8 VisitMetadataAssetMap(const ::Path<PathArenaT>& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix, Visitor&& visitor){
+    using MetadataValue = RemoveCVRef_T<decltype(*DeclVal<const MetadataDocument&>().findVariable(s_MetadataAssetVariable))>;
+    const auto assetMap = FindMetadataAssetMapValue<MetadataDocument, MetadataValue>(nwbFilePath, doc, diagnosticPrefix);
+    if(!assetMap)
+        return false;
+    const auto& value = *assetMap.value().get();
+    if constexpr(IsSame_V<decltype(visitor(value)), b8>)
+        return visitor(value);
+    else{
+        visitor(value);
+        return true;
+    }
+}
+
+template<typename NamedEnumT, typename PathArenaT, typename MetadataValue>
 [[nodiscard]] inline Expected<NamedEnumT> ParseNamedMetadataEnumField(
-    const Path& nwbFilePath,
+    const ::Path<PathArenaT>& nwbFilePath,
     const MetadataValue& object,
     const AStringView diagnosticPrefix,
     const AStringView fieldName,

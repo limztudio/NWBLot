@@ -14,15 +14,19 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CheckPairedSourceExtension(const Path& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
+namespace Detail{
+
+b8 CheckPairedSourceExtensionNative(const TStringView nwbFilePathText, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
     const ::Path<Alloc::ScratchArena> sourcePathValue(scratchArena, sourcePath);
     AString<Alloc::ScratchArena> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == expectedExtension)
         return true;
 
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': paired source '{}' must use '{}' extension"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(sourcePath), ConvertString(expectedExtension));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': paired source '{}' must use '{}' extension"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePathText), ConvertString(sourcePath), ConvertString(expectedExtension));
     return false;
+}
+
 }
 
 

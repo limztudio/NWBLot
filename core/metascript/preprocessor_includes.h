@@ -26,6 +26,7 @@ interface IIncludeResolver{
 public:
     [[nodiscard]] virtual b8 resolveInclude(MStringView includePath, b8 isAngleBracket, MetaArena& arena, MString& outResolvedKey, MString& outContent) = 0;
     virtual void popIncludeScope()noexcept{}
+    [[nodiscard]] virtual MStringView resolveIncludeNamespace(MStringView)const noexcept{ return {}; }
 };
 
 
@@ -40,6 +41,7 @@ public:
     struct IncludedByteRange{
         usize startOffset = 0u;
         usize endOffset = 0u;
+        usize resolvedFileIndex = 0u;
     };
     using IncludedSet = MStringMap<b8>;
     using IncludedList = MVector<MString>;
@@ -53,6 +55,8 @@ public:
 public:
     void clearRanges()noexcept{ m_includedByteRanges.clear(); }
     [[nodiscard]] b8 containsOffset(usize offset)const noexcept;
+    [[nodiscard]] MStringView includedFileAtOffset(usize offset)const noexcept;
+    [[nodiscard]] MStringView resolveNamespaceAtOffset(usize offset)const noexcept;
     [[nodiscard]] Span<const MString> includedFiles()const noexcept{ return {m_includedFiles.data(), m_includedFiles.size()}; }
     [[nodiscard]] Span<const MString> resolvedIncludedFiles()const noexcept{ return {m_resolvedIncludedFiles.data(), m_resolvedIncludedFiles.size()}; }
     [[nodiscard]] b8 process(Preprocessor& owner, MStringView rest, u32 line, u32 depth, MStringView currentFileKey, MString& outProcessed);

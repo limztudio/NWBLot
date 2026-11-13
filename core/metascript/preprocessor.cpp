@@ -267,6 +267,10 @@ b8 Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
     return m_includes.containsOffset(offset);
 }
 
+MStringView Preprocessor::resolveIncludedNamespaceAtOffset(const usize offset)const noexcept{
+    return m_includes.resolveNamespaceAtOffset(offset);
+}
+
 b8 Preprocessor::process(const MStringView source, MString& outProcessed){
     outProcessed.clear();
     outProcessed.reserve(source.size());

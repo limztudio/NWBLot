@@ -43,9 +43,9 @@ using ParsedMetadataExtensionMap = CookMap<Name, ParsedMetadataExtension>;
 template<typename EntryT>
 using ParseMetadataValueFn = Expected<EntryT>(*)(Name, const Path&, const Core::Metascript::Value&, AssetArena&, Alloc::ScratchArena&);
 
-template<typename MetadataValue>
+template<typename PathArenaT, typename MetadataValue>
 [[nodiscard]] inline Expected<b8> ParseMetadataBoolField(
-    const Path& nwbFilePath,
+    const ::Path<PathArenaT>& nwbFilePath,
     const AStringView diagnosticPrefix,
     const MetadataValue& value,
     const AStringView fieldLabel,
@@ -63,9 +63,9 @@ template<typename MetadataValue>
     return integerValue != 0;
 }
 
-template<typename MetadataValue>
+template<typename PathArenaT, typename MetadataValue>
 [[nodiscard]] inline b8 ReadOptionalMetadataBoolField(
-    const Path& nwbFilePath,
+    const ::Path<PathArenaT>& nwbFilePath,
     const MetadataValue& asset,
     const AStringView diagnosticPrefix,
     const AStringView fieldLabel,
@@ -81,9 +81,9 @@ template<typename MetadataValue>
     return true;
 }
 
-template<typename MetadataValue>
+template<typename PathArenaT, typename MetadataValue>
 [[nodiscard]] inline b8 ReadOptionalFiniteF32Field(
-    const Path& nwbFilePath,
+    const ::Path<PathArenaT>& nwbFilePath,
     const MetadataValue& asset,
     const AStringView diagnosticPrefix,
     const AStringView fieldLabel,
@@ -99,9 +99,9 @@ template<typename MetadataValue>
     return true;
 }
 
-template<typename MetadataValue>
+template<typename PathArenaT, typename MetadataValue>
 [[nodiscard]] inline b8 ReadOptionalI32Field(
-    const Path& nwbFilePath,
+    const ::Path<PathArenaT>& nwbFilePath,
     const MetadataValue& asset,
     const AStringView diagnosticPrefix,
     const AStringView fieldLabel,
@@ -123,11 +123,11 @@ template<typename MetadataValue>
     return true;
 }
 
-template<typename EntryT, typename ParseValueFn>
+template<typename EntryT, typename RootArenaT, typename FileArenaT, typename ParseValueFn>
 [[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
-    const Path& assetRoot,
+    const ::Path<RootArenaT>& assetRoot,
     const AStringView virtualRoot,
-    const Path& nwbFilePath,
+    const ::Path<FileArenaT>& nwbFilePath,
     const Core::Metascript::Document& doc,
     const AStringView diagnosticPrefix,
     ParseValueFn&& parseValue,

@@ -62,11 +62,14 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     return nwbVal && nwbVal->requiresNameAdmission;
 }
 
-void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const MStringView valueAccessor, const TypeRef& typeRef, const SymbolTable& symbols){
+void EmitQualifiedTypeName(MString& out, const CppTypeEmitter& typeEmitter, const MStringView typeName){
+    typeEmitter.appendQualifiedName(out, typeEmitter.symbols().findTypeNamespace(typeName), typeName);
+}
+
+void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const MStringView valueAccessor, const TypeRef& typeRef, const CppTypeEmitter& typeEmitter){
     if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName)){
         if(nwbVal->requiresNameAdmission){
             if(IsAssetHandleType(typeName)){
-                const CppTypeEmitter typeEmitter(symbols);
                 typeEmitter.emitTypeCpp(out, typeRef);
                 out.append("(*__name)");
             }
@@ -158,11 +161,11 @@ void EmitNwbMapKeyExpr(MString& out, const MStringView keyName, const b8 isEnumK
     }
 }
 
-void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, const MStringView enumName, const b8 isFlag){
+void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, const MStringView enumName, const b8 isFlag, const CppTypeEmitter& typeEmitter){
     if(!isFlag){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isString()){ if(const auto __e = ");
-        out.append(enumName.data(), enumName.size());
+        EmitQualifiedTypeName(out, typeEmitter, enumName);
         out.append("::parseNamedEnum(__f->asString())) this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(" = *__e; }\r\n");
@@ -171,15 +174,15 @@ void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, cons
     out.append("        if(const auto* __f = inMap.findField(\"");
     out.append(fieldName.data(), fieldName.size());
     out.append("\"); __f){ if(__f->isString()){ if(const auto __e = ");
-    out.append(enumName.data(), enumName.size());
+    EmitQualifiedTypeName(out, typeEmitter, enumName);
     out.append("::parseNamedEnum(__f->asString())) this->");
     out.append(fieldName.data(), fieldName.size());
     out.append(" = *__e; } else if(__f->isList()){ ");
-    out.append(enumName.data(), enumName.size());
+    EmitQualifiedTypeName(out, typeEmitter, enumName);
     out.append("::Flag __flags = static_cast<");
-    out.append(enumName.data(), enumName.size());
+    EmitQualifiedTypeName(out, typeEmitter, enumName);
     out.append("::Flag>(0); for(const auto& __item : __f->asList()){ if(__item.isString()){ if(const auto __e = ");
-    out.append(enumName.data(), enumName.size());
+    EmitQualifiedTypeName(out, typeEmitter, enumName);
     out.append("::parseNamedEnum(__item.asString())) __flags |= *__e; } } this->");
     out.append(fieldName.data(), fieldName.size());
     out.append(" = __flags; } }\r\n");
@@ -219,7 +222,7 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
     out.push_back(' ');
 }
 
-[[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(MString& out, const MStringView fieldName, const MStringView typeName, const SymbolTable& symbols, const b8 isOptional = false){
+[[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(MString& out, const MStringView fieldName, const MStringView typeName, const CppTypeEmitter& typeEmitter, const b8 isOptional = false){
     if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName)){
         EmitNwbFieldFindPrefix(out, fieldName);
         const MStringView prefix = isOptional ? nwbVal->optionalFieldPrefix : nwbVal->directFieldPrefix;
@@ -247,8 +250,8 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
         out.append(">(__f->toDouble());\r\n");
         return true;
     }
-    if(const EnumDecl* ed = symbols.findEnum(typeName)){
-        EmitNwbEnumFieldDeserialize(out, fieldName, typeName, ed->isFlag);
+    if(const EnumDecl* ed = typeEmitter.symbols().findEnum(typeName)){
+        EmitNwbEnumFieldDeserialize(out, fieldName, typeName, ed->isFlag, typeEmitter);
         return true;
     }
     u32 simdLanes = 0u;
@@ -296,7 +299,8 @@ void EmitNwbListContainerLoopHeader(MString& out, const MStringView fieldName, c
     out.append("; ++__i)");
 }
 
-void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldName, const MStringView containerTypeName, const MStringView elemName, const TypeRef& elemType, const SymbolTable& symbols){
+void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldName, const MStringView containerTypeName, const MStringView elemName, const TypeRef& elemType, const CppTypeEmitter& typeEmitter){
+    const SymbolTable& symbols = typeEmitter.symbols();
     const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(containerTypeName);
     const ReflectedLinearKind::Enum linearKind = genericInfo ? genericInfo->reflectedLinearKind : ReflectedLinearKind::None;
     const b8 isSetContainer = (linearKind == ReflectedLinearKind::Set);
@@ -313,7 +317,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
         out.append("{ if(");
         out.append(elemAccessor.data(), elemAccessor.size());
         out.append(".isString()){ if(const auto __e = ");
-        out.append(elemName.data(), elemName.size());
+        EmitQualifiedTypeName(out, typeEmitter, elemName);
         out.append("::parseNamedEnum(");
         out.append(elemAccessor.data(), elemAccessor.size());
         out.append(".asString())) this->");
@@ -331,7 +335,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
         out.append("this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(assignOrPushPrefix.data(), assignOrPushPrefix.size());
-        EmitNwbValueConversionExpr(out, elemName, elemAccessor, elemType, symbols);
+        EmitNwbValueConversionExpr(out, elemName, elemAccessor, elemType, typeEmitter);
         if(isPushContainer)
             out.push_back(')');
         out.append("; } }\r\n");
@@ -389,8 +393,9 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
     }
 }
 
-void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, const MStringView innerName, const TypeRef& innerType, const SymbolTable& symbols){
-    if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, fieldName, innerName, symbols, true))
+void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, const MStringView innerName, const TypeRef& innerType, const CppTypeEmitter& typeEmitter){
+    const SymbolTable& symbols = typeEmitter.symbols();
+    if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, fieldName, innerName, typeEmitter, true))
         return;
     if(SymbolTable::IsSimdStorageMatrixType(innerName)){
         const u32 elemCount = SimdMatrixElementCount(innerName);
@@ -416,7 +421,8 @@ void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, 
     }
 }
 
-void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const MStringView keyName, const MStringView valName, const TypeRef& valType, const SymbolTable& symbols){
+void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const MStringView keyName, const MStringView valName, const TypeRef& valType, const CppTypeEmitter& typeEmitter){
+    const SymbolTable& symbols = typeEmitter.symbols();
     const b8 isStringLikeKey = IsNwbMapKeyType(keyName);
     const b8 isEnumKey = symbols.findEnum(keyName) != nullptr;
     if(!isStringLikeKey && !isEnumKey)
@@ -425,7 +431,7 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
     const auto emitKeyGuardOpen = [&](){
         if(isEnumKey){
             out.append("if(const auto __ek = ");
-            out.append(keyName.data(), keyName.size());
+            EmitQualifiedTypeName(out, typeEmitter, keyName);
             out.append("::parseNamedEnum(__k)){ ");
         }
         else if(RequiresNwbNameAdmission(keyName))
@@ -450,7 +456,7 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
         emitKeyGuardOpen();
         out.append("if(__v.isString()){ if(const auto __e = ");
-        out.append(valName.data(), valName.size());
+        EmitQualifiedTypeName(out, typeEmitter, valName);
         out.append("::parseNamedEnum(__v.asString())) ");
         emitMapIndexedTarget();
         out.append(" = *__e; }");
@@ -466,7 +472,7 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         EmitNwbValueAdmissionGuard(out, valName, "__v");
         emitMapIndexedTarget();
         out.append(" = ");
-        EmitNwbValueConversionExpr(out, valName, "__v", valType, symbols);
+        EmitNwbValueConversionExpr(out, valName, "__v", valType, typeEmitter);
         out.push_back(';');
         emitKeyGuardClose();
         out.append(" } }\r\n");
@@ -513,17 +519,16 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
     }
 }
 
-void EmitCppTypeOrBaseName(MString& out, const TypeRef* typeRef, const MStringView baseName, const SymbolTable& symbols){
+void EmitCppTypeOrBaseName(MString& out, const TypeRef* typeRef, const MStringView baseName, const CppTypeEmitter& typeEmitter){
     if(typeRef){
-        const CppTypeEmitter typeEmitter(symbols);
         typeEmitter.emitTypeCpp(out, *typeRef);
     }
     else{
-        out.append(baseName.data(), baseName.size());
+        EmitQualifiedTypeName(out, typeEmitter, baseName);
     }
 }
 
-void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemTypeRef, const MStringView itemBaseName, const MStringView itemExpr, const SymbolTable& symbols){
+void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemTypeRef, const MStringView itemBaseName, const MStringView itemExpr, const CppTypeEmitter& typeEmitter){
     out.append("if(");
     out.append(itemExpr.data(), itemExpr.size());
     if(IsAssetHandleType(itemBaseName)){
@@ -533,7 +538,7 @@ void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemT
     }
     else{
         out.append(".isMap() && !");
-        EmitCppTypeOrBaseName(out, itemTypeRef, itemBaseName, symbols);
+        EmitCppTypeOrBaseName(out, itemTypeRef, itemBaseName, typeEmitter);
         out.append("::extractNwbAssetDependencies(");
         out.append(itemExpr.data(), itemExpr.size());
         out.append(", callback)) return false;");
@@ -566,7 +571,7 @@ void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const ClassDec
             continue;
         const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
         const MStringView tname = resolvedFieldType ? resolvedFieldType->name : field->type->name;
-        if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, field->name, tname, m_symbols)){
+        if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, field->name, tname, m_typeEmitter)){
             continue;
         }
         else if(SymbolTable::IsSimdStorageMatrixType(tname)){
@@ -586,16 +591,16 @@ void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const ClassDec
         }
         else if(IsReflectedLinearContainerType(tname) && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type){
             const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
-            EmitNwbListContainerFieldDeserialize(out, field->name, tname, elemName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type), m_symbols);
+            EmitNwbListContainerFieldDeserialize(out, field->name, tname, elemName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type), m_typeEmitter);
         }
         else if(IsOptionalContainerType(tname) && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type){
             const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
-            EmitNwbOptionalFieldDeserialize(out, field->name, innerName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type), m_symbols);
+            EmitNwbOptionalFieldDeserialize(out, field->name, innerName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type), m_typeEmitter);
         }
         else if(IsReflectedMapContainerType(tname) && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u && resolvedFieldType->templateArgs[0].type && resolvedFieldType->templateArgs[1].type){
             const MStringView keyName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
             const MStringView valName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[1].type->name);
-            EmitNwbMapFieldDeserialize(out, field->name, keyName, valName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[1].type), m_symbols);
+            EmitNwbMapFieldDeserialize(out, field->name, keyName, valName, *m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[1].type), m_typeEmitter);
         }
     }
     out.append("        return true;\r\n");
@@ -623,7 +628,7 @@ void NwbReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, c
         else if(m_symbols.findClass(effectiveScalarOrClassType)){
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isMap() && !");
-            EmitCppTypeOrBaseName(out, effectiveTypeRef, effectiveScalarOrClassType, m_symbols);
+            EmitCppTypeOrBaseName(out, effectiveTypeRef, effectiveScalarOrClassType, m_typeEmitter);
             out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
         }
         else if(IsReflectedLinearContainerType(effectiveScalarOrClassType) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){
@@ -632,7 +637,7 @@ void NwbReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, c
             if(IsAssetHandleType(elemName) || m_symbols.findClass(elemName)){
                 EmitNwbFieldFindPrefix(out, field->name);
                 out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ ");
-                EmitNwbContainerElementDependencyExtract(out, elemTypeRef, elemName, "__f->asList()[__i]", m_symbols);
+                EmitNwbContainerElementDependencyExtract(out, elemTypeRef, elemName, "__f->asList()[__i]", m_typeEmitter);
                 out.append(" } }\r\n");
             }
         }
@@ -648,11 +653,11 @@ void NwbReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, c
                         out.append("if(!::Name::FromText(AStringView(__k.data(), __k.size()))) continue; ");
                     else if(m_symbols.findEnum(keyName)){
                         out.append("if(!");
-                        out.append(keyName.data(), keyName.size());
+                        EmitQualifiedTypeName(out, m_typeEmitter, keyName);
                         out.append("::parseNamedEnum(__k)) continue; ");
                     }
                 }
-                EmitNwbContainerElementDependencyExtract(out, valTypeRef, valName, "__v", m_symbols);
+                EmitNwbContainerElementDependencyExtract(out, valTypeRef, valName, "__v", m_typeEmitter);
                 out.append(" } }\r\n");
             }
         }

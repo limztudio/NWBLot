@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_texture/asset.adhd>
 #include <impl/assets_texture/types.adhd>
 
 
@@ -20,8 +21,6 @@ native{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/assets_texture/asset.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
@@ -73,7 +72,6 @@ template<typename RootArenaT, typename FileArenaT>
     return ParseTextureCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
 }
 [[nodiscard]] Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
-[[nodiscard]] Expected<Texture> BuildTextureAsset(TextureCookEntry&& textureEntry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +90,21 @@ NWB_IMPL_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextureCookMetadataHeader{
+    public Name virtualPath = s_NameNone;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 1u;
+    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
+    public TexturePayloadFormat payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
+    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -178,6 +191,165 @@ b8 ValidateTextureCompleteMipChain(in Path nwbFilePath, in b8 hasCompleteMipCoun
     return false;
 }
 
+Expected<u32> ReadTextureUnsignedField(in Path nwbFilePath, in MetascriptValue asset, in StringView fieldName, in u32 minimum, in u32 maximum){
+    b8 present = false;
+    b8 isInteger = false;
+    i64 rawValue = 0;
+    asset.visitField(fieldName, lambda[mut present, mut isInteger, mut rawValue](in MetascriptValue value) -> void{
+        present = true;
+        if(value.isInteger()){
+            isInteger = true;
+            rawValue = value.asInteger();
+        }
+    });
+    return ValidateTextureUnsignedField(nwbFilePath, fieldName, present, isInteger, rawValue, minimum, maximum);
+}
+
+Expected<TextureAlphaMode> ParseTextureAlphaModeField(in Path nwbFilePath, in MetascriptValue asset){
+    const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, asset, s_TextureDiagnosticPrefix, s_TextureAlphaModeField, true);
+    if(!field.has_value())
+        return MakeUnexpected(Failure());
+
+    in StringView text = field.value().text;
+    if(text == s_OpaqueAlphaMode)
+        return TextureAlphaMode::Opaque;
+    if(text == s_EmbeddedLdrAlphaMode)
+        return TextureAlphaMode::EmbeddedLdr;
+    if(text == s_ConstantUnorm8AlphaMode)
+        return TextureAlphaMode::ConstantUnorm8;
+    if(text == s_SeparateUastcLdr4x4AlphaMode)
+        return TextureAlphaMode::SeparateUastcLdr4x4;
+
+    error("{} '{}': field '{}' {}", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), s_TextureAlphaModeField, s_TextureUnsupportedAlphaModeHint);
+    return MakeUnexpected(Failure());
+}
+
+Expected<TexturePayloadFormat> ParseTexturePayloadFormatField(in Path nwbFilePath, in MetascriptValue asset){
+    const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, asset, s_TextureDiagnosticPrefix, s_TextureFormatField, true);
+    if(!field.has_value())
+        return MakeUnexpected(Failure());
+
+    in StringView text = field.value().text;
+    if(text == s_UastcLdr4x4Format)
+        return TexturePayloadFormat::UastcLdr4x4;
+    if(text == s_UastcHdr4x4Format)
+        return TexturePayloadFormat::UastcHdr4x4;
+
+    error("{} '{}': field '{}' {}", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), s_TextureFormatField, s_TextureUnsupportedFormatHint);
+    return MakeUnexpected(Failure());
+}
+
+Expected<TexturePayloadDimension> ParseTextureDimensionField(in Path nwbFilePath, in MetascriptValue asset){
+    const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, asset, s_TextureDiagnosticPrefix, s_TextureDimensionField, true);
+    if(!field.has_value())
+        return MakeUnexpected(Failure());
+
+    in StringView text = field.value().text;
+    if(text == s_Texture2DDimension)
+        return TexturePayloadDimension::Texture2D;
+    if(text == s_TextureCubeDimension)
+        return TexturePayloadDimension::TextureCube;
+    if(text == s_Texture3DDimension)
+        return TexturePayloadDimension::Texture3D;
+
+    error("{} '{}': field '{}' {}", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), s_TextureDimensionField, s_TextureUnsupportedDimensionHint);
+    return MakeUnexpected(Failure());
+}
+
+Expected<TextureResolution> ReadTextureResolution(in Path nwbFilePath, in MetascriptValue asset, in TexturePayloadDimension dimension){
+    b8 isList = false;
+    usize listSize = 0u;
+    Span<MetascriptValue> listValues = Span<MetascriptValue>();
+    asset.visitField(s_TextureResolutionField, lambda[mut isList, mut listSize, mut listValues](in MetascriptValue value) -> void{
+        if(value.isList()){
+            isList = true;
+            listValues = value.listView();
+            listSize = listValues.size();
+        }
+    });
+    const usize componentCount = ExpectedTextureResolutionComponentCount(dimension == TexturePayloadDimension::Texture3D);
+    if(!ValidateTextureResolutionListCount(nwbFilePath, isList, listSize, componentCount))
+        return MakeUnexpected(Failure());
+
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 depth = 1u;
+    for(usize component = 0u; component < componentCount; ++component){
+        in MetascriptValue value = listValues[component];
+        const b8 isInteger = value.isInteger();
+        i64 rawValue = 0;
+        if(isInteger)
+            rawValue = value.asInteger();
+        const Expected<u32> parsed = ValidateTextureResolutionComponent(nwbFilePath, component, isInteger, rawValue);
+        if(!parsed.has_value())
+            return MakeUnexpected(Failure());
+        if(component == 0u)
+            width = parsed.value();
+        else if(component == 1u)
+            height = parsed.value();
+        else
+            depth = parsed.value();
+    }
+    if(!ValidateCubeTextureSquareResolution(nwbFilePath, dimension == TexturePayloadDimension::TextureCube, width, height))
+        return MakeUnexpected(Failure());
+
+    TextureResolution resolution;
+    resolution.width = width;
+    resolution.height = height;
+    resolution.depth = depth;
+    return resolution;
+}
+
+Expected<TextureCookMetadataHeader> ParseTextureCookMetadataHeader(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_TextureDiagnosticPrefix))
+        return MakeUnexpected(Failure());
+
+    const Expected<TextureAlphaMode> alphaMode = ParseTextureAlphaModeField(nwbFilePath, asset);
+    if(!alphaMode.has_value())
+        return MakeUnexpected(Failure());
+
+    const b8 allowAlphaConstant = alphaMode.value() == TextureAlphaMode::ConstantUnorm8;
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_TextureDiagnosticPrefix, lambda[in allowAlphaConstant](in StringView fieldName) -> b8{
+        return IsAllowedTextureMetadataField(fieldName, allowAlphaConstant);
+    }))
+        return MakeUnexpected(Failure());
+
+    const Expected<TexturePayloadFormat> format = ParseTexturePayloadFormatField(nwbFilePath, asset);
+    const Expected<TexturePayloadDimension> dimension = ParseTextureDimensionField(nwbFilePath, asset);
+    if(!format.has_value() || !dimension.has_value())
+        return MakeUnexpected(Failure());
+
+    const Expected<TextureResolution> resolution = ReadTextureResolution(nwbFilePath, asset, dimension.value());
+    if(!resolution.has_value())
+        return MakeUnexpected(Failure());
+
+    const Expected<u32> completeMipCount = ComputeCompleteMipCount(dimension.value(), resolution.value().width, resolution.value().height, resolution.value().depth);
+    if(!ValidateTextureCompleteMipChain(nwbFilePath, completeMipCount.has_value()))
+        return MakeUnexpected(Failure());
+
+    TextureCookMetadataHeader header;
+    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TextureDiagnosticPrefix, header))
+        return MakeUnexpected(Failure());
+    header.width = resolution.value().width;
+    header.height = resolution.value().height;
+    header.depth = resolution.value().depth;
+    header.dimension = dimension.value();
+    header.payloadFormat = format.value();
+    header.alphaMode = alphaMode.value();
+    if(header.alphaMode == TextureAlphaMode::ConstantUnorm8){
+        const Expected<u32> constant = ReadTextureUnsignedField(nwbFilePath, asset, s_TextureAlphaConstantField, 0u, s_MaxConstantAlphaUnorm8);
+        if(!constant.has_value())
+            return MakeUnexpected(Failure());
+        header.alphaConstantUnorm8 = cast<u8>(constant.value());
+    }
+    return header;
+}
+
+void LogTextureSidecarReadFailed(in Path nwbFilePath, in Path dataPath, in ErrorCode errorCode){
+    const String errorMessage = StringFormat("{}", errorCode.message());
+    error("{} '{}': failed to read raw texture sidecar '{}': {}", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), PathToString(dataPath), errorMessage);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -197,11 +369,8 @@ native{
 
 #include <impl/assets_texture/texture_binary_codec.adhd.h>
 
-#include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
-#include <core/common/log.h>
 
-#include <global/binary.h>
 #include <global/filesystem.h>
 
 
@@ -214,14 +383,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_texture_cook_metadata{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Core::Metascript::Value;
-
 static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarRegistrar(Core::Assets::AssetPairedSidecarRule{
     .sidecarExtension = TextureFormat::s_TextureDataExtension,
 });
@@ -230,166 +391,26 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarR
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<u32> ReadUnsignedField(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const u32 minimum, const u32 maximum){
-    const Value* const field = asset.findField(fieldName);
-    const b8 present = field != nullptr;
-    const b8 isInteger = present && field->isInteger();
-    const i64 rawValue = isInteger ? field->asInteger() : 0;
-    return ValidateTextureUnsignedField(nwbFilePath, fieldName, present, isInteger, rawValue, minimum, maximum);
-}
-
-[[nodiscard]] static Expected<TextureResolution> ReadResolution(const Path& nwbFilePath, const Value& asset, const TextureDimension::Enum dimension){
-    const Value* const field = asset.findField(s_TextureResolutionField);
-    const usize componentCount = ExpectedTextureResolutionComponentCount(dimension == TextureDimension::Texture3D);
-    const b8 isList = field != nullptr && field->isList();
-    const usize listSize = isList ? field->asList().size() : 0u;
-    if(!ValidateTextureResolutionListCount(nwbFilePath, isList, listSize, componentCount))
-        return MakeUnexpected(Failure{});
-    Array<u32, s_VolumeResolutionComponentCount> dimensions{ 0u, 0u, 1u };
-    for(usize component = 0u; component < componentCount; ++component){
-        const Value& value = field->asList()[component];
-        const b8 isInteger = value.isInteger();
-        const Expected<u32> parsed = ValidateTextureResolutionComponent(nwbFilePath, component, isInteger, isInteger ? value.asInteger() : 0);
-        if(!parsed)
-            return MakeUnexpected(Failure{});
-        dimensions[component] = *parsed;
-    }
-    if(!ValidateCubeTextureSquareResolution(nwbFilePath, dimension == TextureDimension::TextureCube, dimensions[0u], dimensions[1u]))
-        return MakeUnexpected(Failure{});
-    return TextureResolution(dimensions[0u], dimensions[1u], dimensions[2u]);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_texture_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<Texture::MipLevelVector> BuildMipLevels(const TextureCookEntry& entry, Core::Assets::AssetArena& arena){
-    Texture::MipLevelVector levels(arena);
-    if(!BuildTextureCookMipLevels(
-        static_cast<u8>(entry.payloadFormat),
-        static_cast<u8>(entry.dimension),
-        entry.width,
-        entry.height,
-        entry.depth,
-        static_cast<u8>(entry.alphaMode),
-        entry.payloadBytes.size(),
-        levels
-    ))
-        return MakeUnexpected(Failure{});
-    return Move(levels);
-}
-
-[[nodiscard]] static Expected<Texture> FinalizeTextureAsset(
-    const TextureCookEntry& textureEntry,
-    Texture::MipLevelVector&& mipLevels,
-    Core::Assets::AssetBytes&& payload,
-    Core::Assets::AssetArena& arena
-){
-    Texture asset(arena, textureEntry.virtualPath);
-    asset.setPayload(
-        textureEntry.width,
-        textureEntry.height,
-        Move(mipLevels),
-        Move(payload),
-        textureEntry.dimension,
-        textureEntry.depth,
-        textureEntry.payloadFormat,
-        textureEntry.alphaMode,
-        textureEntry.alphaConstantUnorm8
-    );
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_texture_cook_metadata;
-
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_TextureDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    const auto alphaMode = Core::Assets::ParseNamedMetadataEnumField<TextureAlphaMode::Enum>(
-        nwbFilePath,
-        asset,
-        s_TextureDiagnosticPrefix,
-        s_TextureAlphaModeField,
-        TextureFormat::s_AlphaModeCases,
-        s_TextureUnsupportedAlphaModeHint
-    );
-    if(!alphaMode)
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TextureDiagnosticPrefix, [allowAlphaConstant = *alphaMode == TextureAlphaMode::ConstantUnorm8](const AStringView fieldName)noexcept{
-        return IsAllowedTextureMetadataField(fieldName, allowAlphaConstant);
-    }))
-        return MakeUnexpected(Failure{});
-
-    const auto format = Core::Assets::ParseNamedMetadataEnumField<TexturePayloadFormat::Enum>(
-        nwbFilePath,
-        asset,
-        s_TextureDiagnosticPrefix,
-        s_TextureFormatField,
-        TextureFormat::s_PayloadFormatCases,
-        s_TextureUnsupportedFormatHint
-    );
-    const auto dimension = Core::Assets::ParseNamedMetadataEnumField<TextureDimension::Enum>(
-        nwbFilePath,
-        asset,
-        s_TextureDiagnosticPrefix,
-        s_TextureDimensionField,
-        TextureFormat::s_DimensionCases,
-        s_TextureUnsupportedDimensionHint
-    );
-    if(!format || !dimension)
-        return MakeUnexpected(Failure{});
-    const auto resolution = ReadResolution(nwbFilePath, asset, *dimension);
-    if(!resolution)
-        return MakeUnexpected(Failure{});
-    const auto completeMipCount = TextureFormat::ComputeCompleteMipCount(*dimension, resolution->width, resolution->height, resolution->depth);
-    if(!ValidateTextureCompleteMipChain(nwbFilePath, completeMipCount.has_value()))
+    const Expected<TextureCookMetadataHeader> header = ParseTextureCookMetadataHeader(virtualPath, nwbFilePath, asset);
+    if(!header)
         return MakeUnexpected(Failure{});
 
     TextureCookEntry entry(arena);
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TextureDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    entry.width = resolution->width;
-    entry.height = resolution->height;
-    entry.depth = resolution->depth;
-    entry.dimension = *dimension;
-    entry.payloadFormat = *format;
-    entry.alphaMode = *alphaMode;
-    if(entry.alphaMode == TextureAlphaMode::ConstantUnorm8){
-        const auto constant = ReadUnsignedField(nwbFilePath, asset, s_TextureAlphaConstantField, 0u, TextureFormat::s_MaxConstantAlphaUnorm8);
-        if(!constant)
-            return MakeUnexpected(Failure{});
-        entry.alphaConstantUnorm8 = static_cast<u8>(*constant);
-    }
+    entry.virtualPath = header->virtualPath;
+    entry.width = header->width;
+    entry.height = header->height;
+    entry.depth = header->depth;
+    entry.dimension = header->dimension;
+    entry.payloadFormat = header->payloadFormat;
+    entry.alphaMode = header->alphaMode;
+    entry.alphaConstantUnorm8 = header->alphaConstantUnorm8;
 
     ::Path<Core::Alloc::ScratchArena> dataPath(scratchArena, nwbFilePath);
     dataPath.replaceExtension(TextureFormat::s_TextureDataExtension);
-    const auto readResult = ReadBinaryFile(dataPath, entry.payloadBytes);
+    const Expected<void, ErrorCode> readResult = ReadBinaryFile(dataPath, entry.payloadBytes);
     if(!readResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': failed to read raw texture sidecar '{}': {}"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), PathToString<tchar>(dataPath), ConvertString(readResult.error().message()));
+        LogTextureSidecarReadFailed(nwbFilePath, dataPath, readResult.error());
         return MakeUnexpected(Failure{});
     }
     return entry;
@@ -430,21 +451,34 @@ b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
 
 
 Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena){
-    auto mipLevels = __hidden_texture_cook::BuildMipLevels(textureEntry, arena);
-    if(!mipLevels)
+    Texture::MipLevelVector mipLevels(arena);
+    if(!BuildTextureCookMipLevels(
+        static_cast<u8>(textureEntry.payloadFormat),
+        static_cast<u8>(textureEntry.dimension),
+        textureEntry.width,
+        textureEntry.height,
+        textureEntry.depth,
+        static_cast<u8>(textureEntry.alphaMode),
+        textureEntry.payloadBytes.size(),
+        mipLevels
+    ))
         return MakeUnexpected(Failure{});
-    Core::Assets::AssetBytes payload(textureEntry.payloadBytes.begin(), textureEntry.payloadBytes.end(), arena);
-    return __hidden_texture_cook::FinalizeTextureAsset(textureEntry, Move(*mipLevels), Move(payload), arena);
-}
 
-Expected<Texture> BuildTextureAsset(TextureCookEntry&& textureEntry, Core::Assets::AssetArena& arena){
-    auto mipLevels = __hidden_texture_cook::BuildMipLevels(textureEntry, arena);
-    if(!mipLevels)
+    Texture asset(arena, textureEntry.virtualPath);
+    asset.setPayload(
+        textureEntry.width,
+        textureEntry.height,
+        mipLevels,
+        textureEntry.payloadBytes,
+        textureEntry.dimension,
+        textureEntry.depth,
+        textureEntry.payloadFormat,
+        textureEntry.alphaMode,
+        textureEntry.alphaConstantUnorm8
+    );
+    if(!asset.validatePayload())
         return MakeUnexpected(Failure{});
-    Core::Assets::AssetBytes payload = &textureEntry.payloadBytes.get_allocator().arena() == &arena
-        ? Move(textureEntry.payloadBytes)
-        : Core::Assets::AssetBytes(textureEntry.payloadBytes.begin(), textureEntry.payloadBytes.end(), arena);
-    return __hidden_texture_cook::FinalizeTextureAsset(textureEntry, Move(*mipLevels), Move(payload), arena);
+    return asset;
 }
 
 

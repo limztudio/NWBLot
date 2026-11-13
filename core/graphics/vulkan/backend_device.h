@@ -115,6 +115,9 @@ public:
     b8 bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     [[nodiscard]] b8 isTextureReadyForGpuUse(Texture* textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] b8 isTextureReadyForGpuUse(Texture& textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept{
+        return isTextureReadyForGpuUse(&textureResource, requiredUsage);
+    }
     // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
     // Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] Expected<TextureHandle> createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
@@ -124,6 +127,14 @@ public:
     [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& d);
     [[nodiscard]] Expected<void*> mapBuffer(Buffer& buffer, CpuAccessMode::Enum requestedAccess);
     void unmapBuffer(Buffer& buffer);
+    template<GpuPodValue T>
+    [[nodiscard]] b8 readMappedBuffer(Buffer& buffer, T& outValue, u64 srcOffsetBytes = 0){
+        return readMappedBufferBytes(buffer, &outValue, sizeof(T), srcOffsetBytes);
+    }
+    template<GpuMutableContiguousPodContainer OutContainer>
+    [[nodiscard]] b8 readMappedBuffer(Buffer& buffer, OutContainer&& outValues, u64 srcOffsetBytes = 0){
+        return readMappedBufferBytes(buffer, outValues.data(), ContiguousContainerByteSize(outValues), srcOffsetBytes);
+    }
     [[nodiscard]] Expected<MemoryRequirements> getBufferMemoryRequirements(Buffer& buffer);
     b8 bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
@@ -131,14 +142,46 @@ public:
     // Managed ordinary buffers require their VMA allocation, while managed virtual buffers require a retained, device-owned bound Heap allocation.
     // CPU mapping is irrelevant.
     [[nodiscard]] b8 isBufferReadyForGpuUse(Buffer* bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] b8 isBufferReadyForGpuUse(Buffer& bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept{
+        return isBufferReadyForGpuUse(&bufferResource, requiredUsage);
+    }
     // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
     // Only one live Buffer wrapper may name a VkBuffer per Device.
     [[nodiscard]] Expected<BufferHandle> createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
     [[nodiscard]] Expected<ShaderHandle> createShader(const ShaderDesc& d, const void* binary, usize binarySize);
+    template<GpuContiguousPodContainer Container>
+    [[nodiscard]] Expected<ShaderHandle> createShader(const ShaderDesc& d, const Container& binary){
+        return createShader(d, binary.data(), ContiguousContainerByteSize(binary));
+    }
     [[nodiscard]] Expected<ShaderHandle> createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants);
+    template<GpuContiguousTypedContainer<ShaderSpecialization> Container>
+    [[nodiscard]] Expected<ShaderHandle> createShaderSpecialization(Shader& baseShader, const Container& constants){
+        if(constants.size() > Limit<u32>::s_Max)
+            return MakeUnexpected(Failure{});
+        return createShaderSpecialization(baseShader, constants.data(), static_cast<u32>(constants.size()));
+    }
     [[nodiscard]] Expected<ShaderLibraryHandle> createShaderLibrary(const void* binary, usize binarySize);
+    template<GpuContiguousPodContainer Container>
+    [[nodiscard]] Expected<ShaderLibraryHandle> createShaderLibrary(const Container& binary){
+        return createShaderLibrary(binary.data(), ContiguousContainerByteSize(binary));
+    }
     [[nodiscard]] Expected<SamplerHandle> createSampler(const SamplerDesc& d);
     [[nodiscard]] Expected<InputLayoutHandle> createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
+    [[nodiscard]] Expected<InputLayoutHandle> createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader& shader){
+        return createInputLayout(d, attributeCount, &shader);
+    }
+    template<GpuContiguousTypedContainer<VertexAttributeDesc> Container>
+    [[nodiscard]] Expected<InputLayoutHandle> createInputLayout(const Container& attributes, Shader& shader){
+        if(attributes.size() > Limit<u32>::s_Max)
+            return MakeUnexpected(Failure{});
+        return createInputLayout(attributes.data(), static_cast<u32>(attributes.size()), &shader);
+    }
+    template<GpuContiguousTypedContainer<VertexAttributeDesc> Container>
+    [[nodiscard]] Expected<InputLayoutHandle> createInputLayout(const Container& attributes){
+        if(attributes.size() > Limit<u32>::s_Max)
+            return MakeUnexpected(Failure{});
+        return createInputLayout(attributes.data(), static_cast<u32>(attributes.size()), nullptr);
+    }
     [[nodiscard]] Expected<EventQueryHandle> createEventQuery();
     [[nodiscard]] b8 setEventQuery(EventQuery& query, CommandQueue::Enum queue);
     [[nodiscard]] Expected<b8> pollEventQuery(EventQuery& query);
@@ -162,10 +205,21 @@ public:
     b8 bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset);
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
     [[nodiscard]] b8 isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept;
+    [[nodiscard]] b8 isAccelStructReadyForGpuUse(RayTracingAccelStruct& accelStructResource)const noexcept{
+        return isAccelStructReadyForGpuUse(&accelStructResource);
+    }
     [[nodiscard]] Expected<CommandListHandle> createCommandList(const CommandListParameters& params = CommandListParameters());
     // Cross-queue dependencies are immutable submission-local token edges.
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList& commandList, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
+        CommandList* commandListPtr = &commandList;
+        return executeCommandLists(&commandListPtr, 1u, executionQueue, submitDesc);
+    }
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList& commandList, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
+        CommandList* commandListPtr = &commandList;
+        return executeCommandLists(&commandListPtr, 1u, executionQueue, submitDesc);
+    }
 
     // The registry owns every active native VkQueue.
     // Broad CommandQueue calls use the primary record; graph recording/submission picks a concrete ID directly.
@@ -176,6 +230,13 @@ public:
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] b8 tryGetPhysicalQueueInfo(const GpuPhysicalQueueId& queue, GpuPhysicalQueueInfo& outInfo)const noexcept{
+        if(const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(queue)){
+            outInfo = *info;
+            return true;
+        }
+        return false;
+    }
     [[nodiscard]] Expected<GpuQueueTimelineSnapshot> getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
     [[nodiscard]] b8 supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
     // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
@@ -235,6 +296,7 @@ public:
 
 
 private:
+    [[nodiscard]] b8 readMappedBufferBytes(Buffer& buffer, void* outData, usize byteSize, u64 srcOffsetBytes = 0);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
         CommandList* const* commandLists,

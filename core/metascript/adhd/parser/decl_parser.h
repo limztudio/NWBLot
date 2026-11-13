@@ -42,7 +42,9 @@ public:
 
 
 private:
+    [[nodiscard]] b8 computeCurrentTokenOffset(usize& outOffset)const noexcept;
     [[nodiscard]] b8 isCurrentTokenImported()const noexcept;
+    [[nodiscard]] MStringView currentTokenImportedNamespace()const noexcept;
     [[nodiscard]] b8 parseTopLevelDeclaration(TranslationUnit& outUnit);
     [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, Span<const ParsedAttribute> attributes);
     [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isFlag);

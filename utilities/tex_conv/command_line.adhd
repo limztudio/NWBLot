@@ -16,10 +16,11 @@ b8 ValidateTexConvInputImagePath(in Path path, in b8 alphaMask){
     const Expected<b8, ErrorCode> isRegularFile = IsRegularFile(path);
     if(!isRegularFile.has_value() && !IsMissingPathError(isRegularFile.error())){
         const String pathText = PathToString(path);
+        const String errorText = StringFormat("{}", isRegularFile.error().message());
         if(alphaMask)
-            error("tex_conv: failed to inspect alpha image '{}': {}", pathText, isRegularFile.error().message());
+            error("tex_conv: failed to inspect alpha image '{}': {}", pathText, errorText);
         else
-            error("tex_conv: failed to inspect input '{}': {}", pathText, isRegularFile.error().message());
+            error("tex_conv: failed to inspect input '{}': {}", pathText, errorText);
         return false;
     }
     if(!isRegularFile.has_value() || !isRegularFile.value()){

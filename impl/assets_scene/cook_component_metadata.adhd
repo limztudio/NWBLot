@@ -15,102 +15,281 @@ const usize s_SceneQuaternionComponentCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-f32x4 MakeSceneMetadataFloat3(in f32 x, in f32 y, in f32 z){
-    return f32x4(x, y, z, 0.0f);
-}
-
-f32 ConvertSceneDegreesToRadians(in f32 degrees){
-    return degrees * s_SceneDegreesToRadians;
-}
-
-f32x4 BuildTransformEulerRadiansQuaternion(in VectorSingle eulerRadians){
-    return f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(eulerRadians.xyz, 0.0f)));
-}
-
-f32x4 BuildTransformEulerDegreesQuaternion(in VectorSingle eulerDegrees){
-    const VectorSingle angles = VectorSingle(eulerDegrees.xyz, 0.0f) * s_SceneDegreesToRadians;
+f32x4 BuildTransformEulerQuaternion(in VectorSingle eulerAngles, in b8 inDegrees){
+    VectorSingle angles = VectorSingle(eulerAngles.xyz, 0.0f);
+    if(inDegrees)
+        angles = angles * s_SceneDegreesToRadians;
     return f32x4(QuaternionRotationRollPitchYawFromVector(angles));
 }
 
-usize CountTransformRotationFields(in b8 hasRotation, in b8 hasEuler, in b8 hasEulerDegrees){
+b8 ValidateOptionalSceneMetadataMap(in Path nwbFilePath, in MetascriptValue asset, in StringView diagnosticPrefix){
+    if(asset.isNull() || asset.isMap())
+        return true;
+
+    error("{} '{}': asset is not a map", diagnosticPrefix, PathToString(nwbFilePath));
+    return false;
+}
+
+Expected<VectorSingle> ReadSceneFloatListValue(
+    in Path nwbFilePath,
+    in MetascriptValue listValue,
+    in StringView diagnosticPrefix,
+    in StringView fieldLabel,
+    in usize expectedCount
+){
     usize count = 0u;
-    if(hasRotation)
-        ++count;
-    if(hasEuler)
-        ++count;
-    if(hasEulerDegrees)
-        ++count;
-    return count;
-}
+    if(listValue.isList())
+        count = listValue.listView().size();
 
-b8 ValidateOptionalSceneMetadataMap(in b8 isNullOrMap, in StringView diagnosticPrefix, in StringView filePathText){
-    if(isNullOrMap)
-        return true;
-
-    error("{} '{}': asset is not a map", diagnosticPrefix, filePathText);
-    return false;
-}
-
-b8 ValidateSceneFloatListArity(
-    in b8 isList,
-    in usize count,
-    in usize expectedCount,
-    in StringView diagnosticPrefix,
-    in StringView filePathText,
-    in StringView fieldLabel
-){
-    if(isList && count == expectedCount)
-        return true;
-
-    error(
-        "{} '{}': field '{}' must be a {}-element numeric list"
-        , diagnosticPrefix
-        , filePathText
-        , fieldLabel
-        , expectedCount
-    );
-    return false;
-}
-
-Expected<f32x4> ResolveTransformMetadataQuaternion(
-    in f32 x,
-    in f32 y,
-    in f32 z,
-    in f32 w,
-    in StringView diagnosticPrefix,
-    in StringView filePathText,
-    in StringView fieldLabel
-){
-    const Expected<VectorSingle> normalized = TryNormalizeTransformQuaternion(x, y, z, w);
-    if(!normalized.has_value()){
-        error("{} '{}': field '{}' must be a non-zero quaternion", diagnosticPrefix, filePathText, fieldLabel);
+    if(!listValue.isList() || count != expectedCount || expectedCount > s_SceneQuaternionComponentCount){
+        error(
+            "{} '{}': field '{}' must be a {}-element numeric list"
+            , diagnosticPrefix
+            , PathToString(nwbFilePath)
+            , fieldLabel
+            , expectedCount
+        );
         return MakeUnexpected(Failure());
     }
-    return f32x4(normalized.value());
+
+    Array<f32, 4> components = Array<f32, 4>();
+    for(usize i = 0u; i < s_SceneQuaternionComponentCount; ++i)
+        components[i] = 0.0f;
+
+    const Span<MetascriptValue> items = listValue.listView();
+    for(usize i = 0u; i < expectedCount; ++i){
+        in MetascriptValue item = items[i];
+        const Expected<f32> element = ReadMetadataFiniteF32Value(nwbFilePath, item, diagnosticPrefix, fieldLabel);
+        if(!element.has_value())
+            return MakeUnexpected(Failure());
+        components[i] = element.value();
+    }
+
+    return VectorSingle(components[0u], components[1u], components[2u], components[3u]);
 }
 
-b8 ValidateTransformSingleRotationField(in usize rotationFieldCount, in StringView filePathText){
-    if(rotationFieldCount <= 1u)
-        return true;
+Expected<VectorSingle> ParseSceneQuaternionValue(
+    in Path nwbFilePath,
+    in MetascriptValue listValue,
+    in StringView diagnosticPrefix,
+    in StringView fieldLabel
+){
+    const Expected<VectorSingle> parsed = ReadSceneFloatListValue(nwbFilePath, listValue, diagnosticPrefix, fieldLabel, s_SceneQuaternionComponentCount);
+    if(!parsed.has_value())
+        return MakeUnexpected(Failure());
 
-    error(
-        "{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"
-        , s_TransformDiagnosticPrefix
-        , filePathText
-    );
-    return false;
+    const VectorSingle raw = parsed.value();
+    const Expected<VectorSingle> normalized = TryNormalizeTransformQuaternion(raw.x, raw.y, raw.z, raw.w);
+    if(!normalized.has_value()){
+        error("{} '{}': field '{}' must be a non-zero quaternion", diagnosticPrefix, PathToString(nwbFilePath), fieldLabel);
+        return MakeUnexpected(Failure());
+    }
+    return normalized.value();
 }
 
-b8 ValidateCameraSingleFovField(in b8 hasFovDegrees, in b8 hasFovRadians, in StringView filePathText){
-    if(!(hasFovDegrees && hasFovRadians))
-        return true;
-
-    error(
-        "{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"
-        , s_CameraDiagnosticPrefix
-        , filePathText
+b8 ReadOptionalSceneFloat3Field(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    in StringView diagnosticPrefix,
+    in StringView fieldLabel,
+    mut VectorSingle outValue
+){
+    b8 parsedOk = true;
+    VectorSingle parsedValue = outValue;
+    const b8 found = asset.visitField(
+        fieldLabel,
+        lambda[in nwbFilePath, in diagnosticPrefix, in fieldLabel, mut parsedOk, mut parsedValue](in MetascriptValue fieldValue) -> void{
+            const Expected<VectorSingle> parsed = ReadSceneFloatListValue(nwbFilePath, fieldValue, diagnosticPrefix, fieldLabel, s_SceneFloat3ComponentCount);
+            if(!parsed.has_value()){
+                parsedOk = false;
+                return;
+            }
+            parsedValue = parsed.value();
+        }
     );
-    return false;
+    if(!parsedOk)
+        return false;
+    if(found)
+        outValue = parsedValue;
+    return true;
+}
+
+b8 ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset, mut TransformComponent outComponent){
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedTransformComponentField(fieldName);
+    }))
+        return false;
+
+    VectorSingle position = VectorSingle(outComponent.position);
+    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformPositionField, position))
+        return false;
+    outComponent.position = f32x4(position);
+
+    const b8 hasRotation = asset.hasField(s_TransformRotationField);
+    const b8 hasEuler = asset.hasField(s_TransformRotationEulerField);
+    const b8 hasEulerDegrees = asset.hasField(s_TransformRotationEulerDegreesField);
+    usize rotationFieldCount = 0u;
+    if(hasRotation)
+        ++rotationFieldCount;
+    if(hasEuler)
+        ++rotationFieldCount;
+    if(hasEulerDegrees)
+        ++rotationFieldCount;
+    if(rotationFieldCount > 1u){
+        error(
+            "{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"
+            , s_TransformDiagnosticPrefix
+            , PathToString(nwbFilePath)
+        );
+        return false;
+    }
+
+    if(hasRotation){
+        b8 parsedOk = true;
+        VectorSingle parsedRotation = VectorSingle(outComponent.rotation);
+        asset.visitField(
+            s_TransformRotationField,
+            lambda[in nwbFilePath, mut parsedOk, mut parsedRotation](in MetascriptValue fieldValue) -> void{
+                const Expected<VectorSingle> rotation = ParseSceneQuaternionValue(nwbFilePath, fieldValue, s_TransformDiagnosticPrefix, s_TransformRotationField);
+                if(!rotation.has_value()){
+                    parsedOk = false;
+                    return;
+                }
+                parsedRotation = rotation.value();
+            }
+        );
+        if(!parsedOk)
+            return false;
+        outComponent.rotation = f32x4(parsedRotation);
+    }
+    else if(hasEuler){
+        VectorSingle eulerRadians = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+        if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerField, eulerRadians))
+            return false;
+        outComponent.rotation = BuildTransformEulerQuaternion(eulerRadians, false);
+    }
+    else if(hasEulerDegrees){
+        VectorSingle eulerDegrees = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+        if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerDegreesField, eulerDegrees))
+            return false;
+        outComponent.rotation = BuildTransformEulerQuaternion(eulerDegrees, true);
+    }
+
+    VectorSingle scale = VectorSingle(outComponent.scale);
+    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformScaleField, scale))
+        return false;
+    outComponent.scale = f32x4(scale);
+    return true;
+}
+
+b8 ParseCameraComponentData(in Path nwbFilePath, in MetascriptValue asset, mut CameraComponent outComponent){
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedCameraComponentField(fieldName);
+    }))
+        return false;
+
+    const b8 hasFovDegrees = asset.hasField(s_CameraVerticalFovDegreesField);
+    const b8 hasFovRadians = asset.hasField(s_CameraVerticalFovRadiansField);
+    if(hasFovDegrees && hasFovRadians){
+        error(
+            "{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"
+            , s_CameraDiagnosticPrefix
+            , PathToString(nwbFilePath)
+        );
+        return false;
+    }
+
+    if(hasFovDegrees){
+        f32 fovDegrees = 0.0f;
+        if(!ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraVerticalFovDegreesField, fovDegrees))
+            return false;
+        outComponent.setVerticalFovRadians(fovDegrees * s_SceneDegreesToRadians);
+    }
+    else if(hasFovRadians){
+        f32 fovRadians = 0.0f;
+        if(!ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraVerticalFovRadiansField, fovRadians))
+            return false;
+        outComponent.setVerticalFovRadians(fovRadians);
+    }
+
+    f32 nearPlane = outComponent.nearPlane();
+    f32 farPlane = outComponent.farPlane();
+    f32 aspectRatio = outComponent.aspectRatio();
+    if(
+        !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraNearPlaneField, nearPlane)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraFarPlaneField, farPlane)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraAspectRatioField, aspectRatio)
+    )
+        return false;
+    outComponent.setNearPlane(nearPlane);
+    outComponent.setFarPlane(farPlane);
+    outComponent.setAspectRatio(aspectRatio);
+    return true;
+}
+
+b8 ParseLightComponentData(in Path nwbFilePath, in MetascriptValue asset, mut LightComponent outComponent){
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_LightDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedLightComponentField(fieldName);
+    }))
+        return false;
+
+    if(asset.hasField(s_LightTypeField)){
+        const Expected<MetadataStringField> typeField = ReadMetadataStringField(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightTypeField, true);
+        if(!typeField.has_value())
+            return false;
+        const StringView typeText = typeField.value().text;
+        if(typeText == s_LightTypeDirectional)
+            outComponent.type = LightType::Directional;
+        else if(typeText == s_LightTypePoint)
+            outComponent.type = LightType::Point;
+        else if(typeText == s_LightTypeSpot)
+            outComponent.type = LightType::Spot;
+        else{
+            error(
+                "{} '{}': field '{}' {}"
+                , s_LightDiagnosticPrefix
+                , PathToString(nwbFilePath)
+                , s_LightTypeField
+                , s_LightTypeHint
+            );
+            return false;
+        }
+    }
+
+    VectorSingle lightColor = outComponent.color();
+    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightColorField, lightColor))
+        return false;
+    outComponent.setColor(lightColor);
+
+    f32 intensity = outComponent.intensity();
+    if(
+        !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightIntensityField, intensity)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, outComponent.range)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, outComponent.innerConeCos)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, outComponent.outerConeCos)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, outComponent.angularRadius)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, outComponent.sourceRadius)
+    )
+        return false;
+    outComponent.setIntensity(intensity);
+
+    b8 enableCausticsParsed = true;
+    b8 enableCaustics = outComponent.enableCaustics;
+    asset.visitField(
+        s_LightEnableCausticsField,
+        lambda[in nwbFilePath, mut enableCausticsParsed, mut enableCaustics](in MetascriptValue fieldValue) -> void{
+            const Expected<b8> parsed = ParseMetadataBoolField(nwbFilePath, s_LightDiagnosticPrefix, fieldValue, s_LightEnableCausticsField);
+            if(!parsed.has_value()){
+                enableCausticsParsed = false;
+                return;
+            }
+            enableCaustics = parsed.value();
+        }
+    );
+    if(!enableCausticsParsed)
+        return false;
+    outComponent.enableCaustics = enableCaustics;
+    return true;
 }
 
 

@@ -87,9 +87,12 @@ public:
     [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;
     [[nodiscard]] b8 isSelfDefaultedType(MStringView typeName, const ClassDecl* callerClass = nullptr)const noexcept;
     [[nodiscard]] b8 isSmallValueType(MStringView typeName)const noexcept;
+    [[nodiscard]] MStringView findTypeNamespace(MStringView name)const noexcept;
     [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
     [[nodiscard]] b8 isAbstractBuiltinType(MStringView name)const noexcept;
     [[nodiscard]] b8 isPolymorphicBaseBuiltinType(MStringView name)const noexcept;
+    [[nodiscard]] b8 hasPolymorphicInterface(const ClassDecl& classDecl)const noexcept;
+    [[nodiscard]] b8 hasPolymorphicBase(const ClassDecl& classDecl)const noexcept;
 
 
 private:

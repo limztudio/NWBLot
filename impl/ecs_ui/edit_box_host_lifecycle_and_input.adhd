@@ -477,16 +477,21 @@ void UiEditBoxHost::reset(){
     m_context.input().clearFocus();
 }
 
-UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)noexcept{
-    return const_cast<Entry*>(static_cast<const UiEditBoxHost&>(*this).find(widget));
-}
-
-const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const noexcept{
-    for(const auto& entry : m_entries){
+template<typename HostT>
+static auto* FindEditBoxEntry(HostT& entries, const Ui::WidgetId widget)noexcept{
+    for(auto& entry : entries){
         if(entry.widget.id == widget)
             return &entry;
     }
-    return nullptr;
+    return static_cast<decltype(&entries[0])>(nullptr);
+}
+
+UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)noexcept{
+    return FindEditBoxEntry(m_entries, widget);
+}
+
+const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const noexcept{
+    return FindEditBoxEntry(m_entries, widget);
 }
 
 const UiEditBoxHost::Entry* UiEditBoxHost::focusedTextEntry()const noexcept{

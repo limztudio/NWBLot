@@ -58,26 +58,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace FontBinaryPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_FontAssetKindLabel = FOUNDATION_TEXT("font");
-
-static_assert(sizeof(FontBinaryHeader) == 24u && alignof(FontBinaryHeader) == 1u, "Font payload header layout drifted");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct PreparedFontImageGroup{
     Sha256Digest sha256;
     Core::Assets::AssetBytes pixels;
@@ -118,8 +98,11 @@ public:
 [[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const ::Path<::ArenaBase>& path, b8 includePixels, Core::Assets::AssetArena& arena);
 
 // Uses the source buffer's caller-owned arena for native validation allocations.
-[[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex = 0u);
-[[nodiscard]] b8 ValidateFontSource(const Vector<u8, ::ArenaBase>& bytes, u32 faceIndex = 0u);
+[[nodiscard]] b8 ValidateFontSourceNative(Span<const u8> bytes, u32 faceIndex, ::ArenaBase& arena);
+template<typename BytesArenaT>
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateFontSource(const Vector<u8, BytesArenaT>& bytes, const u32 faceIndex = 0u){
+    return ValidateFontSourceNative(Span<const u8>(bytes), faceIndex, bytes.get_allocator().arena());
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

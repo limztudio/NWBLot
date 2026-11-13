@@ -19,8 +19,9 @@ NWB_ADHD_BEGIN
 
 class NwbReflectionEmitter final{
 public:
-    explicit NwbReflectionEmitter(const SymbolTable& symbols)noexcept
+    NwbReflectionEmitter(const SymbolTable& symbols, const CppTypeEmitter& typeEmitter)noexcept
         : m_symbols(symbols)
+        , m_typeEmitter(typeEmitter)
     {}
 
     void emitDeserializeNwbMethod(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> fields, b8 classNeedsArena)const;
@@ -29,6 +30,7 @@ public:
 
 private:
     const SymbolTable& m_symbols;
+    const CppTypeEmitter& m_typeEmitter;
 };
 
 

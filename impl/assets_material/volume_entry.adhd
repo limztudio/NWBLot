@@ -2,12 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_MaterialCookEntryAssetTypeName = "material";
 const StringView s_MaterialNonStandaloneKindLabel = "material";
 const b8 s_MaterialLogCookBuildFailure = false;
 
 b8 IsValidMaterialResourceDependencyName(in b8 parsedOk, in Name resourceName){
     return parsedOk && resourceName != s_NameNone;
+}
+
+b8 IsMaterialResourceParameterValue(in StringView valueText, mut ScratchArena scratchArena){
+    const StringView trimmed = TrimView(valueText);
+    if(!IsMaterialResourceParameterCandidate(trimmed))
+        return false;
+    return HasReservedAssetVirtualRoot(trimmed, scratchArena);
 }
 
 
@@ -58,13 +71,6 @@ namespace __hidden_assets_material_volume_entry{
 inline constexpr TStringView s_MaterialAssetKindLabel = FOUNDATION_TEXT("material");
 
 static_assert(Material::AssetTypeName() == s_MaterialCookEntryAssetTypeName, "Material cook entry asset type drifted");
-
-[[nodiscard]] static b8 IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
-    const AStringView trimmed = TrimView(valueText);
-    if(!IsMaterialResourceParameterCandidate(trimmed))
-        return false;
-    return Core::Assets::HasReservedAssetVirtualRoot(trimmed, scratchArena);
-}
 
 static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     if(!context.document)

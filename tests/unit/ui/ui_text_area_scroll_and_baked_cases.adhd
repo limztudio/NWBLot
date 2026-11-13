@@ -231,10 +231,10 @@ public:
     }
 
     [[nodiscard]] b8 corruptPayloadFontHash(){
-        const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
+        const auto binary = SerializeFontAtlasPayload(m_arena, m_atlas.payload());
         if(!binary)
             return false;
-        auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
+        auto payload = DeserializeFontAtlasPayload(m_arena, *binary);
         if(!payload)
             return false;
         payload->fontSha256.bytes[0u] ^= 1u;
@@ -243,10 +243,10 @@ public:
     }
 
     [[nodiscard]] b8 rebindPayloadFont(const StringView path){
-        const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
+        const auto binary = SerializeFontAtlasPayload(m_arena, m_atlas.payload());
         if(!binary)
             return false;
-        auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
+        auto payload = DeserializeFontAtlasPayload(m_arena, *binary);
         if(!payload)
             return false;
         payload->font = Core::Assets::AssetRef<Font>::FromText(path).value_or(Core::Assets::AssetRef<Font>{});

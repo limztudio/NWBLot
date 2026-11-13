@@ -49,6 +49,7 @@ inline constexpr AStringView s_PipelineConfigurationOption = "--configuration";
 inline constexpr AStringView s_PipelineIncludeDirOption = "-I,--include-dir";
 inline constexpr AStringView s_PipelineDepfileOption = "--depfile";
 inline constexpr AStringView s_PipelineNamespaceOption = "--namespace";
+inline constexpr AStringView s_PipelineNamespaceMapOption = "--namespace-map";
 inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
@@ -59,6 +60,7 @@ struct PipelineOptions{
     Core::Assets::AssetString outputPath;
     Core::Assets::AssetString depfilePath;
     Core::Assets::AssetString customNamespace;
+    Core::Assets::AssetString namespaceMapPath;
     ACompactString configuration;
     // Unset when --asset-type is omitted; the asset builder owns the default domain.
     Optional<ACompactString> assetType;
@@ -73,6 +75,7 @@ public:
         , outputPath(arena)
         , depfilePath(arena)
         , customNamespace(arena)
+        , namespaceMapPath(arena)
     {}
 };
 
@@ -107,6 +110,7 @@ private:
     AInteropString m_outputPath;
     AInteropString m_depfilePath;
     AInteropString m_customNamespace;
+    AInteropString m_namespaceMapPath;
     AInteropString m_configuration;
     AInteropString m_assetType;
     PipelineTool::Enum m_tool;

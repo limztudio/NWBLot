@@ -87,6 +87,10 @@ public:
 public:
     virtual b8 writeCookedAsset(TStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec, const CookEntrySourceLocation& location) = 0;
     virtual b8 writeCachedCookedAsset(TStringView assetKind, const Name& virtualPath, const IAssetCodec& codec, Span<const u8> payloadBytes) = 0;
+#if defined(FOUNDATION_UNICODE)
+    [[nodiscard]] b8 writeCookedAsset(AStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec, const CookEntrySourceLocation& location);
+    [[nodiscard]] b8 writeCachedCookedAsset(AStringView assetKind, const Name& virtualPath, const IAssetCodec& codec, Span<const u8> payloadBytes);
+#endif
 };
 
 
@@ -155,6 +159,10 @@ template<typename StringT>
 
 [[nodiscard]] b8 RegisterParsedVirtualPath(TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes);
 [[nodiscard]] b8 RegisterCookedVirtualPath(TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes);
+#if defined(FOUNDATION_UNICODE)
+[[nodiscard]] b8 RegisterParsedVirtualPath(AStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes);
+[[nodiscard]] b8 RegisterCookedVirtualPath(AStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes);
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

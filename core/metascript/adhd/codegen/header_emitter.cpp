@@ -18,6 +18,8 @@ NWB_ADHD_BEGIN
 
 
 MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView namespacePath)const{
+    m_typeEmitter.setCurrentNamespace(namespacePath);
+    m_sourceEmitter.setCurrentNamespace(namespacePath);
     const DeclarationDependencyAnalyzer declarationDependencies(m_arena, m_symbols);
     MString out(m_arena);
     out.reserve(s_AdhdEmitReserveBytes);

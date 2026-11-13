@@ -85,13 +85,21 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     const FieldDecl* lhsThisField = nullptr;
     const ScopedVarInfo* lhsLocal = nullptr;
     const TypeRef* lhsMemberOrIndexTypeRef = nullptr;
+    auto isRebindableRef = [&](const ParamPassingMode::Enum refMode, const MStringView baseTypeName, const b8 allowMutRebind)noexcept -> b8{
+        return refMode != ParamPassingMode::None && (
+            allowMutRebind
+            || refMode == ParamPassingMode::In
+            || m_checker.m_symbols.findInterface(baseTypeName)
+            || m_checker.m_symbols.isAbstractBuiltinType(baseTypeName)
+        );
+    };
     if(expr.op == TokenType::Equal && expr.lhs){
         if(expr.lhs->kind == ExprKind::ThisMember && ownerClass && !expr.lhs->text.empty()){
             lhsThisField = SymbolTable::FindClassField(*ownerClass, expr.lhs->text);
             if(lhsThisField && lhsThisField->type){
                 const MStringView baseFieldTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name);
                 const ParamPassingMode::Enum fieldRefMode = m_checker.m_symbols.resolveRefMode(lhsThisField->type);
-                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseFieldTypeName))){
+                if(isRebindableRef(fieldRefMode, baseFieldTypeName, method.isConstructor)){
                     if(m_checker.isThisConstInScope(method, scope)){
                         m_checker.reportError(errors, expr.lhs->span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
                         ok = false;
@@ -105,7 +113,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             if(lhsLocal && lhsLocal->type && !lhsLocal->isParam){
                 const MStringView baseLocalTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsLocal->type->name);
                 const ParamPassingMode::Enum localRefMode = (lhsLocal->mode != ParamPassingMode::None) ? lhsLocal->mode : m_checker.m_symbols.resolveRefMode(lhsLocal->type);
-                if(localRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLocalTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLocalTypeName)))
+                if(isRebindableRef(localRefMode, baseLocalTypeName, false))
                     lhsNeedsMut = false;
             }
         }
@@ -113,7 +121,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             lhsMemberOrIndexTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
             const ParamPassingMode::Enum lhsRefMode = m_checker.m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
             const MStringView baseLhsTypeName = lhsMemberOrIndexTypeRef ? m_checker.m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name) : MStringView{};
-            if(lhsRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLhsTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLhsTypeName))){
+            if(isRebindableRef(lhsRefMode, baseLhsTypeName, false)){
                 lhsNeedsMut = false;
                 if(expr.lhs->lhs){
                     const b8 savedDeref = expr.lhs->lhs->derefNotNull;
@@ -132,7 +140,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         if(lhsThisField->type && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*lhsThisField->type))
             rhsInClassArenaCtx = true;
         const ParamPassingMode::Enum fieldRefMode = lhsThisField->type ? m_checker.m_symbols.resolveRefMode(lhsThisField->type) : ParamPassingMode::None;
-        if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseFieldTypeName))){
+        if(isRebindableRef(fieldRefMode, baseFieldTypeName, method.isConstructor)){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
@@ -151,15 +159,16 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     }
     else if(lhsLocal && lhsLocal->type){
         const MStringView baseLocalTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsLocal->type->name);
-        if(expr.lhs->derefNotNull && (m_checker.m_symbols.findInterface(baseLocalTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLocalTypeName))){
-            const ParamPassingMode::Enum localRefMode = (lhsLocal->mode == ParamPassingMode::Mut || m_checker.m_symbols.resolveRefMode(lhsLocal->type) == ParamPassingMode::Mut)
+        const ParamPassingMode::Enum resolvedLocalRefMode = (lhsLocal->mode != ParamPassingMode::None) ? lhsLocal->mode : m_checker.m_symbols.resolveRefMode(lhsLocal->type);
+        if(expr.lhs->derefNotNull && !lhsLocal->isParam && isRebindableRef(resolvedLocalRefMode, baseLocalTypeName, false)){
+            const ParamPassingMode::Enum rebindMode = (resolvedLocalRefMode == ParamPassingMode::Mut)
                 ? ParamPassingMode::Mut
                 : ParamPassingMode::In;
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
                 lhsLocal->type,
-                localRefMode,
+                rebindMode,
                 scope,
                 "cannot rebind interface reference to concrete class that does not implement the interface",
                 expr,
@@ -188,7 +197,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(const_cast<TypeRef*>(lhsMemberOrIndexTypeRef), expr.rhs);
         const ParamPassingMode::Enum lhsRefMode = m_checker.m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
         const MStringView baseLhsTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name);
-        if(lhsRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLhsTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLhsTypeName))){
+        if(expr.lhs->derefNotNull && isRebindableRef(lhsRefMode, baseLhsTypeName, false)){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,

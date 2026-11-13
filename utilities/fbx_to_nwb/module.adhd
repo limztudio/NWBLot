@@ -19,6 +19,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_FbxRefreshMeshMetaKind = "Mesh";
+
+b8 ValidateMeshAssetFields(in Path nwbFilePath, in StringView meshVariableName, in MetascriptValue asset){
+    if(!asset.isMap()){
+        error("{} meta '{}': '{}' is not a map", s_FbxRefreshMeshMetaKind, PathToString(nwbFilePath), meshVariableName);
+        return false;
+    }
+
+    b8 allAllowed = true;
+    asset.forEachMapEntry(lambda[in nwbFilePath, in meshVariableName, mut allAllowed](in StringView fieldName, in MetascriptValue fieldValue) -> b8{
+        if(IsAllowedMeshAssetField(fieldName))
+            return true;
+
+        error("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh", s_FbxRefreshMeshMetaKind, PathToString(nwbFilePath), meshVariableName, fieldName);
+        allAllowed = false;
+        return false;
+    });
+    return allAllowed;
+}
+
+b8 IsMeshMetascriptReferenceTo(in MetascriptValue value, in StringView variableName){
+    return value.isReference() && value.asReference() == variableName;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -1374,23 +1402,6 @@ struct SkinReference{
     AStringView variableName;
 };
 
-[[nodiscard]] static b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
-        return false;
-    }
-
-    for(const auto& field : asset.asMap()){
-        const Core::Metascript::MStringView fieldName(field.first);
-        if(Impl::IsAllowedMeshAssetField(fieldName))
-            continue;
-
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] static b8 ValidateRefreshMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
     if(!Impl::MeshCookSourceStreams::ValidateSourceVertexRefStreams(
         nwbFilePath,
@@ -1445,10 +1456,6 @@ struct SkinReference{
     if(!ValidateRefreshMesh(nwbFilePath, mesh))
         return MakeUnexpected(Failure{});
     return mesh;
-}
-
-[[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
-    return value.isReference() && value.asReference() == variableName;
 }
 
 [[nodiscard]] static Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
@@ -1531,7 +1538,7 @@ struct SkinReference{
             continue;
 
         const Core::Metascript::Value* meshField = skinAsset->findField(s_MeshAssetTypeText);
-        if(!meshField || !IsReferenceTo(*meshField, meshVariableName))
+        if(!meshField || !IsMeshMetascriptReferenceTo(*meshField, meshVariableName))
             continue;
 
         if(result.value){
@@ -1547,43 +1554,29 @@ struct SkinReference{
 }
 
 [[nodiscard]] static b8 AppendMeshReplacements(const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements){
-    if(DidMeshStreamCountChange(before.positions, after.positions.size())){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshVec3List(scratchArena, after.positions);
-        if(!AddReplacement(source, variableName, Impl::s_MeshPositionsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
-    if(DidMeshStreamCountChange(before.normals, after.normals.size())){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshVec3List(scratchArena, after.normals);
-        if(!AddReplacement(source, variableName, Impl::s_MeshNormalsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
-    if(DidMeshStreamCountChange(before.tangents, after.tangents.size())){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshVec4List(scratchArena, after.tangents);
-        if(!AddReplacement(source, variableName, Impl::s_MeshTangentsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
-    if(DidMeshStreamCountChange(before.uv0, after.uv0.size())){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshVec2List(scratchArena, after.uv0);
-        if(!AddReplacement(source, variableName, Impl::s_MeshUv0FieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
-    if(DidMeshStreamCountChange(before.colors, after.colors.size())){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshVec4List(scratchArena, after.colors);
-        if(!AddReplacement(source, variableName, Impl::s_MeshColorsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
+    const auto appendIfChanged = [&](const b8 changed, const AStringView fieldName, auto&& formatFn) -> b8{
+        if(!changed)
+            return true;
+        const AString<::ArenaBase> formatted = formatFn(scratchArena);
+        return AddReplacement(source, variableName, fieldName, AStringView(formatted), scratchArena, inOutReplacements);
+    };
+
+    if(!appendIfChanged(DidMeshStreamCountChange(before.positions, after.positions.size()), Impl::s_MeshPositionsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec3List(arena, after.positions); }))
+        return false;
+    if(!appendIfChanged(DidMeshStreamCountChange(before.normals, after.normals.size()), Impl::s_MeshNormalsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec3List(arena, after.normals); }))
+        return false;
+    if(!appendIfChanged(DidMeshStreamCountChange(before.tangents, after.tangents.size()), Impl::s_MeshTangentsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec4List(arena, after.tangents); }))
+        return false;
+    if(!appendIfChanged(DidMeshStreamCountChange(before.uv0, after.uv0.size()), Impl::s_MeshUv0FieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec2List(arena, after.uv0); }))
+        return false;
+    if(!appendIfChanged(DidMeshStreamCountChange(before.colors, after.colors.size()), Impl::s_MeshColorsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec4List(arena, after.colors); }))
+        return false;
 
     const b8 componentRefsChanged = DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after));
-    if(componentRefsChanged){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshVertexRefList(scratchArena, after.vertexRefs);
-        if(!AddReplacement(source, variableName, Impl::s_MeshVertexRefsFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
-    if(DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size())){
-        const AString<::ArenaBase> formatted = FormatMeshRefreshIndexList(scratchArena, after.indices);
-        if(!AddReplacement(source, variableName, Impl::s_MeshIndicesFieldNameView, AStringView(formatted), scratchArena, inOutReplacements))
-            return false;
-    }
+    if(!appendIfChanged(componentRefsChanged, Impl::s_MeshVertexRefsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVertexRefList(arena, after.vertexRefs); }))
+        return false;
+    if(!appendIfChanged(DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size()), Impl::s_MeshIndicesFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshIndexList(arena, after.indices); }))
+        return false;
 
     return true;
 }
@@ -1798,10 +1791,11 @@ static i32 ExitValidation(const CLI::App& app, const AStringView option, const A
     return true;
 }
 
-static b8 ValidateAndCanonicalizeAssetType(UtilityString& inOutValue){
-    const auto parsed = ParseAssetTypeText(AStringView(inOutValue));
+template<typename ParseFn, typename TextFn>
+static b8 ValidateAndCanonicalizeOption(UtilityString& inOutValue, ParseFn&& parseFn, TextFn&& textFn){
+    const auto parsed = parseFn(AStringView(inOutValue));
     if(parsed){
-        inOutValue.assign(OutputAssetTypeText(*parsed));
+        inOutValue.assign(textFn(*parsed));
         return true;
     }
     const AString<::ArenaBase> normalized = NormalizeFbxOptionText(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(inOutValue));
@@ -1809,15 +1803,20 @@ static b8 ValidateAndCanonicalizeAssetType(UtilityString& inOutValue){
     return false;
 }
 
+static b8 ValidateAndCanonicalizeAssetType(UtilityString& inOutValue){
+    return ValidateAndCanonicalizeOption(
+        inOutValue,
+        [](const AStringView text){ return ParseAssetTypeText(text); },
+        [](const auto value){ return OutputAssetTypeText(value); }
+    );
+}
+
 static b8 ValidateAndCanonicalizeNormalMode(UtilityString& inOutValue){
-    const auto parsed = ParseNormalModeText(AStringView(inOutValue));
-    if(parsed){
-        inOutValue.assign(NormalModeText(*parsed));
-        return true;
-    }
-    const AString<::ArenaBase> normalized = NormalizeFbxOptionText(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(inOutValue));
-    inOutValue.assign(normalized.data(), normalized.size());
-    return false;
+    return ValidateAndCanonicalizeOption(
+        inOutValue,
+        [](const AStringView text){ return ParseNormalModeText(text); },
+        [](const auto value){ return NormalModeText(value); }
+    );
 }
 
 [[nodiscard]] static Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){

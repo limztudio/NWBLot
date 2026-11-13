@@ -226,24 +226,6 @@ void FillPackageRequest(in Path spoolDirectory, in StringView crashId, mut Crash
     CopyFixedBuffer(request.spoolDirectory, PathToString(spoolDirectory));
 }
 
-void ExpectPathExists(in Path path, in b8 expected){
-    const Expected<b8, ErrorCode> query = FileExists(path);
-    ASSERT_TRUE(query.has_value());
-    EXPECT_EQ(query.value(), expected);
-}
-
-void ExpectIsDirectory(in Path path, in b8 expected){
-    const Expected<b8, ErrorCode> query = IsDirectory(path);
-    ASSERT_TRUE(query.has_value());
-    EXPECT_EQ(query.value(), expected);
-}
-
-void ExpectIsRegularFile(in Path path, in b8 expected){
-    const Expected<b8, ErrorCode> query = IsRegularFile(path);
-    ASSERT_TRUE(query.has_value());
-    EXPECT_EQ(query.value(), expected);
-}
-
 void ExpectDirectoryReady(in Path path, in u32 timeoutMs){
     const Expected<b8, ErrorCode> ready = WaitForDirectory(path, timeoutMs);
     ASSERT_TRUE(ready.has_value());
@@ -469,7 +451,7 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
     const Path spool = SpoolDirectory(groupView);
     b8 attachmentRejected = false;
     b8 handlerAcceptedFailure = false;
-    native(in groupView, in spool, mut testArena, mut attachmentRejected, mut handlerAcceptedFailure){
+    native(in spool, mut testArena, mut attachmentRejected, mut handlerAcceptedFailure){
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfig config(installArena);
@@ -494,7 +476,7 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
             const auto captured = Core::Crash::CaptureGpuCrashDump("report", AStringView(reinterpret_cast<const char*>(binary.data()), binary.size()), kinds[index]);
             ASSERT_TRUE(captured.packageWritten());
             Vector<u8, ScratchArena> data(testArena.scratchArena);
-            ASSERT_TRUE(ReadBinaryFile(PackageDirectory(groupView, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId)) / names[index], data));
+            ASSERT_TRUE(ReadBinaryFile(spool / CrashNames::s_PendingDirectoryName / FixedBufferView(crashId) / names[index], data));
             ASSERT_EQ(data.size(), binary.size());
             for(usize byte = 0u; byte < binary.size(); ++byte)
                 EXPECT_EQ(data[byte], binary[byte]);
@@ -519,7 +501,7 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
             Array<char, Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
             const u64 sequence = Core::Crash::CrashDetail::g_State.crashSequence.load(MemoryOrder::relaxed);
             BuildCrashIdForProcess(CurrentProcessId(), sequence, crashId);
-            return WriteTextFile(PackageDirectory(groupView, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId)), AStringView("block package directory"));
+            return WriteTextFile(spool / CrashNames::s_PendingDirectoryName / FixedBufferView(crashId), AStringView("block package directory"));
         };
         ASSERT_TRUE(blockNextPackage());
         const auto attachmentFailure = Core::Crash::CaptureGpuCrashDump("gpu report", {}, Core::Crash::GpuCrashDumpKind::None);
@@ -661,7 +643,7 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
         ASSERT_EQ(WaitForSingleObject(Core::Crash::CrashDetail::g_State.crashHandledEvent, Core::Crash::CrashDetail::s_ManualCrashDumpWaitMilliseconds), WAIT_OBJECT_0);
 
         crashIdText.assign(request.crashId.data());
-        const CrashTestPath packageDirectory = spool / CrashNames::s_PendingDirectoryName / AStringView(request.crashId.data());
+        const auto packageDirectory = spool / CrashNames::s_PendingDirectoryName / AStringView(request.crashId.data());
         Vector<u8, ScratchArena> dumpBytes(testArena.scratchArena);
         const auto read = ReadBinaryFile(packageDirectory / CrashNames::s_ProcessDumpFileName, dumpBytes);
         ASSERT_TRUE(read);

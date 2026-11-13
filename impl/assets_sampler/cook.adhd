@@ -2,70 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_sampler/asset.adhd>
 #include <impl/assets_sampler/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_sampler/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SamplerCookEntry{
-    Name virtualPath = s_NameNone;
-    Core::SamplerDesc description;
+class SamplerCookEntry{
+    public Name virtualPath = s_NameNone;
+    public SamplerDesc description;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<SamplerCookEntry> ParseSamplerCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<Sampler> BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,7 +21,7 @@ NWB_IMPL_END
 const f32 s_SamplerCookBorderColorChannel = 0.0f;
 
 b8 ValidateSamplerCookMetadataDescription(
-    in StringView filePathText,
+    in Path nwbFilePath,
     in f32 borderColorR,
     in f32 borderColorG,
     in f32 borderColorB,
@@ -100,7 +47,7 @@ b8 ValidateSamplerCookMetadataDescription(
     ))
         return true;
 
-    error("{} '{}': sampler description is invalid", s_SamplerMetaDiagnosticPrefix, filePathText);
+    error("{} '{}': sampler description is invalid", s_SamplerMetaDiagnosticPrefix, PathToString(nwbFilePath));
     return false;
 }
 
@@ -110,6 +57,156 @@ b8 ValidateSamplerCookEntryVirtualPath(in Name virtualPath){
 
     error("Sampler cook: sampler entry is invalid");
     return false;
+}
+
+Expected<b8> ReadSamplerFilterField(in Path nwbFilePath, in MetascriptValue object, in StringView fieldName){
+    const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, object, s_SamplerMetaDiagnosticPrefix, fieldName, true);
+    if(!field.has_value())
+        return MakeUnexpected(Failure());
+
+    const StringView value = field.value().text;
+    if(value == s_SamplerFilterNearest)
+        return false;
+    if(value == s_SamplerFilterLinear)
+        return true;
+
+    error("{} '{}': field '{}' {}", s_SamplerMetaDiagnosticPrefix, PathToString(nwbFilePath), fieldName, s_SamplerFilterHint);
+    return MakeUnexpected(Failure());
+}
+
+Expected<SamplerAddressMode> ReadSamplerAddressModeField(in Path nwbFilePath, in MetascriptValue object, in StringView fieldName){
+    const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, object, s_SamplerMetaDiagnosticPrefix, fieldName, true);
+    if(!field.has_value())
+        return MakeUnexpected(Failure());
+
+    const StringView value = field.value().text;
+    if(value == s_SamplerAddressClamp)
+        return SamplerAddressMode::Clamp;
+    if(value == s_SamplerAddressWrap)
+        return SamplerAddressMode::Wrap;
+    if(value == s_SamplerAddressBorder)
+        return SamplerAddressMode::Border;
+    if(value == s_SamplerAddressMirror)
+        return SamplerAddressMode::Mirror;
+    if(value == s_SamplerAddressMirrorOnce)
+        return SamplerAddressMode::MirrorOnce;
+
+    error("{} '{}': field '{}' {}", s_SamplerMetaDiagnosticPrefix, PathToString(nwbFilePath), fieldName, s_SamplerAddressModeHint);
+    return MakeUnexpected(Failure());
+}
+
+Expected<SamplerReductionType> ReadSamplerReductionTypeField(in Path nwbFilePath, in MetascriptValue object, in StringView fieldName){
+    const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, object, s_SamplerMetaDiagnosticPrefix, fieldName, true);
+    if(!field.has_value())
+        return MakeUnexpected(Failure());
+
+    const StringView value = field.value().text;
+    if(value == s_SamplerReductionStandard)
+        return SamplerReductionType::Standard;
+    if(value == s_SamplerReductionComparison)
+        return SamplerReductionType::Comparison;
+
+    error("{} '{}': field '{}' {}", s_SamplerMetaDiagnosticPrefix, PathToString(nwbFilePath), fieldName, s_SamplerReductionTypeHint);
+    return MakeUnexpected(Failure());
+}
+
+Expected<SamplerCookEntry> ParseSamplerCookMetadataValue(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    SamplerCookEntry entry;
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix))
+        return MakeUnexpected(Failure());
+    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SamplerMetaDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedSamplerMetadataField(fieldName);
+    }))
+        return MakeUnexpected(Failure());
+
+    SamplerDesc description;
+    description.borderColor = Color(s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel);
+    const Expected<b8> minFilterResult = ReadSamplerFilterField(nwbFilePath, asset, s_SamplerMinFilterField);
+    if(!minFilterResult.has_value())
+        return MakeUnexpected(Failure());
+    description.minFilter = minFilterResult.value();
+    const Expected<b8> magFilterResult = ReadSamplerFilterField(nwbFilePath, asset, s_SamplerMagFilterField);
+    if(!magFilterResult.has_value())
+        return MakeUnexpected(Failure());
+    description.magFilter = magFilterResult.value();
+    const Expected<b8> mipFilterResult = ReadSamplerFilterField(nwbFilePath, asset, s_SamplerMipFilterField);
+    if(!mipFilterResult.has_value())
+        return MakeUnexpected(Failure());
+    description.mipFilter = mipFilterResult.value();
+    const Expected<SamplerAddressMode> addressUResult = ReadSamplerAddressModeField(nwbFilePath, asset, s_SamplerAddressUField);
+    if(!addressUResult.has_value())
+        return MakeUnexpected(Failure());
+    description.addressU = addressUResult.value();
+    const Expected<SamplerAddressMode> addressVResult = ReadSamplerAddressModeField(nwbFilePath, asset, s_SamplerAddressVField);
+    if(!addressVResult.has_value())
+        return MakeUnexpected(Failure());
+    description.addressV = addressVResult.value();
+    const Expected<SamplerAddressMode> addressWResult = ReadSamplerAddressModeField(nwbFilePath, asset, s_SamplerAddressWField);
+    if(!addressWResult.has_value())
+        return MakeUnexpected(Failure());
+    description.addressW = addressWResult.value();
+    const Expected<SamplerReductionType> reductionTypeResult = ReadSamplerReductionTypeField(nwbFilePath, asset, s_SamplerReductionField);
+    if(!reductionTypeResult.has_value())
+        return MakeUnexpected(Failure());
+    description.reductionType = reductionTypeResult.value();
+    const Expected<f32> maxAnisotropyResult = ReadMetadataFiniteF32Field(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMaxAnisotropyField, true);
+    if(!maxAnisotropyResult.has_value())
+        return MakeUnexpected(Failure());
+    description.maxAnisotropy = maxAnisotropyResult.value();
+    const Expected<f32> mipBiasResult = ReadMetadataFiniteF32Field(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMipBiasField, true);
+    if(!mipBiasResult.has_value())
+        return MakeUnexpected(Failure());
+    description.mipBias = mipBiasResult.value();
+    if(!ValidateSamplerCookMetadataDescription(
+        nwbFilePath,
+        description.borderColor.r,
+        description.borderColor.g,
+        description.borderColor.b,
+        description.borderColor.a,
+        description.maxAnisotropy,
+        description.mipBias,
+        cast<u32>(description.addressU),
+        cast<u32>(description.addressV),
+        cast<u32>(description.addressW),
+        cast<u32>(description.reductionType)
+    ))
+        return MakeUnexpected(Failure());
+
+    entry.description = description;
+    return entry;
+}
+
+Expected<SamplerCookEntry> ParseSamplerCookMetadata(
+    in Path assetRoot,
+    in StringView virtualRoot,
+    in Path nwbFilePath,
+    in MetascriptDocument doc,
+    mut ScratchArena scratchArena
+){
+    return ParseCookMetadataDocument<SamplerCookEntry>(
+        assetRoot,
+        virtualRoot,
+        nwbFilePath,
+        doc,
+        s_SamplerMetaDiagnosticPrefix,
+        lambda[in nwbFilePath](in Name virtualPath, in MetascriptValue asset) -> Expected<SamplerCookEntry>{
+            return ParseSamplerCookMetadataValue(virtualPath, nwbFilePath, asset);
+        },
+        scratchArena
+    );
+}
+
+Expected<Sampler> BuildSamplerAsset(in SamplerCookEntry samplerEntry, mut AssetArena arena){
+    if(!ValidateSamplerCookEntryVirtualPath(samplerEntry.virtualPath))
+        return MakeUnexpected(Failure());
+
+    Sampler asset(arena, samplerEntry.virtualPath);
+    asset.setDescription(samplerEntry.description);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
 }
 
 
@@ -129,52 +226,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/assets/binary_payload_io.h>
-#include <core/assets/cook_metadata.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_sampler_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Metascript;
-
-static constexpr Array<::NamedEnumCase<b8>, 2u> s_FilterCases = {
-    ::NamedEnumCase<b8>{ s_SamplerFilterNearest, false },
-    ::NamedEnumCase<b8>{ s_SamplerFilterLinear, true },
-};
-
-static constexpr Array<::NamedEnumCase<Core::SamplerAddressMode::Enum>, 5u> s_AddressModeCases = {
-    ::NamedEnumCase<Core::SamplerAddressMode::Enum>{ s_SamplerAddressClamp, Core::SamplerAddressMode::Clamp },
-    ::NamedEnumCase<Core::SamplerAddressMode::Enum>{ s_SamplerAddressWrap, Core::SamplerAddressMode::Wrap },
-    ::NamedEnumCase<Core::SamplerAddressMode::Enum>{ s_SamplerAddressBorder, Core::SamplerAddressMode::Border },
-    ::NamedEnumCase<Core::SamplerAddressMode::Enum>{ s_SamplerAddressMirror, Core::SamplerAddressMode::Mirror },
-    ::NamedEnumCase<Core::SamplerAddressMode::Enum>{ s_SamplerAddressMirrorOnce, Core::SamplerAddressMode::MirrorOnce },
-};
-
-static constexpr Array<::NamedEnumCase<Core::SamplerReductionType::Enum>, 2u> s_ReductionTypeCases = {
-    ::NamedEnumCase<Core::SamplerReductionType::Enum>{ s_SamplerReductionStandard, Core::SamplerReductionType::Standard },
-    ::NamedEnumCase<Core::SamplerReductionType::Enum>{ s_SamplerReductionComparison, Core::SamplerReductionType::Comparison },
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,94 +258,6 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         outBinary
     );
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena&, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_sampler_cook;
-
-    SamplerCookEntry entry;
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SamplerMetaDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, &IsAllowedSamplerMetadataField))
-        return MakeUnexpected(Failure{});
-
-    Core::SamplerDesc description;
-    description.borderColor = Core::Color(s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel);
-    auto minFilterResult = Core::Assets::ParseNamedMetadataEnumField<b8>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMinFilterField, s_FilterCases, s_SamplerFilterHint);
-    if(!minFilterResult)
-        return MakeUnexpected(Failure{});
-    description.minFilter = *minFilterResult;
-    auto magFilterResult = Core::Assets::ParseNamedMetadataEnumField<b8>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMagFilterField, s_FilterCases, s_SamplerFilterHint);
-    if(!magFilterResult)
-        return MakeUnexpected(Failure{});
-    description.magFilter = *magFilterResult;
-    auto mipFilterResult = Core::Assets::ParseNamedMetadataEnumField<b8>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMipFilterField, s_FilterCases, s_SamplerFilterHint);
-    if(!mipFilterResult)
-        return MakeUnexpected(Failure{});
-    description.mipFilter = *mipFilterResult;
-    auto addressUResult = Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerAddressUField, s_AddressModeCases, s_SamplerAddressModeHint);
-    if(!addressUResult)
-        return MakeUnexpected(Failure{});
-    description.addressU = *addressUResult;
-    auto addressVResult = Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerAddressVField, s_AddressModeCases, s_SamplerAddressModeHint);
-    if(!addressVResult)
-        return MakeUnexpected(Failure{});
-    description.addressV = *addressVResult;
-    auto addressWResult = Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerAddressWField, s_AddressModeCases, s_SamplerAddressModeHint);
-    if(!addressWResult)
-        return MakeUnexpected(Failure{});
-    description.addressW = *addressWResult;
-    auto reductionTypeResult = Core::Assets::ParseNamedMetadataEnumField<Core::SamplerReductionType::Enum>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerReductionField, s_ReductionTypeCases, s_SamplerReductionTypeHint);
-    if(!reductionTypeResult)
-        return MakeUnexpected(Failure{});
-    description.reductionType = *reductionTypeResult;
-    auto maxAnisotropyResult = Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMaxAnisotropyField, true);
-    if(!maxAnisotropyResult)
-        return MakeUnexpected(Failure{});
-    description.maxAnisotropy = *maxAnisotropyResult;
-    auto mipBiasResult = Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMipBiasField, true);
-    if(!mipBiasResult)
-        return MakeUnexpected(Failure{});
-    description.mipBias = *mipBiasResult;
-    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
-    if(!ValidateSamplerCookMetadataDescription(
-        filePathText,
-        description.borderColor.r,
-        description.borderColor.g,
-        description.borderColor.b,
-        description.borderColor.a,
-        description.maxAnisotropy,
-        description.mipBias,
-        static_cast<u32>(description.addressU),
-        static_cast<u32>(description.addressV),
-        static_cast<u32>(description.addressW),
-        static_cast<u32>(description.reductionType)
-    ))
-        return MakeUnexpected(Failure{});
-
-    entry.description = description;
-    return entry;
-}
-
-Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<SamplerCookEntry, &ParseSamplerCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_SamplerMetaDiagnosticPrefix, arena, scratchArena);
-}
-
-Expected<Sampler> BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Core::Assets::AssetArena& arena){
-    if(!ValidateSamplerCookEntryVirtualPath(samplerEntry.virtualPath))
-        return MakeUnexpected(Failure{});
-
-    Sampler asset(arena, samplerEntry.virtualPath);
-    asset.setDescription(samplerEntry.description);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
 }
 
 

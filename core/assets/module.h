@@ -82,9 +82,7 @@ public:
 public:
     [[nodiscard]] b8 checkVirtualPath(TStringView failureContext)const;
 #if defined(FOUNDATION_UNICODE)
-    [[nodiscard]] b8 checkVirtualPath(const AStringView failureContext)const{
-        return checkVirtualPath(ConvertString(failureContext));
-    }
+    [[nodiscard]] b8 checkVirtualPath(AStringView failureContext)const;
 #endif
 
 
@@ -145,6 +143,9 @@ public:
 
 public:
     [[nodiscard]] b8 checkSerializeAssetType(const IAsset& asset, TStringView failureContext)const;
+#if defined(FOUNDATION_UNICODE)
+    [[nodiscard]] b8 checkSerializeAssetType(const IAsset& asset, AStringView failureContext)const;
+#endif
 #endif
 
 

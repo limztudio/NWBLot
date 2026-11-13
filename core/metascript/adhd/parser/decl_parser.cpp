@@ -50,19 +50,32 @@ b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     return !m_cursor.failed();
 }
 
-b8 DeclParser::isCurrentTokenImported()const noexcept{
+b8 DeclParser::computeCurrentTokenOffset(usize& outOffset)const noexcept{
     if(!m_preprocessor || m_activeSource.empty() || m_cursor.current().text.empty())
         return false;
     const MChar* base = m_activeSource.data();
     const MChar* tokPtr = m_cursor.current().text.data();
     if(tokPtr < base || tokPtr >= base + m_activeSource.size())
         return false;
-    const usize offset = static_cast<usize>(tokPtr - base);
-    return m_preprocessor->isOffsetInIncludedRange(offset);
+    outOffset = static_cast<usize>(tokPtr - base);
+    return true;
+}
+
+b8 DeclParser::isCurrentTokenImported()const noexcept{
+    usize offset = 0u;
+    return computeCurrentTokenOffset(offset) && m_preprocessor->isOffsetInIncludedRange(offset);
+}
+
+MStringView DeclParser::currentTokenImportedNamespace()const noexcept{
+    usize offset = 0u;
+    if(!computeCurrentTokenOffset(offset))
+        return {};
+    return m_preprocessor->resolveIncludedNamespaceAtOffset(offset);
 }
 
 b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     const b8 isImported = isCurrentTokenImported();
+    const MStringView importedNamespace = isImported ? currentTokenImportedNamespace() : MStringView{};
 
     MVector<ParsedAttribute> attributes(m_cursor.arena());
     if(!AttributeParser::ParseOptionalList(m_cursor, attributes))
@@ -125,6 +138,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         Stmt* stmt = m_stmtParser.parseConstDeclaration(span);
         if(!stmt)
             return false;
+        stmt->cppNamespace = importedNamespace;
         stmt->isImported = isImported;
         outUnit.globalConstants.push_back(stmt);
         return true;
@@ -134,6 +148,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         TypeAliasDecl* aliasDecl = parseTypeAlias(span, attributes);
         if(!aliasDecl)
             return false;
+        aliasDecl->cppNamespace = importedNamespace;
         aliasDecl->isImported = isImported;
         outUnit.typeAliases.push_back(aliasDecl);
         return true;
@@ -145,6 +160,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         EnumDecl* enumDecl = parseEnumDecl(span, attributes, isFlagDecl);
         if(!enumDecl)
             return false;
+        enumDecl->cppNamespace = importedNamespace;
         enumDecl->isImported = isImported;
         outUnit.enums.push_back(enumDecl);
         return true;
@@ -154,6 +170,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, attributes);
         if(!ifaceDecl)
             return false;
+        ifaceDecl->cppNamespace = importedNamespace;
         ifaceDecl->isImported = isImported;
         outUnit.interfaces.push_back(ifaceDecl);
         return true;
@@ -163,9 +180,12 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         ClassDecl* classDecl = parseClassDecl(span, attributes);
         if(!classDecl)
             return false;
+        classDecl->cppNamespace = importedNamespace;
         classDecl->isImported = isImported;
-        for(MethodDecl* m : classDecl->methods)
+        for(MethodDecl* m : classDecl->methods){
+            m->cppNamespace = importedNamespace;
             m->isImported = isImported;
+        }
         outUnit.classes.push_back(classDecl);
         return true;
     }
@@ -173,6 +193,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes);
     if(!callable)
         return false;
+    callable->cppNamespace = importedNamespace;
     callable->isImported = isImported;
 
     if(callable->ownerClassName.empty())

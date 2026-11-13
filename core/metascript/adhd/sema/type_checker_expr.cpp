@@ -42,7 +42,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     }
     case ExprKind::Identifier:{
         const ScopedVarInfo* local = FindScopedVar(scope, expr.text);
-        const BuiltinGlobalConstantInfo* builtinConst = (!local && !m_symbols.findGlobalConstant(expr.text) && !HasConstValueTemplateParam(ownerClass, &method, expr.text))
+        const Stmt* globalConstDecl = (!local && !HasConstValueTemplateParam(ownerClass, &method, expr.text))
+            ? m_symbols.findGlobalConstant(expr.text)
+            : nullptr;
+        if(globalConstDecl)
+            expr.resolvedCppNamespace = globalConstDecl->cppNamespace;
+        const BuiltinGlobalConstantInfo* builtinConst = (!local && !globalConstDecl && !HasConstValueTemplateParam(ownerClass, &method, expr.text))
             ? FindBuiltinGlobalConstant(expr.text)
             : nullptr;
         expr.isBuiltinConstant = (builtinConst != nullptr);
@@ -175,6 +180,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             expr.lhs = nullptr;
 
             if(const EnumDecl* enumDecl = m_symbols.findEnum(expr.scopeChain[0])){
+                expr.resolvedCppNamespace = enumDecl->cppNamespace;
                 if(expr.scopeChain.size() != 2u){
                     reportError(errors, expr.span, "invalid enum/flag scope access; expected 'TypeName::Entry'");
                     ok = false;
@@ -252,6 +258,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     || (!scopedCls->componentTypeName.empty() && (expr.scopeChain[1] == "ComponentTypeName" || expr.scopeChain[1] == "s_ComponentTypeName" || expr.scopeChain[1] == "s_ComponentTypeText"))
                 )
             ){
+                expr.resolvedCppNamespace = m_symbols.findTypeNamespace(expr.scopeChain[0]);
             }
             else if(
                 const InterfaceDecl* scopedIface = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u)
@@ -259,6 +266,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     : nullptr;
                 scopedIface && !scopedIface->assetTypeName.empty() && (expr.scopeChain[1] == "AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeText")
             ){
+                expr.resolvedCppNamespace = m_symbols.findTypeNamespace(expr.scopeChain[0]);
             }
             else if(
                 !m_hasTopLevelNativeBlocks
@@ -441,7 +449,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     || IsStringLikeType(lhsBaseType)
                     || SymbolTable::IsSimdType(lhsBaseType)
                     || SymbolTable::IsUnalignedVectorType(lhsBaseType);
-                if(builtinOpIdx && builtinOpIdx->isMutating)
+                if(isMutationTarget && builtinOpIdx && builtinOpIdx->isMutating)
                     lhsNeedsMut = true;
                 if(!isBuiltinIndexable){
                     reportError(errors, expr.span, "type does not support subscripting with 'operator[]'");

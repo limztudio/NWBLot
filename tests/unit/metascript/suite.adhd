@@ -45,6 +45,7 @@ using AdhdTestArena = NWB::Tests::TestArena<AdhdTestArenaTag>;
 class MockIncludeResolver final : public Core::Metascript::IIncludeResolver{
 public:
     [[nodiscard]] virtual b8 resolveInclude(Core::Metascript::MStringView includePath, b8 isSystem, Core::Metascript::MetaArena& arena, Core::Metascript::MString& outResolvedKey, Core::Metascript::MString& outContent)override;
+    [[nodiscard]] virtual Core::Metascript::MStringView resolveIncludeNamespace(Core::Metascript::MStringView resolvedKey)const noexcept override;
 
 
 public:
@@ -804,6 +805,107 @@ inline constexpr MStringView s_SuiteCoreGlobalExportsShadowAndLayoutSource =
     "    return joint._14 == 2.0f && identStore._11 == 1.0f && localFs.mounted() && CanRepresentU64<u32>(cast<u32>(localFmt)) && Viewport(localColor) > 0.0f && mask == ResourceStates::ShaderResource && digest.bytes[0u] <= 255u && Sha1Digest::s_HexTextLength == 40u && BufferRange::s_AllBytes > 0u && alignedBytes >= 64u && emptyWrite.slot == 0u && !entry.path().empty() && IsFinite(decomp.scale.xyz);\r\n"
     "}\r\n";
 
+inline constexpr MStringView s_SuiteHandleDerefRhiAndAssetExportsSource =
+    "b8 AcceptMutBuffer(mut Buffer buf) {\r\n"
+    "    return buf.getDeviceGeneration() != 0u;\r\n"
+    "}\r\n"
+    "b8 AcceptMutAsset(mut IAsset asset, mut Framebuffer fb) {\r\n"
+    "    return fb.getDescription().colorAttachments.empty() || !asset.name().empty();\r\n"
+    "}\r\n"
+    "b8 ExerciseHandleRhiAndAssetExports(\r\n"
+    "    mut GraphicsRuntime rt,\r\n"
+    "    mut CommandList cmd,\r\n"
+    "    mut BufferHandle buf,\r\n"
+    "    mut TextureHandle tex,\r\n"
+    "    mut UniquePtr<IAsset> assetPtr,\r\n"
+    "    mut RefCountPtr<IAsset> rcAsset,\r\n"
+    "    mut GlobalArena devArena,\r\n"
+    "    in Span<u8> indexBytes,\r\n"
+    "    mut CookEntryRegistry entryRegistry,\r\n"
+    "    in Name vp,\r\n"
+    "    in AssetBunchExpandContext bunchCtx\r\n"
+    ") {\r\n"
+    "    mut Device dev = rt.getDevice();\r\n"
+    "    b8 bufOk = buf.valid() && AcceptMutBuffer(buf.deref());\r\n"
+    "    DescriptorWriteItem srv = DescriptorWriteItem::TextureSrv(0u, tex.deref());\r\n"
+    "    srv.setDimension(TextureDimension::Texture2D);\r\n"
+    "    cmd.open();\r\n"
+    "    if(IsValidFramebufferPtr(rt.getFramebuffer(0u))){\r\n"
+    "        cmd.setResourceStatesForFramebuffer(DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n"
+    "    }\r\n"
+    "    cmd.clearState();\r\n"
+    "    cmd.close();\r\n"
+    "    auto idxRes = DeserializeIndex(devArena, indexBytes);\r\n"
+    "    auto bunchRes = ExpandAssetBunchForAssetCook(bunchCtx);\r\n"
+    "    b8 assetOk = assetPtr.valid() && rcAsset.valid() && AcceptMutAsset(assetPtr.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u))) && AcceptMutAsset(rcAsset.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n"
+    "    return dev.getDeviceGeneration() != 0u && bufOk && srv.slot == 0u && idxRes.hasValue() && bunchRes.hasValue() && entryRegistry.has(vp) && entryRegistry.entryCount() == 0u && assetOk;\r\n"
+    "}\r\n";
+
+inline constexpr MStringView s_SuiteCrossNamespaceImportSource =
+    "#include \"foreign_bridge.adhd\"\r\n"
+    "[reflect]\r\n"
+    "class LocalMirror {\r\n"
+    "    public ForeignMode mode = ForeignMode::Beta;\r\n"
+    "    public ForeignItem item;\r\n"
+    "    public FixedVector<u32, kForeignCap> caps;\r\n"
+    "    public HashMap<ForeignMode, ForeignItem> modeMap;\r\n"
+    "    public ForeignMode sentinel = ForeignMode::kCount;\r\n"
+    "    public AssetRef<ForeignAsset> asset;\r\n"
+    "}\r\n"
+    "u32 UseForeign(in u32 x) {\r\n"
+    "    u32 kForeignConst = 100u;\r\n"
+    "    ForeignMode m = ForeignMode::Alpha;\r\n"
+    "    ForeignItem it = ForeignItem();\r\n"
+    "    if(ForeignAsset::s_AssetTypeName.empty())\r\n"
+    "        return kForeignConst;\r\n"
+    "    return ForeignFn(x) + kForeignConst + kForeignOther + kSameBridgeConst;\r\n"
+    "}\r\n";
+
+inline constexpr MStringView s_SuiteNestedTemplateAndDocumentVisitorSource =
+    "[arena, asset(\"mock_nested\")]\r\n"
+    "class MockNestedAsset {\r\n"
+    "    public u32 dummy = 0u;\r\n"
+    "}\r\n"
+    "b8 ExerciseNestedTemplatesAndVisitors(\r\n"
+    "    mut AssetDocumentMetadataParseContext docCtx,\r\n"
+    "    in Path nwbPath,\r\n"
+    "    mut GpuDescriptorRetirementGuard guard,\r\n"
+    "    in AssetManager assetMgr,\r\n"
+    "    in Name vp\r\n"
+    ") {\r\n"
+    "    if(!docCtx.doc.parse(\"asset = { items = [1, 2], ref = \\\"mock/a\\\" };\")) {\r\n"
+    "        for(in MetascriptParseError err : docCtx.doc.errors()) {\r\n"
+    "            if(err.line > 0u)\r\n"
+    "                return false;\r\n"
+    "        }\r\n"
+    "    }\r\n"
+    "    if(!docCtx.doc.hasVariable(\"asset\"))\r\n"
+    "        return false;\r\n"
+    "    const b8 visited = docCtx.doc.visitVariable(\"asset\", lambda[in nwbPath](in MetascriptValue assetVal) -> b8 {\r\n"
+    "        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\"))\r\n"
+    "            return false;\r\n"
+    "        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\", lambda[](in StringView key) -> b8 { return key == \"items\" || key == \"ref\"; }))\r\n"
+    "            return false;\r\n"
+    "        if(!assetVal.forEachMapEntry(lambda[](in StringView k, in MetascriptValue v) -> b8 { return !k.empty() && !v.isNull(); }))\r\n"
+    "            return false;\r\n"
+    "        assetVal.visitField(\"items\", lambda[](in MetascriptValue listVal) -> void {\r\n"
+    "            for(in MetascriptValue item : listVal.listView()) {\r\n"
+    "                if(!item.isNumeric())\r\n"
+    "                    return;\r\n"
+    "            }\r\n"
+    "        });\r\n"
+    "        Expected<AssetRef<MockNestedAsset>> refRes = ReadMetadataAssetRefField<MockNestedAsset>(nwbPath, assetVal, \"test\", \"ref\", false);\r\n"
+    "        if(!refRes.hasValue())\r\n"
+    "            return false;\r\n"
+    "        AssetRef<MockNestedAsset> refVal = refRes.value();\r\n"
+    "        refVal.reset();\r\n"
+    "        return !refVal.valid();\r\n"
+    "    });\r\n"
+    "    guard.release();\r\n"
+    "    Expected<UniquePtr<MockNestedAsset>> loaded = LoadTypedAssetSync<MockNestedAsset>(assetMgr, vp, \"test\");\r\n"
+    "    return visited && loaded.hasValue() && loaded.value().valid();\r\n"
+    "}\r\n";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1209,6 +1311,24 @@ void VerifyAdhdCompiler_TopologicallyOrdersOutOfOrderDeclarationsAndRejectsAcces
     ExpectCompileFails(arena, "class SecretBox {\r\n    public i32 v = 0;\r\n    private SecretBox(in i32 x) { this.v = x; }\r\n}\r\nvoid Make() {\r\n    SecretBox b(5);\r\n}\r\n", "impl/sim/priv_ctor.adhd");
     ExpectCompileFails(arena, "interface INode {\r\n    i32 id()const;\r\n}\r\nvoid BadAuto(in INode n) {\r\n    auto copy = n;\r\n}\r\n", "impl/sim/auto_iface.adhd");
     ExpectCompileFails(arena, s_SuiteMutRebindConstSource, "impl/sim/mut_rebind_const.adhd");
+
+    CompileResult inRebindRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(
+        "class RefTarget {\r\n    public i32 value = 0;\r\n}\r\nclass RefHolder {\r\n    public in RefTarget target;\r\n    public RefHolder(in RefTarget t){ this.target = t; }\r\n    public void rebind(in RefTarget next){ this.target = next; }\r\n    public i32 read()const{ return this.target.value; }\r\n}\r\ni32 StepRefs(in RefTarget a, in RefTarget b){\r\n    in RefTarget localRef = a;\r\n    localRef = b;\r\n    RefHolder holder(a);\r\n    holder.rebind(b);\r\n    holder.target = a;\r\n    return localRef.value + holder.read();\r\n}\r\n",
+        "impl/sim/in_rebind_ok.adhd",
+        arena.arena,
+        inRebindRes
+    ));
+    const StringView inRebindHdrView = GeneratedHeaderView(inRebindRes);
+    const StringView inRebindCppView = GeneratedSourceView(inRebindRes);
+    EXPECT_NE(inRebindHdrView.find("(this->target = ::MakeNotNull(&(next)))"), usize.max);
+    EXPECT_NE(inRebindCppView.find("(localRef = ::MakeNotNull(&(b)))"), usize.max);
+    EXPECT_NE(inRebindCppView.find("(holder.target = ::MakeNotNull(&(a)))"), usize.max);
+
+    ExpectCompileFails(arena, "class RefTarget { public i32 value = 0; }\r\nclass RefHolder {\r\n    public in RefTarget target;\r\n    public RefHolder(in RefTarget t){ this.target = t; }\r\n    public void badConstRebind(in RefTarget next)const{ this.target = next; }\r\n}\r\n", "impl/sim/in_rebind_const_method.adhd");
+    ExpectCompileFails(arena, "class RefTarget { public i32 value = 0; }\r\nvoid BadTempRebind(in RefTarget a){\r\n    in RefTarget localRef = a;\r\n    localRef = RefTarget();\r\n}\r\n", "impl/sim/in_rebind_rvalue.adhd");
+    ExpectCompileFails(arena, "class RefTarget { public i32 value = 0; }\r\nvoid BadParamRebind(in RefTarget a, in RefTarget b){\r\n    a = b;\r\n}\r\n", "impl/sim/in_rebind_param.adhd");
+    ExpectCompileFails(arena, "class RefTarget { public i32 value = 0; }\r\nclass RefHolder {\r\n    public in RefTarget target;\r\n    public RefHolder(in RefTarget t){ this.target = t; }\r\n}\r\nvoid BadConstOwnerRebind(in RefHolder ch, in RefTarget b){\r\n    ch.target = b;\r\n}\r\n", "impl/sim/in_rebind_const_owner.adhd");
 }
 
 void VerifyAdhdCompiler_ExcludesKCountFromEnumReflectionOrdersDeferredTemplateSpecsAndRejectsInvalidTemplates(){
@@ -1396,7 +1516,7 @@ void VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesM
     EXPECT_NE(hdrView.find("::DirectoryEntry<::ArenaBase> entry = ::DirectoryEntry<::ArenaBase>(entryPath);"), usize.max);
     EXPECT_NE(hdrView.find("::LoadFloat(srcMat)"), usize.max);
     EXPECT_NE(hdrView.find("::StoreFloat(reg, dstMat);"), usize.max);
-    EXPECT_NE(hdrView.find("::ComputeSha1(::BinaryByteView{"), usize.max);
+    EXPECT_NE(hdrView.find("::ComputeSha1(([](const auto& __adhd_bytes)"), usize.max);
     EXPECT_NE(hdrView.find("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u)"), usize.max);
     EXPECT_NE(hdrView.find("::NWB::Core::DescriptorWriteItem::None()"), usize.max);
     EXPECT_NE(hdrView.find("::Sha1Digest::s_HexTextLength"), usize.max);
@@ -1416,6 +1536,84 @@ void VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesM
     ExpectCompileFails(arena, "class BadPodBase : BoundingBox {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_pod_base.adhd");
     ExpectCompileFails(arena, "b8 BadMissingTypeArg() {\r\n    return CanRepresentU64(7u);\r\n}\r\n", "impl/sim/bad_no_targ.adhd");
     ExpectCompileFails(arena, "u32 BadScopedMember() {\r\n    return Sha1Digest::s_NoSuchConstant;\r\n}\r\n", "impl/sim/bad_scoped_const.adhd");
+}
+
+void VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    CompileResult res = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(s_SuiteHandleDerefRhiAndAssetExportsSource, "impl/sim/handle_deref_rhi_assets.adhd", arena.arena, res));
+
+    const StringView srcView = GeneratedSourceView(res);
+    const StringView hdrView = GeneratedHeaderView(res);
+    EXPECT_NE(hdrView.find("#include <core/graphics/shader_archive.h>"), usize.max);
+    EXPECT_NE(hdrView.find("#include <core/assets/bunch/cook.h>"), usize.max);
+    EXPECT_NE(srcView.find("buf.deref()"), usize.max);
+    EXPECT_NE(srcView.find("assetPtr.deref()"), usize.max);
+    EXPECT_NE(srcView.find("rcAsset.deref()"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::Core::DerefFramebufferPtr((rt.getFramebuffer(0u)))"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::Core::DescriptorWriteItem::TextureSrv(0u, tex.deref())"), usize.max);
+    EXPECT_NE(srcView.find("srv.setDimension(::NWB::Core::TextureDimension::Texture2D)"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::Core::ShaderArchive::DeserializeIndex(devArena, ([](const auto& __adhd_bytes)"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook(bunchCtx)"), usize.max);
+
+    ExpectCompileFails(arena, "void MutAsset(mut IAsset a) {}\r\nUniquePtr<IAsset> MakePtr() { return UniquePtr<IAsset>(); }\r\nvoid BadTempUniqueDeref() {\r\n    MutAsset(MakePtr().deref());\r\n}\r\n", "impl/sim/bad_tmp_unique_deref.adhd");
+    ExpectCompileFails(arena, "void MutAsset(mut IAsset a) {}\r\nRefCountPtr<IAsset> MakeRc() { return RefCountPtr<IAsset>(); }\r\nvoid BadTempRcDeref() {\r\n    MutAsset(MakeRc().deref());\r\n}\r\n", "impl/sim/bad_tmp_rc_deref.adhd");
+    ExpectCompileFails(arena, "void MutBuf(mut Buffer b) {}\r\nBufferHandle MakeBuf() { return BufferHandle(); }\r\nvoid BadTempHandleDeref() {\r\n    MutBuf(MakeBuf().deref());\r\n}\r\n", "impl/sim/bad_tmp_handle_deref.adhd");
+    ExpectCompileFails(arena, "BufferHandle MakeBuf() { return BufferHandle(); }\r\nvoid BadTempWriteDeref() {\r\n    auto w = DescriptorWriteItem::StructuredBufferSrv(0u, MakeBuf().deref());\r\n}\r\n", "impl/sim/bad_tmp_write_deref.adhd");
+    ExpectCompileFails(arena, "void BadTempWriteSetDim(mut TextureHandle tex) {\r\n    auto w = DescriptorWriteItem::TextureSrv(0u, tex.deref()).setDimension(TextureDimension::Texture2D);\r\n}\r\n", "impl/sim/bad_tmp_write_set_dim.adhd");
+}
+
+void VerifyAdhdCompiler_QualifiesCrossNamespaceImportsRespectingShadowing(){
+    AdhdTestArena arena = AdhdTestArena();
+    MockIncludeResolver resolver = MockIncludeResolver();
+
+    CompileResult res = CompileResult(arena.arena);
+    const b8 compiled = CompileWithResolver(s_SuiteCrossNamespaceImportSource, "impl/scene/cross_ns.adhd", resolver, arena.arena, res);
+    EXPECT_GE(resolver.resolveCallCount, 2u);
+    if(!compiled && !res.errors.empty())
+        EXPECT_EQ(FirstErrorMessage(res), "");
+    ASSERT_TRUE(compiled);
+
+    const StringView hdrView = GeneratedHeaderView(res);
+    const StringView srcView = GeneratedSourceView(res);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::ForeignMode::Enum mode"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::ForeignMode::Beta"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::ForeignItem item{};"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::kForeignCap"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::ForeignMode::kCount"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::ForeignAsset"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::MockForeign::ForeignMode::parseNamedEnum"), usize.max);
+
+    EXPECT_NE(srcView.find("::NWB::MockForeign::ForeignMode::Alpha"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::MockForeign::ForeignItem it = ::NWB::MockForeign::ForeignItem();"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::MockForeign::ForeignAsset::s_AssetTypeName"), usize.max);
+    EXPECT_NE(srcView.find("((::NWB::MockForeign::ForeignFn(x) + kForeignConst) + ::NWB::MockForeign::kForeignOther) + kSameBridgeConst"), usize.max);
+    EXPECT_EQ(srcView.find("::NWB::MockForeign::kForeignConst"), usize.max);
+    EXPECT_EQ(srcView.find("::NWB::MockForeign::kSameBridgeConst"), usize.max);
+}
+
+void VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    CompileResult res = CompileResult(arena.arena);
+    const b8 compiled = Compile(s_SuiteNestedTemplateAndDocumentVisitorSource, "impl/assets_test/nested_tpl.adhd", arena.arena, res);
+    if(!compiled && !res.errors.empty())
+        EXPECT_EQ(FirstErrorMessage(res), "");
+    ASSERT_TRUE(compiled);
+
+    const StringView hdrView = GeneratedHeaderView(res);
+    EXPECT_NE(hdrView.find("#include <core/assets/metadata_fields.h>"), usize.max);
+    EXPECT_NE(hdrView.find("#include <core/assets/manager.h>"), usize.max);
+    EXPECT_NE(hdrView.find("Expected<::NWB::Core::Assets::AssetRef<MockNestedAsset>>"), usize.max);
+    EXPECT_NE(hdrView.find("Expected<::UniquePtr<MockNestedAsset>>"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::Core::Assets::ReadMetadataAssetRefField<MockNestedAsset>"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::Core::Assets::LoadTypedAssetSync<MockNestedAsset>"), usize.max);
+    EXPECT_NE(hdrView.find("docCtx.doc.visitVariable("), usize.max);
+    EXPECT_NE(hdrView.find("assetVal.forEachMapEntry("), usize.max);
+    EXPECT_NE(hdrView.find("assetVal.visitField("), usize.max);
+    EXPECT_NE(hdrView.find("listVal.listView()"), usize.max);
+    EXPECT_NE(hdrView.find("guard.release();"), usize.max);
 }
 
 
@@ -1457,9 +1655,42 @@ b8 MockIncludeResolver::resolveInclude(const Core::Metascript::MStringView inclu
         outContent = Core::Metascript::MString(s_ServiceHeader.data(), s_ServiceHeader.size(), arena);
         return true;
     }
+    if(includePath == "foreign_bridge.adhd"){
+        static constexpr Core::Metascript::MStringView s_ForeignBridge =
+            "#include \"foreign_defs.adhd\"\r\n"
+            "const u32 kSameBridgeConst = 3u;\r\n";
+        outContent = Core::Metascript::MString(s_ForeignBridge.data(), s_ForeignBridge.size(), arena);
+        return true;
+    }
+    if(includePath == "foreign_defs.adhd"){
+        static constexpr Core::Metascript::MStringView s_ForeignDefs =
+            "const u32 kForeignCap = 4;\r\n"
+            "const u32 kForeignConst = 7u;\r\n"
+            "const u32 kForeignOther = 11u;\r\n"
+            "enum<u8> ForeignMode { Alpha = 1, Beta = 2, kCount }\r\n"
+            "[serialize]\r\n"
+            "class ForeignItem {\r\n"
+            "    public u32 tag = 1u;\r\n"
+            "}\r\n"
+            "[arena, asset(\"mock_foreign\")]\r\n"
+            "class ForeignAsset {\r\n"
+            "    public u32 dummy = 0u;\r\n"
+            "}\r\n"
+            "u32 ForeignFn(in u32 x) {\r\n"
+            "    return x + kForeignOther;\r\n"
+            "}\r\n";
+        outContent = Core::Metascript::MString(s_ForeignDefs.data(), s_ForeignDefs.size(), arena);
+        return true;
+    }
     static constexpr Core::Metascript::MStringView s_HeaderCode = "const u32 kSharedLimit = 16;\r\n";
     outContent = Core::Metascript::MString(s_HeaderCode.data(), s_HeaderCode.size(), arena);
     return true;
+}
+
+Core::Metascript::MStringView MockIncludeResolver::resolveIncludeNamespace(const Core::Metascript::MStringView resolvedKey)const noexcept{
+    if(resolvedKey == "foreign_defs.adhd")
+        return "NWB::MockForeign";
+    return {};
 }
 
 
@@ -1511,6 +1742,9 @@ NWB_ADHD_GTEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeducti
 NWB_ADHD_GTEST(AdhdCompiler, RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks, VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks)
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses, VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses)
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder, VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder)
+NWB_ADHD_GTEST(AdhdCompiler, ResolvesHandleDerefRhiAndAssetExports, VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports)
+NWB_ADHD_GTEST(AdhdCompiler, QualifiesCrossNamespaceImportsRespectingShadowing, VerifyAdhdCompiler_QualifiesCrossNamespaceImportsRespectingShadowing)
+NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors, VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

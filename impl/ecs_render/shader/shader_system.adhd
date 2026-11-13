@@ -64,7 +64,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_RendererAssetOwnerName = FOUNDATION_TEXT("RendererSystem");
+inline constexpr AStringView s_RendererAssetOwnerName = "RendererSystem";
 
 using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
 

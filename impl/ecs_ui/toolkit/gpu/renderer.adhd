@@ -558,7 +558,7 @@ b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const Ui
         return false;
     GpuVersion<GpuSkinVersion> version = Move(*versionResult);
     version->m_binding = binding;
-    if(!TextureAssetLoader::Create(*texture, s_GpuAtlasTextureName, s_GpuRendererContext, m_state->m_graphics, version->m_texture))
+    if(!CreateTextureGpuResource(*texture, s_GpuAtlasTextureName, s_GpuRendererContext, m_state->m_graphics, version->m_texture))
         return false;
     if(!IsValidGpuSubmissionReadinessToken(version->m_texture.readinessToken.valid(), version->m_texture.readinessToken.hasPhysicalQueueIdentity()))
         return false;

@@ -25,6 +25,79 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_type_infer{
+
+template<typename ArenaT>
+static TypeRef* SynthesizeBuiltinReturnTypeRef(
+    ArenaT& arena,
+    const MStringView returnTypeName,
+    const MStringView returnTypeArgName,
+    const MStringView returnNestedTypeArgName,
+    const MStringView returnErrorTypeName
+)noexcept{
+    TypeRef* synth = AllocateAstNode<TypeRef>(arena);
+    synth->name = returnTypeName;
+    if(!returnTypeArgName.empty()){
+        TypeRef* valType = AllocateAstNode<TypeRef>(arena);
+        valType->name = returnTypeArgName;
+        if(!returnNestedTypeArgName.empty()){
+            TypeRef* nestedType = AllocateAstNode<TypeRef>(arena);
+            nestedType->name = returnNestedTypeArgName;
+            TypeArg nestedArg;
+            nestedArg.type = nestedType;
+            valType->templateArgs.push_back(nestedArg);
+        }
+        TypeArg valArg;
+        valArg.type = valType;
+        synth->templateArgs.push_back(valArg);
+    }
+    if(!returnErrorTypeName.empty()){
+        TypeRef* errType = AllocateAstNode<TypeRef>(arena);
+        errType->name = returnErrorTypeName;
+        TypeArg errArg;
+        errArg.type = errType;
+        synth->templateArgs.push_back(errArg);
+    }
+    return synth;
+}
+
+template<typename ArenaT>
+static const TypeRef* SynthesizeCallTemplateArg0ReturnType(
+    ArenaT& arena,
+    const SymbolTable& symbols,
+    const BuiltinFunctionInfo& fnInfo,
+    const TypeArg& resolvedTArg
+)noexcept{
+    if(!resolvedTArg.type)
+        return nullptr;
+    if(fnInfo.returnTypeName.empty())
+        return symbols.unwrapTypeAlias(resolvedTArg.type);
+    TypeArg innerArg = resolvedTArg;
+    if(!fnInfo.returnTypeArgName.empty()){
+        TypeRef* innerType = AllocateAstNode<TypeRef>(arena);
+        innerType->name = fnInfo.returnTypeArgName;
+        innerType->templateArgs.push_back(resolvedTArg);
+        innerArg.type = innerType;
+    }
+    TypeRef* synth = AllocateAstNode<TypeRef>(arena);
+    synth->name = fnInfo.returnTypeName;
+    synth->templateArgs.push_back(innerArg);
+    if(!fnInfo.returnErrorTypeName.empty()){
+        TypeRef* errType = AllocateAstNode<TypeRef>(arena);
+        errType->name = fnInfo.returnErrorTypeName;
+        TypeArg errArg;
+        errArg.type = errType;
+        synth->templateArgs.push_back(errArg);
+    }
+    return synth;
+}
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(!expr.resolvedSimdType.empty())
         return expr.resolvedSimdType;
@@ -407,32 +480,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                 if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
                     if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
                         return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
-                    if((fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType || fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType) && !fnInfo->returnTypeName.empty()){
-                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                        synth->name = fnInfo->returnTypeName;
-                        if(!fnInfo->returnTypeArgName.empty()){
-                            TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
-                            valType->name = fnInfo->returnTypeArgName;
-                            if(!fnInfo->returnNestedTypeArgName.empty()){
-                                TypeRef* nestedType = AllocateAstNode<TypeRef>(m_arena);
-                                nestedType->name = fnInfo->returnNestedTypeArgName;
-                                TypeArg nestedArg;
-                                nestedArg.type = nestedType;
-                                valType->templateArgs.push_back(nestedArg);
-                            }
-                            TypeArg valArg;
-                            valArg.type = valType;
-                            synth->templateArgs.push_back(valArg);
-                        }
-                        if(!fnInfo->returnErrorTypeName.empty()){
-                            TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
-                            errType->name = fnInfo->returnErrorTypeName;
-                            TypeArg errArg;
-                            errArg.type = errType;
-                            synth->templateArgs.push_back(errArg);
-                        }
-                        return synth;
-                    }
+                    if((fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType || fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType) && !fnInfo->returnTypeName.empty())
+                        return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, fnInfo->returnTypeName, fnInfo->returnTypeArgName, fnInfo->returnNestedTypeArgName, fnInfo->returnErrorTypeName);
                     if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0){
                         TypeArg resolvedTArg{};
                         if(!expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type){
@@ -450,14 +499,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                                 resolvedTArg.type = deducedType;
                             }
                         }
-                        if(resolvedTArg.type){
-                            if(fnInfo->returnTypeName.empty())
-                                return m_symbols.unwrapTypeAlias(resolvedTArg.type);
-                            TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                            synth->name = fnInfo->returnTypeName;
-                            synth->templateArgs.push_back(resolvedTArg);
+                        if(const TypeRef* synth = __hidden_adhd_type_infer::SynthesizeCallTemplateArg0ReturnType(m_arena, m_symbols, *fnInfo, resolvedTArg))
                             return synth;
-                        }
                     }
                 }
             }
@@ -508,25 +551,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     }
                 }
             }
-            if(inheritedRecv && !inheritedRecv->returnTypeName.empty()){
-                TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                synth->name = inheritedRecv->returnTypeName;
-                if(!inheritedRecv->returnTypeArgName.empty()){
-                    TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
-                    valType->name = inheritedRecv->returnTypeArgName;
-                    TypeArg valArg;
-                    valArg.type = valType;
-                    synth->templateArgs.push_back(valArg);
-                }
-                if(!inheritedRecv->returnErrorTypeName.empty()){
-                    TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
-                    errType->name = inheritedRecv->returnErrorTypeName;
-                    TypeArg errArg;
-                    errArg.type = errType;
-                    synth->templateArgs.push_back(errArg);
-                }
-                return synth;
-            }
+            if(inheritedRecv && !inheritedRecv->returnTypeName.empty())
+                return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName);
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const TypeRef* recvTypeRef = nullptr;
@@ -573,35 +599,15 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                         }
                     }
                 }
-                if(inheritedRecv && !inheritedRecv->returnTypeName.empty()){
-                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                    synth->name = inheritedRecv->returnTypeName;
-                    if(!inheritedRecv->returnTypeArgName.empty()){
-                        TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
-                        valType->name = inheritedRecv->returnTypeArgName;
-                        TypeArg valArg;
-                        valArg.type = valType;
-                        synth->templateArgs.push_back(valArg);
-                    }
-                    if(!inheritedRecv->returnErrorTypeName.empty()){
-                        TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
-                        errType->name = inheritedRecv->returnErrorTypeName;
-                        TypeArg errArg;
-                        errArg.type = errType;
-                        synth->templateArgs.push_back(errArg);
-                    }
-                    return synth;
-                }
+                if(inheritedRecv && !inheritedRecv->returnTypeName.empty())
+                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName);
             }
             else if(const InterfaceDecl* ifaceDecl = recvTypeRef ? m_symbols.findInterface(lhsType) : nullptr){
                 if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints); m && m->returnType)
                     return m_symbols.unwrapTypeAlias(m->returnType);
                 if(!ifaceDecl->assetTypeName.empty()){
-                    if(const BuiltinReceiverMethodInfo* inheritedRecv = FindBuiltinReceiverMethod("IAsset", mName); inheritedRecv && !inheritedRecv->returnTypeName.empty()){
-                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                        synth->name = inheritedRecv->returnTypeName;
-                        return synth;
-                    }
+                    if(const BuiltinReceiverMethodInfo* inheritedRecv = FindBuiltinReceiverMethod("IAsset", mName); inheritedRecv && !inheritedRecv->returnTypeName.empty())
+                        return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName);
                 }
             }
             else if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, method, lhsType)){
@@ -616,23 +622,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                 if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(lhsType, mName); recvMethod && recvMethod->synthesizeTypeRef){
                     if(recvMethod->returnTypeName.empty() && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
                         return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
-                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                    synth->name = recvMethod->returnTypeName;
-                    if(!recvMethod->returnTypeArgName.empty()){
-                        TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
-                        valType->name = recvMethod->returnTypeArgName;
-                        TypeArg valArg;
-                        valArg.type = valType;
-                        synth->templateArgs.push_back(valArg);
-                    }
-                    if(!recvMethod->returnErrorTypeName.empty()){
-                        TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
-                        errType->name = recvMethod->returnErrorTypeName;
-                        TypeArg errArg;
-                        errArg.type = errType;
-                        synth->templateArgs.push_back(errArg);
-                    }
-                    return synth;
+                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, recvMethod->returnTypeName, recvMethod->returnTypeArgName, recvMethod->returnNestedTypeArgName, recvMethod->returnErrorTypeName);
                 }
                 if(recvTypeRef && FindBuiltinGenericType(lhsType) && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
                     if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName)){
@@ -667,32 +657,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             if(const BuiltinFunctionInfo* fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1])){
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
                     return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
-                if((fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType || fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType) && !fnInfo->returnTypeName.empty()){
-                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                    synth->name = fnInfo->returnTypeName;
-                    if(!fnInfo->returnTypeArgName.empty()){
-                        TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
-                        valType->name = fnInfo->returnTypeArgName;
-                        if(!fnInfo->returnNestedTypeArgName.empty()){
-                            TypeRef* nestedType = AllocateAstNode<TypeRef>(m_arena);
-                            nestedType->name = fnInfo->returnNestedTypeArgName;
-                            TypeArg nestedArg;
-                            nestedArg.type = nestedType;
-                            valType->templateArgs.push_back(nestedArg);
-                        }
-                        TypeArg valArg;
-                        valArg.type = valType;
-                        synth->templateArgs.push_back(valArg);
-                    }
-                    if(!fnInfo->returnErrorTypeName.empty()){
-                        TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
-                        errType->name = fnInfo->returnErrorTypeName;
-                        TypeArg errArg;
-                        errArg.type = errType;
-                        synth->templateArgs.push_back(errArg);
-                    }
-                    return synth;
-                }
+                if((fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType || fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType) && !fnInfo->returnTypeName.empty())
+                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, fnInfo->returnTypeName, fnInfo->returnTypeArgName, fnInfo->returnNestedTypeArgName, fnInfo->returnErrorTypeName);
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0){
                     TypeArg resolvedTArg{};
                     if(!expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type){
@@ -710,14 +676,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                             resolvedTArg.type = deducedType;
                         }
                     }
-                    if(resolvedTArg.type){
-                        if(fnInfo->returnTypeName.empty())
-                            return m_symbols.unwrapTypeAlias(resolvedTArg.type);
-                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                        synth->name = fnInfo->returnTypeName;
-                        synth->templateArgs.push_back(resolvedTArg);
+                    if(const TypeRef* synth = __hidden_adhd_type_infer::SynthesizeCallTemplateArg0ReturnType(m_arena, m_symbols, *fnInfo, resolvedTArg))
                         return synth;
-                    }
                 }
             }
         }

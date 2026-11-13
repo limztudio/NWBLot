@@ -38,6 +38,7 @@ inline constexpr Name s_PairedSidecarRuleQueueArena("core/assets/paired_sidecar_
 inline constexpr Name s_MetadataRegistrationTextArena("core/assets/metadata_registration_text");
 
 inline constexpr Name s_AutoRegistrationQueueArena("core/assets/cook_entry_auto_registration_queue");
+inline constexpr Name s_CookEntryRegistryScratch("core/assets/cook_entry_registry_scratch");
 inline constexpr Name s_CookDependencyQueueArena("core/assets/cook_dependency_auto_registration_queue");
 
 inline constexpr Name s_GatherMergeQueueArena("core/assets/gather_merge_queue");

@@ -43,6 +43,10 @@ b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, con
         return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
     }
     case ExprKind::Call:{
+        if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+            if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text); fnInfo && fnInfo->returnsReference)
+                return false;
+        }
         if(expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView mName = expr.lhs->text;
             const MStringView recvBase = m_checker.inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
@@ -50,8 +54,12 @@ b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, con
                 return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope);
             }
             if(!m_checker.m_symbols.hasTypeSymbol(recvBase)){
-                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(recvBase, mName); recvMethod && recvMethod->synthesizeTypeRef && recvMethod->returnTypeName.empty())
-                    return false;
+                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(recvBase, mName)){
+                    if(recvMethod->returnsReference)
+                        return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope);
+                    if(recvMethod->synthesizeTypeRef && recvMethod->returnTypeName.empty())
+                        return false;
+                }
             }
             if(IsBorrowViewType(recvBase)){
                 const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName);

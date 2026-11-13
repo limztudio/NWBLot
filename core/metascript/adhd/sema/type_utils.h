@@ -76,6 +76,7 @@ namespace BuiltinCallLowering{
     enum Enum : u8{
         None = 0u,
         BinaryByteViewArg0,
+        BinaryByteViewArg1,
         StagedWriteTextAtomic,
         StagedWriteBinaryAtomic,
         StagedWriteAtomicChecked,
@@ -246,9 +247,11 @@ struct BuiltinReceiverMethodInfo{
     MStringView methodName;
     MStringView returnTypeName;
     MStringView returnTypeArgName;
+    MStringView returnNestedTypeArgName;
     MStringView returnErrorTypeName;
     b8 synthesizeTypeRef;
     b8 isMutating;
+    b8 returnsReference;
 };
 
 struct BuiltinFieldInfo{
@@ -287,6 +290,7 @@ struct BuiltinFunctionInfo{
     b8 requiresExplicitTypeArg;
     b8 returnsBorrowedView;
     b8 rejectsSimdStorage;
+    b8 returnsReference;
     Array<BuiltinFunctionArgRule::Enum, 9> argRules;
 };
 

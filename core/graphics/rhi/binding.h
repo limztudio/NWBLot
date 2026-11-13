@@ -182,6 +182,9 @@ public:
     }
 
     static DescriptorWriteItem TextureSrv(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown)noexcept;
+    static DescriptorWriteItem TextureSrv(u32 slot, Texture& texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown)noexcept{
+        return TextureSrv(slot, &texture, format, subresources, dimension);
+    }
 
     static DescriptorWriteItem TextureUav(
         u32 slot,
@@ -190,28 +193,64 @@ public:
         TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices),
         TextureDimension::Enum dimension = TextureDimension::Unknown
     )noexcept;
+    static DescriptorWriteItem TextureUav(
+        u32 slot,
+        Texture& texture,
+        Format::Enum format = Format::UNKNOWN,
+        TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices),
+        TextureDimension::Enum dimension = TextureDimension::Unknown
+    )noexcept{
+        return TextureUav(slot, &texture, format, subresources, dimension);
+    }
 
     static DescriptorWriteItem TypedBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem TypedBufferSrv(u32 slot, Buffer& buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
+        return TypedBufferSrv(slot, &buffer, format, range);
+    }
 
     static DescriptorWriteItem TypedBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem TypedBufferUav(u32 slot, Buffer& buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
+        return TypedBufferUav(slot, &buffer, format, range);
+    }
 
     static DescriptorWriteItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem ConstantBuffer(u32 slot, Buffer& buffer, BufferRange range = s_EntireBuffer)noexcept{
+        return ConstantBuffer(slot, &buffer, range);
+    }
 
     static DescriptorWriteItem Sampler(u32 slot, Core::Sampler* sampler)noexcept{
         return Base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
+    }
+    static DescriptorWriteItem Sampler(u32 slot, Core::Sampler& sampler)noexcept{
+        return Sampler(slot, &sampler);
     }
 
     static DescriptorWriteItem RayTracingAccelStruct(u32 slot, Core::RayTracingAccelStruct* as)noexcept{
         return Base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
     }
+    static DescriptorWriteItem RayTracingAccelStruct(u32 slot, Core::RayTracingAccelStruct& as)noexcept{
+        return RayTracingAccelStruct(slot, &as);
+    }
 
     static DescriptorWriteItem StructuredBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem StructuredBufferSrv(u32 slot, Buffer& buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
+        return StructuredBufferSrv(slot, &buffer, format, range);
+    }
 
     static DescriptorWriteItem StructuredBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem StructuredBufferUav(u32 slot, Buffer& buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
+        return StructuredBufferUav(slot, &buffer, format, range);
+    }
 
     static DescriptorWriteItem RawBufferSrv(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem RawBufferSrv(u32 slot, Buffer& buffer, BufferRange range = s_EntireBuffer)noexcept{
+        return RawBufferSrv(slot, &buffer, range);
+    }
 
     static DescriptorWriteItem RawBufferUav(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem RawBufferUav(u32 slot, Buffer& buffer, BufferRange range = s_EntireBuffer)noexcept{
+        return RawBufferUav(slot, &buffer, range);
+    }
 
     static DescriptorWriteItem PushConstants(u32 slot, u32 byteSize)noexcept;
 

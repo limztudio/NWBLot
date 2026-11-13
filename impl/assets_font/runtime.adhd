@@ -87,6 +87,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(sizeof(FontBinaryHeader) == 24u && alignof(FontBinaryHeader) == 1u, "Font payload header layout drifted");
+
 class FreeTypeMemoryFace final : NoCopy{
 private:
     [[nodiscard]] static void* Allocate(FT_Memory memory, const FT_Long size)noexcept{
@@ -285,14 +287,9 @@ template<typename PathArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
-    FreeTypeMemoryFace validator(bytes.get_allocator().arena());
-    return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
-}
-
-b8 ValidateFontSource(const Vector<u8, ::ArenaBase>& bytes, const u32 faceIndex){
-    FreeTypeMemoryFace validator(bytes.get_allocator().arena());
-    return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
+b8 ValidateFontSourceNative(const Span<const u8> bytes, const u32 faceIndex, ::ArenaBase& arena){
+    FreeTypeMemoryFace validator(arena);
+    return validator.openAndValidate(bytes, faceIndex);
 }
 
 b8 Font::validatePayload()const noexcept{

@@ -104,7 +104,7 @@ void AssetClassHeaderEmitter::emitSubsystem(MString& out, const ClassDecl& decl)
         out.append("        ::NWB::Impl::MakeSubsystemFieldDescriptor<");
         out.append(decl.name.data(), decl.name.size());
         out.append(", ");
-        out.append(assetName.data(), assetName.size());
+        m_typeEmitter.appendQualifiedName(out, m_symbols.findTypeNamespace(assetName), assetName);
         out.append(", &");
         out.append(decl.name.data(), decl.name.size());
         out.append("::");

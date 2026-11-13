@@ -80,6 +80,7 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 namespace __hidden_ui_gpu_command_ir{
 
 
@@ -398,7 +399,7 @@ namespace __hidden_ui_gpu_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_ImageLoadContext = FOUNDATION_TEXT("UI Texture Image");
+static constexpr AStringView s_ImageLoadContext = "UI Texture Image";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -742,7 +743,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuImageResources::prepareTextureIm
     if(!versionResult)
         return MakeUnexpected(versionResult.error());
     GpuVersion<GpuTextureImageVersion> version = Move(*versionResult);
-    if(!TextureAssetLoader::Create(source->texture(), source->identity().name(), __hidden_ui_gpu_resources::s_ImageLoadContext, m_graphics, version->m_texture))
+    if(!CreateTextureGpuResource(source->texture(), source->identity().name(), __hidden_ui_gpu_resources::s_ImageLoadContext, m_graphics, version->m_texture))
         return MakeUnexpected(Failure{});
     if(!__hidden_ui_gpu_resources::ValidVersion(*version)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());

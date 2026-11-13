@@ -24,6 +24,7 @@ struct AdhdCompileOptions{
     Core::Metascript::MVector<Core::Metascript::MString> includeDirectories;
     Core::Metascript::MString outputDirectory;
     Core::Metascript::MString customNamespace;
+    Core::Metascript::MString namespaceMapPath;
     Core::Metascript::MString depfilePath;
 
 
@@ -33,6 +34,7 @@ public:
         , includeDirectories(arena)
         , outputDirectory(arena)
         , customNamespace(arena)
+        , namespaceMapPath(arena)
         , depfilePath(arena)
     {}
 };

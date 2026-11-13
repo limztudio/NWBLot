@@ -290,34 +290,28 @@ void AppendPerfCsvRow(const Core::Telemetry::PerfTimingSource::Enum source, cons
     );
 }
 
-void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryReportSummary& summary)noexcept{
+namespace{
+void AccumulateTimingChannel(usize& eventCount, usize& sampleCount, f64& totalSeconds, b8& secondsValid, f64& maxSeconds, const Core::Perf::TimingStats& stats)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if(payload.source == Core::Telemetry::PerfTimingSource::Cpu){
-        ++summary.cpuTimingEventCount;
-        summary.cpuTimingSampleCount += payload.stats.sampleCount;
-        if(summary.cpuTimingSecondsValid){
-            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.cpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
-            if(IsFiniteTimingSecondsTotal(total))
-                summary.cpuTimingSeconds = total;
-            else
-                summary.cpuTimingSecondsValid = false;
-        }
-        if(payload.stats.seconds > summary.maxCpuTimingSeconds)
-            summary.maxCpuTimingSeconds = payload.stats.seconds;
+    ++eventCount;
+    sampleCount += stats.sampleCount;
+    if(secondsValid){
+        const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(totalSeconds), VectorDoubleReplicate(stats.seconds)));
+        if(IsFiniteTimingSecondsTotal(total))
+            totalSeconds = total;
+        else
+            secondsValid = false;
     }
-    else if(payload.source == Core::Telemetry::PerfTimingSource::Gpu){
-        ++summary.gpuTimingEventCount;
-        summary.gpuTimingSampleCount += payload.stats.sampleCount;
-        if(summary.gpuTimingSecondsValid){
-            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.gpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
-            if(IsFiniteTimingSecondsTotal(total))
-                summary.gpuTimingSeconds = total;
-            else
-                summary.gpuTimingSecondsValid = false;
-        }
-        if(payload.stats.seconds > summary.maxGpuTimingSeconds)
-            summary.maxGpuTimingSeconds = payload.stats.seconds;
-    }
+    if(stats.seconds > maxSeconds)
+        maxSeconds = stats.seconds;
+}
+}
+
+void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryReportSummary& summary)noexcept{
+    if(payload.source == Core::Telemetry::PerfTimingSource::Cpu)
+        AccumulateTimingChannel(summary.cpuTimingEventCount, summary.cpuTimingSampleCount, summary.cpuTimingSeconds, summary.cpuTimingSecondsValid, summary.maxCpuTimingSeconds, payload.stats);
+    else if(payload.source == Core::Telemetry::PerfTimingSource::Gpu)
+        AccumulateTimingChannel(summary.gpuTimingEventCount, summary.gpuTimingSampleCount, summary.gpuTimingSeconds, summary.gpuTimingSecondsValid, summary.maxGpuTimingSeconds, payload.stats);
 }
 
 void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept{

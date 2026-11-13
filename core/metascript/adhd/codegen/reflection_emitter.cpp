@@ -248,7 +248,7 @@ void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl
         out.append("    [[nodiscard]] static AStringView assetDependencyFieldName(usize index)noexcept;\r\n");
     }
 
-    const NwbReflectionEmitter nwbEmitter(m_symbols);
+    const NwbReflectionEmitter nwbEmitter(m_symbols, m_typeEmitter);
     nwbEmitter.emitDeserializeNwbMethod(out, decl, fields, classNeedsArena);
     emitAssetDependencyMethods(out, fields);
     nwbEmitter.emitExtractNwbAssetDependenciesMethod(out, fields);

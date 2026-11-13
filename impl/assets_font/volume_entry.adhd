@@ -35,9 +35,11 @@ namespace __hidden_font_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_FontAssetKindLabel = FOUNDATION_TEXT("font");
+
 static b8 RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontCookEntry, Font, FontAssetCodec>(
-        FontBinaryPayload::s_FontAssetKindLabel,
+        s_FontAssetKindLabel,
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseFontCookMetadata(root, virtualRoot, path, doc, context.cookArena, context.scratchArena);
         },

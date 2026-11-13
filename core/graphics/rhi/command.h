@@ -397,6 +397,7 @@ struct VertexBufferBinding{
 
 public:
     constexpr VertexBufferBinding& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
+    constexpr VertexBufferBinding& setBuffer(Buffer& value)noexcept{ buffer = &value; return *this; }
 
     constexpr VertexBufferBinding& setSlot(u32 value)noexcept{ slot = value; return *this; }
 
@@ -416,6 +417,7 @@ struct IndexBufferBinding{
 
 public:
     constexpr IndexBufferBinding& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
+    constexpr IndexBufferBinding& setBuffer(Buffer& value)noexcept{ buffer = &value; return *this; }
 
     constexpr IndexBufferBinding& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
 
@@ -442,8 +444,10 @@ struct GraphicsState{
 
 public:
     constexpr GraphicsState& setPipeline(GraphicsPipeline* value)noexcept{ pipeline = value; return *this; }
+    constexpr GraphicsState& setPipeline(GraphicsPipeline& value)noexcept{ pipeline = &value; return *this; }
 
     constexpr GraphicsState& setFramebuffer(Framebuffer* value)noexcept{ framebuffer = value; return *this; }
+    constexpr GraphicsState& setFramebuffer(Framebuffer& value)noexcept{ framebuffer = &value; return *this; }
 
     constexpr GraphicsState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
 
@@ -456,6 +460,7 @@ public:
     constexpr GraphicsState& setIndexBuffer(const IndexBufferBinding& value)noexcept{ indexBuffer = value; return *this; }
 
     constexpr GraphicsState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
+    constexpr GraphicsState& setIndirectParams(Buffer& value)noexcept{ indirectParams = &value; return *this; }
 };
 
 struct DrawArguments{
@@ -521,8 +526,10 @@ struct ComputeState{
 
 public:
     constexpr ComputeState& setPipeline(ComputePipeline* value)noexcept{ pipeline = value; return *this; }
+    constexpr ComputeState& setPipeline(ComputePipeline& value)noexcept{ pipeline = &value; return *this; }
 
     constexpr ComputeState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
+    constexpr ComputeState& setIndirectParams(Buffer& value)noexcept{ indirectParams = &value; return *this; }
 };
 
 struct DispatchIndirectArguments{
@@ -542,14 +549,17 @@ struct MeshletState{
 
 public:
     constexpr MeshletState& setPipeline(MeshletPipeline* value)noexcept{ pipeline = value; return *this; }
+    constexpr MeshletState& setPipeline(MeshletPipeline& value)noexcept{ pipeline = &value; return *this; }
 
     constexpr MeshletState& setFramebuffer(Framebuffer* value)noexcept{ framebuffer = value; return *this; }
+    constexpr MeshletState& setFramebuffer(Framebuffer& value)noexcept{ framebuffer = &value; return *this; }
 
     constexpr MeshletState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
 
     constexpr MeshletState& setBlendConstantColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
 
     constexpr MeshletState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
+    constexpr MeshletState& setIndirectParams(Buffer& value)noexcept{ indirectParams = &value; return *this; }
 
     constexpr MeshletState& setDynamicStencilRefValue(u8 value)noexcept{ dynamicStencilRefValue = value; return *this; }
 };
@@ -566,6 +576,7 @@ struct RayTracingState{
 
 public:
     constexpr RayTracingState& setShaderTable(RayTracingShaderTable* value)noexcept{ shaderTable = value; return *this; }
+    constexpr RayTracingState& setShaderTable(RayTracingShaderTable& value)noexcept{ shaderTable = &value; return *this; }
 };
 
 struct RayTracingDispatchRaysArguments{

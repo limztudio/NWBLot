@@ -545,20 +545,29 @@ void GpuTimingRecorder::advanceEpoch()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
+void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>& timing){
+    if(!timing.has_value())
         return;
-    timing->value().discardTiming();
-    timing->reset();
+    timing.value().discardTiming();
+    timing.reset();
 }
 
-b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>* const timing){
-    if(!timing || !timing->has_value())
+void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* const timing){
+    if(timing)
+        DiscardGpuTimingMeasure(*timing);
+}
+
+b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>& timing){
+    if(!timing.has_value())
         return false;
-    if(timing->value().finishMarker())
+    if(timing.value().finishMarker())
         return true;
     DiscardGpuTimingMeasure(timing);
     return false;
+}
+
+b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>* const timing){
+    return timing ? FinishSplitGpuTimingMarker(*timing) : false;
 }
 
 

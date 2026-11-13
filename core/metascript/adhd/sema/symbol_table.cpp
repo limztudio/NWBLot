@@ -395,6 +395,18 @@ b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
     return false;
 }
 
+MStringView SymbolTable::findTypeNamespace(const MStringView name)const noexcept{
+    if(const EnumDecl* decl = findEnum(name))
+        return decl->cppNamespace;
+    if(const InterfaceDecl* decl = findInterface(name))
+        return decl->cppNamespace;
+    if(const ClassDecl* decl = findClass(name))
+        return decl->cppNamespace;
+    if(const TypeAliasDecl* decl = findTypeAlias(name))
+        return decl->cppNamespace;
+    return {};
+}
+
 b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
     return findEnum(name) != nullptr || findInterface(name) != nullptr || findClass(name) != nullptr || findTypeAlias(name) != nullptr;
 }
@@ -403,6 +415,8 @@ b8 SymbolTable::isAbstractBuiltinType(const MStringView name)const noexcept{
     const MStringView baseName = resolveBaseTypeName(name);
     if(hasTypeSymbol(baseName))
         return false;
+    if(IsNonCopyableBaseInterfaceName(baseName))
+        return true;
     const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName);
     return objInfo && objInfo->isAbstract;
 }
@@ -413,6 +427,21 @@ b8 SymbolTable::isPolymorphicBaseBuiltinType(const MStringView name)const noexce
         return false;
     const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName);
     return objInfo && objInfo->isPolymorphicBase;
+}
+
+b8 SymbolTable::hasPolymorphicInterface(const ClassDecl& classDecl)const noexcept{
+    for(const TypeRef* ifaceRef : classDecl.implementedInterfaces){
+        if(!ifaceRef)
+            continue;
+        const MStringView baseName = resolveBaseTypeName(ifaceRef->name);
+        if(!IsNonCopyableBaseInterfaceName(baseName))
+            return true;
+    }
+    return false;
+}
+
+b8 SymbolTable::hasPolymorphicBase(const ClassDecl& classDecl)const noexcept{
+    return hasPolymorphicInterface(classDecl) || !classDecl.assetTypeName.empty() || !classDecl.systemTypeName.empty();
 }
 
 

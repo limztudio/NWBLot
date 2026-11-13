@@ -17,7 +17,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <cstdlib>
+#include <tests/smoke/test_environment.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 
     String valueCopy = String(value);
     i32 status = -1;
     native(in nameCopy, in valueCopy, in hasValue, mut status){
-        status = hasValue ? ::setenv(nameCopy.c_str(), valueCopy.c_str(), 1) : ::unsetenv(nameCopy.c_str());
+        status = ::NWB::Tests::Smoke::SetSmokeTestEnvironment(nameCopy.c_str(), hasValue ? valueCopy.c_str() : nullptr);
     }
     ASSERT_EQ(status, 0);
 }

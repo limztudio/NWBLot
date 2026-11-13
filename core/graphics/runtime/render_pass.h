@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <global/assert.h>
+
 #include <core/graphics/api.h>
 
 
@@ -19,6 +21,23 @@ NWB_CORE_BEGIN
 
 class GraphicsRuntime;
 using FramebufferPtr = Framebuffer*;
+using TexturePtr = Texture*;
+
+[[nodiscard]] inline b8 IsValidFramebufferPtr(const FramebufferPtr framebuffer)noexcept{
+    return framebuffer != nullptr;
+}
+[[nodiscard]] inline Framebuffer& DerefFramebufferPtr(const FramebufferPtr framebuffer)noexcept{
+    FOUNDATION_ASSERT_MSG(framebuffer != nullptr, "Attempted to dereference a null FramebufferPtr.");
+    return *framebuffer;
+}
+
+[[nodiscard]] inline b8 IsValidTexturePtr(const TexturePtr texture)noexcept{
+    return texture != nullptr;
+}
+[[nodiscard]] inline Texture& DerefTexturePtr(const TexturePtr texture)noexcept{
+    FOUNDATION_ASSERT_MSG(texture != nullptr, "Attempted to dereference a null TexturePtr.");
+    return *texture;
+}
 
 class IRenderPass{
 public:

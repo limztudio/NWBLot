@@ -45,6 +45,8 @@ namespace __hidden_adhd_cpp_type_emitter{
 MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcept{
     if(BuiltinTypeSemantics::IsScalarType(typeName))
         return typeName;
+    if(IsNonCopyableBaseInterfaceName(typeName))
+        return typeName == "NoCopy" ? "::NoCopy" : typeName;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->cppExportName;
     if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(typeName))
@@ -58,6 +60,77 @@ MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcep
     if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(typeName))
         return enumInfo->cppTypeName;
     return {};
+}
+
+void CppTypeEmitter::appendQualifiedName(MString& out, const MStringView declNamespace, const MStringView symbolName)const{
+    const MStringView ns = resolveCrossNamespace(declNamespace);
+    if(!ns.empty()){
+        out.append("::");
+        out.append(ns.data(), ns.size());
+        out.append("::");
+    }
+    out.append(symbolName.data(), symbolName.size());
+}
+
+void CppTypeEmitter::emitConstantTextCpp(MString& out, const MStringView text)const{
+    usize i = 0u;
+    while(i < text.size()){
+        const char ch = text[i];
+        if(ch == '"' || ch == '\''){
+            const char quote = ch;
+            out.push_back(text[i++]);
+            while(i < text.size()){
+                const char sc = text[i++];
+                out.push_back(sc);
+                if(sc == '\\' && i < text.size())
+                    out.push_back(text[i++]);
+                else if(sc == quote)
+                    break;
+            }
+            continue;
+        }
+        if(IsAsciiDigit(ch)){
+            while(
+                i < text.size()
+                && (
+                    IsAsciiIdentifierChar(text[i])
+                    || text[i] == '.'
+                    || ((text[i] == '+' || text[i] == '-') && i > 0u && (text[i - 1u] == 'e' || text[i - 1u] == 'E' || text[i - 1u] == 'p' || text[i - 1u] == 'P'))
+                )
+            )
+                out.push_back(text[i++]);
+            continue;
+        }
+        if(IsAsciiIdentifierStart(ch)){
+            const usize start = i;
+            while(i < text.size() && IsAsciiIdentifierChar(text[i]))
+                ++i;
+            const MStringView token = text.substr(start, i - start);
+            const b8 isQualifiedRight = (start >= 2u && text[start - 1u] == ':' && text[start - 2u] == ':') || (start >= 1u && text[start - 1u] == '.');
+            if(!isQualifiedRight){
+                if(i + 1u < text.size() && text[i] == ':' && text[i + 1u] == ':'){
+                    if(const MStringView ns = m_symbols.findTypeNamespace(token); !ns.empty()){
+                        appendQualifiedName(out, ns, token);
+                        continue;
+                    }
+                }
+                else if(const Stmt* gc = m_symbols.findGlobalConstant(token)){
+                    appendQualifiedName(out, gc->cppNamespace, token);
+                    continue;
+                }
+            }
+            out.append(token.data(), token.size());
+            continue;
+        }
+        out.push_back(text[i++]);
+    }
+}
+
+void CppTypeEmitter::emitTypeArgCpp(MString& out, const TypeArg& arg)const{
+    if(arg.type)
+        emitTypeCpp(out, *arg.type);
+    else if(!arg.constantText.empty())
+        emitConstantTextCpp(out, arg.constantText);
 }
 
 void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
@@ -106,12 +179,12 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
 
     const MStringView name = type.name;
     if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
-        out.append(name.data(), name.size());
+        appendQualifiedName(out, enumDecl->cppNamespace, name);
         out.append(enumDecl->isFlag ? "::Flag" : "::Enum");
         return;
     }
     if(m_symbols.hasTypeSymbol(name)){
-        out.append(name.data(), name.size());
+        appendQualifiedName(out, m_symbols.findTypeNamespace(name), name);
         if(!type.templateArgs.empty())
             emitTypeArgListCpp(out, type.templateArgs);
         return;
@@ -124,11 +197,7 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
             out.append(simdVecInfo->isDoubleReg ? "<::SIMDVectorDoubleResult" : "<::SIMDVectorSingleResult");
             for(usize i = 1u; i < type.templateArgs.size(); ++i){
                 out.append(", ");
-                const TypeArg& arg = type.templateArgs[i];
-                if(arg.type)
-                    emitTypeCpp(out, *arg.type);
-                else if(!arg.constantText.empty())
-                    out.append(arg.constantText.data(), arg.constantText.size());
+                emitTypeArgCpp(out, type.templateArgs[i]);
             }
             out.push_back('>');
             return;
@@ -205,11 +274,7 @@ void CppTypeEmitter::emitTypeWithCustomArenaCpp(MString& out, const TypeRef& typ
                 for(usize i = 0u; i < target.templateArgs.size(); ++i){
                     if(i > 0u)
                         out.append(", ");
-                    const TypeArg& arg = target.templateArgs[i];
-                    if(arg.type)
-                        emitTypeCpp(out, *arg.type);
-                    else if(!arg.constantText.empty())
-                        out.append(arg.constantText.data(), arg.constantText.size());
+                    emitTypeArgCpp(out, target.templateArgs[i]);
                 }
                 if(!target.templateArgs.empty())
                     out.append(", ");
@@ -227,11 +292,7 @@ void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> 
     for(usize i = 0u; i < args.size(); ++i){
         if(i > 0u)
             out.append(", ");
-        const TypeArg& arg = args[i];
-        if(arg.type)
-            emitTypeCpp(out, *arg.type);
-        else if(!arg.constantText.empty())
-            out.append(arg.constantText.data(), arg.constantText.size());
+        emitTypeArgCpp(out, args[i]);
     }
     out.push_back('>');
 }
@@ -355,7 +416,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
 }
 
 void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const b8 isDeclarationInClass, const b8 ownerNeedsMotherArena)const{
-    const b8 isOverrideDestructor = method.isDestructor && ownerClass && (!ownerClass->implementedInterfaces.empty() || !ownerClass->assetTypeName.empty() || !ownerClass->systemTypeName.empty());
+    const b8 isOverrideDestructor = method.isDestructor && ownerClass && m_symbols.hasPolymorphicBase(*ownerClass);
     const b8 prependMotherArena = method.isConstructor
         && ownerClass
         && !ownerClass->usesStaticClassArena()

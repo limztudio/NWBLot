@@ -366,7 +366,7 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
     else if(!typeRef.templateArgs.empty()){
         const b8 isKnownNonTemplated = m_symbols.findEnum(typeRef.name) != nullptr
             || FindTemplateParam(enclosingClass, enclosingMethod, typeRef.name) != nullptr
-            || (!m_symbols.hasTypeSymbol(typeRef.name) && (BuiltinTypeSemantics::IsBuiltinTypeName(typeRef.name) || FindBuiltinEnum(typeRef.name) != nullptr));
+            || (!m_symbols.hasTypeSymbol(typeRef.name) && (BuiltinTypeSemantics::IsBuiltinTypeName(typeRef.name) || FindBuiltinEnum(typeRef.name) != nullptr || IsNonCopyableBaseInterfaceName(typeRef.name)));
         if(isKnownNonTemplated || !m_hasTopLevelNativeBlocks){
             reportError(errors, typeRef.span, "type does not accept template arguments");
             ok = false;

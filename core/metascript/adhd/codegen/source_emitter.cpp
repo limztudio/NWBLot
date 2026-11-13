@@ -328,10 +328,11 @@ b8 IsScalarLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
 
 
 MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView headerIncludePath, const MStringView namespacePath)const{
+    m_typeEmitter.setCurrentNamespace(namespacePath);
     MString out(m_arena);
     out.reserve(s_AdhdEmitReserveBytes);
 
-    ReflectionEmitter reflectionEmitter(m_symbols);
+    ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
 
     const auto needsAutoCodecRegistrar = [&](const ClassDecl& classDecl)noexcept -> b8{
         if(classDecl.assetTypeName.empty())

@@ -102,21 +102,6 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
     return roots;
 }
 
-b8 PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
-    const auto removed = RemoveAllIfExists(includeRoot);
-    if(!removed){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to clear generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(removed.error().message()));
-        return false;
-    }
-
-    const auto ensured = EnsureDirectories(includeRoot);
-    if(!ensured){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(ensured.error().message()));
-        return false;
-    }
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

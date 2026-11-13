@@ -127,7 +127,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(const BuiltinGlobalConstantInfo* globalConst = expr.isBuiltinConstant ? FindBuiltinGlobalConstant(expr.text) : nullptr)
                 out.append(globalConst->cppExportName.data(), globalConst->cppExportName.size());
             else
-                out.append(expr.text.data(), expr.text.size());
+                m_typeEmitter.appendQualifiedName(out, expr.resolvedCppNamespace, expr.text);
         }
         break;
     }
@@ -206,7 +206,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         for(usize i = 0u; i < expr.scopeChain.size(); ++i){
             if(i > 0u)
                 out.append("::");
-            out.append(expr.scopeChain[i].data(), expr.scopeChain[i].size());
+            if(i == 0u)
+                m_typeEmitter.appendQualifiedName(out, expr.resolvedCppNamespace, expr.scopeChain[i]);
+            else
+                out.append(expr.scopeChain[i].data(), expr.scopeChain[i].size());
         }
         break;
     }
@@ -597,7 +600,7 @@ void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 i
         return;
     if(lhs->kind == ExprKind::Identifier){
         if(isUserCallableCall){
-            out.append(lhs->text.data(), lhs->text.size());
+            m_typeEmitter.appendQualifiedName(out, lhs->resolvedCppNamespace, lhs->text);
             if(!callTemplateArgs.empty())
                 m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
             return;

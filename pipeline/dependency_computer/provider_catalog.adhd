@@ -219,13 +219,13 @@ namespace Assets = Core::Assets;
 
 
 };
+using namespace __hidden_dependency_provider_catalog;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_dependency_provider_catalog;
     auto resolvedRepoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), FOUNDATION_TEXT("DependencyComputer"), m_arena);
     if(!resolvedRepoRoot)
         return false;
@@ -264,7 +264,6 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
     const Core::Assets::CookDependencyRegistry& dependencyRegistry,
     Core::Alloc::ScratchArena& scratchArena
 )const{
-    using namespace __hidden_dependency_provider_catalog;
     DependencyInputSelection selection(scratchArena);
     auto& selected = selection.selected;
     auto& order = selection.order;
@@ -300,7 +299,6 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
 }
 
 Expected<Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, Core::Alloc::ScratchArena& scratchArena)const{
-    using namespace __hidden_dependency_provider_catalog;
     FOUNDATION_ASSERT(index < m_files.size());
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
@@ -316,7 +314,6 @@ Expected<usize> DependencyProviderCatalog::resolve(
     const Core::Assets::CookDependencyRegistry* const dependencyRegistry,
     Core::Alloc::ScratchArena& scratchArena
 )const{
-    using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath)
         return MakeUnexpected(Failure{});
 
@@ -423,8 +420,6 @@ Expected<Optional<Core::Assets::ExpandedAssetMetadataVector>> TryExpandBunchOrCo
     const Core::Metascript::Document& document,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    using namespace __hidden_dependency_provider_catalog;
-
     auto expanded = Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook(Assets::AssetBunchExpandContext{
         .assetRoot = file.assetRoot,
         .virtualRoot = file.virtualRoot,

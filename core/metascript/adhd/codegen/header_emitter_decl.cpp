@@ -240,7 +240,7 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
         out.append(" = 0;\r\n");
     }
 
-    const ReflectionEmitter reflectionEmitter(m_symbols);
+    const ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
     reflectionEmitter.emitInterfaceReflectionDeclarations(decl, m_arena, out);
 
     out.append("};\r\n\r\n");

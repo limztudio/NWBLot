@@ -51,12 +51,12 @@ def require_windows_interactive_desktop(user32=None):
     user32.GetUserObjectInformationW.restype = ctypes.c_int
     station = user32.GetProcessWindowStation()
     if not station:
-        raise SmokeFailure(f"GetProcessWindowStation failed: {getattr(ctypes, "get_last_error", ctypes.get_errno)()}")
+        raise SmokeFailure(f"GetProcessWindowStation failed: {getattr(ctypes, 'get_last_error', ctypes.get_errno)()}")
     flags = WindowsUserObjectFlags()
     length_needed = ctypes.c_uint32()
     # Check WSF_VISIBLE on the borrowed process window station handle.
     if not user32.GetUserObjectInformationW(ctypes.c_void_p(station), 1, ctypes.byref(flags), ctypes.sizeof(flags), ctypes.byref(length_needed)):
-        raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {getattr(ctypes, "get_last_error", ctypes.get_errno)()}")
+        raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {getattr(ctypes, 'get_last_error', ctypes.get_errno)()}")
     if not flags.dwFlags & 0x0001:
         raise WindowsDesktopUnavailable("the Windows process window station has no visible display surfaces; native window/input smoke requires an interactive desktop")
 
@@ -113,7 +113,7 @@ class WindowsCapture:
         self.user32.SetThreadDpiAwarenessContext(self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
         context = ctypes.c_void_p(self.user32.GetThreadDpiAwarenessContext())
         if not self.user32.AreDpiAwarenessContextsEqual(context, self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2):
-            raise SmokeFailure(f"SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {getattr(ctypes, "get_last_error", ctypes.get_errno)()}")
+            raise SmokeFailure(f"SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {getattr(ctypes, 'get_last_error', ctypes.get_errno)()}")
 
     def close(self):
         pass

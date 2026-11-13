@@ -315,6 +315,7 @@ public:
 
 public:
     [[nodiscard]] b8 open(const BakeOptions& options, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& payload){
+        (void)scratch;
         auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena());
         if(!bytes){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));

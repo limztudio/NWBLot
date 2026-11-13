@@ -404,7 +404,7 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
             break;
         }
         const b8 updated = SetSmokeEntityTransform(this.m_cameraEntity, position, rotation, SmokeWorldRef(this.m_world));
-        assert(updated);
+        [essential] assert(updated);
     }
 
     private u32 repeatCount()const{

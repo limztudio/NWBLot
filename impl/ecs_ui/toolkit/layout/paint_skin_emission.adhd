@@ -198,7 +198,7 @@ void FinalizePaintBuilderRecording(
     mut Vector<Rect> inOutClips,
     mut b8 inOutRecording
 ){
-    assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
+    [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
     if(!commandsOrdered){
         for(usize i = 1u; i < inOutCommands.size(); ++i){
             const DrawCommand current = inOutCommands[i];

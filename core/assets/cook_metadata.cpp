@@ -89,7 +89,7 @@ namespace __hidden_cook_metadata{
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' is missing asset declaration '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), ConvertString(s_MetadataAssetVariable));
         return false;
     }
-    const AStringView rawAssetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
+    const AStringView rawAssetTypeText(assetDeclaration->type);
     const auto assetTypeResult = ToName(rawAssetTypeText);
     if(!assetTypeResult){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: asset type contains an embedded null in meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));

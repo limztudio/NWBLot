@@ -245,24 +245,6 @@ void FillPackageRequest(in Path spoolDirectory, in StringView crashId, mut Crash
     }
 }
 
-void ExpectPathExists(in Path path, in b8 expected){
-    const Expected<b8, ErrorCode> query = FileExists(path);
-    ASSERT_TRUE(query.has_value());
-    EXPECT_EQ(query.value(), expected);
-}
-
-void ExpectIsDirectory(in Path path, in b8 expected){
-    const Expected<b8, ErrorCode> query = IsDirectory(path);
-    ASSERT_TRUE(query.has_value());
-    EXPECT_EQ(query.value(), expected);
-}
-
-void ExpectIsRegularFile(in Path path, in b8 expected){
-    const Expected<b8, ErrorCode> query = IsRegularFile(path);
-    ASSERT_TRUE(query.has_value());
-    EXPECT_EQ(query.value(), expected);
-}
-
 void ExpectDirectoryReady(in Path path, in u32 timeoutMs){
     const Expected<b8, ErrorCode> ready = WaitForDirectory(path, timeoutMs);
     ASSERT_TRUE(ready.has_value());

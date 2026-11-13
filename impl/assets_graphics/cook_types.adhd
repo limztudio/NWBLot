@@ -268,25 +268,19 @@ b8 TryAccumulateGeneratedShaderEntryCapacity(
     return true;
 }
 
-b8 TryInsertUniqueShaderIdentityKey(
-    in Name shaderName,
-    in Name stageName,
-    in StringView shaderNameText,
-    in StringView stageText,
-    in b8 hasMetaPath,
-    in StringView metaPathText,
-    mut HashSet<ShaderStageKey> inOutSeenKeys
-){
+b8 TryInsertUniqueShaderIdentityKey(in Name shaderName, in Name stageName, mut HashSet<ShaderStageKey> inOutSeenKeys){
     const ShaderStageKey shaderIdentityKey(shaderName, stageName);
-    if(inOutSeenKeys.contains(shaderIdentityKey)){
-        if(hasMetaPath)
-            error("GraphicsCook: duplicate shader identity '{}' for stage '{}' from meta '{}'", shaderNameText, stageText, metaPathText);
-        else
-            error("GraphicsCook: duplicate generated pixel shader identity '{}'", shaderNameText);
+    if(inOutSeenKeys.contains(shaderIdentityKey))
         return false;
-    }
     inOutSeenKeys.insert(shaderIdentityKey);
     return true;
+}
+
+void ReportDuplicateShaderIdentity(in StringView shaderNameText, in StringView stageText, in b8 hasMetaPath, in StringView metaPathText){
+    if(hasMetaPath)
+        error("GraphicsCook: duplicate shader identity '{}' for stage '{}' from meta '{}'", shaderNameText, stageText, metaPathText);
+    else
+        error("GraphicsCook: duplicate generated pixel shader identity '{}'", shaderNameText);
 }
 
 b8 TryAccumulatePreparedShaderRecordCount(in u64 variantCount, mut u64 inOutShaderRecordCount){

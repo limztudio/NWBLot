@@ -682,10 +682,9 @@ b8 TryReadNonEmptySmokeEnvVar(in StringView name, mut String outValue){
     const Expected<Optional<String>, ErrorCode> result = ReadEnvironmentVariable(name);
     if(!result.has_value())
         return false;
-    const Optional<String> candidate = result.value();
-    if(!candidate.has_value() || candidate.value().empty())
+    if(!result.value().has_value() || result.value().value().empty())
         return false;
-    outValue = candidate.value();
+    outValue = result.value().value();
     return true;
 }
 

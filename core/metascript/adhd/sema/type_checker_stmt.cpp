@@ -5,6 +5,7 @@
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 #include "type_checker.h"
+#include "type_utils.h"
 #include "return_statement_checker.h"
 #include "local_variable_checker.h"
 #include "callable_argument_checker.h"
@@ -457,6 +458,14 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             const b8 isAfterCond = (stmt.diagnosticKind != DiagnosticKind::Assert) || (i >= 1u);
             if(isAfterCond)
                 markStringToPathAdaptation(ownerClass, &method, scope, *arg);
+            const b8 isFormatValue = stmt.diagnosticKind == DiagnosticKind::Assert ? i >= 2u : i >= 1u;
+            if(isFormatValue){
+                const MStringView fmtArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
+                if(!m_symbols.hasTypeSymbol(fmtArgType)){
+                    if(const BuiltinObjectTypeInfo* fmtObj = FindBuiltinObjectType(fmtArgType); fmtObj && fmtObj->formatArgWrapKind == 2u)
+                        arg->formatArgWrapKind = 2u;
+                }
+            }
         }
         break;
     }

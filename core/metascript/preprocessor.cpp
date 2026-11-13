@@ -482,18 +482,24 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
             }
         }
         else if(isActive){
-            MString expandedLine(m_arena);
-            if(!commentPrefix.empty())
-                expandedLine.append(commentPrefix.data(), commentPrefix.size());
             MString expandedTail(m_arena);
-            PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors);
-            if(!macroExpander.expand(effectiveLine, startLine, expandedTail, inNativeKeywordPendingBrace, nativeBraceDepth))
-                return false;
-            expandedLine.append(expandedTail.data(), expandedTail.size());
-
-            updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size(), true);
-
-            outProcessed.append(expandedLine.data(), expandedLine.size());
+            MStringView expandedView = effectiveLine;
+            if(!m_macros.empty()){
+                PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors);
+                if(!macroExpander.expandToView(effectiveLine, startLine, expandedTail, expandedView, inNativeKeywordPendingBrace, nativeBraceDepth))
+                    return false;
+            }
+            if(commentPrefix.empty()){
+                updateLineScanState(expandedView, 0u, true);
+                outProcessed.append(expandedView.data(), expandedView.size());
+            }
+            else{
+                MString expandedLine(m_arena);
+                expandedLine.append(commentPrefix.data(), commentPrefix.size());
+                expandedLine.append(expandedView.data(), expandedView.size());
+                updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size(), true);
+                outProcessed.append(expandedLine.data(), expandedLine.size());
+            }
             outProcessed.push_back('\n');
         }
         else{

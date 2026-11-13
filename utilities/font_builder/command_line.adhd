@@ -12,7 +12,7 @@ const i32 s_FontBuilderExitSuccess = 0;
 const i32 s_FontBuilderExitFailure = 1;
 
 void LogFontBuilderPublishedSummary(in Path outputPath, in usize glyphCount, in usize groupCount){
-    info("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups", PathToString(outputPath), glyphCount, groupCount);
+    info("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups", outputPath, glyphCount, groupCount);
 }
 
 

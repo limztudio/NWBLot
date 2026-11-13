@@ -37,10 +37,6 @@ Expected<b8> TryConvertMaterialBoolInteger(in i64 propertyInt){
     return MakeUnexpected(Failure());
 }
 
-b8 HasMaterialBindSourceExtension(in StringView extensionText, in StringView expectedExtension){
-    return EqualsAsciiIgnoreCase(extensionText, expectedExtension);
-}
-
 b8 ValidateNonEmptyMaterialCookInterface(in StringView materialVirtualPath, in StringView materialInterface){
     if(!materialInterface.empty())
         return true;
@@ -142,7 +138,8 @@ static b8 TryResolveMaterialBindDependencyInterface(const ScratchPath& normalize
     if(!PathHasDirectoryAncestor(normalizedDependency, normalizedMaterialBindIncludeRoot))
         return true;
 
-    if(!HasMaterialBindSourceExtension(PathToString(scratchArena, normalizedDependency.extension()), s_MaterialBindSourceExtensionText))
+    static_assert(s_MaterialBindSourceExtensionText == ".bind");
+    if(!Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(normalizedDependency.extensionView(), s_MaterialBindSourceExtensionText, scratchArena))
         return true;
 
     ScratchPath relativePath = normalizedDependency.lexicallyRelative(normalizedMaterialBindIncludeRoot);
@@ -378,12 +375,6 @@ static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const P
     return parameters;
 }
 
-static b8 HasMatchingVirtualAssetExtension(const ::Path<ScratchArena>& virtualPath, const AStringView requiredExtension, ScratchArena& scratchArena){
-    ScratchString extension = PathToString(scratchArena, virtualPath.extensionView());
-    CanonicalizeTextInPlace(extension);
-    return AStringView(extension) == requiredExtension;
-}
-
 static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena, ScratchArena& scratchArena){
     const auto* interfaceValue = asset.findField(s_MaterialMetaInterfaceField);
     if(!interfaceValue){
@@ -408,7 +399,7 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
 
     // The interface names a `.bind`; strip the extension to match the discovered virtual path.
     ::Path<ScratchArena> interfacePathPath(scratchArena, interfacePath);
-    if(!HasMatchingVirtualAssetExtension(interfacePathPath, s_MaterialBindSourceExtensionText, scratchArena)){
+    if(!Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(interfacePathPath.extensionView(), s_MaterialBindSourceExtensionText, scratchArena)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
@@ -448,7 +439,7 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
     }
 
     const ::Path<ScratchArena> virtualPathPath(scratchArena, virtualPath);
-    if(!HasMatchingVirtualAssetExtension(virtualPathPath, requiredExtension, scratchArena)){
+    if(!Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(virtualPathPath.extensionView(), requiredExtension, scratchArena)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': field '{}' must reference a {} file"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(requiredExtension));
         return MakeUnexpected(Failure{});
     }
@@ -742,7 +733,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     if(!material.validatePayload(s_MaterialSerializeContextText, s_MaterialSerializeContextText))
         return false;
     return MaterialBinaryWriter().serialize(
-        AStringView(material.shaderVariant()),
+        material.shaderVariant(),
         material.materialInterface(),
         material.typedLayoutHash(),
         material.typedLayoutBlocks(),

@@ -1126,7 +1126,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptor
     requiredFields.push_back(TextureMetadataDiagnosticCase("asset.resolution = [7, 5];\n", "resolution must contain exactly"));
     requiredFields.push_back(TextureMetadataDiagnosticCase("asset.alpha_mode = \"embedded_ldr\";\n", "field 'alpha_mode' is required"));
 
-    const String baseMetadata(s_TextureTestMetadata);
+    const StringView baseMetadata = s_TextureTestMetadata;
     for(in TextureMetadataDiagnosticCase field : requiredFields){
         const ScopedTestTrace trace(field.m_assignment);
         CapturingLogger logger = CapturingLogger();
@@ -1135,8 +1135,8 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptor
         ScratchArena scratchArena(s_CodecScratchArena);
         const usize fieldOffset = baseMetadata.find(field.m_assignment);
         ASSERT_LT(fieldOffset, baseMetadata.size());
-        String metadata(baseMetadata.substr(0u, fieldOffset));
-        metadata.append(baseMetadata.substr(fieldOffset + field.m_assignment.size()));
+        String metadata(StringView(baseMetadata).substr(0u, fieldOffset));
+        metadata.append(StringView(baseMetadata).substr(fieldOffset + field.m_assignment.size()));
         EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_missing_layout", testArena, scratchArena));
         EXPECT_TRUE(SawCapturedError(logger, field.m_diagnostic));
     }

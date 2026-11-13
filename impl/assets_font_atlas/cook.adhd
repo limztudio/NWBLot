@@ -109,7 +109,7 @@ b8 ValidateFontAtlasPositiveGlyphBitmapDimensions(in Path path, in u32 width, in
     if(HasPositiveFontAtlasGlyphBitmapDimensions(width, height))
         return true;
 
-    error("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units", PathToString(path));
+    error("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units", path);
     return false;
 }
 
@@ -117,7 +117,7 @@ b8 ValidateFontAtlasSourceGlyphListCount(in Path path, in u32 sourceGlyphCount, 
     if(IsMatchingFontAtlasSourceGlyphListCount(sourceGlyphCount, maxGlyphCount, metadataGlyphCount))
         return true;
 
-    error("Font atlas glyph meta '{}': exactly one record per source glyph is required", PathToString(path));
+    error("Font atlas glyph meta '{}': exactly one record per source glyph is required", path);
     return false;
 }
 
@@ -135,7 +135,7 @@ Expected<u32> ValidateFontAtlasMetadataU32Field(
         if(converted.has_value())
             return converted.value();
     }
-    error("{} '{}': field '{}' must be an integer in {}..{}", diagnosticPrefix, PathToString(path), field, minimum, maximum);
+    error("{} '{}': field '{}' must be an integer in {}..{}", diagnosticPrefix, path, field, minimum, maximum);
     return MakeUnexpected(Failure());
 }
 
@@ -143,7 +143,7 @@ b8 ValidateParsedFontAtlasRasterMode(in Path path, in b8 valid){
     if(valid)
         return true;
 
-    error("Font atlas meta '{}': unsupported raster_mode", PathToString(path));
+    error("Font atlas meta '{}': unsupported raster_mode", path);
     return false;
 }
 
@@ -151,7 +151,7 @@ b8 ValidatePairedFontSourceMetrics(in Path path, in b8 valid){
     if(valid)
         return true;
 
-    error("Font atlas meta '{}': paired font source has invalid face metrics", PathToString(path));
+    error("Font atlas meta '{}': paired font source has invalid face metrics", path);
     return false;
 }
 

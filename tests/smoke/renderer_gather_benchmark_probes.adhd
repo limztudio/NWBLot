@@ -471,7 +471,7 @@ class RendererGatherBenchmarkProbe{
         in u32 runtimeOwners
     )const{
         const b8 complete = this.finished() && this.m_cpu.size() == s_GatherBenchmarkSampleFrames;
-        String modeText = "timing";
+        StringView modeText = "timing";
         if(memoryEnabled)
             modeText = "memory";
         String out = String();

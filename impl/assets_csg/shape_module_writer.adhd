@@ -47,11 +47,11 @@ b8 WriteCsgGeneratedIncludeFile(in Path outputPath, in StringView source){
     const Path parentPath = outputPath.parentPath();
     const auto ensureResult = EnsureDirectories(parentPath);
     if(!ensureResult.has_value()){
-        error("CSG shape include generation: failed to create generated include parent '{}' (error {})", PathToString(parentPath), ensureResult.error().value());
+        error("CSG shape include generation: failed to create generated include parent '{}' (error {})", parentPath, ensureResult.error().value());
         return false;
     }
     if(!WriteTextFile(outputPath, source)){
-        error("CSG shape include generation: failed to write generated include '{}'", PathToString(outputPath));
+        error("CSG shape include generation: failed to write generated include '{}'", outputPath);
         return false;
     }
     return true;

@@ -31,12 +31,34 @@ inline constexpr AStringView s_ImplDirectoryName = "impl";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void CanonicalizeRootIdentity([[maybe_unused]] const AssetRootDuplicatePolicy::Enum duplicatePolicy, [[maybe_unused]] ScratchString& identity)noexcept{
+[[maybe_unused]] static void CanonicalizeRootIdentity([[maybe_unused]] const AssetRootDuplicatePolicy::Enum duplicatePolicy, [[maybe_unused]] ScratchString& identity)noexcept{
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(duplicatePolicy == AssetRootDuplicatePolicy::HostFilesystem)
         CanonicalizeTextInPlace(identity);
 #endif
 }
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+[[nodiscard]] static b8 IsAsciiPath(const TStringView text)noexcept{
+    for(const tchar ch : text){
+        if(static_cast<u32>(ch) >= 0x80u)
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 AsciiRootIdentityEquals(const TStringView lhs, const TStringView rhs, const AssetRootDuplicatePolicy::Enum duplicatePolicy)noexcept{
+    if(lhs.size() != rhs.size())
+        return false;
+    for(usize i = 0u; i < lhs.size(); ++i){
+        const tchar left = duplicatePolicy == AssetRootDuplicatePolicy::HostFilesystem ? Canonicalize(lhs[i]) : lhs[i];
+        const tchar right = duplicatePolicy == AssetRootDuplicatePolicy::HostFilesystem ? Canonicalize(rhs[i]) : rhs[i];
+        if(left != right)
+            return false;
+    }
+    return true;
+}
+#endif
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,9 +90,8 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
                 path = Move(path).parentPath();
             ::Path<ScratchArena> ancestor(scratchArena, path);
             while(!ancestor.empty()){
-                ScratchString name = PathToString(scratchArena, ancestor.filenameView());
-                CanonicalizeTextInPlace(name);
-                if(name == s_AssetsDirectoryName){
+                static_assert(s_AssetsDirectoryName == "assets");
+                if(EqualsAsciiIgnoreCase(ancestor.filenameView(), FOUNDATION_TEXT("assets"))){
                     path = Path(arena, ancestor);
                     break;
                 }
@@ -80,23 +101,53 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
             }
         }
 
-        ScratchString identity = PathToString(scratchArena, path);
-        __hidden_cook_paths::CanonicalizeRootIdentity(duplicatePolicy, identity);
         b8 duplicate = false;
+        b8 needsOwnedComparison = true;
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        b8 allAscii = __hidden_cook_paths::IsAsciiPath(path.native());
+        if(allAscii){
+            for(const ResolvedAssetRoot& root : roots){
+                if(!__hidden_cook_paths::IsAsciiPath(root.path.native())){
+                    allAscii = false;
+                    break;
+                }
+            }
+        }
+        if(allAscii){
+            needsOwnedComparison = false;
+            for(const ResolvedAssetRoot& root : roots){
+                if(__hidden_cook_paths::AsciiRootIdentityEquals(root.path.native(), path.native(), duplicatePolicy)){
+                    duplicate = true;
+                    break;
+                }
+            }
+        }
+#elif !defined(FOUNDATION_UNICODE)
+        needsOwnedComparison = false;
         for(const ResolvedAssetRoot& root : roots){
-            ScratchString existing = PathToString(scratchArena, root.path);
-            __hidden_cook_paths::CanonicalizeRootIdentity(duplicatePolicy, existing);
-            if(existing == identity){
+            if(root.path.native() == path.native()){
                 duplicate = true;
                 break;
+            }
+        }
+#endif
+        if(needsOwnedComparison){
+            ScratchString identity = PathToString(scratchArena, path);
+            __hidden_cook_paths::CanonicalizeRootIdentity(duplicatePolicy, identity);
+            for(const ResolvedAssetRoot& root : roots){
+                ScratchString existing = PathToString(scratchArena, root.path);
+                __hidden_cook_paths::CanonicalizeRootIdentity(duplicatePolicy, existing);
+                if(existing == identity){
+                    duplicate = true;
+                    break;
+                }
             }
         }
         if(duplicate)
             continue;
 
-        ScratchString parentName = PathToString(scratchArena, ::Path<ScratchArena>(scratchArena, path.parentPathView()).filenameView());
-        CanonicalizeTextInPlace(parentName);
-        const AStringView virtualRoot = parentName == __hidden_cook_paths::s_ImplDirectoryName ? s_EngineVirtualRoot : s_ProjectVirtualRoot;
+        const b8 isImplRoot = AssetPathsDetail::CanonicalNativeTextEquals(::Path<ScratchArena>(scratchArena, path.parentPathView()).filenameView(), __hidden_cook_paths::s_ImplDirectoryName, scratchArena);
+        const AStringView virtualRoot = isImplRoot ? s_EngineVirtualRoot : s_ProjectVirtualRoot;
         roots.emplace_back(Move(path), virtualRoot);
     }
     return roots;

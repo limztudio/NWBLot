@@ -6,6 +6,9 @@
 #include "simd_constructor_emitter.h"
 #include "simd_optimization_analysis.h"
 
+#include <global/compact_string.h>
+#include <global/fixed_buffer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,6 +56,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             }
             out.append("return ");
             out.append(isDouble ? "::VectorDoubleSetInt(" : "::VectorSetInt(");
+            ACompactString argVarName;
             for(u32 lane = 0u; lane < 4u; ++lane){
                 if(lane > 0u)
                     out.append(", ");
@@ -64,10 +68,10 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
                 for(usize i = 0u; i < expr.arguments.size(); ++i){
                     if(i > 0u)
                         out.append(", ");
-                    MString argVarName(m_emitter.m_arena);
-                    argVarName.append("__a");
-                    AppendUnsignedDecimal(argVarName, i);
-                    AppendIntSimdLaneExtract(out, MStringView(argVarName.data(), argVarName.size()), lane, isDouble, laneType);
+                    argVarName.clear();
+                    argVarName += "__a";
+                    AppendUnsignedU64Text(argVarName, static_cast<u64>(i));
+                    AppendIntSimdLaneExtract(out, argVarName.view(), lane, isDouble, laneType);
                 }
                 out.append("))");
             }

@@ -139,14 +139,21 @@ static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode
 }
 
 StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
+#if defined(FOUNDATION_UNICODE)
     AString<Core::Alloc::ScratchArena> stageKey = PathToString<char>(scratchArena, outputDirectory);
     stageKey += s_StagedVolumeKeySeparator;
     stageKey += volumeName;
-
+    const u64 stageHash = ComputeFnv64Text(AStringView(stageKey));
+#else
+    const AStringView directoryText = outputDirectory.native();
+    u64 stageHash = UpdateFnv64(s_Fnv64OffsetBasis, Span<const u8>(reinterpret_cast<const u8*>(directoryText.data()), directoryText.size()));
+    stageHash = UpdateFnv64Byte(stageHash, static_cast<u8>(s_StagedVolumeKeySeparator));
+    stageHash = UpdateFnv64(stageHash, Span<const u8>(reinterpret_cast<const u8*>(volumeName.data()), volumeName.size()));
+#endif
     AString<Core::Alloc::ScratchArena> stageToken{scratchArena};
     stageToken.reserve(s_StagedVolumeTokenPrefix.size() + s_StagedVolumeHashDigits);
     stageToken += s_StagedVolumeTokenPrefix;
-    AppendHexU64(ComputeFnv64Text(AStringView(stageKey)), stageToken);
+    AppendHexU64(stageHash, stageToken);
     return StagedDirectoryPaths::Create(scratchArena, outputDirectory, stageToken);
 }
 

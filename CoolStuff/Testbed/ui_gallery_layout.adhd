@@ -24,8 +24,7 @@ const StringView s_ReadOnlyKey = "read_only";
 const StringView s_EnabledKey = "enabled";
 const StringView s_AmountKey = "amount";
 const StringView s_CommandsKey = "commands";
-// Sample text format shared by the selection read-outs.
-const StringView s_SelectedTextFormat = "Selected: {}";
+const StringView s_SelectedTextPrefix = "Selected: ";
 // Default skin regions drawn by more than one sample.
 const Name s_ButtonNormal = "button.normal";
 const Name s_ComboArrow = "combo.arrow";

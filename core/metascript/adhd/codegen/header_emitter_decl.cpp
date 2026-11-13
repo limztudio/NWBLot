@@ -102,9 +102,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         for(const EnumEntry& entry : decl.entries){
             if(!IsEnumEntryReflected(entry))
                 continue;
-            MString snakeName(m_arena);
-            AppendCamelToSnakeCase(snakeName, entry.name);
-            if(MStringView(snakeName.data(), snakeName.size()) != entry.name)
+            if(FindIf(entry.name.begin(), entry.name.end(), [](const MChar ch)noexcept{ return IsAsciiUpper(ch); }) != entry.name.end())
                 ++namedEnumCaseCount;
         }
         out.append("    inline constexpr Array<::NamedEnumCase<");
@@ -124,12 +122,10 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         for(const EnumEntry& entry : decl.entries){
             if(!IsEnumEntryReflected(entry))
                 continue;
-            MString snakeName(m_arena);
-            AppendCamelToSnakeCase(snakeName, entry.name);
-            if(MStringView(snakeName.data(), snakeName.size()) == entry.name)
+            if(FindIf(entry.name.begin(), entry.name.end(), [](const MChar ch)noexcept{ return IsAsciiUpper(ch); }) == entry.name.end())
                 continue;
             out.append("        { \"");
-            out.append(snakeName.data(), snakeName.size());
+            AppendCamelToSnakeCase(out, entry.name);
             out.append("\", ");
             out.append(entry.name.data(), entry.name.size());
             out.append(" },\r\n");

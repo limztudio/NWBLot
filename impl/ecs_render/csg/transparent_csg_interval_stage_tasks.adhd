@@ -364,7 +364,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
                 const Core::GpuTaskSchedulingHint& scheduling,
                 const Core::GpuUploadBlobId source,
                 const Core::GpuGraphResourceId destination,
-                const tchar* const warningMessage
+                const TStringView warningMessage
             ){
                 Core::GpuTaskDesc uploadDesc;
                 uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(scheduling).setDependencies({ &result.uploadTask, 1u });

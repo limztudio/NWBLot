@@ -19,36 +19,33 @@ b8 ShouldPromptPreserveSpace(in b8 hasPreserveSpace, in b8 acceptDefaults, in b8
 }
 
 Expected<b8> ParseFbxConfirmText(in StringView rawText){
-    const String normalized = NormalizeFbxOptionText(rawText);
-    const StringView view = normalized;
-    if(view == "y" || view == "yes" || view == "true" || view == "1")
+    const StringView view = TrimView(rawText);
+    if(EqualsAsciiIgnoreCase(view, "y") || EqualsAsciiIgnoreCase(view, "yes") || EqualsAsciiIgnoreCase(view, "true") || view == "1")
         return true;
-    if(view == "n" || view == "no" || view == "false" || view == "0")
+    if(EqualsAsciiIgnoreCase(view, "n") || EqualsAsciiIgnoreCase(view, "no") || EqualsAsciiIgnoreCase(view, "false") || view == "0")
         return false;
     return MakeUnexpected(Failure());
 }
 
 String FormatAssetTypePromptLabel(){
-    const String choices = OutputAssetTypeOptionsText();
     String prompt;
-    prompt.reserve(16u + choices.size());
+    prompt.reserve(80u);
     prompt.append("Asset type (");
-    prompt.append(choices);
+    AppendOutputAssetTypeOptionsText(prompt);
     prompt.append(")");
     return prompt;
 }
 
 String FormatNormalModePromptLabel(){
-    const String choices = NormalModeOptionsText();
     String prompt;
-    prompt.reserve(16u + choices.size());
+    prompt.reserve(64u);
     prompt.append("Normal mode (");
-    prompt.append(choices);
+    AppendNormalModeOptionsText(prompt);
     prompt.append(")");
     return prompt;
 }
 
-String UnquoteFbxInputText(in StringView text){
+StringView UnquoteFbxInputText(in StringView text){
     StringView view = TrimView(text);
     if(view.size() >= 2u){
         const u8 first = view[0u];
@@ -56,9 +53,7 @@ String UnquoteFbxInputText(in StringView text){
         if((first == s_AsciiDoubleQuoteByte && last == s_AsciiDoubleQuoteByte) || (first == s_AsciiSingleQuoteByte && last == s_AsciiSingleQuoteByte))
             view = view.substr(1u, view.size() - 2u);
     }
-    String out;
-    out.assign(view);
-    return out;
+    return view;
 }
 
 

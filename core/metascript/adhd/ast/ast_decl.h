@@ -226,6 +226,8 @@ public:
 
 
 struct TranslationUnit{
+    // Substituted type views borrow these stable strings for the unit's lifetime.
+    List<MString, MetaArena> substitutedConstantTexts;
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
     MVector<MStringView> requiredGlobalHeaders;
@@ -244,7 +246,8 @@ struct TranslationUnit{
 
 public:
     explicit TranslationUnit(MetaArena& arena)noexcept
-        : topLevelNativeBlocks(arena)
+        : substitutedConstantTexts(arena)
+        , topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
         , requiredGlobalHeaders(arena)
         , includedAdhdFiles(arena)

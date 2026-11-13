@@ -32,6 +32,10 @@ native{
 #include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/material/material_task_graph.adhd.h>
+#include <impl/ecs_render/avboit/avboit_refraction_capture_tasks.adhd.h>
+#include <impl/ecs_render/shadow/rt_shadow_prepare_uploads_and_context.adhd.h>
 #include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
@@ -1922,6 +1926,34 @@ void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLarg
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices(){
+    native{
+        const usize index = Limit<usize>::s_Max;
+        const auto draw = NWB::Impl::FormatRefractionCaptureDrawIdentity(index);
+        const auto decode = NWB::Impl::FormatObjectGeometryDecodeIdentity(index);
+        const auto ready = NWB::Impl::FormatObjectGeometryReadyIdentity(index);
+        const auto queue = NWB::Impl::FormatCsgQueueReadCompleteIdentity(Limit<u32>::s_Max);
+        const auto idle = NWB::Impl::ResolveDeferredGraphQueueInternalIdleScope(true, Limit<u32>::s_Max);
+        ASSERT_TRUE(draw && decode && ready && queue && idle && *idle);
+        const auto drawExpected = Name::FromText(AStringView(sizeof(usize) == 8u ? "render.refraction.capture.draw_18446744073709551615" : "render.refraction.capture.draw_4294967295"));
+        const auto decodeExpected = Name::FromText(AStringView(sizeof(usize) == 8u ? "render.object_geometry.decode_18446744073709551615" : "render.object_geometry.decode_4294967295"));
+        const auto readyExpected = Name::FromText(AStringView(sizeof(usize) == 8u ? "render.object_geometry.ready_18446744073709551615" : "render.object_geometry.ready_4294967295"));
+        const auto queueExpected = Name::FromText(AStringView("render.raytrace.csg_queue_4294967295.read_complete"));
+        const auto idleExpected = Name::FromText(AStringView("render.deferred_graph.queue_4294967295.internal_idle"));
+        ASSERT_TRUE(drawExpected && decodeExpected && readyExpected && queueExpected && idleExpected);
+        EXPECT_EQ(*draw, *drawExpected);
+        EXPECT_EQ(*decode, *decodeExpected);
+        EXPECT_EQ(*ready, *readyExpected);
+        EXPECT_EQ(*queue, *queueExpected);
+        EXPECT_EQ(**idle, *idleExpected);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(EcsGraphics, IndexedNamesPreserveMaximumIndices, VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices)
 NWB_ADHD_GTEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity, VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity)
 NWB_ADHD_GTEST(CausticLightSelectorTests, MissingInputsPreserveSlotsAndPointLightsCannotWin, VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCannotWin)
 NWB_ADHD_GTEST(CausticQualitySettings, RejectsUnsupportedPhotonGridDivisors, VerifyCausticQualitySettings_RejectsUnsupportedPhotonGridDivisors)

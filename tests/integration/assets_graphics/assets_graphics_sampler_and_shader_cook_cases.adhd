@@ -233,9 +233,9 @@ void VerifyAssetsGraphics_SamplerCookerRejectsFixedBorderColorAndUnsupportedRedu
         if(assignment.starts_with(s_ReductionAssignmentPrefix)){
             const usize reductionPosition = metadata.find(reductionAssignment);
             ASSERT_LT(reductionPosition, metadata.size());
-            String updated(metadata.substr(0u, reductionPosition));
+            String updated(StringView(metadata).substr(0u, reductionPosition));
             updated.append(assignment);
-            updated.append(metadata.substr(reductionPosition + reductionAssignment.size()));
+            updated.append(StringView(metadata).substr(reductionPosition + reductionAssignment.size()));
             metadata = updated;
         }
         else
@@ -261,12 +261,12 @@ void VerifyAssetsGraphics_SamplerCookerRejectsDeprecatedVersionMetadata(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const String baseMetadata(s_SamplerTestMetadata);
+    const StringView baseMetadata = s_SamplerTestMetadata;
     const usize firstFieldPosition = baseMetadata.find("asset.min_filter");
     ASSERT_LT(firstFieldPosition, baseMetadata.size());
-    String metadata(baseMetadata.substr(0u, firstFieldPosition));
+    String metadata(StringView(baseMetadata).substr(0u, firstFieldPosition));
     metadata.append("asset.version = 1;\n");
-    metadata.append(baseMetadata.substr(firstFieldPosition));
+    metadata.append(StringView(baseMetadata).substr(firstFieldPosition));
 
     ScratchArena scratchArena(s_CodecScratchArena);
     MetaDocument document(testArena.arena);
@@ -580,6 +580,12 @@ void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLo
     const usize computeBytesAddr = ByteBufferAddress(compute.bytecode());
     const usize pixelEntryAddr = StringDataAddress(pixel.entryPoint());
     const usize computeEntryAddr = StringDataAddress(compute.entryPoint());
+    ASSERT_GE(pixelEntryAddr, pixelBytesAddr);
+    ASSERT_LT(pixelEntryAddr - pixelBytesAddr, pixel.bytecode().size());
+    ASSERT_GE(computeEntryAddr, computeBytesAddr);
+    ASSERT_LT(computeEntryAddr - computeBytesAddr, compute.bytecode().size());
+    PixelShaderAsset emptyPixel(testArena.arena, pixelPath);
+    EXPECT_TRUE(emptyPixel.entryPoint().empty());
     EXPECT_FALSE(pixel.loadBinary(computeBinary));
     EXPECT_FALSE(compute.loadBinary(pixelBinary));
     AssetBytes malformedPixelBinary = pixelBinary;
@@ -596,6 +602,49 @@ void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLo
     EXPECT_EQ(compute.bytecode(), cookedCompute.bytecode());
     EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
     EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
+    ASSERT_TRUE(pixel.loadBinary(pixelBinary));
+    ASSERT_TRUE(compute.loadBinary(computeBinary));
+    EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
+    EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
+    native(in pixelBinary, in cookedPixel, in pixelPath, mut testArena){
+        AssetBytes carrier(testArena.arena);
+        carrier.assign(cookedPixel.bytecode().begin(), cookedPixel.bytecode().end());
+        const usize payloadOffset = carrier.size() + sizeof(u32);
+        const usize payloadWords = (pixelBinary.size() + 3u) / 4u;
+        ASSERT_LE(payloadWords + 1u, 0xffffu);
+        const u32 instruction = (static_cast<u32>(payloadWords + 1u) << 16u) | 7u;
+        for(u32 shift = 0u; shift < 32u; shift += 8u)
+            carrier.push_back(static_cast<u8>(instruction >> shift));
+        carrier.insert(carrier.end(), pixelBinary.begin(), pixelBinary.end());
+        carrier.resize(payloadOffset + payloadWords * sizeof(u32), 0u);
+        AssetBytes outerPayload(testArena.arena);
+        ASSERT_EQ(EncodeTestShaderPayload(cookedPixel.entryPoint(), Span<const u8>(carrier.data(), carrier.size()), outerPayload), s_ShaderPayloadEncodeNone);
+        PixelShaderAsset aliased(testArena.arena, pixelPath);
+        ASSERT_TRUE(aliased.loadBinary(Span<const u8>(outerPayload.data(), outerPayload.size())));
+        const Span<const u8> embedded(aliased.bytecode().data() + payloadOffset, pixelBinary.size());
+        ASSERT_TRUE(aliased.loadBinary(embedded));
+        EXPECT_EQ(aliased.entryPoint(), cookedPixel.entryPoint());
+        EXPECT_EQ(aliased.bytecode(), cookedPixel.bytecode());
+    }
+    pixelBinary.clear();
+    computeBinary.clear();
+    EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
+    EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
+    native(in pixel){
+        TestArena otherArena;
+        PixelShaderAsset rebound(otherArena.arena, pixel);
+        EXPECT_EQ(rebound.entryPoint(), pixel.entryPoint());
+        EXPECT_NE(rebound.bytecode().data(), pixel.bytecode().data());
+        PixelShaderAsset copied(pixel);
+        PixelShaderAsset moved(otherArena.arena, Move(copied));
+        EXPECT_EQ(moved.entryPoint(), pixel.entryPoint());
+        if(copied.bytecode().empty())
+            EXPECT_TRUE(copied.entryPoint().empty());
+        const usize bytes = reinterpret_cast<usize>(moved.bytecode().data());
+        const usize entry = reinterpret_cast<usize>(moved.entryPoint().data());
+        ASSERT_GE(entry, bytes);
+        EXPECT_LT(entry - bytes, moved.bytecode().size());
+    }
     EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 

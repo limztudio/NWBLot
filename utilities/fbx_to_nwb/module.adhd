@@ -19,34 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_FbxRefreshMeshMetaKind = "Mesh";
-
-b8 ValidateMeshAssetFields(in Path nwbFilePath, in StringView meshVariableName, in MetascriptValue asset){
-    if(!asset.isMap()){
-        error("{} meta '{}': '{}' is not a map", s_FbxRefreshMeshMetaKind, PathToString(nwbFilePath), meshVariableName);
-        return false;
-    }
-
-    b8 allAllowed = true;
-    asset.forEachMapEntry(lambda[in nwbFilePath, in meshVariableName, mut allAllowed](in StringView fieldName, in MetascriptValue fieldValue) -> b8{
-        if(IsAllowedMeshAssetField(fieldName))
-            return true;
-
-        error("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh", s_FbxRefreshMeshMetaKind, PathToString(nwbFilePath), meshVariableName, fieldName);
-        allAllowed = false;
-        return false;
-    });
-    return allAllowed;
-}
-
-b8 IsMeshMetascriptReferenceTo(in MetascriptValue value, in StringView variableName){
-    return value.isReference() && value.asReference() == variableName;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [header]
 native{
 
@@ -232,6 +204,7 @@ struct PositionAlignedSkinnedMesh{
 
 
 [[nodiscard]] ScratchString NodeName(const ufbx_node* node, usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] AString<::ArenaBase> MakeSkeletonJointName(const ufbx_node* node, usize fallbackIndex, Span<const AString<::ArenaBase>> usedNames, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<SkeletonOutputData> BuildSkeletonOutputData(Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena);
 
@@ -490,8 +463,27 @@ namespace AssetWriterSkeletonDetail{
 
 
 ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
-    const AString<::ArenaBase> formatted = FormatFbxJointBaseName(scratchArena, node ? UfbxStringView(node->name) : AStringView{}, fallbackIndex);
-    return ScratchString(AStringView(formatted), scratchArena);
+    const AStringView rawName = node ? UfbxStringView(node->name) : AStringView{};
+    ScratchString name(scratchArena);
+    if(!rawName.empty()){
+        name.assign(rawName);
+        return name;
+    }
+    name.reserve(24u);
+    name.append(s_JointFallbackNamePrefix);
+    AppendUnsignedU64Text(name, static_cast<u64>(fallbackIndex));
+    return name;
+}
+
+AString<::ArenaBase> MakeSkeletonJointName(const ufbx_node* const node, const usize fallbackIndex, const Span<const AString<::ArenaBase>> usedNames, Core::Alloc::ScratchArena& scratchArena){
+    AStringView baseName = node ? UfbxStringView(node->name) : AStringView{};
+    Array<char, 32u> fallbackName = {};
+    if(baseName.empty()){
+        CopyFixedBuffer(fallbackName, s_JointFallbackNamePrefix);
+        AppendUnsignedToFixedBuffer(fallbackName, fallbackIndex);
+        baseName = FixedBufferView(fallbackName);
+    }
+    return MakeUniqueFbxJointName(scratchArena, baseName, usedNames);
 }
 
 Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
@@ -502,8 +494,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
 
     UtilityScratchMap<NotNull<const ufbx_node*>, usize> sourceJointLookup(scratchArena);
     sourceJointLookup.reserve(joints.size());
-    UtilityScratchVector<ScratchString> sortNames(scratchArena);
-    sortNames.reserve(joints.size());
+    usize fallbackCount = 0u;
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         ufbx_node* joint = joints[jointIndex];
         if(!joint){
@@ -515,7 +506,22 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
             return MakeUnexpected(Failure{});
         }
-        sortNames.push_back(NodeName(joint, jointIndex, scratchArena));
+        if(UfbxStringView(joint->name).empty())
+            ++fallbackCount;
+    }
+
+    UtilityScratchVector<ScratchString> fallbackNames(scratchArena);
+    fallbackNames.reserve(fallbackCount);
+    UtilityScratchVector<AStringView> sortNames(scratchArena);
+    sortNames.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const ufbx_node* const joint = joints[jointIndex];
+        AStringView sortName = UfbxStringView(joint->name);
+        if(sortName.empty()){
+            fallbackNames.push_back(NodeName(joint, jointIndex, scratchArena));
+            sortName = AStringView(fallbackNames.back());
+        }
+        sortNames.push_back(sortName);
     }
 
     UtilityScratchVector<u32> parentIndices(scratchArena);
@@ -704,12 +710,10 @@ template<typename WriteBodyFn>
     out.append(variableName);
     out.append(".joints = [\n");
 
-    Vector<AString<::ArenaBase>, Core::Alloc::ScratchArena> jointNames(scratchArena);
+    UtilityScratchVector<AString<::ArenaBase>> jointNames(scratchArena);
     jointNames.reserve(joints.size());
-    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
-        const AString<::ArenaBase> baseName = FormatFbxJointBaseName(scratchArena, joints[jointIndex] ? UfbxStringView(joints[jointIndex]->name) : AStringView{}, jointIndex);
-        jointNames.push_back(MakeUniqueFbxJointName(scratchArena, AStringView(baseName), jointNames));
-    }
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
+        jointNames.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(joints[jointIndex], jointIndex, jointNames, scratchArena));
 
     UtilityScratchMap<const ufbx_node*, usize> jointLookup(scratchArena);
     jointLookup.reserve(joints.size());
@@ -889,14 +893,15 @@ static void AppendSkinBodyToString(
     });
 }
 
-[[nodiscard]] static ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringView virtualRoot){
+[[nodiscard]] static AString<::ArenaBase> BuildVirtualBasePath(const ScratchPath& outputPath, const AStringView virtualRoot){
     Core::Alloc::ScratchArena& scratchArena = outputPath.arena();
     ScratchPath noExtension(scratchArena, outputPath);
     noExtension.replaceExtension();
-    const auto genericNoExt = PathToGenericString(scratchArena, noExtension);
-    const auto filenameNoExt = PathToGenericString(scratchArena, noExtension.filenameView());
-    const AString<::ArenaBase> virtualPath = BuildFbxVirtualBasePath(scratchArena, AStringView(genericNoExt), AStringView(filenameNoExt), virtualRoot);
-    return ScratchString(AStringView(virtualPath), scratchArena);
+    ScratchString genericNoExtStorage(scratchArena);
+    ScratchString filenameNoExtStorage(scratchArena);
+    const AStringView genericNoExt = GenericNativeTextView(noExtension.native(), genericNoExtStorage);
+    const AStringView filenameNoExt = GenericNativeTextView(noExtension.filenameView(), filenameNoExtStorage);
+    return BuildFbxVirtualBasePath(scratchArena, genericNoExt, filenameNoExt, virtualRoot);
 }
 
 
@@ -1392,7 +1397,7 @@ static void ApplyCanonicalizedStreams(const CanonicalizeMeshStreamsResult& canon
 struct TextReplacement{
     usize begin = 0u;
     usize end = 0u;
-    ScratchString text;
+    AString<::ArenaBase> text;
 };
 
 using TextReplacements = ::Vector<TextReplacement, Core::Alloc::ScratchArena>;
@@ -1401,6 +1406,23 @@ struct SkinReference{
     const Core::Metascript::Value* value = nullptr;
     AStringView variableName;
 };
+
+[[nodiscard]] static b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
+        return false;
+    }
+
+    for(const auto& field : asset.asMap()){
+        const Core::Metascript::MStringView fieldName(field.first);
+        if(Impl::IsAllowedMeshAssetField(fieldName))
+            continue;
+
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
+        return false;
+    }
+    return true;
+}
 
 [[nodiscard]] static b8 ValidateRefreshMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
     if(!Impl::MeshCookSourceStreams::ValidateSourceVertexRefStreams(
@@ -1458,6 +1480,10 @@ struct SkinReference{
     return mesh;
 }
 
+[[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
+    return value.isReference() && value.asReference() == variableName;
+}
+
 [[nodiscard]] static Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
     AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
@@ -1513,7 +1539,7 @@ struct SkinReference{
     return outRange;
 }
 
-[[nodiscard]] static b8 AddReplacement(const AStringView source, const AStringView variableName, const AStringView fieldName, const AStringView replacementText, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements){
+[[nodiscard]] static b8 AddReplacement(const AStringView source, const AStringView variableName, const AStringView fieldName, AString<::ArenaBase>&& replacementText, TextReplacements& inOutReplacements){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
@@ -1521,7 +1547,7 @@ struct SkinReference{
     }
 
     const AssignmentRange& range = *replacementResult;
-    inOutReplacements.push_back(TextReplacement{ range.begin, range.end, ScratchString(replacementText, scratchArena) });
+    inOutReplacements.push_back(TextReplacement{ range.begin, range.end, Move(replacementText) });
     return true;
 }
 
@@ -1538,7 +1564,7 @@ struct SkinReference{
             continue;
 
         const Core::Metascript::Value* meshField = skinAsset->findField(s_MeshAssetTypeText);
-        if(!meshField || !IsMeshMetascriptReferenceTo(*meshField, meshVariableName))
+        if(!meshField || !IsReferenceTo(*meshField, meshVariableName))
             continue;
 
         if(result.value){
@@ -1554,29 +1580,43 @@ struct SkinReference{
 }
 
 [[nodiscard]] static b8 AppendMeshReplacements(const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements){
-    const auto appendIfChanged = [&](const b8 changed, const AStringView fieldName, auto&& formatFn) -> b8{
-        if(!changed)
-            return true;
-        const AString<::ArenaBase> formatted = formatFn(scratchArena);
-        return AddReplacement(source, variableName, fieldName, AStringView(formatted), scratchArena, inOutReplacements);
-    };
-
-    if(!appendIfChanged(DidMeshStreamCountChange(before.positions, after.positions.size()), Impl::s_MeshPositionsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec3List(arena, after.positions); }))
-        return false;
-    if(!appendIfChanged(DidMeshStreamCountChange(before.normals, after.normals.size()), Impl::s_MeshNormalsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec3List(arena, after.normals); }))
-        return false;
-    if(!appendIfChanged(DidMeshStreamCountChange(before.tangents, after.tangents.size()), Impl::s_MeshTangentsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec4List(arena, after.tangents); }))
-        return false;
-    if(!appendIfChanged(DidMeshStreamCountChange(before.uv0, after.uv0.size()), Impl::s_MeshUv0FieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec2List(arena, after.uv0); }))
-        return false;
-    if(!appendIfChanged(DidMeshStreamCountChange(before.colors, after.colors.size()), Impl::s_MeshColorsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVec4List(arena, after.colors); }))
-        return false;
+    if(DidMeshStreamCountChange(before.positions, after.positions.size())){
+        AString<::ArenaBase> formatted = FormatMeshRefreshVec3List(scratchArena, after.positions);
+        if(!AddReplacement(source, variableName, Impl::s_MeshPositionsFieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.normals, after.normals.size())){
+        AString<::ArenaBase> formatted = FormatMeshRefreshVec3List(scratchArena, after.normals);
+        if(!AddReplacement(source, variableName, Impl::s_MeshNormalsFieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.tangents, after.tangents.size())){
+        AString<::ArenaBase> formatted = FormatMeshRefreshVec4List(scratchArena, after.tangents);
+        if(!AddReplacement(source, variableName, Impl::s_MeshTangentsFieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.uv0, after.uv0.size())){
+        AString<::ArenaBase> formatted = FormatMeshRefreshVec2List(scratchArena, after.uv0);
+        if(!AddReplacement(source, variableName, Impl::s_MeshUv0FieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.colors, after.colors.size())){
+        AString<::ArenaBase> formatted = FormatMeshRefreshVec4List(scratchArena, after.colors);
+        if(!AddReplacement(source, variableName, Impl::s_MeshColorsFieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
 
     const b8 componentRefsChanged = DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after));
-    if(!appendIfChanged(componentRefsChanged, Impl::s_MeshVertexRefsFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshVertexRefList(arena, after.vertexRefs); }))
-        return false;
-    if(!appendIfChanged(DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size()), Impl::s_MeshIndicesFieldNameView, [&](Core::Alloc::ScratchArena& arena){ return FormatMeshRefreshIndexList(arena, after.indices); }))
-        return false;
+    if(componentRefsChanged){
+        AString<::ArenaBase> formatted = FormatMeshRefreshVertexRefList(scratchArena, after.vertexRefs);
+        if(!AddReplacement(source, variableName, Impl::s_MeshVertexRefsFieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
+    if(DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size())){
+        AString<::ArenaBase> formatted = FormatMeshRefreshIndexList(scratchArena, after.indices);
+        if(!AddReplacement(source, variableName, Impl::s_MeshIndicesFieldNameView, Move(formatted), inOutReplacements))
+            return false;
+    }
 
     return true;
 }
@@ -1639,6 +1679,16 @@ static i32 ExitValidation(const CLI::App& app, const AStringView option, const A
     if(line.empty())
         return MakeUnexpected(Failure{});
     return line;
+}
+
+static void UnquoteFbxInputInPlace(UtilityString& text){
+    const AStringView view = UnquoteFbxInputText(AStringView(text));
+    const usize begin = static_cast<usize>(view.data() - text.data());
+    const usize end = begin + view.size();
+    if(end != text.size())
+        text.erase(end);
+    if(begin != 0u)
+        text.erase(0u, begin);
 }
 
 [[nodiscard]] static b8 PromptBool(const AStringView label, const b8 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
@@ -1715,10 +1765,7 @@ static i32 ExitValidation(const CLI::App& app, const AStringView option, const A
         }
         inOutOptions.inputPath = Move(*input);
     }
-    {
-        const AString<::ArenaBase> unquoted = UnquoteFbxInputText(scratchArena, AStringView(inOutOptions.inputPath));
-        inOutOptions.inputPath.assign(unquoted.data(), unquoted.size());
-    }
+    UnquoteFbxInputInPlace(inOutOptions.inputPath);
 
     if(ShouldPromptPreserveSpace(presence.preserveSpace, inOutOptions.acceptDefaults, inOutOptions.listMeshes)){
         const b8 convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, inOutPrompted);
@@ -1746,20 +1793,21 @@ static i32 ExitValidation(const CLI::App& app, const AStringView option, const A
     }
 
     if(!presence.output && !inOutOptions.acceptDefaults){
-        const auto defaultOutput = PathToGenericString(scratchArena, DefaultFbxOutputPath(scratchArena, AStringView(inOutOptions.inputPath)));
+        const auto defaultOutputPath = DefaultFbxOutputPath(scratchArena, AStringView(inOutOptions.inputPath));
+        ScratchString defaultOutputStorage(scratchArena);
+        const AStringView defaultOutput = GenericNativeTextView(defaultOutputPath.native(), defaultOutputStorage);
         auto output = PromptString(s_OutputPathPromptLabel, defaultOutput, inOutPrompted);
         if(!output)
             return false;
         inOutOptions.outputPath = Move(*output);
     }
     if(inOutOptions.outputPath.empty()){
-        const auto defaultOutput = PathToGenericString(scratchArena, DefaultFbxOutputPath(scratchArena, AStringView(inOutOptions.inputPath)));
+        const auto defaultOutputPath = DefaultFbxOutputPath(scratchArena, AStringView(inOutOptions.inputPath));
+        ScratchString defaultOutputStorage(scratchArena);
+        const AStringView defaultOutput = GenericNativeTextView(defaultOutputPath.native(), defaultOutputStorage);
         inOutOptions.outputPath.assign(defaultOutput.data(), defaultOutput.size());
     }
-    {
-        const AString<::ArenaBase> unquoted = UnquoteFbxInputText(scratchArena, AStringView(inOutOptions.outputPath));
-        inOutOptions.outputPath.assign(unquoted.data(), unquoted.size());
-    }
+    UnquoteFbxInputInPlace(inOutOptions.outputPath);
 
     if(!presence.normalMode && !inOutOptions.acceptDefaults){
         const AString<::ArenaBase> prompt = FormatNormalModePromptLabel(scratchArena);
@@ -1791,32 +1839,22 @@ static i32 ExitValidation(const CLI::App& app, const AStringView option, const A
     return true;
 }
 
-template<typename ParseFn, typename TextFn>
-static b8 ValidateAndCanonicalizeOption(UtilityString& inOutValue, ParseFn&& parseFn, TextFn&& textFn){
-    const auto parsed = parseFn(AStringView(inOutValue));
+static b8 ValidateAndCanonicalizeAssetType(UtilityString& inOutValue){
+    const auto parsed = ParseAssetTypeText(AStringView(inOutValue));
     if(parsed){
-        inOutValue.assign(textFn(*parsed));
+        inOutValue.assign(OutputAssetTypeText(*parsed));
         return true;
     }
-    const AString<::ArenaBase> normalized = NormalizeFbxOptionText(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(inOutValue));
-    inOutValue.assign(normalized.data(), normalized.size());
     return false;
 }
 
-static b8 ValidateAndCanonicalizeAssetType(UtilityString& inOutValue){
-    return ValidateAndCanonicalizeOption(
-        inOutValue,
-        [](const AStringView text){ return ParseAssetTypeText(text); },
-        [](const auto value){ return OutputAssetTypeText(value); }
-    );
-}
-
 static b8 ValidateAndCanonicalizeNormalMode(UtilityString& inOutValue){
-    return ValidateAndCanonicalizeOption(
-        inOutValue,
-        [](const AStringView text){ return ParseNormalModeText(text); },
-        [](const auto value){ return NormalModeText(value); }
-    );
+    const auto parsed = ParseNormalModeText(AStringView(inOutValue));
+    if(parsed){
+        inOutValue.assign(NormalModeText(*parsed));
+        return true;
+    }
+    return false;
 }
 
 [[nodiscard]] static Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){
@@ -1852,10 +1890,7 @@ static i32 RunNwbRefreshCommand(
     }
     if(inOutOptions.outputPath.empty())
         inOutOptions.outputPath = inOutOptions.inputPath;
-    {
-        const AString<::ArenaBase> unquoted = UnquoteFbxInputText(scratchArena, AStringView(inOutOptions.outputPath));
-        inOutOptions.outputPath.assign(unquoted.data(), unquoted.size());
-    }
+    UnquoteFbxInputInPlace(inOutOptions.outputPath);
 
     const ScratchPath outputPath(scratchArena, inOutOptions.outputPath);
     if(outputPath.empty())
@@ -1868,8 +1903,10 @@ static i32 RunNwbRefreshCommand(
     if(!canonicalizeReport)
         return s_FbxToNwbExitFailure;
 
-    const auto outputText = PathToGenericString(scratchArena, outputPath);
-    const auto inputText = PathToGenericString(scratchArena, inputPath);
+    ScratchString outputTextStorage(scratchArena);
+    ScratchString inputTextStorage(scratchArena);
+    const AStringView outputText = GenericNativeTextView(outputPath.native(), outputTextStorage);
+    const AStringView inputText = GenericNativeTextView(inputPath.native(), inputTextStorage);
     const AString<::ArenaBase> report = FormatNwbRefreshReport(scratchArena, AStringView(outputText), AStringView(inputText), *canonicalizeReport);
     NWB_LOGGER_ESSENTIAL_INFO(ConvertString(AStringView(report)));
     return s_FbxToNwbExitSuccess;
@@ -1912,7 +1949,8 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
     }
 
     const ScratchPath nativeInputPath(scratchArena, options.inputPath);
-    const auto inputPath = PathToGenericString(scratchArena, nativeInputPath);
+    ScratchString inputPathStorage(scratchArena);
+    const AStringView inputPath = GenericNativeTextView(nativeInputPath.native(), inputPathStorage);
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
@@ -2247,7 +2285,7 @@ b8 WriteNwbAsset(
     const b8 skinnedModel = HasSkinnedModelStreams(!mesh.skin.empty(), !skeletonJoints.empty(), !inverseBindMatrices.empty());
     const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
     const ScratchPath meshPath = packageDirectory / s_MeshSplitFileName;
-    const ScratchString virtualBase = BuildVirtualBasePath(outputPath, virtualRoot);
+    const AString<::ArenaBase> virtualBase = BuildVirtualBasePath(outputPath, virtualRoot);
     const AString<::ArenaBase> meshName = BuildFbxSplitAssetName(scratchArena, AStringView(virtualBase), s_MeshNameSuffix);
 
     if(assetType == OutputAssetType::Model){
@@ -2482,7 +2520,8 @@ i32 Run(const i32 argc, char** argv, Core::Alloc::ScratchArena& scratchArena, b8
         if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices, scratchArena))
             return s_FbxToNwbExitFailure;
 
-        const auto outputText = PathToGenericString(scratchArena, outputPath);
+        ScratchString outputTextStorage(scratchArena);
+        const AStringView outputText = GenericNativeTextView(outputPath.native(), outputTextStorage);
         const AString<::ArenaBase> report = FormatFbxWriteCompletionReport(
             scratchArena,
             AStringView(outputText),

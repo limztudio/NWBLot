@@ -8,6 +8,7 @@
 #ifndef NWB_CSG_SHADOW_HW_TRACE
 #define NWB_CSG_SHADOW_HW_TRACE 0
 #endif
+#define NWB_CSG_RAY_HARDWARE NWB_CSG_SHADOW_HW_TRACE
 
 #define NWB_LIGHT_SPACE_MAP_ONLY 1
 #include "light_space_resolve.slangi"

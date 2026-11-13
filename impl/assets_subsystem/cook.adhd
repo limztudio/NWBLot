@@ -177,61 +177,81 @@ b8 IsSelfSubsystemReference(in Name subsystemVirtualPath, in Name referencedName
     return referencedName == subsystemVirtualPath;
 }
 
+void ReportSubsystemSubsystemsFieldIsList(in Path nwbFilePath){
+    error("{} '{}': '{}' must be a list of strings", s_SubsystemDiagnosticPrefix, nwbFilePath, s_SubsystemSubsystemsFieldName);
+}
+
 b8 ValidateSubsystemSubsystemsFieldIsList(in Path nwbFilePath, in b8 isList){
     if(isList)
         return true;
 
-    error("{} '{}': '{}' must be a list of strings", s_SubsystemDiagnosticPrefix, PathToString(nwbFilePath), s_SubsystemSubsystemsFieldName);
+    ReportSubsystemSubsystemsFieldIsList(nwbFilePath);
     return false;
+}
+
+void ReportSelfSubsystemReference(in Path nwbFilePath, in Name subsystemVirtualPath){
+    error(
+        "{} '{}': '{}' cannot reference subsystem '{}' itself",
+        s_SubsystemDiagnosticPrefix,
+        nwbFilePath,
+        s_SubsystemSubsystemsFieldName,
+        subsystemVirtualPath.resolvedText()
+    );
 }
 
 b8 ValidateNotSelfSubsystemReference(in Path nwbFilePath, in Name subsystemVirtualPath, in Name referencedName){
     if(!IsSelfSubsystemReference(subsystemVirtualPath, referencedName))
         return true;
 
-    error(
-        "{} '{}': '{}' cannot reference subsystem '{}' itself",
-        s_SubsystemDiagnosticPrefix,
-        PathToString(nwbFilePath),
-        s_SubsystemSubsystemsFieldName,
-        subsystemVirtualPath.resolvedText()
-    );
+    ReportSelfSubsystemReference(nwbFilePath, subsystemVirtualPath);
     return false;
+}
+
+void ReportRequiredSubsystemFieldMissing(in Path nwbFilePath, in StringView fieldName, in Name assetType){
+    error(
+        "{} '{}': required field '{}' is missing for '{}'",
+        s_SubsystemDiagnosticPrefix,
+        nwbFilePath,
+        fieldName,
+        assetType.resolvedText()
+    );
 }
 
 b8 ValidateRequiredSubsystemFieldPresent(in Path nwbFilePath, in StringView fieldName, in Name assetType, in b8 present){
     if(present)
         return true;
 
-    error(
-        "{} '{}': required field '{}' is missing for '{}'",
-        s_SubsystemDiagnosticPrefix,
-        PathToString(nwbFilePath),
-        fieldName,
-        assetType.resolvedText()
-    );
+    ReportRequiredSubsystemFieldMissing(nwbFilePath, fieldName, assetType);
     return false;
+}
+
+void ReportEmptySubsystemArrayField(in Path nwbFilePath, in StringView fieldName){
+    error("{} '{}': '{}' must be a non-empty list of strings", s_SubsystemDiagnosticPrefix, nwbFilePath, fieldName);
 }
 
 b8 ValidateNonEmptySubsystemArrayField(in Path nwbFilePath, in StringView fieldName, in b8 validList){
     if(validList)
         return true;
 
-    error("{} '{}': '{}' must be a non-empty list of strings", s_SubsystemDiagnosticPrefix, PathToString(nwbFilePath), fieldName);
+    ReportEmptySubsystemArrayField(nwbFilePath, fieldName);
     return false;
+}
+
+void ReportDuplicateSubsystemArrayFieldEntry(in Path nwbFilePath, in StringView fieldName, in Name entryName){
+    error(
+        "{} '{}': '{}' contains duplicate entry '{}'",
+        s_SubsystemDiagnosticPrefix,
+        nwbFilePath,
+        fieldName,
+        entryName.resolvedText()
+    );
 }
 
 b8 ValidateUniqueSubsystemArrayFieldEntry(in Path nwbFilePath, in StringView fieldName, in Name entryName, in b8 isDuplicate){
     if(!isDuplicate)
         return true;
 
-    error(
-        "{} '{}': '{}' contains duplicate entry '{}'",
-        s_SubsystemDiagnosticPrefix,
-        PathToString(nwbFilePath),
-        fieldName,
-        entryName.resolvedText()
-    );
+    ReportDuplicateSubsystemArrayFieldEntry(nwbFilePath, fieldName, entryName);
     return false;
 }
 

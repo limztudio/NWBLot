@@ -62,7 +62,9 @@ StringView SelectRefractionCaptureDrawMarkerLabel(in b8 generate){
 }
 
 Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
-    return ParseName(StringFormat("render.refraction.capture.draw_{}", drawTaskIndex));
+    CompactString text = CompactString("render.refraction.capture.draw_");
+    AppendUnsignedU64Text(text, cast<u64>(drawTaskIndex));
+    return ParseName(text.view());
 }
 
 

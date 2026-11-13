@@ -2,10 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsBuiltAssetEntryExtension(in b8 isRegularFile, in StringView extensionText, in StringView expectedExtension){
-    return isRegularFile && extensionText == expectedExtension;
-}
-
 void LogGatherInputResolveFailure(in StringView inputPath){
     error("AssetGatherer: failed to resolve input '{}'", inputPath);
 }

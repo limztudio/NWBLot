@@ -98,13 +98,16 @@ u8 SelectAcceptedCrashLogTypeIndex(in StringView event){
     return 1u;
 }
 
-void AppendAcceptedCrashIngestDetails(in StringView rawPathText, in b8 rawArchived, mut String outReport){
+void AppendAcceptedCrashIngestDetails(in Path rawPath, in b8 rawArchived, mut String outReport){
     if(!outReport.empty() && outReport.back() != 10u)
         outReport.append(s_CrashSymbolicateReportLineEnd);
 
     outReport.append(s_CrashIngestAcceptedSectionHeader);
     outReport.append(s_CrashIngestAcceptedRawArchivePrefix);
-    outReport.append(rawPathText);
+    native(in rawPath, mut outReport){
+        auto out = BackInserter(outReport);
+        WriteConvertedText<char>(out, rawPath.native());
+    }
     outReport.append(s_CrashSymbolicateReportLineEnd);
     if(!rawArchived)
         outReport.append(s_CrashIngestRawNotRetainedWarning);
@@ -234,8 +237,8 @@ using CrashText = CrashReportText;
 
     const AStringView manifestText(manifest.data(), manifest.size());
     const auto manifestFormat = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestFormatKey);
-    const auto requireString = [&scratchArena, manifestText](const AStringView key){
-        return FindGeneratedCrashJsonStringValue(scratchArena, manifestText, key);
+    const auto requireString = [manifestText](const AStringView key){
+        return HasGeneratedCrashJsonStringValue(manifestText, key);
     };
     const auto requireUnsigned = [manifestText](const AStringView key){
         return FindGeneratedCrashJsonUnsignedValue(manifestText, key);
@@ -329,9 +332,10 @@ static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestCo
 
     CrashIngestResult result(arena);
     result.type = Core::Common::LogType::Error;
-    result.message = StringFormat(arena, FOUNDATION_TEXT("Crash upload rejected: {}; raw='{}'"), ConvertString(failure.detail), PathToString<tchar>(invalidPath ? *invalidPath : archivePath));
     if(failure.code)
-        result.message += StringFormat(arena, FOUNDATION_TEXT("; native_category='{}'; native_code={}"), ConvertString(failure.code->category().name()), failure.code->value());
+        result.message = StringFormat(arena, FOUNDATION_TEXT("Crash upload rejected: {}; raw='{}'; native_category='{}'; native_code={}"), ConvertString(failure.detail), PathToString<tchar>(invalidPath ? *invalidPath : archivePath), ConvertString(failure.code->category().name()), failure.code->value());
+    else
+        result.message = StringFormat(arena, FOUNDATION_TEXT("Crash upload rejected: {}; raw='{}'"), ConvertString(failure.detail), PathToString<tchar>(invalidPath ? *invalidPath : archivePath));
     return result;
 }
 
@@ -377,8 +381,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
     result.accepted = true;
     result.type = rawArchived ? static_cast<Core::Common::LogType::Enum>(SelectAcceptedCrashLogTypeIndex(summary.event)) : Core::Common::LogType::Warning;
-    const AString<Core::Alloc::ScratchArena> rawPathText = PathToString<char>(scratchArena, rawArchived ? *rawPath : operationArchivePath);
-    AppendAcceptedCrashIngestDetails(rawPathText, rawArchived, symbolicationReport);
+    AppendAcceptedCrashIngestDetails(rawArchived ? *rawPath : operationArchivePath, rawArchived, symbolicationReport);
     result.message = ConvertString(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;
 }

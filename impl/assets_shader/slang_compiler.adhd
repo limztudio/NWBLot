@@ -24,20 +24,6 @@ b8 IsPlannedMacroIncludeDefine(in b8 compilerInputsHaveBom, in Span<StringView> 
     return false;
 }
 
-String FormatCompilerDefineArgument(
-    in StringView definePrefix,
-    in StringView defineName,
-    in StringView defineValue,
-    in b8 hasOverlayIncludePath,
-    in StringView overlayIncludePathText
-){
-    if(defineValue.empty())
-        return StringFormat("{}{}", definePrefix, defineName);
-    if(hasOverlayIncludePath)
-        return StringFormat("{}{}=\"{}\"", definePrefix, defineName, overlayIncludePathText);
-    return StringFormat("{}{}={}", definePrefix, defineName, defineValue);
-}
-
 b8 ValidateUnexpectedCompilerDiagnosticsEmpty(
     in StringView shaderName,
     in StringView variantName,

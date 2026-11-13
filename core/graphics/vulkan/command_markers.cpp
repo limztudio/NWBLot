@@ -65,7 +65,21 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
         return token;
     }
 
-    const GraphicsString markerName(useDebugUtils ? name : AStringView{}, m_context.objectArena);
+    Array<char, 128u> markerBuffer;
+    Optional<GraphicsString> allocatedMarkerName;
+    const char* markerName = "";
+    if(useDebugUtils){
+        if(name.size() < markerBuffer.size()){
+            if(!name.empty())
+                FOUNDATION_MEMCPY(markerBuffer.data(), markerBuffer.size(), name.data(), name.size());
+            markerBuffer[name.size()] = '\0';
+            markerName = markerBuffer.data();
+        }
+        else{
+            allocatedMarkerName.emplace(name, m_context.objectArena);
+            markerName = allocatedMarkerName->c_str();
+        }
+    }
     usize gpuCrashMarker = 0u;
     Device::AmdBreadcrumbWrite breadcrumb;
     b8 crashMarkerArmed = false;
@@ -87,7 +101,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
 
     if(useDebugUtils){
         auto label = VulkanDetail::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);
-        label.pLabelName = markerName.c_str();
+        label.pLabelName = markerName;
         m_context.instanceDispatch.vkCmdBeginDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf, &label);
     }
 

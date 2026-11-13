@@ -91,6 +91,15 @@ using __hidden_cook_input_selection::PathSelectionIndex;
 
 
 b8 CookInputSelector::IsDirectoryWithinRoots(const Path& directoryPath, const Span<const ResolvedAssetRoot> assetRoots, ScratchArena& scratchArena){
+#if !defined(FOUNDATION_PLATFORM_WINDOWS) && !defined(FOUNDATION_UNICODE)
+    (void)scratchArena;
+    const auto normalized = directoryPath.lexicallyNormal();
+    for(const ResolvedAssetRoot& root : assetRoots){
+        const auto rootPath = root.path.lexicallyNormal();
+        if(IsPathPrefixText(rootPath.native(), normalized.native()))
+            return true;
+    }
+#else
     ScratchString normalized = PathToString(scratchArena, directoryPath.lexicallyNormal());
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(normalized);
@@ -103,6 +112,7 @@ b8 CookInputSelector::IsDirectoryWithinRoots(const Path& directoryPath, const Sp
         if(IsPathPrefixText(AStringView(rootText.data(), rootText.size()), AStringView(normalized.data(), normalized.size())))
             return true;
     }
+#endif
     return false;
 }
 

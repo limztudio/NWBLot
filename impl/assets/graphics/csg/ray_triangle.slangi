@@ -1,0 +1,215 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_RAY_TRIANGLE_SLANGI
+#define NWB_GRAPHICS_CSG_RAY_TRIANGLE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ray_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgRayTriangleIntersection{
+    uint failure;
+    bool hit;
+    bool owned;
+    float distance;
+    float2 barycentrics;
+    int windingDelta;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Products of two FP32 significands fit in 48 bits; no optional shader integer or FP64 features are needed.
+uint3 nwbCsgRayExactProduct(const float first, const float second){
+    const uint a = asuint(first) & 0x7fffffffu;
+    const uint b = asuint(second) & 0x7fffffffu;
+    const uint aMantissa = (a & 0x7fffffu) | (a >= 0x800000u ? 0x800000u : 0u);
+    const uint bMantissa = (b & 0x7fffffu) | (b >= 0x800000u ? 0x800000u : 0u);
+    if(aMantissa == 0u || bMantissa == 0u)
+        return uint3(0u);
+    const uint aLow = aMantissa & 0xffffu;
+    const uint bLow = bMantissa & 0xffffu;
+    const uint middle = (aMantissa >> 16u) * bLow + aLow * (bMantissa >> 16u);
+    const uint low = aLow * bLow;
+    const uint sum = low + (middle << 16u);
+    const uint high = (aMantissa >> 16u) * (bMantissa >> 16u) + (middle >> 16u) + (sum < low ? 1u : 0u);
+    const uint leading = high != 0u ? 32u + uint(firstbithigh(high)) : uint(firstbithigh(sum));
+    const uint shift = 47u - leading;
+    const uint normalizedHigh = shift == 0u ? high : (shift < 32u ? (high << shift) | (sum >> (32u - shift)) : sum << (shift - 32u));
+    const uint normalizedLow = shift < 32u ? sum << shift : 0u;
+    return uint3(normalizedLow, normalizedHigh, max(a >> 23u, 1u) + max(b >> 23u, 1u) + leading);
+}
+
+int nwbCsgRayEdgeSign(const float2 first, const float2 second){
+    const float left = first.x * second.y;
+    const float right = first.y * second.x;
+    const float edge = left - right;
+    const float error = 0.00000095367431640625 * (abs(left) + abs(right));
+    if(isfinite(edge) && abs(edge) > max(error, asfloat(0x00800000u)))
+        return edge > 0.0 ? 1 : -1;
+    const uint3 a = nwbCsgRayExactProduct(first.x, second.y);
+    const uint3 b = nwbCsgRayExactProduct(first.y, second.x);
+    const bool aNegative = ((asuint(first.x) ^ asuint(second.y)) >> 31u) != 0u;
+    const bool bNegative = ((asuint(first.y) ^ asuint(second.x)) >> 31u) != 0u;
+    if(a.z == 0u)
+        return b.z == 0u ? 0 : (bNegative ? 1 : -1);
+    if(b.z == 0u || aNegative != bNegative)
+        return aNegative ? -1 : 1;
+    if(all(a == b))
+        return 0;
+    const bool greater = a.z > b.z || (a.z == b.z && (a.y > b.y || (a.y == b.y && a.x > b.x)));
+    return greater != aNegative ? 1 : -1;
+}
+
+bool nwbCsgRayOwnsEdge(const float2 first, const float2 second, const int orientation){
+    const float2 a = orientation > 0 ? first : second;
+    const float2 b = orientation > 0 ? second : first;
+    return a.y < b.y || (a.y == b.y && a.x > b.x);
+}
+
+float nwbCsgRayEdgeMagnitude(const float2 first, const float2 second){
+    const float product = first.y * second.x;
+    return abs(fma(first.x, second.y, -product) + fma(-first.y, second.x, product));
+}
+
+uint2 nwbCsgRayShiftProduct(const uint3 product, const uint exponent){
+    const uint low = product.x << 15u;
+    const uint high = (product.y << 15u) | (product.x >> 17u);
+    const uint shift = exponent - product.z;
+    if(shift >= 64u || product.z == 0u)
+        return uint2(0u);
+    if(shift == 0u)
+        return uint2(low, high);
+    if(shift >= 32u)
+        return uint2(high >> (shift - 32u), 0u);
+    return uint2((low >> shift) | (high << (32u - shift)), high >> shift);
+}
+
+// Align exact products before subtraction when FP32 interpolation loses a small accepted edge.
+float2 nwbCsgRayExactEdgeMagnitude(const float2 first, const float2 second){
+    const uint3 a = nwbCsgRayExactProduct(first.x, second.y);
+    const uint3 b = nwbCsgRayExactProduct(first.y, second.x);
+    const uint exponent = max(a.z, b.z);
+    const uint2 x = nwbCsgRayShiftProduct(a, exponent);
+    const uint2 y = nwbCsgRayShiftProduct(b, exponent);
+    uint2 magnitude;
+    if(((asuint(first.x) ^ asuint(second.y) ^ asuint(first.y) ^ asuint(second.x)) >> 31u) != 0u){
+        magnitude.x = x.x + y.x;
+        magnitude.y = x.y + y.y + (magnitude.x < x.x ? 1u : 0u);
+    }
+    else{
+        const bool greater = x.y > y.y || (x.y == y.y && x.x >= y.x);
+        const uint2 large = greater ? x : y;
+        const uint2 small = greater ? y : x;
+        magnitude.x = large.x - small.x;
+        magnitude.y = large.y - small.y - (large.x < small.x ? 1u : 0u);
+    }
+    const float value = float(magnitude.y) + float(magnitude.x) * 0.00000000023283064365386962890625;
+    return float2(value, value == 0.0 ? 0.0 : float(exponent));
+}
+
+// Shared edge endpoints use one order and interpolation, independent of each incident triangle's third vertex.
+float nwbCsgRayEdgeDistance(const float3 first, const float3 second, const float direction){
+    const bool ordered = first.x < second.x || (first.x == second.x && (first.y < second.y || (first.y == second.y && first.z <= second.z)));
+    const float3 a = ordered ? first : second;
+    const float3 b = ordered ? second : first;
+    const float2 delta = b.xy - a.xy;
+    const float weight = abs(delta.x) >= abs(delta.y) ? -a.x / delta.x : -a.y / delta.y;
+    return fma(weight, b.z - a.z, a.z) / direction;
+}
+
+NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, const float3 v1, const float3 v2, const float3 origin, const float3 direction, const bool closed){
+    NwbCsgRayTriangleIntersection result = (NwbCsgRayTriangleIntersection)0;
+    const float3 edge0 = v1 - v0;
+    const float3 edge1 = v2 - v0;
+    const float3 magnitude = max(abs(edge0), abs(edge1));
+    const float edgeScale = max(magnitude.x, max(magnitude.y, magnitude.z));
+    const float3 absoluteDirection = abs(direction);
+    if(!all(isfinite(edge0)) || !all(isfinite(edge1)) || !all(isfinite(origin)) || !all(isfinite(direction)) || !isfinite(edgeScale) || all(direction == float3(0.0))){
+        result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        return result;
+    }
+    if(edgeScale == 0.0 || all(cross(edge0 / edgeScale, edge1 / edgeScale) == float3(0.0))){
+        result.failure = closed ? NWB_CSG_RAY_FAILURE_TOPOLOGY : 0u;
+        return result;
+    }
+    const uint z = absoluteDirection.x > absoluteDirection.y ? (absoluteDirection.x > absoluteDirection.z ? 0u : 2u) : (absoluteDirection.y > absoluteDirection.z ? 1u : 2u);
+    const uint x = direction[z] < 0.0 ? (z + 2u) % 3u : (z + 1u) % 3u;
+    const uint y = direction[z] < 0.0 ? (z + 1u) % 3u : (z + 2u) % 3u;
+    const float2 shear = float2(direction[x], direction[y]) / direction[z];
+    const float3 a = v0 - origin;
+    const float3 b = v1 - origin;
+    const float3 c = v2 - origin;
+    const float3 p0 = float3(fma(-shear.x, a[z], a[x]), fma(-shear.y, a[z], a[y]), a[z]);
+    const float3 p1 = float3(fma(-shear.x, b[z], b[x]), fma(-shear.y, b[z], b[y]), b[z]);
+    const float3 p2 = float3(fma(-shear.x, c[z], c[x]), fma(-shear.y, c[z], c[y]), c[z]);
+    if(!all(isfinite(p0)) || !all(isfinite(p1)) || !all(isfinite(p2))){
+        result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        return result;
+    }
+    const int3 signs = int3(nwbCsgRayEdgeSign(p1.xy, p2.xy), nwbCsgRayEdgeSign(p2.xy, p0.xy), nwbCsgRayEdgeSign(p0.xy, p1.xy));
+    if((any(signs < int3(0)) && any(signs > int3(0))) || all(signs == int3(0)))
+        return result;
+    const int orientation = any(signs > int3(0)) ? 1 : -1;
+    result.owned = !closed || ((signs.x != 0 || nwbCsgRayOwnsEdge(p1.xy, p2.xy, orientation)) && (signs.y != 0 || nwbCsgRayOwnsEdge(p2.xy, p0.xy, orientation)) && (signs.z != 0 || nwbCsgRayOwnsEdge(p0.xy, p1.xy, orientation)));
+    // Only interpolation is scaled per triangle; exact coverage above always uses the shared ray-space positions.
+    const float2 projectedMagnitude = max(abs(p0.xy), max(abs(p1.xy), abs(p2.xy)));
+    const float scale = asfloat(max(asuint(max(projectedMagnitude.x, projectedMagnitude.y)) & 0x7f800000u, 0x00800000u));
+    const float2 q0 = p0.xy / scale;
+    const float2 q1 = p1.xy / scale;
+    const float2 q2 = p2.xy / scale;
+    float3 weights = float3(signs.x == 0 ? 0.0 : nwbCsgRayEdgeMagnitude(q1, q2), signs.y == 0 ? 0.0 : nwbCsgRayEdgeMagnitude(q2, q0), signs.z == 0 ? 0.0 : nwbCsgRayEdgeMagnitude(q0, q1));
+    if(any((signs != int3(0)) & (weights == float3(0.0)))){
+        const float2 e0 = nwbCsgRayExactEdgeMagnitude(p1.xy, p2.xy);
+        const float2 e1 = nwbCsgRayExactEdgeMagnitude(p2.xy, p0.xy);
+        const float2 e2 = nwbCsgRayExactEdgeMagnitude(p0.xy, p1.xy);
+        const float exponent = max(e0.y, max(e1.y, e2.y));
+        weights = float3(ldexp(e0.x, int(e0.y - exponent)), ldexp(e1.x, int(e1.y - exponent)), ldexp(e2.x, int(e2.y - exponent)));
+    }
+    const float determinant = weights.x + weights.y + weights.z;
+    float distance;
+    if(signs.y == 0 && signs.z == 0)
+        distance = p0.z / direction[z];
+    else if(signs.z == 0 && signs.x == 0)
+        distance = p1.z / direction[z];
+    else if(signs.x == 0 && signs.y == 0)
+        distance = p2.z / direction[z];
+    else if(signs.x == 0)
+        distance = nwbCsgRayEdgeDistance(p1, p2, direction[z]);
+    else if(signs.y == 0)
+        distance = nwbCsgRayEdgeDistance(p2, p0, direction[z]);
+    else if(signs.z == 0)
+        distance = nwbCsgRayEdgeDistance(p0, p1, direction[z]);
+    else
+        distance = dot(weights / determinant, float3(p0.z, p1.z, p2.z)) / direction[z];
+    if(determinant == 0.0 || !isfinite(determinant) || !isfinite(distance)){
+        result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        return result;
+    }
+    if(distance <= 0.0)
+        return result;
+    result.hit = true;
+    result.distance = distance;
+    result.barycentrics = weights.yz / determinant;
+    result.windingDelta = -orientation;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

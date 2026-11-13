@@ -336,7 +336,8 @@ Expected<usize> DependencyProviderCatalog::resolve(
                 return MakeUnexpected(Failure{});
             if(*hasBunch){
                 if(assetType){
-                    LogMultipleAssetsDeclaredForPath(PathToString<char>(scratchArena, m_files[index].filePath), virtualPath);
+                    Assets::ScratchString convertedPath(scratchArena);
+                    LogMultipleAssetsDeclaredForPath(Assets::AssetPathsDetail::NativeTextView(m_files[index].filePath.native(), convertedPath), virtualPath);
                     return MakeUnexpected(Failure{});
                 }
                 const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena);
@@ -375,7 +376,8 @@ Expected<usize> DependencyProviderCatalog::resolve(
             }
 
             if(document->declarations().size() != 1u){
-                LogMultipleAssetsDeclaredForPath(PathToString<char>(scratchArena, m_files[index].filePath), virtualPath);
+                Assets::ScratchString convertedPath(scratchArena);
+                LogMultipleAssetsDeclaredForPath(Assets::AssetPathsDetail::NativeTextView(m_files[index].filePath.native(), convertedPath), virtualPath);
                 return MakeUnexpected(Failure{});
             }
             if(!recordMatch(index))
@@ -571,11 +573,15 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
             continue;
         }
 
-        if(!ValidateSingleProviderAssetDeclaration(document->declarations().size(), PathToString<char>(scratchArena, files[fileIndex].filePath)))
-            return MakeUnexpected(Failure{});
+        if(document->declarations().size() != 1u){
+            Assets::ScratchString convertedPath(scratchArena);
+            if(!ValidateSingleProviderAssetDeclaration(document->declarations().size(), Assets::AssetPathsDetail::NativeTextView(files[fileIndex].filePath.native(), convertedPath)))
+                return MakeUnexpected(Failure{});
+        }
         const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
         if(!assetDeclaration){
-            LogMissingMetadataAssetDeclaration(PathToString<char>(scratchArena, files[fileIndex].filePath));
+            Assets::ScratchString convertedPath(scratchArena);
+            LogMissingMetadataAssetDeclaration(Assets::AssetPathsDetail::NativeTextView(files[fileIndex].filePath.native(), convertedPath));
             return MakeUnexpected(Failure{});
         }
         const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));

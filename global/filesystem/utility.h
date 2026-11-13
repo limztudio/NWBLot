@@ -6,6 +6,8 @@
 
 
 #include "operations.h"
+#include "../array.h"
+#include "../counting_output.h"
 #include "../span.h"
 #include "../text_utils.h"
 
@@ -22,6 +24,36 @@ namespace GlobalFilesystemUtilityDetail{
 template<typename CharT, GlobalFilesystemPathDetail::PathChar SourceCharT>
 struct PathToStringArg{
     BasicStringView<SourceCharT> path;
+
+
+public:
+    template<usize N>
+    void appendDiagnosticText(Array<char, N>& outText, usize& outCursor)const noexcept{
+        struct Utf8Output{
+            Array<char, N>& text;
+            usize& cursor;
+
+
+        public:
+            Utf8Output& operator*()noexcept{ return *this; }
+
+            Utf8Output& operator++(int)noexcept{ return *this; }
+
+            Utf8Output& operator=(const char byte)noexcept{
+                if constexpr(N > 0u){
+                    if(cursor < N - 1u){
+                        text[cursor++] = byte;
+                        text[cursor] = 0;
+                    }
+                }
+                return *this;
+            }
+        };
+
+        Utf8Output out{ outText, outCursor };
+        static_assert(noexcept(WriteConvertedText<char>(out, path)));
+        WriteConvertedText<char>(out, path);
+    }
 };
 
 
@@ -130,6 +162,36 @@ template<typename CharT = char, typename ArenaT, typename PathT>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The result borrows nativeText or convertedText.
+template<typename ArenaT>
+[[nodiscard]] inline AStringView GenericNativeTextView(const TStringView nativeText, AString<ArenaT>& convertedText){
+#if !defined(FOUNDATION_PLATFORM_WINDOWS) && !defined(FOUNDATION_UNICODE)
+    (void)convertedText;
+    return AStringView(nativeText.data(), nativeText.size());
+#else
+#if !defined(FOUNDATION_UNICODE)
+    if(nativeText.find('\\') == TStringView::npos)
+        return AStringView(nativeText.data(), nativeText.size());
+    convertedText.assign(nativeText.data(), nativeText.size());
+#else
+    convertedText.clear();
+    CountingByteOutput counter;
+    WriteConvertedText<char>(counter, nativeText);
+    convertedText.reserve(counter.byteCount);
+    auto out = BackInserter(convertedText);
+    WriteConvertedText<char>(out, nativeText);
+#endif
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    for(char& ch : convertedText){
+        if(ch == '\\')
+            ch = '/';
+    }
+#endif
+    return AStringView(convertedText);
+#endif
+}
 
 
 template<typename CharT>

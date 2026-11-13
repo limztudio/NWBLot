@@ -53,6 +53,7 @@ native{
 #include <logger/processed_message_file.h>
 #include <logger/server/crash_auth.adhd.h>
 #include <logger/server/crash_ingest.adhd.h>
+#include <logger/server/crash_manifest_validator.adhd.h>
 #include <logger/server/crash_paths.adhd.h>
 #include <logger/server/crash_report_composer.adhd.h>
 
@@ -174,10 +175,6 @@ struct ManifestTriggerFields{
     u64 line = 0u;
 };
 
-struct ComposerScratchHolder{
-    ScratchArena scratch{ Name(s_LoggerCrashReportComposerScratch) };
-};
-
 struct LogClientHolder{
     LogClient client;
 };
@@ -200,8 +197,12 @@ template<typename ArenaT>
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 CrashIngestMessageContains(const CrashIngestResult& result, const AStringView asciiNeedle){
+#if defined(FOUNDATION_UNICODE)
     ScratchArena scratch{Name(s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch)};
     return Contains(result.message, ConvertString(scratch, asciiNeedle));
+#else
+    return Contains(result.message, TStringView(asciiNeedle.data(), asciiNeedle.size()));
+#endif
 }
 
 
@@ -492,7 +493,7 @@ Path InvalidArchivePath(in StringView testGroup, in StringView stem){
 void AppendArchiveFile(in StringView relativePath, in StringView content, mut String archive){
     archive.append(s_ArchiveFileHeaderPrefix);
     archive.append(relativePath);
-    archive.append(StringFormat(" {}\n", content.size()));
+    StringAppendFormat(archive, " {}\n", content.size());
     archive.append(content);
     archive.append(s_ArchiveEntryEndText);
 }
@@ -507,24 +508,24 @@ String BuildManifest(
     in ManifestTriggerFields trigger
 ){
     String manifest = "{\n";
-    manifest.append(StringFormat(
+    StringAppendFormat(manifest,
         "  \"format\": \"{}\",\n  \"crash_id\": \"{}\",\n  \"application\": \"logger_server_test\",\n  \"version\": \"1\",\n  \"build_id\": \"unit-test\",\n  \"abi\": \"test-abi\",\n  \"platform\": \"{}\",\n  \"reason_kind\": \"{}\",\n  \"reason_code\": {},\n  \"process_id\": 1,\n  \"thread_id\": 7,\n  \"has_exception_context\": false,\n  \"fault_address\": 0,\n  \"instruction_pointer\": 0,\n  \"stack_pointer\": 0,\n  \"frame_pointer\": 0,\n",
         s_ManifestFormatValue,
         crashId,
         platform,
         reasonKind,
         reasonCode
-    ));
+    );
     if(eventField == s_IncludeEventField)
-        manifest.append(StringFormat("  \"event\": \"{}\",\n", event));
-    manifest.append(StringFormat(
+        StringAppendFormat(manifest, "  \"event\": \"{}\",\n", event);
+    StringAppendFormat(manifest,
         "  \"trigger_category\": \"{}\",\n  \"trigger_expression\": \"{}\",\n  \"trigger_message\": \"{}\",\n  \"trigger_file\": \"{}\",\n  \"trigger_line\": {},\n  \"dump_detail_mode\": \"small\",\n  \"artifact_strategy\": \"unit_test\",\n  \"handler_lifetime\": \"unit_test\"\n",
         trigger.category,
         trigger.expression,
         trigger.message,
         trigger.file,
         trigger.line
-    ));
+    );
     manifest.append("}\n");
     return manifest;
 }
@@ -664,12 +665,11 @@ static CrashTestPath ObservedReportPath(GlobalArena& arena, const CrashTestPath&
         return basePath;
 
     CrashTestText fileName(arena);
-    const CrashTestText stem = PathToString<char>(arena, basePath.stemView());
-    const CrashTestText extension = PathToString<char>(arena, basePath.extensionView());
-    fileName += AStringView(stem.data(), stem.size());
+    auto out = BackInserter(fileName);
+    WriteConvertedText<char>(out, basePath.stemView());
     fileName += ".";
     fileName += suffix;
-    fileName += AStringView(extension.data(), extension.size());
+    WriteConvertedText<char>(out, basePath.extensionView());
     return basePath.parentPath() / AStringView(fileName.data(), fileName.size());
 }
 

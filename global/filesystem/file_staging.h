@@ -153,7 +153,7 @@ namespace GlobalFilesystemStagingDetail{
 
 
 template<typename ArenaT>
-void CaptureCleanupDiagnostic(const AStringView diagnosticTag, const char* const messageFormat, const Path<ArenaT>& path, const ErrorCode& error)noexcept{
+void CaptureCleanupDiagnostic(const AStringView diagnosticTag, const AStringView messageFormat, const Path<ArenaT>& path, const ErrorCode& error)noexcept{
     const DiagnosticEventText diagnostic = MakeDiagnosticEventText(messageFormat, path.c_str(), error.value());
     CaptureDiagnosticEvent(diagnosticTag, diagnostic.view(), __FILE__, __LINE__);
 }

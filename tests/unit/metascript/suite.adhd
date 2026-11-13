@@ -16,6 +16,7 @@ native{
 
 
 #include <core/metascript/adhd/compiler.h>
+#include <core/metascript/preprocessor_macro_expander.h>
 
 #include <tests/common/test_context.adhd.h>
 
@@ -1236,6 +1237,165 @@ void VerifyAdhdCompiler_PreservesNumericLiteralSuffixesUnderSingleLetterMacrosAn
     ExpectCompileFails(arena, "void BadNative(in i32 a, mut i32 b) {\r\n    native(in a, mut a = b) {\r\n    }\r\n}\r\n", "impl/sim/dup_native.adhd");
 }
 
+void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
+    AdhdTestArena arena = AdhdTestArena();
+    AdhdTestArena other = AdhdTestArena();
+    native(mut arena, mut other){
+        using namespace ::NWB::Core::Metascript;
+        Preprocessor::MacroMap macros(0u, TransparentStringHash<MString>(), TransparentStringEqual<MString>(), arena.arena);
+        MVector<ParseError> errors(arena.arena);
+        const auto addObject = [&](const MStringView name, const MStringView value){
+            PreprocessorMacro macro(arena.arena);
+            macro.name.assign(name.data(), name.size());
+            macro.body.assign(value.data(), value.size());
+            MString key(name, arena.arena);
+            macros.insert_or_assign(Move(key), Move(macro));
+        };
+        const auto addUnary = [&](const MStringView name, const MStringView value){
+            PreprocessorMacro macro(arena.arena);
+            macro.name.assign(name.data(), name.size());
+            macro.parameters.emplace_back("x", arena.arena);
+            macro.body.assign(value.data(), value.size());
+            macro.isFunctionLike = true;
+            MString key(name, arena.arena);
+            macros.insert_or_assign(Move(key), Move(macro));
+        };
+        addObject("A", "answer");
+        addObject("EMPTY", "");
+        addUnary("F", "x+x");
+        addUnary("BAD", "x");
+        PreprocessorMacroExpander expander(arena.arena, macros, errors);
+
+        const MStringView unchanged = "defined (A) native { A; } F and a long unchanged line";
+        MString storage("keep", other.arena);
+        MStringView view;
+        ASSERT_TRUE(expander.expandToView(unchanged, 1u, storage, view));
+        EXPECT_EQ(view, unchanged);
+        EXPECT_EQ(view.data(), unchanged.data());
+        EXPECT_EQ(MStringView(storage), "keep");
+        ASSERT_TRUE(expander.expandToView(MStringView{}, 1u, storage, view));
+        EXPECT_TRUE(view.empty());
+        EXPECT_EQ(view.data(), nullptr);
+        EXPECT_EQ(MStringView(storage), "keep");
+
+        MString output("old", other.arena);
+        ASSERT_TRUE(expander.expand(unchanged, 1u, output));
+        EXPECT_EQ(MStringView(output), unchanged);
+        EXPECT_EQ(&output.get_allocator().arena(), &arena.arena);
+        output.assign("prefix A suffix");
+        ASSERT_TRUE(expander.expand(MStringView(output).substr(7u, 1u), 1u, output));
+        EXPECT_EQ(MStringView(output), "answer");
+        ASSERT_TRUE(expander.expand("A F(A) EMPTY tail", 1u, output));
+        EXPECT_EQ(MStringView(output), "answer answer+answer  tail");
+        ASSERT_TRUE(expander.expand("A 1e+A \"A\" /* A */ native { A; } A // A", 1u, output));
+        EXPECT_EQ(MStringView(output), "answer 1e+A \"A\" /* A */ native { A; } answer // A");
+
+        ASSERT_TRUE(expander.expand("A R\"tag(A)tag\" A /* A", 1u, output));
+        EXPECT_EQ(MStringView(output), "answer R\"tag(A)tag\" answer /* A");
+        ASSERT_TRUE(expander.expand(" { A; } A", 1u, output, true, 0u));
+        EXPECT_EQ(MStringView(output), " { A; } answer");
+        PreprocessorMacro variadic(arena.arena);
+        variadic.name = "V";
+        variadic.parameters.emplace_back("x", arena.arena);
+        variadic.body = "x|__VA_ARGS__|...";
+        variadic.isFunctionLike = true;
+        variadic.isVariadic = true;
+        macros.insert_or_assign(MString("V", arena.arena), Move(variadic));
+        ASSERT_TRUE(expander.expand("V(A, two, (3,4))", 1u, output));
+        EXPECT_EQ(MStringView(output), "answer|two, (3,4)|two, (3,4)");
+        ASSERT_TRUE(expander.expand("V(A)", 1u, output));
+        EXPECT_EQ(MStringView(output), "answer||");
+
+        output.assign("unchanged on failure");
+        ASSERT_FALSE(expander.expand("A F(BAD(1, 2))", 42u, output));
+        EXPECT_EQ(MStringView(output), "unchanged on failure");
+        ASSERT_FALSE(errors.empty());
+        EXPECT_EQ(errors.back().line, 42u);
+        errors.clear();
+        ASSERT_FALSE(expander.expand("A F(", 43u, output));
+        EXPECT_EQ(MStringView(output), "unchanged on failure");
+        ASSERT_FALSE(errors.empty());
+        EXPECT_EQ(errors.back().line, 43u);
+        errors.clear();
+
+        addObject("B", "VALUE");
+        addObject("A", "B");
+        auto a = macros.find(MStringView("A"));
+        ASSERT_NE(a, macros.end());
+        ASSERT_TRUE(expander.expand("A", 1u, a.value().body));
+        EXPECT_EQ(MStringView(a.value().body), "VALUE");
+        for(u32 i = 0u; i < 17u; ++i){
+            const MString name = StringFormat(arena.arena, "M{}", i);
+            const MString next = StringFormat(arena.arena, "M{}", i + 1u);
+            addObject(name, next);
+        }
+        ASSERT_TRUE(expander.expand("M0", 1u, output));
+        EXPECT_EQ(MStringView(output), "M16");
+    }
+}
+
+void VerifyAdhdCompiler_SubstitutedConstantTextSurvivesFurtherAllocations(){
+    AdhdTestArena arena = AdhdTestArena();
+    native(mut arena){
+        using namespace ::NWB::Core::Metascript;
+        using namespace ::NWB::Core::Metascript::Adhd;
+        CompileResult result(arena.arena);
+        TypeRef original(arena.arena);
+        original.name = "Array";
+        original.templateArgs.push_back(TypeArg{ .constantText = "N + 1" });
+        original.templateArgs.push_back(TypeArg{ .constantText = "N + 222222222222222222222222222222" });
+        original.templateArgs.push_back(TypeArg{ .constantText = "Namespace::N" });
+        original.templateArgs.push_back(TypeArg{ .constantText = "N + Namespace::N + N" });
+        TypeRef constantType(arena.arena);
+        TemplateParamDecl parameter(arena.arena);
+        parameter.name = "N";
+        parameter.constValueType = &constantType;
+        const TypeArg argument{ .constantText = "7" };
+        const TypeRef* substituted = result.symbols.substituteTypeParams(original, { &parameter, 1u }, { &argument, 1u });
+        ASSERT_NE(substituted, nullptr);
+        TypeRef copied(arena.arena);
+        copied = *substituted;
+        for(usize index = 0u; index < 64u; ++index)
+            ASSERT_NE(result.symbols.substituteTypeParams(original, { &parameter, 1u }, { &argument, 1u }), nullptr);
+        ASSERT_EQ(substituted->templateArgs.size(), 4u);
+        EXPECT_EQ(substituted->templateArgs[0u].constantText, "7 + 1");
+        EXPECT_EQ(substituted->templateArgs[1u].constantText, "7 + 222222222222222222222222222222");
+        EXPECT_EQ(substituted->templateArgs[2u].constantText, "Namespace::N");
+        EXPECT_EQ(substituted->templateArgs[3u].constantText, "7 + Namespace::N + 7");
+        EXPECT_EQ(copied.templateArgs[0u].constantText, "7 + 1");
+        EXPECT_EQ(copied.templateArgs[1u].constantText, "7 + 222222222222222222222222222222");
+    }
+}
+
+void VerifyAdhdCompiler_CustomNamespaceMayBorrowPreviousOutput(){
+    AdhdTestArena arena = AdhdTestArena();
+    native(mut arena){
+        using namespace ::NWB::Core::Metascript;
+        using namespace ::NWB::Core::Metascript::Adhd;
+        constexpr MStringView source = "void Run(){ }\r\n";
+        constexpr MStringView name = "NWB::AReallyLongNamespaceForBorrowedOutput";
+        CompileResult headerResult(arena.arena);
+        headerResult.generatedHeader.assign(name.data(), name.size());
+        ASSERT_TRUE(Compiler::Compile(source, "custom.adhd", nullptr, MStringView(headerResult.generatedHeader), {}, arena.arena, headerResult));
+        EXPECT_NE(MStringView(headerResult.generatedHeader).find(name), MStringView::npos);
+        EXPECT_NE(MStringView(headerResult.generatedSource).find(name), MStringView::npos);
+        CompileResult sourceResult(arena.arena);
+        sourceResult.generatedSource.assign(name.data(), name.size());
+        ASSERT_TRUE(Compiler::Compile(source, "custom.adhd", nullptr, MStringView(sourceResult.generatedSource), {}, arena.arena, sourceResult));
+        EXPECT_NE(MStringView(sourceResult.generatedHeader).find(name), MStringView::npos);
+        EXPECT_NE(MStringView(sourceResult.generatedSource).find(name), MStringView::npos);
+    }
+}
+
+void VerifyAdhdCompiler_EnumSnakeNamesPreserveAcronymsAndDigits(){
+    AdhdTestArena arena = AdhdTestArena();
+    CompileResult result = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("enum<u8> Probe { URLValue2, A1B, kCount, }\r\n", "impl/enum_names.adhd", arena.arena, result));
+    const StringView header = GeneratedHeaderView(result);
+    EXPECT_NE(header.find("{ \"url_value2\", URLValue2 }"), usize.max);
+    EXPECT_NE(header.find("{ \"a1_b\", A1B }"), usize.max);
+}
+
 void VerifyAdhdCompiler_RejectsGlobalConstMutationMissingReturnsParallelIndexMutationAndNonEnumScopeAccess(){
     AdhdTestArena arena = AdhdTestArena();
     ExpectCompileFails(arena, "const u32 kImmutable = 10u;\r\nvoid BadMutateGlobal() {\r\n    kImmutable = 20u;\r\n}\r\n", "impl/sim/bad_mut_global.adhd");
@@ -1716,6 +1876,10 @@ NWB_END
 
 
 NWB_ADHD_GTEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes, VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes)
+NWB_ADHD_GTEST(AdhdPreprocessor, BorrowedExpansionPreservesAliasingAndFailures, VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures)
+NWB_ADHD_GTEST(AdhdCompiler, SubstitutedConstantTextSurvivesFurtherAllocations, VerifyAdhdCompiler_SubstitutedConstantTextSurvivesFurtherAllocations)
+NWB_ADHD_GTEST(AdhdCompiler, CustomNamespaceMayBorrowPreviousOutput, VerifyAdhdCompiler_CustomNamespaceMayBorrowPreviousOutput)
+NWB_ADHD_GTEST(AdhdCompiler, EnumSnakeNamesPreserveAcronymsAndDigits, VerifyAdhdCompiler_EnumSnakeNamesPreserveAcronymsAndDigits)
 NWB_ADHD_GTEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize, VerifyAdhdCompiler_ReordersClassFieldsByDescendingAlignmentAndSize)
 NWB_ADHD_GTEST(AdhdCompiler, SerializeClassPacksTightlyInSourceOrder, VerifyAdhdCompiler_SerializeClassPacksTightlyInSourceOrder)
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses, VerifyAdhdCompiler_EnforcesInterfaceOverrideAndFinalClasses)

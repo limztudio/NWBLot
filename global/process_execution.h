@@ -255,8 +255,13 @@ template<typename ArenaT>
         if(*regularCandidate)
             return true;
 #else
+#if defined(FOUNDATION_UNICODE)
         const AString<ArenaT> candidateText = PathToString<char>(arena, candidate);
-        if(::access(candidateText.c_str(), X_OK) == 0)
+        const char* const candidateName = candidateText.c_str();
+#else
+        const char* const candidateName = candidate.c_str();
+#endif
+        if(::access(candidateName, X_OK) == 0)
             return true;
         const int accessError = errno;
         if(accessError != ENOENT && accessError != ENOTDIR && accessError != EACCES)

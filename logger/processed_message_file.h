@@ -74,8 +74,7 @@ public:
         if(!executableName)
             return false;
 
-        const LogString executableNameString = PathToString<tchar>(m_arena, *executableName);
-        return open(executableNameString);
+        return open(executableName->native());
     }
 
     [[nodiscard]] const Path& path()const noexcept{ return m_filePath; }

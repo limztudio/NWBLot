@@ -52,6 +52,7 @@ native{
 #include <core/graphics/runtime/runtime.h>
 #include <impl/ecs_render/refraction/statistics_readback.adhd.h>
 #include <impl/assets/graphics/refraction/diagnostics_layout.h>
+#include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/ecs_render/refraction/task_graph_refraction_resolve.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
 

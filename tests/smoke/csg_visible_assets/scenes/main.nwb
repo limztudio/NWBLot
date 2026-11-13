@@ -12,6 +12,7 @@ asset.subsystems = [
 ];
 
 asset.assets = {
+    "csg_ray_probe": "project/shaders/csg_ray_probe_cs",
     "cube_hard_edges": "project/meshes/cube_hard_edges",
     "csg_visible_cap_state": "project/smoke/csg_visible/materials/cap_state",
     "csg_visible_direct": "project/smoke/csg_visible/materials/direct",

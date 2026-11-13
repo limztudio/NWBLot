@@ -93,10 +93,9 @@ ProjectFrameClientSize MakeRefractionFrameClientSize(in u32 width, in u32 height
 ProjectFrameClientSize QueryRefractionSmokeFrameClientSize(){
     const Expected<Optional<String>, ErrorCode> extentResult = ReadEnvironmentVariable("NWB_REFRACTION_SMOKE_EXTENT");
     [essential] assert(extentResult.has_value(), "RefractionSmokeProject: failed to read extent");
-    const Optional<String> extentOpt = extentResult.value();
-    if(!extentOpt.has_value())
+    if(!extentResult.value().has_value())
         return MakeRefractionFrameClientSize(960u, 720u);
-    const StringView extent = StringView(extentOpt.value());
+    const StringView extent = StringView(extentResult.value().value());
     if(extent == "native" || extent == "960x720")
         return MakeRefractionFrameClientSize(960u, 720u);
     if(extent == "1600x900")
@@ -155,9 +154,8 @@ class RefractionQueryDiagnostics{
             error("RefractionSmokeProject: diagnostics must be absent, 0, or 1");
             return false;
         }
-        const Optional<String> configuredOpt = configured.value();
-        if(configuredOpt.has_value()){
-            const StringView configuredView = StringView(configuredOpt.value());
+        if(configured.value().has_value()){
+            const StringView configuredView = StringView(configured.value().value());
             if(configuredView != "0" && configuredView != "1"){
                 error("RefractionSmokeProject: diagnostics must be absent, 0, or 1");
                 return false;
@@ -436,10 +434,9 @@ Expected<Optional<u32>> ReadRefractionDensityPercent(){
         error("RefractionSmokeProject: failed to read density fixture selection");
         return MakeUnexpected(Failure());
     }
-    const Optional<String> configuredOpt = configured.value();
-    if(!configuredOpt.has_value())
+    if(!configured.value().has_value())
         return Optional<u32>();
-    const StringView view = StringView(configuredOpt.value());
+    const StringView view = StringView(configured.value().value());
     if(view == "0")
         return Optional<u32>(0u);
     if(view == "1")
@@ -622,12 +619,11 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
             error("RefractionSmokeProject: failed to read frame-graph snapshot path");
             return false;
         }
-        const Optional<String> pathOpt = path.value();
-        if(!pathOpt.has_value())
+        if(!path.value().has_value())
             return true;
         const Expected<Optional<String>, ErrorCode> readback = ReadEnvironmentVariable("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
         const Expected<Optional<String>, ErrorCode> freeze = ReadEnvironmentVariable("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
-        const String candidatePath = pathOpt.value();
+        const StringView candidatePath = StringView(path.value().value());
         if(
             !readback.has_value()
             || !freeze.has_value()

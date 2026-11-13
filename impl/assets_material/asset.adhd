@@ -76,7 +76,7 @@ class Material{
         return shaderAsset;
     }
 
-    public in String shaderVariant()const{ return this.m_shaderVariant; }
+    public StringView shaderVariant()const{ return StringView(this.m_shaderVariant); }
     public in Name materialInterface()const{ return this.m_materialInterface; }
     public u32 shadingModelId()const{ return this.m_shadingModelId; }
     public u32 surfaceDispatchId()const{ return this.m_surfaceDispatchId; }

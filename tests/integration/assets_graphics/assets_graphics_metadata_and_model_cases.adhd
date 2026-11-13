@@ -30,6 +30,31 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void VerifyAssetPaths_CanonicalNativeTextMatchesConversionAtBoundaries(){
+    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
+    native(mut scratchArena){
+        const auto check = [&scratchArena](const TStringView text, const AStringView expected){
+            auto reference = PathToString<char>(scratchArena, text);
+            CanonicalizeTextInPlace(reference);
+            EXPECT_EQ(NWB::Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(text, expected, scratchArena), AStringView(reference) == expected);
+        };
+        check(FOUNDATION_TEXT(".AbC"), ".abc");
+        check(FOUNDATION_TEXT(".AbC"), ".ABC");
+        check({}, {});
+        check(FOUNDATION_TEXT(".a\\b"), ".a/b");
+        const tchar embedded[] = { FOUNDATION_TEXT('.'), FOUNDATION_TEXT('A'), 0, FOUNDATION_TEXT('B') };
+        const char expected[] = { '.', 'a', 0, 'b' };
+        check(TStringView(embedded, 4u), AStringView(expected, 4u));
+#if defined(FOUNDATION_UNICODE)
+        const tchar surrogate[] = { static_cast<tchar>(0xd800u) };
+        check(TStringView(surrogate, 1u), AStringView("\xEF\xBF\xBD", 3u));
+#else
+        const char highByte[] = { static_cast<char>(0xffu) };
+        check(TStringView(highByte, 1u), AStringView(highByte, 1u));
+#endif
+    }
+}
+
 class OctEncodingBoundary{
     public f32x3u m_axis;
     public u32 m_packed;
@@ -344,8 +369,10 @@ void VerifyMetadataExtensionOwnership_EraseClearAndGrowthDestroyEveryConcretePay
             const Name firstName(s_FirstMetadataName);
             const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(firstName, metadata, arena, state));
             for(usize index = 0u; index < 80u; ++index){
-                const AssetString nameText = StringFormat(arena, "tests/metadata_extension/growth_{}", index);
-                const auto nameResult = ToName(nameText);
+                Array<char, 64u> nameText;
+                CopyFixedBuffer(nameText, "tests/metadata_extension/growth_");
+                AppendUnsignedToFixedBuffer(nameText, index);
+                const auto nameResult = ToName(FixedBufferView(nameText));
                 ASSERT_TRUE(nameResult);
                 ASSERT_TRUE(*nameResult);
                 const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(**nameResult, metadata, arena, state);
@@ -1032,6 +1059,7 @@ NWB_ADHD_GTEST(AssetsGraphics, MeshletAttributeDeltasRejectU32WraparoundInEveryC
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths, VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths)
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmission, VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAdmission)
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoot, VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarlierRoot)
+NWB_ADHD_GTEST(AssetPaths, CanonicalNativeTextMatchesConversionAtBoundaries, VerifyAssetPaths_CanonicalNativeTextMatchesConversionAtBoundaries)
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, PathsInSameHashBucketKeepDistinctOwnedPaths, VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPaths)
 NWB_ADHD_GTEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject, VerifyMetadataExtensionOwnership_RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject)
 NWB_ADHD_GTEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadOnce, VerifyMetadataExtensionOwnership_EraseClearAndGrowthDestroyEveryConcretePayloadOnce)

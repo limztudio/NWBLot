@@ -519,7 +519,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         return false;
     }
 
-    const auto ensureBuffer = [&](const Core::BufferDesc& desc, const tchar* const errorMessage, const b8 markNeedsClear, const b8 resetSeeded, Core::BufferHandle& inOutBuffer){
+    const auto ensureBuffer = [&](const Core::BufferDesc& desc, const TStringView errorMessage, const b8 markNeedsClear, const b8 resetSeeded, Core::BufferHandle& inOutBuffer){
         if(inOutBuffer)
             return true;
         auto bufferResult = m_graphics.createBuffer(desc);

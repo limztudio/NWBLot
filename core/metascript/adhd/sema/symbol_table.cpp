@@ -100,6 +100,7 @@ const FieldDecl* SymbolTable::FindClassField(const ClassDecl& classDecl, const M
 }
 
 b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
+    FOUNDATION_ASSERT(&unit == &m_unit);
     b8 ok = true;
 
     for(EnumDecl* decl : unit.enums){
@@ -298,7 +299,7 @@ void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, const u32
 }
 
 TypeRef* SymbolTable::substituteTypeParams(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs)const{
-    return TypeSubstitution::SubstituteAliasType(origType, templateParams, templateArgs, m_arena);
+    return TypeSubstitution::SubstituteAliasType(origType, templateParams, templateArgs, m_arena, m_unit.substitutedConstantTexts);
 }
 
 TypeRef* SymbolTable::substituteTypeParams(const TypeRef* origType, const Span<const TemplateParamDecl> templateParams, const TypeRef* instanceTypeRef)const{

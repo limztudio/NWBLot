@@ -122,7 +122,6 @@ public:
 using TelemetryTestArena = TestArena;
 using GlobalArena = Core::Alloc::GlobalArena;
 using ScratchArena = Core::Alloc::ScratchArena;
-using ScratchTString = TString<Core::Alloc::ScratchArena>;
 using TelemetryArena = Core::Telemetry::TelemetryArena;
 using MemorySnapshot = Core::Perf::MemorySnapshot;
 using MemoryDelta = Core::Perf::MemoryDelta;
@@ -488,8 +487,7 @@ String FormatNameHashText(in NameHash hash){
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         if(lane > 0u)
             text.append("_");
-        const String laneHex = FormatHex64A(hash.qwords[lane]);
-        text.append(laneHex);
+        AppendHexU64(hash.qwords[lane], text);
     }
     return text;
 }
@@ -526,19 +524,27 @@ Expected<TelemetryReport> BuildTestTelemetryReport(in EventView events, mut Tele
     return BuildTelemetryReport(events, arena, scratchArena);
 }
 
-ScratchTString ConvertTestScratchString(mut ScratchArena scratchArena, in StringView message){
-    return ConvertString(scratchArena, message);
-}
-
 b8 BuildTestTextLogPayload(in LogTypeEnum type, in StringView message, mut ScratchArena scratchArena, mut TelemetryBytes outPayload){
-    const ScratchTString converted = ConvertTestScratchString(scratchArena, message);
-    return BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
+    native(in type, in message, mut scratchArena, mut outPayload){
+#if defined(FOUNDATION_UNICODE)
+        const auto converted = ConvertString(scratchArena, message);
+        return Core::Telemetry::BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
+#else
+        return Core::Telemetry::BuildTextLogPayload(type, TStringView(message.data(), message.size()), scratchArena, outPayload);
+#endif
+    }
 }
 
 b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex, in u32 streamId){
-    ScratchArena scratchArena = ScratchArena(s_TelemetryScratch);
-    const ScratchTString converted = ConvertTestScratchString(scratchArena, message);
-    return RecordTextLog(recorder, type, TStringView(converted), frameIndex, streamId);
+    native(in type, in message, in frameIndex, in streamId, mut recorder){
+#if defined(FOUNDATION_UNICODE)
+        Core::Alloc::ScratchArena scratchArena{ s_TelemetryScratch };
+        const auto converted = ConvertString(scratchArena, message);
+        return Core::Telemetry::RecordTextLog(recorder, type, TStringView(converted), frameIndex, streamId);
+#else
+        return Core::Telemetry::RecordTextLog(recorder, type, TStringView(message.data(), message.size()), frameIndex, streamId);
+#endif
+    }
 }
 
 b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex){

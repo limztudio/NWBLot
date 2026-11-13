@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_CrashIngestGeneratedJsonNeedleReserveSlack = 4u;
 const StringView s_CrashIngestMalformedFileFooterDetail = "malformed crash archive file footer";
 const StringView s_CrashSymbolicateReportSectionOpen = "\n[";
 const StringView s_CrashSymbolicateExceptionKey = "exception=";

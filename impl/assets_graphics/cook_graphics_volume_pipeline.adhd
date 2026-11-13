@@ -236,9 +236,10 @@ b8 AppendPreparedShadersToManifest(
             const Core::Assets::CookString generatedVariantName = ShaderCook::BuildCanonicalVariantName(defineCombo, cookArena, scratchArena);
 
             const u64 sourceChecksum = ShaderCook::ComputeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
-            const Core::Assets::ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);
+            ACompactString sourceChecksumHex;
+            AppendHexU64(sourceChecksum, sourceChecksumHex);
 
-            const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = ShaderVariantBytecodeCache::BuildPath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
+            const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = ShaderVariantBytecodeCache::BuildPath(cacheDirectory, configurationSafeName, sourceChecksumHex.view(), scratchArena);
             if(!ShaderVariantBytecodeCache::GetBytecode(
                 entry,
                 generatedVariantName,
@@ -474,17 +475,12 @@ static b8 AppendUniqueShaderEntry(const Path* const nwbFilePath, ShaderCook::Sha
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
         return false;
     }
-    const Core::Assets::CookString nwbFilePathText = nwbFilePath ? PathToString(inOutShaderEntries.get_allocator().arena(), *nwbFilePath) : Core::Assets::CookString(inOutShaderEntries.get_allocator().arena());
-    if(!TryInsertUniqueShaderIdentityKey(
-        *shaderName ? **shaderName : s_NameNone,
-        *stageName ? **stageName : s_NameNone,
-        inOutShaderEntry.name,
-        inOutShaderEntry.archiveStage,
-        nwbFilePath != nullptr,
-        AStringView(nwbFilePathText),
-        inOutGraphicsMetadata.seenShaderIdentityKeys
-    ))
+    if(!TryInsertUniqueShaderIdentityKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone, inOutGraphicsMetadata.seenShaderIdentityKeys)){
+        Core::Assets::CookString convertedPath(inOutShaderEntries.get_allocator().arena());
+        const AStringView nwbFilePathText = nwbFilePath ? Core::Assets::AssetPathsDetail::NativeTextView(nwbFilePath->native(), convertedPath) : AStringView();
+        ReportDuplicateShaderIdentity(inOutShaderEntry.name, inOutShaderEntry.archiveStage, nwbFilePath != nullptr, nwbFilePathText);
         return false;
+    }
 
     inOutShaderEntries.push_back(Move(inOutShaderEntry));
     return true;
@@ -615,9 +611,15 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
             return false;
         }
 
-        auto resolvedText = PathToString(context.scratchArena, *resolvedSource);
-        Replace(resolvedText.begin(), resolvedText.end(), '\\', '/');
-        inOutVirtualSource.assign(AStringView(resolvedText));
+#if defined(FOUNDATION_UNICODE)
+        inOutVirtualSource.clear();
+        auto out = BackInserter(inOutVirtualSource);
+        WriteConvertedText<char>(out, resolvedSource->native());
+#else
+        const auto nativeText = resolvedSource->native();
+        inOutVirtualSource.assign(nativeText.data(), nativeText.size());
+#endif
+        Replace(inOutVirtualSource.begin(), inOutVirtualSource.end(), '\\', '/');
         return true;
     };
 

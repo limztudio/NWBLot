@@ -209,7 +209,8 @@ static void AppendOptionalTextFile(const CrashScratchPath& packageDirectory, con
 static void AppendSymbolStoreStatus(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(config, arena);
     outReport += "symbol_store=";
-    outReport += PathToString<char>(arena, symbolStoreDirectory);
+    auto out = BackInserter(outReport);
+    WriteConvertedText<char>(out, symbolStoreDirectory.native());
     outReport += "\nsymbol_store_status=";
 
     const auto exists = IsDirectory(symbolStoreDirectory);
@@ -285,7 +286,11 @@ static void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirec
     if(!*regularCapture)
         return;
 
+#if !defined(FOUNDATION_UNICODE)
+    const AStringView capturePath = rgdCapture.native();
+#else
     const AString<Core::Alloc::ScratchArena> capturePath = PathToString<char>(arena, rgdCapture);
+#endif
     const auto decoded = Rgd::DecodeCrashDumpToText(capturePath);
     if(!decoded){
         AppendDecodedRgdReport(false, decoded.error(), outReport);
@@ -511,17 +516,13 @@ public:
         return RunLinuxSymbolizerCommand(arguments, arena);
     }
 
-    AString<Core::Alloc::ScratchArena> modulePathArgument{arena};
-    modulePathArgument.reserve(modulePathText.size());
-    modulePathArgument.append(modulePathText.data(), modulePathText.size());
-
     const Array<AStringView, 7> arguments = {{
         s_CrashSymbolicateLinuxAddr2LineTool,
         s_CrashSymbolicateLinuxAddr2LineFunctionsFlag,
         s_CrashSymbolicateLinuxAddr2LineDemangleFlag,
         s_CrashSymbolicateLinuxAddr2LineInlineFlag,
         s_CrashSymbolicateLinuxAddr2LineExeFlag,
-        AStringView(modulePathArgument),
+        modulePathText,
         AStringView(addressArgument),
     }};
 
@@ -580,8 +581,8 @@ public:
     if(!entry.found)
         return MakeUnexpected(Failure{});
 
-    const auto symbolPathText = PathToString<char>(cache.entries.get_allocator().arena(), *symbolPath);
-    entry.symbolPath.assign(symbolPathText.data(), symbolPathText.size());
+    auto out = BackInserter(entry.symbolPath);
+    WriteConvertedText<char>(out, symbolPath->native());
     return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
 }
 
@@ -1139,7 +1140,7 @@ static void LoadDumpModules(const HANDLE symbolProcess, const DumpImage& dumpIma
     outReport += s_ReportLineEnd;
 }
 
-static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIndex, const DWORD64 address, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
+static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIndex, const DWORD64 address, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     outReport += "#";
     AppendCrashDecimal(frameIndex, outReport);
     outReport += " ";
@@ -1152,9 +1153,9 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
 
     DWORD64 displacement = 0u;
     if(SymFromAddrW(symbolProcess, address, &displacement, symbol.get())){
-        const AString<Core::Alloc::ScratchArena> name = WideToUtf8(scratchArena, WStringView(symbol->Name, symbol->NameLen));
         outReport += " ";
-        outReport += name;
+        auto out = BackInserter(outReport);
+        WriteConvertedText<char>(out, WStringView(symbol->Name, symbol->NameLen));
         if(displacement != 0u){
             outReport += "+";
             AppendCrashHexAddress(displacement, outReport);
@@ -1167,9 +1168,9 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
     line.SizeOfStruct = sizeof(line);
     DWORD lineDisplacement = 0u;
     if(SymGetLineFromAddrW64(symbolProcess, address, &lineDisplacement, &line)){
-        const AString<Core::Alloc::ScratchArena> file = WideToUtf8(scratchArena, WStringView(line.FileName));
         outReport += " at ";
-        outReport += file;
+        auto out = BackInserter(outReport);
+        WriteConvertedText<char>(out, WStringView(line.FileName));
         outReport += ":";
         AppendCrashDecimal(line.LineNumber, outReport);
     }
@@ -1248,7 +1249,8 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
     ScopeExit clearMemoryReader([]()noexcept{ s_CurrentDumpMemoryReader = nullptr; });
 
     outReport += s_Win32DecodedResolverPrefix;
-    outReport += WideToUtf8(scratchArena, WStringView(symbolPath));
+    auto symbolPathOut = BackInserter(outReport);
+    WriteConvertedText<char>(symbolPathOut, WStringView(symbolPath));
     outReport += "\nthread_id=";
     AppendCrashDecimal(crashContext->threadId, outReport);
     outReport += s_ReportLineEnd;
@@ -1299,7 +1301,8 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     detailReport.reserve(LoggerCrashSymbolicateDetail::s_CrashReportReserveBytes);
 
     detailReport += "package=";
-    detailReport += PathToString<char>(scratchArena, packageDirectory);
+    auto packageOut = BackInserter(detailReport);
+    WriteConvertedText<char>(packageOut, packageDirectory.native());
     detailReport += "\ncrash_id=";
     detailReport += summary.crashId;
     detailReport += "\nplatform=";
@@ -1341,7 +1344,7 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
-    return LoggerCrashSymbolicateDetail::CrashReportComposer::BuildOrderedCrashReport(summary, scratchArena, Move(detailReport));
+    return LoggerCrashSymbolicateDetail::CrashReportComposer::BuildOrderedCrashReport(summary, Move(detailReport));
 }
 
 

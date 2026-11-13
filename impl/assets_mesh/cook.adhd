@@ -280,7 +280,7 @@ using namespace Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const AStringView nwbFilePathText, const Value& asset, Core::Assets::AssetArena& arena){
+[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
     const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinInverseBindMatricesField);
@@ -294,18 +294,30 @@ using namespace Core::Metascript;
         if(!matrix)
             return MakeUnexpected(Failure{});
 
-        if(!ValidateSkinCookInverseBindMatrix(LoadFloat(*matrix), nwbFilePathText, matrixIndex))
+        if(!IsValidSkinInverseBindMatrix(LoadFloat(*matrix)) && !Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), arena, [&](const AStringView filePathText){ return ValidateSkinCookInverseBindMatrix(LoadFloat(*matrix), filePathText, matrixIndex); }))
             return MakeUnexpected(Failure{});
         values.push_back(*matrix);
     }
 
-    if(!ValidateSkinCookInverseBindMatricesNonEmpty(values.size(), nwbFilePathText))
+    if(values.empty() && !Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), arena, [&](const AStringView filePathText){ return ValidateSkinCookInverseBindMatricesNonEmpty(values.size(), filePathText); }))
         return MakeUnexpected(Failure{});
     return values;
 }
 
-[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const AStringView nwbFilePathText, const SkinCookEntry& entry){
-    return ValidateSkinCookInfluenceJointIndices(nwbFilePathText, entry.inverseBindMatrices.size(), entry.influences);
+[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry, Core::Assets::AssetArena& arena){
+    const usize jointCount = entry.inverseBindMatrices.size();
+    b8 invalid = jointCount > static_cast<usize>(Limit<u16>::s_Max) + 1u;
+    if(!invalid){
+        for(const SkinInfluence4& influence : entry.influences){
+            if(TryFindOutOfRangeSkinInfluenceJoint(influence, static_cast<u32>(jointCount)).has_value()){
+                invalid = true;
+                break;
+            }
+        }
+    }
+    if(!invalid)
+        return true;
+    return Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), arena, [&](const AStringView filePathText){ return ValidateSkinCookInfluenceJointIndices(filePathText, jointCount, entry.influences); });
 }
 
 
@@ -489,12 +501,11 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, FOUNDATION_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
 
-    const Core::Assets::AssetString nwbFilePathText = PathToString(arena, nwbFilePath);
-    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, AStringView(nwbFilePathText), asset, arena);
+    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
     if(!inverseBindMatricesResult)
         return MakeUnexpected(Failure{});
     entry.inverseBindMatrices = Move(*inverseBindMatricesResult);
-    if(!ValidateSkinInfluenceJointIndices(AStringView(nwbFilePathText), entry))
+    if(!ValidateSkinInfluenceJointIndices(nwbFilePath, entry, arena))
         return MakeUnexpected(Failure{});
 
     return entry;

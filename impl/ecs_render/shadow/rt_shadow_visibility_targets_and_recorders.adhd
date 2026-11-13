@@ -162,7 +162,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     // Deferred lighting always samples this per-slot transmittance target.
     targets.shadowVisibilityFormat = Core::Format::RGBA16_FLOAT;
 
-    const auto createShadowTarget = [&](Core::TextureDesc desc, const Name& name, const tchar* const errorMessage, Core::TextureHandle& outTexture){
+    const auto createShadowTarget = [&](Core::TextureDesc desc, const Name& name, const TStringView errorMessage, Core::TextureHandle& outTexture){
         desc.setName(name);
         auto result = m_graphics.createTexture(desc);
         if(!result){

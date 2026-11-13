@@ -22,9 +22,11 @@ native{
 #include <core/metascript/value.h>
 
 #include <global/algorithm.h>
+#include <global/filesystem/utility.h>
 #include <global/floating_point_environment.h>
 #include <global/text_utils.h>
 
+#include <tests/common/capturing_logger.adhd.h>
 #include <tests/common/floating_point_environment_guard.adhd.h>
 #include <tests/common/test_context.adhd.h>
 #include <tests/unit/metascript/generated/builtin_shadow_global.adhd.h>
@@ -926,6 +928,37 @@ native{
 TEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames){ VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames(); }
 TEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText){ VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText(); }
 TEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce){ VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce(); }
+
+TEST(AdhdCompiler, DiagnosticPathsBorrowUntilFormattingAndCaptureUtf8){
+    AdhdTestArena arena;
+    ::NWB::Tests::CapturingLogger logger;
+    ::NWB::Core::Common::LoggerRegistrationGuard registration(logger, ::NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+
+    i32 evaluations = 0;
+    ::NWB::Tests::EmitDiagnosticPathOnce(evaluations);
+    EXPECT_EQ(evaluations, 1);
+    EXPECT_TRUE(logger.sawErrorContainingUtf8("한글"));
+
+    const auto verifyCapture = [&arena](const AStringView text, const b8 truncated){
+        const ::Path<::NWB::Core::Alloc::GlobalArena> path(arena.arena, text);
+        const auto owned = ::PathToString<char>(arena.arena, path);
+        const DiagnosticEventText baseline = MakeDiagnosticEventText(AStringView("{}"), AStringView(owned));
+        const DiagnosticEventText deferred = MakeDiagnosticEventText(AStringView("{}"), ::PathToString<char>(path));
+        const DiagnosticEventText wide = MakeDiagnosticEventText(WStringView(L"{}"), ::PathToString<char>(path));
+        EXPECT_EQ(deferred.view(), baseline.view());
+        EXPECT_EQ(wide.view(), baseline.view());
+        EXPECT_NE(deferred.view().find("한글"), AStringView::npos);
+        EXPECT_EQ(deferred.value.back(), '\0');
+        if(truncated)
+            EXPECT_EQ(deferred.view().size(), s_MaxEventTextBytes - 1u);
+    };
+    verifyCapture("diag/한글/leaf", false);
+    AString<::NWB::Core::Alloc::GlobalArena> longPath(arena.arena);
+    longPath.append("diag/한글/");
+    longPath.append(s_MaxEventTextBytes * 2u, 'x');
+    verifyCapture(AStringView(longPath), true);
+}
+
 TEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories){ VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories(); }
 TEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode){ VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode(); }
 TEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd){ VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd(); }

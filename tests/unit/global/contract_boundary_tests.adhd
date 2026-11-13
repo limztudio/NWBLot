@@ -319,8 +319,18 @@ void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndE
     const Path root = Path("global_test_artifacts/contract_redirected_closed_stdio");
     ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
     const Path outputPath = root / "combined.txt";
-    const String outputText = PathToString(outputPath);
-    const StringView outputPathView = outputText;
+    String outputText = String();
+    StringView outputPathView = "";
+    native(in outputPath, mut outputText, mut outputPathView){
+#if defined(FOUNDATION_UNICODE)
+        auto out = BackInserter(outputText);
+        WriteConvertedText<char>(out, outputPath.native());
+        outputPathView = AStringView(outputText);
+#else
+        const auto text = outputPath.native();
+        outputPathView = AStringView(text.data(), text.size());
+#endif
+    }
     EXPECT_FALSE(outputPathView.empty());
     for(u32 mask = 1u; mask < 8u; ++mask){
         ScopedTestTrace trace(mask);

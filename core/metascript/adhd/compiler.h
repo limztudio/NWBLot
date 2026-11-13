@@ -31,12 +31,16 @@ struct CompileResult{
 public:
     explicit CompileResult(MetaArena& arena)noexcept
         : unit(arena)
-        , symbols(arena)
+        , symbols(arena, unit)
         , preprocessedSource(arena)
         , generatedHeader(arena)
         , generatedSource(arena)
         , errors(arena)
     {}
+    CompileResult(const CompileResult&) = delete;
+    CompileResult(CompileResult&&) = delete;
+    CompileResult& operator=(const CompileResult&) = delete;
+    CompileResult& operator=(CompileResult&&) = delete;
 };
 
 

@@ -51,7 +51,8 @@ Expected<CrashBytesT<ArenaT>, ErrorCode> CrashPackageArchive::Build(ArenaT& aren
             return MakeUnexpected(read.error());
 
         const ::Path<Alloc::ScratchArena> relativePath = entry.path().lexicallyRelative(sourceDirectory);
-        const CrashStringT<Alloc::ScratchArena> pathText = PathToGenericString<char>(scratchArena, relativePath);
+        CrashStringT<Alloc::ScratchArena> pathStorage(scratchArena);
+        const AStringView pathText = GenericNativeTextView(relativePath.native(), pathStorage);
         AppendArchiveText(archive, PackageNames::s_ArchiveFileHeaderPrefix);
         AppendArchiveText(archive, AStringView(pathText.data(), pathText.size()));
         AppendArchiveText(archive, " ");

@@ -154,6 +154,9 @@ static void AppendEventArgument(Array<char, s_MaxEventTextBytes>& outText, usize
     else if constexpr(requires{ { AppendEventArgument(outText, outCursor, value.c_str()) }noexcept; }){
         AppendEventArgument(outText, outCursor, value.c_str());
     }
+    else if constexpr(requires{ { value.appendDiagnosticText(outText, outCursor) }noexcept -> SameAs<void>; }){
+        value.appendDiagnosticText(outText, outCursor);
+    }
     else if constexpr(requires{ value.value; }){
         AppendEventArgument(outText, outCursor, value.value);
     }

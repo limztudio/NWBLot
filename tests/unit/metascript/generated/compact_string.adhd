@@ -127,6 +127,15 @@ String StepAndMakeLongString(mut i32 recvCounter){
     return String("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_tail_segment_beyond_sso");
 }
 
+Path StepAndMakeDiagnosticPath(mut i32 counter){
+    ++counter;
+    return Path("diag/한글/leaf");
+}
+
+void EmitDiagnosticPathOnce(mut i32 counter){
+    error("path '{}'", StepAndMakeDiagnosticPath(counter));
+}
+
 usize StepSubstrArg(mut i32 argCounter, in usize value){
     ++argCounter;
     return value;

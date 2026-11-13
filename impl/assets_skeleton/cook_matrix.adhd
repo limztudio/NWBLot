@@ -8,49 +8,63 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(
-    in Path nwbFilePath,
-    in MetascriptValue value,
-    in StringView metaKind,
-    in StringView label
+b8 HasSkeletonJointMatrixRowCount(in usize rowCount){
+    return rowCount == cast<usize>(s_SkeletonJointMatrixRowCount);
+}
+
+b8 HasSkeletonJointMatrixColumnCount(in usize columnCount){
+    return columnCount == cast<usize>(s_SkeletonJointMatrixColumnCount);
+}
+
+SkeletonJointMatrix BuildSkeletonJointMatrixFromRows(
+    in Array<f32, 4> row0,
+    in Array<f32, 4> row1,
+    in Array<f32, 4> row2
 ){
-    if(!value.isList() || value.listView().size() != cast<usize>(s_SkeletonJointMatrixRowCount)){
-        error("{} meta '{}': '{}' must be a 3x4 affine matrix", metaKind, PathToString(nwbFilePath), label);
-        return MakeUnexpected(Failure());
-    }
-
-    Array<f32, 12> elements = Array<f32, 12>();
-    const Span<MetascriptValue> rows = value.listView();
-    for(usize rowIndex = 0u; rowIndex < cast<usize>(s_SkeletonJointMatrixRowCount); ++rowIndex){
-        in MetascriptValue row = rows[rowIndex];
-        if(!row.isList() || row.listView().size() != cast<usize>(s_SkeletonJointMatrixColumnCount)){
-            error("{} meta '{}': '{}' row {} must have 4 numeric values", metaKind, PathToString(nwbFilePath), label, rowIndex);
-            return MakeUnexpected(Failure());
-        }
-
-        const Span<MetascriptValue> columns = row.listView();
-        for(usize columnIndex = 0u; columnIndex < cast<usize>(s_SkeletonJointMatrixColumnCount); ++columnIndex){
-            in MetascriptValue column = columns[columnIndex];
-            if(!column.isNumeric()){
-                error("{} meta '{}': '{}' row {} column {} must be numeric", metaKind, PathToString(nwbFilePath), label, rowIndex, columnIndex);
-                return MakeUnexpected(Failure());
-            }
-
-            const Expected<f32> decoded = TryFiniteF32FromF64(column.toDouble());
-            if(!decoded){
-                error("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range", metaKind, PathToString(nwbFilePath), label, rowIndex, columnIndex);
-                return MakeUnexpected(Failure());
-            }
-
-            elements[rowIndex * cast<usize>(s_SkeletonJointMatrixColumnCount) + columnIndex] = decoded.value();
-        }
-    }
-
     return SkeletonJointMatrix(
-        elements[0u], elements[1u], elements[2u], elements[3u],
-        elements[4u], elements[5u], elements[6u], elements[7u],
-        elements[8u], elements[9u], elements[10u], elements[11u]
+        row0[0u], row0[1u], row0[2u], row0[3u],
+        row1[0u], row1[1u], row1[2u], row1[3u],
+        row2[0u], row2[1u], row2[2u], row2[3u]
     );
+}
+
+b8 ValidateSkeletonJointMatrixRowList(in b8 isList, in usize rowCount, in Path nwbFilePath, in StringView metaKind, in StringView label){
+    if(isList && HasSkeletonJointMatrixRowCount(rowCount))
+        return true;
+
+    error("{} meta '{}': '{}' must be a 3x4 affine matrix", metaKind, nwbFilePath, label);
+    return false;
+}
+
+b8 ValidateSkeletonJointMatrixColumnList(
+    in b8 isList,
+    in usize columnCount,
+    in Path nwbFilePath,
+    in StringView metaKind,
+    in StringView label,
+    in usize rowIndex
+){
+    if(isList && HasSkeletonJointMatrixColumnCount(columnCount))
+        return true;
+
+    error("{} meta '{}': '{}' row {} must have 4 numeric values", metaKind, nwbFilePath, label, rowIndex);
+    return false;
+}
+
+void LogSkeletonJointMatrixElementFailure(
+    in b8 isNumeric,
+    in Path nwbFilePath,
+    in StringView metaKind,
+    in StringView label,
+    in usize rowIndex,
+    in usize columnIndex
+){
+    if(!isNumeric){
+        error("{} meta '{}': '{}' row {} column {} must be numeric", metaKind, nwbFilePath, label, rowIndex, columnIndex);
+        return;
+    }
+
+    error("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range", metaKind, nwbFilePath, label, rowIndex, columnIndex);
 }
 
 

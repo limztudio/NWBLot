@@ -20,6 +20,39 @@ namespace AssetPathsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 CanonicalNativeTextEquals(const TStringView nativeText, const AStringView expected, Alloc::ScratchArena& scratchArena){
+    if constexpr(!IsSame_V<tchar, char>){
+        b8 needsConversion = false;
+        for(const tchar ch : nativeText){
+            if(static_cast<u32>(ch) >= 0x80u){
+                needsConversion = true;
+                break;
+            }
+        }
+        if(!needsConversion){
+            for(const char ch : expected){
+                if(static_cast<u8>(ch) >= 0x80u){
+                    needsConversion = true;
+                    break;
+                }
+            }
+        }
+        if(needsConversion){
+            auto converted = PathToString<char>(scratchArena, nativeText);
+            CanonicalizeTextInPlace(converted);
+            return AStringView(converted) == expected;
+        }
+    }
+    if(nativeText.size() != expected.size())
+        return false;
+    for(usize index = 0u; index < nativeText.size(); ++index){
+        if(Canonicalize(nativeText[index]) != static_cast<tchar>(expected[index]))
+            return false;
+    }
+    return true;
+}
+
+
 Expected<ACompactString> ExtractAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
     ACompactString virtualRoot;
 
@@ -28,8 +61,9 @@ Expected<ACompactString> ExtractAssetVirtualRoot(const AStringView virtualPath, 
     if(componentIt == virtualPathPath.end())
         return MakeUnexpected(Failure{});
 
-    const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
-    if(!virtualRoot.assign(AStringView(componentText)) || virtualRoot.empty())
+    AString<Alloc::ScratchArena> convertedComponentText(scratchArena);
+    const AStringView componentText = NativeTextView(componentIt.nativeComponent(), convertedComponentText);
+    if(!virtualRoot.assign(componentText) || virtualRoot.empty())
         return MakeUnexpected(Failure{});
     return virtualRoot;
 }
@@ -60,8 +94,9 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
 
     ACompactString requestedVirtualRoot;
     {
-        const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
-        if(!requestedVirtualRoot.assign(AStringView(componentText)) || requestedVirtualRoot.empty())
+        AString<Alloc::ScratchArena> convertedComponentText(scratchArena);
+        const AStringView componentText = AssetPathsDetail::NativeTextView(componentIt.nativeComponent(), convertedComponentText);
+        if(!requestedVirtualRoot.assign(componentText) || requestedVirtualRoot.empty())
             return MakeUnexpected(Failure{});
     }
     ++componentIt;
@@ -72,15 +107,34 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
             continue;
 
         Path resolvedPath(arena, assetRoot.path);
+        const auto appendComponent = [&](const AStringView componentText){
+            if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AStringView::npos){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
+                return false;
+            }
+            resolvedPath /= componentText;
+            return true;
+        };
         for(auto subIt = componentIt; subIt != virtualPathPath.end(); ++subIt){
+#if !defined(FOUNDATION_UNICODE)
+            const AStringView nativeComponent = subIt.nativeComponent();
+            b8 alreadyCanonical = true;
+            for(const char ch : nativeComponent){
+                if(Canonicalize(ch) != ch){
+                    alreadyCanonical = false;
+                    break;
+                }
+            }
+            if(alreadyCanonical){
+                if(!appendComponent(nativeComponent))
+                    return MakeUnexpected(Failure{});
+                continue;
+            }
+#endif
             AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, subIt.nativeComponent());
             CanonicalizeTextInPlace(componentText);
-            if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena>::npos){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
+            if(!appendComponent(AStringView(componentText)))
                 return MakeUnexpected(Failure{});
-            }
-
-            resolvedPath /= componentText;
         }
         resolvedPath = resolvedPath.lexicallyNormal();
         const auto fileExists = FileExists(resolvedPath);
@@ -130,13 +184,10 @@ Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePat
             continue;
 
         const ::Path<Alloc::ScratchArena>& candidatePath = dirEntry.path();
-        auto candidateExtension = PathToString(scratchArena, candidatePath.extensionView());
-        CanonicalizeTextInPlace(candidateExtension);
-        if(candidateExtension == s_NwbExtension)
+        static_assert(s_NwbExtension == ".nwb");
+        if(EqualsAsciiIgnoreCase(candidatePath.extensionView(), FOUNDATION_TEXT(".nwb")))
             continue;
-        auto candidateStem = PathToString(scratchArena, candidatePath.stemView());
-        CanonicalizeTextInPlace(candidateStem);
-        if(candidateStem != nwbStem)
+        if(!AssetPathsDetail::CanonicalNativeTextEquals(candidatePath.stemView(), AStringView(nwbStem), scratchArena))
             continue;
 
         matchedSourcePath = &candidatePath;

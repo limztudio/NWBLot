@@ -207,8 +207,13 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     Alloc::ScratchArena scratchArena(CrashArenaScope::s_PlatformInstallationScratch);
     const ::Path<Alloc::ScratchArena> spoolDirectory = config.spoolDirectory.empty() ? DefaultCrashSpoolDirectory(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.spoolDirectory);
     const ::Path<Alloc::ScratchArena> handlerExecutablePath = config.handlerExecutablePath.empty() ? DefaultCrashHandlerExecutablePath(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.handlerExecutablePath);
+#if defined(FOUNDATION_UNICODE)
     const AString<Alloc::ScratchArena> spoolDirectoryText = PathToString<char>(scratchArena, spoolDirectory);
     const AString<Alloc::ScratchArena> handlerExecutablePathText = PathToString<char>(scratchArena, handlerExecutablePath);
+#else
+    const AStringView spoolDirectoryText = spoolDirectory.native();
+    const AStringView handlerExecutablePathText = handlerExecutablePath.native();
+#endif
     if(!FitsFixedText(spoolDirectoryText, CrashDetail::s_MaxPathText) || !FitsFixedText(handlerExecutablePathText, CrashDetail::s_MaxPathText))
         return false;
 

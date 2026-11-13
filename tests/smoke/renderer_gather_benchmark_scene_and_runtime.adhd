@@ -120,10 +120,16 @@ class RendererGatherBenchmarkScene{
             if(opaque)
                 material = s_GatherBenchmarkOpaqueMaterial;
             if(workload == s_GatherBenchmarkUniqueWorkload){
-                const String meshPath = StringFormat("project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
-                const String materialPath = StringFormat("project/smoke/gather_benchmark/materials/glass_{:02}", index);
-                const Expected<SmokeMeshRef, NameTextErrorEnum> meshReference = SmokeMeshRefFromText(StringView(meshPath));
-                const Expected<SmokeMaterialRef, NameTextErrorEnum> materialReference = SmokeMaterialRefFromText(StringView(materialPath));
+                CompactString meshPath = CompactString("project/smoke/gather_benchmark/meshes/mesh_");
+                CompactString materialPath = CompactString("project/smoke/gather_benchmark/materials/glass_");
+                if(index < 10u){
+                    if(!meshPath.append("0") || !materialPath.append("0"))
+                        return false;
+                }
+                AppendUnsignedU64Text(meshPath, cast<u64>(index));
+                AppendUnsignedU64Text(materialPath, cast<u64>(index));
+                const Expected<SmokeMeshRef, NameTextErrorEnum> meshReference = SmokeMeshRefFromText(meshPath.view());
+                const Expected<SmokeMaterialRef, NameTextErrorEnum> materialReference = SmokeMaterialRefFromText(materialPath.view());
                 if(!meshReference.has_value() || !materialReference.has_value())
                     return false;
                 mesh = meshReference.value();

@@ -59,7 +59,7 @@ b8 ValidateRendererOpticalVolumeGroupUnpadded(in StringView prefix, in Path nwbF
     if(unpadded)
         return true;
 
-    error("{} '{}': field '{}' must not be empty or padded", prefix, PathToString(nwbFilePath), fieldName);
+    error("{} '{}': field '{}' must not be empty or padded", prefix, nwbFilePath, fieldName);
     return false;
 }
 
@@ -67,7 +67,7 @@ b8 ValidateRendererOpticalVolumeGroupParsedName(in StringView prefix, in Path nw
     if(validName)
         return true;
 
-    error("{} '{}': field '{}' contains an embedded null", prefix, PathToString(nwbFilePath), fieldName);
+    error("{} '{}': field '{}' contains an embedded null", prefix, nwbFilePath, fieldName);
     return false;
 }
 

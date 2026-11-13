@@ -178,12 +178,11 @@ class GpuPassTimingProbe{
                 line.sampleAvgMs
             );
         }
-        const String timingPathValue = timingPath.value();
         b8 openFailed = false;
         b8 closeFailed = false;
-        native(in timingPathValue, in reportBlock, mut openFailed, mut closeFailed){
+        native(in timingPath, in reportBlock, mut openFailed, mut closeFailed){
             // Append formatted interval timings to the optional file sink for A/B scripts.
-            OutputFileStream timingFile(timingPathValue.c_str(), s_FileOpenAppend);
+            OutputFileStream timingFile(timingPath.value().c_str(), s_FileOpenAppend);
             if(!timingFile.is_open()){
                 openFailed = true;
             }

@@ -202,12 +202,11 @@ void VerifyBuildInputSelection_ExactInputsPreserveDiscoveredOrderAndDuplicateRec
     self.addInput(s_BuildInputAssetsANwb);
     ASSERT_TRUE(self.select());
     ASSERT_EQ(self.fileCount(), 3u);
-    const AssetString file0 = self.filenameAt(0u);
-    const AssetString file1 = self.filenameAt(1u);
-    const AssetString file2 = self.filenameAt(2u);
-    EXPECT_EQ(ViewArenaString(file0), "z.nwb");
-    EXPECT_EQ(ViewArenaString(file1), s_BuildInputANwb);
-    EXPECT_EQ(ViewArenaString(file2), s_BuildInputANwb);
+    native(in self){
+        EXPECT_EQ(self.filenameAt(0u), TStringView(FOUNDATION_TEXT("z.nwb")));
+        EXPECT_EQ(self.filenameAt(1u), TStringView(FOUNDATION_TEXT("a.nwb")));
+        EXPECT_EQ(self.filenameAt(2u), TStringView(FOUNDATION_TEXT("a.nwb")));
+    }
 }
 
 void VerifyBuildInputSelection_DirectoryInputsRespectBoundariesAndAllowEmptyRoots(mut BuildInputSelection self){
@@ -219,10 +218,10 @@ void VerifyBuildInputSelection_DirectoryInputsRespectBoundariesAndAllowEmptyRoot
     self.addInput("assets/empty");
     ASSERT_TRUE(self.select());
     ASSERT_EQ(self.fileCount(), 2u);
-    const AssetString file0 = self.filenameAt(0u);
-    const AssetString file1 = self.filenameAt(1u);
-    EXPECT_EQ(ViewArenaString(file0), s_BuildInputANwb);
-    EXPECT_EQ(ViewArenaString(file1), "c.nwb");
+    native(in self){
+        EXPECT_EQ(self.filenameAt(0u), TStringView(FOUNDATION_TEXT("a.nwb")));
+        EXPECT_EQ(self.filenameAt(1u), TStringView(FOUNDATION_TEXT("c.nwb")));
+    }
 }
 
 void VerifyBuildInputSelection_RejectedInputsLeaveDiscoveredFilesIntact(mut BuildInputSelection self){
@@ -252,8 +251,9 @@ void VerifyBuildInputSelection_DirectoryCaseFollowsHostFilesystemContract(mut Bu
     }
     else{
         ASSERT_EQ(self.fileCount(), 1u);
-        const AssetString file0 = self.filenameAt(0u);
-        EXPECT_EQ(ViewArenaString(file0), s_BuildInputANwb);
+        native(in self){
+            EXPECT_EQ(self.filenameAt(0u), TStringView(FOUNDATION_TEXT("a.nwb")));
+        }
     }
 }
 
@@ -549,9 +549,8 @@ void VerifyAssetsGraphics_CsgMixedCaseModuleIncludeRetainsCookedPathAndRuntimeId
     ASSERT_TRUE(registered.has_value());
     const Expected<GlobalArenaString> selectedIncludeResult = FindRegistryShaderModuleInclude(registry, entries[0u].shaderModule, testArena);
     ASSERT_TRUE(selectedIncludeResult.has_value());
-    const GlobalArenaString selectedInclude = selectedIncludeResult.value();
-    EXPECT_EQ(ViewArenaString(selectedInclude), ViewArenaString(entries[0u].moduleInclude));
-    EXPECT_TRUE(UsesTestArenaAllocator(selectedInclude, testArena));
+    EXPECT_EQ(ViewArenaString(selectedIncludeResult.value()), ViewArenaString(entries[0u].moduleInclude));
+    EXPECT_TRUE(UsesTestArenaAllocator(selectedIncludeResult.value(), testArena));
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
@@ -569,8 +568,8 @@ void VerifyAssetsGraphics_CsgRegistryOwnsExactModuleTextAfterSourceRetirementAnd
     }
     const Expected<GlobalArenaString> selectedResult = FindRegistryShaderModuleInclude(registry, moduleName, registryArena);
     ASSERT_TRUE(selectedResult.has_value());
-    const GlobalArenaString selected = selectedResult.value();
-    EXPECT_EQ(ViewArenaString(selected), originalInclude);
+    const StringView selected = ViewArenaString(selectedResult.value());
+    EXPECT_EQ(selected, originalInclude);
     for(u32 index = 0u; index < 32u; ++index){
         const Expected<Name> extraNameResult = DeriveIndexedTestName(Name(s_AssetCaseProjectCsgExactTextExtra), index);
         ASSERT_TRUE(extraNameResult.has_value());
@@ -588,7 +587,7 @@ void VerifyAssetsGraphics_CsgRegistryOwnsExactModuleTextAfterSourceRetirementAnd
     const Expected<GlobalArenaString> currentResult = FindRegistryShaderModuleInclude(registry, moduleName, registryArena);
     ASSERT_TRUE(currentResult.has_value());
     EXPECT_EQ(ViewArenaString(currentResult.value()), replacementInclude);
-    EXPECT_EQ(ViewArenaString(selected), originalInclude);
+    EXPECT_EQ(selected, originalInclude);
     EXPECT_EQ(ViewArenaString(stored.desc.shaderModuleInclude), originalInclude);
 }
 

@@ -11,23 +11,58 @@
 
 void VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText(){
     LoggerTestArena testArena = LoggerTestArena();
-    ComposerScratchHolder scratchHolder = ComposerScratchHolder();
     CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
     summary.triggerMessage = "fault";
     String details = "package=one\n[tombstone_callstack]\nframe-one\n[metadata]\nkey=value\n";
 
-    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, scratchHolder.scratch, details);
+    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, details);
     EXPECT_EQ(StringView(report), "fault\n\ncallstack:\nframe-one\n\ndetails:\npackage=one\n[metadata]\nkey=value\n");
 }
 
 void VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombstone(){
     LoggerTestArena testArena = LoggerTestArena();
-    ComposerScratchHolder scratchHolder = ComposerScratchHolder();
     CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
     String details = "[callstack]\n\n[tombstone_callstack]\nfallback\n";
 
-    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, scratchHolder.scratch, details);
+    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, details);
     EXPECT_EQ(StringView(report), "callstack:\n<unavailable>\n\ndetails:\n[tombstone_callstack]\nfallback\n");
+}
+
+void VerifyCrashReportComposerTests_TrimsAcrossRemovedSection(){
+    LoggerTestArena testArena = LoggerTestArena();
+    CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
+    String before = " \n[callstack]\nframe\n[metadata]\n value \n";
+    const String first = CrashReportComposer::BuildOrderedCrashReport(summary, before);
+    EXPECT_EQ(StringView(first), "callstack:\nframe\n\ndetails:\n[metadata]\n value\n");
+
+    String after = " left \n[callstack]\nframe\n";
+    const String second = CrashReportComposer::BuildOrderedCrashReport(summary, after);
+    EXPECT_EQ(StringView(second), "callstack:\nframe\n\ndetails:\nleft\n");
+
+    String whitespace = " \t\n";
+    const String third = CrashReportComposer::BuildOrderedCrashReport(summary, whitespace);
+    EXPECT_EQ(StringView(third), "callstack:\n<unavailable>\n\ndetails:\n");
+}
+
+void VerifyCrashManifestTests_FindsExactKeysAtBoundaries(){
+    native{
+        using ::NWB::Log::FindGeneratedCrashJsonValueCursor;
+        const auto emptyKey = FindGeneratedCrashJsonValueCursor("\"\": ", "");
+        ASSERT_TRUE(emptyKey.has_value());
+        EXPECT_EQ(*emptyKey, 4u);
+        const AStringView collision = "\"ab\": 1, \"a\": ";
+        const auto exact = FindGeneratedCrashJsonValueCursor(collision, "a");
+        ASSERT_TRUE(exact.has_value());
+        EXPECT_EQ(*exact, collision.size());
+        EXPECT_FALSE(FindGeneratedCrashJsonValueCursor("\"a\":", "a").has_value());
+        using ::NWB::Log::HasGeneratedCrashJsonStringValue;
+        EXPECT_TRUE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\n\"", "a"));
+        EXPECT_FALSE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\x\"", "a"));
+        EXPECT_FALSE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\", "a"));
+        const auto quoted = FindGeneratedCrashJsonValueCursor("\"a\"b\": 0", "a\"b");
+        ASSERT_TRUE(quoted.has_value());
+        EXPECT_EQ(*quoted, 7u);
+    }
 }
 
 
@@ -739,6 +774,8 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut Logger
 
 NWB_ADHD_GTEST(CrashReportComposerTests, TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText, VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText)
 NWB_ADHD_GTEST(CrashReportComposerTests, EmptyPrimaryStackTakesPrecedenceOverTombstone, VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombstone)
+NWB_ADHD_GTEST(CrashReportComposerTests, TrimsAcrossRemovedSection, VerifyCrashReportComposerTests_TrimsAcrossRemovedSection)
+NWB_ADHD_GTEST(CrashManifestTests, FindsExactKeysAtBoundaries, VerifyCrashManifestTests_FindsExactKeysAtBoundaries)
 
 NWB_ADHD_GTEST(LogClientShutdown, MessageProgressesWhileTelemetryBacklogRemains, VerifyLogClientShutdown_MessageProgressesWhileTelemetryBacklogRemains)
 NWB_ADHD_GTEST(LogClientShutdown, TelemetryProgressesWhileMessageBacklogRemains, VerifyLogClientShutdown_TelemetryProgressesWhileMessageBacklogRemains)

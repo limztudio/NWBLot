@@ -7,7 +7,6 @@ const Name s_LoggerCrashTestNameTestsIntegrationLoggerServerProducerContractsScr
 const Name s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch = "tests/integration/logger_server/archive_scratch";
 const Name s_LoggerCrashTestNameTestsIntegrationLoggerServerAssertChildInstall = "tests/integration/logger_server/assert_child_install";
 const Name s_LoggerCrashTestNameTestsIntegrationLoggerServerRecoverableErrorInstall = "tests/integration/logger_server/recoverable_error_install";
-const Name s_LoggerCrashReportComposerScratch = "tests/crash_report_composer/scratch";
 const StringView s_LoggerProtocolSecretToken = "secret-token";
 const StringView s_LoggerProtocolHeaderBytes = "Bearer secret-token trailing";
 

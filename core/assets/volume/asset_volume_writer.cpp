@@ -51,7 +51,11 @@ static_assert(AssetsVolumeCookDetail::s_AssetVolumeName.size() <= ACompactString
     stageToken += s_StagedVolumePathTokenSeparator;
     stageToken += configurationSafeName;
     stageToken += s_StagedVolumePathTokenSeparator;
+#if defined(FOUNDATION_UNICODE)
     AppendHexU64(ComputeFnv64Text(PathToString(scratchArena, outputDirectory)), stageToken);
+#else
+    AppendHexU64(ComputeFnv64Text(outputDirectory.native()), stageToken);
+#endif
     return Core::Filesystem::StagedDirectoryPaths::Create(scratchArena, outputDirectory, stageToken);
 }
 

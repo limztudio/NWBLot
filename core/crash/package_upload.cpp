@@ -106,8 +106,12 @@ Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchA
         if(protectedPendingPackageName.empty())
             return true;
 
+#if defined(FOUNDATION_UNICODE)
         const CrashStringT<Alloc::ScratchArena> packageName = PathToString<char>(scratchArena, path.filenameView());
         return AStringView(packageName.data(), packageName.size()) != protectedPendingPackageName;
+#else
+        return path.filenameView() != protectedPendingPackageName;
+#endif
     };
 
     Optional<ErrorCode> firstError;

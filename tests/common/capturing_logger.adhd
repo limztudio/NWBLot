@@ -175,15 +175,23 @@ b8 CapturingLogger::sawErrorContaining(const TStringView text)const noexcept{
 }
 
 b8 CapturingLogger::sawMessageContainingUtf8(const AStringView text)const noexcept{
+#if defined(FOUNDATION_UNICODE)
     Core::Alloc::ScratchArena scratchArena(s_CapturingLoggerArena);
     const auto converted = ConvertString(scratchArena, text);
     return sawMessageContaining(TStringView(converted));
+#else
+    return sawMessageContaining(TStringView(text.data(), text.size()));
+#endif
 }
 
 b8 CapturingLogger::sawErrorContainingUtf8(const AStringView text)const noexcept{
+#if defined(FOUNDATION_UNICODE)
     Core::Alloc::ScratchArena scratchArena(s_CapturingLoggerArena);
     const auto converted = ConvertString(scratchArena, text);
     return sawErrorContaining(TStringView(converted));
+#else
+    return sawErrorContaining(TStringView(text.data(), text.size()));
+#endif
 }
 
 void CapturingLogger::record(const TStringView str, const Core::Common::LogType::Enum type){

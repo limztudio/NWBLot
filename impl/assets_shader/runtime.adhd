@@ -29,7 +29,8 @@ b8 LoadShaderBinaryForStage(
     in IShader shaderAsset,
     in Span<u8> binary,
     in ShaderType shaderType,
-    mut String outEntryPoint,
+    mut usize outEntryPointOffset,
+    mut usize outEntryPointLength,
     mut Vector<u8> outBytecode
 ){
     if(!shaderAsset.checkVirtualPath("IShader::loadBinaryForStage"))
@@ -49,64 +50,71 @@ b8 LoadShaderBinaryForStage(
     if(!ValidateResolvedSpirvEntryPoint(lookupResult.has_value(), payload.value().entryPoint, shaderAsset.assetType()))
         return false;
 
-    CommitDecodedShaderAssetPayload(payload.value().entryPoint, payload.value().bytecode, outEntryPoint, outBytecode);
+    usize entryPointOffset = 0u;
+    native(in payload, in lookupResult, mut entryPointOffset){
+        entryPointOffset = static_cast<usize>(lookupResult.value().data() - reinterpret_cast<const char*>(payload.value().bytecode.data()));
+    }
+    const usize entryPointLength = lookupResult.value().size();
+    AssignTriviallyCopyableVector(outBytecode, payload.value().bytecode);
+    outEntryPointOffset = entryPointOffset;
+    outEntryPointLength = entryPointLength;
     return true;
 }
 
 b8 VertexShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 HullShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 DomainShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 GeometryShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 PixelShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 ComputeShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 AmplificationShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 MeshShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 RayGenerationShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 AnyHitShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 ClosestHitShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 MissShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 IntersectionShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 b8 CallableShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_entryPoint, this.m_bytecode);
+    return LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
 }
 
 

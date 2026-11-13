@@ -42,7 +42,7 @@ b8 VerifyPreparedFontBytesSha256(in Span<u8> bytes, in Sha256Digest expectedDige
 }
 
 void LogPreparedFontReadFailure(in Path path, in StringView reason){
-    error("Prepared font '{}': {}", PathToString(path), reason);
+    error("Prepared font '{}': {}", path, reason);
 }
 
 b8 Font::loadBinary(in Span<u8> binary){

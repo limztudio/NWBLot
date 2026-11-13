@@ -100,7 +100,11 @@ b8 ShouldAppendPendingSwBvhBuildInputs(in b8 runtimeMesh, in b8 swBvhBuildPendin
 }
 
 Expected<Name> FormatCsgQueueReadCompleteIdentity(in u32 physicalQueueIndex){
-    return ParseName(StringFormat("render.raytrace.csg_queue_{}.read_complete", physicalQueueIndex));
+    CompactString text = CompactString("render.raytrace.csg_queue_");
+    AppendUnsignedU64Text(text, cast<u64>(physicalQueueIndex));
+    if(!text.append(".read_complete"))
+        return MakeUnexpected(Failure());
+    return ParseName(text.view());
 }
 
 
@@ -145,7 +149,7 @@ inline constexpr Array<Core::BufferHandle MeshSnapshot::*, s_ShadowTraceMemberCo
     const Core::GpuTaskCostHint::Enum cost,
     const Core::GpuUploadBlobId source,
     const Core::GpuGraphResourceId destination,
-    const tchar* const warningMessage,
+    const TStringView warningMessage,
     Core::GpuTaskId& inOutDependencyTask,
     Core::GpuTaskId& outTask
 ){

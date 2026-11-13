@@ -186,12 +186,14 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     paths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetBuildRoot& assetRoot : options.assetRoots){
         if(!IsValidAssetBuildVirtualRoot(assetRoot.virtualRoot.view(), Assets::s_EngineVirtualRoot, Assets::s_ProjectVirtualRoot)){
-            LogUnsupportedAssetBuildVirtualRoot(PathToString<char>(arena, assetRoot.path), assetRoot.virtualRoot.view());
+            Assets::AssetString convertedPath(arena);
+            LogUnsupportedAssetBuildVirtualRoot(Assets::AssetPathsDetail::NativeTextView(assetRoot.path.native(), convertedPath), assetRoot.virtualRoot.view());
             return MakeUnexpected(Failure{});
         }
         auto resolvedAssetRoot = ResolveAbsolutePath(arena, paths.repoRoot, assetRoot.path);
         if(!resolvedAssetRoot){
-            LogAssetRootResolveFailure(PathToString<char>(arena, assetRoot.path), resolvedAssetRoot.error().message());
+            Assets::AssetString convertedPath(arena);
+            LogAssetRootResolveFailure(Assets::AssetPathsDetail::NativeTextView(assetRoot.path.native(), convertedPath), resolvedAssetRoot.error().message());
             return MakeUnexpected(Failure{});
         }
         paths.assetRoots.emplace_back(Move(*resolvedAssetRoot), assetRoot.virtualRoot);
@@ -199,7 +201,8 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
 
     auto outputDirectory = ResolveAbsolutePath(arena, paths.repoRoot, options.outputDirectory);
     if(!outputDirectory){
-        LogOutputDirectoryResolveFailure(PathToString<char>(arena, options.outputDirectory), outputDirectory.error().message());
+        Assets::AssetString convertedPath(arena);
+        LogOutputDirectoryResolveFailure(Assets::AssetPathsDetail::NativeTextView(options.outputDirectory.native(), convertedPath), outputDirectory.error().message());
         return MakeUnexpected(Failure{});
     }
     paths.outputDirectory = Move(*outputDirectory);
@@ -207,7 +210,8 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     paths.cacheDirectory = paths.repoRoot / s_AssetCacheDirectory;
     const auto created = EnsureDirectories(paths.cacheDirectory);
     if(!created){
-        LogCacheDirectoryCreateFailure(PathToString<char>(arena, paths.cacheDirectory), created.error().message());
+        Assets::AssetString convertedPath(arena);
+        LogCacheDirectoryCreateFailure(Assets::AssetPathsDetail::NativeTextView(paths.cacheDirectory.native(), convertedPath), created.error().message());
         return MakeUnexpected(Failure{});
     }
     return paths;
@@ -256,8 +260,9 @@ b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchAr
     if(!Assets::ParseAssetMetadata(nwbFiles, resolvedPaths.repoRoot, resolvedPaths.cacheDirectory, arena, options.services.cpuScheduler, scratchArena, parsedMetadata))
         return false;
 
-    const AString<::ArenaBase> effectiveConfiguration = ResolveEffectiveBuildConfiguration(scratchArena, options.configuration.view());
-    Assets::CookString configurationSafeName(AStringView(effectiveConfiguration), arena);
+    Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
+    if(configurationSafeName.empty())
+        configurationSafeName = s_DefaultPipelineConfig;
 
     u64 plannedFileCount = 0u;
     Assets::AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(arena);

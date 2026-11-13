@@ -57,11 +57,15 @@ u64 ComputeObjectGeometryInstanceByteOffset(in u32 instanceIndex, in usize insta
 }
 
 Expected<Name> FormatObjectGeometryDecodeIdentity(in usize entryIndex){
-    return ParseName(StringFormat("render.object_geometry.decode_{}", entryIndex));
+    CompactString text = CompactString("render.object_geometry.decode_");
+    AppendUnsignedU64Text(text, cast<u64>(entryIndex));
+    return ParseName(text.view());
 }
 
 Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
-    return ParseName(StringFormat("render.object_geometry.ready_{}", phaseIndex));
+    CompactString text = CompactString("render.object_geometry.ready_");
+    AppendUnsignedU64Text(text, cast<u64>(phaseIndex));
+    return ParseName(text.view());
 }
 
 

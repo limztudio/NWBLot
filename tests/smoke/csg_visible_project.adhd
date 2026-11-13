@@ -3,6 +3,7 @@
 
 
 #include "csg_visible_scene.adhd"
+#include "csg_ray_runtime_probe.adhd"
 #include "presentation_types.adhd"
 #include "framebuffer_capture.adhd"
 #include "gpu_pass_timing_probe.adhd"
@@ -126,6 +127,10 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
+        native(mut context = this.m_context){
+            if(!RunCsgRayRuntimeProbe(context))
+                return false;
+        }
         this.m_temporalEnabled = ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
         const b8 overlapping = this.m_temporalEnabled && ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;

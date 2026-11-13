@@ -233,7 +233,7 @@ b8 RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         const Name& name,
         const u32 layerCount,
         const b8 renderTarget,
-        const tchar* const errorMessage,
+        const TStringView errorMessage,
         Core::TextureHandle& outTexture
     ){
         Core::TextureDesc desc;

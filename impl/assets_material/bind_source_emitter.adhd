@@ -84,18 +84,6 @@ class MaterialBindSourceEmitter{
         }
     }
 
-    private String buildFieldLookupFunctionName(in MaterialLayoutFieldType fieldType, in MaterialBlockClass blockClass)const{
-        String functionName = "";
-        const StringView storageName = this.fieldLookupStorageName(blockClass);
-        const StringView typeName = this.fieldLookupTypeName(fieldType);
-        if(storageName.empty() || typeName.empty())
-            return functionName;
-        functionName += s_MaterialBindLoadFunctionPrefix;
-        functionName += storageName;
-        functionName += typeName;
-        return functionName;
-    }
-
     private void appendResourceFieldAccessor(
         in MaterialLayoutFieldType fieldType,
         in StringView byteOffsetSymbol,
@@ -136,21 +124,18 @@ class MaterialBindSourceEmitter{
 
         const NameHash interfaceHash = interfaceName.hash();
         for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
-            String laneSuffix = "";
-            laneSuffix.append(s_MaterialBindInterfaceHashSymbolPrefix);
-            AppendDecimalU32(lane, laneSuffix);
-            const String symbol = BuildMaterialBindGeneratedSymbol(laneSuffix);
+            const StringView symbol = MaterialBindInterfaceHashSymbol(lane);
             if(!AppendMaterialBindU64Constant(includePath, symbol, interfaceHash.qwords[cast<usize>(lane)], inOutSymbols, inOutSource))
                 return false;
         }
 
-        const String layoutHashSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindLayoutHashSymbol);
-        const String blockCountSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindBlockCountSymbol);
-        const String fieldCountSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindFieldCountSymbol);
-        const String storageConstantSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindStorageConstantSymbol);
-        const String storageMutableSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindStorageMutableSymbol);
-        const String constantByteSizeSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindConstantByteSizeSymbol);
-        const String mutableByteSizeSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindMutableByteSizeSymbol);
+        const StringView layoutHashSymbol = s_MaterialBindGeneratedLayoutHashSymbol;
+        const StringView blockCountSymbol = s_MaterialBindGeneratedBlockCountSymbol;
+        const StringView fieldCountSymbol = s_MaterialBindGeneratedFieldCountSymbol;
+        const StringView storageConstantSymbol = s_MaterialBindGeneratedStorageConstantSymbol;
+        const StringView storageMutableSymbol = s_MaterialBindGeneratedStorageMutableSymbol;
+        const StringView constantByteSizeSymbol = s_MaterialBindGeneratedConstantByteSizeSymbol;
+        const StringView mutableByteSizeSymbol = s_MaterialBindGeneratedMutableByteSizeSymbol;
 
         if(!AppendMaterialBindU64Constant(includePath, layoutHashSymbol, layoutHash, inOutSymbols, inOutSource))
             return false;
@@ -248,13 +233,14 @@ class MaterialBindSourceEmitter{
             return true;
         }
 
-        const String loadFunctionName = this.buildFieldLookupFunctionName(layoutField.fieldType, blockClass);
-        assert(!loadFunctionName.empty());
+        const StringView storageName = this.fieldLookupStorageName(blockClass);
+        const StringView typeName = this.fieldLookupTypeName(layoutField.fieldType);
+        assert(!storageName.empty() && !typeName.empty());
         const String keySymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindKeySymbolSuffix);
         const String defaultSymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindDefaultSymbolSuffix);
         if(!this.appendMaterialBindFieldConstants(includePath, instanceName, fieldName, fieldType, defaultAttribute, keySymbol, defaultSymbol, inOutSymbols, inOutSource))
             return false;
-        AppendMaterialBindFieldAccessor(fieldType, byteOffsetSymbol, functionName, loadFunctionName, inOutSource);
+        AppendMaterialBindFieldAccessor(fieldType, byteOffsetSymbol, functionName, storageName, typeName, inOutSource);
         inOutSource.push_back('\n');
         return true;
     }

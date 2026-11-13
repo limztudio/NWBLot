@@ -149,11 +149,11 @@ Expected<u32> ValidateTextureUnsignedField(
     in u32 maximum
 ){
     if(!present){
-        error("{} '{}': field '{}' is required", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), fieldName);
+        error("{} '{}': field '{}' is required", s_TextureDiagnosticPrefix, nwbFilePath, fieldName);
         return MakeUnexpected(Failure());
     }
     if(!isInteger || !IsValidTextureUnsignedFieldValue(rawValue, minimum, maximum)){
-        error("{} '{}': field '{}' must be an integer in [{}, {}]", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), fieldName, minimum, maximum);
+        error("{} '{}': field '{}' must be an integer in [{}, {}]", s_TextureDiagnosticPrefix, nwbFilePath, fieldName, minimum, maximum);
         return MakeUnexpected(Failure());
     }
     return cast<u32>(rawValue);
@@ -163,7 +163,7 @@ b8 ValidateTextureResolutionListCount(in Path nwbFilePath, in b8 isList, in usiz
     if(isList && listSize == expectedCount)
         return true;
 
-    error("{} '{}': resolution must contain exactly {} positive integer dimensions", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), expectedCount);
+    error("{} '{}': resolution must contain exactly {} positive integer dimensions", s_TextureDiagnosticPrefix, nwbFilePath, expectedCount);
     return false;
 }
 
@@ -171,7 +171,7 @@ Expected<u32> ValidateTextureResolutionComponent(in Path nwbFilePath, in usize c
     if(isInteger && IsPositiveTextureResolutionDimension(rawValue))
         return cast<u32>(rawValue);
 
-    error("{} '{}': resolution component {} must be a positive u32 integer", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), component);
+    error("{} '{}': resolution component {} must be a positive u32 integer", s_TextureDiagnosticPrefix, nwbFilePath, component);
     return MakeUnexpected(Failure());
 }
 
@@ -179,7 +179,7 @@ b8 ValidateCubeTextureSquareResolution(in Path nwbFilePath, in b8 isCubeDimensio
     if(IsValidCubeTextureResolution(isCubeDimension, width, height))
         return true;
 
-    error("{} '{}': cube resolution must be square", s_TextureDiagnosticPrefix, PathToString(nwbFilePath));
+    error("{} '{}': cube resolution must be square", s_TextureDiagnosticPrefix, nwbFilePath);
     return false;
 }
 
@@ -187,7 +187,7 @@ b8 ValidateTextureCompleteMipChain(in Path nwbFilePath, in b8 hasCompleteMipCoun
     if(hasCompleteMipCount)
         return true;
 
-    error("{} '{}': resolution cannot describe a complete mip chain", s_TextureDiagnosticPrefix, PathToString(nwbFilePath));
+    error("{} '{}': resolution cannot describe a complete mip chain", s_TextureDiagnosticPrefix, nwbFilePath);
     return false;
 }
 

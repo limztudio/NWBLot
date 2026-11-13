@@ -10,6 +10,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/assets/paths.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GrowMeshletFromFrontier(
     in StringView metaKind,
     in StringView filePathText,
@@ -123,7 +142,11 @@ b8 BuildCookMeshlets(
     mut Vector<MeshletLocalVertexRef> outMeshletLocalVertexRefs,
     mut Vector<u8> outMeshletPrimitiveIndices
 ){
-    const String filePathText = PathToString(nwbFilePath);
+    String convertedFilePath = "";
+    StringView filePathText = "";
+    native(in nwbFilePath, mut convertedFilePath, mut filePathText){
+        filePathText = Core::Assets::AssetPathsDetail::NativeTextView(nwbFilePath.native(), convertedFilePath);
+    }
     Vector<MeshletTriangleData> triangles;
     Vector<MeshletTriangleCalculation> triangleCalculations;
     Vector<u32> positionTriangleOffsets;

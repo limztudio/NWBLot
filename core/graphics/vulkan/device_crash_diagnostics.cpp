@@ -93,7 +93,7 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
                     if(!resolved.first())
                         continue;
 
-                    report.details.append(StringFormat(m_reportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)));
+                    StringAppendFormat(report.details, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars));
                 }
 
                 remainingEntries -= checkpointCount;
@@ -134,30 +134,30 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
                 if(newestRecord.serial != 0u){
                     const auto resolved = m_tracker.resolveMarker(newestRecord.markerHash);
                     if(resolved.first()){
-                        report.details.append(StringFormat(
-                            m_reportArena,
+                        StringAppendFormat(
+                            report.details,
                             "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): {}\n",
                             queue.index,
                             queue.deviceGeneration,
                             newestRecord.serial,
                             newestRecord.marker,
                             TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)
-                        ));
+                        );
                     }
                     else{
-                        report.details.append(StringFormat(
-                            m_reportArena,
+                        StringAppendFormat(
+                            report.details,
                             "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): "
                             "<unresolved marker>\n",
                             queue.index,
                             queue.deviceGeneration,
                             newestRecord.serial,
                             newestRecord.marker
-                        ));
+                        );
                     }
                 }
                 else{
-                    report.details.append(StringFormat(m_reportArena, "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n", queue.index, queue.deviceGeneration));
+                    StringAppendFormat(report.details, "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n", queue.index, queue.deviceGeneration);
                 }
                 --remainingEntries;
             }
@@ -190,52 +190,52 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
                 const VkResult faultResult = device.m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(device.m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
                     const AStringView faultDescription(faultInfo.description, FOUNDATION_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
-                    report.details.append(StringFormat(m_reportArena, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars)));
+                    StringAppendFormat(report.details, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars));
                     if(vendorBinaryByteSize != 0u){
                         if(!vendorBinary.empty()){
-                            report.details.append(StringFormat(m_reportArena, "device fault vendor binary (RGD): {} bytes\n", vendorBinary.size()));
+                            StringAppendFormat(report.details, "device fault vendor binary (RGD): {} bytes\n", vendorBinary.size());
                             report.binaryDumpKind = GpuCrashDumpKind::RadeonGpuDetective;
                             report.binaryDump = vendorBinary.data();
                             report.binaryDumpSize = vendorBinary.size();
                         }
                         else if(!vendorBinaryIsRgd){
-                            report.details.append(StringFormat(
-                                m_reportArena,
+                            StringAppendFormat(
+                                report.details,
                                 "device fault vendor binary not packaged: {} bytes from vendor 0x{:x}\n",
                                 static_cast<u64>(vendorBinaryByteSize),
                                 static_cast<u32>(device.m_context.physicalDeviceProperties.vendorID)
-                            ));
+                            );
                         }
                         else{
-                            report.details.append(StringFormat(m_reportArena, "device fault vendor binary skipped: {} bytes exceeds {} byte cap\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u64>(s_MaxDeviceFaultVendorBinaryBytes)));
+                            StringAppendFormat(report.details, "device fault vendor binary skipped: {} bytes exceeds {} byte cap\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u64>(s_MaxDeviceFaultVendorBinaryBytes));
                         }
                     }
 
                     for(u32 i = 0u; i < faultCounts.addressInfoCount; ++i){
                         const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
-                        report.details.append(StringFormat(m_reportArena, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
+                        StringAppendFormat(report.details, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
                             , static_cast<u64>(addressInfo.reportedAddress)
                             , static_cast<u32>(addressInfo.addressType)
                             , static_cast<u64>(addressInfo.addressPrecision)
-                        ));
+                        );
                     }
 
                     for(u32 i = 0u; i < faultCounts.vendorInfoCount; ++i){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
                         const AStringView vendorDescription(vendorInfo.description, FOUNDATION_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
-                        report.details.append(StringFormat(m_reportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
+                        StringAppendFormat(report.details, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
                             , TruncateView(vendorDescription, s_MaxGpuCrashMarkerChars)
                             , static_cast<u64>(vendorInfo.vendorFaultCode)
                             , static_cast<u64>(vendorInfo.vendorFaultData)
-                        ));
+                        );
                     }
                 }
             }
         }
 
         if(report.details.empty())
-            report.details.append(StringFormat(
-                m_reportArena,
+            StringAppendFormat(
+                report.details,
                 "minimal GPU crash report: no vendor GPU dump or device-fault details were available\n"
                 "capture context: {}\n"
                 "device: {} (vendor 0x{:x}, device 0x{:x}, driver 0x{:x})\n"
@@ -249,7 +249,7 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
                 , __hidden_device_diagnostics::BoolToAvailabilityText(hasBufferMarker)
                 , __hidden_device_diagnostics::BoolToAvailabilityText(hasDeviceFault)
                 , __hidden_device_diagnostics::BoolToAvailabilityText(Aftermath::IsActive())
-            ));
+            );
     }
 
     NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: GPU crash detected during {}:\n{}"), ConvertString(report.context), ConvertString(report.details));

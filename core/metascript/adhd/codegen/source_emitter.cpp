@@ -353,6 +353,8 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
         }
         if(!hasLocalLoadBinaryDef)
             return false;
+        if(unit.sourceNativeBlocks.empty())
+            return true;
         MString codecName(m_arena);
         codecName.append(classDecl.name.data(), classDecl.name.size());
         codecName.append(classDecl.name.ends_with("Asset") ? "Codec" : "AssetCodec");

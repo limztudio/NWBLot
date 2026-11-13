@@ -990,9 +990,9 @@ void VerifyEcsGraphics_MeshSkinningPayloadValidatesSkeletonAndPalette(){
     }
 
     EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContainingUtf8("joint palette count"));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContainingUtf8("joint palette entry 0 is not a finite invertible affine matrix"));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContainingUtf8("failed dual-quaternion payload build"));
+    EXPECT_TRUE(SawCapturedError(runtimeValidationLogger, "joint palette count"));
+    EXPECT_TRUE(SawCapturedError(runtimeValidationLogger, "joint palette entry 0 is not a finite invertible affine matrix"));
+    EXPECT_TRUE(SawCapturedError(runtimeValidationLogger, "failed dual-quaternion payload build"));
 }
 
 void VerifyEcsGraphics_FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots(){
@@ -1789,7 +1789,7 @@ void VerifyMaterialInstanceOverrideApplierTests_RejectsTruncatedStorageWithoutWr
     for(in u8 value : bytes)
         EXPECT_EQ(value, 0xABu);
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContainingUtf8("exceeds mutable storage"));
+    EXPECT_TRUE(SawCapturedError(logger, "exceeds mutable storage"));
 
     ASSERT_TRUE(ApplyMaterialOverrides(applier, 1u, Name(s_EcsGraphicsOverrideMaterial), interfaceName, block, field, instance, bytes, bytes.size()));
     EXPECT_EQ(bytes[3u], 0xABu);

@@ -1417,33 +1417,30 @@ void VerifyGpuTelemetry_SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherA
 
 void VerifyGpuTelemetry_RejectedInputDoesNotCreateHistoryOrAssignmentState(){
     GraphicsArena arena = GraphicsArena(s_GpuCaseTimingHistoryRejections);
-    {
-        GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(arena);
-        GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(arena);
-        const u64 baselineUsedBytes = arena.memoryStats().usedBytes;
-        const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(0u);
-        EXPECT_FALSE(store.recordSample(GpuTaskTimingKey(), input.queue, 1.0, 1u));
-        EXPECT_FALSE(store.recordSample(input.key, GpuPhysicalQueueId(), 1.0, 1u));
-        Array<f64, 3> invalidDurations = Array<f64, 3>();
-        invalidDurations[0u] = 0.0;
-        invalidDurations[1u] = -1.0;
-        invalidDurations[2u] = f64.max;
-        for(in f64 duration : invalidDurations){
-            EXPECT_FALSE(store.recordSample(input.key, input.queue, duration, 1u));
-            EXPECT_FALSE(store.recordNonCommittingSample(input.key, input.queue, duration));
-        }
-        EXPECT_EQ(store.deviceGeneration(), 0u);
-        EXPECT_EQ(store.historyCount(), 0u);
-        EXPECT_FALSE(FindStoreTimingAssignmentValue(store, GpuTaskTimingAssignmentKeyFromHistoryKey(input.key)).has_value());
-        store.snapshot(snapshot);
-        EXPECT_FALSE(snapshot.valid());
-        store.resetForDeviceGeneration(1u);
-        store.snapshot(snapshot);
-        EXPECT_TRUE(snapshot.valid());
-        EXPECT_FALSE(FindSnapshotTimingHistoryValue(snapshot, input.key, input.queue).has_value());
-        EXPECT_EQ(arena.memoryStats().usedBytes, baselineUsedBytes);
+    GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(arena);
+    GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(arena);
+    const u64 baselineUsedBytes = arena.memoryStats().usedBytes;
+    const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(0u);
+    EXPECT_FALSE(store.recordSample(GpuTaskTimingKey(), input.queue, 1.0, 1u));
+    EXPECT_FALSE(store.recordSample(input.key, GpuPhysicalQueueId(), 1.0, 1u));
+    Array<f64, 3> invalidDurations = Array<f64, 3>();
+    invalidDurations[0u] = 0.0;
+    invalidDurations[1u] = -1.0;
+    invalidDurations[2u] = f64.max;
+    for(in f64 duration : invalidDurations){
+        EXPECT_FALSE(store.recordSample(input.key, input.queue, duration, 1u));
+        EXPECT_FALSE(store.recordNonCommittingSample(input.key, input.queue, duration));
     }
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(store.deviceGeneration(), 0u);
+    EXPECT_EQ(store.historyCount(), 0u);
+    EXPECT_FALSE(FindStoreTimingAssignmentValue(store, GpuTaskTimingAssignmentKeyFromHistoryKey(input.key)).has_value());
+    store.snapshot(snapshot);
+    EXPECT_FALSE(snapshot.valid());
+    store.resetForDeviceGeneration(1u);
+    store.snapshot(snapshot);
+    EXPECT_TRUE(snapshot.valid());
+    EXPECT_FALSE(FindSnapshotTimingHistoryValue(snapshot, input.key, input.queue).has_value());
+    EXPECT_EQ(arena.memoryStats().usedBytes, baselineUsedBytes);
 }
 
 void VerifyGpuTelemetry_PromotesHistoryAndAssignmentCollectionsIndependentlyAndReusesResetStorage(){

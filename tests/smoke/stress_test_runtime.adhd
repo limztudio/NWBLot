@@ -430,14 +430,15 @@ b8 StressHardwareShadowOpaqueBaseline(){
 Expected<u32> ReadStressCharactersPerClass(){
     const Expected<Optional<String>, ErrorCode> value = ReadEnvironmentVariable("NWB_STRESS_CHARACTERS_PER_CLASS");
     if(!value.has_value()){
-        const String errorText = StringFormat("{}", value.error().message());
-        error("StressTestSmokeProject: failed to read workload environment: {}", errorText);
+        native(in value){
+            const auto errorText = value.error().message();
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(AStringView(errorText.data(), errorText.size())));
+        }
         return MakeUnexpected(Failure());
     }
-    const Optional<String> candidate = value.value();
-    if(!candidate.has_value())
+    if(!value.value().has_value())
         return s_StressDefaultCharactersPerClass;
-    const StringView view = StringView(candidate.value());
+    const StringView view = StringView(value.value().value());
     if(view == "5")
         return s_StressComparisonCharactersPerClass;
     if(view != "10"){

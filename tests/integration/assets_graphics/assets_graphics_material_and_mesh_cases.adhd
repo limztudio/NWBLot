@@ -153,6 +153,16 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
 }
 
 void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
+    native{
+        const Array<AStringView, 8u> expectedSymbols = {
+            "NWB_MATERIAL_BIND_INTERFACE_HASH_0", "NWB_MATERIAL_BIND_INTERFACE_HASH_1",
+            "NWB_MATERIAL_BIND_INTERFACE_HASH_2", "NWB_MATERIAL_BIND_INTERFACE_HASH_3",
+            "NWB_MATERIAL_BIND_INTERFACE_HASH_4", "NWB_MATERIAL_BIND_INTERFACE_HASH_5",
+            "NWB_MATERIAL_BIND_INTERFACE_HASH_6", "NWB_MATERIAL_BIND_INTERFACE_HASH_7",
+        };
+        for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
+            EXPECT_EQ(::NWB::Impl::MaterialBindInterfaceHashSymbol(lane), expectedSymbols[lane]);
+    }
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();

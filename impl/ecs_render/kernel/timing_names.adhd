@@ -172,8 +172,11 @@ Expected<Optional<Name>> ResolveDeferredGraphQueueInternalIdleScope(in b8 queueV
     if(!queueValid)
         return Optional<Name>();
 
-    const String scopeText = StringFormat("render.deferred_graph.queue_{}.internal_idle", queueIndex);
-    const Expected<Name> parsedScope = ParseName(scopeText);
+    CompactString scopeText = CompactString("render.deferred_graph.queue_");
+    AppendUnsignedU64Text(scopeText, cast<u64>(queueIndex));
+    if(!scopeText.append(".internal_idle"))
+        return MakeUnexpected(Failure());
+    const Expected<Name> parsedScope = ParseName(scopeText.view());
     if(!parsedScope.has_value())
         return MakeUnexpected(parsedScope.error());
     return Optional<Name>(parsedScope.value());

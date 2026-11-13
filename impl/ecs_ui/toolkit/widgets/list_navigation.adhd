@@ -143,8 +143,12 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
     key.rowMetrics[4u] = metrics.minimum.x;
     key.rowMetrics[5u] = metrics.minimum.y;
     key.scriptTag = scriptTag;
-    for(usize index = 0u; index < textLanguage.size(); ++index)
+    key.languageLength = cast<u8>(textLanguage.size());
+    for(usize index = 0u; index < textLanguage.size(); ++index){
         key.language[index] = cast<u8>(textLanguage[index]);
+        if(textLanguage[index] == 0u && key.languageLength == textLanguage.size())
+            key.languageLength = cast<u8>(index);
+    }
     return key;
 }
 

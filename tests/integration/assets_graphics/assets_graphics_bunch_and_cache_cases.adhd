@@ -145,7 +145,7 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
         const Expected<Name> secondIdentityResult = ParseName(formattedSecond);
         ASSERT_TRUE(secondIdentityResult.has_value());
         const Name secondIdentity = secondIdentityResult.value();
-        const String virtualRoot(ViewArenaString(rootText));
+        const StringView virtualRoot = ViewArenaString(rootText);
 
         const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
 
@@ -160,20 +160,22 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
         const StringView secondPathView = formattedSecond;
         for(usize iteration = 0u; iteration < 16u; ++iteration){
             {
-                const Expected<ExpandedAssetMetadataVector> expandedResult = ExpandBunchWithScratch(fixture.assetRoot, virtualRootView, filePath, fixture.document, scratch);
+                // Keep scratch allocations in stack order.
+                Expected<ExpandedAssetMetadataVector> expandedResult = ExpandBunchWithScratch(fixture.assetRoot, virtualRootView, filePath, fixture.document, scratch);
                 ASSERT_TRUE(expandedResult.has_value());
-                ASSERT_EQ(expandedResult.value().size(), 2u);
-                EXPECT_EQ(expandedResult.value()[0u].virtualPath, secondIdentity);
-                EXPECT_EQ(expandedResult.value()[1u].virtualPath, firstIdentity);
-                ASSERT_TRUE(HasMetaField(expandedResult.value()[0u].value, "nested"));
-                ASSERT_TRUE(GetMetaField(expandedResult.value()[0u].value, "nested").isList());
-                ASSERT_EQ(GetMetaField(expandedResult.value()[0u].value, "nested").asList().size(), 1u);
-                ASSERT_TRUE(HasMetaField(GetMetaField(expandedResult.value()[0u].value, "nested").asList()[0u], s_FieldTarget));
-                ASSERT_TRUE(GetMetaField(GetMetaField(expandedResult.value()[0u].value, "nested").asList()[0u], s_FieldTarget).isString());
-                EXPECT_EQ(GetMetaField(GetMetaField(expandedResult.value()[0u].value, "nested").asList()[0u], s_FieldTarget).asString(), firstPathView);
-                ASSERT_TRUE(HasMetaField(expandedResult.value()[1u].value, s_FieldTarget));
-                ASSERT_TRUE(GetMetaField(expandedResult.value()[1u].value, s_FieldTarget).isString());
-                EXPECT_EQ(GetMetaField(expandedResult.value()[1u].value, s_FieldTarget).asString(), secondPathView);
+                in ExpandedAssetMetadataVector output = expandedResult.value();
+                ASSERT_EQ(output.size(), 2u);
+                EXPECT_EQ(output[0u].virtualPath, secondIdentity);
+                EXPECT_EQ(output[1u].virtualPath, firstIdentity);
+                ASSERT_TRUE(HasMetaField(output[0u].value, "nested"));
+                ASSERT_TRUE(GetMetaField(output[0u].value, "nested").isList());
+                ASSERT_EQ(GetMetaField(output[0u].value, "nested").asList().size(), 1u);
+                ASSERT_TRUE(HasMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget));
+                ASSERT_TRUE(GetMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget).isString());
+                EXPECT_EQ(GetMetaField(GetMetaField(output[0u].value, "nested").asList()[0u], s_FieldTarget).asString(), firstPathView);
+                ASSERT_TRUE(HasMetaField(output[1u].value, s_FieldTarget));
+                ASSERT_TRUE(GetMetaField(output[1u].value, s_FieldTarget).isString());
+                EXPECT_EQ(GetMetaField(output[1u].value, s_FieldTarget).asString(), secondPathView);
             }
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, retainedMetadata.usedBytes);
             EXPECT_TRUE(sentinel.intact());
@@ -544,8 +546,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         Sha256Digest otherProducer = producer;
         otherProducer.bytes[0u] = otherProducer.bytes[0u] ^ 1u;
 
-        const String normalizedPath = PathToString(mixedCaseNwbPath);
-        DiscoveredNwbFile discovered(testArena.arena, assetRoot, mixedCaseNwbPath, normalizedPath, s_ProjectVirtualRoot);
+        DiscoveredNwbFile discovered = MakeDiscoveredNwbFile(assetRoot, mixedCaseNwbPath, s_ProjectVirtualRoot, testArena.arena, scratchArena);
         NwbFileAssetCacheRecord originalProducer(testArena.arena);
         NwbFileAssetCacheRecord staleProducer(testArena.arena);
         ScratchString relativePath(scratchArena);
@@ -572,8 +573,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         const GraphicsTestPath texturePath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.tex");
         ASSERT_TRUE(WriteTextFile(fontPath, "font-one"));
         ASSERT_TRUE(WriteTextFile(texturePath, "texture-one"));
-        const String bunchPathText = PathToString(bunchPath);
-        DiscoveredNwbFile bunch(testArena.arena, assetRoot, bunchPath, bunchPathText, s_ProjectVirtualRoot);
+        DiscoveredNwbFile bunch = MakeDiscoveredNwbFile(assetRoot, bunchPath, s_ProjectVirtualRoot, testArena.arena, scratchArena);
         ScratchString largeMetadata(scratchArena);
         AppendRepeatedAsciiByte(largeMetadata, 70000u, 32u);
         largeMetadata.append("ASSET_BUNCH asset; font f; texture t;");

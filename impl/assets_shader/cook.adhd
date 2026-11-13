@@ -29,6 +29,7 @@ native{
 #include <core/graphics/rhi/shader.h>
 #include <core/metascript/parser.h>
 
+#include <global/counting_output.h>
 #include <global/not_null.h>
 #include <global/span.h>
 #include <global/text_utils.h>
@@ -155,6 +156,7 @@ private:
 
 public:
     [[nodiscard]] static b8 ValidateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 ValidateMaterialVariantSignature(AStringView materialPath, Name stageName, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
 
     template<typename OnAssignmentFn, typename OnErrorFn>
     [[nodiscard]] static b8 ParseVariantSignatureAssignments(
@@ -422,17 +424,6 @@ b8 ValidateCanonicalDependencyRootAliasKey(in StringView canonicalKey){
     return false;
 }
 
-String FormatCanonicalAliasedDependencyPath(
-    in StringView pathPrefix,
-    in StringView aliasKey,
-    in StringView relativePathText
-){
-    if(relativePathText.empty())
-        return StringFormat("{}{}", pathPrefix, aliasKey);
-    return StringFormat("{}{}/{}", pathPrefix, aliasKey, relativePathText);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -541,21 +532,53 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
             return MakeUnexpected(Failure{});
         }
-        const ScratchString absolutePathText = PathToString(scratchArena, normalizedDependency);
+#if defined(FOUNDATION_UNICODE)
+        CountingByteOutput pathBytes;
+        WriteConvertedText<char>(pathBytes, normalizedDependency.native());
+        const usize pathByteCount = pathBytes.byteCount;
+#else
+        const AStringView absolutePathText = normalizedDependency.native();
+        const usize pathByteCount = absolutePathText.size();
+#endif
         ScratchString canonicalPath(ShaderBinaryPayload::s_ShaderChecksumAbsolutePrefix, scratchArena);
-        canonicalPath.reserve(AddSize(canonicalPath.size(), absolutePathText.size()));
+        canonicalPath.reserve(AddSize(canonicalPath.size(), pathByteCount));
+#if defined(FOUNDATION_UNICODE)
+        auto out = BackInserter(canonicalPath);
+        WriteConvertedText<char>(out, normalizedDependency.native());
+#else
         canonicalPath += absolutePathText;
+#endif
         return canonicalPath;
     }
 
-    const ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexicallyRelative(bestRootAlias->root));
+    const auto relativePath = normalizedDependency.lexicallyRelative(bestRootAlias->root);
+#if defined(FOUNDATION_UNICODE)
+    CountingByteOutput pathBytes;
+    WriteConvertedText<char>(pathBytes, relativePath.native());
+    const usize pathByteCount = pathBytes.byteCount;
+#else
+    const AStringView relativePathText = relativePath.native();
+    const usize pathByteCount = relativePathText.size();
+#endif
 
     const AStringView pathPrefix = allowUnaliasedPath ? ShaderBinaryPayload::s_ShaderChecksumAliasPrefix : AStringView();
-    const auto capacity = TryComputeCanonicalAliasedDependencyPathCapacity(pathPrefix.size(), bestRootAlias->key.size(), relativePathText.size());
+    const auto capacity = TryComputeCanonicalAliasedDependencyPathCapacity(pathPrefix.size(), bestRootAlias->key.size(), pathByteCount);
     if(!capacity)
         return MakeUnexpected(Failure{});
-    const auto formattedPath = FormatCanonicalAliasedDependencyPath(scratchArena, pathPrefix, bestRootAlias->key, relativePathText);
-    return ScratchString(AStringView(formattedPath), scratchArena);
+    ScratchString formattedPath(scratchArena);
+    formattedPath.reserve(*capacity);
+    formattedPath.append(pathPrefix);
+    formattedPath.append(bestRootAlias->key);
+    if(pathByteCount != 0u){
+        formattedPath.push_back('/');
+#if defined(FOUNDATION_UNICODE)
+        auto out = BackInserter(formattedPath);
+        WriteConvertedText<char>(out, relativePath.native());
+#else
+        formattedPath.append(relativePathText);
+#endif
+    }
+    return formattedPath;
 }
 
 
@@ -692,11 +715,15 @@ void ShaderDefinePlanner::mergeInheritedDefines(
     usize defineReserveCount = inOutEntry.defineValues.size();
     b8 canReserveDefineValues = true;
     for(const Path& dep : dependencies){
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_UNICODE)
         Core::Assets::ScratchString depKey = PathToString(scratchArena, dep);
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(depKey);
 #endif
         const auto found = includeMetadata.find(AStringView(depKey));
+#else
+        const auto found = includeMetadata.find(AStringView(dep.native()));
+#endif
         if(found == includeMetadata.end())
             continue;
 

@@ -156,9 +156,19 @@ static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(const Mat
     return includePath;
 }
 
-static void AssignGeneratedMaterialShaderSource(const ScratchPath& sourcePath, ScratchArena& scratchArena, CookString& inOutSource){
-    const ScratchString sourceText = PathToGenericString(scratchArena, sourcePath);
-    inOutSource += AStringView(sourceText);
+static void AssignGeneratedMaterialShaderSource(const ScratchPath& sourcePath, CookString& inOutSource){
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    const usize sourceOffset = inOutSource.size();
+#endif
+#if defined(FOUNDATION_UNICODE)
+    auto out = BackInserter(inOutSource);
+    WriteConvertedText<char>(out, sourcePath.native());
+#else
+    inOutSource.append(sourcePath.native());
+#endif
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    Replace(inOutSource.begin() + sourceOffset, inOutSource.end(), '\\', '/');
+#endif
 }
 
 static b8 AppendShadowSurfaceBindAliases(
@@ -222,7 +232,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         GeneratedMaterialPixelShader generated(arena);
         generated.name += spec.generatedNamePrefix;
         generated.name += entry.virtualPath;
-        AssignGeneratedMaterialShaderSource(outputPath, scratchArena, generated.source);
+        AssignGeneratedMaterialShaderSource(outputPath, generated.source);
 
         const auto pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName || !*pixelShaderName){
@@ -499,7 +509,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
         GeneratedMaterialPixelShader generated(arena);
         generated.name += s_MaterialGeneratedPixelShaderNamePrefix;
         generated.name += entry.virtualPath;
-        AssignGeneratedMaterialShaderSource(outputPath, scratchArena, generated.source);
+        AssignGeneratedMaterialShaderSource(outputPath, generated.source);
 
         const auto pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName || !*pixelShaderName){
@@ -615,7 +625,7 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
 
     CookArena& cookArena = cacheDirectory.arena();
     const ShadowSurfaceSourceBuilder sourceBuilder;
-    AString<::ArenaBase> source = sourceBuilder.buildDispatchHeader(cookArena);
+    AString<::ArenaBase> source(s_ShadowSurfaceDispatchHeader, cookArena);
 
     // Context comes from the includer's shadow_surface.slangi; emitting here would force an unresolvable virtual include.
 

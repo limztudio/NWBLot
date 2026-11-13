@@ -247,8 +247,8 @@ public:
     [[nodiscard]] b8 awaitServiceCompletion(const usize, const ClipboardRequestToken, ClipboardCompletion&)noexcept{ return false; }
     [[nodiscard]] b8 writeText(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return false; }
     [[nodiscard]] b8 canReadPrimarySelection()const noexcept{ return false; }
-    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestRead(const usize, const ClipboardChannel::Enum)noexcept{ return MakeUnexpected(ClipboardAdmission::WrongThread); }
-    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWrite(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return MakeUnexpected(ClipboardAdmission::WrongThread); }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestRead(const usize, const ClipboardChannel::Enum)noexcept{ return MakeUnexpected(ClipboardAdmission::QueueFull); }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWrite(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return MakeUnexpected(ClipboardAdmission::QueueFull); }
     [[nodiscard]] b8 pumpService(const usize)noexcept{ return false; }
     [[nodiscard]] b8 cancelService(const usize, const ClipboardRequestToken)noexcept{ return false; }
     [[nodiscard]] ClipboardPollResult::Enum pollService(const usize, const ClipboardRequestToken, ClipboardCompletion&)noexcept{ return ClipboardPollResult::InvalidRequest; }

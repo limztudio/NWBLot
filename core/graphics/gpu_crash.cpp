@@ -3,8 +3,9 @@
 
 
 #include "rhi/gpu_crash_diagnostics.h"
-#include <global/atomic_identity.h>
 
+#include <global/atomic_identity.h>
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -30,14 +31,18 @@ GpuCrashMarkerTracker::GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsA
 {}
 
 usize GpuCrashMarkerTracker::pushEvent(const AStringView name){
-    GraphicsString nextEventStack(m_eventStack, m_eventStack.get_allocator());
-    if(!nextEventStack.empty())
-        nextEventStack.append("/");
-    nextEventStack.append(name);
+    const usize previousSize = m_eventStack.size();
+    ScopeExit rollback([this, previousSize]()noexcept{
+        while(m_eventStack.size() > previousSize)
+            m_eventStack.pop_back();
+    });
+    if(!m_eventStack.empty())
+        m_eventStack.append("/");
+    m_eventStack.append(name);
 
-    const usize markerHash = m_tracker.internEvent(nextEventStack);
-    m_eventStackOffsets.push_back(m_eventStack.size());
-    m_eventStack = Move(nextEventStack);
+    const usize markerHash = m_tracker.internEvent(m_eventStack);
+    m_eventStackOffsets.push_back(previousSize);
+    rollback.release();
     return markerHash;
 }
 

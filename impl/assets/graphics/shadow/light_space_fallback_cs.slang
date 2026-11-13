@@ -5,6 +5,8 @@
 #ifndef NWB_LIGHT_SPACE_CSG_ENABLED
 #define NWB_LIGHT_SPACE_CSG_ENABLED 0
 #endif
+#define NWB_CSG_SHADOW_HW_TRACE 0
+#define NWB_CSG_RAY_HARDWARE NWB_CSG_SHADOW_HW_TRACE
 
 #include "light_space_resources.slangi"
 #include "shadow_heap_resources.slangi"

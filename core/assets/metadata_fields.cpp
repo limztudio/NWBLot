@@ -18,9 +18,7 @@ namespace Detail{
 
 b8 CheckPairedSourceExtensionNative(const TStringView nwbFilePathText, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
     const ::Path<Alloc::ScratchArena> sourcePathValue(scratchArena, sourcePath);
-    AString<Alloc::ScratchArena> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) == expectedExtension)
+    if(AssetPathsDetail::CanonicalNativeTextEquals(sourcePathValue.extensionView(), expectedExtension, scratchArena))
         return true;
 
     NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': paired source '{}' must use '{}' extension"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePathText), ConvertString(sourcePath), ConvertString(expectedExtension));

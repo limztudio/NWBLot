@@ -45,11 +45,11 @@ b8 WriteShadowSurfaceGeneratedIncludeFile(in Path outputPath, in StringView sour
     const Path parentPath = outputPath.parentPath();
     const auto ensureResult = EnsureDirectories(parentPath);
     if(!ensureResult.has_value()){
-        error("Shadow surface dispatch: failed to create generated include parent '{}' (error {})", PathToString(parentPath), ensureResult.error().value());
+        error("Shadow surface dispatch: failed to create generated include parent '{}' (error {})", parentPath, ensureResult.error().value());
         return false;
     }
     if(!WriteTextFile(outputPath, source)){
-        error("Shadow surface dispatch: failed to write generated include '{}'", PathToString(outputPath));
+        error("Shadow surface dispatch: failed to write generated include '{}'", outputPath);
         return false;
     }
     return true;

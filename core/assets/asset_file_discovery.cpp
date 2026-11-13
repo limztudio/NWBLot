@@ -51,9 +51,7 @@ Expected<DiscoveredNwbFileVector> AssetFileDiscovery::Discover(const Span<const 
                 continue;
 
             const ::Path<ScratchArena>& filePath = dirEntry.path();
-            ScratchString extension = PathToString(scratchArena, filePath.extensionView());
-            CanonicalizeTextInPlace(extension);
-            if(extension != expectedExtension)
+            if(!AssetPathsDetail::CanonicalNativeTextEquals(filePath.extensionView(), expectedExtension, scratchArena))
                 continue;
 
             ScratchString normalizedPath = PathToString(scratchArena, filePath.lexicallyNormal());

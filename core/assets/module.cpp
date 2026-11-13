@@ -32,6 +32,19 @@ template<typename ContextT>
     NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: virtual path is empty"), Forward<ContextT>(failureContext));
     return false;
 }
+
+
+#if defined(FOUNDATION_UNICODE)
+b8 IAsset::checkVirtualPath(const AStringView failureContext)const{
+    if(virtualPath())
+        return true;
+
+    constexpr Name s_DiagnosticScratch("core/assets/virtual_path_diagnostic");
+    Alloc::ScratchArena scratchArena(s_DiagnosticScratch);
+    const auto converted = ConvertString(scratchArena, failureContext);
+    return checkVirtualPath(TStringView(converted));
+}
+#endif
 #else
 template<typename ContextT>
 [[nodiscard]] b8 CheckSerializeAssetTypeImpl(const IAsset& asset, const Name expectedAssetType, ContextT&& failureContext){
@@ -46,6 +59,17 @@ template<typename ContextT>
     );
     return false;
 }
+#if defined(FOUNDATION_UNICODE)
+b8 IAssetCodec::checkSerializeAssetType(const IAsset& asset, const AStringView failureContext)const{
+    if(asset.assetType() == assetType())
+        return true;
+
+    constexpr Name s_DiagnosticScratch("core/assets/serialize_type_diagnostic");
+    Alloc::ScratchArena scratchArena(s_DiagnosticScratch);
+    const auto converted = ConvertString(scratchArena, failureContext);
+    return checkSerializeAssetType(asset, TStringView(converted));
+}
+#endif
 #endif
 
 

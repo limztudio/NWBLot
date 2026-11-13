@@ -16,8 +16,14 @@ type UiSearchComboSource = UiFilteredListSource<UiFilteredListState<UiSearchComb
 
 
 b8 DeclareSelectedKeyLabel(mut Builder ui, in u64 selectedKey){
-    const String text = StringFormat(s_SelectedTextFormat, selectedKey);
-    return ui.label(s_SelectedKey, StringView(text));
+    b8 result = false;
+    native(mut ui, in selectedKey, mut result){
+        Array<char, 32u> text = {};
+        CopyFixedBuffer(text, s_SelectedTextPrefix);
+        AppendUnsignedToFixedBuffer(text, selectedKey);
+        result = ui.label(s_SelectedKey, FixedBufferView(text));
+    }
+    return result;
 }
 
 b8 DeclareCommittedNumericLabel(mut Builder ui, in i64 integerValue, in f64 floatValue){
@@ -26,8 +32,16 @@ b8 DeclareCommittedNumericLabel(mut Builder ui, in i64 integerValue, in f64 floa
 }
 
 b8 DeclarePopupToolsStatusLabel(mut Builder ui, in u64 commandKey, in u32 anchorClicks){
-    const String text = StringFormat("Command: {} / Clicks: {}", commandKey, anchorClicks);
-    return ui.label(s_SelectedKey, StringView(text));
+    b8 result = false;
+    native(mut ui, in commandKey, in anchorClicks, mut result){
+        Array<char, 64u> text = {};
+        CopyFixedBuffer(text, "Command: ");
+        AppendUnsignedToFixedBuffer(text, commandKey);
+        AppendFixedBuffer(text, " / Clicks: ");
+        AppendUnsignedToFixedBuffer(text, anchorClicks);
+        result = ui.label(s_SelectedKey, FixedBufferView(text));
+    }
+    return result;
 }
 
 b8 DeclareProgressPercentLabel(mut Builder ui, in f64 percent){
@@ -36,13 +50,36 @@ b8 DeclareProgressPercentLabel(mut Builder ui, in f64 percent){
 }
 
 b8 DeclareGallerySectionLabel(mut Builder ui, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
+    b8 usedBuffer = false;
+    b8 result = false;
+    native(mut ui, in sectionNumber, in sectionCount, in sectionName, mut usedBuffer, mut result){
+        if(sectionName.size() <= 80u && sectionName.find('\0') == AStringView::npos){
+            Array<char, 128u> text = {};
+            CopyFixedBuffer(text, "UI samples ");
+            AppendUnsignedToFixedBuffer(text, sectionNumber);
+            AppendFixedBuffer(text, "/");
+            AppendUnsignedToFixedBuffer(text, sectionCount);
+            AppendFixedBuffer(text, ": ");
+            AppendFixedBuffer(text, sectionName);
+            result = ui.label("section", FixedBufferView(text));
+            usedBuffer = true;
+        }
+    }
+    if(usedBuffer)
+        return result;
     const String text = StringFormat("UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
     return ui.label("section", StringView(text));
 }
 
 b8 DeclareCounterLabel(mut Builder ui, in u32 count){
-    const String text = StringFormat("Count: {}", count);
-    return ui.label("count", StringView(text));
+    b8 result = false;
+    native(mut ui, in count, mut result){
+        Array<char, 32u> text = {};
+        CopyFixedBuffer(text, "Count: ");
+        AppendUnsignedToFixedBuffer(text, count);
+        result = ui.label("count", FixedBufferView(text));
+    }
+    return result;
 }
 
 usize WriteVirtualListRowLabelBytes(in u64 rowKey, mut Array<u8, s_VirtualListLabelCapacity> outLabel){

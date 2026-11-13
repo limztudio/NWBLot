@@ -14,7 +14,7 @@ StringView SelectOptionListSeparator(in b8 isLast){
     return s_OptionSeparatorText;
 }
 
-String OutputAssetTypeOptionsText(){
+void AppendOutputAssetTypeOptionsText(mut String out){
     Array<OutputAssetType, 5u> values;
     values[0u] = OutputAssetType::Bunch;
     values[1u] = OutputAssetType::Mesh;
@@ -22,22 +22,25 @@ String OutputAssetTypeOptionsText(){
     values[3u] = OutputAssetType::Skeleton;
     values[4u] = OutputAssetType::Skin;
 
-    String out;
-    out.reserve(64u);
     for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u)
             out.append(SelectOptionListSeparator(i + 1u == values.size()));
         out.append(OutputAssetTypeText(values[i]));
     }
+}
+
+String OutputAssetTypeOptionsText(){
+    String out;
+    out.reserve(64u);
+    AppendOutputAssetTypeOptionsText(out);
     return out;
 }
 
 String OutputAssetTypeErrorText(){
-    const String options = OutputAssetTypeOptionsText();
     String out;
-    out.reserve(32u + options.size());
+    out.reserve(96u);
     out.append("Asset type must be ");
-    out.append(options);
+    AppendOutputAssetTypeOptionsText(out);
     return out;
 }
 
@@ -56,28 +59,24 @@ Expected<OutputAssetType> ParseAssetTypeText(in StringView value){
     return MakeUnexpected(Failure());
 }
 
-String NormalModeOptionsText(){
+void AppendNormalModeOptionsText(mut String out){
     Array<NormalMode, 3u> values;
     values[0u] = NormalMode::Imported;
     values[1u] = NormalMode::Smooth;
     values[2u] = NormalMode::Regenerate;
 
-    String out;
-    out.reserve(48u);
     for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u)
             out.append(SelectOptionListSeparator(i + 1u == values.size()));
         out.append(NormalModeText(values[i]));
     }
-    return out;
 }
 
 String NormalModeErrorText(){
-    const String options = NormalModeOptionsText();
     String out;
-    out.reserve(32u + options.size());
+    out.reserve(80u);
     out.append("normal mode must be ");
-    out.append(options);
+    AppendNormalModeOptionsText(out);
     return out;
 }
 
@@ -92,15 +91,6 @@ Expected<NormalMode> ParseNormalModeText(in StringView value){
             return values[i];
     }
     return MakeUnexpected(Failure());
-}
-
-String NormalizeFbxOptionText(in StringView text){
-    const StringView trimmed = TrimView(text);
-    String out;
-    out.reserve(trimmed.size());
-    for(usize i = 0u; i < trimmed.size(); ++i)
-        out.push_back(cast<u8>(ToAsciiLower(trimmed[i])));
-    return out;
 }
 
 Expected<StringView> NextFbxColorComponentToken(in StringView text, mut usize inOutCursor){

@@ -8,6 +8,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/filesystem/utility.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsTexConvAlphaOptionPresent(in i32 optionCount){
     return optionCount > s_AlphaOptionPresentCount;
 }
@@ -15,20 +34,21 @@ b8 IsTexConvAlphaOptionPresent(in i32 optionCount){
 b8 ValidateTexConvInputImagePath(in Path path, in b8 alphaMask){
     const Expected<b8, ErrorCode> isRegularFile = IsRegularFile(path);
     if(!isRegularFile.has_value() && !IsMissingPathError(isRegularFile.error())){
-        const String pathText = PathToString(path);
-        const String errorText = StringFormat("{}", isRegularFile.error().message());
-        if(alphaMask)
-            error("tex_conv: failed to inspect alpha image '{}': {}", pathText, errorText);
-        else
-            error("tex_conv: failed to inspect input '{}': {}", pathText, errorText);
+        native(in path, in isRegularFile, in alphaMask){
+            const auto errorText = isRegularFile.error().message();
+            const AStringView errorView(errorText.data(), errorText.size());
+            if(alphaMask)
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), ConvertString(errorView));
+            else
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), ConvertString(errorView));
+        }
         return false;
     }
     if(!isRegularFile.has_value() || !isRegularFile.value()){
-        const String pathText = PathToString(path);
         if(alphaMask)
-            error("tex_conv: alpha image was not found or is not a regular file: '{}'", pathText);
+            error("tex_conv: alpha image was not found or is not a regular file: '{}'", path);
         else
-            error("tex_conv: input image was not found or is not a regular file: '{}'", pathText);
+            error("tex_conv: input image was not found or is not a regular file: '{}'", path);
         return false;
     }
     if(!IsSupportedTexConvInputPath(path)){
@@ -52,8 +72,14 @@ String FormatTexConvCompletionReport(
     in u32 mipCount,
     in usize byteCount
 ){
-    const String metadataPathText = PathToGenericString(metadataPath);
-    const String dataPathText = PathToGenericString(dataPath);
+    String metadataPathStorage = "";
+    String dataPathStorage = "";
+    StringView metadataPathText = "";
+    StringView dataPathText = "";
+    native(in metadataPath, in dataPath, mut metadataPathStorage, mut dataPathStorage, mut metadataPathText, mut dataPathText){
+        metadataPathText = GenericNativeTextView(metadataPath.native(), metadataPathStorage);
+        dataPathText = GenericNativeTextView(dataPath.native(), dataPathStorage);
+    }
     String report;
     report.reserve(AddSaturating<usize>(AddSaturating<usize>(metadataPathText.size(), dataPathText.size()), s_CompletionReportReserveSlack));
     StringAppendFormat(report, "Wrote {}\nWrote {}\n  {}x{}", metadataPathText, dataPathText, width, height);

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font_atlas/glyph_validation.adhd>
 #include <utilities/font_builder/asset_writer.adhd>
 #include <utilities/font_builder/atlas_pack.adhd>
 #include <utilities/font_builder/bake_types.adhd>
@@ -342,7 +343,11 @@ public:
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
             return false;
         }
+#if defined(FOUNDATION_UNICODE)
         const auto stem = PathToGenericString(scratch, options.output.stemView());
+#else
+        const AStringView stem = options.output.stemView();
+#endif
         const auto fontReference = Core::Assets::AssetRef<Impl::Font>::FromText(AStringView(stem));
         if(!fontReference){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: output asset stem contains an embedded null"));

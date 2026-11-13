@@ -66,6 +66,7 @@ native{
 
 #include <global/arena_memory.h>
 #include <global/atomic.h>
+#include <global/counting_output.h>
 #include <global/filesystem/executable_paths.h>
 #include <global/sha1.h>
 #include <global/sync.h>
@@ -446,7 +447,7 @@ FOUNDATION_INLINE void VerifyOwnedBunchOutput(const Core::Assets::ExpandedAssetM
     AString<Core::Alloc::ScratchArena> source(fixture.scratchArena);
     source.reserve(unusedDeclarations * 32u + metadata.size());
     for(usize index = 0u; index < unusedDeclarations; ++index)
-        source += StringFormat(fixture.scratchArena, "metadata unused_{};\n", index);
+        StringAppendFormat(source, "metadata unused_{};\n", index);
     source.append(metadata.data(), metadata.size());
     return fixture.document.parse(AStringView(source));
 }
@@ -637,7 +638,7 @@ public:
         , m_entryPoint(arena)
         , m_bytecode(arena)
     {}
-    virtual const AString<::ArenaBase>& entryPoint()const noexcept override{ return m_entryPoint; }
+    virtual AStringView entryPoint()const noexcept override{ return AStringView(m_entryPoint); }
     virtual const Vector<u8, ::ArenaBase>& bytecode()const noexcept override{ return m_bytecode; }
     virtual b8 loadBinary(Span<const u8>)noexcept override{ return false; }
 
@@ -714,6 +715,22 @@ FOUNDATION_INLINE void PrepareAssetPathWorkload(const usize directoryCount, cons
 [[nodiscard]] FOUNDATION_INLINE b8 BuildAndVerifyDerivedAssetPath(const PathFixture& fixture, Core::Alloc::ScratchArena& scratchArena){
     const auto output = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena, scratchArena);
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
+}
+
+[[nodiscard]] FOUNDATION_INLINE DiscoveredNwbFile MakeDiscoveredNwbFileImpl(const GraphicsTestPath& root, const GraphicsTestPath& path, const AStringView virtualRoot, AssetArena& ownerArena, ScratchArena& scratchArena){
+    ScratchString converted(scratchArena);
+    const AStringView text = Core::Assets::AssetPathsDetail::NativeTextView(path.native(), converted);
+    return DiscoveredNwbFile(ownerArena, root, path, text, virtualRoot);
+}
+
+[[nodiscard]] FOUNDATION_INLINE usize GraphicsPathUtf8ByteCountImpl(const GraphicsTestPath& path)noexcept(IsSame_V<tchar, char>){
+#if defined(FOUNDATION_UNICODE)
+    CountingByteOutput counter;
+    WriteConvertedText<char>(counter, path.native());
+    return counter.byteCount;
+#else
+    return path.native().size();
+#endif
 }
 
 template<typename StringT>
@@ -819,8 +836,8 @@ public:
         return m_files.size();
     }
 
-    [[nodiscard]] Core::Assets::AssetString filenameAt(const usize index){
-        return PathToString(m_testArena.arena, m_files[index].filePath.filenameView());
+    [[nodiscard]] TStringView filenameAt(const usize index)const noexcept{
+        return m_files[index].filePath.filenameView();
     }
 
     [[nodiscard]] Core::Assets::CookVector<Core::Assets::CookString> makeCookSources(){
@@ -1146,8 +1163,15 @@ FOUNDATION_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDi
     const auto entries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
     ASSERT_TRUE(entries);
     for(const auto& entry : *entries){
-        const auto filename = PathToString(cacheDirectory.arena(), entry.path().filenameView());
-        EXPECT_FALSE(AStringView(filename).starts_with(".nwb_shader_")) << filename;
+        const auto filename = entry.path().filenameView();
+        if(filename.starts_with(FOUNDATION_TEXT(".nwb_shader_"))){
+#if defined(FOUNDATION_UNICODE)
+            const auto filenameText = PathToString(cacheDirectory.arena(), filename);
+            EXPECT_FALSE(true) << filenameText;
+#else
+            EXPECT_FALSE(true) << AStringView(filename.data(), filename.size());
+#endif
+        }
     }
 }
 
@@ -1168,8 +1192,7 @@ FOUNDATION_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDi
         if(!*isRegularFile)
             continue;
 
-        const auto extension = PathToString(testArena.arena, entry.path().extensionView());
-        if(extension != ".spv")
+        if(entry.path().extensionView() != FOUNDATION_TEXT(".spv"))
             continue;
 
         path = entry.path();
@@ -1309,6 +1332,10 @@ template<typename ArenaT>
     return reinterpret_cast<usize>(text.data());
 }
 
+[[nodiscard]] FOUNDATION_INLINE usize StringDataAddress(const AStringView text)noexcept{
+    return reinterpret_cast<usize>(text.data());
+}
+
 FOUNDATION_INLINE void AppendZeroU32ToAssetBytesImpl(AssetBytes& bytes){
     AppendPOD(bytes, 0u);
 }
@@ -1326,12 +1353,12 @@ FOUNDATION_INLINE void SetGatherOutputPathImpl(TestArena& testArena, const Path&
 }
 
 [[nodiscard]] FOUNDATION_INLINE Core::Assets::AssetString FormatShaderIncludeRootsMetadataImpl(TestArena& testArena, const AStringView head, const AStringView entryLine, const Path& includeRoot){
-    const auto includeRootText = PathToString(testArena.arena, includeRoot);
-    return StringFormat(testArena.arena, "{}{}asset.include_roots = [\"{}\"];\n", head, entryLine, includeRootText);
+    return StringFormat(testArena.arena, "{}{}asset.include_roots = [\"{}\"];\n", head, entryLine, PathToString(includeRoot));
 }
 
 [[nodiscard]] FOUNDATION_INLINE Core::Assets::AssetString FormatBomAbsoluteIncludeSourceImpl(TestArena& testArena, const Path& includeFilePath){
-    const auto absoluteInclude = PathToGenericString(testArena.arena, includeFilePath);
+    AssetString absoluteIncludeStorage(testArena.arena);
+    const AStringView absoluteInclude = GenericNativeTextView(includeFilePath.native(), absoluteIncludeStorage);
     const usize includeLineEnd = s_BomCompilerProbeSource.find('\n');
     return StringFormat(testArena.arena, "\xEF\xBB\xBF#include \"{}\"{}", absoluteInclude, s_BomCompilerProbeSource.substr(includeLineEnd));
 }
@@ -1942,9 +1969,13 @@ public:
         seen.reserve(2u);
         const usize bucket = Hasher<AStringView>{}(AStringView(first)) % seen.bucket_count();
         for(u32 i = 0u; i < 1024u; ++i){
-            ScratchString candidate = StringFormat(scratchArena, "b/second_{}.asset.nwb", i);
-            if(Hasher<AStringView>{}(AStringView(candidate)) % seen.bucket_count() == bucket){
-                second = Move(candidate);
+            Array<char, 64u> candidate;
+            CopyFixedBuffer(candidate, "b/second_");
+            AppendUnsignedToFixedBuffer(candidate, i);
+            AppendFixedBuffer(candidate, ".asset.nwb");
+            const AStringView candidateView = FixedBufferView(candidate);
+            if(Hasher<AStringView>{}(candidateView) % seen.bucket_count() == bucket){
+                second.assign(candidateView.data(), candidateView.size());
                 break;
             }
         }
@@ -1984,10 +2015,17 @@ public:
 }
 
 FOUNDATION_INLINE void AppendMetadataRegistrySamplerFileImpl(AssetArena& fixtureArena, const NWB::Path& root, const AStringView samplerFields, const usize identity, DiscoveredNwbFileVector& outFiles){
-    const AssetString filename = StringFormat(fixtureArena, "sampler_{:03}.nwb", identity);
-    const NWB::Path path = root / filename;
+    Array<char, 40u> filename = {};
+    CopyFixedBuffer(filename, "sampler_");
+    if(identity < 100u)
+        AppendFixedBuffer(filename, "0");
+    if(identity < 10u)
+        AppendFixedBuffer(filename, "0");
+    AppendUnsignedToFixedBuffer(filename, identity);
+    AppendFixedBuffer(filename, ".nwb");
+    const NWB::Path path = root / FixedBufferView(filename);
     AssetString source(samplerFields, fixtureArena);
-    source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
+    StringAppendFormat(source, "asset.mip_bias = {};\r\n", identity);
     ASSERT_TRUE(::WriteTextFile(path, source));
     const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
     outFiles.emplace_back(fixtureArena, root, path, normalized, s_ProjectVirtualRoot);
@@ -2009,8 +2047,14 @@ FOUNDATION_INLINE void VerifyMetadataRegistryStoragePassImpl(AssetArena& fixture
     EXPECT_EQ(metadata.entryRegistry.entryCount(), samplerCount);
     for(usize index = 0u; index < samplerCount; ++index){
         const usize identity = (index * 37u) % samplerCount;
-        const AssetString virtualPath = StringFormat(fixtureArena, "project/sampler_{:03}", identity);
-        const auto expectedPath = ToName(virtualPath);
+        Array<char, 40u> virtualPath = {};
+        CopyFixedBuffer(virtualPath, "project/sampler_");
+        if(identity < 100u)
+            AppendFixedBuffer(virtualPath, "0");
+        if(identity < 10u)
+            AppendFixedBuffer(virtualPath, "0");
+        AppendUnsignedToFixedBuffer(virtualPath, identity);
+        const auto expectedPath = ToName(FixedBufferView(virtualPath));
         ASSERT_TRUE(expectedPath);
         ASSERT_TRUE(*expectedPath);
         EXPECT_EQ(samplers[index].virtualPath, **expectedPath);
@@ -2165,15 +2209,23 @@ public:
 
 FOUNDATION_INLINE void AddIndexedModelObjects(const usize skeletonCount, const usize meshCount, ModelMetadata& metadata){
     for(usize index = 0u; index < skeletonCount; ++index){
-        const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", index);
-        const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_metadata/skeleton_{}", index);
-        metadata.addSkeleton(objectName, assetName);
+        Array<char, 32u> objectName;
+        Array<char, 64u> assetName;
+        CopyFixedBuffer(objectName, "rig_");
+        CopyFixedBuffer(assetName, "tests/model_cook_metadata/skeleton_");
+        AppendUnsignedToFixedBuffer(objectName, index);
+        AppendUnsignedToFixedBuffer(assetName, index);
+        metadata.addSkeleton(FixedBufferView(objectName), FixedBufferView(assetName));
     }
     for(usize index = 0u; index < meshCount; ++index){
         const usize skeletonIndex = (index * 73u) % skeletonCount;
-        const auto meshName = StringFormat(metadata.metadataArena, "mesh_{}", index);
-        const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", skeletonIndex);
-        metadata.addSkinnedMesh(meshName, objectName, objectName);
+        Array<char, 32u> meshName;
+        Array<char, 32u> objectName;
+        CopyFixedBuffer(meshName, "mesh_");
+        CopyFixedBuffer(objectName, "rig_");
+        AppendUnsignedToFixedBuffer(meshName, index);
+        AppendUnsignedToFixedBuffer(objectName, skeletonIndex);
+        metadata.addSkinnedMesh(FixedBufferView(meshName), FixedBufferView(objectName), FixedBufferView(objectName));
     }
 }
 
@@ -3095,6 +3147,14 @@ StringView ViewScratchString(in ScratchString text){
     return ViewArenaString(text);
 }
 
+DiscoveredNwbFile MakeDiscoveredNwbFile(in GraphicsTestPath root, in GraphicsTestPath path, in StringView virtualRoot, mut AssetArena ownerArena, mut ScratchArena scratchArena){
+    return MakeDiscoveredNwbFileImpl(root, path, virtualRoot, ownerArena, scratchArena);
+}
+
+usize GraphicsPathUtf8ByteCount(in GraphicsTestPath path){
+    return GraphicsPathUtf8ByteCountImpl(path);
+}
+
 DiscoveredPathCollisionProbe MakeDiscoveredPathCollisionProbe(mut ScratchArena scratchArena){
     return MakeDiscoveredPathCollisionProbeImpl(scratchArena);
 }
@@ -3181,11 +3241,11 @@ b8 BuildPreparedGraphicsAssetRoots(
     }
     options.repoRoot = useCaseRootAsRepoRoot ? root : AssetsGraphicsTestRepoRoot(testArena);
     options.assetRoots.reserve(assetRoots.size());
+    NWB::Core::Alloc::ScratchArena scratchArena(s_BuildScratchArena);
     for(const Path& assetRoot : assetRoots){
-        auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
-        CanonicalizeTextInPlace(parentDirectoryName);
-
-        const AStringView virtualRoot = parentDirectoryName == s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
+        const auto parentDirectory = assetRoot.lexicallyNormal().parentPath();
+        const b8 isEngine = NWB::Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(parentDirectory.filenameView(), s_EngineDirectory, scratchArena);
+        const AStringView virtualRoot = isEngine ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
 
         options.assetRoots.emplace_back(assetRoot, virtualRoot);
     }
@@ -3193,7 +3253,6 @@ b8 BuildPreparedGraphicsAssetRoots(
     if(!options.configuration.assign(s_TestsConfiguration) || !options.assetType.assign(s_GraphicsDirectory))
         return false;
 
-    NWB::Core::Alloc::ScratchArena scratchArena(s_BuildScratchArena);
     return NWB::Pipeline::AssetBuilder::BuildAssets(options, scratchArena);
 }
 

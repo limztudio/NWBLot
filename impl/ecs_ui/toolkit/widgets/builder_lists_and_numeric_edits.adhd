@@ -178,7 +178,7 @@ Expected<ListLayoutPreparer::ListRow> ListLayoutPreparer::prepareListRow(const L
     const b8 enabled = frame.options.enabled && frame.source->enabled(index);
     if(!m_builder.listStateMatches(frame))
         return MakeUnexpected(Failure{});
-    const ShapeRequest request{ frame.source->text(index), StringView(reinterpret_cast<const char*>(frame.measureKey.language.data())), frame.widgetStyle.fontSize, frame.measureKey.scriptTag, TextDirection::LeftToRight };
+    const ShapeRequest request{ frame.source->text(index), StringView(reinterpret_cast<const char*>(frame.measureKey.language.data()), frame.measureKey.languageLength), frame.widgetStyle.fontSize, frame.measureKey.scriptTag, TextDirection::LeftToRight };
     if(!m_builder.listStateMatches(frame))
         return MakeUnexpected(Failure{});
     // The source owns a temporary view; shaping must copy it before any further source callback.

@@ -455,12 +455,12 @@ void VerifyAssetsGraphics_SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBu
     ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, "samplers", "second.nwb"), s_LinearWrapSamplerMetadata));
 
     // A 200-character directory leaves room for compact artifacts within the traditional Windows path limit.
-    const usize rootTextLength = PathToString(root).size();
+    const usize rootTextLength = GraphicsPathUtf8ByteCount(root);
     ASSERT_LT(rootTextLength, 199u);
     AssetString directoryName(testArena.arena);
     AppendRepeatedAsciiByte(directoryName, 199u - rootTextLength, 98u);
     const GraphicsTestPath builtDirectory = JoinGraphicsPath(root, ViewArenaString(directoryName));
-    ASSERT_EQ(PathToString(builtDirectory).size(), 200u);
+    ASSERT_EQ(GraphicsPathUtf8ByteCount(builtDirectory), 200u);
     ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, builtDirectory, assetRoot, 2u));
 
     ScratchArena scratchArena(s_GatherScratchArena);
@@ -677,6 +677,45 @@ void VerifyAssetsGraphics_AssetRegistrySupportsReentrantDeserializeAndDrainsBefo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void VerifyAssetsGraphics_NativePathViewReclaimsScratchAfterUnicodeConversion(){
+    native{
+        NWB::Core::Alloc::ScratchArena scratch(s_CodecScratchArena, 65536u);
+        const auto baseline = scratch.memoryStats().usedBytes;
+        const TStringView source = FOUNDATION_TEXT("long-native-path/0123456789/0123456789/0123456789/\uD55C\uAE00");
+        const AStringView expected = "long-native-path/0123456789/0123456789/0123456789/\xED\x95\x9C\xEA\xB8\x80";
+#if defined(FOUNDATION_UNICODE)
+        if constexpr(sizeof(wchar_t) == 2u){
+            const wchar_t malformed[] = { static_cast<wchar_t>(0xd800u), 0 };
+            EXPECT_TRUE(NWB::Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(TStringView(malformed, 1u), "?", scratch));
+        }
+#endif
+        for(usize i = 0u; i < 16u; ++i){
+            {
+                AString<NWB::Core::Alloc::ScratchArena> converted(scratch);
+                const AStringView view = NWB::Core::Assets::AssetPathsDetail::NativeTextView(source, converted);
+                EXPECT_EQ(view, expected);
+            }
+            EXPECT_EQ(scratch.memoryStats().usedBytes, baseline);
+            {
+                AString<NWB::Core::Alloc::ScratchArena> converted(scratch);
+                const TStringView genericSource = FOUNDATION_TEXT("long-native-path\\0123456789\\0123456789\\0123456789\\\uD55C\uAE00");
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+                const AStringView genericExpected = "long-native-path/0123456789/0123456789/0123456789/\xED\x95\x9C\xEA\xB8\x80";
+#else
+                const AStringView genericExpected = "long-native-path\\0123456789\\0123456789\\0123456789\\\xED\x95\x9C\xEA\xB8\x80";
+#endif
+                EXPECT_EQ(GenericNativeTextView(genericSource, converted), genericExpected);
+            }
+            EXPECT_EQ(scratch.memoryStats().usedBytes, baseline);
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(AssetsGraphics, NativePathViewReclaimsScratchAfterUnicodeConversion, VerifyAssetsGraphics_NativePathViewReclaimsScratchAfterUnicodeConversion)
 NWB_ADHD_GTEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad, VerifyAssetCodecAdmission_NullClassAllocationDoesNotCallAssetLoad)
 NWB_ADHD_GTEST(AssetConstructorContracts, ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion, VerifyAssetConstructorContracts_ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion)
 NWB_ADHD_GTEST(AssetConstructorContracts, CastIncludesTheCompleteContextualComparisonConversion, VerifyAssetConstructorContracts_CastIncludesTheCompleteContextualComparisonConversion)

@@ -1,0 +1,204 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+#include "presentation_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd.h>
+#include <impl/assets_shader/loader.adhd.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
+#include <core/task/gpu/task_graph.h>
+#include <global/scope_exit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+[[nodiscard]] Expected<void> RunCsgRayRuntimeProbe(ProjectRuntimeContext& context);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+namespace __hidden_csg_ray_runtime_probe{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_CaseCount = 25u;
+inline constexpr u32 s_WordCount = s_CaseCount + 4u;
+inline constexpr u32 s_Sentinel = 0xa59137cbu;
+
+struct ProbeCleanup final : NoCopy{
+    Core::GraphicsRuntime& graphics;
+    Core::GpuDescriptorHandle descriptor;
+
+    ProbeCleanup(Core::GraphicsRuntime& graphicsIn, const Core::GpuDescriptorHandle descriptorIn)noexcept
+        : graphics(graphicsIn)
+        , descriptor(descriptorIn)
+    {}
+    ~ProbeCleanup()noexcept(false){
+        if(!graphics.waitForIdle())
+            TerminateInvariant();
+        graphics.getDevice().getDescriptorHeap().free(descriptor);
+    }
+};
+
+struct ProbeTask{
+    struct Payload{
+        Core::BufferHandle output;
+        Core::BufferHandle readback;
+        Core::ComputePipelineHandle pipeline;
+        Core::GpuDescriptorHeap& heap;
+        u32 slot;
+    };
+
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
+
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext&){
+        commands.setBufferState(payload.output.get(), Core::ResourceStates::UnorderedAccess);
+        commands.commitBarriers();
+        commands.clearBufferUInt(*payload.output, s_Sentinel);
+        Core::ComputeState state;
+        state.setPipeline(payload.pipeline.get());
+        commands.setComputeState(state);
+        payload.heap.bindCompute(commands, *payload.pipeline);
+        commands.setPushConstants(&payload.slot, sizeof(payload.slot));
+        commands.dispatch(1u, 1u, 1u);
+        commands.setBufferState(payload.output.get(), Core::ResourceStates::CopySource);
+        commands.commitBarriers();
+        commands.copyBuffer(*payload.readback, 0u, *payload.output, 0u, s_WordCount * sizeof(u32));
+        commands.setBufferState(payload.output.get(), Core::ResourceStates::CopyDest);
+        commands.commitBarriers();
+        return !commands.commandRecordingFailed();
+    }
+};
+
+[[nodiscard]] Expected<Core::GpuTaskId> Declare(void* userData, Core::GpuTaskGraph& graph){
+    const auto& payload = *MakeNotNull(static_cast<const ProbeTask::Payload*>(userData));
+    const Array<Core::BufferHandle, 2> buffers{ payload.output, payload.readback };
+    Array<Core::GpuTaskResourceUse, 2> uses{};
+    for(u32 i = 0u; i < buffers.size(); ++i){
+        Core::GpuGraphResourceDesc description;
+        description.setIdentity(buffers[i]->getCreationDescription().debugName).setMarkerLabel("CSG ray edge probe buffer").setType(Core::GpuGraphResourceType::Buffer).setInitialState(Core::ResourceStates::CopyDest).setExternalFinalState(Core::ResourceStates::CopyDest);
+        const auto imported = graph.importBuffer(buffers[i], description);
+        if(!imported)
+            return MakeUnexpected(Failure{});
+        uses[i] = { .resource = *imported, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite };
+    }
+    Core::GpuTaskDesc description;
+    description.setIdentity(Name("tests/csg_ray/dispatch")).setMarkerLabel("CSG ray edge probe").setResourceUses(uses);
+    const auto task = graph.addTask<ProbeTask>(description, ProbeTask::Payload(payload));
+    if(!task || !task->valid())
+        return MakeUnexpected(Failure{});
+    return *task;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<void> RunCsgRayRuntimeProbe(ProjectRuntimeContext& context){
+    using namespace __hidden_csg_ray_runtime_probe;
+    auto& graphics = context.graphics;
+    auto& device = graphics.getDevice();
+    auto& heap = device.getDescriptorHeap();
+    Core::ShaderHandle shader;
+    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(Name("project/shaders/csg_ray_probe_cs"), Core::ShaderArchive::s_DefaultVariant, Name("tests/csg_ray/shader"), FOUNDATION_TEXT("CsgRayProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader))
+        return MakeUnexpected(Failure{});
+    Core::BindingLayoutDesc layoutDescription(context.objectArena);
+    layoutDescription.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(u32)));
+    const auto layout = device.createBindingLayout(layoutDescription);
+    if(!layout)
+        return MakeUnexpected(Failure{});
+    Core::ComputePipelineDesc pipelineDescription;
+    pipelineDescription.setComputeShader(shader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    const auto pipeline = device.createComputePipeline(pipelineDescription);
+    if(!pipeline)
+        return MakeUnexpected(Failure{});
+    Core::BufferDesc description;
+    description.setDebugName(Name("tests/csg_ray/output")).setByteSize(s_WordCount * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(true).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
+    const auto output = graphics.createBuffer(description);
+    if(!output)
+        return MakeUnexpected(Failure{});
+    description.setDebugName(Name("tests/csg_ray/readback")).setCanHaveUAVs(false).setCpuAccess(Core::CpuAccessMode::Read);
+    const auto readback = graphics.createBuffer(description);
+    if(!readback)
+        return MakeUnexpected(Failure{});
+    const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!descriptor)
+        return MakeUnexpected(Failure{});
+    ProbeCleanup cleanup(graphics, *descriptor);
+    if(!heap.write(*descriptor, Core::DescriptorWriteItem::StructuredBufferUav(0u, output->get())))
+        return MakeUnexpected(Failure{});
+    ProbeTask::Payload payload{ *output, *readback, *pipeline, heap, descriptor->slot() };
+    const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, Declare);
+    if(!token || !device.waitForSubmissionToken(*token))
+        return MakeUnexpected(Failure{});
+    const auto mapped = device.mapBuffer(**readback, Core::CpuAccessMode::Read);
+    if(!mapped)
+        return MakeUnexpected(Failure{});
+    ScopeExit unmap([&]()noexcept{ device.unmapBuffer(**readback); });
+    const auto words = MakeNotNull(static_cast<const u32*>(*mapped));
+    for(u32 i = 0u; i < s_WordCount; ++i){
+        const u32 expected = i < s_CaseCount ? 1u : s_Sentinel;
+        if(words.get()[i] != expected){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgRayProbe: case {} expected {} observed {}"), i, expected, words.get()[i]);
+            return MakeUnexpected(Failure{});
+        }
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgRayProbe: passed 25 shared-edge, winding, thin-span, exact-predicate and conservative-BVH cases with sentinel checks"));
+    return {};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -107,7 +107,11 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
         s_NativeLifecycleDiagnostics = 0u;
         s_UnlockedLifecycleDiagnostics = 0u;
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
+#if defined(FOUNDATION_UNICODE)
         const auto executableText = PathToString<char>(arena, invalidExecutable);
+#else
+        const AStringView executableText = invalidExecutable.native();
+#endif
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = "bad-executable-admission";
         config.spoolDirectory = spoolDirectory;
@@ -488,7 +492,9 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     const Path spoolPath = SpoolDirectory(group);
     EXPECT_TRUE(WriteTextFile(blockedBucket, "blocked"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
-    CopyFixedBuffer(snapshot.spoolDirectory, PathToString(spoolPath));
+    native(in spoolPath, mut snapshot){
+        CopyCrashPath(spoolPath, snapshot.spoolDirectory);
+    }
     CopyFixedBuffer(snapshot.logServerUrl, "http://127.0.0.1:1");
 
     EXPECT_FALSE(FlushPendingCrashReportsImpl(testArena.arena, snapshot));

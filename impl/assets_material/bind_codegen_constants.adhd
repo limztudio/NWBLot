@@ -33,6 +33,13 @@ const StringView s_MaterialBindStorageConstantSymbol = "STORAGE_CONSTANT";
 const StringView s_MaterialBindStorageMutableSymbol = "STORAGE_MUTABLE";
 const StringView s_MaterialBindConstantByteSizeSymbol = "CONSTANT_BYTE_SIZE";
 const StringView s_MaterialBindMutableByteSizeSymbol = "MUTABLE_BYTE_SIZE";
+const StringView s_MaterialBindGeneratedLayoutHashSymbol = "NWB_MATERIAL_BIND_LAYOUT_HASH";
+const StringView s_MaterialBindGeneratedBlockCountSymbol = "NWB_MATERIAL_BIND_BLOCK_COUNT";
+const StringView s_MaterialBindGeneratedFieldCountSymbol = "NWB_MATERIAL_BIND_FIELD_COUNT";
+const StringView s_MaterialBindGeneratedStorageConstantSymbol = "NWB_MATERIAL_BIND_STORAGE_CONSTANT";
+const StringView s_MaterialBindGeneratedStorageMutableSymbol = "NWB_MATERIAL_BIND_STORAGE_MUTABLE";
+const StringView s_MaterialBindGeneratedConstantByteSizeSymbol = "NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE";
+const StringView s_MaterialBindGeneratedMutableByteSizeSymbol = "NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE";
 const StringView s_MaterialBindStorageSymbolSuffix = "_STORAGE";
 const StringView s_MaterialBindByteOffsetSymbolSuffix = "_BYTE_OFFSET";
 const StringView s_MaterialBindByteSizeSymbolSuffix = "_BYTE_SIZE";
@@ -151,6 +158,25 @@ void AppendMaterialBindGeneratedSeparator(in u32 newlineCount, mut String inOutS
         inOutSource.push_back('\n');
 }
 
+StringView MaterialBindInterfaceHashSymbol(in u32 lane){
+    [essential] assert(s_NameHashLaneCount == 8u && lane < 8u, "material bind hash lane is out of range");
+    if(lane == 0u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_0";
+    if(lane == 1u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_1";
+    if(lane == 2u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_2";
+    if(lane == 3u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_3";
+    if(lane == 4u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_4";
+    if(lane == 5u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_5";
+    if(lane == 6u)
+        return "NWB_MATERIAL_BIND_INTERFACE_HASH_6";
+    return "NWB_MATERIAL_BIND_INTERFACE_HASH_7";
+}
+
 void AppendU32Slang(in u32 value, mut String inOutText){
     AppendDecimalU32(value, inOutText);
     inOutText.push_back('u');
@@ -194,7 +220,8 @@ void AppendMaterialBindFieldAccessor(
     in StringView fieldType,
     in StringView byteOffsetSymbol,
     in StringView functionName,
-    in StringView loadFunctionName,
+    in StringView storageName,
+    in StringView typeName,
     mut String inOutSource
 ){
     inOutSource.append(fieldType);
@@ -202,7 +229,9 @@ void AppendMaterialBindFieldAccessor(
     inOutSource.append(functionName);
     inOutSource.append(s_MaterialBindAccessorInstanceParameter);
     inOutSource.append(s_GeneratedReturnPrefix);
-    inOutSource.append(loadFunctionName);
+    inOutSource.append(s_MaterialBindLoadFunctionPrefix);
+    inOutSource.append(storageName);
+    inOutSource.append(typeName);
     inOutSource.append(s_MaterialBindLoadInstanceArgPrefix);
     inOutSource.append(byteOffsetSymbol);
     inOutSource.append(s_MaterialBindCallStatementEnd);

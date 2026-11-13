@@ -54,10 +54,10 @@ namespace __hidden_compile{
 ){
     using namespace Core::Metascript;
 
-    const MString genericInput = PathToGenericString<MChar>(arena, inputPath);
-    const MStringView genericView = genericInput;
-    const MString resolvedGenericInput = PathToGenericString<MChar>(arena, resolvedInputPath);
-    const MStringView resolvedGenericView = resolvedGenericInput;
+    MString genericInputStorage(arena);
+    const MStringView genericView = GenericNativeTextView(inputPath.native(), genericInputStorage);
+    MString resolvedGenericInputStorage(arena);
+    const MStringView resolvedGenericView = GenericNativeTextView(resolvedInputPath.native(), resolvedGenericInputStorage);
 
     MStringView bestRelView;
     const auto considerCandidate = [&](const MStringView candidateRelView)noexcept{
@@ -66,9 +66,9 @@ namespace __hidden_compile{
         if(bestRelView.empty() || candidateRelView.size() < bestRelView.size())
             bestRelView = candidateRelView;
     };
-    const auto tryPrefixMatch = [&](const MStringView fullView, MString& dirGeneric)noexcept{
+    const auto tryPrefixMatch = [&](const MStringView fullView, MStringView dirGeneric)noexcept{
         while(dirGeneric.size() > 1u && dirGeneric.back() == '/')
-            dirGeneric.pop_back();
+            dirGeneric.remove_suffix(1u);
         if(dirGeneric.empty() || fullView.size() <= dirGeneric.size() + 1u)
             return;
         if(SameGenericPrefixText(fullView.substr(0u, dirGeneric.size()), dirGeneric) && fullView[dirGeneric.size()] == '/')
@@ -79,13 +79,15 @@ namespace __hidden_compile{
         if(dirText.empty())
             continue;
         const Path<MetaArena> incPath(arena, dirText);
-        MString genericInc = PathToGenericString<MChar>(arena, incPath);
+        MString genericIncStorage(arena);
+        const MStringView genericInc = GenericNativeTextView(incPath.native(), genericIncStorage);
         tryPrefixMatch(genericView, genericInc);
 
         const auto resolvedInc = ResolveComparisonPath(incPath);
         if(!resolvedInc)
             continue;
-        MString resolvedGenericInc = PathToGenericString<MChar>(arena, *resolvedInc);
+        MString resolvedGenericIncStorage(arena);
+        const MStringView resolvedGenericInc = GenericNativeTextView(resolvedInc->native(), resolvedGenericIncStorage);
         tryPrefixMatch(resolvedGenericView, resolvedGenericInc);
 
         Path<MetaArena> ancestor = resolvedInputPath;
@@ -251,10 +253,9 @@ public:
 
         if(!Adhd::HasAdhdExtension(includePath))
             return false;
-        const MString relPath(includePath, arena);
+        const Path<MetaArena> include(arena, includePath);
 
         const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> ResolveResult::Enum{
-            const Path<MetaArena> include(arena, relPath);
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
             const auto includeText = include.native();
             const b8 hasDrive = includeText.size() >= 2u && includeText[1u] == FOUNDATION_TEXT(':');
@@ -458,9 +459,12 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         }
 
         if(!options.depfilePath.empty()){
-            const MString headerGeneric = PathToGenericString<MChar>(arena, headerOutPath);
-            const MString sourceGeneric = PathToGenericString<MChar>(arena, sourceOutPath);
-            const MString inputGeneric = PathToGenericString<MChar>(arena, inputPath);
+            MString headerGenericStorage(arena);
+            MString sourceGenericStorage(arena);
+            MString inputGenericStorage(arena);
+            const MStringView headerGeneric = GenericNativeTextView(headerOutPath.native(), headerGenericStorage);
+            const MStringView sourceGeneric = GenericNativeTextView(sourceOutPath.native(), sourceGenericStorage);
+            const MStringView inputGeneric = GenericNativeTextView(inputPath.native(), inputGenericStorage);
             if(
                 !__hidden_compile::IsRepresentableDepfilePath(headerGeneric)
                 || !__hidden_compile::IsRepresentableDepfilePath(sourceGeneric)

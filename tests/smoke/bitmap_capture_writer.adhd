@@ -159,7 +159,7 @@ class BitmapCaptureWriter{
         const Path outputDirectory = outputPath.parentPath();
         if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory).has_value())
             return false;
-        const String partialPathText = StringFormat("{}.partial", PathToString(outputPath));
+        const String partialPathText = StringFormat("{}.partial", outputPath);
         const Path partialPath = Path(StringView(partialPathText));
         if(!WriteBinaryFile(partialPath, bitmapBytes)){
             if(!RemoveFile(partialPath).has_value())

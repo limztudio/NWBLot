@@ -36,8 +36,9 @@ public:
 
 
 public:
-    explicit SymbolTable(MetaArena& arena)noexcept
+    explicit SymbolTable(MetaArena& arena, TranslationUnit& unit)noexcept
         : m_arena(arena)
+        , m_unit(unit)
         , m_enums(arena)
         , m_interfaces(arena)
         , m_classes(arena)
@@ -97,6 +98,7 @@ public:
 
 private:
     MetaArena& m_arena;
+    TranslationUnit& m_unit;
     MVector<EnumDecl*> m_enums;
     MVector<InterfaceDecl*> m_interfaces;
     MVector<ClassDecl*> m_classes;

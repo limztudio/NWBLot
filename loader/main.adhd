@@ -89,7 +89,11 @@ b8 InstallCrashReporting(CrashArena& crashArena){
     if(!executableName)
         executableName = ::Path<CrashArena>(crashArena, s_FallbackExecutableName);
 
-    AString<CrashArena> applicationName = PathToString<char>(crashArena, *executableName);
+#if defined(FOUNDATION_UNICODE)
+    const AString<CrashArena> applicationName = PathToString<char>(crashArena, *executableName);
+#else
+    const AStringView applicationName = executableName->native();
+#endif
 
     NWB::Core::Crash::CrashConfig crashConfig(crashArena);
     crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());

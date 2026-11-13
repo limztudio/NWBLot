@@ -107,6 +107,7 @@ class ListMeasureKey{
             || this.pixelScaleX != rhs.pixelScaleX
             || this.pixelScaleY != rhs.pixelScaleY
             || this.scriptTag != rhs.scriptTag
+            || this.languageLength != rhs.languageLength
         )
             return false;
         for(usize i = 0u; i < s_ListRowMetricCount; ++i){
@@ -139,6 +140,7 @@ class ListMeasureKey{
     public Array<f32, s_ListRowMetricCount> rowMetrics;
     public Array<u8, s_ListLanguageBufferBytes> language;
     public u32 scriptTag = 0u;
+    public u8 languageLength = 0u;
 }
 
 

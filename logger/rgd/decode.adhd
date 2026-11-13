@@ -228,13 +228,9 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
 
 
 // RDF's C API returns explicit file/open/format status instead of using its throwing C++ file wrappers for expected input failures.
-[[nodiscard]] Expected<void, StringView> AdmitRdfInput(Core::Alloc::ScratchArena& scratchArena, const StringView filePath){
-    if(!IsAdmissibleRgdInputPath(filePath))
-        return MakeUnexpected(s_RgdDecodeValueRdfOpenFailedError);
-
-    const AString<Core::Alloc::ScratchArena> pathText(filePath, scratchArena);
+[[nodiscard]] Expected<void, StringView> AdmitRdfInput(const char* pathText){
     rdfStream* stream = nullptr;
-    if(rdfStreamOpenFile(pathText.c_str(), &stream) != rdfResultOk)
+    if(rdfStreamOpenFile(pathText, &stream) != rdfResultOk)
         return MakeUnexpected(s_RgdDecodeValueRdfOpenFailedError);
 
     rdfChunkFile* chunks = nullptr;
@@ -263,12 +259,13 @@ Expected<AInteropString, StringView> DecodeCrashDumpToText(const StringView file
     ScopedLock decodeLock(__hidden_rgd_decode::RgdDecodeMutex());
     Core::Alloc::ScratchArena scratchArena(s_RgdArenaNameLogRgdDecodeScratch);
 
-    const auto admitted = __hidden_rgd_decode::AdmitRdfInput(scratchArena, filePath);
-    if(!admitted)
-        return MakeUnexpected(admitted.error());
-
+    if(!IsAdmissibleRgdInputPath(filePath))
+        return MakeUnexpected(s_RgdDecodeValueRdfOpenFailedError);
     Config config;
     config.crash_dump_file.assign(filePath.data(), filePath.size());
+    const auto admitted = __hidden_rgd_decode::AdmitRdfInput(config.crash_dump_file.c_str());
+    if(!admitted)
+        return MakeUnexpected(admitted.error());
     RgdCrashDumpContents contents;
     // Keep vendor console diagnostics on their existing streams; replacing shared buffers races with the server output worker.
     if(!RgdParsingUtils::ParseCrashDump(config, contents))

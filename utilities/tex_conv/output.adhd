@@ -29,7 +29,11 @@ Expected<TexConvOutputPaths> ResolveTexConvOutputPaths(in Path inputPath, in Str
     }
     else{
         const Path outputBase(outputArgument);
-        if(outputBase.extension().empty() || IsNwbTexConvOutputPath(outputBase))
+        b8 hasExtension = false;
+        native(in outputBase, mut hasExtension){
+            hasExtension = !outputBase.extensionView().empty();
+        }
+        if(!hasExtension || IsNwbTexConvOutputPath(outputBase))
             paths.metadata = outputBase;
         else{
             error("tex_conv: --output must be an output base name or a .nwb filename.");
@@ -93,17 +97,16 @@ String BuildTexConvMetadataText(
 }
 
 void LogTexConvStagedValidationFailure(in u8 failureStage, in Path path, in StringView errorMessage){
-    const String pathText = PathToString(path);
     if(failureStage == 1u || failureStage == 6u)
-        error("tex_conv: failed to query output path '{}': {}", pathText, errorMessage);
+        error("tex_conv: failed to query output path '{}': {}", path, errorMessage);
     else if(failureStage == 2u)
-        error("tex_conv: failed to inspect output path '{}': {}", pathText, errorMessage);
+        error("tex_conv: failed to inspect output path '{}': {}", path, errorMessage);
     else if(failureStage == 3u)
-        error("tex_conv: output path is not a regular file: '{}'", pathText);
+        error("tex_conv: output path is not a regular file: '{}'", path);
     else if(failureStage == 7u)
-        error("tex_conv: publication work path already exists: '{}'", pathText);
+        error("tex_conv: publication work path already exists: '{}'", path);
     else if(failureStage == 5u)
-        error("tex_conv: Output already exists: '{}'. Pass --force to replace both output files.", pathText);
+        error("tex_conv: Output already exists: '{}'. Pass --force to replace both output files.", path);
 }
 
 

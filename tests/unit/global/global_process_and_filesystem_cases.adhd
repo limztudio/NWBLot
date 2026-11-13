@@ -144,14 +144,12 @@ void VerifyGlobal_EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull(){
     ASSERT_TRUE(expected.has_value());
     ASSERT_TRUE(actual.has_value());
 
-    const Optional<String> expectedOpt = expected.value();
-    const Optional<String> actualOpt = actual.value();
-    ASSERT_TRUE(expectedOpt.has_value());
-    ASSERT_TRUE(actualOpt.has_value());
-    const String expectedValue = expectedOpt.value();
-    EXPECT_EQ(StringView(actualOpt.value()), StringView(expectedValue));
+    ASSERT_TRUE(expected.value().has_value());
+    ASSERT_TRUE(actual.value().has_value());
+    const StringView expectedValue = StringView(expected.value().value());
+    EXPECT_EQ(StringView(actual.value().value()), expectedValue);
 
-    String different = expectedValue;
+    String different = String(expectedValue);
     different.append("x");
     const Expected<b8, ErrorCode> exactMatch = EnvironmentVariableEquals(pathName, StringView(expectedValue));
     const Expected<b8, ErrorCode> mutatedMatch = EnvironmentVariableEquals(pathName, StringView(different));
@@ -286,12 +284,17 @@ void VerifyGlobal_PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdv
 
     native(mut componentCount, mut allComponentsMatched, mut incrementedPastEndStaysAtEnd, mut emptyPathBeginEqualsEnd){
         NWB::Tests::TestArena<> testArena;
+#if defined(FOUNDATION_UNICODE)
+        constexpr TStringView s_KoreanComponent = FOUNDATION_TEXT("\uD55C\uAE00");
+#else
+        constexpr TStringView s_KoreanComponent = FOUNDATION_TEXT("\xED\x95\x9C\xEA\xB8\x80");
+#endif
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
         const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("C:\\"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\ud55c\uae00"), FOUNDATION_TEXT("File.TXT") };
+        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("C:\\"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), s_KoreanComponent, FOUNDATION_TEXT("File.TXT") };
 #else
         const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("/"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\ud55c\uae00"), FOUNDATION_TEXT("File.TXT") };
+        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("/"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), s_KoreanComponent, FOUNDATION_TEXT("File.TXT") };
 #endif
         auto componentIt = path.begin();
         const TStringView first = componentIt.nativeComponent();
@@ -612,7 +615,11 @@ void VerifyGlobal_ProcessArgumentValidationPreservesExistingOutput(){
         const auto outputPath = root / "output.txt";
         ASSERT_TRUE(EnsureEmptyDirectory(root));
         ASSERT_TRUE(WriteTextFile(outputPath, AStringView("retained")));
+#if defined(FOUNDATION_UNICODE)
         const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
+#else
+        const AStringView outputPathText = outputPath.native();
+#endif
 
         const Array<char, 3u> invalidArgument = { 'a', '\0', 'b' };
         const Array<AStringView, 2u> arguments = { "unused_program", AStringView(invalidArgument.data(), invalidArgument.size()) };
@@ -914,7 +921,11 @@ void VerifyGlobal_RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStream
         ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
         const Array<AStringView, 3u> argv = { binSh, cFlag, boundedScript };
+#if defined(FOUNDATION_UNICODE)
         const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
+#else
+        const AStringView outputPathText = outputPath.native();
+#endif
         const auto exitCode = RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText));
         runSucceeded = exitCode.has_value();
         if(exitCode)

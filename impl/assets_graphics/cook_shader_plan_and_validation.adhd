@@ -340,8 +340,7 @@ static b8 ValidateMaterialVariant(const MaterialCookEntry& materialEntry, const 
     if(!ValidateNonEmptyMaterialShaderVariant(AStringView(materialEntry.virtualPath), requestedVariant))
         return false;
 
-    const Core::Assets::ScratchString contextLabel = StringFormat(scratchArena, "{} [{}]", AStringView(materialEntry.virtualPath), stageName.resolvedText());
-    return ShaderCook::ValidateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues, scratchArena);
+    return ShaderCook::ValidateMaterialVariantSignature(AStringView(materialEntry.virtualPath), stageName, requestedVariant, preparedShaderEntry.entry.defineValues, scratchArena);
 }
 
 

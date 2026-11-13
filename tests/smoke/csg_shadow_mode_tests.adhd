@@ -34,7 +34,7 @@ void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 
     String valueCopy = String(value);
     i32 status = -1;
     native(in nameCopy, in valueCopy, in hasValue, mut status){
-        status = ::NWB::Tests::Smoke::SetSmokeTestEnvironment(nameCopy.c_str(), hasValue ? valueCopy.c_str() : nullptr);
+        status = NWB::Tests::Smoke::SetSmokeTestEnvironment(nameCopy.c_str(), hasValue ? valueCopy.c_str() : nullptr);
     }
     ASSERT_EQ(status, 0);
 }

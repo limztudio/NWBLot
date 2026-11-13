@@ -14,16 +14,15 @@ const StringView s_ManifestJsonQuote = "\"";
 const StringView s_ManifestJsonKeySuffix = "\": ";
 
 Expected<usize> FindGeneratedCrashJsonValueCursor(in StringView manifest, in StringView key){
-    String needle;
-    needle.reserve(key.size() + s_CrashIngestGeneratedJsonNeedleReserveSlack);
-    needle.append(s_ManifestJsonQuote);
-    needle.append(key);
-    needle.append(s_ManifestJsonKeySuffix);
-
-    const usize cursor = manifest.find(needle);
-    if(cursor >= manifest.size())
-        return MakeUnexpected(Failure());
-    return cursor + needle.size();
+    usize cursor = manifest.find(s_ManifestJsonQuote);
+    while(cursor < manifest.size()){
+        const usize keyBegin = cursor + 1u;
+        const StringView tail = manifest.substr(keyBegin);
+        if(tail.starts_with(key) && tail.substr(key.size()).starts_with(s_ManifestJsonKeySuffix))
+            return keyBegin + key.size() + s_ManifestJsonKeySuffix.size();
+        cursor = manifest.find(s_ManifestJsonQuote, keyBegin);
+    }
+    return MakeUnexpected(Failure());
 }
 
 Expected<String> FindGeneratedCrashJsonStringValue(in StringView manifest, in StringView key){
@@ -88,6 +87,31 @@ Expected<String> FindGeneratedCrashJsonStringValue(in StringView manifest, in St
     }
 
     return MakeUnexpected(Failure());
+}
+
+b8 HasGeneratedCrashJsonStringValue(in StringView manifest, in StringView key){
+    const Expected<usize> valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor.has_value())
+        return false;
+    usize cursor = valueCursor.value();
+    if(cursor >= manifest.size() || cast<u8>(manifest[cursor]) != 34u)
+        return false;
+    ++cursor;
+    while(cursor < manifest.size()){
+        const u8 ch = cast<u8>(manifest[cursor]);
+        if(ch == 34u)
+            return true;
+        if(ch == 92u){
+            ++cursor;
+            if(cursor >= manifest.size())
+                return false;
+            const u8 esc = cast<u8>(manifest[cursor]);
+            if(esc != 34u && esc != 92u && esc != 110u && esc != 114u && esc != 116u)
+                return false;
+        }
+        ++cursor;
+    }
+    return false;
 }
 
 Expected<u64> FindGeneratedCrashJsonUnsignedValue(in StringView manifest, in StringView key){

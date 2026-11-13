@@ -20,6 +20,7 @@ native{
 
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/list_navigation.adhd.h>
 
 #include <global/limit.h>
 #include <global/simdmath.h>
@@ -1896,6 +1897,28 @@ NWB_ADHD_GTEST_F(MultilineCompositionTests, CancellationPreservesCommittedSelect
 NWB_ADHD_GTEST_F(MultilineCompositionTests, AliasedCompositionCommitOwnsBytesBeforeRetiringPreedit, VerifyMultilineCompositionTests_AliasedCompositionCommitOwnsBytesBeforeRetiringPreedit)
 NWB_ADHD_GTEST_F(MultilineCompositionTests, EmptyPreeditRetainsTheOriginalCrossLineReplacementRange, VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineReplacementRange)
 
+void VerifyListMeasureKey_PreservesEffectiveLanguageLength(){
+    native{
+        using namespace ::NWB::Impl::Ui;
+        const auto embedded = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics{}, SelectableMetrics{}, 0u, AStringView("en\0zz", 5u));
+        ASSERT_TRUE(embedded.has_value());
+        EXPECT_EQ(embedded->languageLength, 2u);
+        EXPECT_EQ(embedded->language[3u], 'z');
+        EXPECT_EQ(AStringView(reinterpret_cast<const char*>(embedded->language.data()), embedded->languageLength), "en");
+        const auto zero = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics{}, SelectableMetrics{}, 0u, AStringView("\0x", 2u));
+        ASSERT_TRUE(zero.has_value());
+        EXPECT_EQ(zero->languageLength, 0u);
+        char longLanguage[64u];
+        for(usize index = 0u; index < 64u; ++index)
+            longLanguage[index] = 'a';
+        const auto longest = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics{}, SelectableMetrics{}, 0u, AStringView(longLanguage, 63u));
+        ASSERT_TRUE(longest.has_value());
+        EXPECT_EQ(longest->languageLength, 63u);
+        EXPECT_FALSE(TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics{}, SelectableMetrics{}, 0u, AStringView(longLanguage, 64u)).has_value());
+    }
+}
+
+NWB_ADHD_GTEST(ListMeasureKey, PreservesEffectiveLanguageLength, VerifyListMeasureKey_PreservesEffectiveLanguageLength)
 NWB_ADHD_GTEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingModel, VerifyMultilineModelTests_SingleLineRejectsHardBreaksAndNulWithoutChangingModel)
 NWB_ADHD_GTEST_F(MultilineModelTests, CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine, VerifyMultilineModelTests_CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine)
 NWB_ADHD_GTEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelectionAndComposition, VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelectionAndComposition)

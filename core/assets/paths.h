@@ -60,6 +60,33 @@ namespace AssetPathsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] b8 CanonicalNativeTextEquals(TStringView nativeText, AStringView expected, Alloc::ScratchArena& scratchArena);
+
+// The result borrows nativeText or convertedText.
+template<typename ArenaT>
+[[nodiscard]] inline AStringView NativeTextView(const TStringView nativeText, AString<ArenaT>& convertedText){
+#if defined(FOUNDATION_UNICODE)
+    convertedText.clear();
+    CountingByteOutput counter;
+    WriteConvertedText<char>(counter, nativeText);
+    convertedText.reserve(counter.byteCount);
+    auto out = BackInserter(convertedText);
+    WriteConvertedText<char>(out, nativeText);
+    return AStringView(convertedText);
+#else
+    (void)convertedText;
+    return AStringView(nativeText.data(), nativeText.size());
+#endif
+}
+
+
+template<typename ArenaT, typename Predicate>
+[[nodiscard]] inline b8 ValidateWithNativeText(const TStringView nativeText, ArenaT& arena, Predicate&& predicate){
+    AString<ArenaT> convertedText(arena);
+    return predicate(NativeTextView(nativeText, convertedText));
+}
+
+
 template<typename PathArenaT>
 struct RelativeAssetPathLayout{
     typename ::Path<PathArenaT>::const_iterator acceptedEnd;

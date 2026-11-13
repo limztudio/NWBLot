@@ -43,20 +43,38 @@ template<typename ArenaT>
 #endif
 }
 
+template<typename ArenaT, typename Predicate>
+[[nodiscard]] inline Expected<b8, ErrorCode> EvaluateEnvironmentVariable(ArenaT& arena, const AStringView name, Predicate predicate){
+    if(name.empty() || name.find('\0') != AStringView::npos || name.find('=') != AStringView::npos)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    const AString<ArenaT> nativeName(name, arena);
+#if defined(_MSC_VER)
+    char* value = nullptr;
+    size_t valueSize = 0u;
+    const int result = ::_dupenv_s(&value, &valueSize, nativeName.c_str());
+    ScopeExit freeValue([&]()noexcept{ ::free(value); });
+    if(result != 0)
+        return MakeUnexpected(ErrorCode(result, GenericCategory()));
+    if(!value)
+        return false;
+    const usize valueLength = valueSize > 0u ? static_cast<usize>(valueSize - 1u) : static_cast<usize>(FOUNDATION_STRLEN(value));
+    return predicate(AStringView(value, valueLength));
+#else
+    const char* const value = ::std::getenv(nativeName.c_str());
+    if(!value)
+        return false;
+    return predicate(AStringView(value));
+#endif
+}
+
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> EnvironmentVariableEquals(ArenaT& arena, const AStringView name, const AStringView expectedValue){
-    const auto current = ReadEnvironmentVariable(arena, name);
-    if(!current)
-        return MakeUnexpected(current.error());
-    return *current && AStringView((*current)->data(), (*current)->size()) == expectedValue;
+    return EvaluateEnvironmentVariable(arena, name, [expectedValue](const AStringView value){ return value == expectedValue; });
 }
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<b8, ErrorCode> HasEnvironmentValue(ArenaT& arena, const AStringView name){
-    const auto current = ReadEnvironmentVariable(arena, name);
-    if(!current)
-        return MakeUnexpected(current.error());
-    return *current && !(*current)->empty();
+    return EvaluateEnvironmentVariable(arena, name, [](const AStringView value){ return !value.empty(); });
 }
 
 

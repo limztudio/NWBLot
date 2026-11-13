@@ -41,13 +41,5 @@ u32 QueryAssetBuilderWorkerCoreCount(){
     return ComputeWorkerCoreCount(QueryCpuCoreCount(CpuAffinity::Any));
 }
 
-String ResolveEffectiveBuildConfiguration(in StringView configuration){
-    const String canonical = BuildCanonicalSafeCacheName(configuration);
-    if(canonical.empty())
-        return String(s_DefaultPipelineConfig);
-    return canonical;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

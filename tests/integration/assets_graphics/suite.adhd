@@ -122,11 +122,15 @@ b8 MaterialBindFixture::WriteMaterialBindShaderProbeSource(
     const AStringView sourceText
 ){
     const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot(testArena) / s_EngineDirectory / s_AssetsDirectory / s_GraphicsDirectory;
-    const NWB::Impl::ShaderCook::CookString engineGraphicsIncludeRootText = PathToString(testArena.arena, engineGraphicsIncludeRoot);
     NWB::Impl::ShaderCook::CookString shaderMeta(testArena.arena);
     shaderMeta += shaderAssetType;
     shaderMeta += " asset;\n\n" "asset.entry_point = \"main\";\n" "asset.include_roots = [\"";
-    shaderMeta += engineGraphicsIncludeRootText;
+#if defined(FOUNDATION_UNICODE)
+    auto out = BackInserter(shaderMeta);
+    WriteConvertedText<char>(out, engineGraphicsIncludeRoot.native());
+#else
+    shaderMeta.append(engineGraphicsIncludeRoot.native());
+#endif
     shaderMeta += "\"];\n";
 
     if(!WriteTextFile(assetRoot / s_ShadersDirectory / metaFilename, AStringView(shaderMeta.data(), shaderMeta.size())))

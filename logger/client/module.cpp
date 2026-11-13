@@ -168,7 +168,7 @@ b8 Client::internalUpdate(){
         return true;
     };
 
-    const auto retryCurlFailure = [this, &scheduleRetry](const CURLcode code, const char* operation){
+    const auto retryCurlFailure = [this, &scheduleRetry](const CURLcode code, const AStringView operation){
         if(m_lastCurlFailureCode != static_cast<i32>(code)){
             const DiagnosticEventText detail = MakeDiagnosticEventText("Logger {} failed: curl code={} detail={}", operation, static_cast<i32>(code), curl_easy_strerror(code));
             CaptureDiagnosticEvent("logger_client_delivery", detail.view(), __FILE__, __LINE__);

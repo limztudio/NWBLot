@@ -34,7 +34,7 @@ float nwbCsgRayCollapsedOpticalBoundary(
             negativeDelta += min(crossings[first].windingDelta, 0);
             positiveDelta += max(crossings[first].windingDelta, 0);
             ++first;
-        }while(first < crossingCount && nwbCsgRaySameDistance(distance, crossings[first].distance));
+        }while(first < crossingCount && nwbCsgRaySameCrossingDistance(distance, crossings[first].distance));
         winding += negativeDelta + positiveDelta;
         if(first - groupBegin <= 1u)
             continue;

@@ -20,6 +20,7 @@ native{
 
 #include <utilities/fbx_to_nwb/skin.adhd.h>
 #include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd.h>
+#include <utilities/fbx_to_nwb/import_prompts.adhd.h>
 #include <utilities/fbx_to_nwb/mesh_stream_types.adhd.h>
 
 #include <global/simdmath.h>
@@ -292,6 +293,70 @@ void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
     EXPECT_GE(logger.errorCount(), 4u);
 }
 
+void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
+    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
+    native(mut scratchArena){
+        ufbx_node longName{};
+        ufbx_node firstFallback{};
+        ufbx_node alpha{};
+        ufbx_node secondFallback{};
+        constexpr AStringView longText = "zzzz a named joint longer than inline string storage";
+        longName.name = { longText.data(), longText.size() };
+        alpha.name = { "Alpha", 5u };
+        ufbx_node* joints[] = { &longName, &firstFallback, &alpha, &secondFallback };
+        const NWB::FbxToNwb::JointMatrix identity = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
+        const NWB::FbxToNwb::JointMatrix matrices[] = { identity, identity, identity, identity };
+        const auto result = NWB::FbxToNwb::AssetWriterSkeletonDetail::BuildSkeletonOutputData(joints, matrices, matrices, scratchArena);
+        ASSERT_TRUE(result.has_value());
+        ASSERT_EQ(result->joints.size(), 4u);
+        EXPECT_EQ(result->joints[0u], &alpha);
+        EXPECT_EQ(result->joints[1u], &firstFallback);
+        EXPECT_EQ(result->joints[2u], &secondFallback);
+        EXPECT_EQ(result->joints[3u], &longName);
+    }
+}
+
+void VerifyFbxSkin_FallbackNamesOnlyCollideWithPublishedNames(){
+    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
+    native(mut scratchArena){
+        using namespace NWB::FbxToNwb;
+        UtilityScratchVector<AString<::ArenaBase>> names(scratchArena);
+        names.reserve(4u);
+        ufbx_node unnamed{};
+        ufbx_node named{};
+        named.name = { "joint_2", 7u };
+        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&unnamed, 0u, names, scratchArena));
+        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&named, 1u, names, scratchArena));
+        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&unnamed, 2u, names, scratchArena));
+        named.name = { "joint_0", 7u };
+        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&named, 3u, names, scratchArena));
+        EXPECT_EQ(AStringView(names[0u]), "joint_0");
+        EXPECT_EQ(AStringView(names[1u]), "joint_2");
+        EXPECT_EQ(AStringView(names[2u]), "joint_2_1");
+        EXPECT_EQ(AStringView(names[3u]), "joint_0_1");
+    }
+}
+
+void VerifyFbxOptions_BorrowsQuotedPromptTextAndParsesAsciiCase(){
+    native{
+        using ::NWB::FbxToNwb::ParseFbxConfirmText;
+        using ::NWB::FbxToNwb::UnquoteFbxInputText;
+        constexpr AStringView quoted = "  \"path with spaces\"  ";
+        const AStringView unquoted = UnquoteFbxInputText(quoted);
+        EXPECT_EQ(unquoted, "path with spaces");
+        EXPECT_EQ(unquoted.data(), quoted.data() + 3u);
+        EXPECT_TRUE(UnquoteFbxInputText("  ''  ").empty());
+        EXPECT_EQ(UnquoteFbxInputText(" 'unmatched\" "), "'unmatched\"");
+        const auto yes = ParseFbxConfirmText(" \tYeS\n");
+        ASSERT_TRUE(yes.has_value());
+        EXPECT_TRUE(*yes);
+        EXPECT_FALSE(ParseFbxConfirmText("  ").has_value());
+    }
+}
+
+NWB_ADHD_GTEST(FbxOptions, BorrowsQuotedPromptTextAndParsesAsciiCase, VerifyFbxOptions_BorrowsQuotedPromptTextAndParsesAsciiCase)
+NWB_ADHD_GTEST(FbxSkin, SortsBorrowedAndFallbackJointNames, VerifyFbxSkin_SortsBorrowedAndFallbackJointNames)
+NWB_ADHD_GTEST(FbxSkin, FallbackNamesOnlyCollideWithPublishedNames, VerifyFbxSkin_FallbackNamesOnlyCollideWithPublishedNames)
 NWB_ADHD_GTEST(FbxMesh, RejectsNonFiniteAndThresholdTriangleAreas, VerifyFbxMesh_RejectsNonFiniteAndThresholdTriangleAreas)
 NWB_ADHD_GTEST(FbxMesh, RejectsSourceStreamAndReplacementCapacityOverflow, VerifyFbxMesh_RejectsSourceStreamAndReplacementCapacityOverflow)
 NWB_ADHD_GTEST(FbxMesh, RejectsMismatchedSkinPositionCounts, VerifyFbxMesh_RejectsMismatchedSkinPositionCounts)

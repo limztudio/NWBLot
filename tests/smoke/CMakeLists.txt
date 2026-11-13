@@ -58,6 +58,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     set(_nwb_refraction_capture_smoke_timeout_seconds 240)
     set(_nwb_refraction_lifecycle_smoke_timeout_seconds 360)
     set(_nwb_refraction_medium_smoke_timeout_seconds 600)
+    set(_nwb_refraction_duplicate_smoke_timeout_seconds 3600)
     set(_nwb_refraction_gallery_smoke_timeout_seconds 2400)
     set(_nwb_refraction_identity_smoke_timeout_seconds 1200)
     set(_nwb_caustic_optical_smoke_timeout_seconds 600)
@@ -288,6 +289,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_target_adhd_sources(nwb_csg_visible_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_project.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_ray_runtime_probe.adhd"
         )
         target_compile_definitions(nwb_csg_visible_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_visible_smoke "${_nwb_csg_visible_runtime_root}" nwb_ecs_csg)

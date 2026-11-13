@@ -364,8 +364,9 @@ struct TextureEncodeInput{
 template<typename PathArenaT>
 [[nodiscard]] static Expected<basisu::imagef> LoadImage(const ::Path<PathArenaT>& path, Core::Alloc::ScratchArena& scratchArena){
     basisu::imagef image;
-    const auto pathText = PathToGenericString(scratchArena, path);
-    if(!basisu::load_image_hdr(pathText.c_str(), image, false)){
+    AString<Core::Alloc::ScratchArena> pathStorage(scratchArena);
+    const AStringView pathText = GenericNativeTextView(path.native(), pathStorage);
+    if(!basisu::load_image_hdr(pathText.data(), image, false)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }

@@ -11,8 +11,10 @@
 Expected<Optional<String>> ReadSmokeOptionalEnvironmentString(in StringView variableName){
     const Expected<Optional<String>, ErrorCode> value = ReadEnvironmentVariable(variableName);
     if(!value.has_value()){
-        const String errorText = StringFormat("{}", value.error().message());
-        error("Smoke: failed to read environment '{}': {}", variableName, errorText);
+        native(in variableName, in value){
+            const auto errorText = value.error().message();
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(AStringView(errorText.data(), errorText.size())));
+        }
         return MakeUnexpected(Failure());
     }
     return value.value();
@@ -22,10 +24,9 @@ Expected<String> ReadSmokeEnvironmentString(in StringView variableName){
     const Expected<Optional<String>> value = ReadSmokeOptionalEnvironmentString(variableName);
     if(!value.has_value())
         return MakeUnexpected(Failure());
-    const Optional<String> candidate = value.value();
-    if(!candidate.has_value() || candidate.value().empty())
+    if(!value.value().has_value() || value.value().value().empty())
         return MakeUnexpected(Failure());
-    return candidate.value();
+    return value.value().value();
 }
 
 Expected<f32> ReadSmokeEnvironmentF32(in StringView variableName){

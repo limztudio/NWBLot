@@ -164,17 +164,14 @@ Expected<AssetPayloadView, AssetPayloadDecodeFailure> DecodeAssetPayload(in Span
     return outView;
 }
 
-void CommitDecodedShaderAssetPayload(
-    in StringView entryPoint,
-    in Span<u8> bytecode,
-    mut String outEntryPoint,
-    mut Vector<u8> outBytecode
-){
-    outEntryPoint = entryPoint;
-    outBytecode.clear();
-    outBytecode.resize(bytecode.size());
-    for(usize i = 0u; i < bytecode.size(); ++i)
-        outBytecode[i] = bytecode[i];
+StringView ShaderEntryPointView(in Span<u8> bytecode, in usize offset, in usize length){
+    StringView entryPoint = "";
+    if(length == 0u || offset >= bytecode.size() || length >= bytecode.size() - offset)
+        return entryPoint;
+    native(in bytecode, in offset, in length, mut entryPoint){
+        entryPoint = AStringView(reinterpret_cast<const char*>(bytecode.data()) + offset, length);
+    }
+    return entryPoint;
 }
 
 

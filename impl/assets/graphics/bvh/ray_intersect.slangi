@@ -21,6 +21,35 @@ static const float NWB_BVH_RAY_DIRECTION_EPSILON = 1e-8;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// CSG needs every crossing, including grazing shared edges and arbitrarily small nonzero direction lanes.
+bool nwbBvhRayConservativeAabb(const float3 origin, const float3 direction, const float minimum, const float maximum, const float3 boxMin, const float3 boxMax, out float entry){
+    entry = minimum;
+    float farDistance = maximum;
+    if(!all(isfinite(origin)) || !all(isfinite(direction)) || !all(isfinite(boxMin)) || !all(isfinite(boxMax)) || any(boxMin > boxMax))
+        return true;
+    [unroll] for(uint axis = 0u; axis < 3u; ++axis){
+        const float error = 0.00000095367431640625 * (max(abs(boxMin[axis]), abs(boxMax[axis])) + abs(origin[axis])) + asfloat(0x00800000u);
+        if(direction[axis] == 0.0){
+            if(origin[axis] < boxMin[axis] - error || origin[axis] > boxMax[axis] + error)
+                return false;
+        }
+        else{
+            const float first = (boxMin[axis] - origin[axis]) / direction[axis];
+            const float second = (boxMax[axis] - origin[axis]) / direction[axis];
+            const float uncertainty = error / abs(direction[axis]) + 0.00000095367431640625 * max(abs(first), abs(second));
+            if(!isfinite(first) || !isfinite(second) || !isfinite(uncertainty))
+                continue;
+            entry = max(entry, min(first, second) - uncertainty);
+            farDistance = min(farDistance, max(first, second) + uncertainty);
+        }
+    }
+    return entry <= farDistance;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Shared ray/AABB helpers for SW BVH consumers. Keep reciprocal directions finite: inf * zero-slab would NaN.
 float3 nwbBvhSafeInvDir(const float3 direction){
     const float epsilon = NWB_BVH_RAY_DIRECTION_EPSILON;

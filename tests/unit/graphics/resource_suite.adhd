@@ -353,6 +353,24 @@ void VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullByte
     EXPECT_TRUE(MatchesEmbeddedNullNestedMarker(nested.second()));
 }
 
+void VerifyGpuCrashMarkerTracker_PushesResolvedHistoryDuringStackGrowth(){
+    GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
+    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+    const usize sourceHash = commandListTracker.pushEvent("a marker long enough to grow the stack");
+    const ResolvedMarker source = crashTracker.resolveMarker(sourceHash);
+    ASSERT_TRUE(source.first());
+    const usize nestedHash = commandListTracker.pushEvent(source.second());
+    const ResolvedMarker nested = crashTracker.resolveMarker(nestedHash);
+    ASSERT_TRUE(nested.first());
+    EXPECT_EQ(nested.second(), StringView("a marker long enough to grow the stack/a marker long enough to grow the stack"));
+    commandListTracker.popEvent();
+    const usize siblingHash = commandListTracker.pushEvent("sibling");
+    const ResolvedMarker sibling = crashTracker.resolveMarker(siblingHash);
+    ASSERT_TRUE(sibling.first());
+    EXPECT_EQ(sibling.second(), StringView("a marker long enough to grow the stack/sibling"));
+}
+
 void VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
     GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
@@ -916,6 +934,7 @@ TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){ VerifyGpuCl
 NWB_ADHD_GTEST(QueueBarrierScopePolicy, TransferQueueRemovesUnsupportedShaderAccess, VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess)
 NWB_ADHD_GTEST(GpuBlasOpacityMicromapPolicyTests, AttachmentSkipsAbsentAndHandlesEmptyUsageCounts, VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmptyUsageCounts)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes, VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullBytes)
+NWB_ADHD_GTEST(GpuCrashMarkerTracker, PushesResolvedHistoryDuringStackGrowth, VerifyGpuCrashMarkerTracker_PushesResolvedHistoryDuringStackGrowth)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset, VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable, VerifyGpuCrashMarkerTracker_DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthAndTrackerDestruction, VerifyGpuCrashMarkerTracker_RetainedResolvedViewSurvivesConcurrentHistoryGrowthAndTrackerDestruction)

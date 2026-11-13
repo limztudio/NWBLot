@@ -5,6 +5,7 @@
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 #include <impl/ecs_render/shared/statistics_types.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

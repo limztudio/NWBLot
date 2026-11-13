@@ -64,14 +64,17 @@ b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath
     if(!typeChecker.checkTranslationUnit(outResult.unit, outResult.errors))
         return false;
 
-    const MString namespacePath = customNamespace.empty() ? DeriveNamespaceFromPath(virtualFilePath, arena) : MString(customNamespace.data(), customNamespace.size(), arena);
+    const MString derivedNamespace = customNamespace.empty() ? DeriveNamespaceFromPath(virtualFilePath, arena) : MString(arena);
+    const MStringView namespacePath = customNamespace.empty() ? MStringView(derivedNamespace.data(), derivedNamespace.size()) : customNamespace;
     const MString headerFilename = DeriveHeaderFilename(virtualFilePath, arena);
 
     HeaderEmitter headerEmitter(arena, outResult.symbols);
     SourceEmitter sourceEmitter(arena, outResult.symbols);
 
-    outResult.generatedHeader = headerEmitter.emitHeader(outResult.unit, MStringView(namespacePath.data(), namespacePath.size()));
-    outResult.generatedSource = sourceEmitter.emitSource(outResult.unit, MStringView(headerFilename.data(), headerFilename.size()), MStringView(namespacePath.data(), namespacePath.size()));
+    MString generatedHeader = headerEmitter.emitHeader(outResult.unit, namespacePath);
+    MString generatedSource = sourceEmitter.emitSource(outResult.unit, MStringView(headerFilename.data(), headerFilename.size()), namespacePath);
+    outResult.generatedHeader = Move(generatedHeader);
+    outResult.generatedSource = Move(generatedSource);
 
     return outResult.errors.empty();
 }
@@ -103,12 +106,11 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
             if(i > segStart){
                 const MStringView seg = dirPart.substr(segStart, i - segStart);
                 if(seg != "." && seg != ".."){
-                    MString segPascal(arena);
-                    AppendPascalCaseIdentifierSegment(seg, segPascal);
-                    if(!segPascal.empty()){
-                        ns.append("::");
-                        ns.append(segPascal.data(), segPascal.size());
-                    }
+                    const usize previousSize = ns.size();
+                    ns.append("::");
+                    AppendPascalCaseIdentifierSegment(seg, ns);
+                    if(ns.size() == previousSize + 2u)
+                        ns.erase(previousSize);
                 }
             }
             segStart = i + 1u;

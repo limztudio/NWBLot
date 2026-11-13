@@ -307,7 +307,16 @@ class GlobalExportEdgeHolder{
 
         Path leaf = "item.bin";
         Path combined = this.m_root / this.m_sub / leaf;
-        String formatted = StringFormat("{0}|{1}|{2}", String("hdr"), combined.stem(), Name("probe"));
+        const String stemOwned = String(combined.stem().native());
+        const Name probeName = Name("probe");
+        const String probeOwned = String("probe");
+        if(probeOwned != String("probe")){
+            return false;
+        }
+        if(probeName != Name("probe")){
+            return false;
+        }
+        String formatted = StringFormat("{0}|{1}|{2}", String("hdr"), stemOwned, probeOwned);
         if(StringView(formatted) != "hdr|item|probe"){
             return false;
         }

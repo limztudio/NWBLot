@@ -54,7 +54,7 @@ Expected<CrashBytesT<ArenaT>, ErrorCode> CrashPackageArchive::Build(ArenaT& aren
         CrashStringT<Alloc::ScratchArena> pathStorage(scratchArena);
         const AStringView pathText = GenericNativeTextView(relativePath.native(), pathStorage);
         AppendArchiveText(archive, PackageNames::s_ArchiveFileHeaderPrefix);
-        AppendArchiveText(archive, AStringView(pathText.data(), pathText.size()));
+        AppendArchiveText(archive, pathText);
         AppendArchiveText(archive, " ");
         AppendUnsignedU64Bytes(archive, fileBytes.size());
         AppendArchiveText(archive, "\n");

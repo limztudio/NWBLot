@@ -96,7 +96,7 @@ b8 InstallCrashReporting(CrashArena& crashArena){
 #endif
 
     NWB::Core::Crash::CrashConfig crashConfig(crashArena);
-    crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
+    crashConfig.applicationName = AStringView(applicationName);
     crashConfig.buildId = s_UnknownBuildLabel;
     crashConfig.version = s_UnknownBuildLabel;
     crashConfig.spoolDirectory = *executableDirectory / NWB::Core::Crash::PackageNames::s_DefaultRootDirectoryName;
@@ -108,7 +108,7 @@ b8 InstallCrashReporting(CrashArena& crashArena){
     NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
         const AStringView binaryDump = report.binaryDump ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize) : AStringView();
         const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
-        const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
+        const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details), binaryDump, dumpKind);
         if(ShouldWarnOnGpuCrashDumpCapture(dumpResult.requestAccepted(), dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed))
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
     }, nullptr);

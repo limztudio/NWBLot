@@ -75,7 +75,7 @@ template<typename ArenaT>
     return AStringView(convertedText);
 #else
     (void)convertedText;
-    return AStringView(nativeText.data(), nativeText.size());
+    return AStringView(nativeText);
 #endif
 }
 

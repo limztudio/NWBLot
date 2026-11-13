@@ -169,11 +169,11 @@ template<typename ArenaT>
 [[nodiscard]] inline AStringView GenericNativeTextView(const TStringView nativeText, AString<ArenaT>& convertedText){
 #if !defined(FOUNDATION_PLATFORM_WINDOWS) && !defined(FOUNDATION_UNICODE)
     (void)convertedText;
-    return AStringView(nativeText.data(), nativeText.size());
+    return AStringView(nativeText);
 #else
 #if !defined(FOUNDATION_UNICODE)
     if(nativeText.find('\\') == TStringView::npos)
-        return AStringView(nativeText.data(), nativeText.size());
+        return AStringView(nativeText);
     convertedText.assign(nativeText.data(), nativeText.size());
 #else
     convertedText.clear();

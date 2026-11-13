@@ -36,7 +36,7 @@ b8 ValidateTexConvInputImagePath(in Path path, in b8 alphaMask){
     if(!isRegularFile.has_value() && !IsMissingPathError(isRegularFile.error())){
         native(in path, in isRegularFile, in alphaMask){
             const auto errorText = isRegularFile.error().message();
-            const AStringView errorView(errorText.data(), errorText.size());
+            const AStringView errorView(errorText);
             if(alphaMask)
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), ConvertString(errorView));
             else

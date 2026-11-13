@@ -387,7 +387,7 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
     }
 
     const Core::Metascript::MStringView interfaceText = interfaceValue->asString();
-    const AStringView interfacePath = TrimView(AStringView(interfaceText.data(), interfaceText.size()));
+    const AStringView interfacePath = TrimView(AStringView(interfaceText));
     if(interfacePath.empty()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': interface must not be empty"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
@@ -428,7 +428,7 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
     }
 
     const Core::Metascript::MStringView fieldText = fieldValue->asString();
-    const AStringView virtualPath = TrimView(AStringView(fieldText.data(), fieldText.size()));
+    const AStringView virtualPath = TrimView(AStringView(fieldText));
     if(virtualPath.empty()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': field '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});

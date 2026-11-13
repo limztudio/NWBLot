@@ -73,7 +73,7 @@ template<typename ArenaT>
     if(!read)
         return MakeUnexpected(read.error());
 
-    return LoadFromMemory(AStringView(text.data(), text.size()), scratchArena);
+    return LoadFromMemory(AStringView(text), scratchArena);
 }
 
 template<typename CharT, typename ArenaT>

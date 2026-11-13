@@ -91,7 +91,7 @@ public:
         , m_defaultEntryText(Move(other.m_defaultEntryText))
         , m_defaultEntryAsset(other.m_defaultEntryAsset)
     {
-        m_defaultEntryAsset.virtualPathText = AStringView(m_defaultEntryText.data(), m_defaultEntryText.size());
+        m_defaultEntryAsset.virtualPathText = AStringView(m_defaultEntryText);
         other.m_defaultEntryAsset = {};
     }
 

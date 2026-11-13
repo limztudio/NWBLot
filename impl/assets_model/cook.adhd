@@ -186,7 +186,7 @@ template<typename ObjectT, typename ParseObjectFn>
     const auto& map = fieldValue->asMap();
     objects.reserve(map.size());
     for(const auto& [objectName, objectValue] : map){
-        const auto nameResult = Name::FromText(AStringView(objectName.data(), objectName.size()));
+        const auto nameResult = Name::FromText(AStringView(objectName));
         if(!nameResult.has_value() && !Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), scratchArena, [&](const AStringView filePathText){ return ValidateModelObjectNameResolved(false, objectKind, filePathText); }))
             return MakeUnexpected(Failure{});
         const Name name = *nameResult;

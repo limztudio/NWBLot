@@ -226,7 +226,7 @@ private:
 #if defined(FOUNDATION_BUILD_SYMBOLS)
     constexpr void recordStoredSymbolText()const{
         if(!IsConstantEvaluated())
-            NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName.data(), m_debugName.size()), m_hasSymbolText);
+            NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName), m_hasSymbolText);
     }
 #endif
 

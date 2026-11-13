@@ -76,7 +76,7 @@ template<typename PathArenaT, typename MetadataValue>
     }
 
     const auto text = fieldValue->asString();
-    result.text = AStringView(text.data(), text.size());
+    result.text = AStringView(text);
     if(required && result.text.empty()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});

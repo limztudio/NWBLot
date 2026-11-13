@@ -435,7 +435,7 @@ static Expected<AStringView> ParseMaterialBindStringField(const Path& bindFilePa
     }
 
     const Core::Metascript::MStringView text = value->asString();
-    return AStringView(text.data(), text.size());
+    return AStringView(text);
 }
 
 

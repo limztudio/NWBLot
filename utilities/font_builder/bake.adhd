@@ -593,7 +593,7 @@ b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes
     }
 
     const Span<const u8> fontBytes(fontBinary->data(), fontBinary->size());
-    const AStringView metadataText(metadata.data(), metadata.size());
+    const AStringView metadataText(metadata);
     const StagedFilePairResult published = StageAndPublishFilePair(
         paths,
         fontBytes,

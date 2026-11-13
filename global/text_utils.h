@@ -248,7 +248,7 @@ inline void AppendTextDiscardCrAndExpandLf(StringT& out, const AStringView text)
 
 template<typename ArenaT>
 [[nodiscard]] inline AString<ArenaT> JoinWithSingleSlash(ArenaT& arena, const AStringView base, const AStringView suffix){
-    AString<ArenaT> output(AStringView(base.data(), base.size()), arena);
+    AString<ArenaT> output(AStringView(base), arena);
     if(output.empty() || suffix.empty())
         return output;
     const b8 baseHasSlash = output.back() == '/';

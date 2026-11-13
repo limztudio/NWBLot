@@ -135,7 +135,7 @@ public:
         }
         SearchComboFilterRules().commitSearchComboFilterState(
             rebuild,
-            AStringView(candidate.data(), candidate.size()),
+            AStringView(candidate),
             full,
             filtered,
             query,

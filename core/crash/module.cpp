@@ -230,8 +230,8 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     for(CrashDetail::FixedDiagnosticSite& site : CrashDetail::g_State.diagnosticSites)
         site = CrashDetail::FixedDiagnosticSite{};
     CrashDetail::InitializeDumpArena();
-    CopyFixedBuffer(CrashDetail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
-    CopyFixedBuffer(CrashDetail::g_State.handlerExecutablePathText, AStringView(handlerExecutablePathText.data(), handlerExecutablePathText.size()));
+    CopyFixedBuffer(CrashDetail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText));
+    CopyFixedBuffer(CrashDetail::g_State.handlerExecutablePathText, AStringView(handlerExecutablePathText));
 
     const auto spool = CrashDetail::EnsureCrashSpoolDirectories(spoolDirectory);
     if(!spool){

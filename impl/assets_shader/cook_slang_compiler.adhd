@@ -167,7 +167,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
     const auto rootKey = FormatCompilerOverlayRootKey(
         scratchArena,
         ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix,
-        AStringView(ShaderBinaryPayload::s_SlangWorkspaceHexDigits.data(), ShaderBinaryPayload::s_SlangWorkspaceHexDigits.size()),
+        AStringView(ShaderBinaryPayload::s_SlangWorkspaceHexDigits),
         AStringView(*rootText),
         *rootKeyCapacity
     );

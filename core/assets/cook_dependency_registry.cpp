@@ -72,7 +72,7 @@ b8 CookDependencyRegistry::registerDefaultEntryAsset(const Name& virtualPath, co
     m_defaultEntryText.assign(virtualPathText.data(), virtualPathText.size());
     m_defaultEntryAsset.virtualPath = virtualPath;
     m_defaultEntryAsset.assetType = assetType;
-    m_defaultEntryAsset.virtualPathText = AStringView(m_defaultEntryText.data(), m_defaultEntryText.size());
+    m_defaultEntryAsset.virtualPathText = AStringView(m_defaultEntryText);
     return true;
 }
 

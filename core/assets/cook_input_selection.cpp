@@ -109,7 +109,7 @@ b8 CookInputSelector::IsDirectoryWithinRoots(const Path& directoryPath, const Sp
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(rootText);
 #endif
-        if(IsPathPrefixText(AStringView(rootText.data(), rootText.size()), AStringView(normalized.data(), normalized.size())))
+        if(IsPathPrefixText(AStringView(rootText), AStringView(normalized)))
             return true;
     }
 #endif

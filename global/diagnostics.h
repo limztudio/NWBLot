@@ -215,7 +215,7 @@ inline DiagnosticEventText MakeDiagnosticEventText(const WStringView fmt, Arg&& 
 template<typename Arg, typename... Args>
 inline DiagnosticEventText MakeDiagnosticEventText(AFormatString<Arg, Args...> fmt, Arg&& arg, Args&&... args)noexcept{
     const auto text = fmt.get();
-    return DiagnosticDetail::MakeFormattedEventText(AStringView(text.data(), text.size()), Forward<Arg>(arg), Forward<Args>(args)...);
+    return DiagnosticDetail::MakeFormattedEventText(AStringView(text), Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
 template<typename Arg, typename... Args>

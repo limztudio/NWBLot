@@ -113,7 +113,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
     RendererDeviceDiagnosticsLabel{}.append(m_graphics, m_frameGraphRendererLabel);
 
-    const Handle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()), rendererFrameMetadata);
+    const Handle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), AStringView(m_frameGraphRendererLabel), rendererFrameMetadata);
     for(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics : physicalQueueRuntimeStatistics){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
             FOUNDATION_ASSERT(false);

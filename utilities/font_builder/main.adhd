@@ -53,12 +53,12 @@ static i32 Run(const i32 argc, char** argv){
     return InvokeTerminalEntry<CLI::ParseError>(
         [&](){
             app.parse(argc, argv);
-            const auto outline = TryParseBakeRendererOutline(AStringView(rendererArgument.data(), rendererArgument.size()));
+            const auto outline = TryParseBakeRendererOutline(AStringView(rendererArgument));
             if(!outline)
                 return s_FontBuilderExitFailure;
             options.outline = *outline;
-            options.source = AStringView(sourceArgument.data(), sourceArgument.size());
-            options.output = AStringView(outputArgument.data(), outputArgument.size());
+            options.source = AStringView(sourceArgument);
+            options.output = AStringView(outputArgument);
             Core::Alloc::ScratchArena scratch(s_FontBuilderBakeArena);
             if(!ValidateOptions(options))
                 return s_FontBuilderExitFailure;

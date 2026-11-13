@@ -163,7 +163,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
         const NameSymbolRecorderState& state = SymbolRecorderState();
         if(!state.callback)
             return;
-        state.callback(hash, AStringView(text.data(), text.size()), state.userData);
+        state.callback(hash, AStringView(text), state.userData);
     }
     else{
         // Wide->narrow by byte truncation, not UTF-8, so recorded text round-trips to the hash.

@@ -150,7 +150,7 @@ private:
             return false;
         AString<Alloc::ScratchArena> fileText(scratchArena);
         appendFileText(scratchArena, fileText);
-        return NameSymbolSidecars::Write(path, AStringView(fileText.data(), fileText.size()));
+        return NameSymbolSidecars::Write(path, AStringView(fileText));
     }
 
 

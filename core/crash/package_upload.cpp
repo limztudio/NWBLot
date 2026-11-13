@@ -73,7 +73,7 @@ static b8 WriteUploadAttemptText(Alloc::ScratchArena& scratchArena, const ::Path
     text += s_StatePrefix;
     text += stateText;
     text += "\n";
-    if(WriteTextFile(packageDirectory / PackageNames::s_UploadAttemptFileName, AStringView(text.data(), text.size())))
+    if(WriteTextFile(packageDirectory / PackageNames::s_UploadAttemptFileName, AStringView(text)))
         return true;
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Warning,
@@ -108,7 +108,7 @@ Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchA
 
 #if defined(FOUNDATION_UNICODE)
         const CrashStringT<Alloc::ScratchArena> packageName = PathToString<char>(scratchArena, path.filenameView());
-        return AStringView(packageName.data(), packageName.size()) != protectedPendingPackageName;
+        return AStringView(packageName) != protectedPendingPackageName;
 #else
         return path.filenameView() != protectedPendingPackageName;
 #endif

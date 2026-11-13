@@ -91,8 +91,8 @@ template<typename ArenaT>
 
     const Path<ArenaT> parentDir = targetPath.parentPath();
     if(parentDir.empty())
-        return Path<ArenaT>(arena, TStringView(candidateName.data(), candidateName.size()));
-    return parentDir / TStringView(candidateName.data(), candidateName.size());
+        return Path<ArenaT>(arena, TStringView(candidateName));
+    return parentDir / TStringView(candidateName);
 }
 
 

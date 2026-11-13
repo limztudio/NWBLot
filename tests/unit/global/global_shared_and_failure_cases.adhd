@@ -173,7 +173,7 @@ public:
 
 struct StatefulPlacementCallable{
 public:
-    static FOUNDATION_INLINE u32 s_Allocations = 0u;
+    inline static u32 s_Allocations = 0u;
     u32& calls;
 
 
@@ -376,7 +376,7 @@ void VerifyComparisonResultConversions(u32& outWrapperChecks, b8& outFirstNull, 
 
 struct ObservationPointer{
 public:
-    static FOUNDATION_INLINE b8 s_FailCopy = false;
+    inline static b8 s_FailCopy = false;
     RefCountTarget* target = nullptr;
 
 

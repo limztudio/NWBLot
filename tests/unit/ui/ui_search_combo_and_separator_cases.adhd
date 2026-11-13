@@ -186,7 +186,7 @@ public:
 
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return view; }
 
-    [[nodiscard]] AStringView queryView()const noexcept{ return AStringView(queryBytes.data(), queryBytes.size()); }
+    [[nodiscard]] AStringView queryView()const noexcept{ return AStringView(queryBytes); }
 
 
 private:
@@ -1597,4 +1597,5 @@ NWB_ADHD_GTEST_F(UiSeparatorTests, DuplicateKeyAndUnbalancedScopeRejectDeclarati
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

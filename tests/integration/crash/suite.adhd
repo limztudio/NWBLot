@@ -440,17 +440,17 @@ void VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool()
             segment.fill('p');
             const Array<char, 3u> embedded{ 'a', '\0', 'b' };
             if(caseIndex == 0u)
-                config.logServerUrl = AStringView(longUrl.data(), longUrl.size());
+                config.logServerUrl = AStringView(longUrl);
             else if(caseIndex == 1u){
                 for(u32 i = 0u; i < 12u; ++i)
-                    config.spoolDirectory /= AStringView(segment.data(), segment.size());
+                    config.spoolDirectory /= AStringView(segment);
             }
             else if(caseIndex == 2u)
-                config.applicationName = AStringView(embedded.data(), embedded.size());
+                config.applicationName = AStringView(embedded);
             else if(caseIndex == 3u)
-                config.spoolDirectory /= AStringView(embedded.data(), embedded.size());
+                config.spoolDirectory /= AStringView(embedded);
             else
-                config.handlerExecutablePath = AStringView(embedded.data(), embedded.size());
+                config.handlerExecutablePath = AStringView(embedded);
             installed = Core::Crash::InstallCrashHandler(config);
 #endif
         }
@@ -511,9 +511,9 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
         const Array<char, 3u> embedded{ 'a', '\0', 'b' };
         ASSERT_TRUE(Core::Crash::SetCrashUploadDestination(AStringView(longUrl.data(), longUrl.size() - 1u), AStringView(longToken.data(), longToken.size() - 1u)));
         ASSERT_TRUE(Core::Crash::SetCrashUploadDestination("http://localhost", "token"));
-        EXPECT_FALSE(Core::Crash::SetCrashUploadDestination(AStringView(longUrl.data(), longUrl.size()), "new"));
-        EXPECT_FALSE(Core::Crash::SetCrashUploadDestination("new", AStringView(longToken.data(), longToken.size())));
-        EXPECT_FALSE(Core::Crash::SetCrashUploadDestination(AStringView(embedded.data(), embedded.size()), "new"));
+        EXPECT_FALSE(Core::Crash::SetCrashUploadDestination(AStringView(longUrl), "new"));
+        EXPECT_FALSE(Core::Crash::SetCrashUploadDestination("new", AStringView(longToken)));
+        EXPECT_FALSE(Core::Crash::SetCrashUploadDestination(AStringView(embedded), "new"));
         const auto snapshot = Core::Crash::CrashDetail::BuildCrashDumpRequest(Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, {});
         EXPECT_EQ(FixedBufferView(snapshot.logServerUrl), AStringView("http://localhost"));
         EXPECT_EQ(FixedBufferView(snapshot.crashUploadToken), AStringView("token"));
@@ -1063,4 +1063,5 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){ NWB::Tests::CrashCases::Verif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -113,7 +113,7 @@ void VerifyGlobal_ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks(){
         constexpr Name s_ViewName{s_Bounded};
         constexpr Name s_LiteralName{"identity/bounded"};
         constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
-        constexpr auto s_InvalidName = Name::FromText(AStringView(s_EmbeddedNull.data(), s_EmbeddedNull.size()));
+        constexpr auto s_InvalidName = Name::FromText(AStringView(s_EmbeddedNull));
         static_assert(s_ViewName == s_LiteralName);
         static_assert(!s_InvalidName && s_InvalidName.error() == NameTextError::EmbeddedNull);
         static_assert(Name{AStringView{}} != s_NameNone);
@@ -361,7 +361,7 @@ void VerifyGlobal_NameResolvedTextIsBoundedByStoredAndResolverBuffers(){
         Array<char, NameDetail::s_DebugNameCapacity + 1u> source = {};
         for(char& character : source)
             character = 'x';
-        const auto nameResult = Name::FromText(AStringView(source.data(), source.size()));
+        const auto nameResult = Name::FromText(AStringView(source));
         created = nameResult.has_value();
         if(nameResult){
             const Name name = *nameResult;
@@ -486,7 +486,7 @@ void VerifyGlobal_RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries
         expectedRuntimeHash = ComputeNameHash(MakeNotNull("identity/runtime"));
 
         NameSymbolCallbackProbe probe;
-        const auto invalidNarrow = Name::FromText(AStringView(s_InvalidNarrow.data(), s_InvalidNarrow.size()));
+        const auto invalidNarrow = Name::FromText(AStringView(s_InvalidNarrow));
         invalidNarrowRejected = !invalidNarrow && invalidNarrow.error() == NameTextError::EmbeddedNull;
         const auto invalidWide = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
         invalidWideRejected = !invalidWide && invalidWide.error() == NameTextError::EmbeddedNull;
@@ -571,7 +571,7 @@ void VerifyGlobal_OptionalNameTextPreservesAbsenceAndOwnedContainerErrors(){
         emptyNarrowAbsent = emptyNarrow.has_value() && !emptyNarrow->has_value();
         const auto emptyWide = ToName(WStringView{});
         emptyWideAbsent = emptyWide.has_value() && !emptyWide->has_value();
-        const auto invalidView = ToName(AStringView(s_Invalid.data(), s_Invalid.size()));
+        const auto invalidView = ToName(AStringView(s_Invalid));
         invalidViewRejected = !invalidView && invalidView.error() == NameTextError::EmbeddedNull;
         const auto invalidOwned = ToName(owned);
         invalidOwnedRejected = !invalidOwned && invalidOwned.error() == NameTextError::EmbeddedNull;
@@ -672,4 +672,5 @@ NWB_ADHD_GTEST(Global, NameHashDebugTextRejectsInvalidHex, VerifyGlobal_NameHash
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

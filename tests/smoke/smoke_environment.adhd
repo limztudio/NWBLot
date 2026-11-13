@@ -13,7 +13,7 @@ Expected<Optional<String>> ReadSmokeOptionalEnvironmentString(in StringView vari
     if(!value.has_value()){
         native(in variableName, in value){
             const auto errorText = value.error().message();
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(AStringView(errorText.data(), errorText.size())));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(AStringView(errorText)));
         }
         return MakeUnexpected(Failure());
     }
@@ -47,4 +47,5 @@ b8 ReadSmokeEnvironmentFlag(in StringView variableName){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

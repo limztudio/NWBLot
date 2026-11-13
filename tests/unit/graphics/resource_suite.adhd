@@ -722,7 +722,7 @@ EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(Core::GpuCrashMarke
     const usize outerHash = commandListTracker.pushEvent(AStringView(label.data(), 5u));
     label[0] = 'x';
     const Array<char, 3u> nestedLabel = { 'I', '\0', 'n' };
-    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel.data(), nestedLabel.size()));
+    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel));
     return EmbeddedNullMarkerHashes{
         .outerHash = outerHash,
         .nestedHash = nestedHash,
@@ -731,7 +731,7 @@ EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(Core::GpuCrashMarke
 
 b8 MatchesEmbeddedNullNestedMarker(const AStringView actual)noexcept{
     constexpr Array<char, 9u> s_Expected = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
-    return actual == AStringView(s_Expected.data(), s_Expected.size());
+    return actual == AStringView(s_Expected);
 }
 
 b8 RunConcurrentCrashMarkerGrowthCheck(
@@ -950,7 +950,6 @@ NWB_ADHD_GTEST(GpuTextureImagePolicyTests, ImageSharingRequiresCompleteQueueFami
 NWB_ADHD_GTEST(GpuTextureShapePolicyTests, CubeArraysRequireWholeCubesAndSquareFaces, VerifyGpuTextureShapePolicyTests_CubeArraysRequireWholeCubesAndSquareFaces)
 NWB_ADHD_GTEST(GpuTextureShapePolicyTests, ThreeDimensionalDepthDeterminesMipLimit, VerifyGpuTextureShapePolicyTests_ThreeDimensionalDepthDeterminesMipLimit)
 NWB_ADHD_GTEST(GpuTextureTransferLayoutTests, CompressedPaddedSlicesPreserveTouchedByteBoundary, VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedByteBoundary)
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -432,7 +432,7 @@ Expected<u32> ReadStressCharactersPerClass(){
     if(!value.has_value()){
         native(in value){
             const auto errorText = value.error().message();
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(AStringView(errorText.data(), errorText.size())));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(AStringView(errorText)));
         }
         return MakeUnexpected(Failure());
     }
@@ -631,4 +631,5 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

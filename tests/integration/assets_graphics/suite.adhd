@@ -133,7 +133,7 @@ b8 MaterialBindFixture::WriteMaterialBindShaderProbeSource(
 #endif
     shaderMeta += "\"];\n";
 
-    if(!WriteTextFile(assetRoot / s_ShadersDirectory / metaFilename, AStringView(shaderMeta.data(), shaderMeta.size())))
+    if(!WriteTextFile(assetRoot / s_ShadersDirectory / metaFilename, AStringView(shaderMeta)))
         return false;
     return WriteTextFile(assetRoot / s_ShadersDirectory / sourceFilename, sourceText);
 }
@@ -226,4 +226,5 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

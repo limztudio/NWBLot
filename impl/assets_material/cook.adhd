@@ -536,7 +536,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
     MaterialBindStruct bindStruct(arena);
     MaterialBindSchemaValidator validator{};
     if(!structValue.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName)));
         return MakeUnexpected(Failure{});
     }
 

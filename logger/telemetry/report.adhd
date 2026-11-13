@@ -448,7 +448,7 @@ void AppendTimedGraphDot(const FrameGraphReportRecord& record, const usize graph
             timedLabel += '\n';
             StringAppendFormat(timedLabel, "{:.3f} ms", VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(timed.value()), VectorDoubleReplicate(s_LogTelemetryReportDotMillisecondsPerSecond))));
 
-            AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
+            AppendDotQuotedText(out, AStringView(timedLabel));
         }
         else
             AppendDotQuotedText(out, labelView);

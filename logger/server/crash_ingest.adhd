@@ -368,7 +368,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
     CrashReportText symbolicationReport = BuildCrashSymbolicationReport(packageDirectory, summary, config.symbolication, arena, scratchArena);
     // Report-write failure retains the valid package and in-memory report; it is not a malformed crash.
-    if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
+    if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport)))
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
 
     const auto rawPath = ::MovePathToDirectory(operationArchivePath, CrashRawDirectory(scratchArena, config.storageDirectory));
@@ -382,7 +382,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     result.accepted = true;
     result.type = rawArchived ? static_cast<Core::Common::LogType::Enum>(SelectAcceptedCrashLogTypeIndex(summary.event)) : Core::Common::LogType::Warning;
     AppendAcceptedCrashIngestDetails(rawArchived ? *rawPath : operationArchivePath, rawArchived, symbolicationReport);
-    result.message = ConvertString(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
+    result.message = ConvertString(arena, AStringView(symbolicationReport));
     return result;
 }
 

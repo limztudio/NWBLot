@@ -270,7 +270,7 @@ static void AppendEventSummary(const CrashPackageSummary& summary, CrashReportTe
 static void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     AString<Core::Alloc::ScratchArena> tombstone{arena};
     const b8 tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
-    AppendParsedAndroidTombstoneReport(tombstonePresent, AStringView(tombstone.data(), tombstone.size()), outReport);
+    AppendParsedAndroidTombstoneReport(tombstonePresent, AStringView(tombstone), outReport);
 }
 
 // Expected decode failures retain the ingest report; unexpected exceptions remain terminal.

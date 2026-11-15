@@ -17,19 +17,30 @@ void ExpectMemoryStatsEqual(in ArenaMemoryStats expected, in ArenaMemoryStats ac
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-ArenaMemoryStats OwnerStats(in Name name, in ArenaMemorySource source){
-    ArenaMemoryStats stats = ArenaMemoryStats();
-    native(in name, in source, mut stats){
+b8 TryReadOwnerStats(in Name name, in ArenaMemorySource source, mut ArenaMemoryStats outStats){
+    b8 found = false;
+    native(in name, in source, mut outStats, mut found){
         const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
         while(record){
             ArenaMemoryOwnerSnapshot snapshot;
             record = ReadArenaMemoryOwnerRecord(*record, snapshot);
             if(snapshot.ownerName == name && snapshot.source == source){
-                stats = snapshot.stats;
+                outStats = snapshot.stats;
+                found = true;
                 break;
             }
         }
     }
+    return found;
+}
+
+b8 TryReadOwnerStats(in Name name, mut ArenaMemoryStats outStats){
+    return TryReadOwnerStats(name, ArenaMemorySource::Arena, outStats);
+}
+
+ArenaMemoryStats OwnerStats(in Name name, in ArenaMemorySource source){
+    ArenaMemoryStats stats = ArenaMemoryStats();
+    TryReadOwnerStats(name, source, stats);
     return stats;
 }
 

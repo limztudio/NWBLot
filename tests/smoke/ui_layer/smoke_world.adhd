@@ -28,14 +28,6 @@ public:
     }
 };
 
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
-    return Move(world);
-}
-
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
-    return Move(world);
-}
-
 [[nodiscard]] FOUNDATION_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World>& world)noexcept{
     if(!world)
         return MakeUnexpected(Failure{});
@@ -460,7 +452,7 @@ Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeCont
     Expected<NotNullUniquePtr<World>> finalized = FinalizeUiLayerSmokeWorld(allocatedWorld);
     if(!finalized.has_value())
         return MakeUnexpected(Failure());
-    NotNullUniquePtr<World> world = TakeUiLayerSmokeWorld(finalized.value());
+    NotNullUniquePtr<World> world = TakeSmokeWorld(finalized.value());
 
     const UiLayerSmokeModeFlags modes = ResolveUiLayerSmokeModes();
     LogActiveUiLayerSmokeSkins(modes);
@@ -469,7 +461,7 @@ Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeCont
 
     SpawnManySmokeRootsIfEnabled(SmokeWorldRef(world));
     AttachUiLayerSmokeScene(context, SmokeWorldRef(world), modes);
-    return TakeUiLayerSmokeWorld(world);
+    return TakeSmokeWorld(world);
 }
 
 void ClearUiLayerSmokeWorld(mut ProjectRuntimeContext context, mut World world){

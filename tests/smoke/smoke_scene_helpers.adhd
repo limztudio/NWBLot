@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/components.adhd>
+#include <impl/ecs_render/components.adhd>
+#include <impl/ecs_scene/component_types.adhd>
 #include "smoke_environment.adhd"
 #include "smoke_project_helpers.adhd"
 
@@ -594,20 +597,16 @@ SmokeTintedEntitySetup CreateSmokeTintedEntity(
     const Name materialInterface = setup.materialInterface;
     const f32x4 storedPosition = f32x4(position);
     const f32x4 storedScale = f32x4(scale);
-    EntityID entityId = s_InvalidEntityId;
-    native(in material, in materialInterface, in storedPosition, in storedScale, mut world, mut entityId){
-        auto entity = world.createEntity();
-        auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-        transform.position = storedPosition;
-        transform.scale = storedScale;
+    Entity entity = world.createEntity();
+    mut TransformComponent transform = entity.addComponent<TransformComponent>();
+    transform.position = storedPosition;
+    transform.scale = storedScale;
 
-        auto& renderer = entity.addComponent<Impl::RendererComponent>();
-        renderer.material = material;
+    mut RendererComponent renderer = entity.addComponent<RendererComponent>();
+    renderer.material = material;
 
-        entity.addComponent<Impl::MaterialInstanceComponent>(materialInterface);
-        entityId = entity.id();
-    }
-    setup.entity = entityId;
+    entity.addComponent<MaterialInstanceComponent>(materialInterface);
+    setup.entity = entity.id();
     return setup;
 }
 
@@ -637,10 +636,8 @@ EntityID CreateTintedStaticMeshEntityWithPath(
     mut World world
 ){
     const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(material, materialInterfacePath, position, scale, world);
-    native(in setup, in mesh, mut world){
-        auto& meshComponent = world.entity(setup.entity).addComponent<Impl::MeshComponent>();
-        meshComponent.mesh = mesh;
-    }
+    mut MeshComponent meshComponent = world.entity(setup.entity).addComponent<MeshComponent>();
+    meshComponent.mesh = mesh;
     if(!ApplySmokeMaterialTint(setup, colorTint, tintParameterPath, world))
         return s_InvalidEntityId;
 

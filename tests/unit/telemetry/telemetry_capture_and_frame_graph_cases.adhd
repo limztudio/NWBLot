@@ -269,7 +269,7 @@ void ApplyEncodedPhysicalQueueMutation(in usize mutationIndex, mut EncodedFrameG
 void VerifyTelemetry_CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureAll());
+    session.setCaptureOptions(TelemetryCaptureOptionsAll());
 
     CapturingLogger previousLogger = CapturingLogger();
     {
@@ -313,7 +313,7 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
         EXPECT_EQ(capture.droppedTextLogCount(), 0u);
         EXPECT_EQ(recorder.eventCount(), 0u);
 
-        recorder.setCaptureOptions(CaptureAll());
+        recorder.setCaptureOptions(Core::Telemetry::CaptureOptions::All());
         capture.enqueue(message, invalidType);
         EXPECT_EQ(capture.droppedTextLogCount(), 1u);
         EXPECT_EQ(recorder.eventCount(), 0u);
@@ -321,7 +321,7 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
         EXPECT_EQ(capture.droppedTextLogCount(), 1u);
         EXPECT_EQ(recorder.eventCount(), 1u);
 
-        recorder.setCaptureOptions(CaptureDisabled());
+        recorder.setCaptureOptions(Core::Telemetry::CaptureOptions::Disabled());
         capture.enqueue(message, invalidType);
         EXPECT_EQ(capture.droppedTextLogCount(), 1u);
         EXPECT_EQ(recorder.eventCount(), 0u);
@@ -395,7 +395,7 @@ void VerifyTelemetry_DiagnosticPayloadPreservesAliasedTextFields(){
 void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     u32 callbackCount = 0u;
     native(mut recorder, mut callbackCount){
         g_ExistingDiagnosticCallbackCount = 0u;
@@ -418,13 +418,13 @@ void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
 void VerifyTelemetry_DiagnosticObserverReusesPreparedStorageAndCountsPoolOverflow(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
     DiagnosticEventRecord source = DiagnosticEventRecord();
     source.event = s_ErrorEvent;
     source.message = "bounded observer";
     for(u32 iteration = 0u; iteration < 3u; ++iteration){
-        recorder.setCaptureOptions(CaptureAll());
+        recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
         DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
         ASSERT_TRUE(guard.installed());
         guard.setFrameIndex(iteration);
@@ -449,7 +449,7 @@ void VerifyTelemetry_DiagnosticObserverReusesPreparedStorageAndCountsPoolOverflo
 void VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDiagnostics(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
     const usize s_MessageCapacity = s_DiagnosticCapturePayloadCapacity - s_EncodedDiagnosticPayloadHeaderByteSize - 5u;
@@ -487,7 +487,7 @@ void VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDia
 void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
@@ -518,7 +518,7 @@ void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
 void VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagTogglesAndFiltersDisabledCapture(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
     DiagnosticEventRecord source = DiagnosticEventRecord();
@@ -530,11 +530,11 @@ void VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagToggle
     ASSERT_NE(retainedAddress, 0u);
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
     for(u32 iteration = 0u; iteration < 3u; ++iteration){
-        recorder.setCaptureOptions(CapturePerfOnly());
+        recorder.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
         guard.capture(source);
         EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
         EXPECT_EQ(EventRecordAddressAt(recorder.view(), 0u), retainedAddress);
-        recorder.setCaptureOptions(CaptureAll());
+        recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
         guard.capture(source);
         EXPECT_EQ(recorder.eventCount(), iteration + 2u);
     }
@@ -542,12 +542,12 @@ void VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagToggle
     EXPECT_EQ(toggled.allocationCount, prepared.allocationCount);
     EXPECT_EQ(toggled.reallocationCount, prepared.reallocationCount);
     EXPECT_EQ(toggled.deallocationCount, prepared.deallocationCount);
-    recorder.setCaptureOptions(CaptureDisabled());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsDisabled());
     guard.capture(source);
     EXPECT_EQ(recorder.eventCount(), 0u);
     EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
     EXPECT_LT(testArena.arena.memoryStats().usedBytes, prepared.usedBytes);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     guard.capture(source);
     EXPECT_EQ(recorder.eventCount(), 1u);
 }
@@ -555,7 +555,7 @@ void VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagToggle
 void VerifyTelemetry_DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinaryEventsFillIt(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
     for(usize eventIndex = 0u; eventIndex < s_DiagnosticCaptureEventCapacity; ++eventIndex)
@@ -576,7 +576,7 @@ void VerifyTelemetry_DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinary
 void VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuilderReentry(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
     b8 captureDidNotAllocate = false;
@@ -616,7 +616,7 @@ void VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuring
 void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
     const usize s_AttemptsPerThread = 256u;
@@ -646,7 +646,7 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
     EXPECT_EQ(captured.allocationCount, prepared.allocationCount);
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
     const u64 dropped = recorder.droppedDiagnosticCount();
-    recorder.setCaptureOptions(CaptureDisabled());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsDisabled());
     guard.capture(source);
     EXPECT_EQ(recorder.droppedDiagnosticCount(), dropped);
     EXPECT_EQ(recorder.eventCount(), 0u);
@@ -655,7 +655,7 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
 void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     const u32 s_IterationCount = 64u;
     b8 allGuardsInstalled = true;
     b8 allIterationsCaptured = true;
@@ -746,7 +746,7 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
 
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureAll());
+    session.setCaptureOptions(TelemetryCaptureOptionsAll());
     session.setFrameIndex(1u);
     session.setStreamId(s_BaseStreamId + 1u);
 
@@ -846,7 +846,7 @@ void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtL
     EXPECT_EQ(timing.stats(taskName).publishFrameIndex, 42u);
 
     TelemetryCaptureSession telemetry = TelemetryCaptureSession(arena.arena);
-    telemetry.setCaptureOptions(CaptureAll());
+    telemetry.setCaptureOptions(TelemetryCaptureOptionsAll());
     const PerfSessionRecordResult result = telemetry.recordPerfReport(perf.report());
     ASSERT_TRUE(result.ok());
     b8 foundNamedTask = false;

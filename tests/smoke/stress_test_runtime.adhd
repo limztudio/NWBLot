@@ -149,7 +149,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
         if(!this.m_cpuTimingProbe.initialize(this.m_cpuDiagnosticsEnabled, this.m_timingEnabled, StringView(cpuTimingPath)))
             return false;
 
-        PerfCaptureOptions capture = SmokePerfGpuTimingOnly();
+        PerfCaptureOptions capture = PerfCaptureOptionsGpuTimingOnly();
         capture.cpuTiming = this.m_cpuDiagnosticsEnabled;
         this.m_context.setPerfCapture(capture);
         const b8 hasQuitCallback = SmokeContextHasQuitCallback(this.m_context);
@@ -430,10 +430,7 @@ b8 StressHardwareShadowOpaqueBaseline(){
 Expected<u32> ReadStressCharactersPerClass(){
     const Expected<Optional<String>, ErrorCode> value = ReadEnvironmentVariable("NWB_STRESS_CHARACTERS_PER_CLASS");
     if(!value.has_value()){
-        native(in value){
-            const auto errorText = value.error().message();
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(AStringView(errorText)));
-        }
+        error("StressTestSmokeProject: failed to read workload environment: {}", ErrorCodeMessage(value.error()));
         return MakeUnexpected(Failure());
     }
     if(!value.value().has_value())

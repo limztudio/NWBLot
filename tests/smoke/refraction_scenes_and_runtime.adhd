@@ -491,7 +491,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
         if(!this.configureFrameGraphSnapshot())
             return false;
         if(this.m_timingEnabled){
-            this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+            this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
             if(!this.m_timingRenderPass.start())
                 return false;
         }

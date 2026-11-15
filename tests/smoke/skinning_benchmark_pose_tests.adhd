@@ -2,31 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_skeleton/components.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/ecs_test_world.adhd>
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_skeleton/components.adhd.h>
-#include <core/ecs/entity.h>
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,20 +30,18 @@ void AnimateSkinningBenchmarkTestEntities(mut EcsTestWorld context, in Span<Enti
     for(usize entityIndex = 0u; entityIndex < entities.size(); ++entityIndex){
         const EntityID entity = entities[entityIndex];
         const u32 seedIndex = cast<u32>(entityIndex);
-        native(mut context, in entity, in bindJoints, in seedIndex, in timeSeconds, in staticPreview){
-            if(auto* pose = context.world.tryGetComponent<NWB::Impl::SkeletonPoseComponent>(entity))
-                AnimateSkinningBenchmarkPoseJoints(bindJoints, seedIndex, timeSeconds, staticPreview, pose->localJoints);
+        if(context.world.hasComponent<SkeletonPoseComponent>(entity)){
+            mut SkeletonPoseComponent pose = context.world.getComponent<SkeletonPoseComponent>(entity);
+            AnimateSkinningBenchmarkPoseJoints(bindJoints, seedIndex, timeSeconds, staticPreview, pose.localJoints);
         }
     }
 }
 
 void ReadSkinningBenchmarkPoseJoints(in EcsTestWorld context, in EntityID entity, mut Vector<f32x3x4> outJoints){
     outJoints.clear();
-    native(in context, in entity, mut outJoints){
-        if(const auto* pose = context.world.tryGetComponent<NWB::Impl::SkeletonPoseComponent>(entity)){
-            for(const auto& joint : pose->localJoints)
-                outJoints.push_back(joint);
-        }
+    if(context.world.hasComponent<SkeletonPoseComponent>(entity)){
+        for(in f32x3x4 joint : context.world.getComponent<SkeletonPoseComponent>(entity).localJoints)
+            outJoints.push_back(joint);
     }
 }
 
@@ -110,13 +88,13 @@ void VerifySkinningBenchmarkPose(){
     identity.rows[1u] = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
     identity.rows[2u] = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
     bindJoints.resize(s_SkinningBenchmarkTestJointCount, identity);
-    native(mut context, mut skeleton, mut missingPose, in bindJoints){
-        auto& world = context.world;
-        skeleton = world.createEntity().id();
-        missingPose = world.createEntity().id();
-        auto& pose = world.entity(skeleton).addComponent<NWB::Impl::SkeletonPoseComponent>();
-        pose.localJoints.assign(bindJoints.begin(), bindJoints.end());
-    }
+    Entity skeletonEntity = context.world.createEntity();
+    skeleton = skeletonEntity.id();
+    Entity missingEntity = context.world.createEntity();
+    missingPose = missingEntity.id();
+    mut SkeletonPoseComponent pose = skeletonEntity.addComponent<SkeletonPoseComponent>();
+    for(in f32x3x4 joint : bindJoints)
+        pose.localJoints.push_back(joint);
     Array<EntityID, 2u> entities;
     entities[0u] = missingPose;
     entities[1u] = skeleton;

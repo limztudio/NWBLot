@@ -57,14 +57,6 @@ using ::s_PI;
 using ::s_2PI;
 using ::s_PIDIV2;
 
-[[nodiscard]] FOUNDATION_INLINE Core::Perf::CaptureOptions SmokePerfGpuTimingOnly()noexcept{
-    return Core::Perf::CaptureOptions::GpuTimingOnly();
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::Telemetry::CaptureOptions SmokeTelemetryPerfOnly()noexcept{
-    return Core::Telemetry::CaptureOptions::PerfOnly();
-}
-
 using NWB::ProjectFrameClientSize;
 
 [[nodiscard]] FOUNDATION_INLINE ProjectFrameClientSize QuerySmokeFrameClientSize(){

@@ -637,7 +637,7 @@ b8 ReloadRuntimeStatisticsPayload(
 void VerifyTelemetry_RegistryOwnsLabelsFromContributorCallbacks(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     LocalLabelContributor contributor = LocalLabelContributor();
     RegisterTestContributor(registry, contributor);
@@ -651,7 +651,7 @@ void VerifyTelemetry_RegistryOwnsLabelsFromContributorCallbacks(){
 void VerifyTelemetry_RegistryDefersAddedContributorsAndSkipsRemovedOnes(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     MutatingContributor first = MutatingContributor(registry);
     MutatingContributor removed = MutatingContributor(registry);
@@ -679,7 +679,7 @@ void VerifyTelemetry_RegistryDefersAddedContributorsAndSkipsRemovedOnes(){
 void VerifyTelemetry_RegistryKeepsLabelsAfterRemovedContributorIsDestroyed(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     b8 firstDestroyed = false;
     native(mut testArena, mut session, mut registry, mut firstDestroyed){
@@ -701,7 +701,7 @@ void VerifyTelemetry_RegistryKeepsLabelsAfterRemovedContributorIsDestroyed(){
 void VerifyTelemetry_RegistryClearDuringCallbackSkipsRemainingContributors(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     MutatingContributor first = MutatingContributor(registry);
     MutatingContributor skipped = MutatingContributor(registry);
@@ -724,7 +724,7 @@ void VerifyTelemetry_RegistryClearDuringCallbackSkipsRemainingContributors(){
 void VerifyTelemetry_RegistryCanRemoveAndReregisterTheCurrentContributor(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     MutatingContributor contributor = MutatingContributor(registry);
     contributor.removeSelf = true;
@@ -739,7 +739,7 @@ void VerifyTelemetry_RegistryCanRemoveAndReregisterTheCurrentContributor(){
 void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     MutatingContributor first = MutatingContributor(registry);
     MutatingContributor skipped = MutatingContributor(registry);
@@ -763,7 +763,7 @@ void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
 void VerifyTelemetry_RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapacity(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     const StringView replacementLabel = "replacement label after unwind";
     b8 reentryRejected = false;
@@ -788,7 +788,7 @@ void VerifyTelemetry_RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphC
 void VerifyTelemetry_PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
-    session.setCaptureOptions(CaptureFrameGraphOnly());
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
 
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     PendingNameFrameGraphContributor contributor = PendingNameFrameGraphContributor();
@@ -852,7 +852,7 @@ void VerifyFrameGraphReport_GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjace
     AddReportUnmeasuredNode(fixture);
 
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
 
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
@@ -905,7 +905,7 @@ void VerifyFrameGraphReport_RestartsOwnerRangesForEveryCaptureAndReportRebuild()
     AddReportUnmeasuredNode(second);
     AddReportOwner(second, 2u, 7u);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
 
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
@@ -937,7 +937,7 @@ void VerifyFrameGraphReport_RejectsMalformedOwnerTablesBeforeReportingAndRetains
     AddReportOwner(fixture, 3u, 1u);
     TelemetryBytes original = TelemetryBytes(testArena.arena);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CaptureAll());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, original));

@@ -144,7 +144,7 @@ NotNullUniquePtr<World> CreateReflectionSmokeWorldOrDie(mut ProjectRuntimeContex
         AddSmokeSkinnedRenderSystems(SmokeWorldRef(world), context);
     else
         SetupSmokeRenderSystems(SmokeWorldRef(world), context);
-    return TakeSmokeWorld(world);
+    return world;
 }
 
 ProjectFrameClientSize QueryReflectionSmokeFrameClientSize(){
@@ -991,7 +991,7 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         }
 
         if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || this.m_hasSpatialOwnerProbe || this.m_hasCpuTimingProbe){
-            PerfCaptureOptions captureOptions = SmokePerfGpuTimingOnly();
+            PerfCaptureOptions captureOptions = PerfCaptureOptionsGpuTimingOnly();
             captureOptions.cpuTiming = this.m_hasCpuTimingProbe;
             this.m_context.setPerfCapture(captureOptions);
             if(!this.m_timingRenderPass.start(extentWidth, extentHeight))

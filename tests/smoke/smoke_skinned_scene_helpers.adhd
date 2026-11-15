@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_model/components.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 #include "smoke_scene_helpers.adhd"
 
 
@@ -258,10 +260,8 @@ SmokeTintedModelEntityResult CreateTintedModelEntity(
     mut World world
 ){
     const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(material, materialInterfacePath, position, scale, world);
-    native(in setup, in model, mut world){
-        auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
-        modelComponent.model = model;
-    }
+    mut ModelComponent modelComponent = world.entity(setup.entity).addComponent<ModelComponent>();
+    modelComponent.model = model;
     SmokeTintedModelEntityResult result = SmokeTintedModelEntityResult();
     result.entity = setup.entity;
     result.tintApplied = ApplySmokeMaterialTint(setup, colorTint, "runtime.color_tint", world);
@@ -285,9 +285,9 @@ void AnimateSkinningBenchmarkPoses(mut World world, in Span<EntityID> entities, 
     for(usize entityIndex = 0u; entityIndex < entities.size(); ++entityIndex){
         const EntityID entity = entities[entityIndex];
         const u32 seedIndex = cast<u32>(entityIndex);
-        native(mut world, in entity, in bindJoints, in seedIndex, in timeSeconds, in staticPreview){
-            if(auto* pose = world.tryGetComponent<NWB::Impl::SkeletonPoseComponent>(entity))
-                AnimateSkinningBenchmarkPoseJoints(bindJoints, seedIndex, timeSeconds, staticPreview, pose->localJoints);
+        if(world.hasComponent<SkeletonPoseComponent>(entity)){
+            mut SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(entity);
+            AnimateSkinningBenchmarkPoseJoints(bindJoints, seedIndex, timeSeconds, staticPreview, pose.localJoints);
         }
     }
 }

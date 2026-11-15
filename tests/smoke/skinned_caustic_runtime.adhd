@@ -95,7 +95,7 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
-        this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+        this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
         if(!this.m_transition.prepare())
             return false;
 
@@ -212,21 +212,20 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
 
     private void animatePoses(){
         const f32 timeSeconds = cast<f32>(this.m_animationTime);
-        native(in skeleton = this.m_skeletonEntity, in bindJoints = this.m_bindJoints, in timeSeconds, mut world = this.m_world){
-            auto* const pose = world->tryGetComponent<Impl::SkeletonPoseComponent>(skeleton);
-            if(pose){
-                for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < bindJoints.size(); ++jointIndex){
-                    if(jointIndex == 0u){
-                        pose->localJoints[jointIndex] = bindJoints[jointIndex];
-                        continue;
-                    }
-                    const SIMDMatrix animatedJoint = BuildSkinnedCausticWaveJointMatrix(
-                        LoadFloat(bindJoints[jointIndex]),
-                        static_cast<f32>(jointIndex),
-                        timeSeconds
-                    );
-                    StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
+        mut World world = SmokeWorldRef(this.m_world);
+        if(world.hasComponent<SkeletonPoseComponent>(this.m_skeletonEntity)){
+            mut SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(this.m_skeletonEntity);
+            for(u32 jointIndex = 0u; jointIndex < pose.localJoints.size() && jointIndex < this.m_bindJoints.size(); ++jointIndex){
+                if(jointIndex == 0u){
+                    pose.localJoints[jointIndex] = this.m_bindJoints[jointIndex];
+                    continue;
                 }
+                const MatrixSingle animatedJoint = BuildSkinnedCausticWaveJointMatrix(
+                    MatrixSingle(this.m_bindJoints[jointIndex]),
+                    cast<f32>(jointIndex),
+                    timeSeconds
+                );
+                pose.localJoints[jointIndex] = f32x3x4(animatedJoint);
             }
         }
     }

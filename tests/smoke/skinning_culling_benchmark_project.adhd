@@ -230,17 +230,13 @@ b8 PopulateSkinningBenchmarkScene(
         if(!staticPreview)
             posX = (cast<f32>(characterIndex) - 1.0f) * 1.15f;
         const f32x4 position = f32x4(posX, 0.0f, 0.0f, 0.0f);
-        EntityID ownerId = s_InvalidEntityId;
-        native(in position, in model, in material, mut world, mut ownerId){
-            auto entity = world.createEntity();
-            auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-            transform.position = position;
-            transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
-            entity.addComponent<Impl::ModelComponent>().model = model;
-            entity.addComponent<Impl::RendererComponent>().material = material;
-            ownerId = entity.id();
-        }
-        modelOwners.push_back(ownerId);
+        Entity entity = world.createEntity();
+        mut TransformComponent transform = entity.addComponent<TransformComponent>();
+        transform.position = position;
+        transform.scale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        entity.addComponent<ModelComponent>().model = model;
+        entity.addComponent<RendererComponent>().material = material;
+        modelOwners.push_back(entity.id());
     }
 
     SyncSmokeModelRuntimes(world);
@@ -272,9 +268,9 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
 
     public b8 onStartup()override{
         if(!this.m_staticPreview)
-            this.m_context.setTelemetryCapture(SmokeTelemetryPerfOnly());
+            this.m_context.setTelemetryCapture(TelemetryCaptureOptionsPerfOnly());
         if(this.m_gpuTimingEnabled)
-            this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+            this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
 
         Expected<SkeletonJointMatrixVector> bindJoints = LoadSmokeSkeletonBindJoints(
             s_BenchmarkModel,

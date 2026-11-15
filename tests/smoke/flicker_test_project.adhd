@@ -159,25 +159,25 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
             s_FlickerDirectionalLightPitch, s_FlickerDirectionalLightYaw, 0.0f,
             f32x4(1.0f, 0.96f, 0.88f, 0.0f), s_FlickerDirectionalLightIntensity, SmokeWorldRef(this.m_world)
         );
-        b8 ok = true;
-        const EntityID pointLight = CreateSmokePointLight(f32x4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), f32x4(0.60f, 0.76f, 1.00f, 0.0f), s_FlickerPointLightIntensity, s_FlickerPointLightRange, SmokeWorldRef(this.m_world));
-        native(in disableCaustics, in meshEntity, in directionalLight, in pointLight, mut world = this.m_world, mut ok){
-            if(disableCaustics){
-                for(const Core::ECS::EntityID lightEntity : { directionalLight, pointLight }){
-                    if(auto* light = world->tryGetComponent<Impl::Scene::LightComponent>(lightEntity))
-                        light->enableCaustics = false;
+        mut World world = SmokeWorldRef(this.m_world);
+        const EntityID pointLight = CreateSmokePointLight(f32x4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), f32x4(0.60f, 0.76f, 1.00f, 0.0f), s_FlickerPointLightIntensity, s_FlickerPointLightRange, world);
+        if(disableCaustics){
+            Array<EntityID, 2u> lightEntities = Array<EntityID, 2u>();
+            lightEntities[0u] = directionalLight;
+            lightEntities[1u] = pointLight;
+            for(in EntityID lightEntity : lightEntities){
+                if(world.hasComponent<LightComponent>(lightEntity)){
+                    mut LightComponent light = world.getComponent<LightComponent>(lightEntity);
+                    light.enableCaustics = false;
                 }
             }
-            auto* const renderer = world->tryGetComponent<Impl::RendererComponent>(meshEntity);
-            if(!renderer)
-                ok = false;
-            else
-                renderer->opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
         }
-        if(!ok){
+        if(!world.hasComponent<RendererComponent>(meshEntity)){
             error("FlickerTestSmokeProject: closed refractor renderer is unavailable");
             return false;
         }
+        mut RendererComponent renderer = world.getComponent<RendererComponent>(meshEntity);
+        renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
         [essential] assert(
             activeCamera.valid() && this.m_groundEntity.valid() && this.m_opaqueOwner.valid() && this.m_transparentOwner.valid(),
             "FlickerTestSmokeProject failed to create all scene entities"

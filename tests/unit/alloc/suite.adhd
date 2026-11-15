@@ -1094,26 +1094,9 @@ void VerifyScratchArenaReuse_NestedContainerDestructionAndCallerUnwindPreserveEa
     }
 }
 
-b8 TryReadArenaOwnerStats(in Name ownerName, mut ArenaMemoryStats outStats){
-    b8 found = false;
-    native(in ownerName, mut outStats, mut found){
-        const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-        while(record){
-            ArenaMemoryOwnerSnapshot owner;
-            record = ReadArenaMemoryOwnerRecord(*record, owner);
-            if(owner.ownerName == ownerName && owner.source == ArenaMemorySource::Arena){
-                outStats = owner.stats;
-                found = true;
-                break;
-            }
-        }
-    }
-    return found;
-}
-
 void VerifyScratchArenaReuse_OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingFromUsage(){
     ArenaMemoryStats before = ArenaMemoryStats();
-    TryReadArenaOwnerStats(s_ScratchReuseOwnerLifecycle, before);
+    TryReadOwnerStats(s_ScratchReuseOwnerLifecycle, before);
     ArenaMemoryStats live = ArenaMemoryStats();
     {
         ScratchArena arena(s_ScratchReuseOwnerLifecycle, 256u);
@@ -1126,7 +1109,7 @@ void VerifyScratchArenaReuse_OwnerTelemetryRetainsHistoryAndSeparatesReservedBac
         EXPECT_EQ(live.usedBytes, 0u);
         EXPECT_GT(live.reservedBytes, 0u);
         ArenaMemoryStats liveOwner = ArenaMemoryStats();
-        const b8 foundLive = TryReadArenaOwnerStats(s_ScratchReuseOwnerLifecycle, liveOwner);
+        const b8 foundLive = TryReadOwnerStats(s_ScratchReuseOwnerLifecycle, liveOwner);
         EXPECT_TRUE(foundLive);
         if(foundLive){
             EXPECT_EQ(liveOwner.usedBytes, 0u);
@@ -1136,7 +1119,7 @@ void VerifyScratchArenaReuse_OwnerTelemetryRetainsHistoryAndSeparatesReservedBac
         }
     }
     ArenaMemoryStats afterOwner = ArenaMemoryStats();
-    const b8 foundAfter = TryReadArenaOwnerStats(s_ScratchReuseOwnerLifecycle, afterOwner);
+    const b8 foundAfter = TryReadOwnerStats(s_ScratchReuseOwnerLifecycle, afterOwner);
     EXPECT_TRUE(foundAfter);
     if(foundAfter){
         EXPECT_EQ(afterOwner.usedBytes, 0u);

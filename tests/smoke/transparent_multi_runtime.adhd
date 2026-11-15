@@ -100,7 +100,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
-        this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+        this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
 
         b8 causticTiming = false;
         if(s_TransparentMultiCausticSphere)

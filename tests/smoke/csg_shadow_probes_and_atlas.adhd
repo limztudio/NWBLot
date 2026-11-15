@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_csg/shape_id.adhd>
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
 #include "avboit_timing_render_pass.adhd"
@@ -610,10 +611,9 @@ class CsgShadowAtlas{
         for(u32 index = 0u; index < this.m_movingCount; ++index){
             const EntityID cutterId = this.m_movingCutters[index];
             const VectorSingle finalCenter = VectorSingle(this.m_finalCutterCenters[index]);
-            native(in cutterId, in finalCenter, in identityRot, mut world){
-                auto& cutter = *MakeNotNull(world.tryGetComponent<Impl::CsgCutterComponent>(cutterId));
-                AssignCsgCutterTransform(finalCenter, identityRot, cutter);
-            }
+            [essential] assert(world.hasComponent<CsgCutterComponent>(cutterId), "CsgShadowSmokeProject: missing moving cutter component");
+            mut CsgCutterComponent cutter = world.getComponent<CsgCutterComponent>(cutterId);
+            AssignCsgCutterTransform(finalCenter, identityRot, cutter);
         }
     }
 
@@ -645,27 +645,14 @@ class CsgShadowAtlas{
         );
         [essential] assert(entity.valid(), "CsgShadowSmokeProject: box creation failed");
         if(s_CsgCausticSmokeEnabled && transparent){
-            native(in entity, mut world){
-                world.entity(entity).getComponent<Impl::RendererComponent>().opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-            }
+            mut RendererComponent renderer = world.entity(entity).getComponent<RendererComponent>();
+            renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
         }
         if(transparent && mode.openAtlas){
-            b8 iorOk = false;
-            b8 transmissionOk = false;
-            native(in entity, mut world, mut iorOk, mut transmissionOk){
-                const Half packedIor = ConvertFloatToHalf(1.5f);
-                const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
-                iorOk = Impl::SetMaterialMutableParameter(
-                    world, entity, Name(s_ShadowSmokeOpenInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16,
-                    Impl::PackMaterialInstanceValue(packedIor)
-                );
-                transmissionOk = Impl::SetMaterialMutableParameter(
-                    world, entity, Name(s_ShadowSmokeOpenInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3,
-                    Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
-                );
-            }
-            [essential] assert(iorOk, "CsgShadowSmokeProject: open-sheet IOR override failed");
-            [essential] assert(transmissionOk, "CsgShadowSmokeProject: open-sheet transmission override failed");
+            const b8 opticalOk = SetSmokeOpticalMaterialParameters(
+                entity, Name(s_ShadowSmokeOpenInterface), 1.5f, f32x4(0.25f, 0.5f, 0.75f, 0.0f), world
+            );
+            [essential] assert(opticalOk, "CsgShadowSmokeProject: open-sheet optical override failed");
         }
         return entity;
     }
@@ -709,19 +696,9 @@ class CsgShadowAtlas{
         }
         const b8 active = mode.arm != CsgShadowArm::Uncut;
         const VectorSingle identityRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
-        EntityID cutterId = s_InvalidEntityId;
-        native(in groupName, in active, in halfExtents, in initialCenter, in identityRot, mut world, mut cutterId){
-            auto cutterEntity = world.createEntity();
-            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-            cutter.receiverGroup = groupName;
-            cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
-            cutter.active = active;
-            Impl::CsgBoxShapeParameters parameters;
-            parameters.halfExtents = halfExtents;
-            AssignCsgCutterParameters(parameters, cutter);
-            AssignCsgCutterTransform(initialCenter, identityRot, cutter);
-            cutterId = cutterEntity.id();
-        }
+        const EntityID cutterId = CreateSmokeCsgBoxCutter(
+            groupName, s_CsgBoxShapeName, active, halfExtents, initialCenter, identityRot, world
+        );
         if(moving){
             assert(this.m_movingCount < this.m_movingCutters.size(), "Moving cutter capacity exceeded");
             this.m_movingCutters[this.m_movingCount] = cutterId;
@@ -875,21 +852,7 @@ class CsgShadowAtlas{
                 f32 planeW = 8.0f;
                 if(clipped)
                     planeW = 6.75f;
-                b8 cutterCreated = false;
-                native(in groupName, in planeW, mut world, mut cutterCreated){
-                    auto entity = world.createEntity();
-                    if(entity.id().valid()){
-                        auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
-                        cutter.receiverGroup = groupName;
-                        cutter.shapeType = Name(s_ShadowSmokePlaneShapePath);
-                        Impl::CsgPlaneShapeParameters plane;
-                        plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, planeW);
-                        AssignCsgCutterParameters(plane, cutter);
-                        AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
-                        cutterCreated = true;
-                    }
-                }
-                if(!cutterCreated)
+                if(!CreateSmokeCsgPlaneCutter(groupName, Name(s_ShadowSmokePlaneShapePath), true, f32x4(0.0f, 0.0f, 1.0f, planeW), world).valid())
                     return false;
             }
         }

@@ -19,7 +19,7 @@ class UiLayerSmokeProject : IProjectEntryCallbacks{
     private u64 m_resizePresentationBaseline = 0u;
 
     public UiLayerSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
-        this.m_world = TakeUiLayerSmokeWorld(world);
+        this.m_world = TakeSmokeWorld(world);
         this.m_context = context;
         this.m_resizeRenderPass = UiLayerResizeRenderPass(context.graphics);
     }

@@ -438,28 +438,6 @@ Array<MemorySourceEnum, 3> Suite_MakeAllMemorySources(){
     return sources;
 }
 
-TelemetryCaptureOptions CapturePerfOnly(){
-    TelemetryCaptureOptions options = TelemetryCaptureOptions();
-    options.flags = CaptureFlag::Perf;
-    return options;
-}
-
-TelemetryCaptureOptions CaptureDisabled(){
-    return TelemetryCaptureOptions();
-}
-
-TelemetryCaptureOptions CaptureAll(){
-    TelemetryCaptureOptions options = TelemetryCaptureOptions();
-    options.flags = CaptureFlag::All;
-    return options;
-}
-
-TelemetryCaptureOptions CaptureFrameGraphOnly(){
-    TelemetryCaptureOptions options = TelemetryCaptureOptions();
-    options.flags = CaptureFlag::FrameGraph;
-    return options;
-}
-
 TelemetryCaptureOptions MakeCaptureOptions(in CaptureFlagMask flags){
     TelemetryCaptureOptions options = TelemetryCaptureOptions();
     options.flags = flags;
@@ -1728,7 +1706,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
 
     PerfSession perfSession = PerfSession(testArena.arena);
     TelemetryCaptureSession capture = TelemetryCaptureSession(testArena.arena);
-    capture.setCaptureOptions(CapturePerfOnly());
+    capture.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     perfSession.beginFrame(40u);
     perfSession.publishFrame();
     const PerfSessionRecordResult disabled = capture.recordPerfReport(perfSession.report(), 23u);
@@ -1766,12 +1744,12 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     EXPECT_EQ(scratch.reallocationCount, scratchLiveStats.reallocationCount);
     EXPECT_EQ(scratch.deallocationCount, scratchLiveStats.allocationCount);
 
-    capture.setCaptureOptions(CaptureDisabled());
+    capture.setCaptureOptions(TelemetryCaptureOptionsDisabled());
     const PerfSessionRecordResult filtered = capture.recordPerfReport(perfSession.report(), 23u);
     EXPECT_FALSE(filtered.ok());
     EXPECT_EQ(filtered.memoryEvents, 0u);
     EXPECT_EQ(capture.eventCount(), 0u);
-    capture.setCaptureOptions(CapturePerfOnly());
+    capture.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     const PerfSessionRecordResult firstRecorded = capture.recordPerfReport(perfSession.report(), 23u);
     ASSERT_TRUE(firstRecorded.ok());
     EXPECT_GT(firstRecorded.memoryEvents, 0u);
@@ -1897,7 +1875,7 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
     EXPECT_EQ(delta.peakUsedBytes, 0);
 
     TelemetryCaptureSession capture = TelemetryCaptureSession(testArena.arena);
-    capture.setCaptureOptions(CapturePerfOnly());
+    capture.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     const PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks);
@@ -1916,7 +1894,7 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
 void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirUsageAgain(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CapturePerfOnly());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     const Name owner = s_TelemetrySharedSourceIdentity;
     const Array<MemorySourceEnum, 3> allSources = Suite_MakeAllMemorySources();
     for(usize sourceIndex = 0u; sourceIndex < allSources.size(); ++sourceIndex){
@@ -1991,7 +1969,7 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
     const String unknownHashText = FormatNameHashText(unknownHash);
 
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
-    recorder.setCaptureOptions(CapturePerfOnly());
+    recorder.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
     ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, StringView(firstHashText), Suite_MakeOwnerSnapshot(firstOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 91u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, secondOwner, StringView(secondHashText), Suite_MakeOwnerSnapshot(secondOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 92u));

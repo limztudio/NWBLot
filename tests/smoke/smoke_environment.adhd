@@ -11,10 +11,7 @@
 Expected<Optional<String>> ReadSmokeOptionalEnvironmentString(in StringView variableName){
     const Expected<Optional<String>, ErrorCode> value = ReadEnvironmentVariable(variableName);
     if(!value.has_value()){
-        native(in variableName, in value){
-            const auto errorText = value.error().message();
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(AStringView(errorText)));
-        }
+        error("Smoke: failed to read environment '{}': {}", variableName, ErrorCodeMessage(value.error()));
         return MakeUnexpected(Failure());
     }
     return value.value();

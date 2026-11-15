@@ -782,10 +782,7 @@ void ReportReflectionSlicePackets(
         }
         const Expected<Name, ErrorCode> sliceIdentity = ReflectionCsgHardwareSliceIdentity(slice);
         if(!sliceIdentity.has_value()){
-            native(in sliceIdentity){
-                const auto errorText = sliceIdentity.error().message();
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), ConvertString(AStringView(errorText)));
-            }
+            error("Reflection CSG context probe: failed to format hardware slice identity: {}", ErrorCodeMessage(sliceIdentity.error()));
             return;
         }
         sliceIdentities.push_back(sliceIdentity.value());

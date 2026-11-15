@@ -200,7 +200,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     public b8 onStartup()override{
         this.m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
         if(this.m_timingEnabled){
-            this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+            this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
             if(!this.m_timingRenderPass.start())
                 return false;
         }

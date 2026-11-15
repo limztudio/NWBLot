@@ -115,7 +115,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
             whiteWallTint = VectorSingle(s_GiBlackEnclosureTint);
         }
 
-        this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+        this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
         const EntityID activeCamera = CreateSmokeCamera(camHeight, camDistance, camPitch, SmokeWorldRef(this.m_world));
         const EntityID directionalLight = CreateSmokeDirectionalLight(
             lightPitch,

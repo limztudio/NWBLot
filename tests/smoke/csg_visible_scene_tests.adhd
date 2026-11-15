@@ -48,16 +48,11 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
     b8 hadBeforeComponents = false;
     f32x4 oldRotation = f32x4();
     f32x3x4 oldCutterTransform = f32x3x4();
-    native(mut testWorld, in missingReceiver, in remainingReceiver, in remainingCutter, mut hadBeforeComponents, mut oldRotation, mut oldCutterTransform){
-        auto& world = testWorld.world;
-        world.destroyEntity(missingReceiver);
-        const auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(remainingReceiver);
-        const auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(remainingCutter);
-        if(transform && cutter){
-            hadBeforeComponents = true;
-            oldRotation = transform->rotation;
-            oldCutterTransform = cutter->shapeToWorld;
-        }
+    testWorld.world.destroyEntity(missingReceiver);
+    if(testWorld.world.hasComponent<TransformComponent>(remainingReceiver) && testWorld.world.hasComponent<CsgCutterComponent>(remainingCutter)){
+        hadBeforeComponents = true;
+        oldRotation = testWorld.world.getComponent<TransformComponent>(remainingReceiver).rotation;
+        oldCutterTransform = testWorld.world.getComponent<CsgCutterComponent>(remainingCutter).shapeToWorld;
     }
     ASSERT_TRUE(hadBeforeComponents);
     const VectorSingle markerRotation = VectorSingle(0.0f, 0.25f, 0.0f, 1.0f);
@@ -68,19 +63,15 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
     b8 hadAfterComponents = false;
     f32x4 newRotation = f32x4();
     f32x3x4 newCutterTransform = f32x3x4();
-    native(mut testWorld, mut scene, in remainingReceiver, in remainingCutter, mut markerApplied, mut hadAfterComponents, mut newRotation, mut newCutterTransform){
-        auto& world = testWorld.world;
-        const auto* markerTransform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(remainingReceiver);
-        if(markerTransform)
-            markerApplied = markerTransform->rotation.x == 0.0f && markerTransform->rotation.y == 0.25f && markerTransform->rotation.z == 0.0f && markerTransform->rotation.w == 1.0f;
-        scene.update(1.0f, world);
-        const auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(remainingReceiver);
-        const auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(remainingCutter);
-        if(transform && cutter){
-            hadAfterComponents = true;
-            newRotation = transform->rotation;
-            newCutterTransform = cutter->shapeToWorld;
-        }
+    if(testWorld.world.hasComponent<TransformComponent>(remainingReceiver)){
+        const TransformComponent markerTransform = testWorld.world.getComponent<TransformComponent>(remainingReceiver);
+        markerApplied = markerTransform.rotation.x == 0.0f && markerTransform.rotation.y == 0.25f && markerTransform.rotation.z == 0.0f && markerTransform.rotation.w == 1.0f;
+    }
+    scene.update(1.0f, testWorld.world);
+    if(testWorld.world.hasComponent<TransformComponent>(remainingReceiver) && testWorld.world.hasComponent<CsgCutterComponent>(remainingCutter)){
+        hadAfterComponents = true;
+        newRotation = testWorld.world.getComponent<TransformComponent>(remainingReceiver).rotation;
+        newCutterTransform = testWorld.world.getComponent<CsgCutterComponent>(remainingCutter).shapeToWorld;
     }
     ASSERT_TRUE(markerApplied);
     ASSERT_TRUE(hadAfterComponents);

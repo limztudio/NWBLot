@@ -139,7 +139,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
         const b8 overlapping = this.m_temporalEnabled && ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;
         if(this.m_temporalEnabled){
-            this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+            this.m_context.setPerfCapture(PerfCaptureOptionsGpuTimingOnly());
             const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
             const Expected<String> viewText = ReadSmokeEnvironmentString("NWB_CSG_GI_TEMPORAL_VIEW");
             if(!output.has_value() || !viewText.has_value())

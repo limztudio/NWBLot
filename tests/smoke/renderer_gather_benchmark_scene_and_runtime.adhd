@@ -139,25 +139,21 @@ class RendererGatherBenchmarkScene{
             const f32x4 storedPosition = f32x4(position);
             const b8 applyOverride = workload == s_GatherBenchmarkOverridesWorkload;
             const f32x4 overrideTint = f32x4(0.55f + cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
-            b8 entityOk = true;
-            native(in storedPosition, in mesh, in material, in opaque, in applyOverride, in overrideTint, mut world, mut entityOk){
-                auto entity = world.createEntity();
-                auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-                transform.position = storedPosition;
-                transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.0f);
-                entity.addComponent<Impl::MeshComponent>().mesh = mesh;
-                auto& component = entity.addComponent<Impl::RendererComponent>();
-                component.material = material;
-                if(!opaque)
-                    component.opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-                if(applyOverride){
-                    entity.addComponent<Impl::MaterialInstanceComponent>(Name(s_SmokeSurfaceMaterialInterface));
-                    if(!Impl::SetMaterialMutableHalf4(world, entity.id(), Name(s_SmokeSurfaceMaterialInterface), "runtime.color_tint", overrideTint))
-                        entityOk = false;
-                }
+            Entity entity = world.createEntity();
+            mut TransformComponent transform = entity.addComponent<TransformComponent>();
+            transform.position = storedPosition;
+            transform.scale = f32x4(0.43f, 0.43f, 0.43f, 0.0f);
+            mut MeshComponent meshComponent = entity.addComponent<MeshComponent>();
+            meshComponent.mesh = mesh;
+            mut RendererComponent component = entity.addComponent<RendererComponent>();
+            component.material = material;
+            if(!opaque)
+                component.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
+            if(applyOverride){
+                entity.addComponent<MaterialInstanceComponent>(Name(s_SmokeSurfaceMaterialInterface));
+                if(!SetSmokeMaterialHalf4(entity.id(), Name(s_SmokeSurfaceMaterialInterface), "runtime.color_tint", overrideTint, world))
+                    return false;
             }
-            if(!entityOk)
-                return false;
             if(!opaque)
                 ++this.m_counts.transparentRenderers;
             ++this.m_counts.renderers;
@@ -191,27 +187,7 @@ class RendererGatherBenchmarkScene{
         const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_PIDIV2, 0.0f, 0.0f, 0.0f)));
         if(!SetSmokeEntityRotation(backdrop, rotation, world))
             return false;
-        b8 paramsOk = false;
-        native(in backdrop, mut world, mut paramsOk){
-            const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
-            const Half roughness = ConvertFloatToHalf(0.0f);
-            paramsOk = Impl::SetMaterialMutableParameter(
-                world,
-                backdrop,
-                Name(s_SmokeSurfaceMaterialInterface),
-                "runtime.specular_f0",
-                Impl::MaterialLayoutFieldType::f16x3,
-                Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))
-            ) && Impl::SetMaterialMutableParameter(
-                world,
-                backdrop,
-                Name(s_SmokeSurfaceMaterialInterface),
-                "runtime.perceptual_roughness",
-                Impl::MaterialLayoutFieldType::f16,
-                Impl::PackMaterialInstanceValue(roughness)
-            );
-        }
-        if(!paramsOk)
+        if(!SetSmokeSurfaceRoughnessF0(backdrop, Name(s_SmokeSurfaceMaterialInterface), "runtime.specular_f0", "runtime.perceptual_roughness", 0.35f, 0.0f, world))
             return false;
         ++this.m_counts.renderers;
         return true;
@@ -238,16 +214,10 @@ class RendererGatherBenchmarkScene{
         if((index & 8u) != 0u)
             yaw = 0.08f;
         const MatrixSingle yawRotation = MatrixRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f));
-        b8 posedOk = false;
-        native(in skeleton, in yawRotation, mut world, mut posedOk){
-            auto& pose = world.entity(skeleton).getComponent<Impl::SkeletonPoseComponent>();
-            if(pose.localJoints.size() >= 2u){
-                StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), yawRotation), pose.localJoints[1u]);
-                posedOk = true;
-            }
-        }
-        if(!posedOk)
+        mut SkeletonPoseComponent pose = world.entity(skeleton).getComponent<SkeletonPoseComponent>();
+        if(pose.localJoints.size() < 2u)
             return false;
+        pose.localJoints[1u] = f32x3x4(MatrixMultiply(MatrixSingle(pose.localJoints[1u]), yawRotation));
         ++this.m_counts.runtimeOwners;
         return true;
     }

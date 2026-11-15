@@ -65,14 +65,6 @@ FOUNDATION_INLINE void SetCallerThreadFlag(const b8 value)noexcept{
     return s_EcsCallerThread;
 }
 
-[[nodiscard]] FOUNDATION_INLINE CpuTaskOptions MainThreadTaskOptions()noexcept{
-    return CpuTaskOptions{ .target = ::NWB::Core::CpuTaskTarget::MainThread };
-}
-
-[[nodiscard]] FOUNDATION_INLINE CpuTaskOptions InvalidTargetTaskOptions()noexcept{
-    return CpuTaskOptions{ .target = static_cast<::NWB::Core::CpuTaskTarget::Enum>(::NWB::Core::CpuTaskTarget::MainThread + 1u) };
-}
-
 template<typename T>
 [[nodiscard]] FOUNDATION_INLINE usize ComponentAddress(const T& component)noexcept{
     return reinterpret_cast<usize>(AddressOf(component));
@@ -324,6 +316,8 @@ class RejectingRangeSystem{
     }
 
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta){
+        CpuTaskOptions options = CpuTaskOptions();
+        options.target = cast<CpuTaskTarget>(cast<u8>(CpuTaskTarget::MainThread) + 1u);
         return world.taskScope().parallelFor(
             cast<usize>(0u),
             cast<usize>(1u),
@@ -333,7 +327,7 @@ class RejectingRangeSystem{
                     return;
                 ++this.callbacks;
             },
-            InvalidTargetTaskOptions()
+            options
         );
     }
 }
@@ -561,6 +555,8 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
         AccessMode::Write,
         lambda[mut value]() -> void{ value = 23; }
     );
+    CpuTaskOptions callerOptions = CpuTaskOptions();
+    callerOptions.target = CpuTaskTarget::MainThread;
     ScheduledSystem caller(
         positionType,
         AccessMode::Write,
@@ -569,7 +565,7 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
             EXPECT_EQ(value, 23);
             value = 29;
         },
-        MainThreadTaskOptions()
+        callerOptions
     );
     ScheduledSystem consumer(
         positionType,

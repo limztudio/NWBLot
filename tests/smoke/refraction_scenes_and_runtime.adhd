@@ -21,10 +21,6 @@ native{
 namespace NWB::Tests::Smoke{
 using Impl::RefractionStatistics;
 
-[[nodiscard]] FOUNDATION_INLINE AStringView RefractionSmokeProjectName()noexcept{
-    return "RefractionSmokeProject";
-}
-
 FOUNDATION_INLINE void LogRefractionQueryDiagnosticsCounters(
     const Impl::RefractionStatistics& statistics,
     const u64 currentFrame,
@@ -83,6 +79,10 @@ const usize s_RefractionLifecyclePhaseCount = 7u;
 const u32 s_RefractionDefaultCaptureFrameCount = 16u;
 const u64 s_RefractionFrameGraphRequiredFrames = 360u;
 const u64 s_RefractionMaxU32Value = 4294967295u;
+
+AStringView RefractionSmokeProjectName(){
+    return "RefractionSmokeProject";
+}
 
 ProjectFrameClientSize MakeRefractionFrameClientSize(in u32 width, in u32 height){
     ProjectFrameClientSize size = ProjectFrameClientSize();

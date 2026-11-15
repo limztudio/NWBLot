@@ -268,6 +268,10 @@ public:
     [[nodiscard]] Expected<SkinPaintSample> sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept;
     [[nodiscard]] b8 installKoreanFallback();
     [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, u32 slot)const noexcept;
+    template<usize Capacity>
+    void expectAccepted(const AcceptedInputState<Capacity>& saved)const{
+        ExpectAcceptedInput(m_context.input(), saved);
+    }
 
 
 public:

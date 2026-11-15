@@ -108,11 +108,10 @@ constexpr AStringView s_ActionKey = "action";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiContextTests : public testing::Test{
+class UiContextTests : public UiTestSupport::ContextTestFixture{
 public:
     UiContextTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContext))
-        , m_context(m_arena)
+        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContext))
     {}
 
 
@@ -160,12 +159,6 @@ public:
         return m_context.states().find(firstCopy.id) == first->get();
     }
 
-    [[nodiscard]] Optional<WidgetState> findState(const WidgetId id)const noexcept{
-        if(const WidgetState* found = m_context.states().find(id))
-            return *found;
-        return {};
-    }
-
     [[nodiscard]] Expected<WidgetState> prepare(const u64 generation, const WidgetRoot& root, const WidgetKind::Enum kind = WidgetKind::Button){
         EXPECT_TRUE(m_context.beginFrame(generation));
         EXPECT_TRUE(m_context.beginRoot(root));
@@ -191,11 +184,6 @@ public:
         EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = position, .type = InputEventType::PrimaryUp })));
         return m_context.input().process();
     }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Context m_context;
 };
 
 

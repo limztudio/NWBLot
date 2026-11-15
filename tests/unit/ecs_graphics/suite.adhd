@@ -997,8 +997,8 @@ void VerifyCoincidentOpticalVolumes_SignedZeroTransformLanesHaveTheSameIdentity(
 
 void VerifyCoincidentOpticalVolumes_InvalidCandidatesCannotSuppressEachOtherOrValidGeometry(){
     CoincidentSelectionContext context = CoincidentSelectionContext();
-    const f32 quietNan = bit_cast<f32>(0x7FC00000u);
-    const f32 posInf = bit_cast<f32>(0x7F800000u);
+    const f32 quietNan = bit_cast<f32>(s_F32QuietNaNBits);
+    const f32 posInf = bit_cast<f32>(s_F32InfinityBits);
     Array<CoincidentOpticalVolumeCandidate, 11> invalidCases = Array<CoincidentOpticalVolumeCandidate, 11>();
     for(usize index = 0u; index < invalidCases.size(); ++index){
         invalidCases[index] = MakeOpticalCandidate(cast<u32>(index) + 100u);
@@ -1908,7 +1908,7 @@ void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLarg
     EXPECT_TRUE(invalid.fullFrame);
 
     CsgFrameWorkRegion nonfinite = CsgFrameWorkRegion();
-    SuiteExpandCsgWorldBounds(nonfinite, identityMat, VectorSingle(-bit_cast<f32>(0x7F800000u), -1.0f, 1.0f, 0.0f), VectorSingle(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
+    SuiteExpandCsgWorldBounds(nonfinite, identityMat, VectorSingle(-bit_cast<f32>(s_F32InfinityBits), -1.0f, 1.0f, 0.0f), VectorSingle(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(nonfinite.fullFrame);
 
     CsgFrameWorkRegion large = CsgFrameWorkRegion();

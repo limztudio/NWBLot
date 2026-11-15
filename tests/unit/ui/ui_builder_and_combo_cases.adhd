@@ -81,15 +81,14 @@ constexpr AStringView s_PanelKey = "panel";
 constexpr AStringView s_CaptionKey = "caption";
 constexpr AStringView s_ApplyKey = "apply";
 
-class UiBuilderTests : public UiTestSupport::InputTestFixtureBase{
+class UiBuilderTests : public UiTestSupport::ContextTestFixture{
 public:
     UiBuilderTests()
-        : InputTestFixtureBase(Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilder))
+        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilder))
         , m_font(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
         , m_text(m_arena)
         , m_skin(m_arena, Name(UiWidgetTests::s_TestSkinPath))
         , m_paint(m_arena)
-        , m_context(m_arena)
         , m_builder(m_arena, m_context, m_paint, m_text)
     {}
 
@@ -140,14 +139,6 @@ public:
         return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_PanelKey), stableKey);
     }
 
-    [[nodiscard]] Optional<WidgetState> findState(const WidgetId widget)const noexcept{
-        for(const WidgetState& entry : m_context.states().entries()){
-            if(entry.id == widget)
-                return entry;
-        }
-        return {};
-    }
-
     [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         // Lanes are first U, last U, first V, last V.
         const SIMDVectorSingle expected = VectorSetW(VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f)), 0.5f);
@@ -165,16 +156,11 @@ public:
         return MakeUnexpected(Failure{});
     }
 
-    [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }
-    [[nodiscard]] virtual const InputRouter& inputRouter()const noexcept override{ return m_context.input(); }
-
-
 public:
     Font m_font;
     TextService m_text;
     UiSkin m_skin;
     PaintBuilder m_paint;
-    Context m_context;
     Builder m_builder;
     WidgetRoot m_root{ 55u, 3u };
 };

@@ -385,15 +385,6 @@ FOUNDATION_INLINE void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::E
     dst = ::Move(*src);
 }
 
-[[nodiscard]] FOUNDATION_INLINE f32 UiPaintOverlayInfinityF32()noexcept{
-    return ::Limit<f32>::s_Infinity;
-}
-[[nodiscard]] FOUNDATION_INLINE f32 UiPaintOverlayQuietNaNF32()noexcept{
-    return ::Limit<f32>::s_QuietNaN;
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlaySignBit(const f32 value)noexcept{
-    return ::SignBit(value);
-}
 [[nodiscard]] FOUNDATION_INLINE usize UiPaintOverlayVerticesAddress(const DrawSnapshot& snapshot)noexcept{
     return reinterpret_cast<usize>(snapshot.vertices().data());
 }
@@ -858,8 +849,8 @@ void VerifyPaintImageFixture_InvalidRectangleUvTintAndNullSourcePreserveEarlierB
     const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 2.0f, 10.0f, 8.0f);
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(reference.drawImage(image, rectangle));
-    const f32 nan = UiPaintOverlayQuietNaNF32();
-    const f32 inf = UiPaintOverlayInfinityF32();
+    const f32 nan = bit_cast<f32>(s_F32QuietNaNBits);
+    const f32 inf = bit_cast<f32>(s_F32InfinityBits);
     Array<Rect, 6u> invalidRectangles = Array<Rect, 6u>();
     invalidRectangles[0u] = MakeUiPaintOverlayRect(nan, 0.0f, 1.0f, 1.0f);
     invalidRectangles[1u] = MakeUiPaintOverlayRect(0.0f, inf, 1.0f, 1.0f);
@@ -1533,17 +1524,17 @@ void VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroO
 
     self.m_builder.pushClip(MakeUiPaintOverlayRect(-0.0f, -0.0f, 1.0f, 1.0f));
     self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f));
-    EXPECT_FALSE(UiPaintOverlaySignBit(self.m_builder.currentClip().x));
-    EXPECT_FALSE(UiPaintOverlaySignBit(self.m_builder.currentClip().y));
+    EXPECT_FALSE(SignBit(self.m_builder.currentClip().x));
+    EXPECT_FALSE(SignBit(self.m_builder.currentClip().y));
     ASSERT_TRUE(self.m_builder.popClip());
-    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().x));
-    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().y));
+    EXPECT_TRUE(SignBit(self.m_builder.currentClip().x));
+    EXPECT_TRUE(SignBit(self.m_builder.currentClip().y));
     ASSERT_TRUE(self.m_builder.popClip());
 
     self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f));
     self.m_builder.pushClip(MakeUiPaintOverlayRect(-0.0f, -0.0f, 1.0f, 1.0f));
-    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().x));
-    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().y));
+    EXPECT_TRUE(SignBit(self.m_builder.currentClip().x));
+    EXPECT_TRUE(SignBit(self.m_builder.currentClip().y));
     EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 1.0f);
     EXPECT_FLOAT_EQ(self.m_builder.currentClip().height, 1.0f);
 }

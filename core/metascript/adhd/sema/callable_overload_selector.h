@@ -14,6 +14,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class CallableOverloadSelector final{
 public:
     [[nodiscard]] static b8 ConsiderScoredCallableCandidate(const SymbolTable& symbols, const usize* preferredArgCount, Span<const MStringView> argTypeNames, Span<const u8> argIsMut, MethodDecl& candidate, MethodDecl*& inOutBestMatch, i32& inOutBestScore)noexcept;
@@ -26,6 +29,9 @@ private:
     static constexpr i32 s_OverloadPublicBonusScore = 32;
     static constexpr i32 s_OverloadConstMatchScore = 1;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

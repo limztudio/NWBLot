@@ -203,6 +203,31 @@ public:
     return text;
 }
 
+[[nodiscard]] inline Expected<AStringView> ReadBinaryTextSlice(const BinaryByteView& payload, const usize offset, const usize byteCount)noexcept{
+    usize cursor = offset;
+    return ReadBinaryText(payload, byteCount, cursor);
+}
+
+[[nodiscard]] inline Expected<usize> FindBinaryTextOffset(const BinaryByteView& payload, const AStringView text)noexcept{
+    if(text.data() == nullptr){
+        if(payload.data() == nullptr && text.empty())
+            return 0u;
+        return MakeUnexpected(Failure{});
+    }
+    if(payload.data() == nullptr)
+        return MakeUnexpected(Failure{});
+
+    const usize payloadBegin = reinterpret_cast<usize>(payload.data());
+    const usize textBegin = reinterpret_cast<usize>(text.data());
+    if(textBegin < payloadBegin)
+        return MakeUnexpected(Failure{});
+
+    const usize offset = textBegin - payloadBegin;
+    if(!CanReadBytes(payload, offset, text.size()))
+        return MakeUnexpected(Failure{});
+    return offset;
+}
+
 template<typename Container, typename PodType>
 inline void AppendPOD(Container& outBinary, const PodType& value){
     if(!CanAppendBytes(outBinary, sizeof(PodType)))

@@ -247,6 +247,12 @@ inline void AppendTextDiscardCrAndExpandLf(StringT& out, const AStringView text)
 }
 
 template<typename ArenaT>
+[[nodiscard]] inline AString<ArenaT> ErrorCodeMessage(ArenaT& arena, const ErrorCode& error){
+    const auto text = error.message();
+    return AString<ArenaT>(text.data(), text.size(), arena);
+}
+
+template<typename ArenaT>
 [[nodiscard]] inline AString<ArenaT> JoinWithSingleSlash(ArenaT& arena, const AStringView base, const AStringView suffix){
     AString<ArenaT> output(AStringView(base), arena);
     if(output.empty() || suffix.empty())

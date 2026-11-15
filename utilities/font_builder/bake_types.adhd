@@ -59,18 +59,12 @@ b8 ValidateBakeInitialOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 
 }
 
 b8 ValidateBakePaths(in Path source, in Path output){
-    b8 validExtension = false;
-    b8 validStem = false;
-    native(in output, mut validExtension, mut validStem){
-        validExtension = output.extensionView() == FOUNDATION_TEXT(".nwb");
-        const auto stem = output.stemView();
-        validStem = !stem.empty() && !IsDot(stem) && !IsDotDot(stem);
-    }
-    if(!validExtension){
+    const String stem = PathToString(output.stem());
+    if(PathToString(output.extension()) != ".nwb"){
         error("font_builder: --output must name a .nwb font asset bunch");
         return false;
     }
-    if(!validStem){
+    if(stem.empty() || stem == "." || stem == ".."){
         error("font_builder: output must have a nonempty asset stem");
         return false;
     }

@@ -655,6 +655,26 @@ void VerifyGlobal_BinarySharedHelpersPreserveEdgeCases(){
     EXPECT_EQ(floatBytes[6u], 0xc0u);
     EXPECT_EQ(floatBytes[7u], 0x7fu);
 
+    const Expected<StringView> slice = ReadBinaryTextSlice(floatBytes, 4u, 2u);
+    EXPECT_TRUE(slice.has_value());
+    EXPECT_EQ(slice.value().size(), 2u);
+    const Expected<usize> foundOffset = FindBinaryTextOffset(floatBytes, slice.value());
+    EXPECT_TRUE(foundOffset.has_value());
+    EXPECT_EQ(foundOffset.value(), 4u);
+    EXPECT_FALSE(ReadBinaryTextSlice(floatBytes, usize.max, 1u).has_value());
+    EXPECT_FALSE(ReadBinaryTextSlice(floatBytes, floatBytes.size(), 1u).has_value());
+    const Expected<StringView> emptyEndSlice = ReadBinaryTextSlice(floatBytes, floatBytes.size(), 0u);
+    EXPECT_TRUE(emptyEndSlice.has_value());
+    EXPECT_TRUE(emptyEndSlice.value().empty());
+    const Expected<StringView> emptySpanSlice = ReadBinaryTextSlice(Span<u8>(), 0u, 0u);
+    EXPECT_TRUE(emptySpanSlice.has_value());
+    EXPECT_TRUE(emptySpanSlice.value().empty());
+    EXPECT_FALSE(ReadBinaryTextSlice(Span<u8>(), 1u, 0u).has_value());
+    EXPECT_FALSE(FindBinaryTextOffset(floatBytes, "external").has_value());
+    EXPECT_FALSE(FindBinaryTextOffset(Span<u8>(), "a").has_value());
+    const ErrorCode invalidErr = MakeErrorCode(ErrorCondition::invalid_argument);
+    EXPECT_FALSE(ErrorCodeMessage(invalidErr).empty());
+
     native(in bytes, mut floatBytes){
         using namespace __hidden_global_binary_shared_tests;
         const Array<u8, 3> pattern{ 1u, 2u, 3u };

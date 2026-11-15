@@ -104,10 +104,7 @@ void AppendAcceptedCrashIngestDetails(in Path rawPath, in b8 rawArchived, mut St
 
     outReport.append(s_CrashIngestAcceptedSectionHeader);
     outReport.append(s_CrashIngestAcceptedRawArchivePrefix);
-    native(in rawPath, mut outReport){
-        auto out = BackInserter(outReport);
-        WriteConvertedText<char>(out, rawPath.native());
-    }
+    outReport.append(PathToString(rawPath));
     outReport.append(s_CrashSymbolicateReportLineEnd);
     if(!rawArchived)
         outReport.append(s_CrashIngestRawNotRetainedWarning);

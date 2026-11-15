@@ -72,10 +72,10 @@ Expected<usize> TryComputeShaderAssetPayloadByteCount(
     in usize bytecodeByteLength
 ){
     usize entryPointBytes = 4u + entryPointByteLength;
-    if(entryPointBytes < entryPointByteLength || entryPointBytes > 0xFFFFFFFFFFFFFFFFu - s_AssetPayloadHeaderBytes)
+    if(entryPointBytes < entryPointByteLength || entryPointBytes > usize.max - s_AssetPayloadHeaderBytes)
         return MakeUnexpected(Failure());
     usize headerAndEntryPointBytes = s_AssetPayloadHeaderBytes + entryPointBytes;
-    if(bytecodeByteLength > 0xFFFFFFFFFFFFFFFFu - headerAndEntryPointBytes)
+    if(bytecodeByteLength > usize.max - headerAndEntryPointBytes)
         return MakeUnexpected(Failure());
     return headerAndEntryPointBytes + bytecodeByteLength;
 }
@@ -165,13 +165,12 @@ Expected<AssetPayloadView, AssetPayloadDecodeFailure> DecodeAssetPayload(in Span
 }
 
 StringView ShaderEntryPointView(in Span<u8> bytecode, in usize offset, in usize length){
-    StringView entryPoint = "";
     if(length == 0u || offset >= bytecode.size() || length >= bytecode.size() - offset)
-        return entryPoint;
-    native(in bytecode, in offset, in length, mut entryPoint){
-        entryPoint = AStringView(reinterpret_cast<const char*>(bytecode.data()) + offset, length);
-    }
-    return entryPoint;
+        return "";
+    const Expected<StringView> entryPoint = ReadBinaryTextSlice(bytecode, offset, length);
+    if(!entryPoint.has_value())
+        return "";
+    return entryPoint.value();
 }
 
 

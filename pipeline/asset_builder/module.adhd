@@ -2,16 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-i32 SelectAssetBuilderExitCode(in b8 built, in i32 exitSuccess, in i32 exitFailure){
-    if(built)
-        return exitSuccess;
-    return exitFailure;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [source]
 native{
 
@@ -93,7 +83,7 @@ int RunPipelineTool(const int argc, char** argv){
         buildOptions.inputs = Move(options.inputs);
         const b8 built = AssetBuilder::BuildAssets(buildOptions, scratchArena);
         cpuScheduler.wait();
-        return SelectAssetBuilderExitCode(built, s_PipelineExitSuccess, s_PipelineExitFailure);
+        return built ? s_PipelineExitSuccess : s_PipelineExitFailure;
     }, arena, scratchArena);
 }
 

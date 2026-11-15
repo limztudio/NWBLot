@@ -13,30 +13,23 @@ b8 IsTexConvAlphaOptionPresent(in i32 optionCount){
 }
 
 b8 ValidateTexConvInputImagePath(in Path path, in b8 alphaMask){
+    StringView roleLabel = "input";
+    StringView missingLabel = "input image";
+    if(alphaMask){
+        roleLabel = "alpha image";
+        missingLabel = "alpha image";
+    }
     const Expected<b8, ErrorCode> isRegularFile = IsRegularFile(path);
     if(!isRegularFile.has_value() && !IsMissingPathError(isRegularFile.error())){
-        native(in path, in isRegularFile, in alphaMask){
-            const auto errorText = isRegularFile.error().message();
-            const AStringView errorView(errorText);
-            if(alphaMask)
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), ConvertString(errorView));
-            else
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), ConvertString(errorView));
-        }
+        error("tex_conv: failed to inspect {} '{}': {}", roleLabel, path, ErrorCodeMessage(isRegularFile.error()));
         return false;
     }
     if(!isRegularFile.has_value() || !isRegularFile.value()){
-        if(alphaMask)
-            error("tex_conv: alpha image was not found or is not a regular file: '{}'", path);
-        else
-            error("tex_conv: input image was not found or is not a regular file: '{}'", path);
+        error("tex_conv: {} was not found or is not a regular file: '{}'", missingLabel, path);
         return false;
     }
     if(!IsSupportedTexConvInputPath(path)){
-        if(alphaMask)
-            error("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, and Radiance HDR.");
-        else
-            error("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, and Radiance HDR.");
+        error("tex_conv: unsupported {} format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, and Radiance HDR.", roleLabel);
         return false;
     }
     return true;

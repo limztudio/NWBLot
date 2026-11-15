@@ -75,65 +75,12 @@ b8 ValidateMeshSkinningRuntimeResourceCounts(in u64 handleValue, in usize skinSi
     return true;
 }
 
-b8 IsRigidSkeletonJointMatrix(in MatrixSingle matrix){
-    if(!IsFiniteSkeletonJointMatrix(matrix) || !IsAffineSkeletonJointRow3(matrix[3u]))
-        return false;
-    const VectorSingle row0 = matrix[0u];
-    const VectorSingle row1 = matrix[1u];
-    const VectorSingle row2 = matrix[2u];
-    const VectorSingle lengthSqDiff = Abs(VectorSingle(LengthSq(row0.xyz), LengthSq(row1.xyz), LengthSq(row2.xyz), 1.0f) - VectorSingle(1.0f));
-    const VectorSingle dotAndDeterminantDiff = Abs(VectorSingle(Dot(row0.xyz, row1.xyz), Dot(row0.xyz, row2.xyz), Dot(row1.xyz, row2.xyz), Dot(row0.xyz, Cross(row1.xyz, row2.xyz))) - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-    return IsFinite(lengthSqDiff.xyz)
-        && IsFinite(dotAndDeterminantDiff)
-        && lengthSqDiff.x <= s_SkeletonRigidJointEpsilon
-        && lengthSqDiff.y <= s_SkeletonRigidJointEpsilon
-        && lengthSqDiff.z <= s_SkeletonRigidJointEpsilon
-        && dotAndDeterminantDiff.x <= s_SkeletonRigidJointEpsilon
-        && dotAndDeterminantDiff.y <= s_SkeletonRigidJointEpsilon
-        && dotAndDeterminantDiff.z <= s_SkeletonRigidJointEpsilon
-        && dotAndDeterminantDiff.w <= s_SkeletonRigidJointEpsilon;
-}
-
-VectorSingle BuildQuaternionFromRotationMatrix(in MatrixSingle matrix){
-    const VectorSingle r0 = matrix[0u];
-    const VectorSingle r1 = matrix[1u];
-    const VectorSingle r2 = matrix[2u];
-    const f32 r00 = r0.x;
-    const f32 r01 = r0.y;
-    const f32 r02 = r0.z;
-    const f32 r10 = r1.x;
-    const f32 r11 = r1.y;
-    const f32 r12 = r1.z;
-    const f32 r20 = r2.x;
-    const f32 r21 = r2.y;
-    const f32 r22 = r2.z;
-
-    VectorSingle tensor(0.0f);
-    if(r22 <= 0.0f){
-        if(r11 - r00 <= 0.0f)
-            tensor = VectorSingle(1.0f + r00 - r11 - r22, r01 + r10, r02 + r20, r21 - r12);
-        else
-            tensor = VectorSingle(r01 + r10, 1.0f - r00 + r11 - r22, r12 + r21, r02 - r20);
-    }
-    else{
-        if(r11 + r00 <= 0.0f)
-            tensor = VectorSingle(r02 + r20, r12 + r21, 1.0f - r00 - r11 + r22, r10 - r01);
-        else
-            tensor = VectorSingle(r21 - r12, r02 - r20, r10 - r01, 1.0f + r00 + r11 + r22);
-    }
-    return tensor / VectorSingle(Length(tensor));
-}
-
 Expected<SkeletonJointMatrix> TryBuildRigidDualQuaternionPayload(in MatrixSingle matrix){
-    if(!IsRigidSkeletonJointMatrix(matrix))
+    const Expected<RigidDualQuaternion> payload = MatrixTryBuildRigidDualQuaternion(matrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
+    if(!payload.has_value())
         return MakeUnexpected(Failure());
-    const VectorSingle real = BuildQuaternionFromRotationMatrix(matrix);
-    if(!IsFinite(real))
-        return MakeUnexpected(Failure());
-    const VectorSingle translation(matrix[0u].w, matrix[1u].w, matrix[2u].w, 0.0f);
-    const VectorSingle dual = QuaternionMultiply(translation, real) * 0.5f;
-    if(!IsFinite(dual))
-        return MakeUnexpected(Failure());
+    const VectorSingle real = payload.value().real;
+    const VectorSingle dual = payload.value().dual;
     return SkeletonJointMatrix(real.x, real.y, real.z, real.w, dual.x, dual.y, dual.z, dual.w, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 

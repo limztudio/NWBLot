@@ -8,19 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 HasPendingUiEditOwnerTransfer(
-    in UiTextEditOwner targetOwner,
-    in UiTextEditOwner sessionOwner,
-    in b8 clipboardPending,
-    in UiTextEditOwner clipboardOwner,
-    in b8 primaryPending,
-    in UiTextEditOwner primaryOwner
-){
-    return sessionOwner == targetOwner
-        || (clipboardPending && clipboardOwner == targetOwner)
-        || (primaryPending && primaryOwner == targetOwner);
-}
-
 b8 ShouldCancelUnfocusedUiEditTransfers(
     in b8 focused,
     in UiTextEditOwner focusedOwner,

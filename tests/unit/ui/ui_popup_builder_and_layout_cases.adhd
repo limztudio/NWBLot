@@ -483,34 +483,9 @@ const StringView s_UiPopupContextBaseKey = "base";
 const StringView s_UiPopupContextPopupKey = "popup";
 const StringView s_UiPopupContextChildKey = "child";
 
-Point MakeUiPopupPoint(in f32 x, in f32 y){
-    Point point = Point();
-    point.x = x;
-    point.y = y;
-    return point;
-}
-
-Rect MakeUiPopupRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-DisplayMetrics MakeUiPopupDisplay(in f32 logicalWidth, in f32 logicalHeight, in f32 pixelScaleX, in f32 pixelScaleY){
-    DisplayMetrics metrics = DisplayMetrics();
-    metrics.logicalWidth = logicalWidth;
-    metrics.logicalHeight = logicalHeight;
-    metrics.pixelScaleX = pixelScaleX;
-    metrics.pixelScaleY = pixelScaleY;
-    return metrics;
-}
-
 PopupOptions MakeUiPopupAnchoredOptions(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(40.0f, 60.0f, 80.0f, 24.0f);
+    options.anchor = Rect(40.0f, 60.0f, 80.0f, 24.0f);
     options.size.x = 220.0f;
     options.size.y = 160.0f;
     return options;
@@ -527,19 +502,6 @@ WidgetOptions MakeUiPopupControlOptionsSized(in f32 width, in f32 height){
 
 WidgetOptions MakeUiPopupControlOptions(){
     return MakeUiPopupControlOptionsSized(120.0f, 30.0f);
-}
-
-InputEvent MakeUiPopupBareEvent(in InputEventTypeEnum type){
-    InputEvent event = InputEvent();
-    event.type = type;
-    return event;
-}
-
-InputEvent MakeUiPopupKeyEvent(in InputEventTypeEnum type, in KeyEnum key){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.key = key;
-    return event;
 }
 
 void ExpectUiPopupLayoutPlacementRejected(in PopupOptions options, in DisplayMetrics display){
@@ -567,7 +529,7 @@ void VerifyUiPopupBuilderTests_ModalBackdropAndBodyRenderAboveAPanelDeclaredByAL
     laterRoot.value = 87u;
     laterRoot.generation = 1u;
     ASSERT_TRUE(self.m_context.beginRoot(laterRoot));
-    ASSERT_TRUE(self.m_builder.beginPanel("later", MakeUiPopupRect(0.0f, 0.0f, 800.0f, 600.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("later", Rect(0.0f, 0.0f, 800.0f, 600.0f)));
     EXPECT_FALSE(self.m_builder.button(s_UiPopupBuilderApplyKey, "Later", MakeUiPopupControlOptions()));
     ASSERT_TRUE(self.m_builder.endPanel());
     ASSERT_TRUE(self.finishRoot());
@@ -589,7 +551,7 @@ void VerifyUiPopupBuilderTests_ModalBackdropAndBodyRenderAboveAPanelDeclaredByAL
     EXPECT_EQ(backdrop.firstIndex, 0u);
     EXPECT_EQ(backdrop.indexCount, 6u);
     EXPECT_GT(snapshot.commands()[0u].firstIndex, backdrop.firstIndex);
-    ExpectUiRect(backdrop.clip, MakeUiPopupRect(0.0f, 0.0f, 800.0f, 600.0f));
+    ExpectUiRect(backdrop.clip, Rect(0.0f, 0.0f, 800.0f, 600.0f));
     const Vertex first = snapshot.vertices()[snapshot.indices()[backdrop.firstIndex]];
     const Vertex opposite = snapshot.vertices()[snapshot.indices()[backdrop.firstIndex + 2u]];
     EXPECT_FLOAT_EQ(first.position.x, 0.0f);
@@ -599,9 +561,9 @@ void VerifyUiPopupBuilderTests_ModalBackdropAndBodyRenderAboveAPanelDeclaredByAL
     EXPECT_FLOAT_EQ(first.color.a, self.m_builder.popupStyle().backdrop.a);
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId child = self.id(s_UiPopupBuilderApplyKey, s_UiPopupBuilderPopupKey);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(325.0f, 255.0f)), child);
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(10.0f, 10.0f)).valid());
-    EXPECT_TRUE(self.m_context.input().wouldConsumePointer(MakeUiPopupPoint(10.0f, 10.0f)));
+    EXPECT_EQ(self.m_context.input().hitTest(Point(325.0f, 255.0f)), child);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(10.0f, 10.0f)).valid());
+    EXPECT_TRUE(self.m_context.input().wouldConsumePointer(Point(10.0f, 10.0f)));
 }
 
 void VerifyUiPopupBuilderTests_ClosingFromTheBodySkipsBackdropBodyPaintAndCandidateTargets(mut UiPopupBuilderTests self){
@@ -619,7 +581,7 @@ void VerifyUiPopupBuilderTests_ClosingFromTheBodySkipsBackdropBodyPaintAndCandid
     const WidgetId closeId = self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey);
     const auto closeTarget = self.tryTarget(closeId);
     ASSERT_TRUE(closeTarget.has_value());
-    self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
+    self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, options));
     EXPECT_TRUE(self.m_builder.button(s_UiPopupBuilderCloseKey, "Close", MakeUiPopupControlOptions()));
@@ -628,8 +590,8 @@ void VerifyUiPopupBuilderTests_ClosingFromTheBodySkipsBackdropBodyPaintAndCandid
     EXPECT_TRUE(self.m_builder.balanced());
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_TRUE(self.m_context.input().actions().empty());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(55.0f, 100.0f)).valid());
-    ASSERT_TRUE(self.m_builder.beginPanel("base", MakeUiPopupRect(0.0f, 0.0f, 100.0f, 80.0f)));
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(55.0f, 100.0f)).valid());
+    ASSERT_TRUE(self.m_builder.beginPanel("base", Rect(0.0f, 0.0f, 100.0f, 80.0f)));
     EXPECT_FALSE(self.m_builder.button(s_UiPopupBuilderApplyKey, "Base", MakeUiPopupControlOptionsSized(80.0f, 24.0f)));
     ASSERT_TRUE(self.m_builder.endPanel());
     ASSERT_TRUE(self.finishRoot());
@@ -661,8 +623,8 @@ void VerifyUiPopupBuilderTests_ClosingAfterTheFirstQueuedButtonPreventsLaterQueu
     const auto laterTarget = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     ASSERT_TRUE(laterTarget.has_value());
-    self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
-    self.click(MakeUiPopupPoint(laterTarget.value().rectangle.x + 4.0f, laterTarget.value().rectangle.y + 4.0f));
+    self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
+    self.click(Point(laterTarget.value().rectangle.x + 4.0f, laterTarget.value().rectangle.y + 4.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 2u);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));
@@ -691,7 +653,7 @@ void VerifyUiPopupBuilderTests_EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeH
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const auto closeTarget = self.tryTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
-    self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
+    self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
     EditModel model = EditModel(self.m_arena);
     ASSERT_TRUE(model.setText("kept"));
     ASSERT_TRUE(model.setSelection(1u, 3u));
@@ -750,8 +712,8 @@ void VerifyUiPopupBuilderTests_CloseAndReopenInTheBodySkipsOldEpochPaintAndActio
     const auto laterTarget = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     ASSERT_TRUE(laterTarget.has_value());
-    self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
-    self.click(MakeUiPopupPoint(laterTarget.value().rectangle.x + 4.0f, laterTarget.value().rectangle.y + 4.0f));
+    self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
+    self.click(Point(laterTarget.value().rectangle.x + 4.0f, laterTarget.value().rectangle.y + 4.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 2u);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));
@@ -784,7 +746,7 @@ void VerifyUiPopupBuilderTests_CloseAndReopenInTheBodySkipsOldEpochPaintAndActio
     EXPECT_TRUE(self.m_context.input().actions().empty());
     const auto reopenedLater = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(reopenedLater.has_value());
-    self.click(MakeUiPopupPoint(reopenedLater.value().rectangle.x + 4.0f, reopenedLater.value().rectangle.y + 4.0f));
+    self.click(Point(reopenedLater.value().rectangle.x + 4.0f, reopenedLater.value().rectangle.y + 4.0f));
     ASSERT_TRUE(self.begin(4u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));
     EXPECT_FALSE(self.m_builder.button(s_UiPopupBuilderCloseKey, "Close", MakeUiPopupControlOptions()));
@@ -799,7 +761,7 @@ void VerifyUiPopupBuilderTests_PopupRequiresThePrecedingPanelToBeBalanced(mut Ui
     PopupState state = PopupState();
     state.open();
     ASSERT_TRUE(self.begin(1u));
-    ASSERT_TRUE(self.m_builder.beginPanel("base", MakeUiPopupRect(0.0f, 0.0f, 100.0f, 80.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("base", Rect(0.0f, 0.0f, 100.0f, 80.0f)));
     EXPECT_FALSE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_FALSE(self.m_builder.balanced());
@@ -851,7 +813,7 @@ void VerifyUiPopupBuilderTests_ReplacementClosedStateImmediatelyFencesPreviousAc
     const WidgetId child = self.id(s_UiPopupBuilderApplyKey, s_UiPopupBuilderPopupKey);
     const auto childTarget = self.tryTarget(child);
     ASSERT_TRUE(childTarget.has_value());
-    self.click(MakeUiPopupPoint(childTarget.value().rectangle.x + 4.0f, childTarget.value().rectangle.y + 4.0f));
+    self.click(Point(childTarget.value().rectangle.x + 4.0f, childTarget.value().rectangle.y + 4.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
     PopupState replacement = PopupState();
     ASSERT_NE(replacement.instanceGeneration(), original.instanceGeneration());
@@ -861,7 +823,7 @@ void VerifyUiPopupBuilderTests_ReplacementClosedStateImmediatelyFencesPreviousAc
     EXPECT_TRUE(self.m_builder.balanced());
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_TRUE(self.m_context.input().actions().empty());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(55.0f, 100.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(55.0f, 100.0f)).valid());
     EXPECT_TRUE(original.isOpen());
     EXPECT_FALSE(replacement.isOpen());
     ASSERT_TRUE(self.finishRoot());
@@ -885,7 +847,7 @@ void VerifyUiPopupBuilderTests_MissingPopupAndPanelSkinRejectsAdmissionWithoutCh
     const Rect previous = state.placement().bounds;
     self.configureSkin("panel.normal");
     PopupOptions moved = MakeUiPopupAnchoredOptions();
-    moved.anchor = MakeUiPopupRect(300.0f, 300.0f, 80.0f, 24.0f);
+    moved.anchor = Rect(300.0f, 300.0f, 80.0f, 24.0f);
     ASSERT_TRUE(self.begin(2u));
     EXPECT_FALSE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, moved));
     EXPECT_TRUE(self.m_context.failed());
@@ -912,18 +874,18 @@ void VerifyUiPopupContextTests_PendingOpenPreservesBaseFocusAndRoutingUntilExact
     EXPECT_TRUE(self.m_context.ready());
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)), base.base.id);
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
-    EXPECT_FALSE(self.m_context.input().wouldConsumePointer(MakeUiPopupPoint(350.0f, 250.0f)));
+    EXPECT_EQ(self.m_context.input().hitTest(Point(15.0f, 15.0f)), base.base.id);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().wouldConsumePointer(Point(350.0f, 250.0f)));
     EXPECT_FALSE(self.m_context.commitFrame(3u));
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_TRUE(self.m_context.input().hasPopup());
     EXPECT_EQ(self.m_context.input().focus(), candidate.child.id);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)), candidate.child.id);
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)).valid());
-    EXPECT_TRUE(self.m_context.input().wouldConsumePointer(MakeUiPopupPoint(350.0f, 250.0f)));
+    EXPECT_EQ(self.m_context.input().hitTest(Point(115.0f, 55.0f)), candidate.child.id);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(15.0f, 15.0f)).valid());
+    EXPECT_TRUE(self.m_context.input().wouldConsumePointer(Point(350.0f, 250.0f)));
 }
 
 void VerifyUiPopupContextTests_PendingGeometryKeepsAcceptedHitBoundsAndChildFocus(mut UiPopupContextTests self){
@@ -931,20 +893,20 @@ void VerifyUiPopupContextTests_PendingGeometryKeepsAcceptedHitBoundsAndChildFocu
     ASSERT_TRUE(originalResult.has_value());
     const UiPopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const auto candidateResult = self.prepare(2u, true, MakeUiPopupRect(200.0f, 160.0f, 160.0f, 100.0f));
+    const auto candidateResult = self.prepare(2u, true, Rect(200.0f, 160.0f, 160.0f, 100.0f));
     ASSERT_TRUE(candidateResult.has_value());
     const UiPopupFrame candidate = candidateResult.value();
     EXPECT_EQ(candidate.child.id, original.child.id);
     EXPECT_EQ(candidate.child.declarationGeneration, original.child.declarationGeneration);
     EXPECT_EQ(self.m_context.input().focus(), original.child.id);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)), original.child.id);
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(215.0f, 175.0f)).valid());
+    EXPECT_EQ(self.m_context.input().hitTest(Point(115.0f, 55.0f)), original.child.id);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(215.0f, 175.0f)).valid());
     EXPECT_FALSE(self.m_context.commitFrame(1u));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().focus(), original.child.id);
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(215.0f, 175.0f)), candidate.child.id);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
+    EXPECT_EQ(self.m_context.input().hitTest(Point(215.0f, 175.0f)), candidate.child.id);
 }
 
 void VerifyUiPopupContextTests_ScopeOmissionRetainsLiveAcceptedDeclarationsUntilCommitThenRestoresFocus(mut UiPopupContextTests self){
@@ -963,13 +925,13 @@ void VerifyUiPopupContextTests_ScopeOmissionRetainsLiveAcceptedDeclarationsUntil
     EXPECT_EQ(closed.child.declarationGeneration, opened.child.declarationGeneration);
     EXPECT_TRUE(self.m_context.input().hasPopup());
     EXPECT_EQ(self.m_context.input().focus(), opened.child.id);
-    EXPECT_TRUE(self.m_context.input().wouldConsumePointer(MakeUiPopupPoint(350.0f, 250.0f)));
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)).valid());
+    EXPECT_TRUE(self.m_context.input().wouldConsumePointer(Point(350.0f, 250.0f)));
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(15.0f, 15.0f)).valid());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)), base.base.id);
-    EXPECT_FALSE(self.m_context.input().wouldConsumePointer(MakeUiPopupPoint(350.0f, 250.0f)));
+    EXPECT_EQ(self.m_context.input().hitTest(Point(15.0f, 15.0f)), base.base.id);
+    EXPECT_FALSE(self.m_context.input().wouldConsumePointer(Point(350.0f, 250.0f)));
 }
 
 void VerifyUiPopupContextTests_RemovingPopupDeclarationImmediatelyRetiresAcceptedScopeAndActions(mut UiPopupContextTests self){
@@ -977,10 +939,10 @@ void VerifyUiPopupContextTests_RemovingPopupDeclarationImmediatelyRetiresAccepte
     ASSERT_TRUE(originalResult.has_value());
     const UiPopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    self.click(MakeUiPopupPoint(115.0f, 55.0f));
+    self.click(Point(115.0f, 55.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
     ASSERT_TRUE(self.begin(2u));
-    const auto baseResult = self.button(s_UiPopupContextBaseKey, MakeUiPopupRect(10.0f, 10.0f, 60.0f, 24.0f));
+    const auto baseResult = self.button(s_UiPopupContextBaseKey, Rect(10.0f, 10.0f, 60.0f, 24.0f));
     ASSERT_TRUE(baseResult.has_value());
     const WidgetState base = baseResult.value();
     ASSERT_TRUE(self.finish());
@@ -988,8 +950,8 @@ void VerifyUiPopupContextTests_RemovingPopupDeclarationImmediatelyRetiresAccepte
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_TRUE(self.m_context.input().actions().empty());
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)), base.id);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
+    EXPECT_EQ(self.m_context.input().hitTest(Point(15.0f, 15.0f)), base.id);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     const auto recreatedResult = self.prepare(3u, true);
     ASSERT_TRUE(recreatedResult.has_value());
@@ -1006,7 +968,7 @@ void VerifyUiPopupContextTests_RootRetirementRemovesAcceptedAndPendingPopupOwner
     ASSERT_TRUE(originalResult.has_value());
     const UiPopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    self.click(MakeUiPopupPoint(115.0f, 55.0f));
+    self.click(Point(115.0f, 55.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
     const auto pendingResult = self.prepare(2u, true);
     ASSERT_TRUE(pendingResult.has_value());
@@ -1018,7 +980,7 @@ void VerifyUiPopupContextTests_RootRetirementRemovesAcceptedAndPendingPopupOwner
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_TRUE(self.m_context.input().actions().empty());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_TRUE(self.m_context.input().targets().empty());
     EXPECT_FALSE(self.m_context.input().hasPopup());
@@ -1029,10 +991,10 @@ void VerifyUiPopupContextTests_ReopeningSameWidgetCannotBorrowAnActivationFromIt
     ASSERT_TRUE(originalResult.has_value());
     const UiPopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    self.click(MakeUiPopupPoint(115.0f, 55.0f));
+    self.click(Point(115.0f, 55.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
     ASSERT_TRUE(self.begin(2u));
-    const auto baseResult = self.button(s_UiPopupContextBaseKey, MakeUiPopupRect(10.0f, 10.0f, 60.0f, 24.0f));
+    const auto baseResult = self.button(s_UiPopupContextBaseKey, Rect(10.0f, 10.0f, 60.0f, 24.0f));
     ASSERT_TRUE(baseResult.has_value());
     const WidgetState base = baseResult.value();
     EXPECT_EQ(base.id, original.base.id);
@@ -1045,7 +1007,7 @@ void VerifyUiPopupContextTests_ReopeningSameWidgetCannotBorrowAnActivationFromIt
     ASSERT_TRUE(self.m_context.beginPopupScope(owner, reopened));
     self.addOwner(owner, reopened);
     ASSERT_TRUE(self.m_context.pushScope(s_UiPopupContextPopupKey));
-    const auto childResult = self.button(s_UiPopupContextChildKey, MakeUiPopupRect(110.0f, 50.0f, 60.0f, 24.0f));
+    const auto childResult = self.button(s_UiPopupContextChildKey, Rect(110.0f, 50.0f, 60.0f, 24.0f));
     ASSERT_TRUE(childResult.has_value());
     const WidgetState child = childResult.value();
     EXPECT_EQ(child.id, original.child.id);
@@ -1056,9 +1018,9 @@ void VerifyUiPopupContextTests_ReopeningSameWidgetCannotBorrowAnActivationFromIt
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_TRUE(self.m_context.input().actions().empty());
-    self.click(MakeUiPopupPoint(115.0f, 55.0f));
+    self.click(Point(115.0f, 55.0f));
     ASSERT_TRUE(self.begin(3u));
-    const auto freshBaseResult = self.button(s_UiPopupContextBaseKey, MakeUiPopupRect(10.0f, 10.0f, 60.0f, 24.0f));
+    const auto freshBaseResult = self.button(s_UiPopupContextBaseKey, Rect(10.0f, 10.0f, 60.0f, 24.0f));
     ASSERT_TRUE(freshBaseResult.has_value());
     const WidgetState freshBase = freshBaseResult.value();
     EXPECT_EQ(freshBase.id, original.base.id);
@@ -1069,7 +1031,7 @@ void VerifyUiPopupContextTests_ReopeningSameWidgetCannotBorrowAnActivationFromIt
     ASSERT_TRUE(self.m_context.beginPopupScope(freshOwner, current));
     self.addOwner(freshOwner, current);
     ASSERT_TRUE(self.m_context.pushScope(s_UiPopupContextPopupKey));
-    const auto freshChildResult = self.button(s_UiPopupContextChildKey, MakeUiPopupRect(110.0f, 50.0f, 60.0f, 24.0f));
+    const auto freshChildResult = self.button(s_UiPopupContextChildKey, Rect(110.0f, 50.0f, 60.0f, 24.0f));
     ASSERT_TRUE(freshChildResult.has_value());
     const WidgetState freshChild = freshChildResult.value();
     EXPECT_TRUE(self.m_context.takeActivation(freshChild, true));
@@ -1086,8 +1048,8 @@ void VerifyUiPopupContextTests_TargetsInSequentialScopesReceiveDistinctLayersThe
     ASSERT_TRUE(baseResult.has_value());
     const WidgetState base = baseResult.value();
     HitTarget spoofed = HitTarget();
-    spoofed.rectangle = MakeUiPopupRect(10.0f, 10.0f, 60.0f, 24.0f);
-    spoofed.clip = MakeUiPopupRect(0.0f, 0.0f, 400.0f, 300.0f);
+    spoofed.rectangle = Rect(10.0f, 10.0f, 60.0f, 24.0f);
+    spoofed.clip = Rect(0.0f, 0.0f, 400.0f, 300.0f);
     spoofed.focusable = true;
     spoofed.activatable = true;
     spoofed.popup.widget.value = 999u;
@@ -1105,7 +1067,7 @@ void VerifyUiPopupContextTests_TargetsInSequentialScopesReceiveDistinctLayersThe
     EXPECT_EQ(self.m_context.popupLayer(), 1u);
     self.addOwner(firstOwner, first);
     ASSERT_TRUE(self.m_context.pushScope("first"));
-    const auto firstChildResult = self.button(s_UiPopupContextChildKey, MakeUiPopupRect(110.0f, 50.0f, 60.0f, 24.0f));
+    const auto firstChildResult = self.button(s_UiPopupContextChildKey, Rect(110.0f, 50.0f, 60.0f, 24.0f));
     ASSERT_TRUE(firstChildResult.has_value());
     const WidgetState firstChild = firstChildResult.value();
     ASSERT_TRUE(self.m_context.popScope());
@@ -1114,18 +1076,18 @@ void VerifyUiPopupContextTests_TargetsInSequentialScopesReceiveDistinctLayersThe
     const auto secondOwnerResult = self.declare("second", WidgetKind::Popup);
     ASSERT_TRUE(secondOwnerResult.has_value());
     const WidgetState secondOwner = secondOwnerResult.value();
-    const PopupScope second = self.scope(secondOwner, MakeUiPopupRect(200.0f, 120.0f, 160.0f, 100.0f));
+    const PopupScope second = self.scope(secondOwner, Rect(200.0f, 120.0f, 160.0f, 100.0f));
     ASSERT_TRUE(self.m_context.beginPopupScope(secondOwner, second));
     EXPECT_EQ(self.m_context.popupLayer(), 2u);
     self.addOwner(secondOwner, second);
     ASSERT_TRUE(self.m_context.pushScope("second"));
-    const auto secondChildResult = self.button(s_UiPopupContextChildKey, MakeUiPopupRect(210.0f, 130.0f, 60.0f, 24.0f));
+    const auto secondChildResult = self.button(s_UiPopupContextChildKey, Rect(210.0f, 130.0f, 60.0f, 24.0f));
     ASSERT_TRUE(secondChildResult.has_value());
     const WidgetState secondChild = secondChildResult.value();
     ASSERT_TRUE(self.m_context.popScope());
     ASSERT_TRUE(self.m_context.endPopupScope(true));
     EXPECT_EQ(self.m_context.popupLayer(), 0u);
-    const auto tailResult = self.button("tail", MakeUiPopupRect(80.0f, 10.0f, 60.0f, 24.0f));
+    const auto tailResult = self.button("tail", Rect(80.0f, 10.0f, 60.0f, 24.0f));
     ASSERT_TRUE(tailResult.has_value());
     const WidgetState tail = tailResult.value();
     ASSERT_TRUE(self.finish());
@@ -1176,7 +1138,7 @@ void VerifyUiPopupContextTests_NestedScopeWithoutItsParentTokenPoisonsCandidateW
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(self.m_context.input().focus(), accepted.base.id);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)), accepted.base.id);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(15.0f, 15.0f)), accepted.base.id);
 }
 
 void VerifyUiPopupContextTests_UnbalancedPopupScopeCannotPublishItsCandidate(mut UiPopupContextTests self){
@@ -1267,7 +1229,7 @@ void VerifyUiPopupContextTests_AutofocusDisabledChangesFocusOnlyAtAcceptanceAndT
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
     const UiPopupFrame accepted = acceptedResult.value();
-    const auto candidateResult = self.prepare(2u, true, MakeUiPopupRect(100.0f, 40.0f, 160.0f, 100.0f), false, false);
+    const auto candidateResult = self.prepare(2u, true, Rect(100.0f, 40.0f, 160.0f, 100.0f), false, false);
     ASSERT_TRUE(candidateResult.has_value());
     const UiPopupFrame candidate = candidateResult.value();
     EXPECT_EQ(self.m_context.input().focus(), accepted.base.id);
@@ -1276,8 +1238,8 @@ void VerifyUiPopupContextTests_AutofocusDisabledChangesFocusOnlyAtAcceptanceAndT
     EXPECT_TRUE(self.m_context.input().hasPopup());
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_TRUE(self.m_context.input().wantsCommands());
-    EXPECT_TRUE(self.send(MakeUiPopupKeyEvent(InputEventType::KeyDown, Key::Tab)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiPopupKeyEvent(InputEventType::KeyUp, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Tab)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), candidate.child.id);
 }
 
@@ -1286,7 +1248,7 @@ void VerifyUiPopupContextTests_MissingOwnerTargetRejectsCommitWithoutReplacingAc
     ASSERT_TRUE(acceptedResult.has_value());
     const UiPopupFrame accepted = acceptedResult.value();
     ASSERT_TRUE(self.begin(2u));
-    const auto baseResult = self.button(s_UiPopupContextBaseKey, MakeUiPopupRect(10.0f, 10.0f, 60.0f, 24.0f));
+    const auto baseResult = self.button(s_UiPopupContextBaseKey, Rect(10.0f, 10.0f, 60.0f, 24.0f));
     ASSERT_TRUE(baseResult.has_value());
     const WidgetState base = baseResult.value();
     EXPECT_EQ(base.id, accepted.base.id);
@@ -1295,7 +1257,7 @@ void VerifyUiPopupContextTests_MissingOwnerTargetRejectsCommitWithoutReplacingAc
     const WidgetState owner = ownerResult.value();
     ASSERT_TRUE(self.m_context.beginPopupScope(owner, self.scope(owner)));
     ASSERT_TRUE(self.m_context.pushScope(s_UiPopupContextPopupKey));
-    const auto childResult = self.button(s_UiPopupContextChildKey, MakeUiPopupRect(110.0f, 50.0f, 60.0f, 24.0f));
+    const auto childResult = self.button(s_UiPopupContextChildKey, Rect(110.0f, 50.0f, 60.0f, 24.0f));
     ASSERT_TRUE(childResult.has_value());
     const WidgetState child = childResult.value();
     EXPECT_TRUE(child.id.valid());
@@ -1307,8 +1269,8 @@ void VerifyUiPopupContextTests_MissingOwnerTargetRejectsCommitWithoutReplacingAc
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(self.m_context.input().focus(), accepted.base.id);
     EXPECT_FALSE(self.m_context.input().hasPopup());
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)), accepted.base.id);
-    EXPECT_FALSE(self.m_context.input().wouldConsumePointer(MakeUiPopupPoint(350.0f, 250.0f)));
+    EXPECT_EQ(self.m_context.input().hitTest(Point(15.0f, 15.0f)), accepted.base.id);
+    EXPECT_FALSE(self.m_context.input().wouldConsumePointer(Point(350.0f, 250.0f)));
 }
 
 void VerifyUiPopupContextTests_FocusLossFencesPreparedOpenBeforeItsFirstAcceptance(mut UiPopupContextTests self){
@@ -1320,14 +1282,14 @@ void VerifyUiPopupContextTests_FocusLossFencesPreparedOpenBeforeItsFirstAcceptan
     const UiPopupFrame candidate = candidateResult.value();
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
     EXPECT_FALSE(self.m_context.input().hasPopup());
-    EXPECT_TRUE(self.send(MakeUiPopupBareEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     EXPECT_FALSE(self.m_context.input().focus().valid());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 2u);
     EXPECT_TRUE(self.m_context.input().hasPopup());
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(15.0f, 15.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(15.0f, 15.0f)).valid());
     EXPECT_TRUE(self.m_context.input().actions().empty());
     const auto reasonResult = self.m_context.input().consumePopupDismissal(candidate.scope.token);
     ASSERT_TRUE(reasonResult.has_value());
@@ -1346,11 +1308,11 @@ void VerifyUiPopupContextTests_FocusLossFencesPreparedHigherPopupAboveAcceptedLo
     const UiPopupStack candidate = candidateResult.value();
     EXPECT_TRUE(candidate.lower.scope.token == original.scope.token);
     EXPECT_EQ(self.m_context.input().focus(), original.child.id);
-    EXPECT_TRUE(self.send(MakeUiPopupBareEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(215.0f, 135.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(215.0f, 135.0f)).valid());
     EXPECT_TRUE(self.m_context.input().actions().empty());
     const auto lowerResult = self.m_context.input().consumePopupDismissal(candidate.lower.scope.token);
     ASSERT_TRUE(lowerResult.has_value());
@@ -1370,11 +1332,11 @@ void VerifyUiPopupContextTests_NativeFocusGainCannotReviveCandidatePreparedBefor
     ASSERT_TRUE(candidateResult.has_value());
     const UiPopupFrame candidate = candidateResult.value();
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
-    EXPECT_TRUE(self.send(MakeUiPopupBareEvent(InputEventType::FocusLost)).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiPopupBareEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
     const auto reasonResult = self.m_context.input().consumePopupDismissal(candidate.scope.token);
     ASSERT_TRUE(reasonResult.has_value());
     EXPECT_EQ(reasonResult.value(), PopupDismissReason::FocusLost);
@@ -1385,8 +1347,8 @@ void VerifyUiPopupContextTests_FreshPopupPreparedAfterNativeFocusGainMayAutofocu
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
     const UiPopupFrame base = baseResult.value();
-    EXPECT_TRUE(self.send(MakeUiPopupBareEvent(InputEventType::FocusLost)).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiPopupBareEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     const auto freshResult = self.prepare(2u, true);
     ASSERT_TRUE(freshResult.has_value());
     const UiPopupFrame fresh = freshResult.value();
@@ -1394,9 +1356,9 @@ void VerifyUiPopupContextTests_FreshPopupPreparedAfterNativeFocusGainMayAutofocu
     EXPECT_FALSE(self.m_context.input().focus().valid());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().focus(), fresh.child.id);
-    EXPECT_EQ(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)), fresh.child.id);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(115.0f, 55.0f)), fresh.child.id);
     EXPECT_FALSE(self.m_context.input().consumePopupDismissal(fresh.scope.token).has_value());
-    self.click(MakeUiPopupPoint(115.0f, 55.0f));
+    self.click(Point(115.0f, 55.0f));
     EXPECT_EQ(self.m_context.input().actions().size(), 1u);
 }
 
@@ -1409,16 +1371,16 @@ void VerifyUiPopupContextTests_NativeFocusGainNeverRestoresAlreadyClosingScopes(
     const UiPopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     ASSERT_EQ(self.m_context.input().focus(), original.child.id);
-    EXPECT_TRUE(self.send(MakeUiPopupBareEvent(InputEventType::FocusLost)).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiPopupBareEvent(InputEventType::FocusGained)).focus.valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
     const auto retainedResult = self.prepare(3u, true);
     ASSERT_TRUE(retainedResult.has_value());
     const UiPopupFrame retained = retainedResult.value();
     EXPECT_TRUE(retained.scope.token == original.scope.token);
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_FALSE(self.m_context.input().hitTest(MakeUiPopupPoint(115.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
     const auto reasonResult = self.m_context.input().consumePopupDismissal(original.scope.token);
     ASSERT_TRUE(reasonResult.has_value());
     EXPECT_EQ(reasonResult.value(), PopupDismissReason::FocusLost);
@@ -1429,7 +1391,7 @@ void VerifyUiPopupContextTests_NativeFocusGainNeverRestoresAlreadyClosingScopes(
     ASSERT_TRUE(self.m_context.commitFrame(4u));
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_FALSE(self.send(MakeUiPopupBareEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
 }
 
 
@@ -1438,132 +1400,132 @@ void VerifyUiPopupContextTests_NativeFocusGainNeverRestoresAlreadyClosingScopes(
 
 void VerifyUiPopupLayoutTests_BottomEdgeFlipsAboveAndClampsHorizontalOverflow(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(730.0f, 560.0f, 50.0f, 24.0f);
+    options.anchor = Rect(730.0f, 560.0f, 50.0f, 24.0f);
     options.size.x = 220.0f;
     options.size.y = 160.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(800.0f, 600.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(580.0f, 396.0f, 220.0f, 160.0f));
+    ExpectUiRect(placement.bounds, Rect(580.0f, 396.0f, 220.0f, 160.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
 
 void VerifyUiPopupLayoutTests_AbovePreferenceFlipsBelowAtTopEdge(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(40.0f, 12.0f, 60.0f, 30.0f);
+    options.anchor = Rect(40.0f, 12.0f, 60.0f, 30.0f);
     options.side = PopupPlacementSide::Above;
     options.size.x = 140.0f;
     options.size.y = 90.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(400.0f, 300.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(400.0f, 300.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(40.0f, 46.0f, 140.0f, 90.0f));
+    ExpectUiRect(placement.bounds, Rect(40.0f, 46.0f, 140.0f, 90.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Below);
 }
 
 void VerifyUiPopupLayoutTests_RightPreferenceFlipsLeftAndClampsVerticalOverflow(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(370.0f, 260.0f, 20.0f, 30.0f);
+    options.anchor = Rect(370.0f, 260.0f, 20.0f, 30.0f);
     options.side = PopupPlacementSide::Right;
     options.size.x = 140.0f;
     options.size.y = 90.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(400.0f, 300.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(400.0f, 300.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(226.0f, 210.0f, 140.0f, 90.0f));
+    ExpectUiRect(placement.bounds, Rect(226.0f, 210.0f, 140.0f, 90.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Left);
 }
 
 void VerifyUiPopupLayoutTests_LeftPreferenceFlipsRightAtLeftEdge(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(12.0f, 40.0f, 30.0f, 24.0f);
+    options.anchor = Rect(12.0f, 40.0f, 30.0f, 24.0f);
     options.side = PopupPlacementSide::Left;
     options.size.x = 140.0f;
     options.size.y = 90.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(400.0f, 300.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(400.0f, 300.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(46.0f, 40.0f, 140.0f, 90.0f));
+    ExpectUiRect(placement.bounds, Rect(46.0f, 40.0f, 140.0f, 90.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
 
 void VerifyUiPopupLayoutTests_NeitherVerticalSideFitsUsesMoreRoomAndKeepsCompletePopupVisible(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(100.0f, 150.0f, 20.0f, 20.0f);
+    options.anchor = Rect(100.0f, 150.0f, 20.0f, 20.0f);
     options.size.x = 80.0f;
     options.size.y = 200.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(320.0f, 240.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(320.0f, 240.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(100.0f, 0.0f, 80.0f, 200.0f));
+    ExpectUiRect(placement.bounds, Rect(100.0f, 0.0f, 80.0f, 200.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
 
 void VerifyUiPopupLayoutTests_EqualAvailableRoomPreservesTheRequestedSide(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(100.0f, 100.0f, 20.0f, 40.0f);
+    options.anchor = Rect(100.0f, 100.0f, 20.0f, 40.0f);
     options.side = PopupPlacementSide::Above;
     options.size.x = 80.0f;
     options.size.y = 150.0f;
     options.gap = 0.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(320.0f, 240.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(320.0f, 240.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(100.0f, 0.0f, 80.0f, 150.0f));
+    ExpectUiRect(placement.bounds, Rect(100.0f, 0.0f, 80.0f, 150.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
 
 void VerifyUiPopupLayoutTests_OversizedPopupShrinksToTheViewportOnBothAxes(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(40.0f, 40.0f, 20.0f, 20.0f);
+    options.anchor = Rect(40.0f, 40.0f, 20.0f, 20.0f);
     options.size.x = 1000.0f;
     options.size.y = 900.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(100.0f, 80.0f, 2.0f, 1.25f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(100.0f, 80.0f, 2.0f, 1.25f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(0.0f, 0.0f, 100.0f, 80.0f));
+    ExpectUiRect(placement.bounds, Rect(0.0f, 0.0f, 100.0f, 80.0f));
     ExpectUiRect(placement.viewport, placement.bounds);
 }
 
 void VerifyUiPopupLayoutTests_OffscreenAnchorAndLargeGapStillProduceBoundedGeometry(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(600.0f, -80.0f, 20.0f, 20.0f);
+    options.anchor = Rect(600.0f, -80.0f, 20.0f, 20.0f);
     options.size.x = 100.0f;
     options.size.y = 100.0f;
     options.side = PopupPlacementSide::Right;
-    const DisplayMetrics display = MakeUiPopupDisplay(320.0f, 240.0f, 1.0f, 1.0f);
+    const DisplayMetrics display = MakeUiDisplayMetrics(320.0f, 240.0f, 1.0f, 1.0f);
     const auto placementResult1 = PlacePopup(options, display);
     ASSERT_TRUE(placementResult1.has_value());
     PopupPlacement placement = placementResult1.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(220.0f, 0.0f, 100.0f, 100.0f));
+    ExpectUiRect(placement.bounds, Rect(220.0f, 0.0f, 100.0f, 100.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Left);
     options.gap = f32.max;
     const auto placementResult2 = PlacePopup(options, display);
     ASSERT_TRUE(placementResult2.has_value());
     placement = placementResult2.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(220.0f, 0.0f, 100.0f, 100.0f));
+    ExpectUiRect(placement.bounds, Rect(220.0f, 0.0f, 100.0f, 100.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
 
 void VerifyUiPopupLayoutTests_EmptyAnchorCanRepresentPointPlacement(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(124.0f, 30.0f, 0.0f, 0.0f);
+    options.anchor = Rect(124.0f, 30.0f, 0.0f, 0.0f);
     options.size.x = 80.0f;
     options.size.y = 60.0f;
-    const auto placementResult = PlacePopup(options, MakeUiPopupDisplay(320.0f, 240.0f, 1.0f, 1.0f));
+    const auto placementResult = PlacePopup(options, MakeUiDisplayMetrics(320.0f, 240.0f, 1.0f, 1.0f));
     ASSERT_TRUE(placementResult.has_value());
     const PopupPlacement placement = placementResult.value();
-    ExpectUiRect(placement.bounds, MakeUiPopupRect(124.0f, 34.0f, 80.0f, 60.0f));
+    ExpectUiRect(placement.bounds, Rect(124.0f, 34.0f, 80.0f, 60.0f));
     EXPECT_EQ(placement.side, PopupPlacementSide::Below);
 }
 
 void VerifyUiPopupLayoutTests_AsymmetricDpiChangesDoNotRescaleLogicalPlacement(){
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRect(610.0f, 410.0f, 50.0f, 30.0f);
-    const auto firstResult = PlacePopup(options, MakeUiPopupDisplay(680.0f, 480.0f, 1.0f, 1.0f));
+    options.anchor = Rect(610.0f, 410.0f, 50.0f, 30.0f);
+    const auto firstResult = PlacePopup(options, MakeUiDisplayMetrics(680.0f, 480.0f, 1.0f, 1.0f));
     ASSERT_TRUE(firstResult.has_value());
     const PopupPlacement first = firstResult.value();
-    const auto secondResult = PlacePopup(options, MakeUiPopupDisplay(680.0f, 480.0f, 2.5f, 1.25f));
+    const auto secondResult = PlacePopup(options, MakeUiDisplayMetrics(680.0f, 480.0f, 2.5f, 1.25f));
     ASSERT_TRUE(secondResult.has_value());
     const PopupPlacement second = secondResult.value();
     ExpectUiRect(second.bounds, first.bounds);
@@ -1573,7 +1535,7 @@ void VerifyUiPopupLayoutTests_AsymmetricDpiChangesDoNotRescaleLogicalPlacement()
 
 void VerifyUiPopupLayoutTests_InvalidInputsRejectPlacement(){
     const PopupOptions validOptions = PopupOptions();
-    const DisplayMetrics validDisplay = MakeUiPopupDisplay(320.0f, 240.0f, 1.0f, 1.0f);
+    const DisplayMetrics validDisplay = MakeUiDisplayMetrics(320.0f, 240.0f, 1.0f, 1.0f);
     PopupOptions options = validOptions;
     options.anchor.x = bit_cast<f32>(0x7fc00000u);
     ExpectUiPopupLayoutPlacementRejected(options, validDisplay);
@@ -1581,7 +1543,7 @@ void VerifyUiPopupLayoutTests_InvalidInputsRejectPlacement(){
     options.anchor.height = -1.0f;
     ExpectUiPopupLayoutPlacementRejected(options, validDisplay);
     options = validOptions;
-    options.anchor = MakeUiPopupRect(f32.max, 0.0f, f32.max, 0.0f);
+    options.anchor = Rect(f32.max, 0.0f, f32.max, 0.0f);
     ExpectUiPopupLayoutPlacementRejected(options, validDisplay);
     options = validOptions;
     options.size.x = 0.0f;

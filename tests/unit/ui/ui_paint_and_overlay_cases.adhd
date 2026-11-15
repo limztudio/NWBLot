@@ -413,24 +413,6 @@ const Name s_UiPaintOverlayPanelRegionName = "panel";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Rect MakeUiPaintOverlayRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Color MakeUiPaintOverlayColor(in f32 r, in f32 g, in f32 b, in f32 a){
-    Color color = Color();
-    color.r = r;
-    color.g = g;
-    color.b = b;
-    color.a = a;
-    return color;
-}
-
 UiSkinSliceInsets MakeUiPaintOverlaySliceInsets(in u32 left, in u32 top, in u32 right, in u32 bottom){
     UiSkinSliceInsets insets = UiSkinSliceInsets();
     insets.left = left;
@@ -447,10 +429,10 @@ void RecordUiPaintImageAdmissionBaseline(
     in SharedImageSource image
 ){
     ASSERT_TRUE(UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(builder, glyphs, sdf, image));
-    builder.fillRect(MakeUiPaintOverlayRect(2.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayColor(0.8f, 0.4f, 0.2f, 0.5f));
-    ASSERT_TRUE(builder.drawGlyph(glyphs[0u], MakeUiPaintOverlayRect(12.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f)));
-    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 3u, MakeUiPaintOverlayRect(22.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
-    ASSERT_TRUE(builder.drawImage(image, MakeUiPaintOverlayRect(32.0f, 3.0f, 8.0f, 4.0f)));
+    builder.fillRect(Rect(2.0f, 3.0f, 4.0f, 5.0f), Color(0.8f, 0.4f, 0.2f, 0.5f));
+    ASSERT_TRUE(builder.drawGlyph(glyphs[0u], Rect(12.0f, 3.0f, 4.0f, 5.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 3u, Rect(22.0f, 3.0f, 4.0f, 5.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(image, Rect(32.0f, 3.0f, 8.0f, 4.0f)));
 }
 
 void RecordUiPaintImageMixedOverflowBaseline(
@@ -460,20 +442,20 @@ void RecordUiPaintImageMixedOverflowBaseline(
     in SharedImageSource image
 ){
     ASSERT_TRUE(UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(builder, glyphs, sdf, image));
-    builder.fillRect(MakeUiPaintOverlayRect(2.0f, 3.0f, 5.0f, 7.0f), MakeUiPaintOverlayColor(0.6f, 0.3f, 0.2f, 0.5f));
-    ASSERT_TRUE(builder.drawGlyph(glyphs[0u], MakeUiPaintOverlayRect(12.0f, 13.0f, 5.0f, 7.0f), MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f)));
+    builder.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
+    ASSERT_TRUE(builder.drawGlyph(glyphs[0u], Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
     ASSERT_TRUE(builder.beginOverlay(2u));
-    builder.pushClip(MakeUiPaintOverlayRect(30.0f, 10.0f, 40.0f, 20.0f));
-    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 2u, MakeUiPaintOverlayRect(32.0f, 12.0f, 8.0f, 8.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
-    ASSERT_TRUE(builder.drawImage(image, MakeUiPaintOverlayRect(44.0f, 12.0f, 12.0f, 8.0f), MakeUiPaintOverlayRect(0.25f, 0.25f, 0.5f, 0.5f)));
+    builder.pushClip(Rect(30.0f, 10.0f, 40.0f, 20.0f));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 2u, Rect(32.0f, 12.0f, 8.0f, 8.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(image, Rect(44.0f, 12.0f, 12.0f, 8.0f), Rect(0.25f, 0.25f, 0.5f, 0.5f)));
     ASSERT_TRUE(builder.popClip());
     ASSERT_TRUE(builder.endOverlay());
 }
 
 void RecordUiPaintImageNullThirdPassInitial(mut PaintBuilder builder, in SharedGlyphPage glyph, in SharedImageSource image){
     ASSERT_TRUE(UiPaintOverlayPrepareOneGlyphAndOneImage(builder, glyph, image));
-    ASSERT_TRUE(builder.drawGlyph(glyph, MakeUiPaintOverlayRect(2.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f)));
-    ASSERT_TRUE(builder.drawImage(image, MakeUiPaintOverlayRect(12.0f, 3.0f, 8.0f, 4.0f)));
+    ASSERT_TRUE(builder.drawGlyph(glyph, Rect(2.0f, 3.0f, 4.0f, 5.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(image, Rect(12.0f, 3.0f, 8.0f, 4.0f)));
 }
 
 void RecordUiPaintImageNullThirdPassRetry(
@@ -483,8 +465,8 @@ void RecordUiPaintImageNullThirdPassRetry(
     in SharedImageSource addition
 ){
     ASSERT_TRUE(UiPaintOverlayPrepareOneEach(builder, upgrade, sdf, addition));
-    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 1u, MakeUiPaintOverlayRect(22.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
-    ASSERT_TRUE(builder.drawImage(addition, MakeUiPaintOverlayRect(32.0f, 3.0f, 8.0f, 4.0f)));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 1u, Rect(22.0f, 3.0f, 4.0f, 5.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(addition, Rect(32.0f, 3.0f, 8.0f, 4.0f)));
 }
 
 
@@ -534,7 +516,7 @@ void VerifyPaintImageFixture_ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicate
     imageCopies[2u] = image;
     ASSERT_TRUE(self.m_builder.prepareImages(glyphCopies, sdfCopies, imageCopies));
     EXPECT_FALSE(UiPaintOverlayPrepareSingleTextureImage(self.m_builder, overflow));
-    EXPECT_FALSE(self.m_builder.drawImage(overflow, MakeUiPaintOverlayRect(48.0f, 3.0f, 8.0f, 4.0f)));
+    EXPECT_FALSE(self.m_builder.drawImage(overflow, Rect(48.0f, 3.0f, 8.0f, 4.0f)));
     const DrawSnapshot actual = self.m_builder.freeze();
     ASSERT_EQ(actual.glyphPages().size(), 62u);
     ASSERT_EQ(actual.sdfPages().size(), 1u);
@@ -700,13 +682,13 @@ void VerifyPaintImageFixture_CropAndNestedClipTrimFullImageGeometryAndUv(mut Pai
     SharedImageSource image = SharedImageSource();
     TakeUiPaintOverlayImageSource(image, imageResult);
     ASSERT_TRUE(UiPaintOverlayHasImage(image));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 8.0f, 60.0f, 35.0f));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(20.0f, 10.0f, 25.0f, 20.0f));
+    self.m_builder.pushClip(Rect(10.0f, 8.0f, 60.0f, 35.0f));
+    self.m_builder.pushClip(Rect(20.0f, 10.0f, 25.0f, 20.0f));
     ASSERT_TRUE(self.m_builder.drawImage(
         image,
-        MakeUiPaintOverlayRect(0.0f, 0.0f, 80.0f, 40.0f),
-        MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f),
-        MakeUiPaintOverlayColor(2.0f, 0.5f, 0.25f, 0.5f)
+        Rect(0.0f, 0.0f, 80.0f, 40.0f),
+        Rect(0.125f, 0.25f, 0.5f, 0.5f),
+        Color(2.0f, 0.5f, 0.25f, 0.5f)
     ));
     ASSERT_TRUE(self.m_builder.popClip());
     ASSERT_TRUE(self.m_builder.popClip());
@@ -733,9 +715,9 @@ void VerifyPaintImageFixture_AdjacentBatchingIncludesImmutableImageIndexAndPrese
     TakeUiPaintOverlayImageSource(second, secondResult);
     ASSERT_TRUE(UiPaintOverlayHasImage(first) && UiPaintOverlayHasImage(second));
     ASSERT_NE(UiPaintOverlayImageGeneration(first), UiPaintOverlayImageGeneration(second));
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 8.0f, 4.0f);
+    const Rect rectangle = Rect(1.0f, 1.0f, 8.0f, 4.0f);
     ASSERT_TRUE(self.m_builder.drawImage(first, rectangle));
-    ASSERT_TRUE(self.m_builder.drawImage(first, rectangle, MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f), MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawImage(first, rectangle, Rect(0.0f, 0.0f, 1.0f, 1.0f), Color(1.0f, 0.0f, 0.0f, 0.5f)));
     ASSERT_TRUE(self.m_builder.drawImage(second, rectangle));
     ASSERT_TRUE(self.m_builder.drawImage(second, rectangle));
     ASSERT_TRUE(self.m_builder.drawImage(first, rectangle));
@@ -767,12 +749,12 @@ void VerifyPaintImageFixture_ImageCommandsKeepDistinctClipsMaterialsAndOverlayLa
     SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasImage(image) && UiPaintOverlayHasGlyphPage(glyph) && UiPaintOverlayHasSdfPage(sdf));
-    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f);
-    const Rect unitUv = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f);
+    const Rect rectangle = Rect(0.0f, 0.0f, 20.0f, 20.0f);
+    const Rect unitUv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(self.m_builder.drawGlyph(glyph, rectangle, unitUv));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, rectangle, unitUv));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(5.0f, 5.0f, 8.0f, 8.0f));
+    self.m_builder.pushClip(Rect(5.0f, 5.0f, 8.0f, 8.0f));
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(self.m_builder.beginOverlay(2u));
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
@@ -806,7 +788,7 @@ void VerifyPaintImageFixture_FrozenAndMovedSnapshotsRetainExactSourceVersionsAcr
     ASSERT_TRUE(UiPaintOverlayHasImage(original));
     const u64 originalGeneration = UiPaintOverlayImageGeneration(original);
     const u8 originalByte = UiPaintOverlayImagePayloadByte(original, 0u);
-    ASSERT_TRUE(self.m_builder.drawImage(original, MakeUiPaintOverlayRect(1.0f, 2.0f, 18.0f, 10.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(original, Rect(1.0f, 2.0f, 18.0f, 10.0f)));
     DrawSnapshot retained = DrawSnapshot(self.m_arena);
     native(mut builder = self.m_builder, mut retained){
         DrawSnapshot frozen = builder.freeze();
@@ -821,7 +803,7 @@ void VerifyPaintImageFixture_FrozenAndMovedSnapshotsRetainExactSourceVersionsAcr
     TakeUiPaintOverlayImageSource(replacement, replacementResult);
     ASSERT_TRUE(UiPaintOverlayHasImage(replacement));
     ASSERT_NE(UiPaintOverlayImageGeneration(replacement), originalGeneration);
-    ASSERT_TRUE(self.m_builder.drawImage(replacement, MakeUiPaintOverlayRect(4.0f, 5.0f, 8.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(replacement, Rect(4.0f, 5.0f, 8.0f, 8.0f)));
     const DrawSnapshot next = self.m_builder.freeze();
     replacement.reset();
     ASSERT_EQ(retained.textureImages().size(), 1u);
@@ -846,40 +828,40 @@ void VerifyPaintImageFixture_InvalidRectangleUvTintAndNullSourcePreserveEarlierB
     ASSERT_TRUE(UiPaintOverlayHasImage(image));
     PaintBuilder reference = PaintBuilder(self.m_arena);
     self.beginPaint(reference);
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 2.0f, 10.0f, 8.0f);
+    const Rect rectangle = Rect(1.0f, 2.0f, 10.0f, 8.0f);
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(reference.drawImage(image, rectangle));
     const f32 nan = bit_cast<f32>(s_F32QuietNaNBits);
     const f32 inf = bit_cast<f32>(s_F32InfinityBits);
     Array<Rect, 6u> invalidRectangles = Array<Rect, 6u>();
-    invalidRectangles[0u] = MakeUiPaintOverlayRect(nan, 0.0f, 1.0f, 1.0f);
-    invalidRectangles[1u] = MakeUiPaintOverlayRect(0.0f, inf, 1.0f, 1.0f);
-    invalidRectangles[2u] = MakeUiPaintOverlayRect(0.0f, 0.0f, -1.0f, 1.0f);
-    invalidRectangles[3u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, -1.0f);
-    invalidRectangles[4u] = MakeUiPaintOverlayRect(f32.max, 0.0f, f32.max, 1.0f);
-    invalidRectangles[5u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, nan);
+    invalidRectangles[0u] = Rect(nan, 0.0f, 1.0f, 1.0f);
+    invalidRectangles[1u] = Rect(0.0f, inf, 1.0f, 1.0f);
+    invalidRectangles[2u] = Rect(0.0f, 0.0f, -1.0f, 1.0f);
+    invalidRectangles[3u] = Rect(0.0f, 0.0f, 1.0f, -1.0f);
+    invalidRectangles[4u] = Rect(f32.max, 0.0f, f32.max, 1.0f);
+    invalidRectangles[5u] = Rect(0.0f, 0.0f, 1.0f, nan);
     for(in Rect invalid : invalidRectangles)
         EXPECT_FALSE(self.m_builder.drawImage(image, invalid));
 
     Array<Rect, 7u> invalidUvs = Array<Rect, 7u>();
-    invalidUvs[0u] = MakeUiPaintOverlayRect(-0.1f, 0.0f, 1.0f, 1.0f);
-    invalidUvs[1u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 0.0f, 1.0f);
-    invalidUvs[2u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, -0.1f);
-    invalidUvs[3u] = MakeUiPaintOverlayRect(0.75f, 0.0f, 0.5f, 1.0f);
-    invalidUvs[4u] = MakeUiPaintOverlayRect(0.0f, 0.75f, 1.0f, 0.5f);
-    invalidUvs[5u] = MakeUiPaintOverlayRect(0.0f, 0.0f, inf, 1.0f);
-    invalidUvs[6u] = MakeUiPaintOverlayRect(0.0f, nan, 1.0f, 1.0f);
+    invalidUvs[0u] = Rect(-0.1f, 0.0f, 1.0f, 1.0f);
+    invalidUvs[1u] = Rect(0.0f, 0.0f, 0.0f, 1.0f);
+    invalidUvs[2u] = Rect(0.0f, 0.0f, 1.0f, -0.1f);
+    invalidUvs[3u] = Rect(0.75f, 0.0f, 0.5f, 1.0f);
+    invalidUvs[4u] = Rect(0.0f, 0.75f, 1.0f, 0.5f);
+    invalidUvs[5u] = Rect(0.0f, 0.0f, inf, 1.0f);
+    invalidUvs[6u] = Rect(0.0f, nan, 1.0f, 1.0f);
     for(in Rect invalid : invalidUvs)
         EXPECT_FALSE(self.m_builder.drawImage(image, rectangle, invalid));
 
     Array<Color, 6u> invalidTints = Array<Color, 6u>();
-    invalidTints[0u] = MakeUiPaintOverlayColor(nan, 1.0f, 1.0f, 1.0f);
-    invalidTints[1u] = MakeUiPaintOverlayColor(1.0f, inf, 1.0f, 1.0f);
-    invalidTints[2u] = MakeUiPaintOverlayColor(1.0f, 1.0f, inf, 1.0f);
-    invalidTints[3u] = MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, -0.1f);
-    invalidTints[4u] = MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, 1.1f);
-    invalidTints[5u] = MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, nan);
-    const Rect unitUv = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f);
+    invalidTints[0u] = Color(nan, 1.0f, 1.0f, 1.0f);
+    invalidTints[1u] = Color(1.0f, inf, 1.0f, 1.0f);
+    invalidTints[2u] = Color(1.0f, 1.0f, inf, 1.0f);
+    invalidTints[3u] = Color(1.0f, 1.0f, 1.0f, -0.1f);
+    invalidTints[4u] = Color(1.0f, 1.0f, 1.0f, 1.1f);
+    invalidTints[5u] = Color(1.0f, 1.0f, 1.0f, nan);
+    const Rect unitUv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     for(in Color invalid : invalidTints)
         EXPECT_FALSE(self.m_builder.drawImage(image, rectangle, unitUv, invalid));
 
@@ -909,19 +891,19 @@ void VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWi
     self.beginPaint(reference);
     ASSERT_TRUE(self.m_builder.prepareGlyphPages(pages));
     ASSERT_TRUE(reference.prepareGlyphPages(pages));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f));
-    reference.fillRect(MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(200.0f, 0.0f, 1.0f, 1.0f)));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, 0.0f, 1.0f)));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 0.0f)));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(1.0f, 1.0f, bit_cast<f32>(1u), 1.0f)));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(1.0f, 1.0f, 5.0f, 5.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f), MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, 0.0f)));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(250.0f, 0.0f, 1.0f, 1.0f));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
-    EXPECT_FALSE(self.m_builder.drawImage(SharedImageSource(), MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
-    EXPECT_FALSE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, -1.0f, 1.0f)));
+    self.m_builder.fillRect(Rect(1.0f, 1.0f, 4.0f, 4.0f));
+    reference.fillRect(Rect(1.0f, 1.0f, 4.0f, 4.0f));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(200.0f, 0.0f, 1.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(0.0f, 0.0f, 0.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(0.0f, 0.0f, 1.0f, 0.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(1.0f, 1.0f, bit_cast<f32>(1u), 1.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(1.0f, 1.0f, 5.0f, 5.0f), Rect(0.0f, 0.0f, 1.0f, 1.0f), Color(1.0f, 1.0f, 1.0f, 0.0f)));
+    self.m_builder.pushClip(Rect(250.0f, 0.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(0.0f, 0.0f, 20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_builder.drawImage(SharedImageSource(), Rect(0.0f, 0.0f, 20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_builder.drawImage(image, Rect(0.0f, 0.0f, -1.0f, 1.0f)));
     ASSERT_TRUE(self.m_builder.popClip());
-    EXPECT_FALSE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f)));
+    EXPECT_FALSE(self.m_builder.drawImage(image, Rect(1.0f, 1.0f, 4.0f, 4.0f)));
     const DrawSnapshot actual = self.m_builder.freeze();
     const DrawSnapshot expected = reference.freeze();
     ExpectUiPaintOverlaySameImagePaint(actual, expected);
@@ -934,13 +916,13 @@ void VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWi
 
 
 void VerifyUiPaintOverlayTests_OverlayRendersAboveLaterBasePaintWithoutMergingItsBatch(mut UiPaintOverlayTests self){
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 1.0f));
+    const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
+    self.m_builder.fillRect(rectangle, Color(1.0f, 0.0f, 0.0f, 1.0f));
     ASSERT_TRUE(self.m_builder.beginOverlay(3u));
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 1.0f));
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 0.5f));
+    self.m_builder.fillRect(rectangle, Color(0.0f, 1.0f, 0.0f, 1.0f));
+    self.m_builder.fillRect(rectangle, Color(0.0f, 1.0f, 0.0f, 0.5f));
     ASSERT_TRUE(self.m_builder.endOverlay());
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 0.0f, 1.0f, 1.0f));
+    self.m_builder.fillRect(rectangle, Color(0.0f, 0.0f, 1.0f, 1.0f));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 3u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
@@ -958,15 +940,15 @@ void VerifyUiPaintOverlayTests_OverlayRendersAboveLaterBasePaintWithoutMergingIt
 }
 
 void VerifyUiPaintOverlayTests_LayerOrderPrecedesDeclarationOrderAndEqualLayersKeepTheirIndexOrder(mut UiPaintOverlayTests self){
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     ASSERT_TRUE(self.m_builder.beginOverlay(7u));
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 1.0f));
+    self.m_builder.fillRect(rectangle, Color(1.0f, 0.0f, 0.0f, 1.0f));
     ASSERT_TRUE(self.m_builder.endOverlay());
     ASSERT_TRUE(self.m_builder.beginOverlay(2u));
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 1.0f));
+    self.m_builder.fillRect(rectangle, Color(0.0f, 1.0f, 0.0f, 1.0f));
     ASSERT_TRUE(self.m_builder.endOverlay());
     ASSERT_TRUE(self.m_builder.beginOverlay(7u));
-    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 0.0f, 1.0f, 1.0f));
+    self.m_builder.fillRect(rectangle, Color(0.0f, 0.0f, 1.0f, 1.0f));
     ASSERT_TRUE(self.m_builder.endOverlay());
     self.m_builder.fillRect(rectangle);
     const DrawSnapshot snapshot = self.m_builder.freeze();
@@ -982,11 +964,11 @@ void VerifyUiPaintOverlayTests_LayerOrderPrecedesDeclarationOrderAndEqualLayersK
 }
 
 void VerifyUiPaintOverlayTests_OverlayEscapesParentClipAndRestoresItsExactPriorClip(mut UiPaintOverlayTests self){
-    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f);
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 20.0f, 20.0f));
+    const Rect rectangle = Rect(0.0f, 0.0f, 100.0f, 80.0f);
+    self.m_builder.pushClip(Rect(10.0f, 10.0f, 20.0f, 20.0f));
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.beginOverlay(4u));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(25.0f, 5.0f, 40.0f, 20.0f));
+    self.m_builder.pushClip(Rect(25.0f, 5.0f, 40.0f, 20.0f));
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.popClip());
     EXPECT_FALSE(self.m_builder.popClip());
@@ -1017,9 +999,9 @@ void VerifyUiPaintOverlayTests_OverlayEscapesParentClipAndRestoresItsExactPriorC
 }
 
 void VerifyUiPaintOverlayTests_EscapingTheParentStillClipsOverlayGeometryAndUvsToTheLogicalViewport(mut UiPaintOverlayTests self){
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(50.0f, 50.0f, 5.0f, 5.0f));
+    self.m_builder.pushClip(Rect(50.0f, 50.0f, 5.0f, 5.0f));
     ASSERT_TRUE(self.m_builder.beginOverlay(2u));
-    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(-20.0f, -10.0f, 160.0f, 100.0f)));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, Rect(-20.0f, -10.0f, 160.0f, 100.0f)));
     ASSERT_TRUE(self.m_builder.endOverlay());
     ASSERT_TRUE(self.m_builder.popClip());
     const DrawSnapshot snapshot = self.m_builder.freeze();
@@ -1039,8 +1021,8 @@ void VerifyUiPaintOverlayTests_EscapingTheParentStillClipsOverlayGeometryAndUvsT
 }
 
 void VerifyUiPaintOverlayTests_RejectedAdmissionAndUnbalancedClosurePreserveTheActiveLayerAndClips(mut UiPaintOverlayTests self){
-    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f);
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(5.0f, 5.0f, 10.0f, 10.0f));
+    const Rect rectangle = Rect(0.0f, 0.0f, 100.0f, 80.0f);
+    self.m_builder.pushClip(Rect(5.0f, 5.0f, 10.0f, 10.0f));
     EXPECT_FALSE(self.m_builder.beginOverlay(0u));
     EXPECT_FALSE(self.m_builder.endOverlay());
     self.m_builder.fillRect(rectangle);
@@ -1048,7 +1030,7 @@ void VerifyUiPaintOverlayTests_RejectedAdmissionAndUnbalancedClosurePreserveTheA
     ASSERT_TRUE(self.m_builder.beginOverlay(9u));
     ASSERT_TRUE(self.m_builder.endOverlay());
     EXPECT_FALSE(self.m_builder.beginOverlay(0u));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 20.0f, 20.0f));
+    self.m_builder.pushClip(Rect(10.0f, 10.0f, 20.0f, 20.0f));
     EXPECT_FALSE(self.m_builder.endOverlay());
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.popClip());
@@ -1071,9 +1053,9 @@ void VerifyUiPaintOverlayTests_RejectedAdmissionAndUnbalancedClosurePreserveTheA
 }
 
 void VerifyUiPaintOverlayTests_NestedOverlayRestoresParentLayerAndItsClipAfterEscapingBoth(mut UiPaintOverlayTests self){
-    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f);
+    const Rect rectangle = Rect(0.0f, 0.0f, 100.0f, 80.0f);
     ASSERT_TRUE(self.m_builder.beginOverlay(2u));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(5.0f, 5.0f, 10.0f, 10.0f));
+    self.m_builder.pushClip(Rect(5.0f, 5.0f, 10.0f, 10.0f));
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.beginOverlay(3u));
     self.m_builder.fillRect(rectangle);
@@ -1100,7 +1082,7 @@ void VerifyUiPaintOverlayTests_BoundedOverlayDepthRejectsWithoutChangingTheLastA
     for(u32 layer = 1u; layer <= cast<u32>(s_PaintMaxOverlayDepth); ++layer)
         ASSERT_TRUE(self.m_builder.beginOverlay(layer));
     EXPECT_FALSE(self.m_builder.beginOverlay(99u));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f));
+    self.m_builder.fillRect(Rect(0.0f, 0.0f, 100.0f, 80.0f));
     for(usize depth = 0u; depth < s_PaintMaxOverlayDepth; ++depth)
         ASSERT_TRUE(self.m_builder.endOverlay());
     EXPECT_FALSE(self.m_builder.endOverlay());
@@ -1114,11 +1096,11 @@ void VerifyUiPaintOverlayTests_UnrecordedScopesAreRejectedAndBeginResetsAbandone
     EXPECT_FALSE(idle.beginOverlay(1u));
     EXPECT_FALSE(idle.endOverlay());
     ASSERT_TRUE(self.m_builder.beginOverlay(5u));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 20.0f, 20.0f));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(10.0f, 10.0f, 10.0f, 10.0f));
+    self.m_builder.pushClip(Rect(10.0f, 10.0f, 20.0f, 20.0f));
+    self.m_builder.fillRect(Rect(10.0f, 10.0f, 10.0f, 10.0f));
     self.begin(8u);
     EXPECT_FALSE(self.m_builder.endOverlay());
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f));
+    self.m_builder.fillRect(Rect(0.0f, 0.0f, 100.0f, 80.0f));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
@@ -1130,7 +1112,7 @@ void VerifyUiPaintOverlayTests_UnrecordedScopesAreRejectedAndBeginResetsAbandone
 }
 
 void VerifyUiPaintOverlayTests_LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches(mut UiPaintOverlayTests self){
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     ASSERT_TRUE(self.m_builder.beginOverlay(4u));
     self.m_builder.fillRect(rectangle);
     self.m_builder.fillRect(rectangle);
@@ -1170,8 +1152,8 @@ void VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBinding
     SharedSdfAtlasPage distance = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(distance, distanceCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasGlyphPage(coverage) && UiPaintOverlayHasSdfPage(distance));
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
-    const Rect uv = MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f);
+    const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
     ASSERT_TRUE(self.m_builder.beginOverlay(4u));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 3u, rectangle, uv));
     ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
@@ -1226,13 +1208,13 @@ void VerifyUiPaintSdfTests_ClipTrimsSdfGeometryAndUv(mut UiPaintSdfTests self){
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(page, pageCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 5.0f, 20.0f, 10.0f));
+    self.m_builder.pushClip(Rect(10.0f, 5.0f, 20.0f, 10.0f));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(
         page,
         3u,
-        MakeUiPaintOverlayRect(0.0f, 0.0f, 40.0f, 20.0f),
-        MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f),
-        MakeUiPaintOverlayColor(0.8f, 0.4f, 0.2f, 0.5f)
+        Rect(0.0f, 0.0f, 40.0f, 20.0f),
+        Rect(0.125f, 0.25f, 0.5f, 0.5f),
+        Color(0.8f, 0.4f, 0.2f, 0.5f)
     ));
     ASSERT_TRUE(self.m_builder.popClip());
     ExpectClippedPaintTextQuad(self.m_builder.freeze());
@@ -1252,17 +1234,17 @@ void VerifyUiPaintSdfTests_BatchesOnlyAdjacentMatchingGroupChannelMaterialAndCli
     SharedGlyphPage coverage = SharedGlyphPage();
     TakeUiPaintOverlayGlyphPage(coverage, coverageCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(first) && UiPaintOverlayHasSdfPage(second) && UiPaintOverlayHasGlyphPage(coverage));
-    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
-    const Rect uv = MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f);
+    const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, MakeUiPaintOverlayColor(0.5f, 0.25f, 1.0f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, Color(0.5f, 0.25f, 1.0f, 0.5f)));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 1u, rectangle, uv));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(second, 1u, rectangle, uv));
     ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f));
+    self.m_builder.pushClip(Rect(0.0f, 0.0f, 20.0f, 20.0f));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
     ASSERT_TRUE(self.m_builder.popClip());
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
@@ -1288,7 +1270,7 @@ void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepack
     TakeUiPaintOverlaySdfPage(original, originalCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(original));
     const Sha256Digest oldPixelsHash = UiPaintOverlaySdfPagePixelsHash(original);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(original, 2u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(original, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
     const DrawSnapshot first = self.m_builder.freeze();
     original.reset();
     self.begin(8u);
@@ -1297,7 +1279,7 @@ void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepack
     SharedSdfAtlasPage replacement = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(replacement, replacementCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(replacement));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(replacement, 2u, MakeUiPaintOverlayRect(6.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.5f, 0.5f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(replacement, 2u, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
     const DrawSnapshot second = self.m_builder.freeze();
     replacement.reset();
     self.begin(9u);
@@ -1328,7 +1310,7 @@ void VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCover
     TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf));
     ASSERT_TRUE(self.prepareGlyphSpanAndSingleSdf(coverage, sdf));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     auto upgradeCreationResult = self.makeCoverage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
     SharedGlyphPage upgrade = SharedGlyphPage();
@@ -1338,7 +1320,7 @@ void VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCover
     SharedSdfAtlasPage overflow = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(overflow, overflowCreationResult);
     EXPECT_FALSE(self.prepareSingleGlyphAndSingleSdf(upgrade, overflow));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(overflow, 0u, MakeUiPaintOverlayRect(10.0f, 10.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(overflow, 0u, Rect(10.0f, 10.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 1u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
@@ -1374,8 +1356,8 @@ void VerifyUiPaintSdfTests_InvalidChannelAndUvFailBeforeImageOrGeometryAdmission
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(page, pageCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 4u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 0u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.75f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 4u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 0u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.75f, 0.0f, 0.5f, 0.5f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_TRUE(snapshot.vertices().empty());
@@ -1438,10 +1420,10 @@ void VerifyUiPaintSdfTests_CompactPageRejectsMissingChannelsWithoutPublishingGeo
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
     TakeUiPaintOverlaySdfPage(page, pageCreationResult);
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 2u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     EXPECT_TRUE(self.m_builder.freeze().commands().empty());
     self.begin(8u);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(page, 1u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(page, 1u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     EXPECT_EQ(snapshot.commands()[0u].sdfChannel, 1u);
@@ -1473,7 +1455,7 @@ void VerifyUiPaintSdfTests_CompactFactoryRejectsInvalidChannelCountAndRgbaSizedI
 void VerifyUiPaintSdfTests_AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased(mut UiPaintSdfTests self){
     UiPaintSdfAssetFactorySample sample = self.createPageFromTemporaryAtlas();
     ASSERT_TRUE(sample.valid);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sample.page, 3u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sample.page, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     sample.page.reset();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
@@ -1487,8 +1469,8 @@ void VerifyUiPaintSdfTests_AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsR
 
 
 void VerifyUiPaintTests_CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay(mut UiPaintTests self){
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 30.0f, 30.0f));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(20.0f, 5.0f, 40.0f, 20.0f));
+    self.m_builder.pushClip(Rect(10.0f, 10.0f, 30.0f, 30.0f));
+    self.m_builder.pushClip(Rect(20.0f, 5.0f, 40.0f, 20.0f));
     const Rect nested = self.m_builder.currentClip();
     EXPECT_FLOAT_EQ(nested.x, 20.0f);
     EXPECT_FLOAT_EQ(nested.y, 10.0f);
@@ -1496,7 +1478,7 @@ void VerifyUiPaintTests_CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOv
     EXPECT_FLOAT_EQ(nested.height, 15.0f);
     ASSERT_TRUE(self.m_builder.beginOverlay(1u));
     EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 200.0f);
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(250.0f, 0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(Rect(250.0f, 0.0f, 1.0f, 1.0f));
     EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 0.0f);
     ASSERT_TRUE(self.m_builder.popClip());
     ASSERT_TRUE(self.m_builder.endOverlay());
@@ -1507,10 +1489,10 @@ void VerifyUiPaintTests_CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOv
 }
 
 void VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroOrigins(mut UiPaintTests self){
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(2.0f, 3.0f, 5.0f, 7.0f));
+    self.m_builder.pushClip(Rect(2.0f, 3.0f, 5.0f, 7.0f));
     Array<Rect, 2u> boundaries = Array<Rect, 2u>();
-    boundaries[0u] = MakeUiPaintOverlayRect(8.0f, 11.0f, 2.0f, 2.0f);
-    boundaries[1u] = MakeUiPaintOverlayRect(7.0f, 10.0f, 2.0f, 2.0f);
+    boundaries[0u] = Rect(8.0f, 11.0f, 2.0f, 2.0f);
+    boundaries[1u] = Rect(7.0f, 10.0f, 2.0f, 2.0f);
     for(in Rect boundary : boundaries){
         self.m_builder.pushClip(boundary);
         const Rect clipped = self.m_builder.currentClip();
@@ -1522,8 +1504,8 @@ void VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroO
     }
     ASSERT_TRUE(self.m_builder.popClip());
 
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(-0.0f, -0.0f, 1.0f, 1.0f));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(Rect(-0.0f, -0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(Rect(0.0f, 0.0f, 1.0f, 1.0f));
     EXPECT_FALSE(SignBit(self.m_builder.currentClip().x));
     EXPECT_FALSE(SignBit(self.m_builder.currentClip().y));
     ASSERT_TRUE(self.m_builder.popClip());
@@ -1531,8 +1513,8 @@ void VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroO
     EXPECT_TRUE(SignBit(self.m_builder.currentClip().y));
     ASSERT_TRUE(self.m_builder.popClip());
 
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(-0.0f, -0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(Rect(0.0f, 0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(Rect(-0.0f, -0.0f, 1.0f, 1.0f));
     EXPECT_TRUE(SignBit(self.m_builder.currentClip().x));
     EXPECT_TRUE(SignBit(self.m_builder.currentClip().y));
     EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 1.0f);
@@ -1541,14 +1523,14 @@ void VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroO
 
 void VerifyUiPaintTests_NestedClipsTrimGeometryAndUvAndRestoreTheirParent(mut UiPaintTests self){
     EXPECT_FALSE(self.m_builder.popClip());
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 30.0f, 30.0f));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(20.0f, 5.0f, 40.0f, 20.0f));
-    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(0.0f, 0.0f, 64.0f, 48.0f)));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(100.0f, 100.0f, 1.0f, 1.0f));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 200.0f, 100.0f));
+    self.m_builder.pushClip(Rect(10.0f, 10.0f, 30.0f, 30.0f));
+    self.m_builder.pushClip(Rect(20.0f, 5.0f, 40.0f, 20.0f));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, Rect(0.0f, 0.0f, 64.0f, 48.0f)));
+    self.m_builder.pushClip(Rect(100.0f, 100.0f, 1.0f, 1.0f));
+    self.m_builder.fillRect(Rect(0.0f, 0.0f, 200.0f, 100.0f));
     ASSERT_TRUE(self.m_builder.popClip());
     ASSERT_TRUE(self.m_builder.popClip());
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 200.0f, 100.0f));
+    self.m_builder.fillRect(Rect(0.0f, 0.0f, 200.0f, 100.0f));
     ASSERT_TRUE(self.m_builder.popClip());
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 8u);
@@ -1564,7 +1546,7 @@ void VerifyUiPaintTests_NestedClipsTrimGeometryAndUvAndRestoreTheirParent(mut Ui
 }
 
 void VerifyUiPaintTests_UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders(mut UiPaintTests self){
-    ASSERT_TRUE(self.m_builder.drawRegion(s_UiPaintOverlayPanelRegionName, MakeUiPaintOverlayRect(10.0f, 20.0f, 3.0f, 2.0f)));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiPaintOverlayPanelRegionName, Rect(10.0f, 20.0f, 3.0f, 2.0f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 16u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, 11.0f);
@@ -1587,7 +1569,7 @@ void VerifyUiPaintTests_NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios(mu
     for(usize index = 0u; index < borders.size(); ++index){
         const ScopedTestTrace trace = ScopedTestTrace(index);
         self.configurePanelBorderCase(borders[index]);
-        const UiPaintDrawRegionFenvSample sample = self.drawPanelWithFenvCheck(s_UiPaintOverlayPanelRegionName, MakeUiPaintOverlayRect(10.0f, 20.0f, 3.0f, 2.0f));
+        const UiPaintDrawRegionFenvSample sample = self.drawPanelWithFenvCheck(s_UiPaintOverlayPanelRegionName, Rect(10.0f, 20.0f, 3.0f, 2.0f));
         ASSERT_TRUE(sample.cleared);
         EXPECT_EQ(sample.exceptions, 0);
         ASSERT_TRUE(sample.drawn);
@@ -1608,12 +1590,12 @@ void VerifyUiPaintTests_NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios(mu
 }
 
 void VerifyUiPaintTests_BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder(mut UiPaintTests self){
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(1.0f, 1.0f, 5.0f, 5.0f), MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 0.5f));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(2.0f, 2.0f, 5.0f, 5.0f), MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 1.0f));
-    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(3.0f, 3.0f, 5.0f, 5.0f)));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(4.0f, 4.0f, 5.0f, 5.0f));
-    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f));
-    self.m_builder.fillRect(MakeUiPaintOverlayRect(5.0f, 5.0f, 5.0f, 5.0f));
+    self.m_builder.fillRect(Rect(1.0f, 1.0f, 5.0f, 5.0f), Color(1.0f, 0.0f, 0.0f, 0.5f));
+    self.m_builder.fillRect(Rect(2.0f, 2.0f, 5.0f, 5.0f), Color(0.0f, 1.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, Rect(3.0f, 3.0f, 5.0f, 5.0f)));
+    self.m_builder.fillRect(Rect(4.0f, 4.0f, 5.0f, 5.0f));
+    self.m_builder.pushClip(Rect(0.0f, 0.0f, 20.0f, 20.0f));
+    self.m_builder.fillRect(Rect(5.0f, 5.0f, 5.0f, 5.0f));
     ASSERT_TRUE(self.m_builder.popClip());
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 4u);
@@ -1624,11 +1606,11 @@ void VerifyUiPaintTests_BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder
 }
 
 void VerifyUiPaintTests_FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges(mut UiPaintTests self){
-    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
-    EXPECT_FALSE(self.m_builder.drawRegion(s_UiInputNameMissing, MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, Rect(0.0f, 0.0f, 20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_builder.drawRegion(s_UiInputNameMissing, Rect(0.0f, 0.0f, 20.0f, 20.0f)));
     const DrawSnapshot first = self.m_builder.freeze();
     self.configureReplacementSpriteSkin();
-    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(0.0f, 0.0f, 10.0f, 10.0f)));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, Rect(0.0f, 0.0f, 10.0f, 10.0f)));
     const DrawSnapshot second = self.m_builder.freeze();
     EXPECT_EQ(first.generation(), 7u);
     EXPECT_EQ(first.skinBinding().generation, 3u);

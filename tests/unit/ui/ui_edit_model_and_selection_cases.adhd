@@ -370,35 +370,11 @@ EditCommandRequest MakeUiEditCommandRequest(in EditCommandEnum command, in b8 ex
     return request;
 }
 
-InputCommandIntent MakeUiEditCommandIntent(in InputCommandEnum command, in b8 extend, in b8 edit){
-    InputCommandIntent intent = InputCommandIntent();
-    intent.command = command;
-    intent.extend = extend;
-    intent.edit = edit;
-    return intent;
-}
-
-EditLimits MakeUiEditLimits(in usize maxBytes, in usize maxHistoryRecords, in usize maxHistoryBytes){
-    EditLimits limits = EditLimits();
-    limits.maxBytes = maxBytes;
-    limits.maxHistoryRecords = maxHistoryRecords;
-    limits.maxHistoryBytes = maxHistoryBytes;
-    return limits;
-}
-
 InputKeyBinding MakeUiEditKeyChord(in i32 key, in i32 modifiers){
     InputKeyBinding binding = InputKeyBinding();
     binding.key = key;
     binding.modifiers = modifiers;
     return binding;
-}
-
-FloatBounds MakeUiFloatModelBounds(in f64 minimum, in f64 maximum, in NumericBoundsPolicyEnum policy){
-    FloatBounds bounds = FloatBounds();
-    bounds.minimum = minimum;
-    bounds.maximum = maximum;
-    bounds.policy = policy;
-    return bounds;
 }
 
 b8 SeedUiEditSurroundingHistoryAndPreedit(in StringView text, in usize anchor, in usize caret, mut EditModel model){
@@ -487,14 +463,14 @@ void VerifyUiEditCommandTests_NonEditingMalformedAndUnrelatedIntentsCannotMutate
     const u64 revision = self.m_model.revision();
     const u64 selection = self.m_model.selectionGeneration();
     Array<InputCommandIntent, 8u> rejected = Array<InputCommandIntent, 8u>();
-    rejected[0u] = MakeUiEditCommandIntent(InputCommand::Backspace, true, false);
-    rejected[1u] = MakeUiEditCommandIntent(InputCommand::Copy, true, false);
-    rejected[2u] = MakeUiEditCommandIntent(InputCommand::Accept, true, false);
-    rejected[3u] = MakeUiEditCommandIntent(InputCommand::WordLeft, true, false);
-    rejected[4u] = MakeUiEditCommandIntent(InputCommand::None, false, true);
-    rejected[5u] = MakeUiEditCommandIntent(InputCommand::Activate, false, true);
-    rejected[6u] = MakeUiEditCommandIntent(InputCommand::ContextMenu, false, true);
-    rejected[7u] = MakeUiEditCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
+    rejected[0u] = MakeUiCommandIntent(InputCommand::Backspace, true, false);
+    rejected[1u] = MakeUiCommandIntent(InputCommand::Copy, true, false);
+    rejected[2u] = MakeUiCommandIntent(InputCommand::Accept, true, false);
+    rejected[3u] = MakeUiCommandIntent(InputCommand::WordLeft, true, false);
+    rejected[4u] = MakeUiCommandIntent(InputCommand::None, false, true);
+    rejected[5u] = MakeUiCommandIntent(InputCommand::Activate, false, true);
+    rejected[6u] = MakeUiCommandIntent(InputCommand::ContextMenu, false, true);
+    rejected[7u] = MakeUiCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
     for(in InputCommandIntent intent : rejected){
         const EditCommandResult result = ApplyEditCommand(self.m_model, TranslateEditCommand(intent, false, EditTextMode::SingleLine));
         EXPECT_FALSE(result.handled);
@@ -507,7 +483,7 @@ void VerifyUiEditCommandTests_NonEditingMalformedAndUnrelatedIntentsCannotMutate
         EXPECT_EQ(self.m_model.revision(), revision);
         EXPECT_EQ(self.m_model.selectionGeneration(), selection);
     }
-    EXPECT_FALSE(ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiEditCommandIntent(InputCommand::Backspace, false, true), false, MakeUiEditInvalidTextMode())).handled);
+    EXPECT_FALSE(ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Backspace, false, true), false, MakeUiEditInvalidTextMode())).handled);
     EXPECT_EQ(self.m_model.revision(), revision);
     EXPECT_EQ(self.m_model.selectionGeneration(), selection);
 }
@@ -1170,12 +1146,12 @@ void VerifyUiEditNavigationStateTests_OsModifiersAndUnrelatedIntentsRejectNaviga
         EXPECT_FALSE(TryTranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers)).has_value());
 
     Array<InputCommandIntent, 6u> rejected = Array<InputCommandIntent, 6u>();
-    rejected[0u] = MakeUiEditCommandIntent(InputCommand::Up, true, false);
-    rejected[1u] = MakeUiEditCommandIntent(InputCommand::Down, false, false);
-    rejected[2u] = MakeUiEditCommandIntent(InputCommand::PageUp, false, false);
-    rejected[3u] = MakeUiEditCommandIntent(InputCommand::PageDown, true, false);
-    rejected[4u] = MakeUiEditCommandIntent(InputCommand::FocusNext, false, true);
-    rejected[5u] = MakeUiEditCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
+    rejected[0u] = MakeUiCommandIntent(InputCommand::Up, true, false);
+    rejected[1u] = MakeUiCommandIntent(InputCommand::Down, false, false);
+    rejected[2u] = MakeUiCommandIntent(InputCommand::PageUp, false, false);
+    rejected[3u] = MakeUiCommandIntent(InputCommand::PageDown, true, false);
+    rejected[4u] = MakeUiCommandIntent(InputCommand::FocusNext, false, true);
+    rejected[5u] = MakeUiCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
     for(in InputCommandIntent intent : rejected)
         EXPECT_FALSE(TryTranslateEditNavigation(intent).has_value());
     UiKeepEditArenaAlive(arena);
@@ -1452,7 +1428,7 @@ void VerifyFloatModelTests_SignedZeroIsPreservedAndItsSignChangeIsReported(mut F
 }
 
 void VerifyFloatModelTests_BoundsClampFiniteRepresentableValuesAndCanonicalize(mut FloatModelTests self){
-    const FloatBounds bounds = MakeUiFloatModelBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
+    const FloatBounds bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
     ASSERT_TRUE(self.m_model.setDraft("9.9e1"));
     EXPECT_EQ(self.m_model.status(bounds), NumericParseStatus::OutOfRange);
     const NumericEditResult high = self.m_model.submit(bounds);
@@ -1474,7 +1450,7 @@ void VerifyFloatModelTests_BoundsClampFiniteRepresentableValuesAndCanonicalize(m
 void VerifyFloatModelTests_RejectionAndInvalidBlurRestoreCanonicalCurrentValue(mut FloatModelTests self){
     ASSERT_TRUE(self.m_model.setDraft("+01.250e0"));
     ASSERT_TRUE(self.m_model.submit().committed);
-    const FloatBounds bounds = MakeUiFloatModelBounds(-10.0, 10.0, NumericBoundsPolicy::Reject);
+    const FloatBounds bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Reject);
     ASSERT_TRUE(self.m_model.setDraft("99"));
     const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model.draft());
     ExpectNumericEditRejected(self.m_model.submit(bounds), false);
@@ -1487,7 +1463,7 @@ void VerifyFloatModelTests_RejectionAndInvalidBlurRestoreCanonicalCurrentValue(m
 
 void VerifyFloatModelTests_OverflowUnderflowAndNonfiniteSpellingsNeverClamp(mut FloatModelTests self){
     ASSERT_TRUE(self.m_model.setValue(1.25));
-    const FloatBounds bounds = MakeUiFloatModelBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
+    const FloatBounds bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
     Array<StringView, 6u> drafts = Array<StringView, 6u>();
     drafts[0u] = "1e309";
     drafts[1u] = "1e-9999";
@@ -1554,7 +1530,7 @@ void VerifyFloatModelTests_ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExac
 
 void VerifyFloatModelTests_ExternalFiniteValueCanRemainOutsideUserBounds(mut FloatModelTests self){
     ASSERT_TRUE(self.m_model.setValue(1000.25));
-    const FloatBounds bounds = MakeUiFloatModelBounds(-10.0, 10.0, NumericBoundsPolicy::Reject);
+    const FloatBounds bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Reject);
     ExpectNumericEditRejected(self.m_model.submit(bounds), false);
     ExpectNumericEditRejected(self.m_model.blur(bounds), false);
     EXPECT_EQ(self.m_model.value(), 1000.25);

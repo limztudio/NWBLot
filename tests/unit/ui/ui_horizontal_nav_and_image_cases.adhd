@@ -697,30 +697,6 @@ const Name s_UiImageSourceTempExpectedName = "tests/ui/image/temporary";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Rect MakeUiHorizImageRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Color MakeUiHorizImageColor(in f32 r, in f32 g, in f32 b, in f32 a){
-    Color color = Color();
-    color.r = r;
-    color.g = g;
-    color.b = b;
-    color.a = a;
-    return color;
-}
-
-Array<PopupScope, 1u> MakeUiHorizNavSinglePopup(in PopupScope popup){
-    Array<PopupScope, 1u> popups = Array<PopupScope, 1u>();
-    popups[0u] = popup;
-    return popups;
-}
-
 UiSkinRegion MakeUiImageLayoutSprite(){
     UiSkinRegion region = UiSkinRegion();
     region.name = s_UiCaseImageTest;
@@ -750,7 +726,7 @@ void VerifyGpuTextureImageValidationFixture_SameIdentityDistinctGenerationsRemai
     ASSERT_TRUE(UiImageHandlePresent(first) && UiImageHandlePresent(second));
     ASSERT_EQ(UiReadImageIdentity(first), UiReadImageIdentity(second));
     ASSERT_NE(UiReadImageGeneration(first), UiReadImageGeneration(second));
-    const Rect rectangle = MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f);
+    const Rect rectangle = Rect(2.0f, 3.0f, 16.0f, 8.0f);
     ASSERT_TRUE(self.m_builder.drawImage(first, rectangle));
     ASSERT_TRUE(self.m_builder.drawImage(second, rectangle));
     const DrawSnapshot snapshot = self.m_builder.freeze();
@@ -766,7 +742,7 @@ void VerifyGpuTextureImageValidationFixture_ImageIndexMustAddressAnOwnedTextureS
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
     ASSERT_TRUE(UiImageHandlePresent(image));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     Array<u32, 2u> invalidIndices = Array<u32, 2u>();
@@ -786,7 +762,7 @@ void VerifyGpuTextureImageValidationFixture_NullTextureSourceRejectsTheSnapshot(
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
     ASSERT_TRUE(UiImageHandlePresent(image));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 1u);
     UiGpuValResetFirstTexture(snapshot);
@@ -799,7 +775,7 @@ void VerifyGpuTextureImageValidationFixture_DuplicateSourceGenerationRejectsTheS
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
     ASSERT_TRUE(UiImageHandlePresent(image));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     UiGpuValAppendTexture(snapshot, image);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
@@ -813,7 +789,7 @@ void VerifyGpuTextureImageValidationFixture_TextureBindingCountOverflowRejectsEv
     ASSERT_TRUE(firstResult.has_value());
     const SharedImageSource first = firstResult.value();
     ASSERT_TRUE(UiImageHandlePresent(first));
-    ASSERT_TRUE(self.m_builder.drawImage(first, MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(first, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     for(usize index = 1u; index <= s_PaintMaxImages; ++index){
         const Expected<SharedImageSource> additionResult = self.makeImage(s_UiGpuOverflowImagePath, cast<u8>(index));
@@ -860,8 +836,8 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
     const SharedGlyphPage glyph = glyphResult.value();
     const SharedSdfAtlasPage sdf = sdfResult.value();
     ASSERT_TRUE(UiImageHandlePresent(image) && UiGlyphHandlePresent(glyph) && UiSdfHandlePresent(sdf));
-    const Rect rectangle = MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f);
-    const Rect uv = MakeUiHorizImageRect(0.0f, 0.0f, 1.0f, 1.0f);
+    const Rect rectangle = Rect(2.0f, 3.0f, 16.0f, 8.0f);
+    const Rect uv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
     ASSERT_TRUE(self.m_builder.drawGlyph(glyph, rectangle, uv));
@@ -887,7 +863,7 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
 void VerifyGpuTextureImageValidationFixture_ImageCommandRejectsGlyphAndSdfMetadata(mut GpuTextureImageValidationFixture self){
     SharedImageSource image = SharedImageSource();
     ASSERT_TRUE(UiGpuValPrepareSingleGlyphSdfAndImage(self, image));
-    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     const DrawCommand original = snapshot.commands()[0u];
@@ -912,7 +888,7 @@ void VerifyGpuTextureImageValidationFixture_UnknownMaterialRejectsCombinedImageV
     const Expected<SharedImageSource> imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     ASSERT_TRUE(UiImageHandlePresent(imageResult.value()));
-    ASSERT_TRUE(self.m_builder.drawImage(imageResult.value(), MakeUiHorizImageRect(2.0f, 3.0f, 16.0f, 8.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(imageResult.value(), Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     UiGpuValSetFirstCommandUnknownMaterial(snapshot);
@@ -1060,7 +1036,7 @@ void VerifyHorizontalNavigationFixture_DisabledClippedOrOmittedHostCannotResumeI
         if(variant == 0u)
             self.m_targets[0u].enabled = false;
         else if(variant == 1u)
-            self.m_targets[0u].clip = MakeUiHorizImageRect(200.0f, 0.0f, 10.0f, 100.0f);
+            self.m_targets[0u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
         else
             publishCount = 0u;
         ASSERT_TRUE(self.publish(publishCount));
@@ -1083,18 +1059,18 @@ void VerifyHorizontalNavigationFixture_ClosingAndReopeningPopupRequiresFreshHori
     PopupScope popup = MakeUiHorizontalNavPopup(self.m_targets[0u]);
     self.m_targets[0u].popup = popup.token;
     self.m_targets[0u].layer = popup.layer;
-    ASSERT_TRUE(self.publish(1u, MakeUiHorizNavSinglePopup(popup)));
+    ASSERT_TRUE(self.publish(1u, MakeUiSinglePopupScopeArray(popup)));
     self.focusTarget();
     EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     self.m_router.closePopup(popup.token);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_FALSE(self.m_router.focus().valid());
-    ASSERT_TRUE(self.publish(1u, MakeUiHorizNavSinglePopup(popup)));
+    ASSERT_TRUE(self.publish(1u, MakeUiSinglePopupScopeArray(popup)));
     EXPECT_FALSE(self.m_router.focus().valid());
     ++popup.token.openGeneration;
     self.m_targets[0u].popup = popup.token;
-    ASSERT_TRUE(self.publish(1u, MakeUiHorizNavSinglePopup(popup)));
+    ASSERT_TRUE(self.publish(1u, MakeUiSinglePopupScopeArray(popup)));
     self.focusTarget();
     EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -1113,7 +1089,7 @@ void VerifyHorizontalNavigationFixture_PopupMaskCannotRedirectOrReviveLowerHostH
     const PopupScope popup = MakeUiHorizontalNavPopup(self.m_targets[1u]);
     self.m_targets[1u].popup = popup.token;
     self.m_targets[1u].layer = popup.layer;
-    ASSERT_TRUE(self.publish(2u, MakeUiHorizNavSinglePopup(popup)));
+    ASSERT_TRUE(self.publish(2u, MakeUiSinglePopupScopeArray(popup)));
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.focusTarget(1u);
     EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
@@ -1347,7 +1323,7 @@ void VerifyUiImageBuilderTests_CallerMutationCannotChangeDeferredImageNameSizeOr
     ASSERT_TRUE(self.panel(1u));
     Name name = s_UiImageBuilderSpriteRegionName;
     ImageOptions options = MakeUiImageBuilderFixedOptions(80.0f, 32.0f);
-    options.tint = MakeUiHorizImageColor(0.8f, 1.0f, 0.6f, 0.5f);
+    options.tint = Color(0.8f, 1.0f, 0.6f, 0.5f);
     ASSERT_TRUE(self.m_builder.image("image", name, options));
     name = s_UiFixtureNameWhite;
     options = MakeUiImageBuilderFixedOptions(20.0f, 20.0f);
@@ -1366,10 +1342,10 @@ void VerifyUiImageBuilderTests_CallerMutationCannotChangeDeferredImageNameSizeOr
 void VerifyUiImageBuilderTests_ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack(mut UiImageBuilderTests self){
     ASSERT_TRUE(self.panel(1u));
     ASSERT_TRUE(self.m_builder.image("image", s_UiImageBuilderSpriteRegionName, MakeUiImageBuilderFixedOptions()));
-    self.m_paint.pushClip(MakeUiHorizImageRect(20.0f, 0.0f, 20.0f, 600.0f));
+    self.m_paint.pushClip(Rect(20.0f, 0.0f, 20.0f, 600.0f));
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_paint.popClip());
-    self.m_paint.fillRect(MakeUiHorizImageRect(60.0f, 80.0f, 8.0f, 8.0f), MakeUiHorizImageColor(1.0f, 0.0f, 0.0f, 1.0f));
+    self.m_paint.fillRect(Rect(60.0f, 80.0f, 8.0f, 8.0f), Color(1.0f, 0.0f, 0.0f, 1.0f));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const Expected<SkinPaintSample> sprite = self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName);
     ASSERT_TRUE(sprite.has_value());
@@ -1457,12 +1433,12 @@ void VerifyUiImageLayoutTests_NineSliceMinimumsRemainLogicalAndCanExceedTheNatur
 }
 
 void VerifyUiImageLayoutTests_EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins(){
-    const Rect bounds = MakeUiHorizImageRect(-100.0f, -50.0f, 200.0f, 100.0f);
-    const Expected<ImagePlacement> placementResult = PlaceImage(bounds, MakeUiHorizImageRect(150.0f, 0.0f, 20.0f, 20.0f));
+    const Rect bounds = Rect(-100.0f, -50.0f, 200.0f, 100.0f);
+    const Expected<ImagePlacement> placementResult = PlaceImage(bounds, Rect(150.0f, 0.0f, 20.0f, 20.0f));
     ASSERT_TRUE(placementResult.has_value());
     ExpectUiRectExact(placementResult.value().bounds, bounds);
-    ExpectUiRectExact(placementResult.value().clip, MakeUiHorizImageRect(150.0f, 0.0f, 0.0f, 20.0f));
-    const Rect emptyBounds = MakeUiHorizImageRect(-10.0f, -20.0f, 0.0f, 0.0f);
+    ExpectUiRectExact(placementResult.value().clip, Rect(150.0f, 0.0f, 0.0f, 20.0f));
+    const Rect emptyBounds = Rect(-10.0f, -20.0f, 0.0f, 0.0f);
     const Expected<ImagePlacement> placementResult2 = PlaceImage(emptyBounds, bounds);
     ASSERT_TRUE(placementResult2.has_value());
     ExpectUiRectExact(placementResult2.value().bounds, emptyBounds);
@@ -1471,12 +1447,12 @@ void VerifyUiImageLayoutTests_EmptyAndDisjointClipsRemainValidAtFiniteNegativeOr
 
 void VerifyUiImageLayoutTests_SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainValid(){
     const f32 tiny = bit_cast<f32>(1u);
-    const Rect small = MakeUiHorizImageRect(0.0f, 0.0f, tiny, tiny);
+    const Rect small = Rect(0.0f, 0.0f, tiny, tiny);
     const Expected<ImagePlacement> placementResult = PlaceImage(small, small);
     ASSERT_TRUE(placementResult.has_value());
     ExpectUiRectExact(placementResult.value().bounds, small);
     ExpectUiRectExact(placementResult.value().clip, small);
-    const Rect large = MakeUiHorizImageRect(-f32.max, 0.0f, f32.max, 1.0f);
+    const Rect large = Rect(-f32.max, 0.0f, f32.max, 1.0f);
     const Expected<ImagePlacement> placementResult2 = PlaceImage(large, large);
     ASSERT_TRUE(placementResult2.has_value());
     ExpectUiRectExact(placementResult2.value().bounds, large);
@@ -1545,15 +1521,15 @@ void VerifyUiImageLayoutTests_UnrepresentableNaturalExtentRejectsMeasurement(){
 }
 
 void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlacement(){
-    const Rect normal = MakeUiHorizImageRect(10.0f, 20.0f, 200.0f, 100.0f);
+    const Rect normal = Rect(10.0f, 20.0f, 200.0f, 100.0f);
     Array<Rect, 7u> invalidList = Array<Rect, 7u>();
-    invalidList[0u] = MakeUiHorizImageRect(UiHorizImageQuietNaNF32(), 0.0f, 1.0f, 1.0f);
-    invalidList[1u] = MakeUiHorizImageRect(0.0f, UiHorizImageInfinityF32(), 1.0f, 1.0f);
-    invalidList[2u] = MakeUiHorizImageRect(0.0f, 0.0f, -1.0f, 1.0f);
-    invalidList[3u] = MakeUiHorizImageRect(0.0f, 0.0f, 1.0f, -1.0f);
-    invalidList[4u] = MakeUiHorizImageRect(f32.max, 0.0f, f32.max, 1.0f);
-    invalidList[5u] = MakeUiHorizImageRect(f32.max, 0.0f, 1.0f, 1.0f);
-    invalidList[6u] = MakeUiHorizImageRect(0.0f, f32.max, 1.0f, 1.0f);
+    invalidList[0u] = Rect(UiHorizImageQuietNaNF32(), 0.0f, 1.0f, 1.0f);
+    invalidList[1u] = Rect(0.0f, UiHorizImageInfinityF32(), 1.0f, 1.0f);
+    invalidList[2u] = Rect(0.0f, 0.0f, -1.0f, 1.0f);
+    invalidList[3u] = Rect(0.0f, 0.0f, 1.0f, -1.0f);
+    invalidList[4u] = Rect(f32.max, 0.0f, f32.max, 1.0f);
+    invalidList[5u] = Rect(f32.max, 0.0f, 1.0f, 1.0f);
+    invalidList[6u] = Rect(0.0f, f32.max, 1.0f, 1.0f);
     for(in Rect invalid : invalidList){
         EXPECT_FALSE(PlaceImage(invalid, normal).has_value());
         EXPECT_FALSE(PlaceImage(normal, invalid).has_value());

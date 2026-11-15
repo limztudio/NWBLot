@@ -489,40 +489,6 @@ using ::NWB::Tests::UiCases::s_UiInputNameRadioMark;
 const StringView s_UiProgressCasePanelKey = "panel";
 const StringView s_UiRadioCasePanelKey = "panel";
 
-Point MakeUiProgressPoint(in f32 x, in f32 y){
-    Point point = Point();
-    point.x = x;
-    point.y = y;
-    return point;
-}
-
-Rect MakeUiProgressRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Insets MakeUiProgressInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
-    Insets insets = Insets();
-    insets.left = left;
-    insets.top = top;
-    insets.right = right;
-    insets.bottom = bottom;
-    return insets;
-}
-
-Color MakeUiProgressColor(in f32 r, in f32 g, in f32 b, in f32 a){
-    Color color = Color();
-    color.r = r;
-    color.g = g;
-    color.b = b;
-    color.a = a;
-    return color;
-}
-
 UiSkinRegion MakeUiProgressNineSliceRegion(){
     UiSkinRegion region = UiSkinRegion();
     region.name = Name(s_UiCaseProgressTest);
@@ -594,20 +560,6 @@ void ExpectUiRadioGroupResult(in RadioGroupResult actual, in RadioGroupResult ex
     EXPECT_EQ(actual.focused, expected.focused);
 }
 
-InputEvent MakeUiRadioPointEvent(in InputEventTypeEnum type, in Point point){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.position = point;
-    return event;
-}
-
-InputEvent MakeUiRadioKeyEvent(in InputEventTypeEnum type, in KeyEnum key){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.key = key;
-    return event;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -616,12 +568,12 @@ void VerifyUiProgressBuilderTests_CallerMutationCannotChangeDeferredProgressGeom
     ASSERT_TRUE(self.panel(1u));
     f64 fraction = 0.25;
     ProgressOptions options = MakeUiProgressDefaultOptions();
-    self.m_builder.progressStyle().fillTint = MakeUiProgressColor(0.8f, 0.6f, 0.4f, 0.5f);
+    self.m_builder.progressStyle().fillTint = Color(0.8f, 0.6f, 0.4f, 0.5f);
     ASSERT_TRUE(self.m_builder.progress("amount", fraction, options));
     fraction = 0.75;
     options.width.value = 100.0f;
     options.height = 80.0f;
-    self.m_builder.progressStyle().padding = MakeUiProgressInsets(12.0f, 12.0f, 12.0f, 12.0f);
+    self.m_builder.progressStyle().padding = Insets(12.0f, 12.0f, 12.0f, 12.0f);
     self.setMissingStyleRegions();
     self.m_builder.progressStyle().fillTint = Color();
     ASSERT_TRUE(self.finishPanel());
@@ -708,10 +660,10 @@ void VerifyUiProgressBuilderTests_SubresolutionPositiveFractionRemainsAValidEmpt
 void VerifyUiProgressBuilderTests_ExternalClipConstrainsPaintAndBothNestedClipsAreRestored(mut UiProgressBuilderTests self){
     ASSERT_TRUE(self.panel(1u));
     ASSERT_TRUE(self.m_builder.progress("amount", 0.25, MakeUiProgressDefaultOptions()));
-    self.m_paint.pushClip(MakeUiProgressRect(20.0f, 0.0f, 20.0f, 600.0f));
+    self.m_paint.pushClip(Rect(20.0f, 0.0f, 20.0f, 600.0f));
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_paint.popClip());
-    self.m_paint.fillRect(MakeUiProgressRect(60.0f, 80.0f, 8.0f, 8.0f), MakeUiProgressColor(1.0f, 0.0f, 0.0f, 1.0f));
+    self.m_paint.fillRect(Rect(60.0f, 80.0f, 8.0f, 8.0f), Color(1.0f, 0.0f, 0.0f, 1.0f));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const auto fillResult = self.sampleFillRegion(snapshot);
     ASSERT_TRUE(fillResult.has_value());
@@ -774,8 +726,8 @@ void VerifyUiProgressLayoutTests_LogicalRegionMinimumsCanExceedSliceBordersWitho
     fill.minimumHeight = 20.0f;
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), track, fill, 4.0f);
     ASSERT_TRUE(metrics.has_value());
-    ExpectUiProgressPointExact(metrics.value().fillMinimum, MakeUiProgressPoint(30.0f, 20.0f));
-    ExpectUiProgressPointExact(metrics.value().contentSize, MakeUiProgressPoint(80.0f, 60.0f));
+    ExpectUiProgressPointExact(metrics.value().fillMinimum, Point(30.0f, 20.0f));
+    ExpectUiProgressPointExact(metrics.value().contentSize, Point(80.0f, 60.0f));
 }
 
 void VerifyUiProgressLayoutTests_FillMetadataPaddingDoesNotInsetTheProgressAmountTwice(){
@@ -787,20 +739,20 @@ void VerifyUiProgressLayoutTests_FillMetadataPaddingDoesNotInsetTheProgressAmoun
     fill.padding.bottom = 400.0f;
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), track, fill, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    ExpectUiProgressPaddingExact(metrics.value().padding, MakeUiProgressInsets(8.0f, 8.0f, 8.0f, 8.0f));
-    ExpectUiProgressPointExact(metrics.value().contentSize, MakeUiProgressPoint(28.0f, 32.0f));
+    ExpectUiProgressPaddingExact(metrics.value().padding, Insets(8.0f, 8.0f, 8.0f, 8.0f));
+    ExpectUiProgressPointExact(metrics.value().contentSize, Point(28.0f, 32.0f));
 }
 
 void VerifyUiProgressLayoutTests_ZeroSkipsFillAndFullCopiesTheExactContentEndpoints(){
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
     const auto zero = PlaceProgress(bounds, bounds, metrics.value(), 0.0);
     ASSERT_TRUE(zero.has_value());
     const auto full = PlaceProgress(bounds, bounds, metrics.value(), 1.0);
     ASSERT_TRUE(full.has_value());
-    ExpectUiRectExact(zero.value().fillReveal, MakeUiProgressRect(18.0f, 28.0f, 0.0f, 16.0f));
+    ExpectUiRectExact(zero.value().fillReveal, Rect(18.0f, 28.0f, 0.0f, 16.0f));
     ExpectUiRectExact(zero.value().fillCanvas, zero.value().fillReveal);
     ExpectUiRectExact(full.value().fillReveal, full.value().content);
     ExpectUiRectExact(full.value().fillCanvas, full.value().content);
@@ -813,7 +765,7 @@ void VerifyUiProgressLayoutTests_FiniteFractionsOutsideTheUnitIntervalClampVisua
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
     Array<f64, 4u> fractions = Array<f64, 4u>();
     fractions[0u] = -f64.max;
     fractions[1u] = -0.1;
@@ -837,11 +789,11 @@ void VerifyUiProgressLayoutTests_SmallFractionsRevealOnlyPartOfAMinimumSizedSkin
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
     const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.01);
     ASSERT_TRUE(placement.has_value());
     EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 1.84f);
-    ExpectUiRectExact(placement.value().fillCanvas, MakeUiProgressRect(18.0f, 28.0f, 12.0f, 16.0f));
+    ExpectUiRectExact(placement.value().fillCanvas, Rect(18.0f, 28.0f, 12.0f, 16.0f));
     EXPECT_GT(placement.value().fillCanvas.width, placement.value().fillReveal.width);
     EXPECT_LT(placement.value().fillCanvas.width, placement.value().content.width);
 }
@@ -850,11 +802,11 @@ void VerifyUiProgressLayoutTests_AMinimumCanvasNeverExtendsPastContentNarrowerTh
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 20.0f, 32.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 20.0f, 32.0f);
     const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5);
     ASSERT_TRUE(placement.has_value());
-    ExpectUiRectExact(placement.value().content, MakeUiProgressRect(18.0f, 28.0f, 4.0f, 16.0f));
-    ExpectUiRectExact(placement.value().fillReveal, MakeUiProgressRect(18.0f, 28.0f, 2.0f, 16.0f));
+    ExpectUiRectExact(placement.value().content, Rect(18.0f, 28.0f, 4.0f, 16.0f));
+    ExpectUiRectExact(placement.value().fillReveal, Rect(18.0f, 28.0f, 2.0f, 16.0f));
     ExpectUiRectExact(placement.value().fillCanvas, placement.value().content);
 }
 
@@ -862,12 +814,12 @@ void VerifyUiProgressLayoutTests_ClippingChangesVisibilityWithoutChangingTheProg
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
     const auto full = PlaceProgress(bounds, bounds, metrics.value(), 0.25);
     ASSERT_TRUE(full.has_value());
-    const auto clipped = PlaceProgress(bounds, MakeUiProgressRect(40.0f, 24.0f, 60.0f, 12.0f), metrics.value(), 0.25);
+    const auto clipped = PlaceProgress(bounds, Rect(40.0f, 24.0f, 60.0f, 12.0f), metrics.value(), 0.25);
     ASSERT_TRUE(clipped.has_value());
-    ExpectUiRectExact(clipped.value().clip, MakeUiProgressRect(40.0f, 24.0f, 60.0f, 12.0f));
+    ExpectUiRectExact(clipped.value().clip, Rect(40.0f, 24.0f, 60.0f, 12.0f));
     ExpectUiRectExact(clipped.value().content, full.value().content);
     ExpectUiRectExact(clipped.value().fillReveal, full.value().fillReveal);
     ExpectUiRectExact(clipped.value().fillCanvas, full.value().fillCanvas);
@@ -877,8 +829,8 @@ void VerifyUiProgressLayoutTests_ACompletelyDisjointClipProducesValidEmptyVisibi
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
-    const auto placement = PlaceProgress(bounds, MakeUiProgressRect(300.0f, 20.0f, 10.0f, 10.0f), metrics.value(), 0.5);
+    const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
+    const auto placement = PlaceProgress(bounds, Rect(300.0f, 20.0f, 10.0f, 10.0f), metrics.value(), 0.5);
     ASSERT_TRUE(placement.has_value());
     EXPECT_FLOAT_EQ(placement.value().clip.width, 0.0f);
     EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 92.0f);
@@ -890,8 +842,8 @@ void VerifyUiProgressLayoutTests_TinyAndEmptyAreasBoundPaddingWithoutNegativeCon
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     Array<Rect, 2u> areas = Array<Rect, 2u>();
-    areas[0u] = MakeUiProgressRect(10.0f, 20.0f, 4.0f, 3.0f);
-    areas[1u] = MakeUiProgressRect(10.0f, 20.0f, 0.0f, 0.0f);
+    areas[0u] = Rect(10.0f, 20.0f, 4.0f, 3.0f);
+    areas[1u] = Rect(10.0f, 20.0f, 0.0f, 0.0f);
     for(in Rect bounds : areas){
         const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5);
         ASSERT_TRUE(placement.has_value());
@@ -908,7 +860,7 @@ void VerifyUiProgressLayoutTests_PositiveSubnormalAndUnrepresentableRevealEdgesR
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect bounds = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
     Array<f64, 2u> fractions = Array<f64, 2u>();
     fractions[0u] = bit_cast<f64>(cast<u64>(1u));
     fractions[1u] = 1.0e-15;
@@ -917,14 +869,14 @@ void VerifyUiProgressLayoutTests_PositiveSubnormalAndUnrepresentableRevealEdgesR
         ASSERT_TRUE(placement.has_value());
         EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.value().fillCanvas.width, 0.0f);
-        ExpectUiRectExact(placement.value().content, MakeUiProgressRect(18.0f, 28.0f, 184.0f, 16.0f));
+        ExpectUiRectExact(placement.value().content, Rect(18.0f, 28.0f, 184.0f, 16.0f));
     }
 }
 
 void VerifyUiProgressLayoutTests_RepresentableFloatSubnormalRevealIsPreservedAtTheOrigin(){
     ProgressMetrics metrics = ProgressMetrics();
-    metrics.contentSize = MakeUiProgressPoint(1.0f, 1.0f);
-    const Rect bounds = MakeUiProgressRect(0.0f, 0.0f, 1.0f, 1.0f);
+    metrics.contentSize = Point(1.0f, 1.0f);
+    const Rect bounds = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     const f32 leastPositive = bit_cast<f32>(1u);
     const auto placement = PlaceProgress(bounds, bounds, metrics, cast<f64>(leastPositive));
     ASSERT_TRUE(placement.has_value());
@@ -1098,7 +1050,7 @@ void VerifyUiProgressLayoutTests_InvalidProspectiveRectanglesMetricsAndFractions
     const UiSkinRegion region = MakeUiProgressNineSliceRegion();
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
-    const Rect normal = MakeUiProgressRect(10.0f, 20.0f, 200.0f, 32.0f);
+    const Rect normal = Rect(10.0f, 20.0f, 200.0f, 32.0f);
     for(u32 field = 0u; field < 13u; ++field){
         Rect bounds = normal;
         Rect clip = normal;
@@ -1151,8 +1103,8 @@ void VerifyUiProgressLayoutTests_InvalidProspectiveRectanglesMetricsAndFractions
 
 void VerifyUiProgressLayoutTests_FiniteExtremeCoordinatesRetainValidExactFullEndpoints(){
     ProgressMetrics metrics = ProgressMetrics();
-    metrics.contentSize = MakeUiProgressPoint(f32.max, 32.0f);
-    const Rect bounds = MakeUiProgressRect(-f32.max, 0.0f, f32.max, 32.0f);
+    metrics.contentSize = Point(f32.max, 32.0f);
+    const Rect bounds = Rect(-f32.max, 0.0f, f32.max, 32.0f);
     auto placement = PlaceProgress(bounds, bounds, metrics, 1.0);
     ASSERT_TRUE(placement.has_value());
     ExpectUiRectExact(placement.value().content, bounds);
@@ -1166,12 +1118,12 @@ void VerifyUiProgressLayoutTests_FiniteExtremeCoordinatesRetainValidExactFullEnd
 
 void VerifyUiProgressLayoutTests_OverflowingAndCollapsedPositiveInputEndpointsRejectPlacement(){
     ProgressMetrics metrics = ProgressMetrics();
-    metrics.contentSize = MakeUiProgressPoint(1.0f, 1.0f);
-    const Rect normal = MakeUiProgressRect(0.0f, 0.0f, 20.0f, 10.0f);
+    metrics.contentSize = Point(1.0f, 1.0f);
+    const Rect normal = Rect(0.0f, 0.0f, 20.0f, 10.0f);
     Array<Rect, 3u> invalidRects = Array<Rect, 3u>();
-    invalidRects[0u] = MakeUiProgressRect(f32.max, 0.0f, f32.max, 1.0f);
-    invalidRects[1u] = MakeUiProgressRect(f32.max, 0.0f, 1.0f, 1.0f);
-    invalidRects[2u] = MakeUiProgressRect(0.0f, f32.max, 1.0f, 1.0f);
+    invalidRects[0u] = Rect(f32.max, 0.0f, f32.max, 1.0f);
+    invalidRects[1u] = Rect(f32.max, 0.0f, 1.0f, 1.0f);
+    invalidRects[2u] = Rect(0.0f, f32.max, 1.0f, 1.0f);
     for(in Rect invalid : invalidRects){
         EXPECT_FALSE(PlaceProgress(invalid, normal, metrics, 0.5).has_value());
         EXPECT_FALSE(PlaceProgress(normal, invalid, metrics, 0.5).has_value());
@@ -1613,12 +1565,12 @@ void VerifyUiRadioGroupBuilderTests_TemporaryLabelsAreOwnedBeforeTheNextSourceCa
 void VerifyUiRadioGroupBuilderTests_SelectionCommitsOnReleaseAndNotOnPress(mut UiRadioGroupBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point point = self.choicePoint(20u);
-    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.selectionChanged);
     EXPECT_FALSE(self.m_result.activated);
-    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 20u);
     EXPECT_TRUE(self.m_result.selectionChanged);
@@ -1627,7 +1579,7 @@ void VerifyUiRadioGroupBuilderTests_SelectionCommitsOnReleaseAndNotOnPress(mut U
 
 void VerifyUiRadioGroupBuilderTests_ReleaseOutsideAndDisabledChoiceCannotActivate(mut UiRadioGroupBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    self.drag(self.choicePoint(20u), MakeUiProgressPoint(700.0f, 500.0f));
+    self.drag(self.choicePoint(20u), Point(700.0f, 500.0f));
     ASSERT_TRUE(self.accept(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.activated);
@@ -1691,22 +1643,22 @@ void VerifyUiRadioGroupBuilderTests_HeldSubmitWaitsForReleaseWhileAnUnchangedCho
 void VerifyUiRadioGroupBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission(mut UiRadioGroupBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point point = self.choicePoint(20u);
-    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_result.activated);
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.activated);
     EXPECT_FALSE(self.m_result.selectionChanged);
     self.press(Key::Tab);
     ASSERT_EQ(self.m_context.input().focus(), self.host());
-    EXPECT_TRUE(self.send(MakeUiRadioKeyEvent(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_FALSE(self.m_result.activated);
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiRadioKeyEvent(InputEventType::KeyUp, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.activated);
@@ -1749,8 +1701,8 @@ void VerifyUiRadioGroupBuilderTests_WholeDisabledGroupKeepsThePanelBarrierAndRet
     EXPECT_FALSE(self.hasTarget(RequireUiWidgetPartId(RequireUiWidgetId(self.host(), "choices"), 10u)));
     const Point point = self.choicePoint(10u);
     EXPECT_EQ(self.m_context.input().hitTest(point), RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiRadioCasePanelKey));
-    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiRadioPointEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(3u, options));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.selectionChanged);
@@ -1846,7 +1798,7 @@ void VerifyUiRadioGroupBuilderTests_PreparedGeometryDoesNotReplaceAcceptedChoice
     const auto initialHost = self.tryTarget(self.host());
     ASSERT_TRUE(initialHost.has_value());
     const Rect oldBounds = initialHost.value().rectangle;
-    ASSERT_TRUE(self.prepare(2u, RadioGroupOptions(), MakeUiProgressRect(80.0f, 40.0f, 420.0f, 360.0f)));
+    ASSERT_TRUE(self.prepare(2u, RadioGroupOptions(), Rect(80.0f, 40.0f, 420.0f, 360.0f)));
     const auto preparedHost = self.tryTarget(self.host());
     ASSERT_TRUE(preparedHost.has_value());
     ExpectUiRect(preparedHost.value().rectangle, oldBounds);

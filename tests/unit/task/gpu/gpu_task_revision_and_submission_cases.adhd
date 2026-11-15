@@ -1576,13 +1576,6 @@ void VerifyGpuSubmission_CountsDistinctPhysicalQueueGenerationsWithoutChangingWa
     EXPECT_LE(testArena.arena.memoryStats().usedBytes, testArena.arena.memoryStats().reservedBytes);
 }
 
-GpuGraphResourceId GpuSubmissionMakeResourceId(in u64 generation, in u32 index){
-    GpuGraphResourceId id = GpuGraphResourceId();
-    id.generation = generation;
-    id.index = index;
-    return id;
-}
-
 GpuTaskResourceUse GpuSubmissionBufferUseState(
     in GpuGraphResourceId resource,
     in u64 offset,
@@ -1630,8 +1623,8 @@ void GpuSubmissionExpectBufferRanges(in ScratchResourceRanges ranges, in Span<Bu
 }
 
 void VerifyGpuSubmission_RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews(){
-    const GpuGraphResourceId resA = GpuSubmissionMakeResourceId(1u, 0u);
-    const GpuGraphResourceId resB = GpuSubmissionMakeResourceId(1u, 1u);
+    const GpuGraphResourceId resA = MakeGpuResourceId(1u, 0u);
+    const GpuGraphResourceId resB = MakeGpuResourceId(1u, 1u);
     Array<GpuTaskResourceUse, 2> first = Array<GpuTaskResourceUse, 2>();
     first[0u] = GpuSubmissionBufferUse(resA, 0u, 16u);
     first[1u] = GpuSubmissionBufferUse(resA, 16u, 16u);
@@ -1641,7 +1634,7 @@ void VerifyGpuSubmission_RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews
     const GpuTaskGraphTaskView taskB = MakeGpuSubmissionTaskView(second, 1u, 1u);
     GpuSubmissionUseIndexScope scope = GpuSubmissionUseIndexScope(3u, 1u, first.size());
     ASSERT_TRUE(scope.index.build(taskA));
-    EXPECT_EQ(scope.index.first(GpuSubmissionMakeResourceId(1u, 2u)), s_GpuSubmissionNoUse);
+    EXPECT_EQ(scope.index.first(MakeGpuResourceId(1u, 2u)), s_GpuSubmissionNoUse);
     EXPECT_EQ(scope.index.next(first.size()), s_GpuSubmissionNoUse);
     ASSERT_TRUE(scope.index.build(taskB));
     EXPECT_FALSE(scope.index.validFor(taskA));
@@ -1670,8 +1663,8 @@ void VerifyGpuSubmission_RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews
 }
 
 void VerifyGpuSubmission_InvalidGenerationIdentityAndCapacityNeverPublishAUsableIndex(){
-    const GpuGraphResourceId resA = GpuSubmissionMakeResourceId(1u, 0u);
-    const GpuGraphResourceId resB = GpuSubmissionMakeResourceId(1u, 1u);
+    const GpuGraphResourceId resA = MakeGpuResourceId(1u, 0u);
+    const GpuGraphResourceId resB = MakeGpuResourceId(1u, 1u);
     Array<GpuTaskResourceUse, 2> uses = Array<GpuTaskResourceUse, 2>();
     uses[0u] = GpuSubmissionBufferUse(resA, 0u, 16u);
     uses[1u] = GpuSubmissionBufferUse(resB, 0u, 8u);
@@ -1680,8 +1673,8 @@ void VerifyGpuSubmission_InvalidGenerationIdentityAndCapacityNeverPublishAUsable
 
     Array<GpuGraphResourceId, 3> invalidIds = Array<GpuGraphResourceId, 3>();
     invalidIds[0u] = GpuGraphResourceId();
-    invalidIds[1u] = GpuSubmissionMakeResourceId(2u, 0u);
-    invalidIds[2u] = GpuSubmissionMakeResourceId(1u, 2u);
+    invalidIds[1u] = MakeGpuResourceId(2u, 0u);
+    invalidIds[2u] = MakeGpuResourceId(1u, 2u);
     for(in GpuGraphResourceId invalidId : invalidIds){
         uses[0u].resource = invalidId;
         EXPECT_FALSE(scope.index.build(task));

@@ -505,13 +505,6 @@ void ExpectUiTextAreaScrollLifetimeModel(in UiTextAreaScrollLifetimeTests self, 
     EXPECT_EQ(self.m_host.publishes, 0u);
 }
 
-InputEvent MakeUiTextScrollPointerEvent(in Point position, in InputEventTypeEnum eventType){
-    InputEvent event = InputEvent();
-    event.position = position;
-    event.type = eventType;
-    return event;
-}
-
 InputEvent MakeUiTextScrollWheelEvent(in Point position, in f64 scrollX, in f64 scrollY){
     InputEvent event = InputEvent();
     event.position = position;
@@ -519,22 +512,6 @@ InputEvent MakeUiTextScrollWheelEvent(in Point position, in f64 scrollX, in f64 
     event.scrollY = scrollY;
     event.type = InputEventType::PointerWheel;
     return event;
-}
-
-DisplayMetrics MakeUiTextScrollDisplayMetrics(in f32 width, in f32 height, in f32 scaleX, in f32 scaleY){
-    DisplayMetrics display = DisplayMetrics();
-    display.logicalWidth = width;
-    display.logicalHeight = height;
-    display.pixelScaleX = scaleX;
-    display.pixelScaleY = scaleY;
-    return display;
-}
-
-ShapeRequest MakeUiTextScrollShapeRequest(in StringView text, in f32 fontSize){
-    ShapeRequest request = ShapeRequest();
-    request.text = text;
-    request.fontSize = fontSize;
-    return request;
 }
 
 TextAreaOptions UiTextAreaScrollLifetimeSmallOptions(){
@@ -598,8 +575,8 @@ b8 StartUiTextAreaScrollThumb(mut UiTextAreaScrollLifetimeTests self, in WidgetI
         return false;
     const Point origin = CenterUiRect(thumb.value().rectangle);
     const Point destination = Point(origin.x, origin.y + 24.0f);
-    return self.send(MakeUiTextScrollPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed
-        && self.send(MakeUiTextScrollPointerEvent(destination, InputEventType::PointerMove)).pointerConsumed
+    return self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed
+        && self.send(MakeUiPointerEvent(InputEventType::PointerMove, destination)).pointerConsumed
         && self.m_context.input().capture() == thumbId;
 }
 
@@ -792,7 +769,7 @@ void VerifyUiTextAreaScrollLifetimeTests_ClosingAnAncestorRetiresWheelAndCapture
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(release, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, release)).pointerConsumed);
     ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
     self.m_parent.open();
     ASSERT_TRUE(self.begin(3u));
@@ -817,7 +794,7 @@ void VerifyUiTextAreaScrollLifetimeTests_CaptureLossCancelsTheUnfinishedThumbAnd
     const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     ASSERT_TRUE(self.wheel());
     ASSERT_TRUE(self.startThumb(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey)));
-    EXPECT_FALSE(self.send(MakeUiTextScrollPointerEvent(Point(), InputEventType::PointerCaptureLost)).capture.valid());
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PointerCaptureLost, Point())).capture.valid());
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollLifetimeSmallOptions()));
     ASSERT_GT(self.m_state.scroll().y, 0.0f);
     const f32 wheelOnly = self.m_state.scroll().y;
@@ -835,12 +812,12 @@ void VerifyUiTextAreaScrollLifetimeTests_NativeFocusLossCancelsCopiedWheelAndAnA
     const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     ASSERT_TRUE(self.wheel());
     ASSERT_TRUE(self.startThumb(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey)));
-    EXPECT_FALSE(self.send(MakeUiTextScrollPointerEvent(Point(), InputEventType::FocusLost)).wantsCommands);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::FocusLost, Point())).wantsCommands);
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollLifetimeSmallOptions()));
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
-    EXPECT_FALSE(self.send(MakeUiTextScrollPointerEvent(Point(), InputEventType::FocusGained)).wantsCommands);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::FocusGained, Point())).wantsCommands);
     ASSERT_TRUE(self.wheel());
     ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
     EXPECT_GT(self.m_state.scroll().y, 0.0f);
@@ -858,7 +835,7 @@ void VerifyUiTextAreaScrollLifetimeTests_DisablingRetiresPendingWheelAndThumbWit
     ASSERT_TRUE(self.frameArea(2u, disabled));
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(release, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, release)).pointerConsumed);
     ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
     ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
@@ -875,9 +852,9 @@ void VerifyUiTextAreaScrollLifetimeTests_DisablingRetiresPendingWheelAndThumbWit
 void VerifyUiTextAreaScrollTests_ExplicitTwoAxisScrollSurvivesTheFirstModelBinding(mut UiTextAreaScrollTests self){
     const AStringView dense = UiTextAreaScrollDenseText();
     ASSERT_TRUE(self.m_model.setText(dense));
-    const auto layout = self.m_text.layout(MakeUiTextScrollShapeRequest(dense, self.m_builder.style().fontSize));
+    const auto layout = self.m_text.layout(MakeUiShapeRequest(dense, self.m_builder.style().fontSize));
     ASSERT_TRUE(layout.has_value());
-    const auto visual = self.m_text.measure(layout.value(), MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    const auto visual = self.m_text.measure(layout.value(), MakeUiDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
     ASSERT_TRUE(visual.has_value());
     ASSERT_LT(visual.value().x, 0.0f);
     ASSERT_TRUE(self.m_state.scrollTo(Point(17.0f, 19.0f)));
@@ -897,9 +874,9 @@ void VerifyUiTextAreaScrollTests_IdleAndResizeClampExplicitViewportWithoutAdvanc
     self.useHost();
     const AStringView dense = UiTextAreaScrollDenseText();
     ASSERT_TRUE(self.m_model.setText(dense));
-    const auto layout = self.m_text.layout(MakeUiTextScrollShapeRequest(dense, self.m_builder.style().fontSize));
+    const auto layout = self.m_text.layout(MakeUiShapeRequest(dense, self.m_builder.style().fontSize));
     ASSERT_TRUE(layout.has_value());
-    const auto visual = self.m_text.measure(layout.value(), MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    const auto visual = self.m_text.measure(layout.value(), MakeUiDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
     ASSERT_TRUE(visual.has_value());
     ASSERT_LT(visual.value().x, 0.0f);
     ASSERT_TRUE(self.m_state.scrollTo(Point(17.0f, 19.0f)));
@@ -1079,8 +1056,8 @@ void VerifyUiTextAreaScrollTests_DocumentEdgesRevealCombiningMarksAndFallbackInk
     ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
     EditBoxView reference = EditBoxView(self.m_arena);
     ASSERT_TRUE(reference.snapshot(self.m_model));
-    ASSERT_EQ(reference.shape(self.m_text, MakeUiTextScrollShapeRequest("", 24.0f)), TextLayoutStatus::Success);
-    ASSERT_TRUE(reference.measure(self.m_text, MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)));
+    ASSERT_EQ(reference.shape(self.m_text, MakeUiShapeRequest("", 24.0f)), TextLayoutStatus::Success);
+    ASSERT_TRUE(reference.measure(self.m_text, MakeUiDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)));
     const Rect visual = reference.visualBounds();
     const Point logical = reference.layout().measure();
     ASSERT_LT(visual.y, 0.0f);
@@ -1145,7 +1122,7 @@ void VerifyUiTextAreaScrollTests_SingleLineVisualMeasurementRefreshesAcrossDpiAn
     EditBoxView view = EditBoxView(self.m_arena);
     ASSERT_TRUE(model.setText("A\xcc\x81\xcc\x81 g\xcc\xa3"));
     ASSERT_TRUE(view.snapshot(model));
-    ASSERT_EQ(view.shape(self.m_text, MakeUiTextScrollShapeRequest("", 17.3f)), TextLayoutStatus::Success);
+    ASSERT_EQ(view.shape(self.m_text, MakeUiShapeRequest("", 17.3f)), TextLayoutStatus::Success);
     const Point logical = view.layout().measure();
     ExpectUiRect(view.visualBounds(), Rect(0.0f, 0.0f, logical.x, logical.y));
     const auto logicalCaret = view.caretGeometry().caretRect(view.displayCaret());
@@ -1157,7 +1134,7 @@ void VerifyUiTextAreaScrollTests_SingleLineVisualMeasurementRefreshesAcrossDpiAn
     scales[1u] = 1.5f;
     scales[2u] = 2.0f;
     for(in f32 scale : scales){
-        const DisplayMetrics display = MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, scale, scale);
+        const DisplayMetrics display = MakeUiDisplayMetrics(800.0f, 600.0f, scale, scale);
         const auto expected = self.m_text.measure(view.layout(), display);
         ASSERT_TRUE(expected.has_value());
         ASSERT_TRUE(view.measure(self.m_text, display));
@@ -1181,16 +1158,16 @@ void VerifyUiTextAreaScrollTests_SingleLineVisualMeasurementRefreshesAcrossDpiAn
         previous = expected.value();
     }
     EXPECT_TRUE(changedWithScale);
-    EXPECT_FALSE(view.measure(self.m_text, MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 0.0f, 1.0f)));
+    EXPECT_FALSE(view.measure(self.m_text, MakeUiDisplayMetrics(800.0f, 600.0f, 0.0f, 1.0f)));
     ExpectUiRect(view.visualBounds(), previous);
     ASSERT_TRUE(model.setText("x"));
     ASSERT_TRUE(view.snapshot(model));
     EXPECT_FALSE(view.ready());
-    ASSERT_EQ(view.shape(self.m_text, MakeUiTextScrollShapeRequest("", 17.3f)), TextLayoutStatus::Success);
+    ASSERT_EQ(view.shape(self.m_text, MakeUiShapeRequest("", 17.3f)), TextLayoutStatus::Success);
     const Point replacementLogical = view.layout().measure();
     ExpectUiRect(view.visualBounds(), Rect(0.0f, 0.0f, replacementLogical.x, replacementLogical.y));
-    ASSERT_TRUE(view.measure(self.m_text, MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)));
-    const auto replacement = self.m_text.measure(view.layout(), MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(view.measure(self.m_text, MakeUiDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)));
+    const auto replacement = self.m_text.measure(view.layout(), MakeUiDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
     ASSERT_TRUE(replacement.has_value());
     ExpectUiRect(view.visualBounds(), replacement.value());
     EXPECT_LT(view.visualBounds().height, previous.height);
@@ -1346,14 +1323,14 @@ void VerifyTextBakedTests_FontHashMismatchUsesCoverageForTheAlreadySelectedFace(
 void VerifyTextBakedTests_LogicalFontIdentityMustMatchEvenWhenTheBytesMatch(mut TextBakedTests self){
     ASSERT_TRUE(self.rebindPayloadFont("tests/ui/fonts/other"));
     ASSERT_TRUE(self.installAtlas());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
     EXPECT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
     EXPECT_TRUE(self.paint().sdfPages().empty());
 }
 
 void VerifyTextBakedTests_OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease(mut TextBakedTests self){
     ASSERT_TRUE(self.installAtlas());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
     const SharedBakedFontAtlas retained = FontFaceBakedAtlas(self.m_layout.glyphs()[0u].face);
     const DrawSnapshot first = self.paint();
     ASSERT_EQ(first.sdfPages().size(), 1u);
@@ -1368,27 +1345,27 @@ void VerifyTextBakedTests_OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementA
 
 void VerifyTextBakedTests_OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl(mut TextBakedTests self){
     ASSERT_TRUE(self.installAtlas());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
     const DrawSnapshot first = self.paint();
     ASSERT_EQ(first.sdfPages().size(), 1u);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 8.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 8.0f)));
     const DrawSnapshot small = self.paint();
     EXPECT_TRUE(small.sdfPages().empty());
     EXPECT_FALSE(small.glyphPages().empty());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 129.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 129.0f)));
     EXPECT_TRUE(self.paint().sdfPages().empty());
 }
 
 void VerifyTextBakedTests_FractionalPhysicalSizeBelowSdfThresholdUsesCoverage(mut TextBakedTests self){
     ASSERT_TRUE(self.installAtlas());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 23.5f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 23.5f)));
     const DrawSnapshot fractionalFont = self.paint();
     EXPECT_TRUE(fractionalFont.sdfPages().empty());
     ASSERT_EQ(fractionalFont.glyphPages().size(), 1u);
     ASSERT_EQ(fractionalFont.commands().size(), 1u);
     EXPECT_EQ(fractionalFont.commands()[0u].material, PaintMaterial::Glyph);
 
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 16.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextBakedSampleGlyphText, 16.0f)));
     const DrawSnapshot fractionalDpi = self.paint(1.49f);
     EXPECT_TRUE(fractionalDpi.sdfPages().empty());
     ASSERT_EQ(fractionalDpi.glyphPages().size(), 1u);
@@ -1404,7 +1381,7 @@ void VerifyTextBakedTests_FractionalPhysicalSizeBelowSdfThresholdUsesCoverage(mu
 
 void VerifyTextBakedTests_WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage(mut TextBakedTests self){
     ASSERT_TRUE(self.installAtlas());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest("   ", 24.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("   ", 24.0f)));
     EXPECT_GT(self.m_layout.measure().x, 0.0f);
     const DrawSnapshot snapshot = self.paint();
     EXPECT_TRUE(snapshot.sdfPages().empty());
@@ -1418,7 +1395,7 @@ void VerifyTextBakedTests_WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage(mut T
 
 void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextFocusAndMainCapture(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, -1.0)).pointerConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     self.revise();
@@ -1426,9 +1403,9 @@ void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextF
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(160.0f, 150.0f), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(160.0f, 150.0f))).pointerConsumed);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(160.0f, 150.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(160.0f, 150.0f))).pointerConsumed);
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_FALSE(self.m_router.capture().valid());
 }
@@ -1436,7 +1413,7 @@ void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextF
 void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangeRetiresOwnedPartCaptureAndGesture(mut UiTextControlLifetimeTests self){
     self.m_targets[1u].textEditable = true;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(95.0f, 25.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[1u].id);
     self.revise();
@@ -1448,7 +1425,7 @@ void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangeRetiresOwnedPa
 
 void VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 0.0, -1.0)).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
@@ -1474,7 +1451,7 @@ void VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAnd
 
 void VerifyUiTextControlLifetimeTests_RepeatedAuxiliaryFenceKeepsTextCaptureBeforeAnyNewAcceptance(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
     self.revise();
@@ -1491,7 +1468,7 @@ void VerifyUiTextControlLifetimeTests_RepeatedAuxiliaryFenceKeepsTextCaptureBefo
 
 void VerifyUiTextControlLifetimeTests_PrepublicationFenceRetiresOwnedPartDragWithoutBlurringEditor(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(95.0f, 25.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
@@ -1501,7 +1478,7 @@ void VerifyUiTextControlLifetimeTests_PrepublicationFenceRetiresOwnedPartDragWit
 
 void VerifyUiTextControlLifetimeTests_DifferentDeclarationFenceStillRetiresTextFocusAndCapture(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.m_router.fenceControl(self.m_targets[0u].id, 8u, self.m_targets[0u].control);
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.capture().valid());
@@ -1511,7 +1488,7 @@ void VerifyUiTextControlLifetimeTests_DifferentDeclarationFenceStillRetiresTextF
 
 void VerifyUiTextControlLifetimeTests_ReplacedDeclarationStillRetiresTextFocusAndMainCapture(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     ++self.m_targets[0u].declarationGeneration;
     ++self.m_targets[1u].ownerDeclarationGeneration;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
@@ -1521,7 +1498,7 @@ void VerifyUiTextControlLifetimeTests_ReplacedDeclarationStillRetiresTextFocusAn
 
 void VerifyUiTextControlLifetimeTests_DisabledTextHostCannotKeepFocusOrMainCapture(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_targets[0u].enabled = false;
     ASSERT_TRUE(self.commitFirstTarget(2u));
@@ -1531,7 +1508,7 @@ void VerifyUiTextControlLifetimeTests_DisabledTextHostCannotKeepFocusOrMainCaptu
 
 void VerifyUiTextControlLifetimeTests_FullyClippedTextHostCannotKeepFocusOrMainCapture(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_targets[0u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
     self.m_targets[1u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
@@ -1542,7 +1519,7 @@ void VerifyUiTextControlLifetimeTests_FullyClippedTextHostCannotKeepFocusOrMainC
 
 void VerifyUiTextControlLifetimeTests_RefreshedAuxiliaryTokenSupportsLaterOrdinaryControlRules(mut UiTextControlLifetimeTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     self.m_targets[0u].textEditable = false;
@@ -1558,7 +1535,7 @@ void VerifyUiTextControlLifetimeTests_RefreshedAuxiliaryTokenSupportsLaterOrdina
 void VerifyUiTextControlLifetimeTests_NonTextScrollHostKeepsItsExistingFullFenceBehavior(mut UiTextControlLifetimeTests self){
     self.m_targets[0u].textEditable = false;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
     EXPECT_FALSE(self.m_router.focus().valid());
@@ -1570,7 +1547,7 @@ void VerifyUiTextControlLifetimeTests_NonTextScrollHostKeepsItsExistingFullFence
 void VerifyUiTextControlLifetimeTests_AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission(mut UiTextControlLifetimeTests self){
     self.m_targets[0u].activatable = true;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.m_router.pressed(self.m_targets[0u].id));
     const ControlToken original = self.m_targets[0u].control;
@@ -1582,10 +1559,10 @@ void VerifyUiTextControlLifetimeTests_AuxiliaryTokenRestorationPreservesMainText
     self.m_targets[1u].control = original;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(self.m_targets[0u].id));
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(self.m_targets[0u].id));
 }
 

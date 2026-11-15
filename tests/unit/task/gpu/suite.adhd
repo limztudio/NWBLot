@@ -166,6 +166,66 @@ Expected<ExternalFinalReadPair> AddExternalFinalReadPair(
     return out;
 }
 
+GpuTaskId MakeGpuTaskId(in u64 generation, in u32 index){
+    GpuTaskId id = GpuTaskId();
+    id.generation = generation;
+    id.index = index;
+    return id;
+}
+
+GpuGraphResourceId MakeGpuResourceId(in u64 generation, in u32 index){
+    GpuGraphResourceId id = GpuGraphResourceId();
+    id.generation = generation;
+    id.index = index;
+    return id;
+}
+
+GpuPhysicalQueueId MakeGpuPhysicalQueueId(in u16 index, in u16 deviceGeneration){
+    GpuPhysicalQueueId id = GpuPhysicalQueueId();
+    id.index = index;
+    id.deviceGeneration = deviceGeneration;
+    return id;
+}
+
+QueueSubmissionToken MakeGpuSubmissionToken(
+    in u64 value,
+    in u16 physicalQueueIndex,
+    in u16 deviceGeneration,
+    in CommandQueueEnum queue
+){
+    QueueSubmissionToken token = QueueSubmissionToken();
+    token.value = value;
+    token.physicalQueueIndex = physicalQueueIndex;
+    token.deviceGeneration = deviceGeneration;
+    token.queue = queue;
+    return token;
+}
+
+Expected<GpuTaskId> AddGpuEmptyTask(in Name identity, in AStringView label, mut GpuTaskGraph graph){
+    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
+    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
+    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
+    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
+    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
+    return AddTask(identity, label, emptyDeps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
+}
+
+Expected<GpuTaskId> AddGpuDepTask(in Name identity, in AStringView label, in Span<GpuTaskId> deps, mut GpuTaskGraph graph){
+    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
+    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
+    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
+    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
+    return AddTask(identity, label, deps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
+}
+
+Expected<GpuTaskId> AddGpuUseTask(in Name identity, in AStringView label, in Span<GpuTaskResourceUse> uses, mut GpuTaskGraph graph){
+    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
+    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
+    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
+    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
+    return AddTask(identity, label, emptyDeps, uses, emptySets, emptyVersions, emptyExternals, graph);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

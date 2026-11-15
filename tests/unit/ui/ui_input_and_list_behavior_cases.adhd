@@ -404,15 +404,8 @@ HitTarget MakeUiInputTarget(in u64 value){
     return MakeUiInputTargetAt(value, Rect(10.0f, 10.0f, 20.0f, 20.0f));
 }
 
-InputEvent MakeUiInputPointerAt(in InputEventTypeEnum type, in Point position){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.position = position;
-    return event;
-}
-
 InputEvent MakeUiInputPointer(in InputEventTypeEnum type){
-    return MakeUiInputPointerAt(type, Point(15.0f, 15.0f));
+    return MakeUiPointerEvent(type, Point(15.0f, 15.0f));
 }
 
 InputEvent MakeUiInputKey(in InputEventTypeEnum type, in CoreKeyEnum key, in b8 repeat){
@@ -421,21 +414,6 @@ InputEvent MakeUiInputKey(in InputEventTypeEnum type, in CoreKeyEnum key, in b8 
     event.key = key;
     event.repeat = repeat;
     return event;
-}
-
-InputEvent MakeUiInputBareEvent(in InputEventTypeEnum type){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.position = Point();
-    return event;
-}
-
-IntegerBounds MakeUiIntegerBounds(in i64 minimum, in i64 maximum, in NumericBoundsPolicyEnum policy){
-    IntegerBounds bounds = IntegerBounds();
-    bounds.minimum = minimum;
-    bounds.maximum = maximum;
-    bounds.policy = policy;
-    return bounds;
 }
 
 LayoutNodeDesc MakeUiLayoutStretchContainer(in LayoutDirectionEnum direction){
@@ -707,20 +685,20 @@ void VerifyUiInputTests_TransientHoverDepartureAndReentryAdvanceActivityBeforeTh
     ASSERT_TRUE(self.commitSpan(targets, 1u));
     ASSERT_EQ(self.send(MakeUiInputPointer(InputEventType::PointerMove)).hover, targets[0u].id);
     const u64 stable = self.m_router.hoverActivityGeneration();
-    ASSERT_EQ(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(16.0f, 16.0f))).hover, targets[0u].id);
+    ASSERT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(16.0f, 16.0f))).hover, targets[0u].id);
     EXPECT_EQ(self.m_router.hoverActivityGeneration(), stable);
     ASSERT_TRUE(self.commitSpan(targets, 2u));
     EXPECT_EQ(self.m_router.hoverActivityGeneration(), stable);
     EXPECT_FALSE(self.commitSpan(targets, 2u));
     EXPECT_EQ(self.m_router.hoverActivityGeneration(), stable);
 
-    ASSERT_TRUE(self.queueNative(MakeUiInputPointerAt(InputEventType::PointerMove, Point(45.0f, 15.0f))));
+    ASSERT_TRUE(self.queueNative(MakeUiPointerEvent(InputEventType::PointerMove, Point(45.0f, 15.0f))));
     ASSERT_TRUE(self.queueNative(MakeUiInputPointer(InputEventType::PointerMove)));
     EXPECT_EQ(self.m_router.process().hover, targets[0u].id);
     const u64 returned = self.m_router.hoverActivityGeneration();
     EXPECT_GT(returned, stable);
 
-    ASSERT_TRUE(self.queueNative(MakeUiInputBareEvent(InputEventType::PointerLeave)));
+    ASSERT_TRUE(self.queueNative(MakeUiBareInputEvent(InputEventType::PointerLeave)));
     ASSERT_TRUE(self.queueNative(MakeUiInputPointer(InputEventType::PointerMove)));
     EXPECT_EQ(self.m_router.process().hover, targets[0u].id);
     EXPECT_GT(self.m_router.hoverActivityGeneration(), returned);
@@ -740,11 +718,11 @@ void VerifyUiInputTests_HoverActivityUsesTheControlHostLifetimeAcrossOwnedParts(
         targets[index].paintOrder = cast<u32>(index);
     }
     ASSERT_TRUE(self.commitSpan(targets, 1u));
-    ASSERT_EQ(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(15.0f, 15.0f))).hover, targets[0u].id);
+    ASSERT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(15.0f, 15.0f))).hover, targets[0u].id);
     const u64 ownerGeneration = self.m_router.hoverActivityGeneration();
-    EXPECT_EQ(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(25.0f, 15.0f))).hover, targets[1u].id);
-    EXPECT_EQ(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(45.0f, 15.0f))).hover, targets[2u].id);
-    EXPECT_EQ(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(80.0f, 15.0f))).hover, targets[0u].id);
+    EXPECT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(25.0f, 15.0f))).hover, targets[1u].id);
+    EXPECT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(45.0f, 15.0f))).hover, targets[2u].id);
+    EXPECT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(80.0f, 15.0f))).hover, targets[0u].id);
     EXPECT_EQ(self.m_router.hoverActivityGeneration(), ownerGeneration);
     ASSERT_TRUE(self.commitSpan(targets, 2u));
     EXPECT_EQ(self.m_router.hoverActivityGeneration(), ownerGeneration);
@@ -782,10 +760,10 @@ void VerifyUiInputTests_PressCaptureLossFocusLossAndResetFenceHoverActivity(mut 
     ASSERT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_GT(self.m_router.hoverActivityGeneration(), previous);
     previous = self.m_router.hoverActivityGeneration();
-    self.send(MakeUiInputBareEvent(InputEventType::PointerCaptureLost));
+    self.send(MakeUiBareInputEvent(InputEventType::PointerCaptureLost));
     EXPECT_GT(self.m_router.hoverActivityGeneration(), previous);
     previous = self.m_router.hoverActivityGeneration();
-    self.send(MakeUiInputBareEvent(InputEventType::FocusLost));
+    self.send(MakeUiBareInputEvent(InputEventType::FocusLost));
     self.m_router.cancelDeviceInput(0u);
     EXPECT_GT(self.m_router.hoverActivityGeneration(), previous);
     previous = self.m_router.hoverActivityGeneration();
@@ -793,7 +771,7 @@ void VerifyUiInputTests_PressCaptureLossFocusLossAndResetFenceHoverActivity(mut 
     EXPECT_GT(self.m_router.hoverActivityGeneration(), previous);
     previous = self.m_router.hoverActivityGeneration();
     ASSERT_TRUE(self.commitSingle(target, 1u));
-    self.send(MakeUiInputBareEvent(InputEventType::FocusGained));
+    self.send(MakeUiBareInputEvent(InputEventType::FocusGained));
     EXPECT_EQ(self.send(MakeUiInputPointer(InputEventType::PointerMove)).hover, target.id);
     EXPECT_GT(self.m_router.hoverActivityGeneration(), previous);
 }
@@ -802,18 +780,18 @@ void VerifyUiInputTests_DragOutsideDoesNotActivateAndRemovalKeepsReleaseConsumpt
     const HitTarget target = MakeUiInputTarget(1u);
     ASSERT_TRUE(self.commitSingle(target, 1u));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    const InputRoutingResult moved = self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(90.0f, 90.0f)));
+    const InputRoutingResult moved = self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(90.0f, 90.0f)));
     EXPECT_TRUE(moved.pointerConsumed);
     EXPECT_FALSE(moved.hover.valid());
     EXPECT_EQ(moved.capture.value, 1u);
     EXPECT_TRUE(self.m_router.wouldConsumePointer(Point(90.0f, 90.0f)));
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
     ASSERT_TRUE(self.commitEmpty(2u));
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.m_router.focus().valid());
-    const InputRoutingResult afterRemoval = self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(90.0f, 90.0f)));
+    const InputRoutingResult afterRemoval = self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(90.0f, 90.0f)));
     EXPECT_TRUE(afterRemoval.pointerConsumed);
     EXPECT_TRUE(afterRemoval.wantsPointer);
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
@@ -826,17 +804,17 @@ void VerifyUiInputTests_PointerLeaveClearsHoverButPreservesLogicalCaptureAndRele
     const HitTarget target = MakeUiInputTarget(1u);
     ASSERT_TRUE(self.commitSingle(target, 1u));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PointerMove)).pointerConsumed);
-    const InputRoutingResult hoveredLeave = self.send(MakeUiInputBareEvent(InputEventType::PointerLeave));
+    const InputRoutingResult hoveredLeave = self.send(MakeUiBareInputEvent(InputEventType::PointerLeave));
     EXPECT_FALSE(hoveredLeave.hover.valid());
     EXPECT_FALSE(hoveredLeave.wantsPointer);
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    const InputRoutingResult capturedLeave = self.send(MakeUiInputBareEvent(InputEventType::PointerLeave));
+    const InputRoutingResult capturedLeave = self.send(MakeUiBareInputEvent(InputEventType::PointerLeave));
     EXPECT_TRUE(capturedLeave.pointerConsumed);
     EXPECT_TRUE(capturedLeave.wantsPointer);
     EXPECT_FALSE(capturedLeave.hover.valid());
     EXPECT_EQ(capturedLeave.capture.value, 1u);
     EXPECT_EQ(capturedLeave.focus.value, 1u);
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_FALSE(self.m_router.capture().valid());
 }
@@ -893,11 +871,11 @@ void VerifyUiInputTests_PanelBlocksPointerAndClearsKeyboardFocusWithoutActivatin
     self.click();
     ASSERT_EQ(self.m_router.focus().value, 1u);
     ASSERT_TRUE(self.m_router.consumeActivation(targets[0u].id));
-    const InputRoutingResult panel = self.send(MakeUiInputPointerAt(InputEventType::PrimaryDown, Point(45.0f, 15.0f)));
+    const InputRoutingResult panel = self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(45.0f, 15.0f)));
     EXPECT_TRUE(panel.pointerConsumed);
     EXPECT_FALSE(panel.focus.valid());
     EXPECT_EQ(panel.capture.value, 2u);
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(45.0f, 15.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(45.0f, 15.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
     EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
@@ -1016,7 +994,7 @@ void VerifyUiInputTests_NativeFocusTerminationAndResetDoNotReuseActionSequences(
     const u64 firstSequence = self.m_router.actions()[0u].id.sequence;
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
-    const InputRoutingResult lost = self.send(MakeUiInputBareEvent(InputEventType::FocusLost));
+    const InputRoutingResult lost = self.send(MakeUiBareInputEvent(InputEventType::FocusLost));
     EXPECT_TRUE(lost.pointerConsumed);
     EXPECT_TRUE(lost.commandConsumed);
     EXPECT_TRUE(lost.wantsPointer);
@@ -1033,7 +1011,7 @@ void VerifyUiInputTests_NativeFocusTerminationAndResetDoNotReuseActionSequences(
     EXPECT_FALSE(self.m_router.wantsPointer());
     EXPECT_FALSE(self.m_router.wantsCommands());
     EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     ASSERT_TRUE(self.queueNative(MakeUiInputPointer(InputEventType::PrimaryDown)));
     self.m_router.reset();
@@ -1041,8 +1019,8 @@ void VerifyUiInputTests_NativeFocusTerminationAndResetDoNotReuseActionSequences(
     EXPECT_TRUE(self.m_router.targets().empty());
     EXPECT_FALSE(self.m_router.process().pointerConsumed);
     ASSERT_TRUE(self.commitSingle(target, 1u));
-    EXPECT_FALSE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
-    self.send(MakeUiInputBareEvent(InputEventType::FocusGained));
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
+    self.send(MakeUiBareInputEvent(InputEventType::FocusGained));
     self.click();
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     EXPECT_GT(self.m_router.actions()[0u].id.sequence, firstSequence);
@@ -1053,10 +1031,10 @@ void VerifyUiInputTests_EventsUseCommittedTargetsAndScenePressCannotTransferToNe
     HitTarget nextTarget = MakeUiInputTargetAt(2u, Rect(40.0f, 10.0f, 20.0f, 20.0f));
     ASSERT_TRUE(self.commitSingle(oldTarget, 1u));
     EXPECT_FALSE(self.m_router.hitTest(Point(45.0f, 15.0f)).valid());
-    EXPECT_FALSE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryDown, Point(45.0f, 15.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(45.0f, 15.0f))).pointerConsumed);
     ASSERT_TRUE(self.commitSingle(nextTarget, 2u));
     EXPECT_EQ(self.m_router.hitTest(Point(45.0f, 15.0f)).value, 2u);
-    EXPECT_FALSE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(45.0f, 15.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(45.0f, 15.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     self.click(Point(45.0f, 15.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
@@ -1114,8 +1092,8 @@ void VerifyUiInputTests_TargetAndEventLimitsRejectOverflowAndAllowSubsequentProc
     EXPECT_FALSE(self.queueNative(MakeUiInputPointer(InputEventType::PointerMove)));
     EXPECT_TRUE(self.m_router.process().pointerConsumed);
     EXPECT_EQ(self.m_router.hover().value, s_InputMaxTargets);
-    EXPECT_FALSE(self.queueNative(MakeUiInputPointerAt(InputEventType::PointerMove, Point(UiInputLayoutQuietNaNF32(), 1.0f))));
-    EXPECT_FALSE(self.queueNative(MakeUiInputBareEvent(bit_cast<InputEventTypeEnum>(u8(255u)))));
+    EXPECT_FALSE(self.queueNative(MakeUiPointerEvent(InputEventType::PointerMove, Point(UiInputLayoutQuietNaNF32(), 1.0f))));
+    EXPECT_FALSE(self.queueNative(MakeUiBareInputEvent(bit_cast<InputEventTypeEnum>(u8(255u)))));
     EXPECT_FALSE(self.queueNative(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Unknown, false)));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PointerMove)).pointerConsumed);
 }
@@ -1157,7 +1135,7 @@ void VerifyUiInputTests_EscapeCancelsPointerPressEvenWhenATextEditorKeepsFocus(m
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.m_router.pressed(target.id));
     EXPECT_TRUE(self.m_router.primaryDown());
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, Point(90.0f, 90.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(90.0f, 90.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
     EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Escape, false)).commandConsumed);
@@ -1169,13 +1147,13 @@ void VerifyUiInputTests_NativeCaptureLossTerminatesPointerOwnershipWithoutSubmit
     const HitTarget target = MakeUiInputTarget(1u);
     ASSERT_TRUE(self.commitSingle(target, 1u));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputBareEvent(InputEventType::PointerCaptureLost)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::PointerCaptureLost)).pointerConsumed);
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.m_router.primaryDown());
     EXPECT_FALSE(self.m_router.wantsPointer());
-    EXPECT_FALSE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(150.0f, 150.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(150.0f, 150.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
-    EXPECT_FALSE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, Point(150.0f, 150.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(150.0f, 150.0f))).pointerConsumed);
 }
 
 void VerifyUiInputTests_NativeCaptureTerminationAdmitsFreshClicksWithoutCancellingCompletedActionsOrKeys(mut UiInputTests self){
@@ -1184,7 +1162,7 @@ void VerifyUiInputTests_NativeCaptureTerminationAdmitsFreshClicksWithoutCancelli
     self.click();
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputBareEvent(InputEventType::PointerCaptureLost)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::PointerCaptureLost)).pointerConsumed);
     EXPECT_FALSE(self.m_router.primaryDown());
     EXPECT_FALSE(self.m_router.secondaryDown());
     EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Space));
@@ -1207,13 +1185,13 @@ void VerifyUiInputTests_NativeFocusTerminationDropsMissingNativeReleasesButPrese
     controller.source = InputSource(7u, 3u);
     controller.command = InputCommand::Activate;
     EXPECT_TRUE(self.send(controller).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputBareEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     self.m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(self.m_router.primaryDown());
     EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Space));
     EXPECT_TRUE(self.m_router.ownsSource(controller.source));
     EXPECT_TRUE(self.m_router.actions().empty());
-    self.send(MakeUiInputBareEvent(InputEventType::FocusGained));
+    self.send(MakeUiBareInputEvent(InputEventType::FocusGained));
     self.click();
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
@@ -1870,14 +1848,14 @@ void VerifyUiListBuilderScrollbarTests_LatestThumbMotionFollowsAnInterveningWhee
     const Point origin = UiListScrollbarCenter(accepted.rectangle);
     const f32 trackEnd = accepted.gestureReference.y + accepted.gestureReference.height;
     const Point destination = Point(origin.x, trackEnd - accepted.rectangle.height * 0.5f);
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     InputEvent event = InputEvent();
     event.type = InputEventType::PointerWheel;
     event.position = origin;
     event.scrollY = 1.0;
     EXPECT_TRUE(self.send(event).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PointerMove, destination)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputPointerAt(InputEventType::PrimaryUp, destination)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, destination)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, destination)).pointerConsumed);
     ASSERT_TRUE(self.prepare(2u));
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), accepted.gestureMaximum);
     EXPECT_EQ(self.m_state.placement().endRow, 100000u);

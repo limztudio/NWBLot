@@ -8,19 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 HasPendingUiEditBorrowOwnerTransfer(
-    in UiTextEditOwner targetOwner,
-    in UiTextEditOwner sessionOwner,
-    in b8 clipboardPending,
-    in UiTextEditOwner clipboardOwner,
-    in b8 primaryPending,
-    in UiTextEditOwner primaryOwner
-){
-    return sessionOwner == targetOwner
-        || (clipboardPending && clipboardOwner == targetOwner)
-        || (primaryPending && primaryOwner == targetOwner);
-}
-
 b8 HasUiEditModelGenerationsChanged(
     in u64 beforeRevision,
     in u64 beforeExternalRevision,
@@ -123,7 +110,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
         if(rebound || policyChanged || !entry->expected.matches(model)){
             m_context.input().cancelSubmitCommands(widget.id);
             entry->navigationResetPending = navigation != nullptr;
-            if(HasPendingUiEditBorrowOwnerTransfer(entry->owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
+            if(HasPendingUiEditOwnerTransfer(entry->owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
                 cancelTransfers();
             discard(entry->owner);
             entry->owner = owner;
@@ -186,7 +173,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
             if(!apply(options, event, *entry, model, result, actions, navigation)){
                 result.valid = false;
                 discard(owner);
-                if(HasPendingUiEditBorrowOwnerTransfer(owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
+                if(HasPendingUiEditOwnerTransfer(owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
                     cancelTransfers();
                 return result;
             }

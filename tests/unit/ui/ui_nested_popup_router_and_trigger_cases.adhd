@@ -897,31 +897,9 @@ const StringView s_UiNestedPopupRouterCallbackQuery = "callback";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Rect MakeUiNestedPopupRouterRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Point MakeUiNestedPopupRouterPoint(in f32 x, in f32 y){
-    Point point = Point();
-    point.x = x;
-    point.y = y;
-    return point;
-}
-
-WidgetId MakeUiNestedPopupRouterWidgetId(in u64 value){
-    WidgetId id = WidgetId();
-    id.value = value;
-    return id;
-}
-
 PopupToken MakeUiNestedPopupRouterToken(in u64 widgetValue, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
     PopupToken token = PopupToken();
-    token.widget = MakeUiNestedPopupRouterWidgetId(widgetValue);
+    token.widget = WidgetId(widgetValue);
     token.declarationGeneration = declarationGeneration;
     token.instanceGeneration = instanceGeneration;
     token.openGeneration = openGeneration;
@@ -934,35 +912,6 @@ ControlToken MakeUiNestedPopupRouterControlToken(in u64 instanceGeneration, in u
     token.contentGeneration = contentGeneration;
     token.contentRevision = contentRevision;
     return token;
-}
-
-InputEvent MakeUiNestedPopupRouterPointerEvent(in InputEventTypeEnum eventType, in f32 x, in f32 y){
-    InputEvent event = InputEvent();
-    event.type = eventType;
-    event.position.x = x;
-    event.position.y = y;
-    return event;
-}
-
-InputEvent MakeUiNestedPopupRouterPointerPointEvent(in InputEventTypeEnum eventType, in Point position){
-    InputEvent event = InputEvent();
-    event.type = eventType;
-    event.position = position;
-    return event;
-}
-
-InputEvent MakeUiNestedPopupRouterKeyEvent(in InputEventTypeEnum eventType, in CoreKeyEnum key, in b8 repeat){
-    InputEvent event = InputEvent();
-    event.type = eventType;
-    event.key = key;
-    event.repeat = repeat;
-    return event;
-}
-
-InputEvent MakeUiNestedPopupRouterFocusEvent(in InputEventTypeEnum eventType){
-    InputEvent event = InputEvent();
-    event.type = eventType;
-    return event;
 }
 
 
@@ -1069,7 +1018,7 @@ void VerifyUiNestedPopupLoanTests_ParentSourceCallbackCannotMutateTheEndedChildS
 
 void VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame(mut UiNestedPopupLoanTests self){
     ASSERT_TRUE(self.acceptBase(1u));
-    ASSERT_TRUE(self.m_menu.open(MakeUiNestedPopupRouterRect(80.0f, 120.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(80.0f, 120.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.beginParent(2u));
     EXPECT_FALSE(self.m_builder.button(s_UiNestedPopupRouterAnchorKey, "Commands"));
     ASSERT_TRUE(self.m_builder.contextMenu("menu", s_UiNestedPopupRouterAnchorKey, self.m_menuSource, self.m_menu).valid);
@@ -1087,7 +1036,7 @@ void VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotCloseTheParentContext
 void VerifyUiNestedPopupLoanTests_ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication(mut UiNestedPopupLoanTests self){
     self.m_combo.open();
     self.m_search.combo().open();
-    ASSERT_TRUE(self.m_menu.open(MakeUiNestedPopupRouterRect(510.0f, 280.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(510.0f, 280.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareChildCompounds(1u));
     self.resetChildCounters();
     self.m_parent.close();
@@ -1104,7 +1053,7 @@ void VerifyUiNestedPopupLoanTests_ClosingTheParentBeforeOuterEndSuppressesEveryD
 void VerifyUiNestedPopupLoanTests_ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans(mut UiNestedPopupLoanTests self){
     self.m_combo.open();
     self.m_search.combo().open();
-    ASSERT_TRUE(self.m_menu.open(MakeUiNestedPopupRouterRect(510.0f, 280.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(510.0f, 280.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareChildCompounds(1u));
     self.resetChildCounters();
     const u64 openGeneration = self.m_parent.openGeneration();
@@ -1350,8 +1299,8 @@ void VerifyUiNestedPopupRouterTests_ChildMayExtendOutsideParentWhileFocusAndPoin
     EXPECT_EQ(childScope.value().parent, parent.token);
     EXPECT_EQ(self.m_router.topPopupToken(), child.token);
     EXPECT_EQ(self.m_router.focus().value, 201u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(175.0f, 125.0f)).value, 201u);
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(35.0f, 35.0f)).valid());
+    EXPECT_EQ(self.m_router.hitTest(Point(175.0f, 125.0f)).value, 201u);
+    EXPECT_FALSE(self.m_router.hitTest(Point(35.0f, 35.0f)).valid());
     self.key(CoreKey::Tab);
     EXPECT_EQ(self.m_router.focus().value, 202u);
     self.key(CoreKey::Tab);
@@ -1359,8 +1308,8 @@ void VerifyUiNestedPopupRouterTests_ChildMayExtendOutsideParentWhileFocusAndPoin
     self.key(CoreKey::Tab, true);
     EXPECT_EQ(self.m_router.focus().value, 202u);
     self.key(CoreKey::Enter);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(202u)));
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(101u)));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(202u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(101u)));
 }
 
 void VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance(mut UiNestedPopupRouterTests self){
@@ -1375,7 +1324,7 @@ void VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenPa
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 3u));
     ASSERT_EQ(self.m_router.focus().value, 201u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, CoreKey::Escape, false)).commandConsumed);
     PopupDismissReasonEnum reason = PopupDismissReason::None;
     const auto reasonResult1 = self.m_router.consumePopupDismissal(child.token);
     ASSERT_TRUE(reasonResult1.has_value());
@@ -1385,10 +1334,10 @@ void VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenPa
     EXPECT_FALSE(self.m_router.focus().valid());
     ASSERT_TRUE(self.installOne(parent, 4u));
     EXPECT_EQ(self.m_router.focus().value, 102u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Escape, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, CoreKey::Escape, true)).commandConsumed);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
     EXPECT_EQ(self.m_router.focus().value, 102u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyUp, CoreKey::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, CoreKey::Escape, false)).commandConsumed);
     self.key(CoreKey::Escape);
     const auto reasonResult2 = self.m_router.consumePopupDismissal(parent.token);
     ASSERT_TRUE(reasonResult2.has_value());
@@ -1404,7 +1353,7 @@ void VerifyUiNestedPopupRouterTests_OptedInChildTabLeavesItsParentOpenAndAdvance
     ASSERT_EQ(self.m_router.focus().value, 102u);
     PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
     child.dismissFocusTraversal = true;
-    child.focusAnchor = MakeUiNestedPopupRouterWidgetId(102u);
+    child.focusAnchor = WidgetId(102u);
     child.focusAnchorDeclarationGeneration = 10u;
     Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
     scopes[0u] = parent;
@@ -1433,7 +1382,7 @@ void VerifyUiNestedPopupRouterTests_OutsideChildPressOverParentConsumesReleaseWi
     scopes[0u] = parent;
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 1u));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(35.0f, 35.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.capture().valid());
     PopupDismissReasonEnum reason = PopupDismissReason::None;
     const auto reasonResult = self.m_router.consumePopupDismissal(child.token);
@@ -1442,10 +1391,10 @@ void VerifyUiNestedPopupRouterTests_OutsideChildPressOverParentConsumesReleaseWi
     EXPECT_EQ(reason, PopupDismissReason::OutsideClick);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
     ASSERT_TRUE(self.installOne(parent, 2u));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 35.0f, 35.0f)).pointerConsumed);
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(101u)));
-    self.click(MakeUiNestedPopupRouterPoint(35.0f, 35.0f));
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(101u)));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(35.0f, 35.0f))).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(101u)));
+    self.click(Point(35.0f, 35.0f));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(101u)));
 }
 
 void VerifyUiNestedPopupRouterTests_OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu(mut UiNestedPopupRouterTests self){
@@ -1455,17 +1404,17 @@ void VerifyUiNestedPopupRouterTests_OutsideSecondarySequenceCannotOpenTheNewlyEx
     scopes[0u] = parent;
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 1u, true));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryDown, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, Point(35.0f, 35.0f))).pointerConsumed);
     const auto reasonResult = self.m_router.consumePopupDismissal(child.token);
     ASSERT_TRUE(reasonResult.has_value());
     ASSERT_TRUE(self.installOne(parent, 2u, true));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryUp, 35.0f, 35.0f)).pointerConsumed);
-    const WidgetId target101 = MakeUiNestedPopupRouterWidgetId(101u);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, Point(35.0f, 35.0f))).pointerConsumed);
+    const WidgetId target101 = WidgetId(101u);
     ContextMenuAction action = ContextMenuAction();
     EXPECT_FALSE(self.m_router.consumeContextMenu(target101, 10u).has_value());
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryDown, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, Point(35.0f, 35.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumeContextMenu(target101, 10u).has_value());
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryUp, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, Point(35.0f, 35.0f))).pointerConsumed);
     const auto actionResult = self.m_router.consumeContextMenu(target101, 10u);
     ASSERT_TRUE(actionResult.has_value());
     action = actionResult.value();
@@ -1489,8 +1438,8 @@ void VerifyUiNestedPopupRouterTests_ClosingAncestorPreservesUnrelatedTopChainAnd
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     self.m_router.closePopup(parent.token);
     EXPECT_EQ(self.m_router.focus().value, 401u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(255.0f, 35.0f)).value, 401u);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(401u)));
+    EXPECT_EQ(self.m_router.hitTest(Point(255.0f, 35.0f)).value, 401u);
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(401u)));
     ASSERT_TRUE(self.installOne(unrelated, 3u));
     EXPECT_EQ(self.m_router.popupCount(), 1u);
     EXPECT_EQ(self.m_router.focus().value, 401u);
@@ -1509,10 +1458,10 @@ void VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsA
     scopes[0u] = parent;
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 2u, true));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Menu, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 175.0f, 125.0f)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryDown, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, CoreKey::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(175.0f, 125.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, Point(175.0f, 125.0f))).pointerConsumed);
     ASSERT_EQ(self.m_router.capture().value, 201u);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     self.m_router.invalidateTarget(parent.token.widget);
@@ -1523,18 +1472,18 @@ void VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsA
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    const WidgetId target201 = MakeUiNestedPopupRouterWidgetId(201u);
+    const WidgetId target201 = WidgetId(201u);
     EXPECT_FALSE(self.m_router.consumeContextMenu(target201, 10u).has_value());
     ASSERT_TRUE(self.install(scopes, 3u, true));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, CoreKey::Menu, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_FALSE(self.m_router.consumeContextMenu(target201, 10u).has_value());
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 175.0f, 125.0f)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryUp, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(175.0f, 125.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, Point(175.0f, 125.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyUp, CoreKey::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, CoreKey::Menu, false)).commandConsumed);
     self.key(CoreKey::Down);
     ControlAction action = ControlAction();
     const auto actionResult = self.m_router.consumeControlAction(target201, 10u, MakeUiNestedPopupRouterControlToken(600u, 700u, 800u));
@@ -1553,16 +1502,16 @@ void VerifyUiNestedPopupRouterTests_RetiringLowerFamilyPreservesUnrelatedTopCapt
     scopes[1u] = child;
     scopes[2u] = unrelated;
     ASSERT_TRUE(self.install(scopes, 1u));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 255.0f, 35.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(255.0f, 35.0f))).pointerConsumed);
     ASSERT_EQ(self.m_router.capture().value, 401u);
     self.m_router.invalidateTarget(parent.token.widget);
     EXPECT_EQ(self.m_router.popupCount(), 1u);
     EXPECT_EQ(self.m_router.topPopupToken(), unrelated.token);
     EXPECT_EQ(self.m_router.focus().value, 401u);
     EXPECT_EQ(self.m_router.capture().value, 401u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 255.0f, 35.0f)).pointerConsumed);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(401u)));
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(201u)));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(255.0f, 35.0f))).pointerConsumed);
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(401u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(201u)));
 }
 
 void VerifyUiNestedPopupRouterTests_ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture(mut UiNestedPopupRouterTests self){
@@ -1572,9 +1521,9 @@ void VerifyUiNestedPopupRouterTests_ChangingAncestorRequiresRenewedChildTokenAnd
     original[0u] = parent;
     original[1u] = child;
     ASSERT_TRUE(self.install(original, 1u));
-    self.click(MakeUiNestedPopupRouterPoint(175.0f, 125.0f));
+    self.click(Point(175.0f, 125.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(175.0f, 125.0f))).pointerConsumed);
     PopupScope nextParent = parent;
     ++nextParent.token.openGeneration;
     PopupScope nextChild = child;
@@ -1599,10 +1548,10 @@ void VerifyUiNestedPopupRouterTests_ChangingAncestorRequiresRenewedChildTokenAnd
     EXPECT_EQ(self.m_router.focus().value, 201u);
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 175.0f, 125.0f)).pointerConsumed);
-    const WidgetId target201 = MakeUiNestedPopupRouterWidgetId(201u);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(175.0f, 125.0f))).pointerConsumed);
+    const WidgetId target201 = WidgetId(201u);
     EXPECT_FALSE(self.m_router.consumeActivation(target201));
-    self.click(MakeUiNestedPopupRouterPoint(175.0f, 125.0f));
+    self.click(Point(175.0f, 125.0f));
     EXPECT_TRUE(self.m_router.consumeActivation(target201));
 }
 
@@ -1613,8 +1562,8 @@ void VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAga
     scopes[0u] = parent;
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 1u));
-    self.click(MakeUiNestedPopupRouterPoint(175.0f, 125.0f));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 175.0f, 125.0f)).pointerConsumed);
+    self.click(Point(175.0f, 125.0f));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(175.0f, 125.0f))).pointerConsumed);
     Array<PopupScope, 5u> invalid = Array<PopupScope, 5u>();
     invalid.fill(child);
     ++invalid[0u].parent.openGeneration;
@@ -1630,7 +1579,7 @@ void VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAga
         EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
         EXPECT_EQ(self.m_router.focus().value, 201u);
         EXPECT_EQ(self.m_router.capture().value, 201u);
-        EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(175.0f, 125.0f)).value, 201u);
+        EXPECT_EQ(self.m_router.hitTest(Point(175.0f, 125.0f)).value, 201u);
         EXPECT_EQ(self.m_router.actions().size(), 1u);
     }
     EXPECT_FALSE(self.installOne(child, 2u));
@@ -1641,8 +1590,8 @@ void VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAga
     cyclic[1u] = child;
     EXPECT_FALSE(self.install(cyclic, 2u));
     EXPECT_EQ(self.m_router.popupCount(), 2u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 175.0f, 125.0f)).pointerConsumed);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(201u)));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(175.0f, 125.0f))).pointerConsumed);
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(201u)));
 }
 
 void VerifyUiNestedPopupRouterTests_NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime(mut UiNestedPopupRouterTests self){
@@ -1664,7 +1613,7 @@ void VerifyUiNestedPopupRouterTests_NewDescendantsCannotRestoreInputBeneathAClos
     underClosingParent[2u] = grandchild;
     ASSERT_TRUE(self.install(underClosingParent, 2u));
     EXPECT_FALSE(self.m_router.focus().valid());
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).valid());
+    EXPECT_FALSE(self.m_router.hitTest(Point(285.0f, 205.0f)).valid());
     EXPECT_TRUE(self.m_router.actions().empty());
     ++parent.token.openGeneration;
     self.m_router.fencePopup(parent.token);
@@ -1678,7 +1627,7 @@ void VerifyUiNestedPopupRouterTests_NewDescendantsCannotRestoreInputBeneathAClos
     renewed[2u] = grandchild;
     ASSERT_TRUE(self.install(renewed, 3u));
     EXPECT_EQ(self.m_router.focus().value, 301u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).value, 301u);
+    EXPECT_EQ(self.m_router.hitTest(Point(285.0f, 205.0f)).value, 301u);
 }
 
 void VerifyUiNestedPopupRouterTests_FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture(mut UiNestedPopupRouterTests self){
@@ -1690,18 +1639,18 @@ void VerifyUiNestedPopupRouterTests_FencingAncestorImmediatelySuppressesAllDesce
     scopes[1u] = child;
     scopes[2u] = grandchild;
     ASSERT_TRUE(self.install(scopes, 1u));
-    self.click(MakeUiNestedPopupRouterPoint(285.0f, 205.0f));
+    self.click(Point(285.0f, 205.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 285.0f, 205.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(285.0f, 205.0f))).pointerConsumed);
     PopupToken replaced = parent.token;
     ++replaced.instanceGeneration;
     self.m_router.fencePopup(replaced);
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).valid());
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 285.0f, 205.0f)).pointerConsumed);
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(301u)));
+    EXPECT_FALSE(self.m_router.hitTest(Point(285.0f, 205.0f)).valid());
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(285.0f, 205.0f))).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(301u)));
 }
 
 void VerifyUiNestedPopupRouterTests_RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus(mut UiNestedPopupRouterTests self){
@@ -1738,9 +1687,9 @@ void VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRe
     scopes[1u] = child;
     scopes[2u] = grandchild;
     ASSERT_TRUE(self.install(scopes, 2u));
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterFocusEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     EXPECT_FALSE(self.m_router.focus().valid());
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).valid());
+    EXPECT_FALSE(self.m_router.hitTest(Point(285.0f, 205.0f)).valid());
     PopupDismissReasonEnum reason = PopupDismissReason::None;
     for(in PopupScope scope : scopes){
         const auto reasonResult = self.m_router.consumePopupDismissal(scope.token);
@@ -1749,7 +1698,7 @@ void VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRe
         EXPECT_EQ(reason, PopupDismissReason::FocusLost);
         EXPECT_FALSE(self.m_router.consumePopupDismissal(scope.token).has_value());
     }
-    EXPECT_FALSE(self.send(MakeUiNestedPopupRouterFocusEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     ASSERT_TRUE(self.installEmpty(3u));
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.hasPopup());
@@ -1796,8 +1745,8 @@ void VerifyUiNestedPopupTriggerTests_NestedMenuSkipsDisabledCommandsWithoutActiv
     const Expected<HitTarget> anchorTarget = self.tryTarget(self.anchorId());
     ASSERT_TRUE(anchorTarget.has_value());
     const Point point = CenterUiRect(anchorTarget.value().rectangle);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerPointEvent(InputEventType::SecondaryDown, point)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerPointEvent(InputEventType::SecondaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, point)).pointerConsumed);
     ASSERT_TRUE(self.acceptChildMenu(2u));
     EXPECT_TRUE(self.m_menuResult.opened);
     EXPECT_FALSE(self.m_anchorActivated);

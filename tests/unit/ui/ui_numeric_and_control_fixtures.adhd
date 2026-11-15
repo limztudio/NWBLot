@@ -11,3 +11,156 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_glyph_sdf_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using EditLimits = ::NWB::Impl::Ui::EditLimits;
+using FloatBounds = ::NWB::Impl::Ui::FloatBounds;
+using IntegerBounds = ::NWB::Impl::Ui::IntegerBounds;
+using NumericBoundsPolicyEnum = ::NWB::Impl::Ui::NumericBoundsPolicy::Enum;
+using InputCommandIntent = ::NWB::Impl::Ui::InputCommandIntent;
+using InputCommandEnum = ::NWB::Impl::Ui::InputCommand::Enum;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+using InputSource = ::NWB::Impl::Ui::InputSource;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Array<HitTarget, 1u> MakeUiSingleHitTargetArray(in HitTarget target){
+    Array<HitTarget, 1u> targets = Array<HitTarget, 1u>();
+    targets[0u] = target;
+    return targets;
+}
+
+Array<PopupScope, 1u> MakeUiSinglePopupScopeArray(in PopupScope scope){
+    Array<PopupScope, 1u> scopes = Array<PopupScope, 1u>();
+    scopes[0u] = scope;
+    return scopes;
+}
+
+InputEvent MakeUiPointerEvent(in InputEventTypeEnum eventType, in Point position){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.position = position;
+    return event;
+}
+
+InputEvent MakeUiBareInputEvent(in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.position = Point();
+    return event;
+}
+
+InputEvent MakeUiKeyEvent(in InputEventTypeEnum eventType, in KeyEnum key){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.key = key;
+    return event;
+}
+
+InputEvent MakeUiRepeatedKeyEvent(in InputEventTypeEnum eventType, in KeyEnum key, in b8 repeat){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.key = key;
+    event.repeat = repeat;
+    return event;
+}
+
+ShapeRequest MakeUiDefaultShapeRequest(in StringView text){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    return request;
+}
+
+ShapeRequest MakeUiShapeRequest(in StringView text, in f32 fontSize){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.fontSize = fontSize;
+    return request;
+}
+
+DisplayMetrics MakeUiDisplayMetrics(in f32 logicalWidth, in f32 logicalHeight, in f32 pixelScaleX, in f32 pixelScaleY){
+    DisplayMetrics metrics = DisplayMetrics();
+    metrics.logicalWidth = logicalWidth;
+    metrics.logicalHeight = logicalHeight;
+    metrics.pixelScaleX = pixelScaleX;
+    metrics.pixelScaleY = pixelScaleY;
+    return metrics;
+}
+
+EditLimits MakeUiEditLimits(in usize maxBytes, in usize maxHistoryRecords, in usize maxHistoryBytes){
+    EditLimits limits = EditLimits();
+    limits.maxBytes = maxBytes;
+    limits.maxHistoryRecords = maxHistoryRecords;
+    limits.maxHistoryBytes = maxHistoryBytes;
+    return limits;
+}
+
+InputCommandIntent MakeUiCommandIntent(in InputCommandEnum command, in b8 extend, in b8 edit){
+    InputCommandIntent intent = InputCommandIntent();
+    intent.command = command;
+    intent.extend = extend;
+    intent.edit = edit;
+    return intent;
+}
+
+FloatBounds MakeUiFloatBounds(in f64 minimum, in f64 maximum, in NumericBoundsPolicyEnum policy){
+    FloatBounds bounds = FloatBounds();
+    bounds.minimum = minimum;
+    bounds.maximum = maximum;
+    bounds.policy = policy;
+    return bounds;
+}
+
+IntegerBounds MakeUiIntegerBounds(in i64 minimum, in i64 maximum, in NumericBoundsPolicyEnum policy){
+    IntegerBounds bounds = IntegerBounds();
+    bounds.minimum = minimum;
+    bounds.maximum = maximum;
+    bounds.policy = policy;
+    return bounds;
+}
+
+InputSource MakeUiInputSource(in u64 device, in u64 control){
+    InputSource source = InputSource();
+    source.device = device;
+    source.control = control;
+    return source;
+}
+
+PopupToken MakeUiPopupToken(in WidgetId widget, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
+    PopupToken token = PopupToken();
+    token.widget = widget;
+    token.declarationGeneration = declarationGeneration;
+    token.instanceGeneration = instanceGeneration;
+    token.openGeneration = openGeneration;
+    return token;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

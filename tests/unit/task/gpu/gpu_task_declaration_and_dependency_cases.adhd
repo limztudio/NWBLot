@@ -20,10 +20,6 @@ enum<u8> GpuDeclDenseScenario{
     kCount
 }
 
-TwoQueueCompile GpuDecl_MakeTwoQueueCompile(mut TestArena testArena){
-    return TwoQueueCompile(testArena);
-}
-
 FrameGraphBuilder GpuDecl_MakeFrameGraphBuilder(
     mut ScratchArena scratchArena,
     mut FrameGraphNodeDescs nodes,
@@ -31,57 +27,6 @@ FrameGraphBuilder GpuDecl_MakeFrameGraphBuilder(
     mut FrameGraphPendingNameEdges pendingEdges
 ){
     return FrameGraphBuilder(scratchArena, nodes, edges, pendingEdges);
-}
-
-GpuTaskId GpuDecl_MakeTaskId(in u64 generation, in u32 index){
-    GpuTaskId id = GpuTaskId();
-    id.generation = generation;
-    id.index = index;
-    return id;
-}
-
-GpuPhysicalQueueTopology GpuDecl_MakeTopology(in Span<GpuPhysicalQueueInfo> queues, in usize count){
-    return MakeTopologyPrefix(queues, count);
-}
-
-b8 GpuDecl_HasFatalFailure(){
-    return TestHasFatalFailure();
-}
-
-b8 GpuDecl_HasEdge(in GpuTaskGraphAnalysis analysis, in GpuTaskId producer, in GpuTaskId consumer){
-    return HasEdge(analysis, producer, consumer);
-}
-
-Optional<GpuTaskDependencyEdge> GpuDecl_FindEdge(in GpuTaskGraphAnalysis analysis, in GpuTaskId producer, in GpuTaskId consumer){
-    return TryFindEdge(analysis, producer, consumer);
-}
-
-Optional<GpuTaskQueueAssignment> GpuDecl_FindAssignment(in GpuTaskGraphQueueAssignments assignments, in GpuTaskId task){
-    return FindQueueAssignment(assignments, task);
-}
-
-Optional<GpuCompiledTask> GpuDecl_TaskPlan(in GpuCompiledTaskView view){
-    return TaskPlan(view);
-}
-
-Span<GpuCompiledBarrier> GpuDecl_PrologueBarriers(in GpuCompiledTaskView view){
-    return PrologueBarriers(view);
-}
-
-Span<GpuPacketStateSeed> GpuDecl_PrologueSeeds(in GpuCompiledTaskView view){
-    return PrologueStateSeeds(view);
-}
-
-Span<GpuPacketDependency> GpuDecl_PacketDependencies(in GpuCompiledPacketView view){
-    return PacketDependencies(view);
-}
-
-Span<GpuTaskId> GpuDecl_PacketTasks(in GpuCompiledPacketView view){
-    return PacketTasks(view);
-}
-
-b8 GpuDecl_HasPacketTasksPtr(in GpuCompiledPacketView view){
-    return HasPacketTasksPtr(view);
 }
 
 Optional<GpuTaskQueueAssignmentTelemetry> GpuDecl_FindTrackedTelemetry(
@@ -102,31 +47,6 @@ Expected<GpuUploadBlobId> GpuDecl_CopyUploadSpan(mut GpuTaskGraph graph, in Span
         out = graph.copyUploadData(bytes.data(), bytes.size(), alignment);
     }
     return out;
-}
-
-Expected<GpuTaskId> GpuDecl_AddEmptyTask(in Name identity, in AStringView label, mut GpuTaskGraph graph){
-    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
-    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, emptyDeps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
-}
-
-Expected<GpuTaskId> GpuDecl_AddDepTask(in Name identity, in AStringView label, in Span<GpuTaskId> deps, mut GpuTaskGraph graph){
-    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, deps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
-}
-
-Expected<GpuTaskId> GpuDecl_AddUseTask(in Name identity, in AStringView label, in Span<GpuTaskResourceUse> uses, mut GpuTaskGraph graph){
-    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, emptyDeps, uses, emptySets, emptyVersions, emptyExternals, graph);
 }
 
 Expected<GpuTaskId> GpuDecl_AddSetTask(in Name identity, in AStringView label, in Span<GpuTaskResourceSetUse> sets, mut GpuTaskGraph graph){
@@ -176,7 +96,7 @@ b8 GpuDecl_HasPacketDependency(in GpuCompiledGraphReadView plan, in GpuTaskId co
     const GpuCompiledPacketView consumerPacket = plan.packet(plan.packetForTask(consumer));
     if(!producerPacket.valid() || !consumerPacket.valid())
         return false;
-    for(in GpuPacketDependency dep : GpuDecl_PacketDependencies(consumerPacket)){
+    for(in GpuPacketDependency dep : PacketDependencies(consumerPacket)){
         if(dep.producer == producerPacket)
             return true;
     }
@@ -188,7 +108,7 @@ b8 GpuDecl_HasStateSeed(in GpuCompiledGraphReadView plan, in GpuTaskId consumer,
     const GpuCompiledTaskView consumerTask = plan.findTask(consumer);
     if(!producerPacket.valid() || !consumerTask.valid())
         return false;
-    for(in GpuPacketStateSeed seed : GpuDecl_PrologueSeeds(consumerTask)){
+    for(in GpuPacketStateSeed seed : PrologueStateSeeds(consumerTask)){
         if(seed.sourcePacket == producerPacket)
             return true;
     }
@@ -235,7 +155,7 @@ void GpuDecl_CheckSingleLaneStateChangeScratch(mut usize scratchPeak, in usize t
     usize queueCount = 1u;
     if(concurrentSharing)
         queueCount = queues.size();
-    const GpuPhysicalQueueTopology topology = GpuDecl_MakeTopology(queues, queueCount);
+    const GpuPhysicalQueueTopology topology = MakeTopologyPrefix(queues, queueCount);
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
@@ -253,7 +173,7 @@ void GpuDecl_CheckSingleLaneStateChangeScratch(mut usize scratchPeak, in usize t
     for(usize index = 0u; index < taskCount; ++index){
         const GpuCompiledPacketView packet = plan.packet(plan.packetIdAt(index));
         ASSERT_TRUE(packet.valid());
-        const Span<GpuPacketDependency> deps = GpuDecl_PacketDependencies(packet);
+        const Span<GpuPacketDependency> deps = PacketDependencies(packet);
         usize expectedDeps = 1u;
         if(index == 0u)
             expectedDeps = 0u;
@@ -313,7 +233,7 @@ void VerifyGpuDecl_KeepsConcurrentReadersIndependentAfterStateEstablishingProduc
         ASSERT_TRUE(computeReader.valid());
         ASSERT_TRUE(graphicsReader.valid());
 
-        TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+        TwoQueueCompile compilation = TwoQueueCompile(testArena);
         ASSERT_TRUE(compilation.compile(graph));
         const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
         EXPECT_TRUE(GpuDecl_HasStateSeed(plan, computeReader, firstReader));
@@ -359,7 +279,7 @@ void VerifyGpuDecl_KeepsCompatibleTextureReadMasksIndependentWithoutChangingSema
     ASSERT_TRUE(computeReader.valid());
     ASSERT_TRUE(depthReader.valid());
 
-    TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile compilation = TwoQueueCompile(testArena);
     ASSERT_TRUE(compilation.compile(graph));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     EXPECT_TRUE(GpuDecl_HasStateSeed(plan, depthReader, firstReader));
@@ -367,7 +287,7 @@ void VerifyGpuDecl_KeepsCompatibleTextureReadMasksIndependentWithoutChangingSema
     const GpuCompiledTaskView depthTask = plan.findTask(depthReader);
     ASSERT_TRUE(depthTask.valid());
     b8 hasSemanticTransition = false;
-    for(in GpuCompiledBarrier barrier : GpuDecl_PrologueBarriers(depthTask)){
+    for(in GpuCompiledBarrier barrier : PrologueBarriers(depthTask)){
         if(
             barrier.resource == resource
             && barrier.type == GpuCompiledBarrierType::TextureTransition
@@ -421,7 +341,7 @@ void VerifyGpuDecl_JoinsEveryConcurrentReaderBeforeIncompatibleReadStateChange()
         ASSERT_TRUE(graphicsReader.valid());
         ASSERT_TRUE(transitionReader.valid());
 
-        TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+        TwoQueueCompile compilation = TwoQueueCompile(testArena);
         ASSERT_TRUE(compilation.compile(graph));
         const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
         EXPECT_FALSE(GpuDecl_HasPacketDependency(plan, graphicsReader, computeReader));
@@ -505,7 +425,7 @@ void VerifyGpuDecl_JoinsConcurrentReadersBeforeTaskInternalReadStateChange(){
             ASSERT_TRUE(graphicsReader.valid());
             ASSERT_TRUE(transitionReader.valid());
 
-            TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+            TwoQueueCompile compilation = TwoQueueCompile(testArena);
             ASSERT_TRUE(compilation.compile(graph));
             const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
             ASSERT_FALSE(GpuDecl_HasPacketDependency(plan, graphicsReader, computeReader));
@@ -579,7 +499,7 @@ void VerifyGpuDecl_PreservesReaderJoinAcrossPartialTaskInternalStateEpoch(){
     ASSERT_TRUE(spanningReader.valid());
     ASSERT_TRUE(transitionReader.valid());
 
-    TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile compilation = TwoQueueCompile(testArena);
     ASSERT_TRUE(compilation.compile(graph));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     ASSERT_FALSE(GpuDecl_HasPacketDependency(plan, internalReader, computeReader));
@@ -631,7 +551,7 @@ void VerifyGpuDecl_PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierSta
     ASSERT_TRUE(computeReader.valid());
     ASSERT_TRUE(graphicsReader.valid());
 
-    TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile compilation = TwoQueueCompile(testArena);
     ASSERT_TRUE(compilation.compile(graph));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     EXPECT_TRUE(GpuDecl_HasStateSeed(plan, graphicsReader, firstReader));
@@ -700,7 +620,7 @@ void VerifyGpuDecl_KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange(
     ASSERT_TRUE(computeReader.valid());
     ASSERT_TRUE(graphicsReader.valid());
 
-    TwoQueueCompile compilation = GpuDecl_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile compilation = TwoQueueCompile(testArena);
     ASSERT_TRUE(compilation.compile(graph));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     ASSERT_TRUE(plan.tasksSharePacket(firstReader, packetTail));
@@ -713,9 +633,9 @@ void VerifyGpuDecl_KeepsSingleLaneAlternatingReadStateScratchGrowthLinear(){
     usize smallScratchPeak = 0u;
     usize largeScratchPeak = 0u;
     GpuDecl_CheckSingleLaneStateChangeScratch(smallScratchPeak, 128u, false);
-    ASSERT_FALSE(GpuDecl_HasFatalFailure());
+    ASSERT_FALSE(TestHasFatalFailure());
     GpuDecl_CheckSingleLaneStateChangeScratch(largeScratchPeak, 512u, false);
-    ASSERT_FALSE(GpuDecl_HasFatalFailure());
+    ASSERT_FALSE(TestHasFatalFailure());
     ASSERT_NE(smallScratchPeak, 0u);
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_read_state_scratch_peak_bytes", cast<u64>(smallScratchPeak));
@@ -728,9 +648,9 @@ void VerifyGpuDecl_KeepsConcurrentSingleLaneAlternatingReadStateScratchGrowthLin
     usize smallScratchPeak = 0u;
     usize largeScratchPeak = 0u;
     GpuDecl_CheckSingleLaneStateChangeScratch(smallScratchPeak, 128u, true);
-    ASSERT_FALSE(GpuDecl_HasFatalFailure());
+    ASSERT_FALSE(TestHasFatalFailure());
     GpuDecl_CheckSingleLaneStateChangeScratch(largeScratchPeak, 512u, true);
-    ASSERT_FALSE(GpuDecl_HasFatalFailure());
+    ASSERT_FALSE(TestHasFatalFailure());
     ASSERT_NE(smallScratchPeak, 0u);
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_concurrent_read_state_scratch_peak_bytes", cast<u64>(smallScratchPeak));
@@ -746,7 +666,7 @@ void VerifyGpuDecl_CopiesCallerMetadataAndDestroysTypedPayloadOnReset(){
     const GpuGraphResourceId resource = resourceResult.value();
     ASSERT_TRUE(resource.valid());
 
-    const auto predecessorResult = GpuDecl_AddEmptyTask(s_DeclarationCasePredecessor, "Predecessor", graph);
+    const auto predecessorResult = AddGpuEmptyTask(s_DeclarationCasePredecessor, "Predecessor", graph);
     ASSERT_TRUE(predecessorResult.has_value());
     const GpuTaskId predecessor = predecessorResult.value();
     ASSERT_TRUE(predecessor.valid());
@@ -858,14 +778,14 @@ void VerifyGpuDecl_RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto existingTaskResult = GpuDecl_AddEmptyTask(s_DeclarationCaseReentrantTelemetryExisting, "Reentrant Telemetry Existing", graph);
+    const auto existingTaskResult = AddGpuEmptyTask(s_DeclarationCaseReentrantTelemetryExisting, "Reentrant Telemetry Existing", graph);
     ASSERT_TRUE(existingTaskResult.has_value());
     const GpuTaskId existingTask = existingTaskResult.value();
     ASSERT_TRUE(existingTask.valid());
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuDecl_MakeTopology(queues, 1u);
+    const GpuPhysicalQueueTopology topology = MakeTopologyPrefix(queues, 1u);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -1114,7 +1034,7 @@ void VerifyGpuDecl_RejectsStaleDependencyHandlesDuringAnalysis(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto staleTaskResult = GpuDecl_AddEmptyTask(s_DeclarationCaseOld, "Old", graph);
+    const auto staleTaskResult = AddGpuEmptyTask(s_DeclarationCaseOld, "Old", graph);
     ASSERT_TRUE(staleTaskResult.has_value());
     const GpuTaskId staleTask = staleTaskResult.value();
     ASSERT_TRUE(staleTask.valid());
@@ -1122,7 +1042,7 @@ void VerifyGpuDecl_RejectsStaleDependencyHandlesDuringAnalysis(){
     graph.reset();
     Array<GpuTaskId, 1> staleDeps = Array<GpuTaskId, 1>();
     staleDeps[0u] = staleTask;
-    const auto taskResult = GpuDecl_AddDepTask(s_DeclarationCaseNew, "New", staleDeps, graph);
+    const auto taskResult = AddGpuDepTask(s_DeclarationCaseNew, "New", staleDeps, graph);
     ASSERT_TRUE(taskResult.has_value());
     const GpuTaskId task = taskResult.value();
     ASSERT_TRUE(task.valid());
@@ -1144,7 +1064,7 @@ void VerifyGpuDecl_RejectsEmptyLabelsAndStaleResourceAndExternalHandles(){
     unlabeledResource.setIdentity(s_DeclarationCaseUnlabeledResource);
     unlabeledResource.setType(GpuGraphResourceType::HazardDomain);
     EXPECT_FALSE(graph.importHazardDomain(unlabeledResource).has_value());
-    EXPECT_FALSE(GpuDecl_AddEmptyTask(s_DeclarationCaseUnlabeledTask, "", graph).has_value());
+    EXPECT_FALSE(AddGpuEmptyTask(s_DeclarationCaseUnlabeledTask, "", graph).has_value());
     GpuExternalCompletionDesc unlabeledExt = GpuExternalCompletionDesc();
     unlabeledExt.setIdentity(s_DeclarationCaseUnlabeledExternal);
     EXPECT_FALSE(graph.importExternalCompletion(unlabeledExt).has_value());
@@ -1166,7 +1086,7 @@ void VerifyGpuDecl_RejectsEmptyLabelsAndStaleResourceAndExternalHandles(){
     staleResourceUses[0u].resource = staleResource;
     staleResourceUses[0u].requiredState = ResourceStates::ShaderResource;
     staleResourceUses[0u].access = GpuTaskResourceAccess::Read;
-    const auto resourceTaskResult = GpuDecl_AddUseTask(s_DeclarationCaseStaleResourceConsumer, "Stale Resource Consumer", staleResourceUses, graph);
+    const auto resourceTaskResult = AddGpuUseTask(s_DeclarationCaseStaleResourceConsumer, "Stale Resource Consumer", staleResourceUses, graph);
     ASSERT_TRUE(resourceTaskResult.has_value());
     const GpuTaskId resourceTask = resourceTaskResult.value();
     ASSERT_TRUE(resourceTask.valid());
@@ -1258,7 +1178,7 @@ void GpuDecl_CheckDenseDependencies(in usize taskCount, in GpuDeclDenseScenario 
     TestArena arena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(arena.arena);
     GpuDecl_DeclareDenseDependencies(graph, taskCount, scenario);
-    ASSERT_FALSE(GpuDecl_HasFatalFailure());
+    ASSERT_FALSE(TestHasFatalFailure());
 
     const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(arena.arena);
@@ -1322,7 +1242,7 @@ void VerifyGpuDecl_DenseSequentialDependencyPairsBoundStorageAndPreserveTelemetr
     scenarios[2u] = GpuDeclDenseScenario::Mixed;
     for(in GpuDeclDenseScenario scenario : scenarios){
         GpuDecl_CheckDenseDependencies(256u, scenario);
-        ASSERT_FALSE(GpuDecl_HasFatalFailure());
+        ASSERT_FALSE(TestHasFatalFailure());
     }
 }
 
@@ -1331,21 +1251,21 @@ void VerifyGpuDecl_ReductionRetainsAnUnreachedMiddleTargetAfterReachingTheLastTa
 
     TestArena arena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(arena.arena);
-    const auto rootResult = GpuDecl_AddEmptyTask(s_GpuCaseReductionGapRoot, "Root", graph);
+    const auto rootResult = AddGpuEmptyTask(s_GpuCaseReductionGapRoot, "Root", graph);
     ASSERT_TRUE(rootResult.has_value());
     const GpuTaskId root = rootResult.value();
     Array<GpuTaskId, 1> rootDeps = Array<GpuTaskId, 1>();
     rootDeps[0u] = root;
-    const auto leftResult = GpuDecl_AddDepTask(s_GpuCaseReductionGapLeft, "Left", rootDeps, graph);
+    const auto leftResult = AddGpuDepTask(s_GpuCaseReductionGapLeft, "Left", rootDeps, graph);
     ASSERT_TRUE(leftResult.has_value());
     const GpuTaskId left = leftResult.value();
-    const auto middleResult = GpuDecl_AddDepTask(s_GpuCaseReductionGapMiddle, "Middle", rootDeps, graph);
+    const auto middleResult = AddGpuDepTask(s_GpuCaseReductionGapMiddle, "Middle", rootDeps, graph);
     ASSERT_TRUE(middleResult.has_value());
     const GpuTaskId middle = middleResult.value();
     Array<GpuTaskId, 2> lastDependencies = Array<GpuTaskId, 2>();
     lastDependencies[0u] = root;
     lastDependencies[1u] = left;
-    const auto lastResult = GpuDecl_AddDepTask(s_GpuCaseReductionGapLast, "Last", lastDependencies, graph);
+    const auto lastResult = AddGpuDepTask(s_GpuCaseReductionGapLast, "Last", lastDependencies, graph);
     ASSERT_TRUE(lastResult.has_value());
     const GpuTaskId last = lastResult.value();
     ASSERT_TRUE(root.valid());
@@ -1435,7 +1355,7 @@ void VerifyGpuDecl_ExpandsImmutableResourceSetsIntoConcreteHazards(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
     ASSERT_EQ(analysis.edges().size(), 1u);
-    const Optional<GpuTaskDependencyEdge> edge = GpuDecl_FindEdge(analysis, writer, reader);
+    const Optional<GpuTaskDependencyEdge> edge = TryFindEdge(analysis, writer, reader);
     ASSERT_TRUE(edge.has_value());
     EXPECT_EQ(edge.value().hazard, GpuTaskHazardType::ReadAfterWrite);
     ASSERT_EQ(analysis.inferredEdges().size(), members.size());
@@ -1474,7 +1394,7 @@ void VerifyGpuDecl_RejectsMalformedBufferRangesAndDetectsTextureOverlap(){
     zeroBufferUses[0u].requiredState = ResourceStates::ShaderResource;
     zeroBufferUses[0u].access = GpuTaskResourceAccess::Read;
     {
-        const auto gpuTaskAdmission = GpuDecl_AddUseTask(s_GpuCaseTaskGraphZeroBufferRange, "Zero Buffer Range", zeroBufferUses, graph);
+        const auto gpuTaskAdmission = AddGpuUseTask(s_GpuCaseTaskGraphZeroBufferRange, "Zero Buffer Range", zeroBufferUses, graph);
         ASSERT_TRUE(gpuTaskAdmission.has_value());
         ASSERT_TRUE(gpuTaskAdmission.value().valid());
     }
@@ -1493,7 +1413,7 @@ void VerifyGpuDecl_RejectsMalformedBufferRangesAndDetectsTextureOverlap(){
     overflowBufferUses[0u].requiredState = ResourceStates::ShaderResource;
     overflowBufferUses[0u].access = GpuTaskResourceAccess::Read;
     {
-        const auto secondGpuTaskAdmission = GpuDecl_AddUseTask(s_GpuCaseTaskGraphOverflowBufferRange, "Overflow Buffer Range", overflowBufferUses, graph);
+        const auto secondGpuTaskAdmission = AddGpuUseTask(s_GpuCaseTaskGraphOverflowBufferRange, "Overflow Buffer Range", overflowBufferUses, graph);
         ASSERT_TRUE(secondGpuTaskAdmission.has_value());
         ASSERT_TRUE(secondGpuTaskAdmission.value().valid());
     }
@@ -1522,17 +1442,17 @@ void VerifyGpuDecl_RejectsMalformedBufferRangesAndDetectsTextureOverlap(){
     secondTextureUses[0u].requiredState = ResourceStates::ShaderResource;
     secondTextureUses[0u].access = GpuTaskResourceAccess::Read;
 
-    const auto firstResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphOverlapTextureWriter, "Overlap Texture Writer", firstTextureUses, graph);
+    const auto firstResult = AddGpuUseTask(s_GpuCaseTaskGraphOverlapTextureWriter, "Overlap Texture Writer", firstTextureUses, graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
-    const auto secondResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphOverlapTextureReader, "Overlap Texture Reader", secondTextureUses, graph);
+    const auto secondResult = AddGpuUseTask(s_GpuCaseTaskGraphOverlapTextureReader, "Overlap Texture Reader", secondTextureUses, graph);
     ASSERT_TRUE(secondResult.has_value());
     const GpuTaskId second = secondResult.value();
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     GpuTaskGraphAnalysis overlapAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, overlapAnalysis));
-    EXPECT_TRUE(GpuDecl_HasEdge(overlapAnalysis, first, second));
+    EXPECT_TRUE(HasEdge(overlapAnalysis, first, second));
 }
 
 void VerifyGpuDecl_TracksOnlyTheNearestWholeResourceWriters(){
@@ -1549,13 +1469,13 @@ void VerifyGpuDecl_TracksOnlyTheNearestWholeResourceWriters(){
     writerUses[0u].resource = resource;
     writerUses[0u].requiredState = ResourceStates::UnorderedAccess;
     writerUses[0u].access = GpuTaskResourceAccess::Write;
-    const auto firstResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphNearestWriterFirst, "Nearest Writer First", writerUses, graph);
+    const auto firstResult = AddGpuUseTask(s_GpuCaseTaskGraphNearestWriterFirst, "Nearest Writer First", writerUses, graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
-    const auto secondResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphNearestWriterSecond, "Nearest Writer Second", writerUses, graph);
+    const auto secondResult = AddGpuUseTask(s_GpuCaseTaskGraphNearestWriterSecond, "Nearest Writer Second", writerUses, graph);
     ASSERT_TRUE(secondResult.has_value());
     const GpuTaskId second = secondResult.value();
-    const auto thirdResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphNearestWriterThird, "Nearest Writer Third", writerUses, graph);
+    const auto thirdResult = AddGpuUseTask(s_GpuCaseTaskGraphNearestWriterThird, "Nearest Writer Third", writerUses, graph);
     ASSERT_TRUE(thirdResult.has_value());
     const GpuTaskId third = thirdResult.value();
     ASSERT_TRUE(first.valid());
@@ -1564,9 +1484,9 @@ void VerifyGpuDecl_TracksOnlyTheNearestWholeResourceWriters(){
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
-    EXPECT_TRUE(GpuDecl_HasEdge(analysis, first, second));
-    EXPECT_TRUE(GpuDecl_HasEdge(analysis, second, third));
-    EXPECT_FALSE(GpuDecl_HasEdge(analysis, first, third));
+    EXPECT_TRUE(HasEdge(analysis, first, second));
+    EXPECT_TRUE(HasEdge(analysis, second, third));
+    EXPECT_FALSE(HasEdge(analysis, first, third));
     ASSERT_EQ(analysis.inferredEdges().size(), 2u);
     EXPECT_TRUE(HasInferredHazard(analysis, first, second, resource, GpuTaskHazardType::WriteAfterWrite));
     EXPECT_TRUE(HasInferredHazard(analysis, second, third, resource, GpuTaskHazardType::WriteAfterWrite));
@@ -1609,7 +1529,7 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
         graphGeneration = declarations.generation();
     }
     Array<GpuTaskId, 1> futureThirdDeps = Array<GpuTaskId, 1>();
-    futureThirdDeps[0u] = GpuDecl_MakeTaskId(graphGeneration, 2u);
+    futureThirdDeps[0u] = MakeGpuTaskId(graphGeneration, 2u);
     const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
     const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
     const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
@@ -1625,10 +1545,10 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
     );
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
-    const auto secondResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphExplicitSecond, "Explicit Second", secondUses, graph);
+    const auto secondResult = AddGpuUseTask(s_GpuCaseTaskGraphExplicitSecond, "Explicit Second", secondUses, graph);
     ASSERT_TRUE(secondResult.has_value());
     const GpuTaskId second = secondResult.value();
-    const auto thirdResult = GpuDecl_AddUseTask(s_GpuCaseTaskGraphExplicitThird, "Explicit Third", thirdUses, graph);
+    const auto thirdResult = AddGpuUseTask(s_GpuCaseTaskGraphExplicitThird, "Explicit Third", thirdUses, graph);
     ASSERT_TRUE(thirdResult.has_value());
     const GpuTaskId third = thirdResult.value();
     ASSERT_TRUE(first.valid());
@@ -1637,9 +1557,9 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
-    EXPECT_TRUE(GpuDecl_HasEdge(analysis, third, first));
-    EXPECT_TRUE(GpuDecl_HasEdge(analysis, second, first));
-    EXPECT_TRUE(GpuDecl_HasEdge(analysis, second, third));
+    EXPECT_TRUE(HasEdge(analysis, third, first));
+    EXPECT_TRUE(HasEdge(analysis, second, first));
+    EXPECT_TRUE(HasEdge(analysis, second, third));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], second);
     EXPECT_EQ(analysis.topologicalOrder()[1u], third);
@@ -1647,7 +1567,7 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuDecl_MakeTopology(queues, 1u);
+    const GpuPhysicalQueueTopology topology = MakeTopologyPrefix(queues, 1u);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
@@ -1663,8 +1583,8 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
         const GpuSubmissionPacketId packet = compiledPlan.packetIdAt(taskIndex);
         ASSERT_TRUE(packet.valid());
         const GpuCompiledPacketView packetView = compiledPlan.packet(packet);
-        ASSERT_TRUE(GpuDecl_HasPacketTasksPtr(packetView));
-        const Span<GpuTaskId> packetTasks = GpuDecl_PacketTasks(packetView);
+        ASSERT_TRUE(HasPacketTasksPtr(packetView));
+        const Span<GpuTaskId> packetTasks = PacketTasks(packetView);
         ASSERT_EQ(packetTasks.size(), 1u);
         EXPECT_EQ(packetTasks[0u], topologicalTasks[taskIndex]);
     }
@@ -1677,16 +1597,16 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
     lookupOrder[4u] = second;
     lookupOrder[5u] = first;
     for(in GpuTaskId task : lookupOrder){
-        const Optional<GpuTaskQueueAssignment> assignment = GpuDecl_FindAssignment(assignments, task);
+        const Optional<GpuTaskQueueAssignment> assignment = FindQueueAssignment(assignments, task);
         ASSERT_TRUE(assignment.has_value());
         EXPECT_EQ(assignment.value().task, task);
-        const Optional<GpuCompiledTask> compiledTask = GpuDecl_TaskPlan(compiledPlan.findTask(task));
+        const Optional<GpuCompiledTask> compiledTask = TaskPlan(compiledPlan.findTask(task));
         ASSERT_TRUE(compiledTask.has_value());
         EXPECT_EQ(compiledTask.value().task, task);
         EXPECT_EQ(compiledPlan.packetForTask(task), compiledTask.value().packet);
         const GpuCompiledPacketView packetView = compiledPlan.packet(compiledTask.value().packet);
-        ASSERT_TRUE(GpuDecl_HasPacketTasksPtr(packetView));
-        const Span<GpuTaskId> packetTasks = GpuDecl_PacketTasks(packetView);
+        ASSERT_TRUE(HasPacketTasksPtr(packetView));
+        const Span<GpuTaskId> packetTasks = PacketTasks(packetView);
         ASSERT_EQ(packetTasks.size(), 1u);
         EXPECT_EQ(packetTasks[0u], task);
     }
@@ -1704,13 +1624,13 @@ void VerifyGpuDecl_RejectsExplicitCyclesAndExportsExternalMetadata(){
         graphGeneration = declarations.generation();
     }
     Array<GpuTaskId, 1> futureSecondDeps = Array<GpuTaskId, 1>();
-    futureSecondDeps[0u] = GpuDecl_MakeTaskId(graphGeneration, 1u);
-    const auto firstResult = GpuDecl_AddDepTask(s_GpuCaseTaskGraphCycleFirst, "Cycle First", futureSecondDeps, graph);
+    futureSecondDeps[0u] = MakeGpuTaskId(graphGeneration, 1u);
+    const auto firstResult = AddGpuDepTask(s_GpuCaseTaskGraphCycleFirst, "Cycle First", futureSecondDeps, graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
     Array<GpuTaskId, 1> firstDeps = Array<GpuTaskId, 1>();
     firstDeps[0u] = first;
-    const auto secondResult = GpuDecl_AddDepTask(s_GpuCaseTaskGraphCycleSecond, "Cycle Second", firstDeps, graph);
+    const auto secondResult = AddGpuDepTask(s_GpuCaseTaskGraphCycleSecond, "Cycle Second", firstDeps, graph);
     ASSERT_TRUE(secondResult.has_value());
     const GpuTaskId second = secondResult.value();
     ASSERT_TRUE(first.valid());
@@ -1788,10 +1708,10 @@ void VerifyGpuDecl_RejectsDeepExplicitCyclesWithoutCallStackGrowth(){
         graphGeneration = declarations.generation();
     }
     Array<GpuTaskId, 1> futureLastDeps = Array<GpuTaskId, 1>();
-    futureLastDeps[0u] = GpuDecl_MakeTaskId(graphGeneration, cast<u32>(taskCount - 1u));
+    futureLastDeps[0u] = MakeGpuTaskId(graphGeneration, cast<u32>(taskCount - 1u));
     const auto derivedNameResult = IndexedName(s_TaskGraphDeepCycleTask, 0u);
     ASSERT_TRUE(derivedNameResult.has_value());
-    const auto firstResult = GpuDecl_AddDepTask(derivedNameResult.value(), s_GpuDeclDeepCycleTaskLabel, futureLastDeps, graph);
+    const auto firstResult = AddGpuDepTask(derivedNameResult.value(), s_GpuDeclDeepCycleTaskLabel, futureLastDeps, graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
     ASSERT_TRUE(first.valid());
@@ -1802,7 +1722,7 @@ void VerifyGpuDecl_RejectsDeepExplicitCyclesWithoutCallStackGrowth(){
         ASSERT_TRUE(secondDerivedNameResult.has_value());
         Array<GpuTaskId, 1> prevDeps = Array<GpuTaskId, 1>();
         prevDeps[0u] = previous;
-        const auto currentResult = GpuDecl_AddDepTask(secondDerivedNameResult.value(), s_GpuDeclDeepCycleTaskLabel, prevDeps, graph);
+        const auto currentResult = AddGpuDepTask(secondDerivedNameResult.value(), s_GpuDeclDeepCycleTaskLabel, prevDeps, graph);
         ASSERT_TRUE(currentResult.has_value());
         const GpuTaskId current = currentResult.value();
         ASSERT_TRUE(current.valid());
@@ -1816,7 +1736,7 @@ void VerifyGpuDecl_RejectsDeepExplicitCyclesWithoutCallStackGrowth(){
     ASSERT_EQ(analysis.cyclePath().size(), taskCount + 1u);
     ASSERT_EQ(analysis.cycleEdges().size(), taskCount);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        const GpuTaskId expectedTask = GpuDecl_MakeTaskId(graphGeneration, cast<u32>(taskIndex));
+        const GpuTaskId expectedTask = MakeGpuTaskId(graphGeneration, cast<u32>(taskIndex));
         EXPECT_EQ(analysis.cyclePath()[taskIndex], expectedTask);
         EXPECT_EQ(analysis.cycleEdges()[taskIndex].producer, analysis.cyclePath()[taskIndex]);
         EXPECT_EQ(analysis.cycleEdges()[taskIndex].consumer, analysis.cyclePath()[taskIndex + 1u]);

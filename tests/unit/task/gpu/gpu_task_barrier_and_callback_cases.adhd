@@ -233,70 +233,6 @@ const usize s_GpuBarrierMergeGroupSize = 2u;
 const usize s_GpuBarrierExtraRangeTasks = 4u;
 const usize s_GpuBarrierExcludedPacketCount = 1u;
 
-SingleQueueCompile GpuBarrier_MakeSingleQueueCompile(mut TestArena testArena){
-    return SingleQueueCompile(testArena);
-}
-
-GpuPhysicalQueueTopology GpuBarrier_MakeTopology(in Span<GpuPhysicalQueueInfo> queues){
-    return MakeTopology(queues);
-}
-
-b8 GpuBarrier_HasEdge(in GpuTaskGraphAnalysis analysis, in GpuTaskId producer, in GpuTaskId consumer){
-    return HasEdge(analysis, producer, consumer);
-}
-
-Optional<GpuCompiledTask> GpuBarrier_TaskPlan(in GpuCompiledTaskView view){
-    return TaskPlan(view);
-}
-
-b8 GpuBarrier_HasPrologueSeedsPtr(in GpuCompiledTaskView view){
-    return HasPrologueStateSeedsPtr(view);
-}
-
-b8 GpuBarrier_HasPrologueBarriersPtr(in GpuCompiledTaskView view){
-    return HasPrologueBarriersPtr(view);
-}
-
-b8 GpuBarrier_HasEpilogueBarriersPtr(in GpuCompiledTaskView view){
-    return HasEpilogueBarriersPtr(view);
-}
-
-Span<GpuPacketStateSeed> GpuBarrier_PrologueSeeds(in GpuCompiledTaskView view){
-    return PrologueStateSeeds(view);
-}
-
-Span<GpuCompiledBarrier> GpuBarrier_PrologueBarriers(in GpuCompiledTaskView view){
-    return PrologueBarriers(view);
-}
-
-Span<GpuCompiledBarrier> GpuBarrier_EpilogueBarriers(in GpuCompiledTaskView view){
-    return EpilogueBarriers(view);
-}
-
-Optional<GpuSubmissionPacket> GpuBarrier_PacketPlan(in GpuCompiledPacketView view){
-    return PacketPlan(view);
-}
-
-Span<GpuPacketDependency> GpuBarrier_PacketDependencies(in GpuCompiledPacketView view){
-    return PacketDependencies(view);
-}
-
-Span<GpuTaskId> GpuBarrier_PacketTasks(in GpuCompiledPacketView view){
-    return PacketTasks(view);
-}
-
-Optional<GpuCompiledExternalResourceExport> GpuBarrier_ExportPlan(in GpuCompiledExternalResourceExportView view){
-    return ExportPlan(view);
-}
-
-Span<GpuCompiledExternalResourceExportSource> GpuBarrier_ExportSources(in GpuCompiledExternalResourceExportView view){
-    return ExportSources(view);
-}
-
-Optional<GpuCompiledOwnershipTransfer> GpuBarrier_OwnershipTransferAt(in GpuCompiledGraphReadView plan, in usize index){
-    return LogicalOwnershipTransferAtValue(plan, index);
-}
-
 GpuTaskResourceUse GpuBarrier_MakeResourceUse(
     in GpuGraphResourceId resource,
     in GpuResourceStatesMask requiredState,
@@ -370,10 +306,6 @@ Optional<GpuCompiledBarrier> GpuBarrier_FindRangeBarrier(
     return Optional<GpuCompiledBarrier>();
 }
 
-b8 GpuBarrier_HasFatalFailure(){
-    return TestHasFatalFailure();
-}
-
 void VerifyGpuBarrier_ForcesMergedSameStateWriteDependenciesAcrossResourceKinds(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -434,14 +366,14 @@ void VerifyGpuBarrier_ForcesMergedSameStateWriteDependenciesAcrossResourceKinds(
     const GpuTaskId consumer = consumerResult.value();
     ASSERT_TRUE(consumer.valid());
 
-    SingleQueueCompile singleQueueCompile = GpuBarrier_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
     const GpuCompiledTaskView producerView = compiledPlan.findTask(producer);
     const GpuCompiledTaskView consumerView = compiledPlan.findTask(consumer);
-    const Optional<GpuCompiledTask> compiledProducer = GpuBarrier_TaskPlan(producerView);
-    const Optional<GpuCompiledTask> compiledConsumer = GpuBarrier_TaskPlan(consumerView);
+    const Optional<GpuCompiledTask> compiledProducer = TaskPlan(producerView);
+    const Optional<GpuCompiledTask> compiledConsumer = TaskPlan(consumerView);
     ASSERT_TRUE(compiledProducer.has_value());
     ASSERT_TRUE(compiledConsumer.has_value());
     EXPECT_EQ(compiledProducer.value().packet, compiledConsumer.value().packet);
@@ -449,10 +381,10 @@ void VerifyGpuBarrier_ForcesMergedSameStateWriteDependenciesAcrossResourceKinds(
     ASSERT_EQ(compiledConsumer.value().prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledConsumer.value().prologueBarrierCount, 5u);
 
-    ASSERT_TRUE(GpuBarrier_HasPrologueBarriersPtr(producerView));
-    ASSERT_TRUE(GpuBarrier_HasPrologueBarriersPtr(consumerView));
-    const Span<GpuCompiledBarrier> producerBarriers = GpuBarrier_PrologueBarriers(producerView);
-    const Span<GpuCompiledBarrier> consumerBarriers = GpuBarrier_PrologueBarriers(consumerView);
+    ASSERT_TRUE(HasPrologueBarriersPtr(producerView));
+    ASSERT_TRUE(HasPrologueBarriersPtr(consumerView));
+    const Span<GpuCompiledBarrier> producerBarriers = PrologueBarriers(producerView);
+    const Span<GpuCompiledBarrier> consumerBarriers = PrologueBarriers(consumerView);
     for(in GpuCompiledBarrier barrier : producerBarriers)
         EXPECT_FALSE(barrier.forceMemoryDependency);
 
@@ -516,16 +448,16 @@ void VerifyGpuBarrier_PlansPacketBoundaryTransitionsAndUavDependencies(){
     ASSERT_TRUE(uavReader.valid());
     ASSERT_TRUE(shaderReader.valid());
 
-    SingleQueueCompile singleQueueCompile = GpuBarrier_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
     const GpuCompiledTaskView writerView = compiledPlan.findTask(writer);
     const GpuCompiledTaskView uavView = compiledPlan.findTask(uavReader);
     const GpuCompiledTaskView shaderView = compiledPlan.findTask(shaderReader);
-    const Optional<GpuCompiledTask> compiledWriter = GpuBarrier_TaskPlan(writerView);
-    const Optional<GpuCompiledTask> compiledUavReader = GpuBarrier_TaskPlan(uavView);
-    const Optional<GpuCompiledTask> compiledShaderReader = GpuBarrier_TaskPlan(shaderView);
+    const Optional<GpuCompiledTask> compiledWriter = TaskPlan(writerView);
+    const Optional<GpuCompiledTask> compiledUavReader = TaskPlan(uavView);
+    const Optional<GpuCompiledTask> compiledShaderReader = TaskPlan(shaderView);
     ASSERT_TRUE(compiledWriter.has_value());
     ASSERT_TRUE(compiledUavReader.has_value());
     ASSERT_TRUE(compiledShaderReader.has_value());
@@ -536,11 +468,11 @@ void VerifyGpuBarrier_PlansPacketBoundaryTransitionsAndUavDependencies(){
     ASSERT_EQ(compiledUavReader.value().prologueBarrierCount, 1u);
     ASSERT_EQ(compiledShaderReader.value().prologueBarrierCount, 1u);
 
-    const Span<GpuCompiledBarrier> writerBarriers = GpuBarrier_PrologueBarriers(writerView);
-    const Span<GpuCompiledBarrier> uavBarriers = GpuBarrier_PrologueBarriers(uavView);
-    const Span<GpuCompiledBarrier> shaderBarriers = GpuBarrier_PrologueBarriers(shaderView);
-    const Span<GpuPacketStateSeed> uavSeeds = GpuBarrier_PrologueSeeds(uavView);
-    const Span<GpuPacketStateSeed> shaderSeeds = GpuBarrier_PrologueSeeds(shaderView);
+    const Span<GpuCompiledBarrier> writerBarriers = PrologueBarriers(writerView);
+    const Span<GpuCompiledBarrier> uavBarriers = PrologueBarriers(uavView);
+    const Span<GpuCompiledBarrier> shaderBarriers = PrologueBarriers(shaderView);
+    const Span<GpuPacketStateSeed> uavSeeds = PrologueStateSeeds(uavView);
+    const Span<GpuPacketStateSeed> shaderSeeds = PrologueStateSeeds(shaderView);
     ASSERT_EQ(writerBarriers.size(), 1u);
     ASSERT_EQ(uavBarriers.size(), 1u);
     ASSERT_EQ(shaderBarriers.size(), 1u);
@@ -593,20 +525,20 @@ void VerifyGpuBarrier_PlansCompositeUavDependencies(){
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
 
-    SingleQueueCompile singleQueueCompile = GpuBarrier_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
     const GpuCompiledTaskView producerView = compiledPlan.findTask(producer);
     const GpuCompiledTaskView consumerView = compiledPlan.findTask(consumer);
-    const Optional<GpuCompiledTask> compiledProducer = GpuBarrier_TaskPlan(producerView);
-    const Optional<GpuCompiledTask> compiledConsumer = GpuBarrier_TaskPlan(consumerView);
+    const Optional<GpuCompiledTask> compiledProducer = TaskPlan(producerView);
+    const Optional<GpuCompiledTask> compiledConsumer = TaskPlan(consumerView);
     ASSERT_TRUE(compiledProducer.has_value());
     ASSERT_TRUE(compiledConsumer.has_value());
     ASSERT_EQ(compiledConsumer.value().prologueStateSeedCount, 2u);
     ASSERT_EQ(compiledConsumer.value().prologueBarrierCount, 2u);
 
-    const Span<GpuCompiledBarrier> consumerBarriers = GpuBarrier_PrologueBarriers(consumerView);
+    const Span<GpuCompiledBarrier> consumerBarriers = PrologueBarriers(consumerView);
     ASSERT_EQ(consumerBarriers.size(), 2u);
     b8 hasTextureUavBarrier = false;
     b8 hasBufferUavBarrier = false;
@@ -626,7 +558,7 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
     TestArena testArena = TestArena();
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     {
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -658,8 +590,8 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
 
         const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
         const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(consumer);
-        const Optional<GpuCompiledTask> compiledProducer = GpuBarrier_TaskPlan(compiledProducerView);
-        const Optional<GpuCompiledTask> compiledConsumer = GpuBarrier_TaskPlan(compiledConsumerView);
+        const Optional<GpuCompiledTask> compiledProducer = TaskPlan(compiledProducerView);
+        const Optional<GpuCompiledTask> compiledConsumer = TaskPlan(compiledConsumerView);
         ASSERT_TRUE(compiledProducer.has_value());
         ASSERT_TRUE(compiledConsumer.has_value());
         EXPECT_NE(compiledProducer.value().packet, compiledConsumer.value().packet);
@@ -667,9 +599,9 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
         ASSERT_EQ(compiledConsumer.value().prologueStateSeedCount, 1u);
         ASSERT_EQ(compiledConsumer.value().prologueBarrierCount, 1u);
 
-        const Span<GpuCompiledBarrier> producerBarriers = GpuBarrier_PrologueBarriers(compiledProducerView);
-        const Span<GpuPacketStateSeed> consumerSeeds = GpuBarrier_PrologueSeeds(compiledConsumerView);
-        const Span<GpuCompiledBarrier> consumerBarriers = GpuBarrier_PrologueBarriers(compiledConsumerView);
+        const Span<GpuCompiledBarrier> producerBarriers = PrologueBarriers(compiledProducerView);
+        const Span<GpuPacketStateSeed> consumerSeeds = PrologueStateSeeds(compiledConsumerView);
+        const Span<GpuCompiledBarrier> consumerBarriers = PrologueBarriers(compiledConsumerView);
         ASSERT_EQ(producerBarriers.size(), 1u);
         ASSERT_EQ(consumerSeeds.size(), 1u);
         ASSERT_EQ(consumerBarriers.size(), 1u);
@@ -708,10 +640,10 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
         const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
-        const Optional<GpuCompiledTask> compiledProducer = GpuBarrier_TaskPlan(compiledProducerView);
+        const Optional<GpuCompiledTask> compiledProducer = TaskPlan(compiledProducerView);
         ASSERT_TRUE(compiledProducer.has_value());
         ASSERT_EQ(compiledProducer.value().epilogueBarrierCount, 1u);
-        const Span<GpuCompiledBarrier> exportBarriers = GpuBarrier_EpilogueBarriers(compiledProducerView);
+        const Span<GpuCompiledBarrier> exportBarriers = EpilogueBarriers(compiledProducerView);
         ASSERT_EQ(exportBarriers.size(), 1u);
         EXPECT_EQ(exportBarriers[0u].type, GpuCompiledBarrierType::TextureStateExport);
         EXPECT_EQ(exportBarriers[0u].before, ResourceStates::RenderTarget);
@@ -725,7 +657,7 @@ void VerifyGpuBarrier_PlansGraphInitialStateForUncoveredLaterTextureSubresources
     TestArena testArena = TestArena();
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuGraphResourceDesc desc = GpuGraphResourceDesc();
@@ -762,10 +694,10 @@ void VerifyGpuBarrier_PlansGraphInitialStateForUncoveredLaterTextureSubresources
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledTaskView taskView = compiledPlan.findTask(task);
-    const Optional<GpuCompiledTask> compiledTask = GpuBarrier_TaskPlan(taskView);
+    const Optional<GpuCompiledTask> compiledTask = TaskPlan(taskView);
     ASSERT_TRUE(compiledTask.has_value());
     ASSERT_EQ(compiledTask.value().prologueBarrierCount, 2u);
-    const Span<GpuCompiledBarrier> barriers = GpuBarrier_PrologueBarriers(taskView);
+    const Span<GpuCompiledBarrier> barriers = PrologueBarriers(taskView);
     ASSERT_EQ(barriers.size(), 2u);
 
     b8 hasMipZeroInitialBarrier = false;
@@ -925,14 +857,14 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
-    EXPECT_FALSE(GpuBarrier_HasEdge(analysis, concurrentGraphics, concurrentCompute));
-    EXPECT_FALSE(GpuBarrier_HasEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute));
-    EXPECT_FALSE(GpuBarrier_HasEdge(analysis, exclusiveGraphics, exclusiveCompute));
+    EXPECT_FALSE(HasEdge(analysis, concurrentGraphics, concurrentCompute));
+    EXPECT_FALSE(HasEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute));
+    EXPECT_FALSE(HasEdge(analysis, exclusiveGraphics, exclusiveCompute));
 
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
@@ -961,10 +893,10 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
         const GpuCompiledTaskView defaultConcurrentComputeView = compiledPlan.findTask(defaultConcurrentCompute);
         const GpuCompiledTaskView exclusiveGraphicsView = compiledPlan.findTask(exclusiveGraphics);
         const GpuCompiledTaskView exclusiveComputeView = compiledPlan.findTask(exclusiveCompute);
-        const Optional<GpuCompiledTask> compiledConcurrentCompute = GpuBarrier_TaskPlan(concurrentComputeView);
-        const Optional<GpuCompiledTask> compiledDefaultConcurrentCompute = GpuBarrier_TaskPlan(defaultConcurrentComputeView);
-        const Optional<GpuCompiledTask> compiledExclusiveGraphics = GpuBarrier_TaskPlan(exclusiveGraphicsView);
-        const Optional<GpuCompiledTask> compiledExclusiveCompute = GpuBarrier_TaskPlan(exclusiveComputeView);
+        const Optional<GpuCompiledTask> compiledConcurrentCompute = TaskPlan(concurrentComputeView);
+        const Optional<GpuCompiledTask> compiledDefaultConcurrentCompute = TaskPlan(defaultConcurrentComputeView);
+        const Optional<GpuCompiledTask> compiledExclusiveGraphics = TaskPlan(exclusiveGraphicsView);
+        const Optional<GpuCompiledTask> compiledExclusiveCompute = TaskPlan(exclusiveComputeView);
         ASSERT_TRUE(compiledConcurrentCompute.has_value());
         ASSERT_TRUE(compiledDefaultConcurrentCompute.has_value());
         ASSERT_TRUE(compiledExclusiveGraphics.has_value());
@@ -977,11 +909,11 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
         ASSERT_EQ(compiledExclusiveCompute.value().prologueBarrierCount, 1u);
         ASSERT_EQ(compiledExclusiveGraphics.value().epilogueBarrierCount, 1u);
 
-        EXPECT_FALSE(GpuBarrier_HasPrologueSeedsPtr(concurrentComputeView));
-        const Span<GpuPacketStateSeed> defaultConcurrentSeeds = GpuBarrier_PrologueSeeds(defaultConcurrentComputeView);
-        const Span<GpuPacketStateSeed> exclusiveSeeds = GpuBarrier_PrologueSeeds(exclusiveComputeView);
-        const Span<GpuCompiledBarrier> exclusiveAcquires = GpuBarrier_PrologueBarriers(exclusiveComputeView);
-        const Span<GpuCompiledBarrier> exclusiveReleases = GpuBarrier_EpilogueBarriers(exclusiveGraphicsView);
+        EXPECT_FALSE(HasPrologueStateSeedsPtr(concurrentComputeView));
+        const Span<GpuPacketStateSeed> defaultConcurrentSeeds = PrologueStateSeeds(defaultConcurrentComputeView);
+        const Span<GpuPacketStateSeed> exclusiveSeeds = PrologueStateSeeds(exclusiveComputeView);
+        const Span<GpuCompiledBarrier> exclusiveAcquires = PrologueBarriers(exclusiveComputeView);
+        const Span<GpuCompiledBarrier> exclusiveReleases = EpilogueBarriers(exclusiveGraphicsView);
         ASSERT_EQ(defaultConcurrentSeeds.size(), 1u);
         ASSERT_EQ(exclusiveSeeds.size(), 1u);
         ASSERT_EQ(exclusiveAcquires.size(), 1u);
@@ -996,19 +928,19 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
         EXPECT_EQ(exclusiveReleases[0u].sourceQueue, compiledExclusiveGraphics.value().queue);
         EXPECT_EQ(exclusiveReleases[0u].destinationQueue, compiledExclusiveCompute.value().queue);
 
-        const Optional<GpuSubmissionPacket> concurrentComputePacketPlan = GpuBarrier_PacketPlan(compiledPlan.packet(concurrentComputePacket));
+        const Optional<GpuSubmissionPacket> concurrentComputePacketPlan = PacketPlan(compiledPlan.packet(concurrentComputePacket));
         ASSERT_TRUE(concurrentComputePacketPlan.has_value());
         EXPECT_EQ(concurrentComputePacketPlan.value().dependencyCount, 0u);
 
         const GpuCompiledPacketView defaultConcurrentComputePacketView = compiledPlan.packet(defaultConcurrentComputePacket);
         ASSERT_TRUE(defaultConcurrentComputePacketView.valid());
-        const Span<GpuPacketDependency> defaultConcurrentDeps = GpuBarrier_PacketDependencies(defaultConcurrentComputePacketView);
+        const Span<GpuPacketDependency> defaultConcurrentDeps = PacketDependencies(defaultConcurrentComputePacketView);
         ASSERT_EQ(defaultConcurrentDeps.size(), 1u);
         EXPECT_EQ(defaultConcurrentDeps[0u].producer, defaultConcurrentGraphicsPacket);
 
         const GpuCompiledPacketView exclusiveComputePacketView = compiledPlan.packet(exclusiveComputePacket);
         ASSERT_TRUE(exclusiveComputePacketView.valid());
-        const Span<GpuPacketDependency> exclusiveDeps = GpuBarrier_PacketDependencies(exclusiveComputePacketView);
+        const Span<GpuPacketDependency> exclusiveDeps = PacketDependencies(exclusiveComputePacketView);
         ASSERT_EQ(exclusiveDeps.size(), 1u);
         EXPECT_EQ(exclusiveDeps[0u].producer, exclusiveGraphicsPacket);
     }
@@ -1020,7 +952,7 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
     Array<GpuPhysicalQueueInfo, 2> sameFamilyQueues = Array<GpuPhysicalQueueInfo, 2>();
     sameFamilyQueues[0u] = GraphicsQueue();
     sameFamilyQueues[1u] = sameFamilyComputeQueue;
-    const GpuPhysicalQueueTopology sameFamilyTopology = GpuBarrier_MakeTopology(sameFamilyQueues);
+    const GpuPhysicalQueueTopology sameFamilyTopology = MakeTopology(sameFamilyQueues);
     GpuTaskGraphAnalysis sameFamilyAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments sameFamilyAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph sameFamilyCompiledGraph = GpuCompiledGraph(testArena.arena);
@@ -1029,17 +961,17 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
     const GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyPlan.packetForTask(concurrentGraphics);
     const GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyPlan.packetForTask(concurrentCompute);
     const GpuCompiledTaskView sameFamilyCompiledComputeView = sameFamilyPlan.findTask(concurrentCompute);
-    const Optional<GpuCompiledTask> sameFamilyCompiledCompute = GpuBarrier_TaskPlan(sameFamilyCompiledComputeView);
+    const Optional<GpuCompiledTask> sameFamilyCompiledCompute = TaskPlan(sameFamilyCompiledComputeView);
     ASSERT_TRUE(sameFamilyGraphicsPacket.valid());
     ASSERT_TRUE(sameFamilyComputePacket.valid());
     ASSERT_TRUE(sameFamilyCompiledCompute.has_value());
     ASSERT_EQ(sameFamilyCompiledCompute.value().prologueStateSeedCount, 1u);
-    const Span<GpuPacketStateSeed> sameFamilySeeds = GpuBarrier_PrologueSeeds(sameFamilyCompiledComputeView);
+    const Span<GpuPacketStateSeed> sameFamilySeeds = PrologueStateSeeds(sameFamilyCompiledComputeView);
     ASSERT_EQ(sameFamilySeeds.size(), 1u);
     EXPECT_EQ(sameFamilySeeds[0u].sourcePacket, sameFamilyGraphicsPacket);
     const GpuCompiledPacketView sameFamilyComputePacketView = sameFamilyPlan.packet(sameFamilyComputePacket);
     ASSERT_TRUE(sameFamilyComputePacketView.valid());
-    const Span<GpuPacketDependency> sameFamilyDeps = GpuBarrier_PacketDependencies(sameFamilyComputePacketView);
+    const Span<GpuPacketDependency> sameFamilyDeps = PacketDependencies(sameFamilyComputePacketView);
     ASSERT_EQ(sameFamilyDeps.size(), 1u);
     EXPECT_EQ(sameFamilyDeps[0u].producer, sameFamilyGraphicsPacket);
 }
@@ -1067,20 +999,20 @@ void VerifyGpuBarrier_IndependentIntervalsKeepSeparateInitialStates(){
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
-    EXPECT_FALSE(GpuBarrier_HasEdge(analysis, first, tail));
+    EXPECT_FALSE(HasEdge(analysis, first, tail));
 
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
     const GpuCompiledTaskView tailView = plan.findTask(tail);
     ASSERT_TRUE(tailView.valid());
-    const Optional<GpuCompiledTask> tailPlan = GpuBarrier_TaskPlan(tailView);
+    const Optional<GpuCompiledTask> tailPlan = TaskPlan(tailView);
     ASSERT_TRUE(tailPlan.has_value());
     EXPECT_EQ(tailPlan.value().prologueStateSeedCount, 0u);
-    const Span<GpuCompiledBarrier> tailBarriers = GpuBarrier_PrologueBarriers(tailView);
+    const Span<GpuCompiledBarrier> tailBarriers = PrologueBarriers(tailView);
     ASSERT_EQ(tailBarriers.size(), 1u);
     EXPECT_EQ(tailBarriers[0u].range.bufferRange, tailUses[0u].range.bufferRange);
     EXPECT_EQ(tailBarriers[0u].before, ResourceStates::Common);
@@ -1117,19 +1049,19 @@ void VerifyGpuBarrier_WideConsumerCollectsOlderPrefixAndTailAfterPartialOverwrit
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
-    EXPECT_TRUE(GpuBarrier_HasEdge(analysis, whole, reader));
-    EXPECT_TRUE(GpuBarrier_HasEdge(analysis, middle, reader));
+    EXPECT_TRUE(HasEdge(analysis, whole, reader));
+    EXPECT_TRUE(HasEdge(analysis, middle, reader));
 
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
     const GpuCompiledTaskView readerView = plan.findTask(reader);
     ASSERT_TRUE(readerView.valid());
-    const Span<GpuCompiledBarrier> readerBarriers = GpuBarrier_PrologueBarriers(readerView);
-    const Span<GpuPacketStateSeed> readerSeeds = GpuBarrier_PrologueSeeds(readerView);
+    const Span<GpuCompiledBarrier> readerBarriers = PrologueBarriers(readerView);
+    const Span<GpuPacketStateSeed> readerSeeds = PrologueStateSeeds(readerView);
     ASSERT_EQ(readerBarriers.size(), 3u);
     ASSERT_EQ(readerSeeds.size(), 3u);
     Array<BufferRange, 3> ranges = Array<BufferRange, 3>();
@@ -1147,7 +1079,7 @@ void VerifyGpuBarrier_WideConsumerCollectsOlderPrefixAndTailAfterPartialOverwrit
         }
         EXPECT_EQ(barrier.value().before, expectedBefore);
         EXPECT_EQ(barrier.value().after, ResourceStates::ShaderResource);
-        const Optional<GpuCompiledTask> producerPlan = GpuBarrier_TaskPlan(plan.findTask(expectedProducer));
+        const Optional<GpuCompiledTask> producerPlan = TaskPlan(plan.findTask(expectedProducer));
         ASSERT_TRUE(producerPlan.has_value());
         const GpuSubmissionPacketId producerPacket = producerPlan.value().packet;
         b8 foundSeed = false;
@@ -1183,7 +1115,7 @@ void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -1192,10 +1124,10 @@ void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
 
     const GpuCompiledTaskView taskView = plan.findTask(task);
     ASSERT_TRUE(taskView.valid());
-    const Optional<GpuCompiledTask> taskPlan = GpuBarrier_TaskPlan(taskView);
+    const Optional<GpuCompiledTask> taskPlan = TaskPlan(taskView);
     ASSERT_TRUE(taskPlan.has_value());
     EXPECT_EQ(taskPlan.value().prologueStateSeedCount, 0u);
-    const Span<GpuCompiledBarrier> taskBarriers = GpuBarrier_PrologueBarriers(taskView);
+    const Span<GpuCompiledBarrier> taskBarriers = PrologueBarriers(taskView);
     ASSERT_EQ(taskBarriers.size(), 3u);
     Array<BufferRange, 3> ranges = Array<BufferRange, 3>();
     ranges[0u] = BufferRange(32u, 32u);
@@ -1213,7 +1145,7 @@ void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
 
     const GpuCompiledTaskView readerView = plan.findTask(reader);
     ASSERT_TRUE(readerView.valid());
-    const Span<GpuCompiledBarrier> readerBarriers = GpuBarrier_PrologueBarriers(readerView);
+    const Span<GpuCompiledBarrier> readerBarriers = PrologueBarriers(readerView);
     ASSERT_EQ(readerBarriers.size(), 1u);
     EXPECT_EQ(readerBarriers[0u].range.bufferRange, readUses[0u].range.bufferRange);
     EXPECT_EQ(readerBarriers[0u].before, ResourceStates::UnorderedAccess);
@@ -1228,7 +1160,7 @@ void VerifyGpuBarrier_ExportsEveryTerminalIntervalIncludingSymbolicTail(){
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
     queues[2u] = DedicatedTransferQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuGraphResourceDesc desc = GpuGraphResourceDesc();
     desc.setIdentity(s_GpuCaseBufferRangeExport);
@@ -1261,11 +1193,11 @@ void VerifyGpuBarrier_ExportsEveryTerminalIntervalIncludingSymbolicTail(){
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
     const GpuCompiledExternalResourceExportView exportView = plan.externalResourceExport(buffer);
     ASSERT_TRUE(exportView.valid());
-    const Optional<GpuCompiledExternalResourceExport> exportPlan = GpuBarrier_ExportPlan(exportView);
+    const Optional<GpuCompiledExternalResourceExport> exportPlan = ExportPlan(exportView);
     ASSERT_TRUE(exportPlan.has_value());
     ASSERT_EQ(exportPlan.value().sourceCount, 3u);
     EXPECT_FALSE(exportPlan.value().producerTask.valid());
-    const Span<GpuCompiledExternalResourceExportSource> exportSources = GpuBarrier_ExportSources(exportView);
+    const Span<GpuCompiledExternalResourceExportSource> exportSources = ExportSources(exportView);
     ASSERT_EQ(exportSources.size(), 3u);
 
     Array<BufferRange, 3> ranges = Array<BufferRange, 3>();
@@ -1278,7 +1210,7 @@ void VerifyGpuBarrier_ExportsEveryTerminalIntervalIncludingSymbolicTail(){
             producer = middle;
         const GpuCompiledTaskView taskView = plan.findTask(producer);
         ASSERT_TRUE(taskView.valid());
-        const Span<GpuCompiledBarrier> epilogueBarriers = GpuBarrier_EpilogueBarriers(taskView);
+        const Span<GpuCompiledBarrier> epilogueBarriers = EpilogueBarriers(taskView);
         const Optional<GpuCompiledBarrier> stateExport = GpuBarrier_FindRangeBarrier(epilogueBarriers, ranges[index], GpuCompiledBarrierType::BufferStateExport);
         ASSERT_TRUE(stateExport.has_value());
         EXPECT_EQ(stateExport.value().after, ResourceStates::ShaderResource);
@@ -1300,7 +1232,7 @@ void VerifyGpuBarrier_CrossQueueFanInTransfersOnlyIntersectingBytes(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseBufferRangeCrossQueue, "Cross Queue Bytes");
     ASSERT_TRUE(bufferResult.has_value());
@@ -1329,27 +1261,27 @@ void VerifyGpuBarrier_CrossQueueFanInTransfersOnlyIntersectingBytes(){
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
-    EXPECT_FALSE(GpuBarrier_HasEdge(analysis, graphics, compute));
+    EXPECT_FALSE(HasEdge(analysis, graphics, compute));
 
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
     const GpuCompiledTaskView computeView = plan.findTask(compute);
     const GpuCompiledTaskView readerView = plan.findTask(reader);
     ASSERT_TRUE(computeView.valid());
     ASSERT_TRUE(readerView.valid());
-    const Optional<GpuCompiledTask> computePlan = GpuBarrier_TaskPlan(computeView);
-    const Optional<GpuCompiledTask> readerPlan = GpuBarrier_TaskPlan(readerView);
+    const Optional<GpuCompiledTask> computePlan = TaskPlan(computeView);
+    const Optional<GpuCompiledTask> readerPlan = TaskPlan(readerView);
     ASSERT_TRUE(computePlan.has_value());
     ASSERT_TRUE(readerPlan.has_value());
     EXPECT_EQ(computePlan.value().queue, queues[1u].id);
     EXPECT_EQ(readerPlan.value().prologueStateSeedCount, 2u);
     ASSERT_EQ(plan.logicalOwnershipTransferCount(), 1u);
-    const Optional<GpuCompiledOwnershipTransfer> transfer = GpuBarrier_OwnershipTransferAt(plan, 0u);
+    const Optional<GpuCompiledOwnershipTransfer> transfer = LogicalOwnershipTransferAtValue(plan, 0u);
     ASSERT_TRUE(transfer.has_value());
     EXPECT_EQ(transfer.value().range.bufferRange, BufferRange(64u, 32u));
     EXPECT_EQ(transfer.value().sourceTask, compute);
     EXPECT_EQ(transfer.value().destinationTask, reader);
-    EXPECT_TRUE(GpuBarrier_FindRangeBarrier(GpuBarrier_EpilogueBarriers(computeView), BufferRange(64u, 32u), GpuCompiledBarrierType::BufferOwnershipRelease).has_value());
-    EXPECT_TRUE(GpuBarrier_FindRangeBarrier(GpuBarrier_PrologueBarriers(readerView), BufferRange(64u, 32u), GpuCompiledBarrierType::BufferOwnershipAcquire).has_value());
+    EXPECT_TRUE(GpuBarrier_FindRangeBarrier(EpilogueBarriers(computeView), BufferRange(64u, 32u), GpuCompiledBarrierType::BufferOwnershipRelease).has_value());
+    EXPECT_TRUE(GpuBarrier_FindRangeBarrier(PrologueBarriers(readerView), BufferRange(64u, 32u), GpuCompiledBarrierType::BufferOwnershipAcquire).has_value());
 }
 
 void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrder(){
@@ -1361,7 +1293,7 @@ void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrd
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
     queues[2u] = DedicatedTransferQueue();
-    const GpuPhysicalQueueTopology topology = GpuBarrier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     Array<Name, 2> identities = Array<Name, 2>();
     identities[0u] = s_GpuCaseBufferRangeGroupedA;
@@ -1423,11 +1355,11 @@ void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrd
         const GpuScopedTrace trace = GpuScopedTrace(index);
         const GpuCompiledTaskView writer = plan.findTask(writers[index]);
         ASSERT_TRUE(writer.valid());
-        const Optional<GpuCompiledTask> writerPlan = GpuBarrier_TaskPlan(writer);
+        const Optional<GpuCompiledTask> writerPlan = TaskPlan(writer);
         ASSERT_TRUE(writerPlan.has_value());
         ASSERT_EQ(writerPlan.value().epilogueBarrierCount, 1u);
         EXPECT_EQ(writerPlan.value().epilogueBarrierOffset, resources.size() - index - 1u);
-        const Span<GpuCompiledBarrier> writerBarriers = GpuBarrier_EpilogueBarriers(writer);
+        const Span<GpuCompiledBarrier> writerBarriers = EpilogueBarriers(writer);
         ASSERT_EQ(writerBarriers.size(), 1u);
         EXPECT_EQ(writerBarriers[0u].resource, resources[index]);
         EXPECT_EQ(writerBarriers[0u].range.bufferRange, ranges[index]);
@@ -1437,11 +1369,11 @@ void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrd
 
         const GpuCompiledTaskView consumer = plan.findTask(consumers[index]);
         ASSERT_TRUE(consumer.valid());
-        const Optional<GpuCompiledTask> consumerPlan = GpuBarrier_TaskPlan(consumer);
+        const Optional<GpuCompiledTask> consumerPlan = TaskPlan(consumer);
         ASSERT_TRUE(consumerPlan.has_value());
         ASSERT_EQ(consumerPlan.value().epilogueBarrierCount, 2u);
         EXPECT_EQ(consumerPlan.value().epilogueBarrierOffset, 2u + index * 2u);
-        const Span<GpuCompiledBarrier> consumerBarriers = GpuBarrier_EpilogueBarriers(consumer);
+        const Span<GpuCompiledBarrier> consumerBarriers = EpilogueBarriers(consumer);
         ASSERT_EQ(consumerBarriers.size(), 2u);
         EXPECT_EQ(consumerBarriers[0u].type, GpuCompiledBarrierType::BufferStateExport);
         EXPECT_EQ(consumerBarriers[1u].type, GpuCompiledBarrierType::BufferOwnershipRelease);
@@ -1460,11 +1392,11 @@ void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrd
     }
     const GpuCompiledTaskView emptyView = plan.findTask(empty);
     ASSERT_TRUE(emptyView.valid());
-    const Optional<GpuCompiledTask> emptyPlan = GpuBarrier_TaskPlan(emptyView);
+    const Optional<GpuCompiledTask> emptyPlan = TaskPlan(emptyView);
     ASSERT_TRUE(emptyPlan.has_value());
     EXPECT_EQ(emptyPlan.value().epilogueBarrierOffset, 6u);
     EXPECT_EQ(emptyPlan.value().epilogueBarrierCount, 0u);
-    EXPECT_FALSE(GpuBarrier_HasEpilogueBarriersPtr(emptyView));
+    EXPECT_FALSE(HasEpilogueBarriersPtr(emptyView));
 }
 
 b8 GpuBarrier_PrepareCallbackGraph(
@@ -1507,7 +1439,7 @@ b8 GpuBarrier_PrepareCallbackGraph(
         const GpuCompiledPacketView packet = plan.packet(plan.packetIdAt(packetIndex));
         if(!packet.valid())
             return false;
-        const Span<GpuTaskId> packetTasks = GpuBarrier_PacketTasks(packet);
+        const Span<GpuTaskId> packetTasks = PacketTasks(packet);
         for(in GpuTaskId packetTask : packetTasks)
             tasks.push_back(packetTask);
     }
@@ -1560,9 +1492,9 @@ void VerifyGpuBarrier_ReversedBindingsInvokeInMergedCompiledTaskOrderWithoutLook
     counts[1u] = s_GpuBarrierIndexedCount;
     for(in usize count : counts){
         GpuBarrier_CheckReorderedBindingsForKind(testArena, scratch, count, true);
-        ASSERT_FALSE(GpuBarrier_HasFatalFailure());
+        ASSERT_FALSE(TestHasFatalFailure());
         GpuBarrier_CheckReorderedBindingsForKind(testArena, scratch, count, false);
-        ASSERT_FALSE(GpuBarrier_HasFatalFailure());
+        ASSERT_FALSE(TestHasFatalFailure());
     }
 }
 
@@ -1574,9 +1506,9 @@ void VerifyGpuBarrier_FailedAdmissionClearsPriorBindingsForBothLookupPaths(){
     counts[1u] = s_GpuBarrierIndexedCount;
     for(in usize count : counts){
         GpuBarrier_CheckInvalidBindingsForKind(testArena, scratch, count, true);
-        ASSERT_FALSE(GpuBarrier_HasFatalFailure());
+        ASSERT_FALSE(TestHasFatalFailure());
         GpuBarrier_CheckInvalidBindingsForKind(testArena, scratch, count, false);
-        ASSERT_FALSE(GpuBarrier_HasFatalFailure());
+        ASSERT_FALSE(TestHasFatalFailure());
     }
 }
 

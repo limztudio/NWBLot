@@ -768,26 +768,13 @@ Rect ComputeUiTextVisibleRasterFringe(in Rect raster, in Rect outline){
     return Rect();
 }
 
-ShapeRequest MakeUiTextRegionShapeRequest(in StringView text, in f32 fontSize){
-    ShapeRequest request = ShapeRequest();
-    request.text = text;
-    request.fontSize = fontSize;
-    return request;
-}
-
-ShapeRequest MakeUiTextRegionDefaultShapeRequest(in StringView text){
-    ShapeRequest request = ShapeRequest();
-    request.text = text;
-    return request;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales(mut UiTextRegionTests self){
     Label label = Label(self.m_arena);
-    ASSERT_EQ(label.setText(MakeUiTextRegionShapeRequest(s_UiTextRegionOverflowText, 16.0f)), TextLayoutStatus::Success);
+    ASSERT_EQ(label.setText(MakeUiShapeRequest(s_UiTextRegionOverflowText, 16.0f)), TextLayoutStatus::Success);
     u64 generation = 1u;
     Array<f32, 3u> scales;
     scales[0u] = 1.0f;
@@ -825,7 +812,7 @@ void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResiz
 
 void VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling(mut UiTextRegionTests self){
     Label label = Label(self.m_arena);
-    ASSERT_EQ(label.setText(MakeUiTextRegionDefaultShapeRequest(s_UiTextRegionOverflowText)), TextLayoutStatus::Success);
+    ASSERT_EQ(label.setText(MakeUiDefaultShapeRequest(s_UiTextRegionOverflowText)), TextLayoutStatus::Success);
     const Rect inherited = Rect(10.0f, 10.0f, 180.0f, 120.0f);
     u64 generation = 1u;
     Array<Rect, 4u> emptyRegions;
@@ -847,7 +834,7 @@ void VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBefo
         EXPECT_TRUE(snapshot.vertices().empty());
         EXPECT_TRUE(snapshot.indices().empty());
     }
-    ASSERT_EQ(label.setText(MakeUiTextRegionDefaultShapeRequest("MMMMMMMMMMMM")), TextLayoutStatus::Success);
+    ASSERT_EQ(label.setText(MakeUiDefaultShapeRequest("MMMMMMMMMMMM")), TextLayoutStatus::Success);
     self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
     self.m_paint.pushClip(inherited);
     EXPECT_FALSE(label.paint(self.m_text, self.m_paint, Rect(20.0f, 20.0f, 30.0f, 20.0f), Color(1.0f, 1.0f, 1.0f, 2.0f)));
@@ -979,7 +966,7 @@ void VerifyUiTextRegionTests_SelectableCentersWithinAsymmetricVerticalPaddingIns
     const DrawSnapshot actual = self.m_paint.freeze();
     const Rect content = Rect(20.0f, 35.0f, 70.0f, 54.0f);
     ExpectUiTextGlyphRegion(actual, content);
-    auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(text, self.m_builder.style().fontSize));
+    auto layout = self.m_text.layout(MakeUiShapeRequest(text, self.m_builder.style().fontSize));
     ASSERT_TRUE(layout.has_value());
     const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f);
     const auto measured = self.m_text.measure(layout.value(), display);
@@ -1097,7 +1084,7 @@ void VerifyUiTextRegionTests_ContentRowsPreserveDescendersStackedAccentsMultilin
     samples[1u] = s_UiTextRegionPaddedStackedAccentSample;
     samples[2u] = "Previous\nA\xCC\x81\xCC\x81 gjpqy g\xCC\xA3 ";
     samples[3u] = "\xED\x95\x9C\xEA\xB8\x80 Agjpqy A\xCC\x81 e\xCC\x88 ";
-    auto mixed = self.m_text.layout(MakeUiTextRegionDefaultShapeRequest(samples[3u]));
+    auto mixed = self.m_text.layout(MakeUiDefaultShapeRequest(samples[3u]));
     ASSERT_TRUE(mixed.has_value());
     b8 sawLatin = false;
     b8 sawKorean = false;
@@ -1152,7 +1139,7 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             EditModel model = EditModel(self.m_arena);
             ASSERT_TRUE(model.setText(sample));
             EditBoxState state = EditBoxState();
-            auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(sample, 16.0f));
+            auto layout = self.m_text.layout(MakeUiShapeRequest(sample, 16.0f));
             ASSERT_TRUE(layout.has_value());
             const auto measured = self.m_text.measure(layout.value(), display);
             ASSERT_TRUE(measured.has_value());
@@ -1273,7 +1260,7 @@ void VerifyUiTextRegionTests_SelectableMetricsUseEveryStatePaddingAndMinimumWith
     EXPECT_FLOAT_EQ(metrics.value().padding.bottom, 15.0f);
     EXPECT_FLOAT_EQ(metrics.value().minimum.x, 100.0f);
     EXPECT_FLOAT_EQ(metrics.value().minimum.y, 55.0f);
-    const auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest("Agjpqy", 16.0f));
+    const auto layout = self.m_text.layout(MakeUiShapeRequest("Agjpqy", 16.0f));
     ASSERT_TRUE(layout.has_value());
     const auto textBounds = self.m_text.measure(layout.value(), DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
     ASSERT_TRUE(textBounds.has_value());
@@ -1439,7 +1426,7 @@ void VerifyTextVisibleBakedTests_FullyOutsideBakedGroupsRemainAbsentUntilALaterV
 
 void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry(mut TextVisibleBakedTests self){
     ASSERT_TRUE(self.installBaked("A"));
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("\xED\x95\x9C", 32.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("\xED\x95\x9C", 32.0f)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     ASSERT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
     const u32 warmGlyph = self.m_layout.glyphs()[0u].glyphId;
@@ -1459,7 +1446,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
         ASSERT_TRUE(cast<b8>(page));
         prior.push_back(page);
     }
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("\352\270\200A", 32.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("\352\270\200A", 32.0f)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 2u);
     ASSERT_NE(self.m_layout.glyphs()[0u].glyphId, warmGlyph);
     ASSERT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
@@ -1481,7 +1468,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     ASSERT_EQ(rejected.glyphPages().size(), s_PaintMaxImages);
     EXPECT_EQ(rejected.glyphPages()[0u], oldPage);
     EXPECT_EQ(GlyphPageBindingOf(rejected.glyphPages()[0u]).generation, GlyphPageBindingOf(oldPage).generation);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("\xEA\xB8\x80", 32.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("\xEA\xB8\x80", 32.0f)));
     self.beginPaint(3u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot upgraded = self.m_paint.freeze();
@@ -1503,7 +1490,7 @@ void VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaust
     const u32 s_HangulSyllableBase = 0xac00u;
     for(u32 index = 0u; index < cast<u32>(hiddenCount); ++index)
         ASSERT_TRUE(AppendUiUtf8CodePoint(text, s_HangulSyllableBase + index));
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(StringView(text.data(), text.size()))));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(StringView(text.data(), text.size()))));
     ASSERT_EQ(self.m_layout.lines().size(), 2u);
     ASSERT_EQ(self.m_layout.glyphs().size(), hiddenCount + 1u);
     ASSERT_TRUE(self.m_text.measure(self.m_layout, DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)).has_value());
@@ -1548,7 +1535,7 @@ void VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaust
 }
 
 void VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed(mut TextVisibleCoverageTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest("A\nB")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("A\nB")));
     ASSERT_EQ(self.m_layout.lines().size(), 2u);
     const Rect clip = Rect(0.0f, 0.0f, 100.0f, 20.0f + self.m_layout.lines()[1u].top);
     self.beginPaint(1u);
@@ -1580,9 +1567,9 @@ void VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRev
 }
 
 void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage(mut TextVisibleCoverageTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(s_UiTextVisibleSampleGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleSampleGlyphText)));
     TextLayout oversized = TextLayout(self.m_arena);
-    auto oversizedLayoutResult = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
+    auto oversizedLayoutResult = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
     ASSERT_TRUE(TextVisibleFixture::AdoptLayoutInto(oversizedLayoutResult, oversized));
     self.beginPaint(1u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
@@ -1592,7 +1579,7 @@ void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePri
     ASSERT_TRUE(self.m_text.paint(self.m_paint, oversized, Point(10000.0f, 10000.0f)));
     const DrawSnapshot hidden = self.m_paint.freeze();
     ExpectUiTextVisibleSamePaint(hidden, before);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
     self.beginPaint(3u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot ordinary = self.m_paint.freeze();
@@ -1602,7 +1589,7 @@ void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePri
 }
 
 void VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage(mut TextVisibleCoverageTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f)));
     self.beginPaint(1u);
     self.m_paint.fillRect(Rect(1.0f, 1.0f, 4.0f, 4.0f));
     self.m_paint.pushClip(Rect(10.0f, 10.0f, 20.0f, 20.0f));
@@ -1616,7 +1603,7 @@ void VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepare
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
     self.beginPaint(2u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     EXPECT_FALSE(self.m_paint.freeze().glyphPages().empty());
@@ -1625,7 +1612,7 @@ void VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepare
 void VerifyTextVisibleCoverageTests_FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline(mut TextVisibleCoverageTests self){
     const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.25f, 1.5f);
     const Point origin = Point(40.375f, 20.125f);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 17.25f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest(s_UiTextVisibleWideGlyphText, 17.25f)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
     ASSERT_TRUE(raster.has_value());
@@ -1646,7 +1633,7 @@ void VerifyTextVisibleCoverageTests_FractionalUnequalDpiKeepsAHintedRasterSliver
 void VerifyTextVisibleCoverageTests_FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid(mut TextVisibleCoverageTests self){
     const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.25f, 1.5f);
     const Point origin = Point(40.375f, 20.125f);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("g", 17.25f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("g", 17.25f)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
     ASSERT_TRUE(raster.has_value());
@@ -1662,7 +1649,7 @@ void VerifyTextVisibleCoverageTests_FractionalOriginPlacesNativeCoverageOnThePhy
 void VerifyTextVisibleCoverageTests_NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin(mut TextVisibleCoverageTests self){
     const Point origin = Point(50.0f, 20.0f);
     const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.25f, 1.25f);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("j", 32.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("j", 32.0f)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
     ASSERT_TRUE(raster.has_value());
@@ -1680,7 +1667,7 @@ void VerifyTextVisibleCoverageTests_NegativeBearingRemainsVisibleToTheLeftOfTheG
 void VerifyTextVisibleCoverageTests_CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad(mut TextVisibleCoverageTests self){
     const Point origin = Point(50.0f, 20.0f);
     const DisplayMetrics display = DisplayMetrics(200.0f, 100.0f, 1.5f, 1.5f);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionShapeRequest("x\xcc\x81", 32.0f)));
+    ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("x\xcc\x81", 32.0f)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 2u);
     ASSERT_EQ(self.m_layout.clusters().size(), 1u);
     const auto base = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
@@ -1699,7 +1686,7 @@ void VerifyTextVisibleCoverageTests_CombiningMarkOnlyClipKeepsItsOffsetGlyphAndE
 }
 
 void VerifyTextVisibleCoverageTests_SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace(mut TextVisibleCoverageTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextRegionDefaultShapeRequest("A\n\xed\x95\x9c")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("A\n\xed\x95\x9c")));
     ASSERT_EQ(self.m_layout.lines().size(), 2u);
     const Rect clip = Rect(0.0f, 0.0f, 100.0f, 20.0f + self.m_layout.lines()[1u].top);
     Vector<SharedGlyphPage> prior = Vector<SharedGlyphPage>();
@@ -1729,9 +1716,9 @@ void VerifyTextVisibleCoverageTests_SixtyThreePriorImagesLeaveRoomForOnlyTheVisi
 }
 
 void VerifyTextVisibleCoverageTests_OversizedMeasurementDoesNotAdmitAtlasCoverage(mut TextVisibleCoverageTests self){
-    const auto layout = self.m_text.layout(MakeUiTextRegionDefaultShapeRequest("Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80"));
+    const auto layout = self.m_text.layout(MakeUiDefaultShapeRequest("Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80"));
     ASSERT_TRUE(layout.has_value());
-    const auto large = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
+    const auto large = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
     ASSERT_TRUE(large.has_value());
     ASSERT_TRUE(self.m_text.measure(large.value(), DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)).has_value());
     self.beginPaint(1u);
@@ -1770,7 +1757,7 @@ void VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbac
         const f32 size = sizes[sizeIndex];
         for(usize sampleIndex = 0u; sampleIndex < samples.size(); ++sampleIndex){
             const StringView sample = samples[sampleIndex];
-            const auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(sample, size));
+            const auto layout = self.m_text.layout(MakeUiShapeRequest(sample, size));
             ASSERT_TRUE(layout.has_value());
             for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
                 const Point scale = scales[scaleIndex];
@@ -1806,7 +1793,7 @@ void VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbac
 }
 
 void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage(mut TextVisibleCoverageTests self){
-    const auto initial = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleSampleGlyphText, 32.0f));
+    const auto initial = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleSampleGlyphText, 32.0f));
     ASSERT_TRUE(initial.has_value());
     ASSERT_EQ(initial.value().glyphs().size(), 1u);
     ASSERT_TRUE(self.installMeasuredSdfAtlas(initial.value().glyphs()[0u].glyphId));
@@ -1828,7 +1815,7 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
     usize visibleSamples = 0u;
     for(usize fontSizeIndex = 0u; fontSizeIndex < fontSizes.size(); ++fontSizeIndex){
         const f32 fontSize = fontSizes[fontSizeIndex];
-        const auto layout = self.m_text.layout(MakeUiTextRegionShapeRequest(s_UiTextVisibleSampleGlyphText, fontSize));
+        const auto layout = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleSampleGlyphText, fontSize));
         ASSERT_TRUE(layout.has_value());
         const PlacedGlyph placed = layout.value().glyphs()[0u];
         ASSERT_TRUE(FontFaceHasBakedAtlas(placed.face));

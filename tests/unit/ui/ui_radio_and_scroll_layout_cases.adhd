@@ -215,15 +215,6 @@ const u64 s_UiRadioScrollQuietNaNF64Bits = 0x7ff8000000000000u;
 const u64 s_UiRadioScrollPosInfF64Bits = 0x7ff0000000000000u;
 const u64 s_UiRadioScrollNegZeroF64Bits = 0x8000000000000000u;
 
-Insets MakeUiRadioScrollInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
-    Insets insets = Insets();
-    insets.left = left;
-    insets.top = top;
-    insets.right = right;
-    insets.bottom = bottom;
-    return insets;
-}
-
 RadioGroupChoices MakeUiRadioGroupLayoutChoices(in u32 count){
     RadioGroupChoices choices = RadioGroupChoices();
     choices.sourceGeneration = 41u;
@@ -818,7 +809,7 @@ void VerifyUiScrollLayoutTests_EmptyContentUsesFullPaddedViewportAndEmptyVisible
     const auto placementResult = CalculateScrollPlacement(
         Rect(10.0f, 20.0f, 200.0f, 120.0f),
         Rect(0.0f, 0.0f, 400.0f, 300.0f),
-        MakeUiRadioScrollInsets(8.0f, 6.0f, 4.0f, 14.0f),
+        Insets(8.0f, 6.0f, 4.0f, 14.0f),
         12.0f,
         16.0f,
         0u,
@@ -976,7 +967,7 @@ void VerifyUiScrollLayoutTests_DisjointAndZeroAreaClipsHaveNoVisibleRowsButKeepS
 
 void VerifyUiScrollLayoutTests_PaddingCanCollapseLogicalViewportWithoutNegativeSizes(){
     const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 100.0f);
-    const auto placementResult = CalculateScrollPlacement(bounds, bounds, MakeUiRadioScrollInsets(300.0f, 200.0f, 300.0f, 200.0f), 12.0f, 16.0f, 20u, 20.0f, 40.0);
+    const auto placementResult = CalculateScrollPlacement(bounds, bounds, Insets(300.0f, 200.0f, 300.0f, 200.0f), 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult.has_value());
     const ScrollPlacement placement = placementResult.value();
     ExpectUiRect(placement.viewport, Rect(210.0f, 120.0f, 0.0f, 0.0f));
@@ -1017,7 +1008,7 @@ void VerifyUiScrollLayoutTests_ExtentsBeyondDoubleViewportPrecisionFailInsteadOf
 
 void VerifyUiScrollLayoutTests_InvalidLayoutInputsRejectPlacement(){
     const Rect validBounds = Rect(10.0f, 20.0f, 200.0f, 100.0f);
-    const Insets validPadding = MakeUiRadioScrollInsets(4.0f, 8.0f, 12.0f, 16.0f);
+    const Insets validPadding = Insets(4.0f, 8.0f, 12.0f, 16.0f);
     const f32 nanF32 = bit_cast<f32>(s_UiRadioScrollQuietNaNF32Bits);
     const f32 posInfF32 = bit_cast<f32>(s_UiRadioScrollPosInfF32Bits);
     const f32 negInfF32 = bit_cast<f32>(s_UiRadioScrollNegInfF32Bits);
@@ -1171,7 +1162,7 @@ void VerifyUiScrollbarLayoutTests_FittingContentKeepsPaddedViewportAndClampsStor
     const auto placementResult = CalculateScrollViewportPlacement(
         bounds,
         bounds,
-        MakeUiRadioScrollInsets(8.0f, 6.0f, 4.0f, 14.0f),
+        Insets(8.0f, 6.0f, 4.0f, 14.0f),
         Point(100.0f, 80.0f),
         2.0f,
         Point(40.0f, 60.0f),
@@ -1353,7 +1344,7 @@ void VerifyUiScrollbarLayoutTests_ExcessivePaddingCollapsesViewportWithoutNegati
     const auto placementResult = CalculateScrollViewportPlacement(
         bounds,
         bounds,
-        MakeUiRadioScrollInsets(200.0f, 120.0f, 200.0f, 120.0f),
+        Insets(200.0f, 120.0f, 200.0f, 120.0f),
         Point(399.0f, 300.0f),
         1.0f,
         Point(60.0f, 70.0f),
@@ -1432,7 +1423,7 @@ void VerifyUiScrollbarLayoutTests_OverscrollUpdatesClampBothThumbsAndRestoreExac
 
 void VerifyUiScrollbarLayoutTests_InvalidCalculationInputsRejectPlacement(){
     const Rect bounds = Rect(10.0f, 20.0f, 112.0f, 112.0f);
-    const Insets padding = MakeUiRadioScrollInsets(1.0f, 2.0f, 3.0f, 4.0f);
+    const Insets padding = Insets(1.0f, 2.0f, 3.0f, 4.0f);
     const f32 nan = bit_cast<f32>(s_UiRadioScrollQuietNaNF32Bits);
     const f32 infinity = bit_cast<f32>(s_UiRadioScrollPosInfF32Bits);
     ExpectUiScrollbarViewportRejected(Rect(nan, 20.0f, 112.0f, 112.0f), bounds, padding, Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
@@ -1440,8 +1431,8 @@ void VerifyUiScrollbarLayoutTests_InvalidCalculationInputsRejectPlacement(){
     ExpectUiScrollbarViewportRejected(Rect(f32.max, 0.0f, f32.max, 112.0f), bounds, padding, Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
     ExpectUiScrollbarViewportRejected(bounds, Rect(10.0f, infinity, 112.0f, 112.0f), padding, Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
     ExpectUiScrollbarViewportRejected(bounds, Rect(10.0f, 20.0f, 112.0f, -1.0f), padding, Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
-    ExpectUiScrollbarViewportRejected(bounds, bounds, MakeUiRadioScrollInsets(-1.0f, 2.0f, 3.0f, 4.0f), Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
-    ExpectUiScrollbarViewportRejected(bounds, bounds, MakeUiRadioScrollInsets(1.0f, 2.0f, 3.0f, nan), Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
+    ExpectUiScrollbarViewportRejected(bounds, bounds, Insets(-1.0f, 2.0f, 3.0f, 4.0f), Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
+    ExpectUiScrollbarViewportRejected(bounds, bounds, Insets(1.0f, 2.0f, 3.0f, nan), Point(399.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
     ExpectUiScrollbarViewportRejected(bounds, bounds, padding, Point(-1.0f, 400.0f), 1.0f, Point(), 12.0f, 16.0f);
     ExpectUiScrollbarViewportRejected(bounds, bounds, padding, Point(399.0f, nan), 1.0f, Point(), 12.0f, 16.0f);
     ExpectUiScrollbarViewportRejected(bounds, bounds, padding, Point(infinity, 400.0f), 1.0f, Point(), 12.0f, 16.0f);

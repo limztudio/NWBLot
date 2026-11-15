@@ -398,22 +398,6 @@ SliderResult MakeUiSliderResult(in b8 valid, in b8 valueChanged, in b8 focused, 
     return result;
 }
 
-InputEvent MakeUiSliderPointerEvent(in Point position, in InputEventTypeEnum eventType){
-    InputEvent event = InputEvent();
-    event.position = position;
-    event.type = eventType;
-    return event;
-}
-
-DisplayMetrics MakeUiSliderDisplayMetrics(in f32 width, in f32 height, in f32 scaleX, in f32 scaleY){
-    DisplayMetrics metrics = DisplayMetrics();
-    metrics.logicalWidth = width;
-    metrics.logicalHeight = height;
-    metrics.pixelScaleX = scaleX;
-    metrics.pixelScaleY = scaleY;
-    return metrics;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -805,8 +789,8 @@ void VerifyUiSliderBuilderTests_DisabledSliderKeepsAPointerBarrierWithoutApplyin
     EXPECT_FALSE(disabledHost.value().enabled);
     EXPECT_FALSE(disabledHost.value().focusable);
     const Point center = CenterUiRect(self.m_state.placement().bounds);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(center, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(center, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, center)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, center)).pointerConsumed);
     EXPECT_FALSE(self.m_context.input().focus().valid());
     ASSERT_TRUE(self.accept(3u, disabled));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
@@ -889,7 +873,7 @@ void VerifyUiSliderInputTests_AcceptedKeyRepeatsRemainAddressedToTheSurvivingCon
 void VerifyUiSliderInputTests_TrackPressSeeksDuringFinalPaintAndReleaseOutsideAppliesTheFinalEndpoint(mut UiSliderInputTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point point = self.trackPoint(0.75, self.m_state);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(point, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ASSERT_TRUE(self.declare(2u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
     EXPECT_FALSE(self.m_state.result().valid);
@@ -899,7 +883,7 @@ void VerifyUiSliderInputTests_TrackPressSeeksDuringFinalPaintAndReleaseOutsideAp
     EXPECT_TRUE(self.m_state.result().valueChanged);
     EXPECT_TRUE(self.m_state.result().dragging);
     EXPECT_EQ(self.m_context.input().capture(), self.track());
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(700.0f, 500.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(700.0f, 500.0f))).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
     EXPECT_FALSE(self.m_state.result().dragging);
@@ -914,12 +898,12 @@ void VerifyUiSliderInputTests_OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOve
     const Rect thumbBounds = self.m_state.placement().thumb;
     const Point origin = Point(thumbBounds.x + 3.0f, CenterUiRect(thumbBounds).y);
     const f64 stepped = baseline + 0.125;
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), stepped);
     EXPECT_TRUE(self.m_state.result().dragging);
     EXPECT_EQ(self.m_context.input().capture(), self.thumb());
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, origin)).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), stepped);
     EXPECT_FALSE(self.m_state.result().valueChanged);
@@ -932,8 +916,8 @@ void VerifyUiSliderInputTests_HeldThumbRepaintPreservesCaptureAndReturningToOrig
     const Point origin = self.thumbPoint();
     const Point destination = Point(origin.x + 50.0f, origin.y);
     const f64 travel = cast<f64>(self.m_state.placement().centerTravel.width);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(destination, InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, destination)).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     const f64 displacement = cast<f64>(destination.x) - cast<f64>(origin.x);
     EXPECT_NEAR(self.m_state.value(), baseline + displacement / travel, 0.00000001);
@@ -948,11 +932,11 @@ void VerifyUiSliderInputTests_HeldThumbRepaintPreservesCaptureAndReturningToOrig
     EXPECT_EQ(self.m_context.input().capture(), self.thumb());
     EXPECT_TRUE(self.m_state.result().dragging);
     EXPECT_FALSE(self.m_state.result().valueChanged);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, origin)).pointerConsumed);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(baseline));
     EXPECT_TRUE(self.m_state.result().valueChanged);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, origin)).pointerConsumed);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_FALSE(self.m_state.result().dragging);
 }
@@ -961,10 +945,10 @@ void VerifyUiSliderInputTests_LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedK
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
     const f64 travel = cast<f64>(self.m_state.placement().centerTravel.width);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 30.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 30.0f, origin.y))).pointerConsumed);
     self.press(UiSliderKey::Right);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 60.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 60.0f, origin.y))).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_NEAR(self.m_state.value(), 0.25 + 60.0 / travel, 0.00000001);
     EXPECT_TRUE(self.m_state.result().dragging);
@@ -974,8 +958,8 @@ void VerifyUiSliderInputTests_AKeyAfterTheLatestCoalescedMoveAppliesToTheDragged
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
     const f64 travel = cast<f64>(self.m_state.placement().centerTravel.width);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 60.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 60.0f, origin.y))).pointerConsumed);
     self.press(UiSliderKey::Right);
     ASSERT_TRUE(self.accept(2u));
     const f64 dragged = 0.25 + 60.0 / travel;
@@ -985,16 +969,16 @@ void VerifyUiSliderInputTests_AKeyAfterTheLatestCoalescedMoveAppliesToTheDragged
 void VerifyUiSliderInputTests_DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedCapture(mut UiSliderInputTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(790.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(790.0f, origin.y))).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
     EXPECT_EQ(self.m_context.input().capture(), self.thumb());
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(1.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(1.0f, origin.y))).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.0);
     EXPECT_EQ(self.m_context.input().capture(), self.thumb());
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(1.0f, origin.y), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(1.0f, origin.y))).pointerConsumed);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_FALSE(self.m_state.result().dragging);
 }
@@ -1002,12 +986,12 @@ void VerifyUiSliderInputTests_DragOutsideTravelSaturatesBothEndsWithoutLosingOwn
 void VerifyUiSliderInputTests_CaptureLossCancelsPendingMotionAndRetainsTheLastAppliedValue(mut UiSliderInputTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 40.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 40.0f, origin.y))).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     const u64 retained = bit_cast<u64>(self.m_state.value());
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 80.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(), InputEventType::PointerCaptureLost)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 80.0f, origin.y))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerCaptureLost, Point())).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(bit_cast<u64>(self.m_state.value()), retained);
     EXPECT_FALSE(self.m_state.result().valueChanged);
@@ -1018,13 +1002,13 @@ void VerifyUiSliderInputTests_CaptureLossCancelsPendingMotionAndRetainsTheLastAp
 void VerifyUiSliderInputTests_FocusLossRetiresPendingDragAndHeldNavigationWithoutRollingBackAppliedInput(mut UiSliderInputTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     self.press(UiSliderKey::Right);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 80.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(), InputEventType::FocusLost)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiSliderPointerEvent(Point(), InputEventType::FocusGained)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 80.0f, origin.y))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::FocusLost, Point())).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::FocusGained, Point())).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
     EXPECT_FALSE(self.m_state.result().dragging);
@@ -1225,9 +1209,9 @@ void VerifyUiSliderLayoutTests_PositiveDimensionsThatCollapseAtExtremeCoordinate
 void VerifyUiSliderLifetimeTests_IdenticalPublicValueIntentRetiresAlreadyCopiedKeyboardAndThumbInput(mut UiSliderLifetimeTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     self.press(UiSliderKey::Right);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 50.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 50.0f, origin.y))).pointerConsumed);
     const u64 token = self.m_state.inputGeneration();
     ASSERT_TRUE(self.m_state.setValue(0.25));
     ASSERT_TRUE(self.accept(2u));
@@ -1284,8 +1268,8 @@ void VerifyUiSliderLifetimeTests_ChangedRangeDropsTheOldDragAndRetainsAnAuthorit
     ASSERT_TRUE(self.m_state.setValue(0.75));
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x - 50.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x - 50.0f, origin.y))).pointerConsumed);
     SliderOptions narrow = MakeSliderFixtureOptions();
     narrow.maximum = 0.5;
     ASSERT_TRUE(self.accept(2u, narrow));
@@ -1301,8 +1285,8 @@ void VerifyUiSliderLifetimeTests_ChangedFinalTrackGeometryFencesTheCopiedDragBef
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
     const u64 admission = self.m_state.admissionGeneration();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 60.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 60.0f, origin.y))).pointerConsumed);
     SliderOptions wider = MakeSliderFixtureOptions();
     wider.width = LayoutSize(LayoutSizePolicy::Fixed, 340.0f);
     ASSERT_TRUE(self.accept(2u, wider, Rect(10.0f, 10.0f, 420.0f, 240.0f)));
@@ -1316,9 +1300,9 @@ void VerifyUiSliderLifetimeTests_ChangedClipRetiresOldPointerGeometryEvenWhenThe
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
     const SliderPlacement before = self.m_state.placement();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 30.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
-    ASSERT_TRUE(self.begin(2u, MakeUiSliderDisplayMetrics(180.0f, 600.0f, 1.0f, 1.0f)));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 30.0f, origin.y))).pointerConsumed);
+    ASSERT_TRUE(self.begin(2u, MakeUiDisplayMetrics(180.0f, 600.0f, 1.0f, 1.0f)));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiSliderPanelKey, Rect(10.0f, 10.0f, 360.0f, 240.0f)));
     ASSERT_TRUE(self.m_builder.slider(s_UiSliderKey, self.m_state, MakeSliderFixtureOptions()));
     ASSERT_TRUE(self.finishPanel());
@@ -1332,8 +1316,8 @@ void VerifyUiSliderLifetimeTests_ChangedClipRetiresOldPointerGeometryEvenWhenThe
 void VerifyUiSliderLifetimeTests_ChangedThumbExtentRetiresTheOldGrabOffset(mut UiSliderLifetimeTests self){
     ASSERT_TRUE(self.accept(1u));
     const Point origin = self.thumbPoint();
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 40.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(origin.x + 40.0f, origin.y))).pointerConsumed);
     self.m_builder.sliderStyle().thumbExtent.x = 40.0f;
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FLOAT_EQ(self.m_state.placement().thumb.width, 40.0f);
@@ -1627,8 +1611,8 @@ void VerifyUiSliderPopupTests_AncestorClosureBeforePaintSuppressesCallbacksAndRe
     ASSERT_TRUE(self.acceptFamily(1u));
     const Point origin = CenterUiRect(self.m_childState.placement().thumb);
     const Point moved = Point(origin.x + 60.0f, origin.y);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(moved, InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, moved)).pointerConsumed);
     ASSERT_TRUE(self.beginParent(2u));
     ASSERT_TRUE(self.beginChild());
     self.m_laterSource.clearCounters();
@@ -1650,7 +1634,7 @@ void VerifyUiSliderPopupTests_AncestorClosureBeforePaintSuppressesCallbacksAndRe
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     self.m_child.open();
     ASSERT_TRUE(self.acceptFamily(4u));
-    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(moved, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, moved)).pointerConsumed);
     ASSERT_TRUE(self.acceptFamily(5u));
     EXPECT_DOUBLE_EQ(self.m_childState.value(), 0.5);
     EXPECT_FALSE(self.m_childState.result().valueChanged);

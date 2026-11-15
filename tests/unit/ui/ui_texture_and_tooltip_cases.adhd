@@ -288,15 +288,6 @@ PopupToken MakeUiTooltipPopup(){
     return token;
 }
 
-PopupToken MakeUiTooltipPartialPopup(in WidgetId widget, in u64 declaration, in u64 instance, in u64 openGen){
-    PopupToken token = PopupToken();
-    token.widget = widget;
-    token.declarationGeneration = declaration;
-    token.instanceGeneration = instance;
-    token.openGeneration = openGen;
-    return token;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1083,11 +1074,11 @@ void VerifyUiTooltipBehaviorTests_InvalidAnchorsDeclarationsAndPartialPopupToken
     Array<UiTooltipTestBinding, 7u> invalid;
     invalid[0u] = MakeUiTooltipTestBinding(WidgetId(), s_UiTooltipDeclaration, popup);
     invalid[1u] = MakeUiTooltipTestBinding(anchor, 0u, popup);
-    invalid[2u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(WidgetId(), 19u, 23u, 7u));
-    invalid[3u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 0u, 23u, 7u));
-    invalid[4u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 19u, 0u, 7u));
-    invalid[5u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 19u, 23u, 0u));
-    invalid[6u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 0u, 0u, 0u));
+    invalid[2u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiPopupToken(WidgetId(), 19u, 23u, 7u));
+    invalid[3u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiPopupToken(popup.widget, 0u, 23u, 7u));
+    invalid[4u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiPopupToken(popup.widget, 19u, 0u, 7u));
+    invalid[5u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiPopupToken(popup.widget, 19u, 23u, 0u));
+    invalid[6u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiPopupToken(popup.widget, 0u, 0u, 0u));
     const TooltipOptions options = TooltipOptions();
     for(usize index = 0u; index < invalid.size(); ++index){
         const UiTooltipTestBinding rejected = invalid[index];

@@ -1717,19 +1717,12 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
-GpuGraphResourceId GpuScoringMakeResourceId(in u64 generation, in u32 index){
-    GpuGraphResourceId id = GpuGraphResourceId();
-    id.generation = generation;
-    id.index = index;
-    return id;
-}
-
 GpuGraphResourceId GpuScoringBufferId(){
-    return GpuScoringMakeResourceId(1u, 0u);
+    return MakeGpuResourceId(1u, 0u);
 }
 
 GpuGraphResourceId GpuScoringOtherBufferId(){
-    return GpuScoringMakeResourceId(1u, 1u);
+    return MakeGpuResourceId(1u, 1u);
 }
 
 GpuTaskGraphResourceView GpuScoringResourceView(in GpuGraphResourceId id, in GpuGraphResourceTypeEnum resourceType){
@@ -2035,8 +2028,8 @@ void VerifyGpuScoring_IndexedHistoryRejectsForeignGenerationAndInvalidResourcesW
     ASSERT_TRUE(history.append(state));
 
     Array<GpuGraphResourceId, 3> invalidIds = Array<GpuGraphResourceId, 3>();
-    invalidIds[0u] = GpuScoringMakeResourceId(2u, 0u);
-    invalidIds[1u] = GpuScoringMakeResourceId(1u, 2u);
+    invalidIds[0u] = MakeGpuResourceId(2u, 0u);
+    invalidIds[1u] = MakeGpuResourceId(1u, 2u);
     invalidIds[2u] = GpuGraphResourceId();
     for(in GpuGraphResourceId invalid : invalidIds){
         state.resource = invalid;
@@ -2050,7 +2043,7 @@ void VerifyGpuScoring_IndexedHistoryRejectsForeignGenerationAndInvalidResourcesW
     ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 16u));
     ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
-    const GpuTaskGraphResourceView foreign = GpuScoringResourceView(GpuScoringMakeResourceId(0u, 2u), GpuGraphResourceType::Buffer);
+    const GpuTaskGraphResourceView foreign = GpuScoringResourceView(MakeGpuResourceId(0u, 2u), GpuGraphResourceType::Buffer);
     EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, foreign, requested, scratchArena, fragments));
     EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, foreign, scratchArena, fragments));
     EXPECT_TRUE(fragments.empty());

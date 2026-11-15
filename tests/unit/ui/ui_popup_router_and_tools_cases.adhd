@@ -341,61 +341,11 @@ using ::NWB::Tests::UiCases::s_UiCaseButtonPressed;
 const StringView s_UiPopupToolsCasePanelKey = "panel";
 const StringView s_UiPopupToolsCaseAnchorKey = "anchor";
 
-WidgetId MakeUiPopupRouterWidgetId(in u64 value){
-    WidgetId id = WidgetId();
-    id.value = value;
-    return id;
-}
-
-Point MakeUiPopupRouterPoint(in f32 x, in f32 y){
-    Point point = Point();
-    point.x = x;
-    point.y = y;
-    return point;
-}
-
-Rect MakeUiPopupRouterRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-InputEvent MakeUiPopupRouterBareEvent(in InputEventTypeEnum type){
-    InputEvent event = InputEvent();
-    event.type = type;
-    return event;
-}
-
-InputEvent MakeUiPopupRouterPointerEvent(in InputEventTypeEnum type, in f32 x, in f32 y){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.position = MakeUiPopupRouterPoint(x, y);
-    return event;
-}
-
-InputEvent MakeUiPopupRouterPointEvent(in InputEventTypeEnum type, in Point point){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.position = point;
-    return event;
-}
-
-InputEvent MakeUiPopupRouterKeyEvent(in InputEventTypeEnum type, in KeyEnum key, in b8 repeat){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.key = key;
-    event.repeat = repeat;
-    return event;
-}
-
 HitTarget MakeUiPopupRouterButtonOrdered(in u64 idValue, in Rect rectangle, in u32 paintOrder){
     HitTarget target = HitTarget();
     target.id.value = idValue;
     target.rectangle = rectangle;
-    target.clip = MakeUiPopupRouterRect(0.0f, 0.0f, 200.0f, 120.0f);
+    target.clip = Rect(0.0f, 0.0f, 200.0f, 120.0f);
     target.paintOrder = paintOrder;
     target.focusable = true;
     target.activatable = true;
@@ -412,8 +362,8 @@ PopupScope MakeUiPopupRouterScopeEpoch(in u64 widgetValue, in u32 layer, in u64 
     scope.token.declarationGeneration = 10u;
     scope.token.instanceGeneration = 20u;
     scope.token.openGeneration = openGeneration;
-    scope.bounds = MakeUiPopupRouterRect(40.0f, 40.0f, 100.0f, 70.0f);
-    scope.viewport = MakeUiPopupRouterRect(0.0f, 0.0f, 200.0f, 120.0f);
+    scope.bounds = Rect(40.0f, 40.0f, 100.0f, 70.0f);
+    scope.viewport = Rect(0.0f, 0.0f, 200.0f, 120.0f);
     scope.layer = layer;
     return scope;
 }
@@ -428,8 +378,8 @@ PopupScope MakeUiPopupRouterScope(){
 
 Array<HitTarget, 2u> MakeUiPopupRouterBaseTargets(){
     Array<HitTarget, 2u> targets = Array<HitTarget, 2u>();
-    targets[0u] = MakeUiPopupRouterButton(1u, MakeUiPopupRouterRect(10.0f, 10.0f, 30.0f, 20.0f));
-    targets[1u] = MakeUiPopupRouterButton(2u, MakeUiPopupRouterRect(60.0f, 10.0f, 30.0f, 20.0f));
+    targets[0u] = MakeUiPopupRouterButton(1u, Rect(10.0f, 10.0f, 30.0f, 20.0f));
+    targets[1u] = MakeUiPopupRouterButton(2u, Rect(60.0f, 10.0f, 30.0f, 20.0f));
     return targets;
 }
 
@@ -459,8 +409,8 @@ Array<HitTarget, 5u> MakeUiPopupRouterTargets(in PopupScope scope){
     targets[0u] = base[0u];
     targets[1u] = base[1u];
     targets[2u] = MakeUiPopupRouterBarrier(scope);
-    targets[3u] = MakeUiPopupRouterChild(scope, scope.token.widget.value + 1u, MakeUiPopupRouterRect(50.0f, 50.0f, 30.0f, 20.0f), 11u);
-    targets[4u] = MakeUiPopupRouterChild(scope, scope.token.widget.value + 2u, MakeUiPopupRouterRect(90.0f, 50.0f, 30.0f, 20.0f), 12u);
+    targets[3u] = MakeUiPopupRouterChild(scope, scope.token.widget.value + 1u, Rect(50.0f, 50.0f, 30.0f, 20.0f), 11u);
+    targets[4u] = MakeUiPopupRouterChild(scope, scope.token.widget.value + 2u, Rect(90.0f, 50.0f, 30.0f, 20.0f), 12u);
     return targets;
 }
 
@@ -473,7 +423,7 @@ Array<HitTarget, 7u> MakeUiPopupRouterTwoLayerTargets(in PopupScope lower, in Po
     targets[3u] = lowerTargets[3u];
     targets[4u] = lowerTargets[4u];
     targets[5u] = MakeUiPopupRouterBarrier(higher);
-    targets[6u] = MakeUiPopupRouterChild(higher, 201u, MakeUiPopupRouterRect(50.0f, 50.0f, 30.0f, 20.0f), 11u);
+    targets[6u] = MakeUiPopupRouterChild(higher, 201u, Rect(50.0f, 50.0f, 30.0f, 20.0f), 11u);
     return targets;
 }
 
@@ -491,13 +441,13 @@ void VerifyUiPopupRouterTests_AcceptedPopupBlocksUnderlyingHitTargetsDespiteThei
     EXPECT_TRUE(self.m_router.wantsCommands());
     EXPECT_TRUE(self.m_router.wantsPointer());
     EXPECT_EQ(self.m_router.focus().value, 101u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).value, 101u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(45.0f, 45.0f)).value, 100u);
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiPopupRouterPoint(15.0f, 15.0f)).valid());
-    EXPECT_TRUE(self.m_router.wouldConsumePointer(MakeUiPopupRouterPoint(15.0f, 15.0f)));
-    self.click(MakeUiPopupRouterPoint(55.0f, 55.0f));
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(1u)));
+    EXPECT_EQ(self.m_router.hitTest(Point(55.0f, 55.0f)).value, 101u);
+    EXPECT_EQ(self.m_router.hitTest(Point(45.0f, 45.0f)).value, 100u);
+    EXPECT_FALSE(self.m_router.hitTest(Point(15.0f, 15.0f)).valid());
+    EXPECT_TRUE(self.m_router.wouldConsumePointer(Point(15.0f, 15.0f)));
+    self.click(Point(55.0f, 55.0f));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(101u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(1u)));
 }
 
 void VerifyUiPopupRouterTests_TabAndReverseTabWrapOnlyWithinTheAcceptedTopScope(mut UiPopupRouterTests self){
@@ -511,9 +461,9 @@ void VerifyUiPopupRouterTests_TabAndReverseTabWrapOnlyWithinTheAcceptedTopScope(
     self.key(Key::Tab, true);
     EXPECT_EQ(self.m_router.focus().value, 102u);
     self.key(Key::Enter);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(102u)));
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(1u)));
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(2u)));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(102u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(1u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(2u)));
 }
 
 void VerifyUiPopupRouterTests_OptedInSingleStopPopupTabsToTheNextParentStopAfterAcceptance(mut UiPopupRouterTests self){
@@ -525,9 +475,9 @@ void VerifyUiPopupRouterTests_OptedInSingleStopPopupTabsToTheNextParentStopAfter
     const Array<HitTarget, 5u> targets = MakeUiPopupRouterTargets(scope);
     ASSERT_TRUE(self.commitCountWithScope(targets, 4u, 2u, scope));
     ASSERT_EQ(self.m_router.focus().value, 101u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
     EXPECT_FALSE(self.m_router.focus().valid());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Tab, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, true)).commandConsumed);
     const auto reasonResult = self.m_router.consumePopupDismissal(scope.token);
     ASSERT_TRUE(reasonResult.has_value());
     EXPECT_EQ(reasonResult.value(), PopupDismissReason::FocusTraversal);
@@ -535,7 +485,7 @@ void VerifyUiPopupRouterTests_OptedInSingleStopPopupTabsToTheNextParentStopAfter
     const Array<HitTarget, 2u> base = MakeUiPopupRouterBaseTargets();
     ASSERT_TRUE(self.m_router.commitTargets(base, 3u));
     EXPECT_EQ(self.m_router.focus().value, 2u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
     EXPECT_FALSE(self.m_router.ownsKey(Key::Tab));
 }
 
@@ -592,7 +542,7 @@ void VerifyUiPopupRouterTests_EmptyPopupStillOwnsKeysAndOutsidePointerInput(mut 
     EXPECT_FALSE(self.m_router.focus().valid());
     self.key(Key::Enter);
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, 15.0f, 15.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(15.0f, 15.0f))).pointerConsumed);
     self.key(Key::Escape);
     const auto reasonResult = self.m_router.consumePopupDismissal(scope.token);
     ASSERT_TRUE(reasonResult.has_value());
@@ -616,7 +566,7 @@ void VerifyUiPopupRouterTests_OutsideDismissalConsumesItsEntirePressAcrossAccept
     self.focusBase();
     const PopupScope scope = MakeUiPopupRouterScope();
     ASSERT_TRUE(self.install(scope, 2u));
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryDown, 15.0f, 15.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(15.0f, 15.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.m_router.hasPopup());
     EXPECT_TRUE(self.m_router.wantsPointer());
@@ -628,18 +578,18 @@ void VerifyUiPopupRouterTests_OutsideDismissalConsumesItsEntirePressAcrossAccept
     ASSERT_TRUE(self.m_router.commitTargets(base, 3u));
     EXPECT_FALSE(self.m_router.hasPopup());
     EXPECT_EQ(self.m_router.focus().value, 1u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, 15.0f, 15.0f)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryUp, 15.0f, 15.0f)).pointerConsumed);
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(1u)));
-    self.click(MakeUiPopupRouterPoint(15.0f, 15.0f));
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(1u)));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(15.0f, 15.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(15.0f, 15.0f))).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(1u)));
+    self.click(Point(15.0f, 15.0f));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(1u)));
 }
 
 void VerifyUiPopupRouterTests_EscapeDismissalPreservesHeldKeyOwnershipAcrossAcceptedRemoval(mut UiPopupRouterTests self){
     self.focusBase();
     const PopupScope scope = MakeUiPopupRouterScope();
     ASSERT_TRUE(self.install(scope, 2u));
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.ownsKey(Key::Escape));
     const auto reasonResult = self.m_router.consumePopupDismissal(scope.token);
     ASSERT_TRUE(reasonResult.has_value());
@@ -647,7 +597,7 @@ void VerifyUiPopupRouterTests_EscapeDismissalPreservesHeldKeyOwnershipAcrossAcce
     const Array<HitTarget, 2u> base = MakeUiPopupRouterBaseTargets();
     ASSERT_TRUE(self.m_router.commitTargets(base, 3u));
     EXPECT_EQ(self.m_router.focus().value, 1u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
     EXPECT_FALSE(self.m_router.ownsKey(Key::Escape));
     EXPECT_EQ(self.m_router.focus().value, 1u);
 }
@@ -657,7 +607,7 @@ void VerifyUiPopupRouterTests_NonDismissibleModalBlocksOutsideAndEscapeWithoutPu
     scope.dismissOutside = false;
     scope.dismissCancel = false;
     ASSERT_TRUE(self.install(scope, 1u));
-    self.click(MakeUiPopupRouterPoint(15.0f, 15.0f));
+    self.click(Point(15.0f, 15.0f));
     self.key(Key::Escape);
     EXPECT_TRUE(self.m_router.hasPopup());
     EXPECT_EQ(self.m_router.focus().value, 101u);
@@ -672,15 +622,15 @@ void VerifyUiPopupRouterTests_ClosingTokenSuppressesActionsUntilItsAcceptedRemov
     self.focusBase();
     const PopupScope scope = MakeUiPopupRouterScope();
     ASSERT_TRUE(self.install(scope, 2u));
-    self.click(MakeUiPopupRouterPoint(55.0f, 55.0f));
+    self.click(Point(55.0f, 55.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     self.m_router.closePopup(scope.token);
     EXPECT_TRUE(self.m_router.hasPopup());
     EXPECT_FALSE(self.m_router.focus().valid());
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_router.hitTest(Point(55.0f, 55.0f)).valid());
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_TRUE(self.m_router.wantsCommands());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, 15.0f, 15.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(15.0f, 15.0f))).pointerConsumed);
     self.key(Key::Enter);
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_FALSE(self.m_router.consumePopupDismissal(scope.token).has_value());
@@ -696,14 +646,14 @@ void VerifyUiPopupRouterTests_SameOpenEpochRetainsChosenChildFocusAcrossAccepted
     ASSERT_TRUE(self.install(scope, 2u));
     self.key(Key::Tab);
     ASSERT_EQ(self.m_router.focus().value, 102u);
-    scope.bounds = MakeUiPopupRouterRect(60.0f, 30.0f, 100.0f, 70.0f);
+    scope.bounds = Rect(60.0f, 30.0f, 100.0f, 70.0f);
     Array<HitTarget, 5u> targets = MakeUiPopupRouterTargets(scope);
-    targets[3u].rectangle = MakeUiPopupRouterRect(70.0f, 40.0f, 30.0f, 20.0f);
-    targets[4u].rectangle = MakeUiPopupRouterRect(110.0f, 40.0f, 30.0f, 20.0f);
+    targets[3u].rectangle = Rect(70.0f, 40.0f, 30.0f, 20.0f);
+    targets[4u].rectangle = Rect(110.0f, 40.0f, 30.0f, 20.0f);
     ASSERT_TRUE(self.commitWithScope(targets, 3u, scope));
     EXPECT_EQ(self.m_router.focus().value, 102u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(115.0f, 45.0f)).value, 102u);
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).valid());
+    EXPECT_EQ(self.m_router.hitTest(Point(115.0f, 45.0f)).value, 102u);
+    EXPECT_FALSE(self.m_router.hitTest(Point(55.0f, 55.0f)).valid());
     self.m_router.closePopup(scope.token);
     const Array<HitTarget, 2u> base = MakeUiPopupRouterBaseTargets();
     ASSERT_TRUE(self.m_router.commitTargets(base, 4u));
@@ -720,7 +670,7 @@ void VerifyUiPopupRouterTests_ReopenedEpochFencesOldCloseAndDismissalTokens(mut 
     EXPECT_EQ(self.m_router.focus().value, 101u);
     self.m_router.closePopup(original.token);
     EXPECT_EQ(self.m_router.focus().value, 101u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).value, 101u);
+    EXPECT_EQ(self.m_router.hitTest(Point(55.0f, 55.0f)).value, 101u);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(reopened.token).has_value());
     self.m_router.closePopup(reopened.token);
     const Array<HitTarget, 2u> base = MakeUiPopupRouterBaseTargets();
@@ -731,33 +681,33 @@ void VerifyUiPopupRouterTests_ReopenedEpochFencesOldCloseAndDismissalTokens(mut 
 void VerifyUiPopupRouterTests_ReopenedEpochCannotReplayQueuedActivationWithTheSameChildIdAndDeclaration(mut UiPopupRouterTests self){
     const PopupScope original = MakeUiPopupRouterScope();
     ASSERT_TRUE(self.install(original, 1u));
-    self.click(MakeUiPopupRouterPoint(55.0f, 55.0f));
+    self.click(Point(55.0f, 55.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     const u64 originalSequence = self.m_router.actions()[0u].id.sequence;
     const PopupScope reopened = MakeUiPopupRouterScopeEpoch(100u, 3u, 2u);
     ASSERT_TRUE(self.install(reopened, 2u));
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
-    self.click(MakeUiPopupRouterPoint(55.0f, 55.0f));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(101u)));
+    self.click(Point(55.0f, 55.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     EXPECT_GT(self.m_router.actions()[0u].id.sequence, originalSequence);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(101u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(101u)));
 }
 
 void VerifyUiPopupRouterTests_ReopenedEpochCancelsOldCaptureWithoutTransferringItsReleaseToTheNewChild(mut UiPopupRouterTests self){
     const PopupScope original = MakeUiPopupRouterScope();
     ASSERT_TRUE(self.install(original, 1u));
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryDown, 55.0f, 55.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(55.0f, 55.0f))).pointerConsumed);
     ASSERT_EQ(self.m_router.capture().value, 101u);
     const PopupScope reopened = MakeUiPopupRouterScopeEpoch(100u, 3u, 2u);
     ASSERT_TRUE(self.install(reopened, 2u));
     EXPECT_FALSE(self.m_router.capture().valid());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryUp, 55.0f, 55.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(55.0f, 55.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
-    self.click(MakeUiPopupRouterPoint(55.0f, 55.0f));
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(101u)));
+    self.click(Point(55.0f, 55.0f));
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(101u)));
 }
 
 void VerifyUiPopupRouterTests_HeldEscapeDoesNotDismissTheNewlyAcceptedLowerScopeOnRepeatOrDuplicateDown(mut UiPopupRouterTests self){
@@ -769,24 +719,24 @@ void VerifyUiPopupRouterTests_HeldEscapeDoesNotDismissTheNewlyAcceptedLowerScope
     scopes[0u] = lower;
     scopes[1u] = higher;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, scopes));
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     const auto reasonResult1 = self.m_router.consumePopupDismissal(higher.token);
     ASSERT_TRUE(reasonResult1.has_value());
     EXPECT_EQ(reasonResult1.value(), PopupDismissReason::Cancel);
     ASSERT_TRUE(self.install(lower, 3u));
     EXPECT_EQ(self.m_router.focus().value, 101u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Escape, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, true)).commandConsumed);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(lower.token).has_value());
     EXPECT_EQ(self.m_router.focus().value, 101u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(lower.token).has_value());
     EXPECT_EQ(self.m_router.focus().value, 101u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     const auto reasonResult2 = self.m_router.consumePopupDismissal(lower.token);
     ASSERT_TRUE(reasonResult2.has_value());
     EXPECT_EQ(reasonResult2.value(), PopupDismissReason::Cancel);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
 }
 
 void VerifyUiPopupRouterTests_RemovalNeverRestoresDisabledOrRecreatedUnderlyingFocus(mut UiPopupRouterTests self){
@@ -838,11 +788,11 @@ void VerifyUiPopupRouterTests_HigherLayerScopeBlocksLowerChildrenAndRestoresThei
     scopes[1u] = higher;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, scopes));
     EXPECT_EQ(self.m_router.focus().value, 201u);
-    EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).value, 201u);
+    EXPECT_EQ(self.m_router.hitTest(Point(55.0f, 55.0f)).value, 201u);
     self.key(Key::Tab);
     EXPECT_EQ(self.m_router.focus().value, 201u);
     self.m_router.closePopup(higher.token);
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).valid());
+    EXPECT_FALSE(self.m_router.hitTest(Point(55.0f, 55.0f)).valid());
     ASSERT_TRUE(self.install(lower, 4u));
     EXPECT_EQ(self.m_router.focus().value, 102u);
     self.m_router.closePopup(lower.token);
@@ -888,8 +838,8 @@ void VerifyUiPopupRouterTests_InsertingLowerBeneathRetainedTopKeepsTopFocusAndTh
     targets[3u] = lowerTargets[3u];
     targets[4u] = lowerTargets[4u];
     targets[5u] = MakeUiPopupRouterBarrier(higher);
-    targets[6u] = MakeUiPopupRouterChild(higher, 201u, MakeUiPopupRouterRect(50.0f, 50.0f, 30.0f, 20.0f), 11u);
-    targets[7u] = MakeUiPopupRouterChild(higher, 202u, MakeUiPopupRouterRect(90.0f, 50.0f, 30.0f, 20.0f), 12u);
+    targets[6u] = MakeUiPopupRouterChild(higher, 201u, Rect(50.0f, 50.0f, 30.0f, 20.0f), 11u);
+    targets[7u] = MakeUiPopupRouterChild(higher, 202u, Rect(90.0f, 50.0f, 30.0f, 20.0f), 12u);
     Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
     scopes[0u] = lower;
     scopes[1u] = higher;
@@ -915,7 +865,7 @@ void VerifyUiPopupRouterTests_FocusLossDismissesAllScopesWithoutRestoringUnderly
     scopes[0u] = lower;
     scopes[1u] = higher;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, scopes));
-    EXPECT_TRUE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     EXPECT_FALSE(self.m_router.focus().valid());
     const auto reasonResult1 = self.m_router.consumePopupDismissal(lower.token);
     ASSERT_TRUE(reasonResult1.has_value());
@@ -935,7 +885,7 @@ void VerifyUiPopupRouterTests_FocusLossWhileAlreadyClosingStillSuppressesSavedFo
     ASSERT_TRUE(self.install(scope, 2u));
     self.key(Key::Escape);
     EXPECT_TRUE(self.m_router.hasPopup());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     const Array<HitTarget, 2u> base = MakeUiPopupRouterBaseTargets();
     ASSERT_TRUE(self.m_router.commitTargets(base, 3u));
     EXPECT_FALSE(self.m_router.hasPopup());
@@ -945,9 +895,9 @@ void VerifyUiPopupRouterTests_FocusLossWhileAlreadyClosingStillSuppressesSavedFo
 void VerifyUiPopupRouterTests_InvalidatingPopupOwnerRetiresItsScopeActionsAndHeldCaptureImmediately(mut UiPopupRouterTests self){
     const PopupScope scope = MakeUiPopupRouterScope();
     ASSERT_TRUE(self.install(scope, 7u));
-    self.click(MakeUiPopupRouterPoint(55.0f, 55.0f));
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryDown, 55.0f, 55.0f)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
+    self.click(Point(55.0f, 55.0f));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(55.0f, 55.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     self.m_router.invalidateTarget(scope.token.widget);
     EXPECT_FALSE(self.m_router.hasPopup());
@@ -955,10 +905,10 @@ void VerifyUiPopupRouterTests_InvalidatingPopupOwnerRetiresItsScopeActionsAndHel
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_FALSE(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).valid());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryUp, 55.0f, 55.0f)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterKeyEvent(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
-    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
+    EXPECT_FALSE(self.m_router.hitTest(Point(55.0f, 55.0f)).valid());
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(55.0f, 55.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(WidgetId(101u)));
 }
 
 void VerifyUiPopupRouterTests_InvalidScopeDescriptionsRejectAtomicallyWithoutChangingAcceptedInteraction(mut UiPopupRouterTests self){
@@ -967,7 +917,7 @@ void VerifyUiPopupRouterTests_InvalidScopeDescriptionsRejectAtomicallyWithoutCha
     ASSERT_TRUE(self.install(scope, 1u));
     self.key(Key::Enter);
     ASSERT_EQ(self.m_router.actions().size(), 1u);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryDown, 55.0f, 55.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(55.0f, 55.0f))).pointerConsumed);
     Array<PopupScope, 10u> invalid = Array<PopupScope, 10u>();
     for(mut PopupScope candidate : invalid)
         candidate = scope;
@@ -987,11 +937,11 @@ void VerifyUiPopupRouterTests_InvalidScopeDescriptionsRejectAtomicallyWithoutCha
         EXPECT_TRUE(self.m_router.hasPopup());
         EXPECT_EQ(self.m_router.focus().value, 101u);
         EXPECT_EQ(self.m_router.capture().value, 101u);
-        EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).value, 101u);
+        EXPECT_EQ(self.m_router.hitTest(Point(55.0f, 55.0f)).value, 101u);
         EXPECT_EQ(self.m_router.actions().size(), 1u);
     }
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PrimaryUp, 55.0f, 55.0f)).pointerConsumed);
-    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiPopupRouterWidgetId(101u)));
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(55.0f, 55.0f))).pointerConsumed);
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(101u)));
 }
 
 void VerifyUiPopupRouterTests_MissingOwnersDuplicateScopesAndMismatchedScopedTargetsRejectAtomically(mut UiPopupRouterTests self){
@@ -1019,7 +969,7 @@ void VerifyUiPopupRouterTests_MissingOwnersDuplicateScopesAndMismatchedScopedTar
             invalid[0u].popup.widget = scope.token.widget;
             break;
         case 4u:
-            invalid[2u].id = MakeUiPopupRouterWidgetId(150u);
+            invalid[2u].id = WidgetId(150u);
             break;
         case 5u:
             ++invalid[2u].declarationGeneration;
@@ -1031,7 +981,7 @@ void VerifyUiPopupRouterTests_MissingOwnersDuplicateScopesAndMismatchedScopedTar
         EXPECT_FALSE(self.commitWithScope(invalid, 2u, scope));
         EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
         EXPECT_EQ(self.m_router.focus().value, 101u);
-        EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(55.0f, 55.0f)).value, 101u);
+        EXPECT_EQ(self.m_router.hitTest(Point(55.0f, 55.0f)).value, 101u);
     }
     Array<HitTarget, 5u> invalid = accepted;
     invalid[4u] = invalid[2u];
@@ -1068,7 +1018,7 @@ void VerifyUiPopupRouterTests_ResetDropsOwnedScopesDismissalsAndInteractionBefor
     EXPECT_FALSE(self.m_router.consumePopupDismissal(scope.token).has_value());
     const Array<HitTarget, 2u> base = MakeUiPopupRouterBaseTargets();
     ASSERT_TRUE(self.m_router.commitTargets(base, 1u));
-    EXPECT_EQ(self.m_router.hitTest(MakeUiPopupRouterPoint(15.0f, 15.0f)).value, 1u);
+    EXPECT_EQ(self.m_router.hitTest(Point(15.0f, 15.0f)).value, 1u);
 }
 
 
@@ -1079,7 +1029,7 @@ void VerifyUiPopupToolsBuilderTests_TooltipDelayBeginsOnlyAfterTheAnchorLayoutIs
     self.m_tooltipOptions.delaySeconds = 0.5f;
     self.m_deltaSeconds = 0.25f;
     ASSERT_TRUE(self.prepareTools(1u, true, false));
-    EXPECT_FALSE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, 30.0f, 30.0f)).hover.valid());
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(30.0f, 30.0f))).hover.valid());
     EXPECT_FALSE(self.m_tooltip.visible());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     ASSERT_TRUE(self.moveToAnchor());
@@ -1116,7 +1066,7 @@ void VerifyUiPopupToolsBuilderTests_VisibleTooltipPaintsItsDeclarationStyleAfter
     ASSERT_TRUE(self.acceptTools(1u, true, false));
     ASSERT_TRUE(self.moveToAnchor());
     ASSERT_TRUE(self.begin(2u));
-    ASSERT_TRUE(self.m_builder.beginPanel("panel", MakeUiPopupRouterRect(10.0f, 10.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 280.0f)));
     EXPECT_FALSE(self.m_builder.button("anchor", "Anchor", self.m_anchorOptions));
     self.m_builder.tooltipStyle().background = s_UiCaseNameButtonNormal;
     ASSERT_TRUE(self.m_builder.tooltip("tip", "anchor", "Helpful text", self.m_tooltip, self.m_tooltipOptions));
@@ -1138,7 +1088,7 @@ void VerifyUiPopupToolsBuilderTests_LeavingTheAnchorCancelsVisibleTooltipAndRequ
     ASSERT_TRUE(self.acceptTools(2u, true, false));
     ASSERT_TRUE(self.acceptTools(3u, true, false));
     ASSERT_TRUE(self.m_tooltip.visible());
-    EXPECT_NE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, 790.0f, 590.0f)).hover, self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    EXPECT_NE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(790.0f, 590.0f))).hover, self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(self.acceptTools(4u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
     ASSERT_TRUE(self.moveToAnchor());
@@ -1157,7 +1107,7 @@ void VerifyUiPopupToolsBuilderTests_LeaveAndReturnBetweenDeclarationsRestartsThe
     ASSERT_TRUE(self.acceptTools(3u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
     const u64 activity = self.m_context.input().hoverActivityGeneration();
-    EXPECT_NE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, 790.0f, 590.0f)).hover, self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    EXPECT_NE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(790.0f, 590.0f))).hover, self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(self.moveToAnchor());
     EXPECT_GT(self.m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(self.acceptTools(4u, true, false));
@@ -1176,7 +1126,7 @@ void VerifyUiPopupToolsBuilderTests_SameAnchorPointerMotionKeepsTheTooltipDelay(
     ASSERT_TRUE(self.acceptTools(2u, true, false));
     const u64 activity = self.m_context.input().hoverActivityGeneration();
     const Point pointer = self.m_context.input().pointerPosition();
-    EXPECT_EQ(self.send(MakeUiPopupRouterPointerEvent(InputEventType::PointerMove, pointer.x + 5.0f, pointer.y)).hover, self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    EXPECT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(pointer.x + 5.0f, pointer.y))).hover, self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     EXPECT_EQ(self.m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(self.acceptTools(3u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
@@ -1195,8 +1145,8 @@ void VerifyUiPopupToolsBuilderTests_ClickBetweenDeclarationsRestartsTheTooltipDe
     ASSERT_TRUE(self.m_tooltip.visible());
     const u64 activity = self.m_context.input().hoverActivityGeneration();
     const Point pointer = self.m_context.input().pointerPosition();
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::PrimaryDown, pointer)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::PrimaryUp, pointer)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, pointer)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, pointer)).pointerConsumed);
     EXPECT_GT(self.m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(self.acceptTools(5u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
@@ -1212,16 +1162,16 @@ void VerifyUiPopupToolsBuilderTests_PrimaryCaptureAndSecondaryPressSuppressTheTo
     ASSERT_TRUE(self.acceptTools(2u, true, false));
     ASSERT_TRUE(self.m_tooltip.visible());
     const Point pointer = self.m_context.input().pointerPosition();
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::PrimaryDown, pointer)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, pointer)).pointerConsumed);
     ASSERT_TRUE(self.acceptTools(3u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::PrimaryUp, pointer)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, pointer)).pointerConsumed);
     ASSERT_TRUE(self.acceptTools(4u, true, false));
     ASSERT_TRUE(self.m_tooltip.visible());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::SecondaryDown, pointer)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, pointer)).pointerConsumed);
     ASSERT_TRUE(self.acceptTools(5u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::SecondaryUp, pointer)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, pointer)).pointerConsumed);
 }
 
 void VerifyUiPopupToolsBuilderTests_DisabledTooltipAndDisabledAnchorCannotRetainVisibleHelp(mut UiPopupToolsBuilderTests self){
@@ -1246,9 +1196,9 @@ void VerifyUiPopupToolsBuilderTests_UnknownPointerAndNativeFocusLossCannotQualif
     ASSERT_TRUE(self.moveToAnchor());
     ASSERT_TRUE(self.acceptTools(2u, true, false));
     ASSERT_TRUE(self.m_tooltip.visible());
-    EXPECT_FALSE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusLost)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).focus.valid());
     EXPECT_FALSE(self.m_context.input().capture().valid());
-    EXPECT_FALSE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     ASSERT_TRUE(self.acceptTools(3u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
 }
@@ -1281,7 +1231,7 @@ void VerifyUiPopupToolsBuilderTests_FullyClippedReplacementGeometrySuppressesPre
     ASSERT_TRUE(self.moveToAnchor());
     ASSERT_TRUE(self.acceptTools(2u, true, false));
     ASSERT_TRUE(self.m_tooltip.visible());
-    ASSERT_TRUE(self.acceptTools(3u, true, false, MakeUiPopupRouterRect(900.0f, 900.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.acceptTools(3u, true, false, Rect(900.0f, 900.0f, 360.0f, 280.0f)));
     EXPECT_FALSE(self.m_tooltip.visible());
     EXPECT_FLOAT_EQ(self.m_tooltip.placement().bounds.width, 0.0f);
     const DrawSnapshot snapshot = self.m_paint.freeze();
@@ -1309,7 +1259,7 @@ void VerifyUiPopupToolsBuilderTests_TooltipInsideAPlainPopupPaintsAfterItsOverla
 
 void VerifyUiPopupToolsBuilderTests_TooltipRequiresAPrecedingAnchorInTheSameContainer(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.begin(1u));
-    ASSERT_TRUE(self.m_builder.beginPanel("panel", MakeUiPopupRouterRect(10.0f, 10.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 280.0f)));
     EXPECT_FALSE(self.m_builder.button("anchor", "Anchor", self.m_anchorOptions));
     ASSERT_TRUE(self.m_builder.beginRow("inner"));
     EXPECT_FALSE(self.m_builder.tooltip("tip", "anchor", "Help", self.m_tooltip, self.m_tooltipOptions));
@@ -1318,7 +1268,7 @@ void VerifyUiPopupToolsBuilderTests_TooltipRequiresAPrecedingAnchorInTheSameCont
 
 void VerifyUiPopupToolsBuilderTests_MissingTooltipAnchorRejectsTheCandidate(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.begin(1u));
-    ASSERT_TRUE(self.m_builder.beginPanel("panel", MakeUiPopupRouterRect(10.0f, 10.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 280.0f)));
     EXPECT_FALSE(self.m_builder.tooltip("tip", "missing", "Help", self.m_tooltip, self.m_tooltipOptions));
     EXPECT_TRUE(self.m_context.failed());
 }
@@ -1349,8 +1299,8 @@ void VerifyUiPopupToolsBuilderTests_ExplicitTooltipResetBeforeScopeEndRejectsIts
 
 void VerifyUiPopupToolsBuilderTests_SecondaryTriggerUsesOnlyTheExactlyAcceptedAnchorLayout(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.prepareTools(1u, false));
-    EXPECT_FALSE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::SecondaryDown, 30.0f, 30.0f)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiPopupRouterPointerEvent(InputEventType::SecondaryUp, 30.0f, 30.0f)).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, Point(30.0f, 30.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, Point(30.0f, 30.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_menu.isOpen());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     ASSERT_TRUE(self.openBySecondary(2u));
@@ -1365,12 +1315,12 @@ void VerifyUiPopupToolsBuilderTests_EscapeBeforeSecondaryReleaseCancelsThePendin
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.moveToAnchor());
     const Point point = self.m_context.input().pointerPosition();
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::SecondaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, point)).pointerConsumed);
     ASSERT_TRUE(self.acceptTools(2u, false));
     EXPECT_FALSE(self.m_menu.isOpen());
     EXPECT_FALSE(self.m_menuResult.opened);
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiPopupRouterPointEvent(InputEventType::SecondaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, point)).pointerConsumed);
     ASSERT_TRUE(self.acceptTools(3u, false));
     EXPECT_FALSE(self.m_menu.isOpen());
     EXPECT_FALSE(self.m_menuResult.opened);
@@ -1431,7 +1381,7 @@ void VerifyUiPopupToolsBuilderTests_PointerReleaseCommitsOnlyAnEnabledCommand(mu
 void VerifyUiPopupToolsBuilderTests_OutsideClickCancelsAndConsumesTheCompletePointerSequence(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.openBySecondary(2u));
-    self.click(MakeUiPopupRouterPoint(790.0f, 590.0f));
+    self.click(Point(790.0f, 590.0f));
     ASSERT_TRUE(self.acceptTools(3u, false));
     EXPECT_TRUE(self.m_menuResult.closed);
     EXPECT_FALSE(self.m_menuResult.activated);
@@ -1443,9 +1393,9 @@ void VerifyUiPopupToolsBuilderTests_OutsideClickCancelsAndConsumesTheCompletePoi
 void VerifyUiPopupToolsBuilderTests_NativeFocusLossCancelsMenuEvenIfFocusReturnsBeforeDeclaration(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.openBySecondary(2u));
-    EXPECT_FALSE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusLost)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).focus.valid());
     EXPECT_FALSE(self.m_context.input().capture().valid());
-    EXPECT_FALSE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     ASSERT_TRUE(self.acceptTools(3u, false));
     EXPECT_TRUE(self.m_menuResult.closed);
     EXPECT_FALSE(self.m_menuResult.activated);
@@ -1496,7 +1446,7 @@ void VerifyUiPopupToolsBuilderTests_DisablingTheAnchorClosesItsOpenMenuAndRemove
 void VerifyUiPopupToolsBuilderTests_FullyClippedAnchorCancelsItsOpenContextMenuDuringScopeEnd(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.openBySecondary(2u));
-    ASSERT_TRUE(self.acceptTools(3u, false, true, MakeUiPopupRouterRect(900.0f, 900.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.acceptTools(3u, false, true, Rect(900.0f, 900.0f, 360.0f, 280.0f)));
     EXPECT_FALSE(self.m_menu.isOpen());
     EXPECT_FALSE(self.m_menuResult.activated);
     EXPECT_FALSE(self.m_context.input().hasPopup());
@@ -1529,7 +1479,7 @@ void VerifyUiPopupToolsBuilderTests_OneMenuStateCannotOwnTwoAttachmentsInTheSame
 
 void VerifyUiPopupToolsBuilderTests_MissingMenuAnchorRejectsTheCandidate(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.begin(1u));
-    ASSERT_TRUE(self.m_builder.beginPanel("panel", MakeUiPopupRouterRect(10.0f, 10.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 280.0f)));
     const ContextMenuResult result = self.m_builder.contextMenu("menu", "missing", self.m_source, self.m_menu, self.m_menuOptions);
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(self.m_context.failed());
@@ -1543,7 +1493,7 @@ void VerifyUiPopupToolsBuilderTests_InvalidMenuWheelStepRejectsTheCandidate(mut 
 
 void VerifyUiPopupToolsBuilderTests_ExternalMenuCloseBeforeScopeEndPreservesTheMutationAndRejectsTheLoan(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
-    ASSERT_TRUE(self.m_menu.open(MakeUiPopupRouterRect(40.0f, 60.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareTools(2u, false));
     const u64 revision = self.m_menu.revision();
     self.m_menu.close();
@@ -1555,7 +1505,7 @@ void VerifyUiPopupToolsBuilderTests_ExternalMenuCloseBeforeScopeEndPreservesTheM
 
 void VerifyUiPopupToolsBuilderTests_SourceMutationDuringRowPaintingRejectsTheCandidateWithoutRollingBackData(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
-    ASSERT_TRUE(self.m_menu.open(MakeUiPopupRouterRect(40.0f, 60.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareTools(2u, false));
     self.m_source.changeRevisionOnText = true;
     const u64 revision = self.m_source.contentRevision;
@@ -1567,7 +1517,7 @@ void VerifyUiPopupToolsBuilderTests_SourceMutationDuringRowPaintingRejectsTheCan
 
 void VerifyUiPopupToolsBuilderTests_ReentrantSourceClosePreservesTheClosedStateAndRejectsDeferredPainting(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
-    ASSERT_TRUE(self.m_menu.open(MakeUiPopupRouterRect(40.0f, 60.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareTools(2u, false));
     self.armCloseMenuOnText();
     const u64 revision = self.m_menu.revision();
@@ -1579,7 +1529,7 @@ void VerifyUiPopupToolsBuilderTests_ReentrantSourceClosePreservesTheClosedStateA
 
 void VerifyUiPopupToolsBuilderTests_MenuSourceCallbackCannotMutateAnEarlierBorrowedTooltipAndStillPublish(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u));
-    ASSERT_TRUE(self.m_menu.open(MakeUiPopupRouterRect(40.0f, 60.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareTools(2u));
     const u64 revision = self.m_tooltip.revision();
     self.armResetTooltipOnText();
@@ -1601,8 +1551,8 @@ void VerifyUiPopupToolsLoanTests_ClosingAUserPopupAfterTooltipDeclarationHidesHe
     ASSERT_TRUE(self.m_context.input().hasPopup());
     ASSERT_TRUE(self.begin(3u));
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiPopupRouterRect(40.0f, 40.0f, 40.0f, 24.0f);
-    options.size = MakeUiPopupRouterPoint(320.0f, 220.0f);
+    options.anchor = Rect(40.0f, 40.0f, 40.0f, 24.0f);
+    options.size = Point(320.0f, 220.0f);
     ASSERT_TRUE(self.m_builder.beginPopup("plain", self.m_plainPopup, options));
     EXPECT_FALSE(self.m_builder.button("anchor", "Popup anchor", self.m_anchorOptions));
     ASSERT_TRUE(self.m_builder.tooltip("tip", "anchor", "Overlay help", self.m_tooltip, self.m_tooltipOptions));
@@ -1629,9 +1579,9 @@ void VerifyUiPopupToolsLoanTests_MenuRowCallbackCannotReplaceAnAlreadyPaintedOrd
     ordinarySource.generation = 1502u;
     ListState ordinary = ListState();
     ordinary.select(1u);
-    ASSERT_TRUE(self.m_menu.open(MakeUiPopupRouterRect(40.0f, 60.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.begin(2u));
-    ASSERT_TRUE(self.m_builder.beginPanel("panel", MakeUiPopupRouterRect(10.0f, 10.0f, 360.0f, 360.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 360.0f)));
     ListOptions options = ListOptions();
     options.width.policy = LayoutSizePolicy::Fixed;
     options.width.value = 220.0f;
@@ -1657,9 +1607,9 @@ void VerifyUiPopupToolsLoanTests_LateMenuMetadataCallbackCannotCloseAPaintedComb
     UiPopupToolsRevisionArmingComboSource comboSource = UiPopupToolsRevisionArmingComboSource(self.m_source, combo);
     combo.open();
     ASSERT_EQ(combo.selectedKey(), 0u);
-    ASSERT_TRUE(self.m_menu.open(MakeUiPopupRouterRect(40.0f, 60.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.begin(2u));
-    ASSERT_TRUE(self.m_builder.beginPanel("panel", MakeUiPopupRouterRect(10.0f, 10.0f, 360.0f, 360.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 360.0f)));
     EXPECT_FALSE(self.m_builder.button("anchor", "Anchor", self.m_anchorOptions));
     ASSERT_TRUE(self.m_builder.contextMenu("menu", "anchor", self.m_source, self.m_menu, self.m_menuOptions).valid);
     ComboOptions options = ComboOptions();
@@ -1767,8 +1717,8 @@ void VerifyUiPopupToolsNavigationTests_FocusLossAndRegainCannotRestorePreparedRo
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_TRUE(self.m_menu.isOpen());
 
-    EXPECT_FALSE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusLost)).focus.valid());
-    EXPECT_FALSE(self.send(MakeUiPopupRouterBareEvent(InputEventType::FocusGained)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).focus.valid());
+    EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_FALSE(self.m_context.input().capture().valid());

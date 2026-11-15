@@ -458,34 +458,11 @@ const StringView s_UiContextClaimListKey = "list";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Rect MakeUiComboLoanRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Point MakeUiComboLoanPoint(in f32 x, in f32 y){
-    Point point = Point();
-    point.x = x;
-    point.y = y;
-    return point;
-}
-
-InputSource MakeUiCommandInputSource(in u64 device, in u64 control){
-    InputSource source = InputSource();
-    source.device = device;
-    source.control = control;
-    return source;
-}
-
 HitTarget MakeUiCommandInputTarget(in u64 id){
     HitTarget target = HitTarget();
     target.id.value = id;
-    target.rectangle = MakeUiComboLoanRect(0.0f, 0.0f, 80.0f, 40.0f);
-    target.clip = MakeUiComboLoanRect(0.0f, 0.0f, 200.0f, 100.0f);
+    target.rectangle = Rect(0.0f, 0.0f, 80.0f, 40.0f);
+    target.clip = Rect(0.0f, 0.0f, 200.0f, 100.0f);
     target.declarationGeneration = 7u;
     target.focusable = true;
     target.activatable = true;
@@ -521,26 +498,14 @@ InputEvent MakeUiCommandInputKey(in InputEventTypeEnum type, in b8 shift, in b8 
     return event;
 }
 
-Array<HitTarget, 1u> MakeUiSingleHitTargetArray(in HitTarget target){
-    Array<HitTarget, 1u> targets = Array<HitTarget, 1u>();
-    targets[0u] = target;
-    return targets;
-}
-
 Array<InputKeyBinding, 1u> MakeUiSingleKeyBindingArray(in InputKeyBinding binding){
     Array<InputKeyBinding, 1u> bindings = Array<InputKeyBinding, 1u>();
     bindings[0u] = binding;
     return bindings;
 }
 
-Array<PopupScope, 1u> MakeUiSinglePopupScopeArray(in PopupScope scope){
-    Array<PopupScope, 1u> scopes = Array<PopupScope, 1u>();
-    scopes[0u] = scope;
-    return scopes;
-}
-
 b8 DeclareUiComboLoanPair(mut UiComboLoanTests self, in u64 generation, in IListDataSource secondSource, mut ComboState secondState){
-    if(!self.begin(generation) || !self.m_builder.beginPanel(s_UiComboLoanPanelKey, MakeUiComboLoanRect(10.0f, 10.0f, 320.0f, 240.0f)))
+    if(!self.begin(generation) || !self.m_builder.beginPanel(s_UiComboLoanPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)))
         return false;
     const ComboOptions options = MakeUiComboLoanDefaultOptions();
     return self.m_builder.comboBox(s_UiComboLoanKey, self.m_source, self.m_state, options).valid
@@ -712,8 +677,8 @@ void VerifyUiComboLoanTests_ClosedUserPopupSuppressesLaterComboBeforeSourceOrMod
     PopupState popupState = PopupState();
     popupState.open();
     PopupOptions options = PopupOptions();
-    options.anchor = MakeUiComboLoanRect(30.0f, 40.0f, 100.0f, 30.0f);
-    options.size = MakeUiComboLoanPoint(280.0f, 200.0f);
+    options.anchor = Rect(30.0f, 40.0f, 100.0f, 30.0f);
+    options.size = Point(280.0f, 200.0f);
     self.m_state.select(1u);
     const u64 inputGeneration = self.m_state.inputGeneration();
     ASSERT_TRUE(self.begin(1u));
@@ -739,7 +704,7 @@ void VerifyUiComboLoanTests_MatchingPanelEndReleasesItsSourceAndStateBeforeTheNe
     self.m_callbacks.arm(UiComboLoanMutationKind::RevisionSelect, 9u);
     self.m_callbacks.count = 0u;
     ++self.m_callbacks.contentRevision;
-    ASSERT_TRUE(self.m_builder.beginPanel("later", MakeUiComboLoanRect(400.0f, 10.0f, 200.0f, 120.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel("later", Rect(400.0f, 10.0f, 200.0f, 120.0f)));
     ASSERT_TRUE(self.m_builder.label("label", "Later panel"));
     ASSERT_TRUE(self.m_builder.endPanel());
     ASSERT_TRUE(self.m_context.endRoot());
@@ -804,8 +769,8 @@ void VerifyUiComboLoanTests_LaterPopupTextCannotChangeTheEarlierSourceAfterItsLo
 void VerifyUiCommandInputTests_TwoControllersRetainIndependentOwnersForTheSameCommand(mut UiCommandInputTests self){
     const HitTarget host = MakeUiCommandInputControl(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(host), 1u));
-    const InputSource first = MakeUiCommandInputSource(1u, 5u);
-    const InputSource second = MakeUiCommandInputSource(2u, 5u);
+    const InputSource first = MakeUiInputSource(1u, 5u);
+    const InputSource second = MakeUiInputSource(2u, 5u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, first, InputCommand::Down, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, second, InputCommand::Down, false)).routing.commandConsumed);
     const Expected<ControlAction> actionResult1 = self.take(host);
@@ -898,7 +863,7 @@ void VerifyUiCommandInputTests_HeldPhysicalPressPinsCommandSelectionAndEditAdmis
 }
 
 void VerifyUiCommandInputTests_AnUnconsumedInitialPressCannotClaimUiAfterFocusAppears(mut UiCommandInputTests self){
-    const InputSource source = MakeUiCommandInputSource(1u, 1u);
+    const InputSource source = MakeUiInputSource(1u, 1u);
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Activate, false)).routing.commandConsumed);
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
@@ -917,7 +882,7 @@ void VerifyUiCommandInputTests_AnUnconsumedInitialPressCannotClaimUiAfterFocusAp
 void VerifyUiCommandInputTests_RetiredControlOwnerCannotReviveWhenTheExactOldTargetReturns(mut UiCommandInputTests self){
     const HitTarget host = MakeUiCommandInputControl(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(host), 1u));
-    const InputSource source = MakeUiCommandInputSource(3u, 9u);
+    const InputSource source = MakeUiInputSource(3u, 9u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Down, false)).routing.commandConsumed);
     const Expected<ControlAction> actionResult1 = self.take(host);
     ASSERT_TRUE(actionResult1.has_value());
@@ -935,7 +900,7 @@ void VerifyUiCommandInputTests_RetiredEditorCannotBorrowAHeldCommandAfterReturni
     HitTarget editor = MakeUiCommandInputTarget(1u);
     editor.textEditable = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(editor), 1u));
-    const InputSource source = MakeUiCommandInputSource(3u, 9u);
+    const InputSource source = MakeUiInputSource(3u, 9u);
     const UiCommandInputRouted dispatchResult1 = self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Left, false));
     EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     EXPECT_TRUE(self.m_router.canEditCommand(dispatchResult1.event));
@@ -961,11 +926,11 @@ void VerifyUiCommandInputTests_HeldEditingCommandCannotMoveToAnotherFocusedEdito
     targets[0u] = first;
     targets[1u] = second;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
-    const InputSource edit = MakeUiCommandInputSource(3u, 1u);
+    const InputSource edit = MakeUiInputSource(3u, 1u);
     const UiCommandInputRouted dispatchResult1 = self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, edit, InputCommand::Left, false));
     EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     EXPECT_TRUE(self.m_router.canEditCommand(dispatchResult1.event));
-    const InputSource traverse = MakeUiCommandInputSource(3u, 2u);
+    const InputSource traverse = MakeUiInputSource(3u, 2u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, traverse, InputCommand::FocusNext, false)).routing.commandConsumed);
     EXPECT_EQ(self.m_router.focus(), second.id);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, traverse, InputCommand::None, false)).routing.commandConsumed);
@@ -991,7 +956,7 @@ void VerifyUiCommandInputTests_DelegatedAcceptStillReachesEditorSubmissionWhileV
     targets[0u] = editor;
     targets[1u] = host;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
-    const InputSource submit = MakeUiCommandInputSource(4u, 1u);
+    const InputSource submit = MakeUiInputSource(4u, 1u);
     const UiCommandInputRouted dispatchResult1 = self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, submit, InputCommand::Accept, false));
     EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     EXPECT_TRUE(self.m_router.canEditCommand(dispatchResult1.event));
@@ -1004,7 +969,7 @@ void VerifyUiCommandInputTests_DelegatedAcceptStillReachesEditorSubmissionWhileV
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::Submit);
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, submit, InputCommand::None, false)).routing.commandConsumed);
-    const InputSource navigate = MakeUiCommandInputSource(4u, 2u);
+    const InputSource navigate = MakeUiInputSource(4u, 2u);
     const UiCommandInputRouted dispatchResult2 = self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, navigate, InputCommand::Down, false));
     EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     EXPECT_FALSE(self.m_router.canEditCommand(dispatchResult2.event));
@@ -1026,7 +991,7 @@ void VerifyUiCommandInputTests_DelegatedAcceptStillReachesEditorSubmissionWhileV
 void VerifyUiCommandInputTests_ClearFocusAndNativeLossRetainReleaseOwnershipButCancelPendingSubmissions(mut UiCommandInputTests self){
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    const InputSource held = MakeUiCommandInputSource(5u, 1u);
+    const InputSource held = MakeUiInputSource(5u, 1u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, held, InputCommand::Activate, false)).routing.commandConsumed);
     self.m_router.clearFocus();
     EXPECT_TRUE(self.m_router.ownsSource(held));
@@ -1038,7 +1003,7 @@ void VerifyUiCommandInputTests_ClearFocusAndNativeLossRetainReleaseOwnershipButC
     EXPECT_TRUE(self.send(focusLost).routing.commandConsumed);
     EXPECT_TRUE(self.m_router.ownsSource(held));
     EXPECT_TRUE(self.m_router.wantsCommands());
-    const InputSource traverse = MakeUiCommandInputSource(5u, 2u);
+    const InputSource traverse = MakeUiInputSource(5u, 2u);
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, traverse, InputCommand::FocusNext, false)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, held, InputCommand::Activate, false)).routing.commandConsumed);
@@ -1091,7 +1056,7 @@ void VerifyUiCommandInputTests_OrphanRepeatsAfterNativeLossAndResetNeedReleaseBe
     HitTarget editor = MakeUiCommandInputTarget(1u);
     editor.textEditable = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(editor), 1u));
-    const InputSource edit = MakeUiCommandInputSource(7u, 1u);
+    const InputSource edit = MakeUiInputSource(7u, 1u);
     const UiCommandInputRouted dispatchResult1 = self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, edit, InputCommand::Left, false));
     EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     EXPECT_TRUE(self.m_router.canEditCommand(dispatchResult1.event));
@@ -1122,13 +1087,13 @@ void VerifyUiCommandInputTests_OrphanRepeatsAfterNativeLossAndResetNeedReleaseBe
     targets[0u] = editor;
     targets[1u] = button;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
-    const InputSource traverse = MakeUiCommandInputSource(7u, 2u);
+    const InputSource traverse = MakeUiInputSource(7u, 2u);
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
     EXPECT_EQ(self.m_router.focus(), editor.id);
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, traverse, InputCommand::None, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, traverse, InputCommand::FocusNext, false)).routing.commandConsumed);
     EXPECT_EQ(self.m_router.focus(), button.id);
-    const InputSource activate = MakeUiCommandInputSource(7u, 3u);
+    const InputSource activate = MakeUiInputSource(7u, 3u);
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, activate, InputCommand::Activate, true)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(button.id));
     EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, activate, InputCommand::None, false)).routing.commandConsumed);
@@ -1143,19 +1108,19 @@ void VerifyUiCommandInputTests_MalformedCommandSourcesRejectWithoutChangingExist
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     Array<InputSource, 2u> invalidSources = Array<InputSource, 2u>();
     invalidSources[0u] = InputSource();
-    invalidSources[1u] = MakeUiCommandInputSource(1u, 0u);
+    invalidSources[1u] = MakeUiInputSource(1u, 0u);
     for(in InputSource source : invalidSources)
         EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Activate, false)).has_value());
-    EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, MakeUiCommandInputSource(1u, 1u), MakeUiInvalidInputCommand(), false)).has_value());
+    EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, MakeUiInputSource(1u, 1u), MakeUiInvalidInputCommand(), false)).has_value());
     EXPECT_FALSE(self.m_router.process().commandConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
-    InputEvent strayRelease = MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiCommandInputSource(2u, 2u), InputCommand::None, false);
+    InputEvent strayRelease = MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiInputSource(2u, 2u), InputCommand::None, false);
     strayRelease.allowText = true;
     const Expected<InputEvent> outputResult = self.queueNative(strayRelease);
     ASSERT_TRUE(outputResult.has_value());
     EXPECT_FALSE(outputResult.value().allowText);
     EXPECT_FALSE(self.m_router.process().commandConsumed);
-    const InputSource zeroDevice = MakeUiCommandInputSource(0u, 1u);
+    const InputSource zeroDevice = MakeUiInputSource(0u, 1u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, zeroDevice, InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, zeroDevice, InputCommand::None, false)).routing.commandConsumed);
@@ -1165,8 +1130,8 @@ void VerifyUiCommandInputTests_MalformedCommandSourcesRejectWithoutChangingExist
 void VerifyUiCommandInputTests_ExplicitDeviceTerminationPreservesAnotherProvidersHeldSubmit(mut UiCommandInputTests self){
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    const InputSource first = MakeUiCommandInputSource(31u, 7u);
-    const InputSource second = MakeUiCommandInputSource(32u, 7u);
+    const InputSource first = MakeUiInputSource(31u, 7u);
+    const InputSource second = MakeUiInputSource(32u, 7u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, first, InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, second, InputCommand::Activate, false)).routing.commandConsumed);
     self.m_router.cancelDeviceInput(first.device);
@@ -1183,10 +1148,10 @@ void VerifyUiCommandInputTests_ExactSourceCapacityRejectsOverflowWithoutLosingRe
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     for(usize index = 0u; index < s_InputMaxSources; ++index)
-        EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, MakeUiCommandInputSource(1u, index + 1u), InputCommand::Left, false)).routing.commandConsumed);
-    const InputSource overflow = MakeUiCommandInputSource(1u, s_InputMaxSources + 1u);
+        EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, MakeUiInputSource(1u, index + 1u), InputCommand::Left, false)).routing.commandConsumed);
+    const InputSource overflow = MakeUiInputSource(1u, s_InputMaxSources + 1u);
     EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, overflow, InputCommand::Right, false)).has_value());
-    const InputSource first = MakeUiCommandInputSource(1u, 1u);
+    const InputSource first = MakeUiInputSource(1u, 1u);
     EXPECT_TRUE(self.m_router.ownsSource(first));
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, first, InputCommand::None, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, overflow, InputCommand::Right, false)).routing.commandConsumed);
@@ -1196,14 +1161,14 @@ void VerifyUiCommandInputTests_ExactSourceCapacityRejectsOverflowWithoutLosingRe
     EXPECT_TRUE(self.m_router.wantsCommands());
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, overflow, InputCommand::None, false)).routing.commandConsumed);
     for(usize index = 1u; index < s_InputMaxSources; ++index)
-        EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiCommandInputSource(1u, index + 1u), InputCommand::None, false)).routing.commandConsumed);
+        EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiInputSource(1u, index + 1u), InputCommand::None, false)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.wantsCommands());
 }
 
 void VerifyUiCommandInputTests_FullEventQueueCannotReleaseOrChangeAnAlreadyAdmittedSource(mut UiCommandInputTests self){
     const HitTarget host = MakeUiCommandInputControl(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(host), 1u));
-    const InputSource source = MakeUiCommandInputSource(8u, 8u);
+    const InputSource source = MakeUiInputSource(8u, 8u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Down, false)).routing.commandConsumed);
     InputEvent pointerMove = InputEvent();
     pointerMove.type = InputEventType::PointerMove;
@@ -1222,7 +1187,7 @@ void VerifyUiCommandInputTests_DirectContextMenuReleaseCopiesAcceptedAnchorAndDo
     HitTarget target = MakeUiCommandInputTarget(1u);
     target.contextMenu = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    const InputSource source = MakeUiCommandInputSource(9u, 9u);
+    const InputSource source = MakeUiInputSource(9u, 9u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::ContextMenu, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.consumeContextMenu(target.id, target.declarationGeneration).has_value());
@@ -1241,12 +1206,12 @@ void VerifyUiCommandInputTests_DirectContextMenuReleaseCopiesAcceptedAnchorAndDo
 void VerifyUiCommandInputTests_IndependentControllerSubmitReleasesDoNotTransferOrRepeat(mut UiCommandInputTests self){
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    const InputSource first = MakeUiCommandInputSource(1u, 8u);
-    const InputSource second = MakeUiCommandInputSource(2u, 8u);
+    const InputSource first = MakeUiInputSource(1u, 8u);
+    const InputSource second = MakeUiInputSource(2u, 8u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, first, InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, second, InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
-    EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiCommandInputSource(3u, 8u), InputCommand::Activate, false)).routing.commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiInputSource(3u, 8u), InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandUp, first, InputCommand::None, true)).routing.commandConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
@@ -1269,8 +1234,8 @@ void VerifyUiCommandInputTests_SubmitCannotReviveWhenFocusReturnsToTheOriginalDe
     targets[0u] = first;
     targets[1u] = second;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
-    const InputSource activate = MakeUiCommandInputSource(5u, 5u);
-    const InputSource traverse = MakeUiCommandInputSource(5u, 6u);
+    const InputSource activate = MakeUiInputSource(5u, 5u);
+    const InputSource traverse = MakeUiInputSource(5u, 6u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, activate, InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, traverse, InputCommand::FocusNext, false)).routing.commandConsumed);
     EXPECT_EQ(self.m_router.focus(), second.id);
@@ -1287,9 +1252,9 @@ void VerifyUiCommandInputTests_EditorCancelRetiresAllSubmitSourcesButKeepsTheirR
     editor.textEditable = true;
     editor.activatable = false;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(editor), 1u));
-    const InputSource first = MakeUiCommandInputSource(2u, 1u);
-    const InputSource second = MakeUiCommandInputSource(3u, 1u);
-    const InputSource cancel = MakeUiCommandInputSource(2u, 2u);
+    const InputSource first = MakeUiInputSource(2u, 1u);
+    const InputSource second = MakeUiInputSource(3u, 1u);
+    const InputSource cancel = MakeUiInputSource(2u, 2u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, first, InputCommand::Submit, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, second, InputCommand::Accept, false)).routing.commandConsumed);
     EXPECT_TRUE(self.m_router.pressed(editor.id));
@@ -1341,8 +1306,8 @@ void VerifyUiCommandInputTests_CustomSubmitBindingPinsItsReleaseAcrossModifierAn
 void VerifyUiCommandInputTests_QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedCommand(mut UiCommandInputTests self){
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    const InputSource released = MakeUiCommandInputSource(41u, 1u);
-    const InputSource held = MakeUiCommandInputSource(41u, 2u);
+    const InputSource released = MakeUiInputSource(41u, 1u);
+    const InputSource held = MakeUiInputSource(41u, 2u);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, released, InputCommand::Activate, false)).routing.commandConsumed);
     EXPECT_TRUE(self.send(MakeUiCommandInputCommand(InputEventType::CommandDown, held, InputCommand::Activate, false)).routing.commandConsumed);
     ASSERT_TRUE(self.m_router.queue(MakeUiCommandInputCommand(InputEventType::CommandUp, released, InputCommand::None, false)).has_value());

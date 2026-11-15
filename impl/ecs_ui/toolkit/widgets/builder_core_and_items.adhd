@@ -38,13 +38,6 @@ LayoutNodeDesc BuildSizedLeafNodeDesc(in LayoutSize width, in LayoutSize height,
     return description;
 }
 
-LayoutNodeDesc BuildWidthLeafNodeDesc(in LayoutSize width, in Point intrinsicSize){
-    LayoutNodeDesc description;
-    description.width = width;
-    description.intrinsicSize = intrinsicSize;
-    return description;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

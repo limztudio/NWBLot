@@ -14,87 +14,6 @@ const Name s_GpuExtFrontierMetadataCompletion = "tests/task_graph/metadata_exter
 const Name s_GpuExtFrontierSecondMergeDomain = "tests/task_graph/frontier_scored_second_domain";
 const Name s_GpuExtFrontierCrossQueueMergeDomain = "tests/task_graph/frontier_scored_cross_queue";
 
-SingleQueueCompile GpuExtFrontier_MakeSingleQueueCompile(mut TestArena testArena){
-    return SingleQueueCompile(testArena);
-}
-
-TwoQueueCompile GpuExtFrontier_MakeTwoQueueCompile(mut TestArena testArena){
-    return TwoQueueCompile(testArena);
-}
-
-GpuPhysicalQueueTopology GpuExtFrontier_MakeTopology(in Span<GpuPhysicalQueueInfo> queues){
-    return MakeTopology(queues);
-}
-
-QueueSubmissionToken GpuExtFrontier_MakeToken(
-    in u64 value,
-    in u16 physicalQueueIndex,
-    in u16 deviceGeneration,
-    in CommandQueueEnum queue
-){
-    QueueSubmissionToken token = QueueSubmissionToken();
-    token.value = value;
-    token.physicalQueueIndex = physicalQueueIndex;
-    token.deviceGeneration = deviceGeneration;
-    token.queue = queue;
-    return token;
-}
-
-Optional<QueueSubmissionToken> GpuExtFrontier_ExternalCompletionToken(
-    in GpuTaskGraphDeclarationReadView declarations,
-    in GpuExternalCompletionId completion
-){
-    return ExternalCompletionTokenValue(declarations, completion);
-}
-
-b8 GpuExtFrontier_ValidateExternalDependencyTokens(
-    in GpuTaskGraphDeclarationReadView declarations,
-    in GpuCompiledGraphReadView compiled,
-    in GpuSubmissionPacketRange range
-){
-    return ValidateExternalDependencyTokens(declarations, compiled, range);
-}
-
-b8 GpuExtFrontier_HasEdge(in GpuTaskGraphAnalysis analysis, in GpuTaskId producer, in GpuTaskId consumer){
-    return HasEdge(analysis, producer, consumer);
-}
-
-Optional<GpuTaskQueueAssignment> GpuExtFrontier_FindAssignment(in GpuTaskGraphQueueAssignments assignments, in GpuTaskId task){
-    return FindQueueAssignment(assignments, task);
-}
-
-Optional<GpuCompiledTask> GpuExtFrontier_TaskPlan(in GpuCompiledTaskView view){
-    return TaskPlan(view);
-}
-
-Span<GpuCompiledBarrier> GpuExtFrontier_EpilogueBarriers(in GpuCompiledTaskView view){
-    return EpilogueBarriers(view);
-}
-
-Optional<GpuSubmissionPacket> GpuExtFrontier_PacketPlan(in GpuCompiledPacketView view){
-    return PacketPlan(view);
-}
-
-b8 GpuExtFrontier_HasPacketDepsPtr(in GpuCompiledPacketView view){
-    return HasPacketDependenciesPtr(view);
-}
-
-Span<GpuPacketDependency> GpuExtFrontier_PacketDependencies(in GpuCompiledPacketView view){
-    return PacketDependencies(view);
-}
-
-Optional<GpuCompiledExternalResourceExport> GpuExtFrontier_ExportPlan(in GpuCompiledExternalResourceExportView view){
-    return ExportPlan(view);
-}
-
-Span<GpuCompiledExternalResourceExportSource> GpuExtFrontier_ExportSources(in GpuCompiledExternalResourceExportView view){
-    return ExportSources(view);
-}
-
-b8 GpuExtFrontier_HasTransfersPtr(in GpuCompiledGraphReadView plan){
-    return HasLogicalOwnershipTransfersPtr(plan);
-}
-
 b8 GpuExtFrontier_FirstTransferMatchesSliceStart(in GpuCompiledGraphReadView plan){
     const Span<GpuCompiledOwnershipTransfer> transfers = LogicalOwnershipTransfers(plan);
     const Optional<GpuCompiledOwnershipTransfer> firstOpt = LogicalOwnershipTransferAtValue(plan, 0u);
@@ -120,19 +39,6 @@ b8 GpuExtFrontier_FirstTransferMatchesSliceStart(in GpuCompiledGraphReadView pla
         && sliceFirst.concurrentSharingCouldAvoid == indexedFirst.concurrentSharingCouldAvoid;
 }
 
-Optional<GpuCompiledOwnershipTransfer> GpuExtFrontier_OwnershipTransferAt(in GpuCompiledGraphReadView plan, in usize index){
-    return LogicalOwnershipTransferAtValue(plan, index);
-}
-
-Expected<GpuTaskId> GpuExtFrontier_AddEmptyTask(in Name identity, in AStringView label, mut GpuTaskGraph graph){
-    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
-    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, emptyDeps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
-}
-
 void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionToken(){
     ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
 
@@ -147,7 +53,7 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
     const GpuExternalCompletionId completion = completionResult.value();
     ASSERT_TRUE(completion.valid());
 
-    const auto firstResult = GpuExtFrontier_AddEmptyTask(s_GpuCaseTaskGraphTokenPreflightFirst, "Token Preflight First", graph);
+    const auto firstResult = AddGpuEmptyTask(s_GpuCaseTaskGraphTokenPreflightFirst, "Token Preflight First", graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
     ASSERT_TRUE(first.valid());
@@ -172,7 +78,7 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -183,13 +89,13 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
         ASSERT_EQ(views.compiled.packetCount(), 2u);
         const GpuSubmissionPacketRange firstRange = views.compiled.packetRangeForTasks(first, first);
         const GpuSubmissionPacketRange secondRange = views.compiled.packetRangeForTasks(second, second);
-        EXPECT_FALSE(GpuExtFrontier_ExternalCompletionToken(views.declarations, completion).has_value());
-        EXPECT_TRUE(GpuExtFrontier_ValidateExternalDependencyTokens(views.declarations, views.compiled, firstRange));
-        EXPECT_FALSE(GpuExtFrontier_ValidateExternalDependencyTokens(views.declarations, views.compiled, secondRange));
-        EXPECT_FALSE(GpuExtFrontier_ValidateExternalDependencyTokens(views.declarations, views.compiled, views.compiled.allPacketRange()));
+        EXPECT_FALSE(ExternalCompletionTokenValue(views.declarations, completion).has_value());
+        EXPECT_TRUE(ValidateExternalDependencyTokens(views.declarations, views.compiled, firstRange));
+        EXPECT_FALSE(ValidateExternalDependencyTokens(views.declarations, views.compiled, secondRange));
+        EXPECT_FALSE(ValidateExternalDependencyTokens(views.declarations, views.compiled, views.compiled.allPacketRange()));
     }
 
-    const QueueSubmissionToken token = GpuExtFrontier_MakeToken(17u, queues[0u].id.index, queues[0u].id.deviceGeneration, queues[0u].queueClass);
+    const QueueSubmissionToken token = MakeGpuSubmissionToken(17u, queues[0u].id.index, queues[0u].id.deviceGeneration, queues[0u].queueClass);
     {
         GpuExternalCompletionDesc boundDesc = GpuExternalCompletionDesc();
         boundDesc.setIdentity(completionIdentity);
@@ -203,13 +109,13 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
-        EXPECT_FALSE(GpuExtFrontier_ValidateExternalDependencyTokens(declarations, compiledPlan, compiledPlan.allPacketRange()));
+        EXPECT_FALSE(ValidateExternalDependencyTokens(declarations, compiledPlan, compiledPlan.allPacketRange()));
     }
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const GpuTaskGraphReadViews views = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
-        EXPECT_TRUE(GpuExtFrontier_ValidateExternalDependencyTokens(views.declarations, views.compiled, views.compiled.allPacketRange()));
+        EXPECT_TRUE(ValidateExternalDependencyTokens(views.declarations, views.compiled, views.compiled.allPacketRange()));
     }
 }
 
@@ -218,7 +124,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const QueueSubmissionToken token = GpuExtFrontier_MakeToken(31u, 2u, 1u, CommandQueue::Transfer);
+    const QueueSubmissionToken token = MakeGpuSubmissionToken(31u, 2u, 1u, CommandQueue::Transfer);
     GpuExternalCompletionDesc ownedDesc = GpuExternalCompletionDesc();
     ownedDesc.setIdentity(s_GpuExtFrontierOwnedCompletion);
     ownedDesc.setMarkerLabel("Owned External Completion");
@@ -233,7 +139,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         ASSERT_TRUE(declarations.valid());
         ASSERT_EQ(declarations.externalCompletionCount(), 1u);
-        const Optional<QueueSubmissionToken> storedToken = GpuExtFrontier_ExternalCompletionToken(declarations, completion);
+        const Optional<QueueSubmissionToken> storedToken = ExternalCompletionTokenValue(declarations, completion);
         ASSERT_TRUE(storedToken.has_value());
         EXPECT_TRUE(declarations.validForDeviceGeneration(token.deviceGeneration));
         tokenFirstRevision = declarations.declarationRevision();
@@ -305,7 +211,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         ASSERT_TRUE(declarations.valid());
         EXPECT_FALSE(declarations.externalCompletionAt(metadataCompletion.index).hasToken);
-        EXPECT_FALSE(GpuExtFrontier_ExternalCompletionToken(declarations, metadataCompletion).has_value());
+        EXPECT_FALSE(ExternalCompletionTokenValue(declarations, metadataCompletion).has_value());
     }
 
     Array<GpuExternalCompletionId, 2> taskExternalDependencies = Array<GpuExternalCompletionId, 2>();
@@ -324,7 +230,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
     queues[2u] = DedicatedTransferQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -339,7 +245,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     Array<GpuPhysicalQueueInfo, 2> missingProducerQueues = Array<GpuPhysicalQueueInfo, 2>();
     missingProducerQueues[0u] = GraphicsQueue();
     missingProducerQueues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology missingProducerTopology = GpuExtFrontier_MakeTopology(missingProducerQueues);
+    const GpuPhysicalQueueTopology missingProducerTopology = MakeTopology(missingProducerQueues);
     GpuTaskGraphAnalysis invalidTopologyAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments invalidTopologyAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph invalidTopologyCompiledGraph = GpuCompiledGraph(testArena.arena);
@@ -351,7 +257,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     wrongProducerClassQueues[2u] = DedicatedTransferQueue();
     wrongProducerClassQueues[2u].queueClass = CommandQueue::Compute;
     wrongProducerClassQueues[2u].capabilities = QueueCapabilities(GpuQueueCapability::Compute, GpuQueueCapability::Transfer);
-    const GpuPhysicalQueueTopology wrongProducerClassTopology = GpuExtFrontier_MakeTopology(wrongProducerClassQueues);
+    const GpuPhysicalQueueTopology wrongProducerClassTopology = MakeTopology(wrongProducerClassQueues);
     EXPECT_FALSE(Compile(invalidTopologyAnalysis, invalidTopologyAssignments, invalidTopologyCompiledGraph, operationScratchArena, graph, wrongProducerClassTopology));
 
     u64 metadataFirstRevision = 0u;
@@ -374,7 +280,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
         ASSERT_TRUE(compiledPlan.valid());
         EXPECT_NE(declarations.declarationRevision(), metadataFirstRevision);
         EXPECT_TRUE(declarations.externalCompletionAt(metadataCompletion.index).hasToken);
-        const Optional<QueueSubmissionToken> upgradedToken = GpuExtFrontier_ExternalCompletionToken(declarations, metadataCompletion);
+        const Optional<QueueSubmissionToken> upgradedToken = ExternalCompletionTokenValue(declarations, metadataCompletion);
         ASSERT_TRUE(upgradedToken.has_value());
         EXPECT_EQ(upgradedToken.value().queue, token.queue);
         EXPECT_EQ(upgradedToken.value().value, token.value);
@@ -422,7 +328,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     staleTopologyQueues[2u] = DedicatedTransferQueue();
     for(mut GpuPhysicalQueueInfo staleQueue : staleTopologyQueues)
         ++staleQueue.id.deviceGeneration;
-    const GpuPhysicalQueueTopology staleTopology = GpuExtFrontier_MakeTopology(staleTopologyQueues);
+    const GpuPhysicalQueueTopology staleTopology = MakeTopology(staleTopologyQueues);
     GpuTaskGraphAnalysis staleAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments staleAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph staleCompiledGraph = GpuCompiledGraph(testArena.arena);
@@ -432,8 +338,8 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
         const GpuTaskGraphReadViews views = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
         EXPECT_TRUE(views.compiled.validFor(views.declarations));
-        const Optional<QueueSubmissionToken> storedToken = GpuExtFrontier_ExternalCompletionToken(views.declarations, completion);
-        const Optional<QueueSubmissionToken> upgradedToken = GpuExtFrontier_ExternalCompletionToken(views.declarations, metadataCompletion);
+        const Optional<QueueSubmissionToken> storedToken = ExternalCompletionTokenValue(views.declarations, completion);
+        const Optional<QueueSubmissionToken> upgradedToken = ExternalCompletionTokenValue(views.declarations, metadataCompletion);
         ASSERT_TRUE(storedToken.has_value());
         ASSERT_TRUE(upgradedToken.has_value());
         EXPECT_EQ(storedToken.value().value, token.value);
@@ -446,7 +352,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         ASSERT_TRUE(declarations.valid());
-        EXPECT_FALSE(GpuExtFrontier_ExternalCompletionToken(declarations, completion).has_value());
+        EXPECT_FALSE(ExternalCompletionTokenValue(declarations, completion).has_value());
     }
 }
 
@@ -458,7 +364,7 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuGraphResourceDesc resDesc = GpuGraphResourceDesc();
     resDesc.setIdentity(s_GpuCaseTaskGraphExternalFinalReleaseBuffer);
@@ -502,11 +408,11 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
         const GpuCompiledTaskView compiledTaskView = compiledPlan.findTask(task);
-        const Optional<GpuCompiledTask> compiledTask = GpuExtFrontier_TaskPlan(compiledTaskView);
+        const Optional<GpuCompiledTask> compiledTask = TaskPlan(compiledTaskView);
         ASSERT_TRUE(compiledTask.has_value());
         EXPECT_EQ(compiledTask.value().queue, queues[0u].id);
 
-        const Optional<GpuCompiledExternalResourceExport> exportInfo = GpuExtFrontier_ExportPlan(compiledPlan.externalResourceExport(buffer));
+        const Optional<GpuCompiledExternalResourceExport> exportInfo = ExportPlan(compiledPlan.externalResourceExport(buffer));
         ASSERT_TRUE(exportInfo.has_value());
         EXPECT_EQ(exportInfo.value().resource, buffer);
         EXPECT_EQ(exportInfo.value().producerTask, task);
@@ -514,7 +420,7 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
         EXPECT_EQ(exportInfo.value().destinationQueue, queues[1u].id);
         EXPECT_EQ(exportInfo.value().finalState, ResourceStates::ShaderResource);
 
-        const Span<GpuCompiledBarrier> barriers = GpuExtFrontier_EpilogueBarriers(compiledTaskView);
+        const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(compiledTaskView);
         ASSERT_EQ(barriers.size(), 2u);
         EXPECT_EQ(barriers[0u].type, GpuCompiledBarrierType::BufferStateExport);
         EXPECT_EQ(barriers[0u].resource, buffer);
@@ -541,10 +447,10 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
         EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
 
         ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
-        ASSERT_TRUE(GpuExtFrontier_HasTransfersPtr(compiledPlan));
+        ASSERT_TRUE(HasLogicalOwnershipTransfersPtr(compiledPlan));
         EXPECT_TRUE(GpuExtFrontier_FirstTransferMatchesSliceStart(compiledPlan));
-        EXPECT_FALSE(GpuExtFrontier_OwnershipTransferAt(compiledPlan, 1u).has_value());
-        const Optional<GpuCompiledOwnershipTransfer> transferOpt = GpuExtFrontier_OwnershipTransferAt(compiledPlan, 0u);
+        EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 1u).has_value());
+        const Optional<GpuCompiledOwnershipTransfer> transferOpt = LogicalOwnershipTransferAtValue(compiledPlan, 0u);
         ASSERT_TRUE(transferOpt.has_value());
         const GpuCompiledOwnershipTransfer ownershipTransfer = transferOpt.value();
         EXPECT_TRUE(ownershipTransfer.valid());
@@ -583,13 +489,13 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
     sameFamilyQueues[1u] = queues[1u];
     sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
     sameFamilyQueues[1u].queueIndex = 1u;
-    const GpuPhysicalQueueTopology sameFamilyTopology = GpuExtFrontier_MakeTopology(sameFamilyQueues);
+    const GpuPhysicalQueueTopology sameFamilyTopology = MakeTopology(sameFamilyQueues);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, sameFamilyTopology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
-    EXPECT_FALSE(GpuExtFrontier_HasTransfersPtr(compiledPlan));
-    EXPECT_FALSE(GpuExtFrontier_OwnershipTransferAt(compiledPlan, 0u).has_value());
+    EXPECT_FALSE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+    EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
     EXPECT_EQ(compiledPlan.compileStatistics().logicalOwnershipTransferCount, 0u);
 }
 
@@ -601,7 +507,7 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuGraphResourceDesc texDesc = GpuGraphResourceDesc();
     texDesc.setIdentity(s_GpuCaseTaskGraphExternalFinalMultiplePackets);
@@ -652,7 +558,7 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledExternalResourceExportView exportView = compiledPlan.externalResourceExport(texture);
-    const Optional<GpuCompiledExternalResourceExport> exportInfo = GpuExtFrontier_ExportPlan(exportView);
+    const Optional<GpuCompiledExternalResourceExport> exportInfo = ExportPlan(exportView);
     ASSERT_TRUE(exportInfo.has_value());
     EXPECT_EQ(exportInfo.value().resource, texture);
     EXPECT_EQ(exportInfo.value().destinationQueue, queues[1u].id);
@@ -660,7 +566,7 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
     // No singular semantic producer exists: each mip's terminal range belongs to a different packet and queue.
     EXPECT_FALSE(exportInfo.value().producerTask.valid());
     EXPECT_FALSE(exportInfo.value().sourceQueue.valid());
-    const Span<GpuCompiledExternalResourceExportSource> sources = GpuExtFrontier_ExportSources(exportView);
+    const Span<GpuCompiledExternalResourceExportSource> sources = ExportSources(exportView);
     ASSERT_EQ(sources.size(), 2u);
     EXPECT_EQ(sources[0u].producerTask, graphicsTask);
     EXPECT_EQ(sources[0u].sourceQueue, queues[0u].id);
@@ -671,14 +577,14 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
 
     const GpuCompiledTaskView graphicsView = compiledPlan.findTask(graphicsTask);
     const GpuCompiledTaskView computeView = compiledPlan.findTask(computeTask);
-    const Optional<GpuCompiledTask> compiledGraphics = GpuExtFrontier_TaskPlan(graphicsView);
-    const Optional<GpuCompiledTask> compiledCompute = GpuExtFrontier_TaskPlan(computeView);
+    const Optional<GpuCompiledTask> compiledGraphics = TaskPlan(graphicsView);
+    const Optional<GpuCompiledTask> compiledCompute = TaskPlan(computeView);
     ASSERT_TRUE(compiledGraphics.has_value());
     ASSERT_TRUE(compiledCompute.has_value());
     EXPECT_EQ(compiledGraphics.value().queue, queues[0u].id);
     EXPECT_EQ(compiledCompute.value().queue, queues[1u].id);
-    const Span<GpuCompiledBarrier> graphicsBarriers = GpuExtFrontier_EpilogueBarriers(graphicsView);
-    const Span<GpuCompiledBarrier> computeBarriers = GpuExtFrontier_EpilogueBarriers(computeView);
+    const Span<GpuCompiledBarrier> graphicsBarriers = EpilogueBarriers(graphicsView);
+    const Span<GpuCompiledBarrier> computeBarriers = EpilogueBarriers(computeView);
     ASSERT_EQ(graphicsBarriers.size(), 2u);
     ASSERT_EQ(computeBarriers.size(), 1u);
     EXPECT_EQ(graphicsBarriers[0u].type, GpuCompiledBarrierType::TextureStateExport);
@@ -687,10 +593,10 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
     EXPECT_EQ(computeBarriers[0u].type, GpuCompiledBarrierType::TextureStateExport);
 
     ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
-    ASSERT_TRUE(GpuExtFrontier_HasTransfersPtr(compiledPlan));
+    ASSERT_TRUE(HasLogicalOwnershipTransfersPtr(compiledPlan));
     EXPECT_TRUE(GpuExtFrontier_FirstTransferMatchesSliceStart(compiledPlan));
-    EXPECT_FALSE(GpuExtFrontier_OwnershipTransferAt(compiledPlan, 1u).has_value());
-    const Optional<GpuCompiledOwnershipTransfer> transferOpt = GpuExtFrontier_OwnershipTransferAt(compiledPlan, 0u);
+    EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 1u).has_value());
+    const Optional<GpuCompiledOwnershipTransfer> transferOpt = LogicalOwnershipTransferAtValue(compiledPlan, 0u);
     ASSERT_TRUE(transferOpt.has_value());
     const GpuCompiledOwnershipTransfer ownershipTransfer = transferOpt.value();
     EXPECT_TRUE(ownershipTransfer.valid());
@@ -736,10 +642,10 @@ void VerifyGpuExtFrontier_OrdersExternalFinalTransitionAfterOverlappingConcurren
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    TwoQueueCompile twoQueueCompile = GpuExtFrontier_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
     ASSERT_TRUE(twoQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_FALSE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
+    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
 
     const GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
     const GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
@@ -747,16 +653,16 @@ void VerifyGpuExtFrontier_OrdersExternalFinalTransitionAfterOverlappingConcurren
     ASSERT_TRUE(finalizingPacket.valid());
     ASSERT_NE(earlierPacket, finalizingPacket);
     const GpuCompiledTaskView finalizingView = compiledPlan.findTask(pair.finalizingReader);
-    const Optional<GpuCompiledTask> finalizingTask = GpuExtFrontier_TaskPlan(finalizingView);
+    const Optional<GpuCompiledTask> finalizingTask = TaskPlan(finalizingView);
     ASSERT_TRUE(finalizingTask.has_value());
     EXPECT_EQ(finalizingTask.value().prologueStateSeedCount, 0u);
 
-    const Span<GpuPacketDependency> dependencies = GpuExtFrontier_PacketDependencies(compiledPlan.packet(finalizingPacket));
+    const Span<GpuPacketDependency> dependencies = PacketDependencies(compiledPlan.packet(finalizingPacket));
     ASSERT_EQ(dependencies.size(), 1u);
     EXPECT_EQ(dependencies[0u].producer, earlierPacket);
     EXPECT_EQ(dependencies[0u].consumer, finalizingPacket);
 
-    const Span<GpuCompiledBarrier> barriers = GpuExtFrontier_EpilogueBarriers(finalizingView);
+    const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(finalizingView);
     ASSERT_EQ(barriers.size(), 1u);
     EXPECT_EQ(barriers[0u].type, GpuCompiledBarrierType::TextureStateExport);
     EXPECT_EQ(barriers[0u].before, ResourceStates::ShaderResource);
@@ -797,14 +703,14 @@ void VerifyGpuExtFrontier_RejectsUnpublishableExternalFinalStateContracts(){
             EXPECT_TRUE(gpuTaskAdmission.value().valid());
     }
     {
-        const auto secondGpuTaskAdmission = GpuExtFrontier_AddEmptyTask(s_GpuCaseTaskGraphExternalFinalUnrelated, "External Final Unrelated", graph);
+        const auto secondGpuTaskAdmission = AddGpuEmptyTask(s_GpuCaseTaskGraphExternalFinalUnrelated, "External Final Unrelated", graph);
         ASSERT_TRUE(secondGpuTaskAdmission.has_value());
         ASSERT_TRUE(secondGpuTaskAdmission.value().valid());
     }
 
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -836,24 +742,24 @@ void VerifyGpuExtFrontier_KeepsSameStateExternalExportConcurrentReadersIndepende
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    TwoQueueCompile twoQueueCompile = GpuExtFrontier_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
     ASSERT_TRUE(twoQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_FALSE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
+    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
 
     const GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
     const GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(finalizingPacket.valid());
     ASSERT_NE(earlierPacket, finalizingPacket);
-    const Optional<GpuSubmissionPacket> earlierPacketPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(earlierPacket));
-    const Optional<GpuSubmissionPacket> finalizingPacketPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(finalizingPacket));
+    const Optional<GpuSubmissionPacket> earlierPacketPlan = PacketPlan(compiledPlan.packet(earlierPacket));
+    const Optional<GpuSubmissionPacket> finalizingPacketPlan = PacketPlan(compiledPlan.packet(finalizingPacket));
     ASSERT_TRUE(earlierPacketPlan.has_value());
     ASSERT_TRUE(finalizingPacketPlan.has_value());
     EXPECT_EQ(earlierPacketPlan.value().dependencyCount, 0u);
     EXPECT_EQ(finalizingPacketPlan.value().dependencyCount, 0u);
 
-    const Span<GpuCompiledBarrier> barriers = GpuExtFrontier_EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
+    const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
     ASSERT_EQ(barriers.size(), 1u);
     EXPECT_EQ(barriers[0u].before, ResourceStates::ShaderResource);
     EXPECT_EQ(barriers[0u].after, ResourceStates::ShaderResource);
@@ -884,25 +790,25 @@ void VerifyGpuExtFrontier_KeepsDisjointExternalFinalTextureFragmentsIndependent(
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    TwoQueueCompile twoQueueCompile = GpuExtFrontier_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
     ASSERT_TRUE(twoQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_FALSE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
+    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
 
     const GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
     const GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(finalizingPacket.valid());
     ASSERT_NE(earlierPacket, finalizingPacket);
-    const Optional<GpuSubmissionPacket> earlierPacketPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(earlierPacket));
-    const Optional<GpuSubmissionPacket> finalizingPacketPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(finalizingPacket));
+    const Optional<GpuSubmissionPacket> earlierPacketPlan = PacketPlan(compiledPlan.packet(earlierPacket));
+    const Optional<GpuSubmissionPacket> finalizingPacketPlan = PacketPlan(compiledPlan.packet(finalizingPacket));
     ASSERT_TRUE(earlierPacketPlan.has_value());
     ASSERT_TRUE(finalizingPacketPlan.has_value());
     EXPECT_EQ(earlierPacketPlan.value().dependencyCount, 0u);
     EXPECT_EQ(finalizingPacketPlan.value().dependencyCount, 0u);
 
-    const Optional<GpuCompiledTask> earlierTask = GpuExtFrontier_TaskPlan(compiledPlan.findTask(pair.earlierReader));
-    const Optional<GpuCompiledTask> finalizingTask = GpuExtFrontier_TaskPlan(compiledPlan.findTask(pair.finalizingReader));
+    const Optional<GpuCompiledTask> earlierTask = TaskPlan(compiledPlan.findTask(pair.earlierReader));
+    const Optional<GpuCompiledTask> finalizingTask = TaskPlan(compiledPlan.findTask(pair.finalizingReader));
     ASSERT_TRUE(earlierTask.has_value());
     ASSERT_TRUE(finalizingTask.has_value());
     EXPECT_EQ(earlierTask.value().epilogueBarrierCount, 1u);
@@ -932,18 +838,18 @@ void VerifyGpuExtFrontier_ElidesSamePacketExternalFinalTransitionSelfDependency(
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    TwoQueueCompile twoQueueCompile = GpuExtFrontier_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
     ASSERT_TRUE(twoQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_FALSE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
+    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
 
     const GpuSubmissionPacketId packet = compiledPlan.packetForTask(pair.earlierReader);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(compiledPlan.packetForTask(pair.finalizingReader), packet);
-    const Optional<GpuSubmissionPacket> packetPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(packet));
+    const Optional<GpuSubmissionPacket> packetPlan = PacketPlan(compiledPlan.packet(packet));
     ASSERT_TRUE(packetPlan.has_value());
     EXPECT_EQ(packetPlan.value().dependencyCount, 0u);
-    const Optional<GpuCompiledTask> finalizingTask = GpuExtFrontier_TaskPlan(compiledPlan.findTask(pair.finalizingReader));
+    const Optional<GpuCompiledTask> finalizingTask = TaskPlan(compiledPlan.findTask(pair.finalizingReader));
     ASSERT_TRUE(finalizingTask.has_value());
     EXPECT_EQ(finalizingTask.value().epilogueBarrierCount, 1u);
 }
@@ -974,22 +880,22 @@ void VerifyGpuExtFrontier_OrdersExternalFinalTransitionsForWholeAllocationResour
         ASSERT_TRUE(pair.earlierReader.valid());
         ASSERT_TRUE(pair.finalizingReader.valid());
 
-        TwoQueueCompile twoQueueCompile = GpuExtFrontier_MakeTwoQueueCompile(testArena);
+        TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
         ASSERT_TRUE(twoQueueCompile.compile(graph));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-        EXPECT_FALSE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
+        EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
 
         const GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
         const GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
         ASSERT_TRUE(earlierPacket.valid());
         ASSERT_TRUE(finalizingPacket.valid());
         ASSERT_NE(earlierPacket, finalizingPacket);
-        const Span<GpuPacketDependency> dependencies = GpuExtFrontier_PacketDependencies(compiledPlan.packet(finalizingPacket));
+        const Span<GpuPacketDependency> dependencies = PacketDependencies(compiledPlan.packet(finalizingPacket));
         ASSERT_EQ(dependencies.size(), 1u);
         EXPECT_EQ(dependencies[0u].producer, earlierPacket);
         EXPECT_EQ(dependencies[0u].consumer, finalizingPacket);
 
-        const Span<GpuCompiledBarrier> barriers = GpuExtFrontier_EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
+        const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
         ASSERT_EQ(barriers.size(), 1u);
         EXPECT_EQ(barriers[0u].before, testCase.readState);
         EXPECT_EQ(barriers[0u].after, testCase.finalState);
@@ -1024,7 +930,7 @@ void VerifyGpuExtFrontier_ElidesSamePacketReleaseOnlyExternalFinalizationSelfDep
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -1034,10 +940,10 @@ void VerifyGpuExtFrontier_ElidesSamePacketReleaseOnlyExternalFinalizationSelfDep
     const GpuSubmissionPacketId packet = compiledPlan.packetForTask(pair.earlierReader);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(compiledPlan.packetForTask(pair.finalizingReader), packet);
-    const Optional<GpuSubmissionPacket> packetPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(packet));
+    const Optional<GpuSubmissionPacket> packetPlan = PacketPlan(compiledPlan.packet(packet));
     ASSERT_TRUE(packetPlan.has_value());
     EXPECT_EQ(packetPlan.value().dependencyCount, 0u);
-    const Span<GpuCompiledBarrier> barriers = GpuExtFrontier_EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
+    const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
     ASSERT_EQ(barriers.size(), 2u);
     EXPECT_EQ(barriers[0u].type, GpuCompiledBarrierType::TextureStateExport);
     EXPECT_EQ(barriers[0u].before, ResourceStates::ShaderResource);
@@ -1091,12 +997,12 @@ void VerifyGpuExtFrontier_AvoidsTransitiveExternalFinalizationPacketDependencies
     const GpuTaskId terminalReader = terminalReaderResult.value();
     ASSERT_TRUE(terminalReader.valid());
 
-    TwoQueueCompile twoQueueCompile = GpuExtFrontier_MakeTwoQueueCompile(testArena);
+    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
     ASSERT_TRUE(twoQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_TRUE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
-    EXPECT_TRUE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.finalizingReader, terminalReader));
-    EXPECT_FALSE(GpuExtFrontier_HasEdge(twoQueueCompile.analysis, pair.earlierReader, terminalReader));
+    EXPECT_TRUE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
+    EXPECT_TRUE(HasEdge(twoQueueCompile.analysis, pair.finalizingReader, terminalReader));
+    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, terminalReader));
 
     const GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
     const GpuSubmissionPacketId middlePacket = compiledPlan.packetForTask(pair.finalizingReader);
@@ -1104,8 +1010,8 @@ void VerifyGpuExtFrontier_AvoidsTransitiveExternalFinalizationPacketDependencies
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(middlePacket.valid());
     ASSERT_TRUE(terminalPacket.valid());
-    const Span<GpuPacketDependency> middleDependencies = GpuExtFrontier_PacketDependencies(compiledPlan.packet(middlePacket));
-    const Span<GpuPacketDependency> terminalDependencies = GpuExtFrontier_PacketDependencies(compiledPlan.packet(terminalPacket));
+    const Span<GpuPacketDependency> middleDependencies = PacketDependencies(compiledPlan.packet(middlePacket));
+    const Span<GpuPacketDependency> terminalDependencies = PacketDependencies(compiledPlan.packet(terminalPacket));
     ASSERT_EQ(middleDependencies.size(), 1u);
     ASSERT_EQ(terminalDependencies.size(), 1u);
     EXPECT_EQ(middleDependencies[0u].producer, earlierPacket);
@@ -1158,7 +1064,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsume
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuTaskGraphAnalysis explicitMergeAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments explicitMergeAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
@@ -1175,7 +1081,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsume
         EXPECT_NE(explicitFirstPacket, explicitConsumerPacket);
         const GpuCompiledPacketView explicitConsumerView = explicitMergePlan.packet(explicitConsumerPacket);
         ASSERT_TRUE(explicitConsumerView.valid());
-        const Span<GpuPacketDependency> deps = GpuExtFrontier_PacketDependencies(explicitConsumerView);
+        const Span<GpuPacketDependency> deps = PacketDependencies(explicitConsumerView);
         ASSERT_EQ(deps.size(), 1u);
         EXPECT_EQ(deps[0u].producer, explicitFirstPacket);
     }
@@ -1195,9 +1101,9 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsume
     ASSERT_TRUE(frontierFirstPacket.valid());
     EXPECT_NE(frontierFirstPacket, frontierUnrelatedPacket);
     EXPECT_NE(frontierUnrelatedPacket, frontierConsumerPacket);
-    const Optional<GpuSubmissionPacket> firstPktPlan = GpuExtFrontier_PacketPlan(frontierPlan.packet(frontierFirstPacket));
-    const Optional<GpuSubmissionPacket> unrelatedPktPlan = GpuExtFrontier_PacketPlan(frontierPlan.packet(frontierUnrelatedPacket));
-    const Optional<GpuSubmissionPacket> consumerPktPlan = GpuExtFrontier_PacketPlan(frontierPlan.packet(frontierConsumerPacket));
+    const Optional<GpuSubmissionPacket> firstPktPlan = PacketPlan(frontierPlan.packet(frontierFirstPacket));
+    const Optional<GpuSubmissionPacket> unrelatedPktPlan = PacketPlan(frontierPlan.packet(frontierUnrelatedPacket));
+    const Optional<GpuSubmissionPacket> consumerPktPlan = PacketPlan(frontierPlan.packet(frontierConsumerPacket));
     ASSERT_TRUE(firstPktPlan.has_value());
     ASSERT_TRUE(unrelatedPktPlan.has_value());
     ASSERT_TRUE(consumerPktPlan.has_value());
@@ -1207,7 +1113,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsume
     EXPECT_EQ(frontierPlan.packetizationDecisionForTask(unrelatedGraphics), GpuTaskPacketizationDecision::CrossQueueConsumerFrontier);
     const GpuCompiledPacketView frontierConsumerView = frontierPlan.packet(frontierConsumerPacket);
     ASSERT_TRUE(frontierConsumerView.valid());
-    const Span<GpuPacketDependency> frontierDeps = GpuExtFrontier_PacketDependencies(frontierConsumerView);
+    const Span<GpuPacketDependency> frontierDeps = PacketDependencies(frontierConsumerView);
     ASSERT_EQ(frontierDeps.size(), 1u);
     EXPECT_EQ(frontierDeps[0u].producer, frontierFirstPacket);
 }
@@ -1248,7 +1154,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationRejectsPrecedingBoundaryTas
 
     GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
     options.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
-    SingleQueueCompile singleQueueCompile = GpuExtFrontier_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph, options));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
@@ -1304,7 +1210,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationRequiresNonemptyMergeDomain
 
     GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
     options.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
-    SingleQueueCompile singleQueueCompile = GpuExtFrontier_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph, options));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
@@ -1369,7 +1275,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationRequiresOneDomainAcrossPrec
 
     GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
     options.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
-    SingleQueueCompile singleQueueCompile = GpuExtFrontier_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph, options));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
@@ -1431,7 +1337,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationPreservesCrossQueueConsumer
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
     options.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -1448,7 +1354,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationPreservesCrossQueueConsumer
     EXPECT_NE(producerPacket, successorPacket);
     EXPECT_NE(producerPacket, consumerPacket);
     EXPECT_EQ(compiledPlan.packetizationDecisionForTask(successor), GpuTaskPacketizationDecision::CrossQueueConsumerFrontier);
-    const Span<GpuPacketDependency> consumerDeps = GpuExtFrontier_PacketDependencies(compiledPlan.packet(consumerPacket));
+    const Span<GpuPacketDependency> consumerDeps = PacketDependencies(compiledPlan.packet(consumerPacket));
     ASSERT_EQ(consumerDeps.size(), 1u);
     EXPECT_EQ(consumerDeps[0u].producer, producerPacket);
 }
@@ -1520,7 +1426,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationCarriesTailPhysicalQueueFro
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = auxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
     options.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -1531,10 +1437,10 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationCarriesTailPhysicalQueueFro
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
 
-    const Optional<GpuTaskQueueAssignment> firstAssignment = GpuExtFrontier_FindAssignment(assignments, first);
-    const Optional<GpuTaskQueueAssignment> mergedAssignment = GpuExtFrontier_FindAssignment(assignments, merged);
-    const Optional<GpuTaskQueueAssignment> blockedAssignment = GpuExtFrontier_FindAssignment(assignments, blocked);
-    const Optional<GpuTaskQueueAssignment> consumerAssignment = GpuExtFrontier_FindAssignment(assignments, consumer);
+    const Optional<GpuTaskQueueAssignment> firstAssignment = FindQueueAssignment(assignments, first);
+    const Optional<GpuTaskQueueAssignment> mergedAssignment = FindQueueAssignment(assignments, merged);
+    const Optional<GpuTaskQueueAssignment> blockedAssignment = FindQueueAssignment(assignments, blocked);
+    const Optional<GpuTaskQueueAssignment> consumerAssignment = FindQueueAssignment(assignments, consumer);
     ASSERT_TRUE(firstAssignment.has_value());
     ASSERT_TRUE(mergedAssignment.has_value());
     ASSERT_TRUE(blockedAssignment.has_value());
@@ -1620,7 +1526,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsFrontierAfterExplicitOve
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
     options.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -1722,7 +1628,7 @@ void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitIm
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphCompileOptions frontierOptions = GpuTaskGraphCompileOptions();
     frontierOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -1740,16 +1646,16 @@ void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitIm
     EXPECT_EQ(firstPacket, immediateFinalizePacket);
     EXPECT_NE(firstPacket, unrelatedPacket);
     EXPECT_NE(unrelatedPacket, consumerPacket);
-    const Optional<GpuSubmissionPacket> firstPktPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(firstPacket));
-    const Optional<GpuSubmissionPacket> unrelatedPktPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(unrelatedPacket));
+    const Optional<GpuSubmissionPacket> firstPktPlan = PacketPlan(compiledPlan.packet(firstPacket));
+    const Optional<GpuSubmissionPacket> unrelatedPktPlan = PacketPlan(compiledPlan.packet(unrelatedPacket));
     ASSERT_TRUE(firstPktPlan.has_value());
     ASSERT_TRUE(unrelatedPktPlan.has_value());
     EXPECT_EQ(firstPktPlan.value().taskCount, 2u);
     EXPECT_EQ(unrelatedPktPlan.value().taskCount, 1u);
     EXPECT_TRUE(analysis.hasExplicitEdge(first, computeConsumer));
     const GpuCompiledPacketView consumerPktView = compiledPlan.packet(consumerPacket);
-    ASSERT_TRUE(GpuExtFrontier_HasPacketDepsPtr(consumerPktView));
-    const Span<GpuPacketDependency> consumerDeps = GpuExtFrontier_PacketDependencies(consumerPktView);
+    ASSERT_TRUE(HasPacketDependenciesPtr(consumerPktView));
+    const Span<GpuPacketDependency> consumerDeps = PacketDependencies(consumerPktView);
     ASSERT_EQ(consumerDeps.size(), 1u);
     EXPECT_EQ(consumerDeps[0u].producer, unrelatedPacket);
     EXPECT_TRUE(HasInferredHazard(analysis, immediateFinalize, unrelatedSuccessor, orderedHandoff, GpuTaskHazardType::ReadAfterWrite));
@@ -1803,7 +1709,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCr
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = GpuExtFrontier_MakeTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphCompileOptions frontierOptions = GpuTaskGraphCompileOptions();
     frontierOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -1819,13 +1725,13 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCr
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, producerPacket);
     EXPECT_NE(producerPacket, consumerPacket);
-    const Optional<GpuSubmissionPacket> firstPktPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(firstPacket));
-    const Optional<GpuSubmissionPacket> consumerPktPlan = GpuExtFrontier_PacketPlan(compiledPlan.packet(consumerPacket));
+    const Optional<GpuSubmissionPacket> firstPktPlan = PacketPlan(compiledPlan.packet(firstPacket));
+    const Optional<GpuSubmissionPacket> consumerPktPlan = PacketPlan(compiledPlan.packet(consumerPacket));
     ASSERT_TRUE(firstPktPlan.has_value());
     ASSERT_TRUE(consumerPktPlan.has_value());
     EXPECT_EQ(firstPktPlan.value().taskCount, 2u);
     EXPECT_NE(firstPktPlan.value().queue, consumerPktPlan.value().queue);
-    const Span<GpuPacketDependency> consumerDeps = GpuExtFrontier_PacketDependencies(compiledPlan.packet(consumerPacket));
+    const Span<GpuPacketDependency> consumerDeps = PacketDependencies(compiledPlan.packet(consumerPacket));
     ASSERT_EQ(consumerDeps.size(), 1u);
     EXPECT_EQ(consumerDeps[0u].producer, producerPacket);
 }

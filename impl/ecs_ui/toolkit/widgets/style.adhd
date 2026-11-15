@@ -220,6 +220,13 @@ LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in Separator
     return description;
 }
 
+LayoutNodeDesc BuildWidthLeafNodeDesc(in LayoutSize width, in Point intrinsicSize){
+    LayoutNodeDesc description;
+    description.width = width;
+    description.intrinsicSize = intrinsicSize;
+    return description;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

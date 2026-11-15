@@ -56,13 +56,6 @@ b8 ResolveSliderThumbPressedState(in b8 interactive, in b8 primaryDown, in Widge
     return interactive && primaryDown && (captureId == trackId || captureId == thumbId);
 }
 
-LayoutNodeDesc BuildPopupRangeWidthNodeDesc(in LayoutSize width, in Point intrinsicSize){
-    LayoutNodeDesc description;
-    description.width = width;
-    description.intrinsicSize = intrinsicSize;
-    return description;
-}
-
 PopupOptions BuildCompoundPopupReservationOptions(){
     PopupOptions options;
     options.size = s_CompoundPopupPlaceholderSize;
@@ -468,7 +461,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     item.state = **widget;
     item.enabled = interactive;
     item.radioGroup = static_cast<u32>(m_scope->m_radioGroups.size());
-    const LayoutNodeDesc description = BuildPopupRangeWidthNodeDesc(options.width, frame.m_metrics.contentSize);
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
     if(!addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -632,7 +625,7 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
     item.state = **widget;
     item.enabled = options.enabled;
     item.slider = static_cast<u32>(m_scope->m_sliders.size());
-    const LayoutNodeDesc description = BuildPopupRangeWidthNodeDesc(options.width, frame.m_metrics.contentSize);
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
     if(!addItemNode(description, item))
         return false;
     m_scope->m_sliders.push_back(Move(frame));

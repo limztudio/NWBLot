@@ -158,60 +158,6 @@ GpuHazardOwnerIndexPair GpuHazardOwner_MakeIndexPair(in usize f, in usize s){
     return out;
 }
 
-SingleQueueCompile GpuHazardOwner_MakeSingleQueueCompile(mut TestArena testArena){
-    return SingleQueueCompile(testArena);
-}
-
-ThreeQueueCompile GpuHazardOwner_MakeThreeQueueCompile(mut TestArena testArena){
-    return ThreeQueueCompile(testArena);
-}
-
-GpuPhysicalQueueId GpuHazardOwner_MakeQueueId(in u16 index, in u16 deviceGeneration){
-    GpuPhysicalQueueId id = GpuPhysicalQueueId();
-    id.index = index;
-    id.deviceGeneration = deviceGeneration;
-    return id;
-}
-
-QueueSubmissionToken GpuHazardOwner_MakeToken(
-    in u64 value,
-    in u16 physicalQueueIndex,
-    in u16 deviceGeneration,
-    in CommandQueueEnum queue
-){
-    QueueSubmissionToken token = QueueSubmissionToken();
-    token.value = value;
-    token.physicalQueueIndex = physicalQueueIndex;
-    token.deviceGeneration = deviceGeneration;
-    token.queue = queue;
-    return token;
-}
-
-Expected<GpuTaskId> GpuHazardOwner_AddEmptyTask(in Name identity, in AStringView label, mut GpuTaskGraph graph){
-    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
-    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, emptyDeps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
-}
-
-Expected<GpuTaskId> GpuHazardOwner_AddDepTask(in Name identity, in AStringView label, in Span<GpuTaskId> deps, mut GpuTaskGraph graph){
-    const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, deps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
-}
-
-Expected<GpuTaskId> GpuHazardOwner_AddUseTask(in Name identity, in AStringView label, in Span<GpuTaskResourceUse> uses, mut GpuTaskGraph graph){
-    const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
-    const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
-    const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
-    const Span<GpuExternalCompletionId> emptyExternals = Span<GpuExternalCompletionId>();
-    return AddTask(identity, label, emptyDeps, uses, emptySets, emptyVersions, emptyExternals, graph);
-}
-
 GpuTaskResourceUse GpuHazardOwner_BufferUse(
     in GpuGraphResourceId resource,
     in u64 offset,
@@ -262,7 +208,7 @@ void VerifyGpuHazardOwner_HazardTrackingPreservesResourceAndSurvivingWriterOrder
         ASSERT_TRUE(derivedNameResult.has_value());
         Array<GpuTaskResourceUse, 1> singleUse = Array<GpuTaskResourceUse, 1>();
         singleUse[0u] = uses[index];
-        const auto taskAdmission = GpuHazardOwner_AddUseTask(derivedNameResult.value(), "Task", singleUse, graph);
+        const auto taskAdmission = AddGpuUseTask(derivedNameResult.value(), "Task", singleUse, graph);
         ASSERT_TRUE(taskAdmission.has_value());
         tasks[index] = taskAdmission.value();
         ASSERT_TRUE(tasks[index].valid());
@@ -325,7 +271,7 @@ void VerifyGpuHazardOwner_HazardTrackingRetiresOnlyCoveredReadersAndPreservesApp
         ASSERT_TRUE(derivedNameResult.has_value());
         Array<GpuTaskResourceUse, 1> singleUse = Array<GpuTaskResourceUse, 1>();
         singleUse[0u] = uses[index];
-        const auto taskAdmission = GpuHazardOwner_AddUseTask(derivedNameResult.value(), "Read Task", singleUse, graph);
+        const auto taskAdmission = AddGpuUseTask(derivedNameResult.value(), "Read Task", singleUse, graph);
         ASSERT_TRUE(taskAdmission.has_value());
         tasks[index] = taskAdmission.value();
         ASSERT_TRUE(tasks[index].valid());
@@ -365,19 +311,19 @@ void VerifyGpuHazardOwner_HazardTrackingPreservesSameTaskAccessAndResetSemantics
         firstUses[0u] = GpuHazardOwner_BufferUse(buffer, 0u, 32u, GpuTaskResourceAccess::Write);
         firstUses[1u] = GpuHazardOwner_BufferUse(buffer, 0u, 16u, GpuTaskResourceAccess::Read);
         firstUses[2u] = GpuHazardOwner_BufferUse(buffer, 32u, 16u, GpuTaskResourceAccess::Read);
-        const auto firstResult = GpuHazardOwner_AddUseTask(s_GpuCaseHazardTrackingFirst, "First", firstUses, graph);
+        const auto firstResult = AddGpuUseTask(s_GpuCaseHazardTrackingFirst, "First", firstUses, graph);
         ASSERT_TRUE(firstResult.has_value());
         const GpuTaskId first = firstResult.value();
 
         Array<GpuTaskResourceUse, 1> secondUses = Array<GpuTaskResourceUse, 1>();
         secondUses[0u] = GpuHazardOwner_BufferUse(buffer, 0u, 48u, GpuTaskResourceAccess::Write);
-        const auto secondResult = GpuHazardOwner_AddUseTask(s_GpuCaseHazardTrackingSecond, "Second", secondUses, graph);
+        const auto secondResult = AddGpuUseTask(s_GpuCaseHazardTrackingSecond, "Second", secondUses, graph);
         ASSERT_TRUE(secondResult.has_value());
         const GpuTaskId second = secondResult.value();
 
         Array<GpuTaskResourceUse, 1> thirdUses = Array<GpuTaskResourceUse, 1>();
         thirdUses[0u] = GpuHazardOwner_BufferUse(buffer, 0u, 48u, GpuTaskResourceAccess::ReadWrite);
-        const auto thirdResult = GpuHazardOwner_AddUseTask(s_GpuCaseHazardTrackingThird, "Third", thirdUses, graph);
+        const auto thirdResult = AddGpuUseTask(s_GpuCaseHazardTrackingThird, "Third", thirdUses, graph);
         ASSERT_TRUE(thirdResult.has_value());
         const GpuTaskId third = thirdResult.value();
 
@@ -607,7 +553,7 @@ void VerifyGpuHazardOwner_PreservesCompletionUpgradeConflictsAndResetAcrossIndex
 
         GpuExternalCompletionDesc upgraded = metadata;
         upgraded.markerLabel = "Token Upgrade Label";
-        upgraded.token = GpuHazardOwner_MakeToken(31u, 0u, 17u, CommandQueue::Graphics);
+        upgraded.token = MakeGpuSubmissionToken(31u, 0u, 17u, CommandQueue::Graphics);
         {
             const auto secondGpuTaskAdmission = graph.importExternalCompletion(upgraded);
             EXPECT_TRUE(secondGpuTaskAdmission.has_value());
@@ -765,7 +711,7 @@ void VerifyGpuHazardOwner_ValidatesInitialExclusiveOwnerBeforeFirstUse(){
             graph,
             s_GpuInitialOwnerStale,
             "Initial Owner Stale",
-            GpuHazardOwner_MakeQueueId(queues[0u].id.index, cast<u16>(queues[0u].id.deviceGeneration + 1u)),
+            MakeGpuPhysicalQueueId(queues[0u].id.index, cast<u16>(queues[0u].id.deviceGeneration + 1u)),
             ResourceQueueSharing::Exclusive
         );
         ASSERT_TRUE(resourceResult.has_value());
@@ -826,7 +772,7 @@ void VerifyGpuHazardOwner_RejectsInvalidSingleSourceInitialOwnerHandoffsForBuffe
     const GpuExternalCompletionId completion = completionResult.value();
     ASSERT_TRUE(completion.valid());
 
-    const QueueSubmissionToken minimumCompletionToken = GpuHazardOwner_MakeToken(7u, sourceQueue.id.index, sourceQueue.id.deviceGeneration, CommandQueue::Graphics);
+    const QueueSubmissionToken minimumCompletionToken = MakeGpuSubmissionToken(7u, sourceQueue.id.index, sourceQueue.id.deviceGeneration, CommandQueue::Graphics);
     CommandListResourceStateHandoff stateSource = CommandListResourceStateHandoff(testArena.arena);
     ASSERT_FALSE(stateSource.valid());
 
@@ -877,7 +823,7 @@ void VerifyGpuHazardOwner_RejectsMultiSourceInitialOwnerCompletionAcrossQueues()
         graphicsQueue.id,
         graphicsQueue.id,
         sharedCompletion,
-        GpuHazardOwner_MakeToken(7u, graphicsQueue.id.index, graphicsQueue.id.deviceGeneration, CommandQueue::Graphics),
+        MakeGpuSubmissionToken(7u, graphicsQueue.id.index, graphicsQueue.id.deviceGeneration, CommandQueue::Graphics),
         graphicsState
     );
     sources[1u] = MakeHandoffSourceWithState(
@@ -885,7 +831,7 @@ void VerifyGpuHazardOwner_RejectsMultiSourceInitialOwnerCompletionAcrossQueues()
         computeQueue.id,
         graphicsQueue.id,
         sharedCompletion,
-        GpuHazardOwner_MakeToken(11u, computeQueue.id.index, computeQueue.id.deviceGeneration, CommandQueue::Compute),
+        MakeGpuSubmissionToken(11u, computeQueue.id.index, computeQueue.id.deviceGeneration, CommandQueue::Compute),
         computeState
     );
     GpuGraphResourceDesc multiOwnerDesc = GpuGraphResourceDesc();
@@ -910,7 +856,7 @@ void VerifyGpuHazardOwner_RejectsMultiSourceInitialOwnerCompletionAcrossQueues()
 void VerifyGpuHazardOwner_RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken(){
     const GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
     const GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
-    const QueueSubmissionToken completionToken = GpuHazardOwner_MakeToken(7u, sourceQueue.id.index, sourceQueue.id.deviceGeneration, CommandQueue::Graphics);
+    const QueueSubmissionToken completionToken = MakeGpuSubmissionToken(7u, sourceQueue.id.index, sourceQueue.id.deviceGeneration, CommandQueue::Graphics);
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuExternalCompletionDesc compDesc = GpuExternalCompletionDesc();
@@ -980,7 +926,7 @@ void VerifyGpuHazardOwner_RejectsInvalidMultiSourceInitialTextureOwnershipHandof
         graphicsQueue.id,
         computeQueue.id,
         graphicsCompletion,
-        GpuHazardOwner_MakeToken(7u, graphicsQueue.id.index, graphicsQueue.id.deviceGeneration, CommandQueue::Graphics),
+        MakeGpuSubmissionToken(7u, graphicsQueue.id.index, graphicsQueue.id.deviceGeneration, CommandQueue::Graphics),
         graphicsState
     );
     sources[1u] = MakeHandoffSourceWithState(
@@ -988,7 +934,7 @@ void VerifyGpuHazardOwner_RejectsInvalidMultiSourceInitialTextureOwnershipHandof
         computeQueue.id,
         graphicsQueue.id,
         computeCompletion,
-        GpuHazardOwner_MakeToken(11u, computeQueue.id.index, computeQueue.id.deviceGeneration, CommandQueue::Compute),
+        MakeGpuSubmissionToken(11u, computeQueue.id.index, computeQueue.id.deviceGeneration, CommandQueue::Compute),
         computeState
     );
     GpuGraphResourceDesc resDesc = GpuGraphResourceDesc();
@@ -1155,7 +1101,7 @@ void VerifyGpuHazardOwner_RejectsPresentationEndpointWithoutNativeBackBuffer(){
     resDesc.setExternalFinalState(ResourceStates::Present);
     const auto resource = graph.importResource(resDesc);
     ASSERT_TRUE(resource.has_value());
-    const auto producer = GpuHazardOwner_AddEmptyTask(s_TaskGraphCasePresentMetadataProducer, "Present Metadata Producer", graph);
+    const auto producer = AddGpuEmptyTask(s_TaskGraphCasePresentMetadataProducer, "Present Metadata Producer", graph);
     ASSERT_TRUE(producer.has_value());
 
     GpuPresentEndpoint endpoint = GpuPresentEndpoint();
@@ -1214,7 +1160,7 @@ void GpuHazardOwner_CheckOwnershipStatistics(in usize resourceCount){
         ASSERT_TRUE(gpuTaskAdmission.value().valid());
     }
 
-    ThreeQueueCompile compilation = GpuHazardOwner_MakeThreeQueueCompile(testArena);
+    ThreeQueueCompile compilation = ThreeQueueCompile(testArena);
     {
         ASSERT_TRUE(compilation.compile(graph));
         ASSERT_EQ(compilation.analysis.inferredEdges().size(), resourceCount * 2u);
@@ -1244,8 +1190,8 @@ void GpuHazardOwner_CheckOwnershipStatistics(in usize resourceCount){
         EXPECT_EQ(idle.incomingLogicalOwnershipTransferCount, 0u);
         EXPECT_EQ(idle.outgoingLogicalOwnershipTransferSignatureCount, 0u);
         EXPECT_EQ(idle.concurrentSharingAdviceResourceCount, 0u);
-        EXPECT_FALSE(plan.physicalQueueCompileStatistics(GpuHazardOwner_MakeQueueId(0u, 2u)).valid());
-        EXPECT_FALSE(plan.physicalQueueCompileStatistics(GpuHazardOwner_MakeQueueId(17u, 1u)).valid());
+        EXPECT_FALSE(plan.physicalQueueCompileStatistics(MakeGpuPhysicalQueueId(0u, 2u)).valid());
+        EXPECT_FALSE(plan.physicalQueueCompileStatistics(MakeGpuPhysicalQueueId(17u, 1u)).valid());
 
         Array<GpuTaskGraphPhysicalQueueCompileStatistics, 2> activeStats = Array<GpuTaskGraphPhysicalQueueCompileStatistics, 2>();
         activeStats[0u] = graphics;
@@ -1393,7 +1339,7 @@ void VerifyGpuHazardOwner_CompilesOneTaskPacketsWithDependenciesAndLifecycleBoun
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     const GpuPhysicalQueueInfo producerQueue = DedicatedComputeQueue();
-    const QueueSubmissionToken completionToken = GpuHazardOwner_MakeToken(41u, producerQueue.id.index, producerQueue.id.deviceGeneration, producerQueue.queueClass);
+    const QueueSubmissionToken completionToken = MakeGpuSubmissionToken(41u, producerQueue.id.index, producerQueue.id.deviceGeneration, producerQueue.queueClass);
     GpuExternalCompletionDesc extDesc = GpuExternalCompletionDesc();
     extDesc.setIdentity(s_GpuCaseTaskGraphPacketExternal);
     extDesc.setMarkerLabel("External Completion");
@@ -1537,23 +1483,23 @@ void VerifyGpuHazardOwner_CompilesOneTaskPacketsWithDependenciesAndLifecycleBoun
 void VerifyGpuHazardOwner_KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto firstResult = GpuHazardOwner_AddEmptyTask(s_GpuCaseTaskGraphRecordingFrontierFirst, "Recording Frontier First", graph);
+    const auto firstResult = AddGpuEmptyTask(s_GpuCaseTaskGraphRecordingFrontierFirst, "Recording Frontier First", graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
-    const auto secondResult = GpuHazardOwner_AddEmptyTask(s_GpuCaseTaskGraphRecordingFrontierSecond, "Recording Frontier Second", graph);
+    const auto secondResult = AddGpuEmptyTask(s_GpuCaseTaskGraphRecordingFrontierSecond, "Recording Frontier Second", graph);
     ASSERT_TRUE(secondResult.has_value());
     const GpuTaskId second = secondResult.value();
 
     Array<GpuTaskId, 1> thirdDependencies = Array<GpuTaskId, 1>();
     thirdDependencies[0u] = first;
-    const auto thirdResult = GpuHazardOwner_AddDepTask(s_GpuCaseTaskGraphRecordingFrontierThird, "Recording Frontier Third", thirdDependencies, graph);
+    const auto thirdResult = AddGpuDepTask(s_GpuCaseTaskGraphRecordingFrontierThird, "Recording Frontier Third", thirdDependencies, graph);
     ASSERT_TRUE(thirdResult.has_value());
     const GpuTaskId third = thirdResult.value();
 
     Array<GpuTaskId, 2> fourthDependencies = Array<GpuTaskId, 2>();
     fourthDependencies[0u] = second;
     fourthDependencies[1u] = third;
-    const auto fourthResult = GpuHazardOwner_AddDepTask(s_GpuCaseTaskGraphRecordingFrontierFourth, "Recording Frontier Fourth", fourthDependencies, graph);
+    const auto fourthResult = AddGpuDepTask(s_GpuCaseTaskGraphRecordingFrontierFourth, "Recording Frontier Fourth", fourthDependencies, graph);
     ASSERT_TRUE(fourthResult.has_value());
     const GpuTaskId fourth = fourthResult.value();
     ASSERT_TRUE(first.valid());
@@ -1561,7 +1507,7 @@ void VerifyGpuHazardOwner_KeepsExplicitPacketDependenciesOutOfRecordingReadyFron
     ASSERT_TRUE(third.valid());
     ASSERT_TRUE(fourth.valid());
 
-    SingleQueueCompile singleQueueCompile = GpuHazardOwner_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
@@ -1610,13 +1556,13 @@ void VerifyGpuHazardOwner_PlansSchedulingPacketDependenciesInStableIncomingOrder
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto firstResult = GpuHazardOwner_AddEmptyTask(s_GpuCaseTaskGraphStablePacketDependencyFirst, "Stable Packet Dependency First", graph);
+    const auto firstResult = AddGpuEmptyTask(s_GpuCaseTaskGraphStablePacketDependencyFirst, "Stable Packet Dependency First", graph);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTaskId first = firstResult.value();
-    const auto secondResult = GpuHazardOwner_AddEmptyTask(s_GpuCaseTaskGraphStablePacketDependencySecond, "Stable Packet Dependency Second", graph);
+    const auto secondResult = AddGpuEmptyTask(s_GpuCaseTaskGraphStablePacketDependencySecond, "Stable Packet Dependency Second", graph);
     ASSERT_TRUE(secondResult.has_value());
     const GpuTaskId second = secondResult.value();
-    const auto thirdResult = GpuHazardOwner_AddEmptyTask(s_GpuCaseTaskGraphStablePacketDependencyThird, "Stable Packet Dependency Third", graph);
+    const auto thirdResult = AddGpuEmptyTask(s_GpuCaseTaskGraphStablePacketDependencyThird, "Stable Packet Dependency Third", graph);
     ASSERT_TRUE(thirdResult.has_value());
     const GpuTaskId third = thirdResult.value();
 
@@ -1624,7 +1570,7 @@ void VerifyGpuHazardOwner_PlansSchedulingPacketDependenciesInStableIncomingOrder
     consumerDependencies[0u] = third;
     consumerDependencies[1u] = first;
     consumerDependencies[2u] = second;
-    const auto consumerResult = GpuHazardOwner_AddDepTask(
+    const auto consumerResult = AddGpuDepTask(
         s_GpuCaseTaskGraphStablePacketDependencyConsumer,
         "Stable Packet Dependency Consumer",
         consumerDependencies,
@@ -1674,7 +1620,7 @@ void VerifyGpuHazardOwner_DerivesRecordingReadyFrontiersFromStateSeedProducers()
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
-    const auto orderingProducerResult = GpuHazardOwner_AddEmptyTask(
+    const auto orderingProducerResult = AddGpuEmptyTask(
         s_GpuCaseTaskGraphRecordingFrontierOrderingProducer,
         "Recording Frontier Ordering Producer",
         graph
@@ -1721,7 +1667,7 @@ void VerifyGpuHazardOwner_DerivesRecordingReadyFrontiersFromStateSeedProducers()
     const GpuTaskId consumer = consumerResult.value();
     ASSERT_TRUE(consumer.valid());
 
-    SingleQueueCompile singleQueueCompile = GpuHazardOwner_MakeSingleQueueCompile(testArena);
+    SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 

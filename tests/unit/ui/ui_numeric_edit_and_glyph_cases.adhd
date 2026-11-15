@@ -570,40 +570,6 @@ class UiNumericParseFloatCompleteCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IntegerBounds MakeUiNumericIntegerBounds(in i64 minimum, in i64 maximum, in NumericBoundsPolicyEnum policy){
-    IntegerBounds bounds = IntegerBounds();
-    bounds.minimum = minimum;
-    bounds.maximum = maximum;
-    bounds.policy = policy;
-    return bounds;
-}
-
-FloatBounds MakeUiNumericFloatBounds(in f64 minimum, in f64 maximum, in NumericBoundsPolicyEnum policy){
-    FloatBounds bounds = FloatBounds();
-    bounds.minimum = minimum;
-    bounds.maximum = maximum;
-    bounds.policy = policy;
-    return bounds;
-}
-
-Rect MakeUiPaintGlyphRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Color MakeUiPaintGlyphColor(in f32 r, in f32 g, in f32 b, in f32 a){
-    Color color = Color();
-    color.r = r;
-    color.g = g;
-    color.b = b;
-    color.a = a;
-    return color;
-}
-
 void ExpectUiNumericAtomicBadIntegerBounds(in IntegerBounds bounds, mut UiNumericLifetimeGlobalArena arena, mut IntegerEditModel model){
     ASSERT_TRUE(model.setValue(7));
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
@@ -731,7 +697,7 @@ void VerifyUiNumericEditBuilderTests_FloatClampUsesTheBoundsOfTheOrderedAction(m
     self.m_host.replace("12.5");
     self.m_host.key(CoreKey::Enter);
     FloatEditOptions options = FloatEditOptions();
-    options.bounds = MakeUiNumericFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
+    options.bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
     ASSERT_TRUE(self.beginNumeric(1u));
     const auto result = self.m_builder.floatEdit(s_UiNumericEditDecimalKey, self.m_float, self.m_floatState, options);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
@@ -749,7 +715,7 @@ void VerifyUiNumericEditBuilderTests_BoundsPolicyChangePreservesDraftUntilTheNex
     ASSERT_TRUE(self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState).edit.valid);
     ASSERT_TRUE(self.acceptNumeric());
     IntegerEditOptions options = IntegerEditOptions();
-    options.bounds = MakeUiNumericIntegerBounds(-10, 10, NumericBoundsPolicy::Clamp);
+    options.bounds = MakeUiIntegerBounds(-10, 10, NumericBoundsPolicy::Clamp);
     ASSERT_TRUE(self.beginNumeric(2u));
     const auto unchanged = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState, options);
     ASSERT_TRUE(unchanged.edit.valid && unchanged.numeric.valid);
@@ -1478,17 +1444,17 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
 }
 
 void VerifyIntegerLifetimeTests_ReversedAndUnknownIntegerBoundsAreAtomic(mut IntegerLifetimeTests self){
-    ExpectUiNumericAtomicBadIntegerBounds(MakeUiNumericIntegerBounds(10, 1, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(10, 1, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
     const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(3u);
-    ExpectUiNumericAtomicBadIntegerBounds(MakeUiNumericIntegerBounds(-10, 10, unknown), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(-10, 10, unknown), self.m_arena, self.m_model);
 }
 
 void VerifyFloatLifetimeTests_ReversedNonfiniteAndUnknownFloatBoundsAreAtomic(mut FloatLifetimeTests self){
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiNumericFloatBounds(10.0, 1.0, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiNumericFloatBounds(UiNumericQuietNaNF64(), 10.0, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiNumericFloatBounds(-10.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(10.0, 1.0, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(UiNumericQuietNaNF64(), 10.0, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
     const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(3u);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiNumericFloatBounds(-10.0, 10.0, unknown), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, 10.0, unknown), self.m_arena, self.m_model);
 }
 
 
@@ -1629,15 +1595,15 @@ void VerifyUiNumericParseTests_EveryAsciiEdgeWhitespaceIsAcceptedButInteriorWhit
 }
 
 void VerifyUiNumericParseTests_BoundsValidationRejectsReversalNonfiniteEndpointsAndUnknownPolicy(){
-    EXPECT_TRUE(ValidateIntegerBounds(MakeUiNumericIntegerBounds(4, 4, NumericBoundsPolicy::Clamp)));
-    EXPECT_TRUE(ValidateFloatBounds(MakeUiNumericFloatBounds(-0.0, 0.0, NumericBoundsPolicy::Reject)));
-    EXPECT_FALSE(ValidateIntegerBounds(MakeUiNumericIntegerBounds(8, 3, NumericBoundsPolicy::Reject)));
-    EXPECT_FALSE(ValidateFloatBounds(MakeUiNumericFloatBounds(8.0, 3.0, NumericBoundsPolicy::Reject)));
-    EXPECT_FALSE(ValidateFloatBounds(MakeUiNumericFloatBounds(UiNumericQuietNaNF64(), 1.0, NumericBoundsPolicy::Reject)));
-    EXPECT_FALSE(ValidateFloatBounds(MakeUiNumericFloatBounds(-1.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject)));
+    EXPECT_TRUE(ValidateIntegerBounds(MakeUiIntegerBounds(4, 4, NumericBoundsPolicy::Clamp)));
+    EXPECT_TRUE(ValidateFloatBounds(MakeUiFloatBounds(-0.0, 0.0, NumericBoundsPolicy::Reject)));
+    EXPECT_FALSE(ValidateIntegerBounds(MakeUiIntegerBounds(8, 3, NumericBoundsPolicy::Reject)));
+    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(8.0, 3.0, NumericBoundsPolicy::Reject)));
+    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(UiNumericQuietNaNF64(), 1.0, NumericBoundsPolicy::Reject)));
+    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(-1.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject)));
     const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(2u);
-    EXPECT_FALSE(ValidateIntegerBounds(MakeUiNumericIntegerBounds(-1, 1, unknown)));
-    EXPECT_FALSE(ValidateFloatBounds(MakeUiNumericFloatBounds(-1.0, 1.0, unknown)));
+    EXPECT_FALSE(ValidateIntegerBounds(MakeUiIntegerBounds(-1, 1, unknown)));
+    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(-1.0, 1.0, unknown)));
 }
 
 
@@ -1839,12 +1805,12 @@ void VerifyUiPaintGlyphTests_ClipTrimsGlyphGeometryAndUv(mut UiPaintGlyphTests s
     SharedGlyphPage page = SharedGlyphPage();
     TakeUiPaintGlyphPage(page, pageCreationResult);
     ASSERT_TRUE(UiPaintGlyphHasPage(page));
-    self.m_builder.pushClip(MakeUiPaintGlyphRect(10.0f, 5.0f, 20.0f, 10.0f));
+    self.m_builder.pushClip(Rect(10.0f, 5.0f, 20.0f, 10.0f));
     ASSERT_TRUE(self.m_builder.drawGlyph(
         page,
-        MakeUiPaintGlyphRect(0.0f, 0.0f, 40.0f, 20.0f),
-        MakeUiPaintGlyphRect(0.125f, 0.25f, 0.5f, 0.5f),
-        MakeUiPaintGlyphColor(0.8f, 0.4f, 0.2f, 0.5f)
+        Rect(0.0f, 0.0f, 40.0f, 20.0f),
+        Rect(0.125f, 0.25f, 0.5f, 0.5f),
+        Color(0.8f, 0.4f, 0.2f, 0.5f)
     ));
     ASSERT_TRUE(self.m_builder.popClip());
     ExpectClippedPaintTextQuad(self.m_builder.freeze());
@@ -1861,17 +1827,17 @@ void VerifyUiPaintGlyphTests_BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAn
     TakeUiPaintGlyphPage(second, secondCreationResult);
     ASSERT_TRUE(UiPaintGlyphHasPage(first));
     ASSERT_TRUE(UiPaintGlyphHasPage(second));
-    const Rect rectangle = MakeUiPaintGlyphRect(1.0f, 1.0f, 4.0f, 4.0f);
-    const Rect uv = MakeUiPaintGlyphRect(0.0f, 0.0f, 0.5f, 0.5f);
+    const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
-    ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv, MakeUiPaintGlyphColor(0.5f, 0.25f, 1.0f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv, Color(0.5f, 0.25f, 1.0f, 0.5f)));
     ASSERT_TRUE(self.m_builder.drawGlyph(second, rectangle, uv));
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
     ASSERT_TRUE(self.m_builder.drawRegion(Name(s_UiInputNameSprite), rectangle));
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
-    self.m_builder.pushClip(MakeUiPaintGlyphRect(0.0f, 0.0f, 20.0f, 20.0f));
+    self.m_builder.pushClip(Rect(0.0f, 0.0f, 20.0f, 20.0f));
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
     ASSERT_TRUE(self.m_builder.popClip());
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
@@ -1907,12 +1873,12 @@ void VerifyUiPaintGlyphTests_NewerAppendOnlyPageUpgradesBindingWithoutMovingEarl
     TakeUiPaintGlyphPage(appended, appendedCreationResult);
     ASSERT_TRUE(UiPaintGlyphHasPage(original));
     ASSERT_TRUE(UiPaintGlyphHasPage(appended));
-    const Rect earlierUv = MakeUiPaintGlyphRect(0.0f, 0.0f, 0.25f, 0.25f);
-    ASSERT_TRUE(self.m_builder.drawGlyph(original, MakeUiPaintGlyphRect(1.0f, 1.0f, 4.0f, 4.0f), earlierUv));
+    const Rect earlierUv = Rect(0.0f, 0.0f, 0.25f, 0.25f);
+    ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(1.0f, 1.0f, 4.0f, 4.0f), earlierUv));
     ASSERT_TRUE(self.prepareSingleGlyphPage(appended));
-    ASSERT_TRUE(self.m_builder.drawGlyph(appended, MakeUiPaintGlyphRect(6.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintGlyphRect(0.5f, 0.5f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawGlyph(appended, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
     // A later caller retaining the old page must neither downgrade the binding nor split the compatible batch.
-    ASSERT_TRUE(self.m_builder.drawGlyph(original, MakeUiPaintGlyphRect(11.0f, 1.0f, 4.0f, 4.0f), earlierUv));
+    ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(11.0f, 1.0f, 4.0f, 4.0f), earlierUv));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
     ASSERT_EQ(snapshot.commands().size(), 1u);
@@ -1939,7 +1905,7 @@ void VerifyUiPaintGlyphTests_FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAn
     SharedGlyphPage original = SharedGlyphPage();
     TakeUiPaintGlyphPage(original, originalCreationResult);
     ASSERT_TRUE(UiPaintGlyphHasPage(original));
-    ASSERT_TRUE(self.m_builder.drawGlyph(original, MakeUiPaintGlyphRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintGlyphRect(0.0f, 0.0f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
     const DrawSnapshot first = self.m_builder.freeze();
     original.reset();
     self.begin(8u);
@@ -1948,7 +1914,7 @@ void VerifyUiPaintGlyphTests_FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAn
     SharedGlyphPage appended = SharedGlyphPage();
     TakeUiPaintGlyphPage(appended, appendedCreationResult);
     ASSERT_TRUE(UiPaintGlyphHasPage(appended));
-    ASSERT_TRUE(self.m_builder.drawGlyph(appended, MakeUiPaintGlyphRect(6.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintGlyphRect(0.5f, 0.5f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawGlyph(appended, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
     const DrawSnapshot second = self.m_builder.freeze();
     appended.reset();
     self.begin(9u);
@@ -1976,7 +1942,7 @@ void VerifyUiPaintGlyphTests_RejectedPageAdmissionAtCapacityPreservesBindingsAnd
         ASSERT_TRUE(UiPaintGlyphHasPage(page));
         pages.push_back(page);
     }
-    ASSERT_TRUE(self.m_builder.drawGlyph(pages[0u], MakeUiPaintGlyphRect(2.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintGlyphRect(0.125f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawGlyph(pages[0u], Rect(2.0f, 3.0f, 4.0f, 5.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
     ASSERT_TRUE(self.m_builder.prepareGlyphPages(pages));
     auto upgradeCreationResult = self.makeGlyphPage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
@@ -1992,7 +1958,7 @@ void VerifyUiPaintGlyphTests_RejectedPageAdmissionAtCapacityPreservesBindingsAnd
     candidates[0u] = upgrade;
     candidates[1u] = overflow;
     EXPECT_FALSE(self.m_builder.prepareGlyphPages(candidates));
-    EXPECT_FALSE(self.m_builder.drawGlyph(overflow, MakeUiPaintGlyphRect(10.0f, 10.0f, 4.0f, 4.0f), MakeUiPaintGlyphRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawGlyph(overflow, Rect(10.0f, 10.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages);
     for(usize index = 0u; index < pages.size(); ++index)

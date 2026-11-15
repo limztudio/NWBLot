@@ -266,21 +266,6 @@ const u64 s_UiWheelPosInfF64Bits = 0x7ff0000000000000u;
 const AStringView s_UiWindowSkinApplyKey = "apply";
 
 
-InputEvent MakeUiWindowPointerEvent(in Point position, in InputEventTypeEnum eventType){
-    InputEvent event = InputEvent();
-    event.position = position;
-    event.type = eventType;
-    return event;
-}
-
-InputEvent MakeUiWindowKeyEvent(in UiWindowKeyEnum key, in InputEventTypeEnum eventType, in b8 repeat){
-    InputEvent event = InputEvent();
-    event.key = key;
-    event.type = eventType;
-    event.repeat = repeat;
-    return event;
-}
-
 HitTarget MakeUiWheelHost(){
     HitTarget target = HitTarget();
     target.id.value = 1u;
@@ -652,16 +637,16 @@ void VerifyUiWindowTests_ActiveDragRetainsBaselineAcrossAcceptedLayouts(mut UiWi
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(130.0f, 55.0f), InputEventType::PrimaryDown)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(140.0f, 65.0f), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(130.0f, 55.0f))).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(140.0f, 65.0f))).pointerConsumed);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
     EXPECT_FLOAT_EQ(state.bounds.x, 40.0f);
     EXPECT_FLOAT_EQ(state.bounds.y, 50.0f);
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(160.0f, 80.0f), InputEventType::PointerMove)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(160.0f, 80.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(160.0f, 80.0f))).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(160.0f, 80.0f))).pointerConsumed);
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
     EXPECT_FLOAT_EQ(state.bounds.x, 60.0f);
@@ -722,15 +707,15 @@ void VerifyUiWindowTests_ResizeMinimumDoesNotLoseOriginalPointerBaseline(mut UiW
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(262.0f, 182.0f), InputEventType::PrimaryDown)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(0.0f, 0.0f), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(262.0f, 182.0f))).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(0.0f, 0.0f))).pointerConsumed);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
     EXPECT_FLOAT_EQ(state.bounds.width, 180.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 110.0f);
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(282.0f, 192.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(282.0f, 192.0f))).pointerConsumed);
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
     EXPECT_FLOAT_EQ(state.bounds.width, 260.0f);
@@ -764,8 +749,8 @@ void VerifyUiWindowTests_CollapseKeepsHostSizeAndRequiresBalancedEnd(mut UiWindo
     const auto skin = self.skinQuad(collapsed, 0u);
     ASSERT_TRUE(skin.has_value());
     EXPECT_FLOAT_EQ(skin.value().height, 34.0f);
-    EXPECT_FALSE(self.send(MakeUiWindowPointerEvent(Point(100.0f, 120.0f), InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiWindowPointerEvent(Point(100.0f, 120.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(100.0f, 120.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(100.0f, 120.0f))).pointerConsumed);
 }
 
 void VerifyUiWindowTests_KeyboardCollapseUsesTabFocusAndSuppressesRepeat(mut UiWindowTests self){
@@ -775,25 +760,25 @@ void VerifyUiWindowTests_KeyboardCollapseUsesTabFocusAndSuppressesRepeat(mut UiW
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Tab, InputEventType::KeyDown, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Tab, InputEventType::KeyUp, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, UiWindowKey::Tab, false)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), self.id("@window.collapse"));
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Enter, InputEventType::KeyDown, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Enter, InputEventType::KeyDown, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Enter, true)).commandConsumed);
     ASSERT_TRUE(self.begin(2u));
     EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Enter, InputEventType::KeyUp, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, UiWindowKey::Enter, false)).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     EXPECT_FALSE(self.m_builder.beginWindow("window", "Keyboard", state));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_TRUE(state.collapsed);
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Space, InputEventType::KeyDown, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Space, InputEventType::KeyUp, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, UiWindowKey::Space, false)).commandConsumed);
     ASSERT_TRUE(self.begin(4u));
     EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
@@ -834,9 +819,9 @@ void VerifyUiWindowTests_FocusLossCancelsUnconsumedWindowDrag(mut UiWindowTests 
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Focus", state));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(130.0f, 35.0f), InputEventType::PrimaryDown)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(180.0f, 80.0f), InputEventType::PointerMove)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiWindowPointerEvent(Point(), InputEventType::FocusLost)).capture.valid());
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(130.0f, 35.0f))).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(180.0f, 80.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::FocusLost, Point())).capture.valid());
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Focus", state));
     EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);

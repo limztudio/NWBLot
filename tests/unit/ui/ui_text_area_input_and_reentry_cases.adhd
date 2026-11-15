@@ -542,13 +542,6 @@ class UiTextAreaScrollModelRecord{
     }
 }
 
-InputEvent MakeUiTextAreaPointerEvent(in Point position, in InputEventTypeEnum eventType){
-    InputEvent event = InputEvent();
-    event.position = position;
-    event.type = eventType;
-    return event;
-}
-
 ShapeRequest MakeUiTextAreaFontSizeShapeRequest(in f32 fontSize){
     ShapeRequest request = ShapeRequest();
     request.fontSize = fontSize;
@@ -610,11 +603,11 @@ void VerifyUiTextAreaBuilderTests_RawPointerCapturePersistsOutsideWithoutGesture
     const HitTarget area = foundArea.value();
     const VectorSingle originValue = VectorSingle(area.rectangle.x, area.rectangle.y, 0.0f, 0.0f) + VectorSingle(10.0f, 10.0f, 10.0f, 10.0f);
     const Point origin = Point(originValue.x, originValue.y);
-    EXPECT_TRUE(self.send(MakeUiTextAreaPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     EXPECT_EQ(self.m_context.input().capture(), widget);
-    EXPECT_TRUE(self.send(MakeUiTextAreaPointerEvent(Point(780.0f, 580.0f), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(780.0f, 580.0f))).pointerConsumed);
     EXPECT_EQ(self.m_context.input().capture(), widget);
-    EXPECT_TRUE(self.send(MakeUiTextAreaPointerEvent(Point(780.0f, 580.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(780.0f, 580.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FALSE(self.m_context.input().consumePointerGesture(widget, area.declarationGeneration).has_value());
 }
@@ -634,9 +627,9 @@ void VerifyUiTextAreaBuilderTests_DisabledAreaRetainsAPointerBarrierAndDiscardsH
     const VectorSingle pointValue = VectorSingle(area.rectangle.x, area.rectangle.y, 0.0f, 0.0f) + VectorSingle(5.0f, 5.0f, 5.0f, 5.0f);
     const Point point = Point(pointValue.x, pointValue.y);
     EXPECT_EQ(self.m_context.input().hitTest(point), RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiTextAreaPanelKey));
-    EXPECT_TRUE(self.send(MakeUiTextAreaPointerEvent(point, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_TRUE(self.send(MakeUiTextAreaPointerEvent(point, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     EXPECT_FALSE(self.m_state.focused());
     EXPECT_EQ(self.m_model.text(), "first\nsecond");
     EXPECT_FALSE(self.m_model.canUndo());
@@ -919,7 +912,7 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     const VectorSingle originValue = VectorSingle(thumb.rectangle.width, thumb.rectangle.height, 0.0f, 0.0f) * VectorSingle(0.5f, 0.25f, 0.0f, 0.0f) + VectorSingle(thumb.rectangle.x, thumb.rectangle.y, 0.0f, 0.0f);
     const Point origin = Point(originValue.x, originValue.y);
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     EXPECT_EQ(self.m_context.input().capture(), thumb.id);
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiTextAreaWidgetKey, s_UiTextAreaPanelKey));
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
@@ -933,7 +926,7 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     const VectorSingle dragY = travel * VectorSingle(0.25f, 0.5f, 0.0f, 0.0f) + VectorSingle(originValue.y, originValue.y, originValue.y, originValue.y);
     const VectorDouble expectedScroll = VectorDouble(thumb.gestureMaximum, thumb.gestureMaximum, thumb.gestureMaximum, thumb.gestureMaximum) * VectorDouble(0.25, 0.5, 0.0, 0.0) + VectorDouble(50.0, 50.0, 50.0, 50.0);
     const Point quarter = Point(origin.x, dragY.x);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(quarter, InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, quarter)).pointerConsumed);
     ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), expectedScroll.x, 0.001);
     const auto foundAfterMove = self.tryTarget(self.part("scroll.y.thumb"));
@@ -942,8 +935,8 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     EXPECT_EQ(afterMove.control, thumb.control);
     EXPECT_GT(afterMove.rectangle.y, thumb.rectangle.y);
     const Point half = Point(origin.x, dragY.y);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(half, InputEventType::PointerMove)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(half, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, half)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, half)).pointerConsumed);
     ASSERT_TRUE(self.frameArea(4u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), expectedScroll.y, 0.001);
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 30.0f);
@@ -960,10 +953,10 @@ void VerifyUiTextAreaInputScrollTests_CompletedHorizontalThumbDragKeepsOutsideRe
     const VectorSingle originValue = VectorSingle(thumb.rectangle.width, thumb.rectangle.height, 0.0f, 0.0f) * VectorSingle(0.25f, 0.5f, 0.0f, 0.0f) + VectorSingle(thumb.rectangle.x, thumb.rectangle.y, 0.0f, 0.0f);
     const Point origin = Point(originValue.x, originValue.y);
     const Point outside = Point(900.0f, origin.y);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(outside, InputEventType::PointerMove)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(Point(), InputEventType::PointerLeave)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(outside, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, outside)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerLeave, Point())).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, outside)).pointerConsumed);
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
@@ -980,10 +973,10 @@ void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewpo
     ASSERT_TRUE(foundAfter.has_value());
     const HitTarget after = foundAfter.value();
     const Point point = CenterUiRect(after.rectangle);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(point, InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 100.0, 0.001);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(point, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 100.0, 0.001);
     ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 100.0 + page, 0.001);
@@ -999,12 +992,12 @@ void VerifyUiTextAreaInputScrollTests_LaterCoalescedThumbUpdateRunsAfterAnInterv
     const Point origin = CenterUiRect(thumb.rectangle);
     const f32 travel = thumb.gestureReference.height - thumb.rectangle.height;
     ASSERT_GT(travel, 0.0f);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     ASSERT_TRUE(self.wheel(0.0, -1.0, origin));
     ASSERT_EQ(self.m_context.input().controlActions().size(), 1u);
     const Point quarter = Point(origin.x, travel * 0.25f + origin.y);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(quarter, InputEventType::PointerMove)).pointerConsumed);
-    ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(quarter, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, quarter)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, quarter)).pointerConsumed);
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), thumb.gestureMaximum * 0.25, 0.001);
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);

@@ -142,6 +142,19 @@ u64 AdvanceUiEditFocusGeneration(mut u64 inOutFocusGeneration){
     return inOutFocusGeneration;
 }
 
+b8 HasPendingUiEditOwnerTransfer(
+    in UiTextEditOwner targetOwner,
+    in UiTextEditOwner sessionOwner,
+    in b8 clipboardPending,
+    in UiTextEditOwner clipboardOwner,
+    in b8 primaryPending,
+    in UiTextEditOwner primaryOwner
+){
+    return sessionOwner == targetOwner
+        || (clipboardPending && clipboardOwner == targetOwner)
+        || (primaryPending && primaryOwner == targetOwner);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

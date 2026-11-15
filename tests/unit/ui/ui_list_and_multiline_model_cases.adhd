@@ -344,27 +344,6 @@ const StringView s_UiMultilineParagraphSeparator = "\xE2\x80\xA9";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputEvent MakeUiListPointerAt(in InputEventTypeEnum type, in Point position){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.position = position;
-    return event;
-}
-
-InputEvent MakeUiListKeyEvent(in InputEventTypeEnum type, in CoreKeyEnum key){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.key = key;
-    return event;
-}
-
-ShapeRequest MakeUiListShapeRequest(in StringView text, in f32 fontSize){
-    ShapeRequest request = ShapeRequest();
-    request.text = text;
-    request.fontSize = fontSize;
-    return request;
-}
-
 ShapeRequest MakeUiListLanguageShapeRequest(in StringView text, in StringView language, in f32 fontSize){
     ShapeRequest request = ShapeRequest();
     request.text = text;
@@ -373,26 +352,10 @@ ShapeRequest MakeUiListLanguageShapeRequest(in StringView text, in StringView la
     return request;
 }
 
-InputCommandIntent MakeUiMultilineIntent(in InputCommandEnum command, in b8 extend, in b8 edit){
-    InputCommandIntent intent = InputCommandIntent();
-    intent.command = command;
-    intent.extend = extend;
-    intent.edit = edit;
-    return intent;
-}
-
 EditCommandRequest MakeUiMultilineCommand(in EditCommandEnum command){
     EditCommandRequest request = EditCommandRequest();
     request.command = command;
     return request;
-}
-
-EditLimits MakeUiMultilineLimits(in usize maxBytes, in usize maxHistoryRecords, in usize maxHistoryBytes){
-    EditLimits limits = EditLimits();
-    limits.maxBytes = maxBytes;
-    limits.maxHistoryRecords = maxHistoryRecords;
-    limits.maxHistoryBytes = maxHistoryBytes;
-    return limits;
 }
 
 
@@ -511,12 +474,12 @@ void VerifyUiListBuilderSelectionTests_SourceRevisionFencesHeldCaptureAndRestore
     const Expected<HitTarget> firstRowOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(firstRowOpt.has_value());
     const Point point = UiListBuilderCenter(firstRowOpt.value().rectangle);
-    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ++self.m_source.contentRevision;
     ASSERT_TRUE(self.prepare(2u));
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
@@ -531,22 +494,22 @@ void VerifyUiListBuilderSelectionTests_EscapeBeforeReleaseCancelsRowSelectionAnd
     const Expected<HitTarget> secondRowOpt = self.tryTarget(self.row(2u));
     ASSERT_TRUE(secondRowOpt.has_value());
     const Point point = UiListBuilderCenter(secondRowOpt.value().rectangle);
-    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_result.activated);
     self.press(CoreKey::Escape);
-    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryUp, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_FALSE(self.m_result.activated);
     EXPECT_FALSE(self.m_result.selectionChanged);
     self.press(CoreKey::Tab);
     ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
-    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_FALSE(self.m_result.activated);
     self.press(CoreKey::Escape);
-    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_FALSE(self.m_result.activated);
@@ -562,11 +525,11 @@ void VerifyUiListBuilderSelectionTests_DatasetReplacementWhileSubmitIsHeldCannot
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     self.press(CoreKey::Tab);
-    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
     ++self.m_source.contentRevision;
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_result.activated);
-    EXPECT_TRUE(self.send(MakeUiListKeyEvent(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_FALSE(self.m_result.activated);
@@ -757,7 +720,7 @@ void VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPi
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), cast<f64>(self.m_source.specialIndex) * grown + within);
     EXPECT_DOUBLE_EQ(placement.contentHeight, cast<f64>(self.m_source.count) * grown);
     const Expected<SelectableMetrics> metrics = MeasureSelectable(self.m_skin, self.m_builder.listStyle().row);
-    const Expected<TextLayout, TextLayoutStatusEnum> layout = self.m_text.layout(MakeUiListShapeRequest(self.m_source.specialText, self.m_builder.style().fontSize));
+    const Expected<TextLayout, TextLayoutStatusEnum> layout = self.m_text.layout(MakeUiShapeRequest(self.m_source.specialText, self.m_builder.style().fontSize));
     ASSERT_TRUE(metrics.has_value());
     ASSERT_TRUE(layout.has_value());
     const Expected<Rect> visual = self.m_text.measure(layout.value(), self.m_paint.displayMetrics());
@@ -1010,8 +973,8 @@ void VerifyUiListBuilderTests_ContentViewportPreflightsTallSecondRowAtFractional
     ListOptions options = MakeUiListBuilderDefaultOptions();
     options.height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
     const Expected<SelectableMetrics> metrics = MeasureSelectable(self.m_skin, self.m_builder.listStyle().row);
-    const Expected<TextLayout, TextLayoutStatusEnum> ordinary = self.m_text.layout(MakeUiListShapeRequest(s_UiListCaseFirstRowText, self.m_builder.style().fontSize));
-    const Expected<TextLayout, TextLayoutStatusEnum> tall = self.m_text.layout(MakeUiListShapeRequest(self.m_source.specialText, self.m_builder.style().fontSize));
+    const Expected<TextLayout, TextLayoutStatusEnum> ordinary = self.m_text.layout(MakeUiShapeRequest(s_UiListCaseFirstRowText, self.m_builder.style().fontSize));
+    const Expected<TextLayout, TextLayoutStatusEnum> tall = self.m_text.layout(MakeUiShapeRequest(self.m_source.specialText, self.m_builder.style().fontSize));
     ASSERT_TRUE(metrics.has_value());
     ASSERT_TRUE(ordinary.has_value());
     ASSERT_TRUE(tall.has_value());
@@ -1105,7 +1068,7 @@ void VerifyUiListLoanTests_SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptu
     const HitTarget row = rowOpt.value();
     const VectorSingle pointValue = VectorSingle(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f) + VectorSingle(10.0f, 12.0f, 0.0f, 0.0f);
     const Point point = Point(pointValue.x, pointValue.y);
-    EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
     ASSERT_EQ(self.m_context.input().capture(), self.firstRow());
     const UiListLoanAcceptedState displayed = self.accepted();
     ASSERT_TRUE(self.declareList(2u));
@@ -1316,20 +1279,20 @@ void VerifyUiListReconciliationTests_ApplicationChangesFenceEvenAnUnchangedSelec
 
 
 void VerifyMultilineCommandTests_InvalidTextModeAndNonEditingAcceptAreRejected(in MultilineCommandTests self){
-    EXPECT_EQ(TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, false), false, EditTextMode::Multiline).command, EditCommand::None);
-    EXPECT_EQ(TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, true), false, bit_cast<EditTextModeEnum>(u8(255u))).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, false), false, EditTextMode::Multiline).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), false, bit_cast<EditTextModeEnum>(u8(255u))).command, EditCommand::None);
 }
 
 void VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("ab"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
-    const EditCommandResult inserted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, true), false, self.m_model.textMode()));
+    const EditCommandResult inserted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), false, self.m_model.textMode()));
     EXPECT_TRUE(inserted.handled);
     EXPECT_TRUE(inserted.textChanged);
     EXPECT_TRUE(inserted.selectionChanged);
     EXPECT_FALSE(inserted.submitted);
     EXPECT_EQ(self.m_model.text(), "a\nb");
-    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Accept, false, true), true, self.m_model.textMode()));
+    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), true, self.m_model.textMode()));
     EXPECT_TRUE(repeated.textChanged);
     EXPECT_FALSE(repeated.submitted);
     EXPECT_EQ(self.m_model.text(), "a\n\nb");
@@ -1338,13 +1301,13 @@ void VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitt
 void VerifyMultilineCommandTests_SubmitIntentReportsWithoutEditingAndSuppressesRepeats(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("a\nb"));
     const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
-    const EditCommandResult submitted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Submit, false, true), false, self.m_model.textMode()));
+    const EditCommandResult submitted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), false, self.m_model.textMode()));
     EXPECT_TRUE(submitted.handled);
     EXPECT_TRUE(submitted.submitted);
     EXPECT_FALSE(submitted.textChanged);
     EXPECT_FALSE(submitted.selectionChanged);
     before.expectUnchanged(self.m_model);
-    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiMultilineIntent(InputCommand::Submit, false, true), true, self.m_model.textMode()));
+    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), true, self.m_model.textMode()));
     EXPECT_TRUE(repeated.handled);
     EXPECT_FALSE(repeated.submitted);
     before.expectUnchanged(self.m_model);
@@ -1412,7 +1375,7 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
 }
 
 void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAllState(mut MultilineCommandTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiMultilineLimits(3u, 8u, 128u), EditTextMode::Multiline);
+    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(3u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
     const EditCommandResult rejected = ApplyEditCommand(limited, MakeUiMultilineCommand(EditCommand::Newline));
@@ -1492,7 +1455,7 @@ void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWith
 }
 
 void VerifyMultilineCompositionTests_OverCapacityPreeditAndCommitPreserveEveryModelField(mut MultilineCompositionTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiMultilineLimits(6u, 8u, 128u), EditTextMode::Multiline);
+    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(6u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.setSelection(1u, 2u));
     ASSERT_TRUE(limited.beginComposition());
@@ -1650,7 +1613,7 @@ void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelect
 }
 
 void VerifyMultilineModelTests_CapacityFailureKeepsTheExactBorrowedModelState(mut MultilineModelTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiMultilineLimits(6u, 8u, 128u), EditTextMode::Multiline);
+    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(6u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.replaceSelection("d"));
     ASSERT_TRUE(limited.setSelection(0u, 1u));

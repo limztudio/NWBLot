@@ -510,12 +510,6 @@ const AStringView s_UiTextLayoutCombiningMarkText = "A\xcc\x81";
 const AStringView s_UiTextLayoutTwoGlyphText = "AB";
 
 
-ShapeRequest MakeUiTextFontLayoutRequest(in StringView text){
-    ShapeRequest request = ShapeRequest();
-    request.text = text;
-    return request;
-}
-
 GlyphCoverageBounds MakeUiTextFontLayoutCoverage(in Rect ink, in b8 known){
     GlyphCoverageBounds coverage = GlyphCoverageBounds();
     coverage.ink = ink;
@@ -563,7 +557,7 @@ void VerifyTextFontConstruction_ThrowingNativeFaceDiagnosticReleasesAcquiredAren
 }
 
 void VerifyTextFontTests_MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters(mut TextFontTests self){
-    ShapeRequest request = MakeUiTextFontLayoutRequest("\xed\x95\x9c\xea\xb8\x80");
+    ShapeRequest request = MakeUiDefaultShapeRequest("\xed\x95\x9c\xea\xb8\x80");
     request.scriptTag = PackFourCharTag(72u, 97u, 110u, 103u);
     request.language = s_UiTextFontKoreanLanguage;
     ASSERT_TRUE(self.applyLayout(request));
@@ -573,7 +567,7 @@ void VerifyTextFontTests_MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelCl
 }
 
 void VerifyTextFontTests_RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart(mut TextFontTests self){
-    ShapeRequest request = MakeUiTextFontLayoutRequest("abc");
+    ShapeRequest request = MakeUiDefaultShapeRequest("abc");
     request.direction = TextDirection::RightToLeft;
     ASSERT_TRUE(self.applyLayout(request));
     ASSERT_EQ(self.m_layout.clusters().size(), 3u);
@@ -585,7 +579,7 @@ void VerifyTextFontTests_RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualSta
 }
 
 void VerifyTextFontTests_FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsable(mut TextFontTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest("AV")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("AV")));
     const f32 width = self.m_layout.measure().x;
     const u64 oldServiceGeneration = self.m_service.generation();
     const SharedFontFace oldFace = self.m_layout.glyphs()[0u].face;
@@ -607,12 +601,12 @@ void VerifyTextFontTests_FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutU
 }
 
 void VerifyTextFontTests_AppendingGlyphKeepsEarlierCoverageBytesImmutable(mut TextFontTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextFontSampleGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontSampleGlyphText)));
     self.beginPaint(1u);
     ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot first = self.m_paint.freeze();
     ASSERT_EQ(first.glyphPages().size(), 1u);
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest("B")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("B")));
     self.beginPaint(2u);
     ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot second = self.m_paint.freeze();
@@ -637,7 +631,7 @@ void VerifyTextFontTests_AppendingGlyphKeepsEarlierCoverageBytesImmutable(mut Te
 }
 
 void VerifyTextFontTests_RasterDpiChangesPagesWithoutChangingLogicalMeasurement(mut TextFontTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest("Ag")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("Ag")));
     const Point measured = self.m_layout.measure();
     self.beginPaint(1u);
     ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
@@ -653,7 +647,7 @@ void VerifyTextFontTests_RasterDpiChangesPagesWithoutChangingLogicalMeasurement(
 }
 
 void VerifyTextFontTests_OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads(mut TextFontTests self){
-    ShapeRequest request = MakeUiTextFontLayoutRequest(s_UiTextFontWideGlyphText);
+    ShapeRequest request = MakeUiDefaultShapeRequest(s_UiTextFontWideGlyphText);
     request.fontSize = 1024.0f;
     ASSERT_TRUE(self.applyLayout(request));
     self.beginPaint(1u);
@@ -665,7 +659,7 @@ void VerifyTextFontTests_OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads(m
 }
 
 void VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset(mut TextFontTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextFontSampleGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontSampleGlyphText)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const u32 glyphId = self.m_layout.glyphs()[0u].glyphId;
     GlyphAtlas atlas = GlyphAtlas(self.m_arena);
@@ -687,7 +681,7 @@ void VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcros
     EXPECT_NE(AtlasGlyphSlotId(atlas, face, glyphId, 32u), firstSlot);
     EXPECT_NE(AtlasGlyphSlotId(atlas, otherFace, glyphId, 24u), firstSlot);
 
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(" ")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(" ")));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const u32 spaceId = self.m_layout.glyphs()[0u].glyphId;
     GlyphBitmap bitmap = GlyphBitmap(self.m_arena);
@@ -718,7 +712,7 @@ void VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcros
 }
 
 void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut TextFontTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextFontWideGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontWideGlyphText)));
     ASSERT_FALSE(self.m_layout.glyphs().empty());
     const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
     GlyphAtlas atlas = GlyphAtlas(self.m_arena);
@@ -746,7 +740,7 @@ void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut Te
 }
 
 void VerifyTextFontTests_AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages(mut TextFontTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextFontWideGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontWideGlyphText)));
     const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
     GlyphAtlas atlas = GlyphAtlas(self.m_arena);
     for(u32 index = 0u; index < s_GlyphAtlasMaxPages; ++index){
@@ -770,7 +764,7 @@ void VerifyTextFontTests_AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages(mut 
 }
 
 void VerifyTextFontTests_NativeCffCoverageAndFaceSurviveFontReplacement(mut TextFontTests self){
-    ShapeRequest request = MakeUiTextFontLayoutRequest("\xed\x95\x9c");
+    ShapeRequest request = MakeUiDefaultShapeRequest("\xed\x95\x9c");
     request.scriptTag = PackFourCharTag(72u, 97u, 110u, 103u);
     request.language = s_UiTextFontKoreanLanguage;
     ASSERT_TRUE(self.applyLayout(request));
@@ -798,7 +792,7 @@ void VerifyTextFontTests_NativeCffBoundsCoverFractionalDpiRasterFringes(mut Text
     sizes[2u] = 320.0078125f;
     const u32 hangulTag = PackFourCharTag(72u, 97u, 110u, 103u);
     for(in f32 fontSize : sizes){
-        ShapeRequest request = MakeUiTextFontLayoutRequest("\xed\x95\x9c");
+        ShapeRequest request = MakeUiDefaultShapeRequest("\xed\x95\x9c");
         request.scriptTag = hangulTag;
         request.language = s_UiTextFontKoreanLanguage;
         request.fontSize = fontSize;
@@ -1095,7 +1089,7 @@ void VerifyTextGlyphVisibilityAtlasTests_RejectedAtlasRectanglesRejectTheResult(
 
 void VerifyTextLayoutInkTests_EmptyShapingInkRemainsAnUnknownPerGlyphRectangle(mut TextLayoutInkTests self){
     self.m_shaper.m_ink = Rect();
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkCommittedText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkCommittedText)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     EXPECT_FLOAT_EQ(self.m_layout.glyphs()[0u].ink.width, 0.0f);
     EXPECT_FLOAT_EQ(self.m_layout.glyphs()[0u].ink.height, 0.0f);
@@ -1104,9 +1098,9 @@ void VerifyTextLayoutInkTests_EmptyShapingInkRemainsAnUnknownPerGlyphRectangle(m
 }
 
 void VerifyTextLayoutInkTests_UnrepresentableRelativeInkEndpointRejectsTheShaperWithoutReplacingLayout(mut TextLayoutInkTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkCommittedText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkCommittedText)));
     self.m_shaper.m_ink = Rect(f32.max, 0.0f, f32.max, 1.0f);
-    const auto layoutResult = self.m_builder.layout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkReplacementText));
+    const auto layoutResult = self.m_builder.layout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkReplacementText));
     ASSERT_FALSE(layoutResult.has_value());
     EXPECT_EQ(layoutResult.error(), TextLayoutStatus::FontFailure);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
@@ -1114,10 +1108,10 @@ void VerifyTextLayoutInkTests_UnrepresentableRelativeInkEndpointRejectsTheShaper
 }
 
 void VerifyTextLayoutInkTests_UnrepresentableTranslatedInkRejectsAtomicallyEvenWithEmptyInk(mut TextLayoutInkTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkCommittedText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkCommittedText)));
     self.m_shaper.m_offset.x = f32.max;
     self.m_shaper.m_ink = Rect(f32.max, 0.0f, 0.0f, 0.0f);
-    const auto layoutResult = self.m_builder.layout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkReplacementText));
+    const auto layoutResult = self.m_builder.layout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkReplacementText));
     ASSERT_FALSE(layoutResult.has_value());
     EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
@@ -1125,12 +1119,12 @@ void VerifyTextLayoutInkTests_UnrepresentableTranslatedInkRejectsAtomicallyEvenW
 }
 
 void VerifyTextLayoutInkTests_UnrepresentableUnionAcrossValidGlyphsRejectsAtomically(mut TextLayoutInkTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkCommittedText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkCommittedText)));
     self.m_shaper.m_offset.x = -f32.max * 0.75f;
     self.m_shaper.m_secondOffset.x = f32.max * 0.75f;
     self.m_shaper.m_ink = Rect(0.0f, -8.0f, 1.0f, 10.0f);
     self.m_shaper.m_advance.x = 0.0f;
-    const auto layoutResult = self.m_builder.layout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkTwoGlyphReplacementText));
+    const auto layoutResult = self.m_builder.layout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkTwoGlyphReplacementText));
     ASSERT_FALSE(layoutResult.has_value());
     EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
@@ -1138,11 +1132,11 @@ void VerifyTextLayoutInkTests_UnrepresentableUnionAcrossValidGlyphsRejectsAtomic
 }
 
 void VerifyTextLayoutInkTests_UnrepresentablePositionOrAdvanceRejectsBeforeGlyphPublication(mut TextLayoutInkTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkCommittedText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkCommittedText)));
     self.m_shaper.m_ink = Rect();
     self.m_shaper.m_advance.x = f32.max;
     self.m_shaper.m_secondOffset.x = f32.max;
-    const auto layoutResult = self.m_builder.layout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkTwoGlyphReplacementText));
+    const auto layoutResult = self.m_builder.layout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkTwoGlyphReplacementText));
     ASSERT_FALSE(layoutResult.has_value());
     EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
@@ -1150,16 +1144,16 @@ void VerifyTextLayoutInkTests_UnrepresentablePositionOrAdvanceRejectsBeforeGlyph
 }
 
 void VerifyTextLayoutInkTests_MalformedOrUnrepresentableKnownCoverageRejectsAtomically(mut TextLayoutInkTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkCommittedText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkCommittedText)));
     self.m_shaper.m_coverage = MakeUiTextFontLayoutCoverage(Rect(0.0f, 0.0f, -1.0f, 1.0f), true);
-    const auto firstRejected = self.m_builder.layout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkReplacementText));
+    const auto firstRejected = self.m_builder.layout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkReplacementText));
     ASSERT_FALSE(firstRejected.has_value());
     EXPECT_EQ(firstRejected.error(), TextLayoutStatus::FontFailure);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
     self.m_shaper.m_coverage = MakeUiTextFontLayoutCoverage(Rect(f32.max, 0.0f, 0.0f, 0.0f), true);
     self.m_shaper.m_offset.x = f32.max;
     self.m_shaper.m_ink = Rect();
-    const auto secondRejected = self.m_builder.layout(MakeUiTextFontLayoutRequest(s_UiTextLayoutInkReplacementText));
+    const auto secondRejected = self.m_builder.layout(MakeUiDefaultShapeRequest(s_UiTextLayoutInkReplacementText));
     ASSERT_FALSE(secondRejected.has_value());
     EXPECT_EQ(secondRejected.error(), TextLayoutStatus::InvalidParameters);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
@@ -1171,7 +1165,7 @@ void VerifyTextLayoutInkTests_MalformedOrUnrepresentableKnownCoverageRejectsAtom
 
 
 void VerifyTextLayoutTests_CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalLine(mut TextLayoutTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest("A\r\nB\n")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("A\r\nB\n")));
     ASSERT_EQ(self.m_layout.lines().size(), 3u);
     EXPECT_EQ(self.m_layout.lines()[0u].byteEnd, 1u);
     EXPECT_EQ(self.m_layout.lines()[0u].breakEnd, 3u);
@@ -1188,14 +1182,14 @@ void VerifyTextLayoutTests_CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFin
 }
 
 void VerifyTextLayoutTests_LigatureAndCombiningClustersHaveOnlyRealSourceEdges(mut TextLayoutTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutLigatureText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutLigatureText)));
     ASSERT_EQ(self.m_layout.clusters().size(), 1u);
     EXPECT_EQ(self.m_layout.clusters()[0u].byteBegin, 0u);
     EXPECT_EQ(self.m_layout.clusters()[0u].byteEnd, 3u);
     EXPECT_EQ(self.m_layout.hitTest(Point(15.0f, 4.0f)).byteOffset, 0u);
     EXPECT_EQ(self.m_layout.hitTest(Point(15.01f, 4.0f)).byteOffset, 3u);
     EXPECT_FALSE(self.m_layout.caretRect(1u, TextCaretEdge::Leading).has_value());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutCombiningMarkText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutCombiningMarkText)));
     ASSERT_EQ(self.m_layout.clusters().size(), 1u);
     EXPECT_EQ(self.m_layout.clusters()[0u].glyphCount, 2u);
     EXPECT_FLOAT_EQ(self.m_layout.measure().x, 10.0f);
@@ -1205,7 +1199,7 @@ void VerifyTextLayoutTests_LigatureAndCombiningClustersHaveOnlyRealSourceEdges(m
 }
 
 void VerifyTextLayoutTests_NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIndices(mut TextLayoutTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest("A\xed\x95\x9c\xf0\x9f\x98\x80")));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("A\xed\x95\x9c\xf0\x9f\x98\x80")));
     ASSERT_EQ(self.m_layout.clusters().size(), 3u);
     EXPECT_EQ(self.m_layout.clusters()[0u].byteEnd, 1u);
     EXPECT_EQ(self.m_layout.clusters()[1u].byteBegin, 1u);
@@ -1220,7 +1214,7 @@ void VerifyTextLayoutTests_NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIn
 }
 
 void VerifyTextLayoutTests_RtlVisualOrderReversesLogicalClusterEdgesAndPreservesByteEnds(mut TextLayoutTests self){
-    ShapeRequest request = MakeUiTextFontLayoutRequest("abc");
+    ShapeRequest request = MakeUiDefaultShapeRequest("abc");
     request.direction = TextDirection::RightToLeft;
     ASSERT_TRUE(self.applyLayout(request));
     ASSERT_EQ(self.m_layout.clusters().size(), 3u);
@@ -1242,16 +1236,16 @@ void VerifyTextLayoutTests_RtlVisualOrderReversesLogicalClusterEdgesAndPreserves
 void VerifyTextLayoutTests_FailedLaterLineAndSourceMutationPreserveCommittedLayout(mut TextLayoutTests self){
     String source = "";
     source.assign(s_UiTextLayoutTwoGlyphText.data(), s_UiTextLayoutTwoGlyphText.size());
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(StringView(source.data(), source.size()))));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(StringView(source.data(), source.size()))));
     source.assign("changed", 7u);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
-    const auto missingResult = self.m_builder.layout(MakeUiTextFontLayoutRequest("C\nFAIL"));
+    const auto missingResult = self.m_builder.layout(MakeUiDefaultShapeRequest("C\nFAIL"));
     ASSERT_FALSE(missingResult.has_value());
     EXPECT_EQ(missingResult.error(), TextLayoutStatus::MissingGlyph);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
     EXPECT_FLOAT_EQ(self.m_layout.measure().x, 20.0f);
     ASSERT_EQ(self.m_layout.lines().size(), 1u);
-    const auto tabResult = self.m_builder.layout(MakeUiTextFontLayoutRequest("A\tB"));
+    const auto tabResult = self.m_builder.layout(MakeUiDefaultShapeRequest("A\tB"));
     ASSERT_FALSE(tabResult.has_value());
     EXPECT_EQ(tabResult.error(), TextLayoutStatus::UnsupportedControl);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
@@ -1270,7 +1264,7 @@ void VerifyTextLayoutTests_EmptyTextHasOneTypographicLineAndNoInk(mut TextLayout
 }
 
 void VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAtomic(mut TextLayoutTests self){
-    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(s_UiTextLayoutTwoGlyphText)));
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextLayoutTwoGlyphText)));
     Array<StringView, 5u> invalid;
     invalid[0u] = "\xc0\x80";
     invalid[1u] = "\xed\xa0\x80";
@@ -1278,15 +1272,15 @@ void VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAto
     invalid[3u] = "\xe2\x82";
     invalid[4u] = MakeUiTextLayoutNullByteView();
     for(in StringView text : invalid){
-        const auto layoutResult = self.m_builder.layout(MakeUiTextFontLayoutRequest(text));
+        const auto layoutResult = self.m_builder.layout(MakeUiDefaultShapeRequest(text));
         ASSERT_FALSE(layoutResult.has_value());
         EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidUtf8);
         EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
     }
-    const auto crResult = self.m_builder.layout(MakeUiTextFontLayoutRequest("A\rB"));
+    const auto crResult = self.m_builder.layout(MakeUiDefaultShapeRequest("A\rB"));
     ASSERT_FALSE(crResult.has_value());
     EXPECT_EQ(crResult.error(), TextLayoutStatus::UnsupportedControl);
-    ShapeRequest request = MakeUiTextFontLayoutRequest(s_UiTextLayoutTwoGlyphText);
+    ShapeRequest request = MakeUiDefaultShapeRequest(s_UiTextLayoutTwoGlyphText);
     request.fontSize = bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits);
     const auto nanResult = self.m_builder.layout(request);
     ASSERT_FALSE(nanResult.has_value());

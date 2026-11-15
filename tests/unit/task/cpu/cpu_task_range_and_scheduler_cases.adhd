@@ -411,12 +411,13 @@ void ExecuteWorkerSelfWaitDeath(in TestSchedulerConfig config){
     TaskGate start = TaskGate();
     CpuTaskScheduler scheduler(config);
     CpuTaskHandle self = CpuTaskHandle();
-    native(mut scheduler, mut start, mut self){
-        const auto selfTaskAdmission = scheduler.submit([&]() { start.block(); scheduler.wait(self); });
-        if(!selfTaskAdmission)
-            ExitTestProcess(0u);
-        self = *selfTaskAdmission;
-    }
+    const auto selfTaskAdmission = scheduler.submit(lambda[mut scheduler, mut start, mut self]() -> void{
+        start.block();
+        scheduler.wait(self);
+    });
+    if(!selfTaskAdmission.has_value())
+        ExitTestProcess(0u);
+    self = selfTaskAdmission.value();
     start.open();
     scheduler.wait();
 }
@@ -431,19 +432,19 @@ void ExecuteDescendantAncestorWaitDeath(in TestSchedulerConfig config){
     TaskGate start = TaskGate();
     CpuTaskScheduler scheduler(config);
     CpuTaskHandle parent = CpuTaskHandle();
-    native(mut scheduler, mut start, mut parent){
-        const auto cpuTaskAdmission = scheduler.submit([&]() {
-            start.block();
-            const auto childTaskAdmission = scheduler.submit([&]() { scheduler.wait(parent); });
-            if(!childTaskAdmission)
-                ExitTestProcess(0u);
-            const auto child = *childTaskAdmission;
-            EXPECT_TRUE(child.valid());
+    const auto cpuTaskAdmission = scheduler.submit(lambda[mut scheduler, mut start, mut parent]() -> void{
+        start.block();
+        const auto childTaskAdmission = scheduler.submit(lambda[mut scheduler, mut parent]() -> void{
+            scheduler.wait(parent);
         });
-        if(!cpuTaskAdmission)
+        if(!childTaskAdmission.has_value())
             ExitTestProcess(0u);
-        parent = *cpuTaskAdmission;
-    }
+        const CpuTaskHandle child = childTaskAdmission.value();
+        EXPECT_TRUE(child.valid());
+    });
+    if(!cpuTaskAdmission.has_value())
+        ExitTestProcess(0u);
+    parent = cpuTaskAdmission.value();
     start.open();
     scheduler.wait();
 }
@@ -457,12 +458,12 @@ void ExecuteCurrentScopeJoinDeath(in TestSchedulerConfig config){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
-    native(mut scope){
-        const auto cpuTaskAdmission = scope.submit([&]() { scope.wait(); });
-        EXPECT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-    }
+    const auto cpuTaskAdmission = scope.submit(lambda[mut scope]() -> void{
+        scope.wait();
+    });
+    EXPECT_TRUE(cpuTaskAdmission.has_value());
+    if(cpuTaskAdmission.has_value())
+        EXPECT_TRUE(cpuTaskAdmission.value().valid());
     scheduler.wait();
 }
 
@@ -546,23 +547,21 @@ void ExecuteCrossWorkerAncestorScopeJoinDeath(in TestSchedulerConfig config){
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
     Atomic<usize> parentWorker(0u);
-    native(mut scheduler, mut scope, mut parentGate, mut parentWorker){
-        const auto cpuTaskAdmission = scope.submit([&]() {
-            parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
-            const auto secondCpuTaskAdmission = scheduler.submit([&]() {
-                if(!WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
-                    ExitTestProcess(0u);
-                scope.wait();
-            });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-            parentGate.block();
+    const auto cpuTaskAdmission = scope.submit(lambda[mut scope, mut scheduler, mut parentGate, mut parentWorker]() -> void{
+        parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
+        const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut scope, mut scheduler, mut parentGate, mut parentWorker]() -> void{
+            if(!WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
+                ExitTestProcess(0u);
+            scope.wait();
         });
-        EXPECT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-    }
+        EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+        parentGate.block();
+    });
+    EXPECT_TRUE(cpuTaskAdmission.has_value());
+    if(cpuTaskAdmission.has_value())
+        EXPECT_TRUE(cpuTaskAdmission.value().valid());
     scheduler.wait();
 }
 
@@ -577,12 +576,13 @@ void ExecuteIndependentDependentWaitDeath(in TestSchedulerConfig config){
     CpuTaskScheduler scheduler(config);
     CpuTaskHandle running = CpuTaskHandle();
     CpuTaskHandle dependent = CpuTaskHandle();
-    native(mut scheduler, mut start, mut running, mut dependent){
-        const auto runningTaskAdmission = scheduler.submit([&]() { start.block(); scheduler.wait(dependent); });
-        if(!runningTaskAdmission)
-            ExitTestProcess(0u);
-        running = *runningTaskAdmission;
-    }
+    const auto runningTaskAdmission = scheduler.submit(lambda[mut scheduler, mut start, mut dependent]() -> void{
+        start.block();
+        scheduler.wait(dependent);
+    });
+    if(!runningTaskAdmission.has_value())
+        ExitTestProcess(0u);
+    running = runningTaskAdmission.value();
     const auto dependentTaskAdmission = scheduler.submit(lambda[]() -> void{}, running);
     if(!dependentTaskAdmission.has_value()){
         ExitTestProcess(0u);
@@ -602,18 +602,18 @@ void ExecuteTransitiveDependentWaitDeath(in TestSchedulerConfig config, in u32 c
     TaskGate start = TaskGate();
     CpuTaskScheduler scheduler(config);
     CpuTaskHandle dependent = CpuTaskHandle();
-    native(mut scheduler, mut start, mut dependent){
-        const auto cpuTaskAdmission = scheduler.submit([&]() {
-            start.block();
-            const auto secondCpuTaskAdmission = scheduler.submit([&]() { scheduler.wait(dependent); });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
+    const auto cpuTaskAdmission = scheduler.submit(lambda[mut scheduler, mut start, mut dependent]() -> void{
+        start.block();
+        const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut scheduler, mut dependent]() -> void{
+            scheduler.wait(dependent);
         });
-        if(!cpuTaskAdmission)
-            ExitTestProcess(0u);
-        dependent = *cpuTaskAdmission;
-    }
+        EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+    });
+    if(!cpuTaskAdmission.has_value())
+        ExitTestProcess(0u);
+    dependent = cpuTaskAdmission.value();
     for(u32 depth = 0u; depth < chainDepth; ++depth){
         const auto dependentTaskAdmission = scheduler.submit(lambda[]() -> void{}, dependent);
         if(!dependentTaskAdmission.has_value()){

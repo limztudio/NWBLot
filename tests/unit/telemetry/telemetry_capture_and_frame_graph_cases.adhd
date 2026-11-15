@@ -827,13 +827,13 @@ void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtL
     CpuTaskScope scope = CpuTaskScope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 41u);
 
-    native(in taskLabel, mut scope, mut scheduler){
-        const auto taskAdmission = scope.submit([]()noexcept{}, { .profileLabel = taskLabel });
-        ASSERT_TRUE(taskAdmission.has_value());
-        const CpuTaskHandle task = taskAdmission.value();
-        ASSERT_TRUE(task.valid());
-        scheduler.wait(task);
-    }
+    CpuTaskOptions taskOptions = CpuTaskOptions();
+    taskOptions.profileLabel = taskLabel;
+    const auto taskAdmission = scope.submit(lambda[]() -> void{}, taskOptions);
+    ASSERT_TRUE(taskAdmission.has_value());
+    const CpuTaskHandle task = taskAdmission.value();
+    ASSERT_TRUE(task.valid());
+    scheduler.wait(task);
     scope.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
     CollectTestCpuTaskProfile(scheduler, perf.cpuTimingSink());
@@ -868,11 +868,9 @@ void VerifyCpuTaskProfileIntegration_DisabledTimingSinkDiscardsBufferedSamples()
     TimingRecorder timing = TimingRecorder(arena.arena);
     CpuTaskScheduler scheduler = CpuTaskScheduler(0u);
     scheduler.setProfiling(true, 7u);
-    native(mut scheduler){
-        const auto cpuTaskAdmission = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(cpuTaskAdmission.has_value());
-        ASSERT_TRUE(cpuTaskAdmission.value().valid());
-    }
+    const auto cpuTaskAdmission = scheduler.submit(lambda[]() -> void{});
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    ASSERT_TRUE(cpuTaskAdmission.value().valid());
     scheduler.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
     CollectTestCpuTaskProfile(scheduler, timing);
@@ -890,11 +888,9 @@ void VerifyCpuTaskProfileIntegration_CollectorConsumesOnlyItsInitialPendingSnaps
     timing.setEnabled(true);
     CpuTaskScheduler scheduler = CpuTaskScheduler(0u);
     scheduler.setProfiling(true, 11u);
-    native(mut scheduler){
-        const auto cpuTaskAdmission = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(cpuTaskAdmission.has_value());
-        ASSERT_TRUE(cpuTaskAdmission.value().valid());
-    }
+    const auto cpuTaskAdmission = scheduler.submit(lambda[]() -> void{});
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    ASSERT_TRUE(cpuTaskAdmission.value().valid());
     scheduler.wait();
     const usize pendingBefore = scheduler.statistics().profilePendingEvents;
     ASSERT_GT(pendingBefore, 0u);
@@ -917,16 +913,18 @@ void VerifyCpuTaskProfileIntegration_NativeWorkerSamplesAreRecordedOnTheCollecto
     const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
     ASSERT_TRUE(label.valid());
     scheduler.setProfiling(true, 19u);
-    native(in label, mut scheduler){
-        const ThreadId owner = QueryCurrentThreadId();
-        ThreadId executionThread;
-        const auto taskAdmission = scheduler.submit([&]()noexcept{ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
-        ASSERT_TRUE(taskAdmission.has_value());
-        const CpuTaskHandle task = taskAdmission.value();
-        ASSERT_TRUE(task.valid());
-        scheduler.wait(task);
-        EXPECT_NE(executionThread, owner);
-    }
+    const ThreadId owner = QueryCurrentThreadId();
+    ThreadId executionThread = ThreadId();
+    CpuTaskOptions taskOptions = CpuTaskOptions();
+    taskOptions.profileLabel = label;
+    const auto taskAdmission = scheduler.submit(lambda[mut executionThread]() -> void{
+        executionThread = QueryCurrentThreadId();
+    }, taskOptions);
+    ASSERT_TRUE(taskAdmission.has_value());
+    const CpuTaskHandle task = taskAdmission.value();
+    ASSERT_TRUE(task.valid());
+    scheduler.wait(task);
+    EXPECT_NE(executionThread, owner);
     OwnerThreadTimingSink sink = MakeOwnerThreadTimingSink(scheduler, timing);
     CollectTestCpuTaskProfile(scheduler, sink);
     timing.publishFrame(20u);

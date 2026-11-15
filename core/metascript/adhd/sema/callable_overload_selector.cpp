@@ -12,6 +12,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] i32 CallableOverloadSelector::ScoreCandidateParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
     i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? s_OverloadExactArityScore : 0;
     score += ScoreCallableParams(symbols, params, argTypeNames, argIsMut);
@@ -88,6 +91,9 @@ const MethodDecl* CallableOverloadSelector::FindClassConstructor(const SymbolTab
     }
     return bestMatch;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

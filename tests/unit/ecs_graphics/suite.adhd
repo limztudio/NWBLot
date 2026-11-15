@@ -453,7 +453,6 @@ using CausticEmissionTargetBuilder = Impl::CausticEmissionTargetBuilder;
 namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
 using CausticLightSelector = Impl::CausticLightSelector;
 using SceneLightGpuData = Impl::SceneLightGpuData;
-using MutableSceneLightGpuDataSpan = Impl::MutableSceneLightGpuDataSpan;
 using CausticQualitySettings = Impl::CausticQualitySettings;
 using CausticResolveActivityLayout = Impl::CausticResolveActivityLayout;
 using Impl::ValidateCausticQualitySettings;
@@ -739,16 +738,15 @@ void VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCan
     importance[0u] = 10.0f;
     importance[1u] = 100.0f;
     importance[2u] = 5.0f;
-    MutableSceneLightGpuDataSpan lightSpan = MutableSceneLightGpuDataSpan(lights.data(), lights.size());
     const Span<f32> allImportance = importance;
     const Span<f32> shortImportance = allImportance.subspan(0u, 2u);
     const CausticLightSelector selector = CausticLightSelector();
 
-    EXPECT_EQ(selector.assignSlots(allImportance, 0u, lightSpan), 0u);
-    EXPECT_EQ(selector.assignSlots(shortImportance, 1u, lightSpan), 0u);
+    EXPECT_EQ(selector.assignSlots(allImportance, 0u, lights), 0u);
+    EXPECT_EQ(selector.assignSlots(shortImportance, 1u, lights), 0u);
     for(in SceneLightGpuData light : lights)
         EXPECT_EQ(light.params.w, -1.0f);
-    EXPECT_EQ(selector.assignSlots(allImportance, 1u, lightSpan), 2u);
+    EXPECT_EQ(selector.assignSlots(allImportance, 1u, lights), 2u);
     EXPECT_EQ(lights[0u].params.w, 0.0f);
     EXPECT_EQ(lights[1u].params.w, -1.0f);
     EXPECT_EQ(lights[2u].params.w, 1.0f);

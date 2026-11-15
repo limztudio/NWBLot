@@ -5,7 +5,6 @@
 #include <impl/ecs_render/raytrace/types.adhd>
 #include <impl/ecs_render/shadow/quality_settings.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
-#include <impl/ecs_render/shared/statistics_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +81,7 @@ u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f3
 void AssignShadowSlotLights(
     in Span<f32> shadowImportance,
     in u32 lightCount,
-    mut MutableSceneLightGpuDataSpan outLights
+    mut Span<SceneLightGpuData> outLights
 ){
     u32 slotCount = s_SceneShadowSlotCount;
     if(lightCount < slotCount)

@@ -343,7 +343,7 @@ Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(c
                 s_CausticsNameRenderHardwareCausticsResolveGeometry,
                 s_CausticsNameRenderHardwareCausticsSceneGeometry,
                 s_SceneGeometryDomainLabel,
-                FOUNDATION_TEXT("RendererSystem: could not import hardware-caustics graph resources")
+                "RendererSystem: could not import hardware-caustics graph resources"
             );
         }
         return CausticsStageTargetNaming(
@@ -353,7 +353,7 @@ Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(c
             s_CausticsNameRenderSoftwareCausticsResolveGeometry,
             s_CausticsNameRenderSoftwareCausticsSceneGeometry,
             "Software BVH Scene Geometry",
-            FOUNDATION_TEXT("RendererSystem: could not import deferred software-caustics graph resources")
+            "RendererSystem: could not import deferred software-caustics graph resources"
         );
     }();
 
@@ -363,7 +363,7 @@ Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(c
     const auto causticResolveGeometryResult = ImportExternalTexture(m_graph, targets.causticResolveGeometry, naming.resolveGeometry, s_CausticResolveGeometryLabel);
     const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(naming.sceneGeometryDomain, naming.sceneGeometryDomainLabel));
     if(!causticAccumulatorResult || !causticHistoryResult || !causticResolveHalfResult || !causticResolveGeometryResult || !sceneGeometryDomainResult){
-        NWB_LOGGER_WARNING(naming.importWarnText);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("{}"), ConvertString(naming.importWarnText));
         return MakeUnexpected(Failure{});
     }
     return CausticsStageTargets(*causticAccumulatorResult, *causticHistoryResult, *causticResolveHalfResult, *causticResolveGeometryResult, *sceneGeometryDomainResult);

@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/caustic/push_constants.adhd>
 #include <impl/ecs_render/components.adhd>
-#include <impl/ecs_render/shared/statistics_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +41,7 @@ class CausticLightSelector{
     public u32 assignSlots(
         in Span<f32> causticImportance,
         in u32 refractiveInstanceCount,
-        mut MutableSceneLightGpuDataSpan lights
+        mut Span<SceneLightGpuData> lights
     )const{
         const u32 lightCount = cast<u32>(lights.size());
         if(refractiveInstanceCount == 0u || lightCount == 0u || causticImportance.size() < cast<usize>(lightCount))

@@ -64,7 +64,7 @@ class CausticsStageTargetNaming{
     public Name resolveGeometry;
     public Name sceneGeometryDomain;
     public CausticLabelView sceneGeometryDomainLabel;
-    public CausticWarnView importWarnText;
+    public CausticLabelView importWarnText;
 
     public CausticsStageTargetNaming(){
         this.accumulator = Name();
@@ -73,10 +73,10 @@ class CausticsStageTargetNaming{
         this.resolveGeometry = Name();
         this.sceneGeometryDomain = Name();
         this.sceneGeometryDomainLabel = CausticLabelView();
-        this.importWarnText = CausticWarnView();
+        this.importWarnText = CausticLabelView();
     }
 
-    public CausticsStageTargetNaming(in Name accumulator, in Name history, in Name resolveHalf, in Name resolveGeometry, in Name sceneGeometryDomain, in CausticLabelView sceneGeometryDomainLabel, in CausticWarnView importWarnText){
+    public CausticsStageTargetNaming(in Name accumulator, in Name history, in Name resolveHalf, in Name resolveGeometry, in Name sceneGeometryDomain, in CausticLabelView sceneGeometryDomainLabel, in CausticLabelView importWarnText){
         this.accumulator = accumulator;
         this.history = history;
         this.resolveHalf = resolveHalf;

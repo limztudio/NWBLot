@@ -22,14 +22,12 @@ native{
 
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
-#include <core/perf/session.h>
 #include <core/telemetry/codec.h>
 #include <core/telemetry/diagnostic.h>
 #include <core/telemetry/event.h>
 #include <core/telemetry/frame_graph.h>
 #include <core/telemetry/perf.h>
 #include <core/telemetry/recorder.h>
-#include <core/telemetry/session.h>
 #include <core/telemetry/text_log.h>
 
 #include <global/arena_memory.h>
@@ -119,7 +117,6 @@ public:
     }
 };
 
-using TelemetryTestArena = TestArena;
 using GlobalArena = Core::Alloc::GlobalArena;
 using ScratchArena = Core::Alloc::ScratchArena;
 using TelemetryArena = Core::Telemetry::TelemetryArena;
@@ -130,18 +127,13 @@ using MemoryView = Core::Perf::MemoryView;
 using MemoryScopeId = Core::Perf::MemoryScopeId;
 using MemorySourceEnum = Core::Perf::MemorySource::Enum;
 namespace MemorySource = Core::Perf::MemorySource;
-using PerfSession = Core::Perf::Session;
-using PerfSessionReport = Core::Perf::SessionReport;
-using PerfCaptureOptions = Core::Perf::CaptureOptions;
 using TimingStats = Core::Perf::TimingStats;
 using TimingRecorder = Core::Perf::TimingRecorder;
 using TimingView = Core::Perf::TimingView;
 using TimingScopeId = Core::Perf::TimingScopeId;
 using TelemetryBytes = Core::Telemetry::TelemetryBytes;
 using TelemetryRecorder = Core::Telemetry::Recorder;
-using TelemetryCaptureSession = Core::Telemetry::CaptureSession;
 using CaptureSessionCaptureScope = Core::Telemetry::CaptureSessionCaptureScope;
-using TelemetryCaptureOptions = Core::Telemetry::CaptureOptions;
 using PerfSessionRecordResult = Core::Telemetry::PerfSessionRecordResult;
 using PerfTimingPayload = Core::Telemetry::PerfTimingPayload;
 using PerfMemoryPayload = Core::Telemetry::PerfMemoryPayload;
@@ -419,6 +411,11 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type PerfSession = Session;
+type PerfSessionReport = SessionReport;
+type TelemetryCaptureSession = CaptureSession;
+type TelemetryTestArena = TestArena;
 
 const StringView s_SuiteArenaSourceRecord = "\"source\": \"arena\"";
 const StringView s_SuiteHeapBackingSourceRecord = "\"source\": \"heapBacking\"";
@@ -2050,5 +2047,4 @@ NWB_ADHD_GTEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentit
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

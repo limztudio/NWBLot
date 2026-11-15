@@ -450,7 +450,7 @@ Expr* ExprParser::parseLambda(const SourceSpan span){
             return nullptr;
     }
 
-    if(!m_typeParser.parseParamList(node->lambdaParams))
+    if(!m_typeParser.parseParamList(node->lambdaParams, true))
         return nullptr;
 
     if(!m_cursor.expect(TokenType::Arrow, "expected '-> ReturnType' after lambda parameters"))

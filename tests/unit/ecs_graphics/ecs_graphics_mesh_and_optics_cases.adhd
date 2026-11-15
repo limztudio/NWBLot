@@ -886,11 +886,9 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
 
     // The exact third coordinate is one; cancellation must not make its error budget disappear.
     Array<f64, 3> exact = Array<f64, 3>();
-    native(mut exact){
-        exact[0u] = 1.0 - 0x1p-23;
-        exact[1u] = 0.0;
-        exact[2u] = 1.0;
-    }
+    exact[0u] = 0.99999988079071044921875;
+    exact[1u] = 0.0;
+    exact[2u] = 1.0;
     for(usize lane = 0u; lane < 3u; ++lane){
         EXPECT_LT(cast<f64>(minimum.raw[lane]), exact[lane]);
         EXPECT_GT(cast<f64>(maximum.raw[lane]), exact[lane]);

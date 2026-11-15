@@ -136,27 +136,7 @@ struct SRGBClearEdgeInputs{
         SRGBClearEdgeReadbackTask::Payload{ inputs.texture, inputs.readback });
 }
 
-inline constexpr AStringView s_TextureSmokeProjectName = "TextureSmokeProject";
 
-using TextureSmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
-using TextureSmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
-
-inline constexpr TextureSmokeMeshRef s_TextureGroundPlaneMesh{"project/meshes/shadow_plane"};
-inline constexpr TextureSmokeMeshRef s_TexturedSphereMesh{"project/meshes/caustic_sphere"};
-inline constexpr TextureSmokeMaterialRef s_WhiteGroundMaterial{"project/smoke/texture/materials/white_ground"};
-inline constexpr AStringView s_WhiteGroundMaterialInterface = "project/shaders/smoke_surface";
-inline constexpr TextureSmokeMaterialRef s_TextureMaterial{"project/smoke/texture/materials/pattern"};
-inline constexpr AStringView s_TextureMaterialInterface = "project/shaders/texture_smoke_surface";
-inline constexpr AStringView s_TextureRuntimeTintParameter = "texture_runtime.color_tint";
-inline constexpr f32 s_TextureCameraHeight = 3.1f;
-inline constexpr f32 s_TextureCameraDistance = 5.7f;
-inline constexpr f32 s_TextureCameraPitch = 0.36f;
-// Cast a foreground shadow on the white floor to expose red indirect bounce from the sphere.
-inline constexpr f32 s_TextureDirectionalLightPitch = 0.48f;
-// Aim the shadow toward the foreground rather than hiding the receiver spill behind the sphere from the camera.
-inline constexpr f32 s_TextureDirectionalLightYaw = 2.2f;
-inline constexpr f32 s_TextureDirectionalLightIntensity = 2.0f;
-inline constexpr u32 s_TextureFramebufferCaptureDefaultFrameCount = 360u;
 using Core::GraphicsRuntime;
 };
 
@@ -165,6 +145,30 @@ using Core::GraphicsRuntime;
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TextureSmokeProjectName = "TextureSmokeProject";
+
+
+const SmokeMeshRef s_TextureGroundPlaneMesh = "project/meshes/shadow_plane";
+const SmokeMeshRef s_TexturedSphereMesh = "project/meshes/caustic_sphere";
+const SmokeMaterialRef s_WhiteGroundMaterial = "project/smoke/texture/materials/white_ground";
+const StringView s_WhiteGroundMaterialInterface = "project/shaders/smoke_surface";
+const SmokeMaterialRef s_TextureMaterial = "project/smoke/texture/materials/pattern";
+const StringView s_TextureMaterialInterface = "project/shaders/texture_smoke_surface";
+const StringView s_TextureRuntimeTintParameter = "texture_runtime.color_tint";
+const f32 s_TextureCameraHeight = 3.1f;
+const f32 s_TextureCameraDistance = 5.7f;
+const f32 s_TextureCameraPitch = 0.36f;
+// Cast a foreground shadow on the white floor to expose red indirect bounce from the sphere.
+const f32 s_TextureDirectionalLightPitch = 0.48f;
+// Aim the shadow toward the foreground rather than hiding the receiver spill behind the sphere from the camera.
+const f32 s_TextureDirectionalLightYaw = 2.2f;
+const f32 s_TextureDirectionalLightIntensity = 2.0f;
+const u32 s_TextureFramebufferCaptureDefaultFrameCount = 360u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -337,10 +341,10 @@ class TextureSmokeProject : IProjectEntryCallbacks{
             SmokeWorldRef(this.m_world)
         );
 
-        EntityID directionalLight = s_InvalidEntityId;
-        native(mut world = this.m_world, mut directionalLight){
-            directionalLight = Impl::Scene::CreateDirectionalLightEntity(*world, s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity);
-        }
+        const EntityID directionalLight = CreateSmokeDirectionalLight(
+            s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f,
+            f32x4(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity, SmokeWorldRef(this.m_world)
+        );
         [essential] assert(
             activeCamera.valid() && directionalLight.valid() && this.m_whiteGround.valid() && this.m_texturedSphere.valid(),
             "TextureSmokeProject failed to create the white receiver and textured sphere"

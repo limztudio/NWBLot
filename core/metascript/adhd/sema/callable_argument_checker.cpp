@@ -15,6 +15,75 @@
 NWB_ADHD_BEGIN
 
 
+b8 CallableArgumentChecker::checkBuiltinVisitor(
+    ClassDecl* const ownerClass,
+    const Span<const ScopedVarInfo> scope,
+    MethodDecl& method,
+    Expr& arg,
+    const BuiltinVisitorRuleInfo& rule,
+    const b8 receiverIsConst,
+    MVector<ParseError>& errors
+){
+    const b8 readsKeyValue = !rule.keyType.empty();
+
+    const Expr* lambda = arg.kind == ExprKind::Lambda ? &arg : nullptr;
+    const MethodDecl* function = nullptr;
+    const TypeRef* callableType = m_checker.m_symbols.unwrapTypeAlias(m_checker.inferExprTypeRef(ownerClass, &method, arg, scope));
+    if(callableType && !callableType->isFuncType)
+        callableType = nullptr;
+    b8 directFunction = false;
+    if(arg.kind == ExprKind::Identifier){
+        const ScopedVarInfo* local = m_checker.FindScopedVar(scope, arg.text);
+        if(local && !callableType){
+            lambda = local->lambdaExpr;
+            function = local->callableFunction;
+        }
+        else if(!local && !callableType && !m_checker.m_symbols.findGlobalConstant(arg.text)){
+            b8 ambiguous = false;
+            function = m_checker.m_symbols.findUniqueFreeFunction(arg.text, ambiguous);
+            if(ambiguous){
+                m_checker.reportError(errors, arg.span, "visitor must have an unambiguous callable signature");
+                return false;
+            }
+            directFunction = function != nullptr;
+        }
+    }
+    if(!lambda && !callableType && !function){
+        m_checker.reportError(errors, arg.span, "visitor must have a known callable signature");
+        return false;
+    }
+    if(directFunction)
+        arg.resolvedCppNamespace = function->cppNamespace;
+    const usize expectedCount = readsKeyValue ? 2u : 1u;
+    const usize actualCount = lambda ? lambda->lambdaParams.size() : (callableType ? callableType->funcParams.size() : function->params.size());
+    if(actualCount != expectedCount){
+        m_checker.reportError(errors, arg.span, "visitor has the wrong number of parameters");
+        return false;
+    }
+    for(usize i = 0u; i < expectedCount; ++i){
+        const TypeRef* parameterType = lambda ? lambda->lambdaParams[i].type : (callableType ? callableType->funcParams[i].type : function->params[i].type);
+        const ParamPassingMode::Enum mode = lambda ? lambda->lambdaParams[i].mode : (callableType ? callableType->funcParams[i].mode : function->params[i].mode);
+        const b8 key = readsKeyValue && i == 0u;
+        const MStringView expectedType = key ? rule.keyType : rule.valueType;
+        const b8 genericLambdaParameter = lambda && parameterType && parameterType->isAuto;
+        if(!parameterType || (!genericLambdaParameter && (m_checker.m_symbols.hasTypeSymbol(expectedType) || m_checker.m_symbols.resolveBaseTypeName(parameterType->name) != expectedType))){
+            m_checker.reportError(errors, arg.span, "visitor parameter has the wrong type");
+            return false;
+        }
+        if(mode != ParamPassingMode::In && (key || !rule.mutableWithReceiver || receiverIsConst || mode != ParamPassingMode::Mut)){
+            m_checker.reportError(errors, arg.span, "visitor cannot mutate a read-only value");
+            return false;
+        }
+    }
+    const TypeRef* returnType = lambda ? lambda->lambdaReturnType : (callableType ? callableType->funcReturnType : function->returnType);
+    if((lambda && lambda->lambdaInjectsCallerArena) || (function && function->injectsCallerArena) || (returnType && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*returnType))){
+        m_checker.reportError(errors, arg.span, "visitor return value cannot require a caller arena");
+        return false;
+    }
+    return true;
+}
+
+
 b8 CallableArgumentChecker::check(
     ClassDecl* ownerClass,
     const Span<const ScopedVarInfo> scope,
@@ -22,6 +91,8 @@ b8 CallableArgumentChecker::check(
     const ClassDecl* targetOwnerCls,
     const TypeRef* recvTypeRef,
     const BuiltinReceiverSignatureInfo* builtinReceiverSignature,
+    const b8 builtinReceiverIsConst,
+    const b8 calleeSignatureKnown,
     const Span<const TypeArg> callTemplateArgs,
     const TypeRef* invokedFuncType,
     const ScopedVarInfo* localCallable,
@@ -134,6 +205,8 @@ b8 CallableArgumentChecker::check(
             expectedParamType = builtinArgRule->expectedParamType;
             paramIsMut = builtinArgRule->isMut;
         }
+        if(!calleeSignatureKnown && m_checker.isPotentiallyMutableLvalueExpr(ownerClass, method, *arg, scope))
+            paramIsMut = true;
         const b8 wrapContainerRefElement = !targetCallable
             && !invokedFuncType
             && !localCallable
@@ -144,6 +217,10 @@ b8 CallableArgumentChecker::check(
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!m_checker.checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
+        if(builtinArgRule){
+            if(const BuiltinVisitorRuleInfo* visitor = FindBuiltinVisitorRule(builtinArgRule->rule); visitor && !checkBuiltinVisitor(ownerClass, scope, method, *arg, *visitor, builtinReceiverIsConst, errors))
+                ok = false;
+        }
         if(wrapContainerRefElement)
             arg->wrapInNotNull = true;
         if(builtinFnInfo && builtinFnInfo->wrapsFormatArgs && i >= builtinFnInfo->minArity){

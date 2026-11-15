@@ -78,6 +78,11 @@ public:
     [[nodiscard]] Value* findVariable(MStringView name)noexcept;
     [[nodiscard]] b8 hasVariable(MStringView name)const noexcept{ return findVariable(name) != nullptr; }
     template<typename Visitor>
+    b8 visitVariable(MStringView name, Visitor&& visitor){
+        Value* const value = findVariable(name);
+        return value && Value::InvokeBoolVisitor(visitor, *value);
+    }
+    template<typename Visitor>
     b8 visitVariable(MStringView name, Visitor&& visitor)const{
         return Value::VisitOptionalValue(findVariable(name), visitor);
     }

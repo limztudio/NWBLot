@@ -8,25 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/filesystem/utility.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 IsTexConvAlphaOptionPresent(in i32 optionCount){
     return optionCount > s_AlphaOptionPresentCount;
 }
@@ -72,14 +53,8 @@ String FormatTexConvCompletionReport(
     in u32 mipCount,
     in usize byteCount
 ){
-    String metadataPathStorage = "";
-    String dataPathStorage = "";
-    StringView metadataPathText = "";
-    StringView dataPathText = "";
-    native(in metadataPath, in dataPath, mut metadataPathStorage, mut dataPathStorage, mut metadataPathText, mut dataPathText){
-        metadataPathText = GenericNativeTextView(metadataPath.native(), metadataPathStorage);
-        dataPathText = GenericNativeTextView(dataPath.native(), dataPathStorage);
-    }
+    const String metadataPathText = PathToGenericString(metadataPath);
+    const String dataPathText = PathToGenericString(dataPath);
     String report;
     report.reserve(AddSaturating<usize>(AddSaturating<usize>(metadataPathText.size(), dataPathText.size()), s_CompletionReportReserveSlack));
     StringAppendFormat(report, "Wrote {}\nWrote {}\n  {}x{}", metadataPathText, dataPathText, width, height);

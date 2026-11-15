@@ -24,6 +24,7 @@ struct ScopedVarInfo{
     MStringView borrowedLocalOwnerName;
     TypeRef* type = nullptr;
     const Expr* lambdaExpr = nullptr;
+    const MethodDecl* callableFunction = nullptr;
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     u32 declaredParallelDepth = 0u;
     b8 isConst = false;
@@ -132,6 +133,7 @@ private:
 
     [[nodiscard]] b8 checkExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
     [[nodiscard]] b8 isReceiverConst(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] b8 isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
 
     [[nodiscard]] b8 checkCallExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
 

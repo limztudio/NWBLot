@@ -240,9 +240,7 @@ void FillPackageRequest(in Path spoolDirectory, in StringView crashId, mut Crash
     CopyFixedBuffer(request.versionText, s_ApplicationVersion);
     CopyFixedBuffer(request.buildId, s_Test);
     CopyFixedBuffer(request.abi, CurrentAbiName());
-    native(in spoolDirectory, mut request){
-        CopyCrashPath(spoolDirectory, request.spoolDirectory);
-    }
+    CopyCrashPath(spoolDirectory, request.spoolDirectory);
 }
 
 void ExpectDirectoryReady(in Path path, in u32 timeoutMs){
@@ -329,9 +327,7 @@ void VerifyCrashArchiveUpload_UnsupportedProtocolPreservesFailureAndPendingRetry
     ASSERT_TRUE(EnsureDirectories(pending).has_value());
     ASSERT_TRUE(WriteTextFile(pending / "marker.txt", "package"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
-    native(in spoolDirectory, mut snapshot){
-        CopyCrashPath(spoolDirectory, snapshot.spoolDirectory);
-    }
+    CopyCrashPath(spoolDirectory, snapshot.spoolDirectory);
     CopyFixedBuffer(snapshot.logServerUrl, "nwb-unsupported://local");
     UninstallCrashHandler();
     native(mut self, in snapshot){
@@ -1063,5 +1059,4 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){ NWB::Tests::CrashCases::Verif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

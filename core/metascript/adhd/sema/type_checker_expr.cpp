@@ -736,6 +736,116 @@ b8 TypeChecker::isReceiverConst(const ClassDecl* ownerClass, const MethodDecl& m
     return false;
 }
 
+// Conservative mutability check for unresolved C++ calls: identify adhd lvalues that can bind to non-const references.
+b8 TypeChecker::isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    switch(expr.kind){
+    case ExprKind::Identifier:{
+        const ScopedVarInfo* local = FindScopedVar(scope, expr.text);
+        return local != nullptr && !isReceiverConst(ownerClass, method, expr, scope);
+    }
+    case ExprKind::ThisMember:{
+        if(!ownerClass)
+            return false;
+        if(!expr.text.empty() && !SymbolTable::FindClassField(*ownerClass, expr.text))
+            return false;
+        return !isReceiverConst(ownerClass, method, expr, scope);
+    }
+    case ExprKind::MemberAccess:{
+        if(!expr.lhs)
+            return false;
+        if(expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text))
+            return false;
+        const TypeRef* lhsTypeRef = nullptr;
+        const MStringView baseType = inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &lhsTypeRef);
+        if(SymbolTable::IsSimdRegisterVectorType(baseType))
+            return false;
+        if(const BuiltinSimdVectorInfo* simdInfo = FindBuiltinSimdVectorType(baseType)){
+            b8 isSwizzle = false;
+            b8 validLanes = true;
+            if(CheckSwizzlePattern(expr.text, simdInfo->lanes, isSwizzle, validLanes) && isSwizzle){
+                if(!validLanes || expr.text.size() > 1u)
+                    return false;
+            }
+        }
+        else if(u32 unalignedLanes = 0u; SymbolTable::IsUnalignedVectorType(baseType, unalignedLanes)){
+            b8 isSwizzle = false;
+            b8 validLanes = true;
+            if(!CheckSwizzlePattern(expr.text, unalignedLanes, isSwizzle, validLanes) || !isSwizzle || !validLanes || expr.text.size() != 1u)
+                return false;
+        }
+        if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
+            const FieldDecl* field = SymbolTable::FindClassField(*targetCls, expr.text);
+            if(!field)
+                return false;
+            const TypeRef* ft = m_symbols.substituteTypeParams(field->type, targetCls->templateParams, lhsTypeRef);
+            const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(ft);
+            if(fieldRefMode == ParamPassingMode::In)
+                return false;
+            if(fieldRefMode == ParamPassingMode::Mut)
+                return true;
+            return isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs, scope);
+        }
+        if(m_symbols.findInterface(baseType) || FindTemplateParam(ownerClass, &method, baseType))
+            return false;
+        return !isReceiverConst(ownerClass, method, expr, scope) && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs, scope);
+    }
+    case ExprKind::Index:{
+        if(!expr.lhs)
+            return false;
+        const TypeRef* indexedElemType = inferExprTypeRef(ownerClass, &method, expr, scope);
+        const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
+        if(elemRefMode == ParamPassingMode::Mut)
+            return true;
+        if(elemRefMode == ParamPassingMode::In)
+            return false;
+        const TypeRef* containerTypeRef = nullptr;
+        const MStringView lhsBaseType = inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &containerTypeRef);
+        if(SymbolTable::IsSimdRegisterVectorType(lhsBaseType) || SymbolTable::IsSimdMatrixType(lhsBaseType))
+            return false;
+        if(!m_symbols.hasTypeSymbol(lhsBaseType) && IsStringLikeType(lhsBaseType) && !HasMutableStringElements(lhsBaseType))
+            return false;
+        const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
+        if(const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, "[]", 1u, recvIsConst))
+            return customOpIdx->returnType && m_symbols.resolveRefMode(customOpIdx->returnType) == ParamPassingMode::Mut;
+        if(const BuiltinReceiverMethodInfo* builtinOpIdx = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinReceiverMethod(lhsBaseType, "[]"); builtinOpIdx && !builtinOpIdx->isMutating)
+            return false;
+        return !recvIsConst && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs, scope);
+    }
+    case ExprKind::Call:{
+        if(const TypeRef* retType = inferExprTypeRef(ownerClass, &method, expr, scope)){
+            const ParamPassingMode::Enum refMode = m_symbols.resolveRefMode(retType);
+            if(refMode != ParamPassingMode::None)
+                return refMode == ParamPassingMode::Mut;
+        }
+        if(expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const MStringView objType = inferExprBaseType(ownerClass, &method, *expr.lhs->lhs, scope);
+            if(!m_symbols.hasTypeSymbol(objType)){
+                const b8 mutLhs = !isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope) && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs->lhs, scope);
+                if(const BuiltinReceiverMethodInfo* recvInfo = FindBuiltinReceiverMethod(objType, expr.lhs->text); recvInfo && recvInfo->returnsReference)
+                    return recvInfo->isMutating && mutLhs;
+                if(expr.lhs->text == "deref" && (objType == "UniquePtr" || objType == "NotNullUniquePtr" || objType == "RefCountPtr"))
+                    return !isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope) && !BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, &method, *expr.lhs->lhs, scope);
+                if(IsStringByteAccessorMethod(objType, expr.lhs->text) && HasMutableStringElements(objType))
+                    return mutLhs;
+            }
+        }
+        else if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+            if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text); fnInfo && fnInfo->returnsReference)
+                return !expr.arguments.empty() && expr.arguments[0] && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.arguments[0], scope);
+        }
+        return false;
+    }
+    case ExprKind::Unary:{
+        const TypeRef* unaryRetType = inferExprTypeRef(ownerClass, &method, expr, scope);
+        return m_symbols.resolveRefMode(unaryRetType) == ParamPassingMode::Mut;
+    }
+    case ExprKind::Binary:
+        return OperatorSemantics::IsCompoundOrSimpleAssignment(expr.op);
+    default:
+        return false;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

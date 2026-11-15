@@ -34,7 +34,7 @@ public:
     [[nodiscard]] TypeRef* parseType(b8 allowRefMode = false, b8 allowAuto = false);
     [[nodiscard]] b8 parseTemplateParamList(MVector<TemplateParamDecl>& outParams);
     [[nodiscard]] b8 parseTypeArgList(MVector<TypeArg>& outArgs);
-    [[nodiscard]] b8 parseParamList(MVector<ParamDecl>& outParams);
+    [[nodiscard]] b8 parseParamList(MVector<ParamDecl>& outParams, b8 allowAuto = false);
     [[nodiscard]] b8 expectClosingAngle();
     [[nodiscard]] b8 hasPendingRightAngles()const noexcept{ return m_pendingRightAngles > 0u; }
     void resetPendingRightAngles()noexcept{ m_pendingRightAngles = 0u; }

@@ -72,8 +72,6 @@ using ScopedTestTrace = Tests::ScopedTestTrace;
     return Core::Metascript::LiteralDecoder::TryDecodeCharLiteral(text, outValue);
 }
 
-inline constexpr AStringView s_MetaRuntimeAssetVariable = "asset";
-inline constexpr AStringView s_MetaRuntimeNameField = "name";
 inline constexpr AStringView s_MetaRuntimeItemsField = Tests::s_MetascriptValueItemsField;
 inline constexpr usize s_MetaRuntimeInitialCount = Tests::s_MetascriptValueInitialCount;
 
@@ -263,6 +261,13 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_MetaRuntimeAssetVariable = "asset";
+const StringView s_MetaRuntimeNameField = "name";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

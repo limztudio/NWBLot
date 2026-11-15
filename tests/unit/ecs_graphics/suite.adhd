@@ -51,7 +51,6 @@ native{
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
 #include <core/ecs/entity.h>
-#include <core/graphics/rhi/command.h>
 
 #include <global/limit.h>
 #include <global/simd/vector.h>
@@ -513,13 +512,9 @@ using EcsGraphicsSuiteDetail::s_OpenTriangleWords;
 
 using SuiteMeshAssetRef = Core::Assets::AssetRef<Impl::Mesh>;
 using SuiteMaterialAssetRef = Core::Assets::AssetRef<Impl::Material>;
-using SuiteScratchArena = Core::Alloc::ScratchArena;
 using SuiteTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadView;
-using SuiteGpuGraphResourceSetId = Core::GpuGraphResourceSetId;
 using AvboitValidatorContext = EcsGraphicsSuiteDetail::AvboitValidatorContext;
-using SuiteGpuPhysicalQueueInfo = Core::GpuPhysicalQueueInfo;
 using SuiteGpuPhysicalQueueInfoConstPtr = const Core::GpuPhysicalQueueInfo*;
-using SuiteGpuTaskId = Core::GpuTaskId;
 using SuiteSharedPhaseTaskArray = Array<Core::GpuTaskId, Impl::s_SharedComputeEmulationMaximumPhaseCount>;
 using MeshRayTracingResourceSnapshot = Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
 
@@ -574,6 +569,11 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type SuiteScratchArena = ScratchArena;
+type SuiteGpuGraphResourceSetId = GpuGraphResourceSetId;
+type SuiteGpuPhysicalQueueInfo = GpuPhysicalQueueInfo;
+type SuiteGpuTaskId = GpuTaskId;
 
 void SuiteSelectOpticalVolumes(mut CoincidentSelectionContext context, in Span<CoincidentOpticalVolumeCandidate> candidates){
     context.select(candidates);

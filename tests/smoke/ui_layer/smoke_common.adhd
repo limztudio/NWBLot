@@ -83,8 +83,6 @@ using Core::InputDispatcher;
 using Core::KeyboardInputResult;
 namespace Key = Core::Key;
 namespace InputAction = Core::InputAction;
-using ClipboardAdmissionEnum = Core::ClipboardAdmission::Enum;
-using ClipboardPollResultEnum = Core::ClipboardPollResult::Enum;
 namespace ClipboardAdmission = Core::ClipboardAdmission;
 namespace ClipboardChannel = Core::ClipboardChannel;
 namespace ClipboardPollResult = Core::ClipboardPollResult;
@@ -741,6 +739,9 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type ClipboardAdmissionEnum = ClipboardAdmission;
+type ClipboardPollResultEnum = ClipboardPollResult;
 
 Point MakeSmokePoint(in f32 x, in f32 y){
     Point point();

@@ -74,6 +74,7 @@ struct NativeBinding{
     MStringView aliasName;
     Expr* sourceExpr = nullptr;
     SourceSpan span;
+    b8 needsConstShadow = false;
 };
 
 

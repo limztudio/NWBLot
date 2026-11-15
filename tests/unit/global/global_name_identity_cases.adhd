@@ -17,7 +17,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/common/name_symbols.h>
 
 #include <global/containers.h>
 #include <global/diagnostics.h>
@@ -35,7 +34,6 @@ namespace __hidden_name_identity_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_RecursiveInnerName = "identity/recursive_inner";
 
 #if !defined(NWB_DEBUG)
 inline constexpr AStringView s_RuntimeGenerated = "runtime/generated";
@@ -78,6 +76,12 @@ public:
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RecursiveInnerName = "identity/recursive_inner";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,9 +147,9 @@ void VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols(){
 #endif
         constexpr Name s_First{"Identity\\First"};
         first = s_First;
-        NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
-        NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
     }
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
 
     const NameHash firstHash = first.identityHash();
     for(usize lane = 0u; lane < 8u; ++lane){
@@ -159,8 +163,8 @@ void VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols(){
     usize countAfterBinaryLanes = 1u;
     NameHash expectedFirstHash = NameHash();
     usize countAfterFirstHash = 0u;
-    native(in first, mut countAfterBinaryLanes, mut expectedFirstHash, mut countAfterFirstHash){
-        countAfterBinaryLanes = NWB::Core::Common::NameSymbols::EntryCount();
+    countAfterBinaryLanes = EntryCount();
+    native(in first, mut expectedFirstHash, mut countAfterFirstHash){
 #if defined(NWB_BUILD_SYMBOLS)
         constexpr Name s_First{"Identity\\First"};
         expectedFirstHash = ComputeNameHash(MakeNotNull("identity/first"));
@@ -672,5 +676,4 @@ NWB_ADHD_GTEST(Global, NameHashDebugTextRejectsInvalidHex, VerifyGlobal_NameHash
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

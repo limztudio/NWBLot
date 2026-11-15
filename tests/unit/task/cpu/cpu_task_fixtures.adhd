@@ -33,7 +33,7 @@ native{
 #include <global/timer.h>
 #include <global/type.h>
 
-#include <cstdlib>
+#include <stdlib.h>
 #include <gtest/gtest.h>
 
 
@@ -51,7 +51,7 @@ using namespace NWB::Core;
 
 
 [[noreturn]] FOUNDATION_INLINE void ExitTestProcess(const u32 code)noexcept{
-    std::_Exit(static_cast<int>(code));
+    ::_Exit(static_cast<int>(code));
 }
 
 
@@ -120,10 +120,6 @@ namespace NWB::Tests::CpuTaskSuite{
 
 using namespace NWB::Core;
 using TestSchedulerConfig = CpuTaskSchedulerTestSupport::TestSchedulerConfig;
-using CpuTaskAdmissionErrorEnum = NWB::Core::CpuTaskAdmissionError::Enum;
-using CpuTaskCostEnum = NWB::Core::CpuTaskCost::Enum;
-using CpuTaskPriorityEnum = NWB::Core::CpuTaskPriority::Enum;
-using CpuTaskTargetEnum = NWB::Core::CpuTaskTarget::Enum;
 using CpuTaskSchedulerTestSupport::DeadlineGuard;
 using CpuTaskSchedulerTestSupport::ExitTestProcess;
 using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
@@ -162,6 +158,12 @@ using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCanceledScope;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type CpuTaskTargetEnum = CpuTaskTarget;
+
+type CpuTaskAdmissionErrorEnum = CpuTaskAdmissionError;
+type CpuTaskCostEnum = CpuTaskCost;
+type CpuTaskPriorityEnum = CpuTaskPriority;
 
 const u32 s_FanInGateTimeoutMS = 20000u;
 const u32 s_FanInTestTimeoutMS = 60000u;

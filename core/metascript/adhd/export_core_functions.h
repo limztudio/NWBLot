@@ -7,6 +7,11 @@
 #define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_VISITOR_RULE
+#define NWB_ADHD_EXPORT_VISITOR_RULE(ruleName, valueType, keyType, mutableWithReceiver)
+#define NWB_ADHD_EXPORT_VISITOR_RULE_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_FUNCTION
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
@@ -148,6 +153,12 @@ NWB_ADHD_EXPORT_FUNCTION_CALL("BuildFrameGraphPayload", "::NWB::Core::Telemetry:
 NWB_ADHD_EXPORT_FUNCTION_CALL("BuildPerfMemoryPayload", "::NWB::Core::Telemetry::BuildPerfMemoryPayload", 5u, 5u, FixedType, "b8", "", "", "", "<core/telemetry/perf.h>", false, false, false, None, false, false, false, NameValue, TextView, Any, Any, MutAny, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("BuildPerfTimingPayload", "::NWB::Core::Telemetry::BuildPerfTimingPayload", 5u, 5u, FixedType, "b8", "", "", "", "<core/telemetry/perf.h>", false, false, false, None, false, false, false, Any, NameValue, TextView, Any, MutAny, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_CALL("BuildVirtualPathName", "::NWB::Core::ShaderArchive::BuildVirtualPathName", 3u, 3u, FixedType, "Expected", "Name", "", "", "<core/graphics/shader_archive.h>", false, false, false, None, false, false, false, NameValue, TextView, NameValue, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ReceiverValueVisitor, "", false, "", false, false, "")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ReadValueVisitor, "", false, "", false, false, "")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ReadKeyValueVisitor, "", false, "", false, false, "")
+NWB_ADHD_EXPORT_VISITOR_RULE(ReceiverValueVisitor, "MetascriptValue", "", true)
+NWB_ADHD_EXPORT_VISITOR_RULE(ReadValueVisitor, "MetascriptValue", "", false)
+NWB_ADHD_EXPORT_VISITOR_RULE(ReadKeyValueVisitor, "MetascriptValue", "StringView", false)
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BlendFactorValue, "", false, "BlendFactor", false, false, "built-in function argument must be BlendFactor")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BlendOpValue, "", false, "BlendOp", false, false, "built-in function argument must be BlendOp")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ColorMaskValue, "", false, "ColorMask", false, false, "built-in function argument must be ColorMask")
@@ -1101,6 +1112,7 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptDocument", "hasErrors", "b8", "",
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptDocument", "hasVariable", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptDocument", "parse", "b8", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptDocument", "visitVariable", "b8", "", "", true, false)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("MetascriptDocument", "visitVariable", 2u, TextView, ReceiverValueVisitor, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptExpressionParser", "parseExpression", "MetascriptValue", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptIIncludeResolver", "popIncludeScope", "void", "", "", false, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptIIncludeResolver", "resolveInclude", "b8", "", "", true, true)
@@ -1140,6 +1152,7 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "asReference", "StringVie
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "asString", "StringView", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_REF("MetascriptValue", "field", "MetascriptValue", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "forEachMapEntry", "b8", "", "", true, false)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("MetascriptValue", "forEachMapEntry", 1u, ReadKeyValueVisitor, Any, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "hasField", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "isDouble", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "isInteger", "b8", "", "", true, false)
@@ -1159,6 +1172,7 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "setString", "void", "", 
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "toDouble", "f64", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "type", "MetascriptValueType", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("MetascriptValue", "visitField", "b8", "", "", true, false)
+NWB_ADHD_EXPORT_RECEIVER_SIGNATURE("MetascriptValue", "visitField", 2u, TextView, ReadValueVisitor, Any, Any, Any, Any, Any, Any, Any)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("PerfCaptureOptions", "cpuTimingActive", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("PerfCaptureOptions", "gpuTimingActive", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("PerfCaptureOptions", "memoryActive", "b8", "", "", true, false)
@@ -4552,6 +4566,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_WindowsPlatformName", "::NWB::Core::Crash::s_
 #ifdef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION
+#endif
+
+#ifdef NWB_ADHD_EXPORT_VISITOR_RULE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_VISITOR_RULE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_VISITOR_RULE
 #endif
 
 #ifdef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF

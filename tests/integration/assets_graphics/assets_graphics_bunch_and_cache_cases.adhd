@@ -95,7 +95,8 @@ void VerifyAssetBunchOwnership_OutputMoveAndGrowthPreserveValuesUntilTheirFinalO
             ASSERT_TRUE(expandedResult.has_value());
             source = expandedResult.value();
         }
-        ExpandedAssetMetadataVector destination = MoveExpandedBunchVector(source);
+        ExpandedAssetMetadataVector destination(fixture.scratchArena);
+        destination = source;
         destination.reserve(destination.capacity() + 37u);
         VerifyOwnedBunchOutput(destination, fixture.document);
         destination[1u].value.field(s_BunchLocal).field(s_BunchLabel).setString("changed output");

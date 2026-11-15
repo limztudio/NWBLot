@@ -72,6 +72,8 @@ b8 ConstructorArgumentChecker::check(ClassDecl* ownerClass, const TypeRef* targe
         ctorCls,
         resolvedTargetType,
         nullptr,
+        false,
+        true,
         {},
         nullptr,
         nullptr,

@@ -14,6 +14,7 @@ NWB_ADHD_BEGIN
 
 b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors){
     b8 ok = true;
+    const b8 isAutoDeclaration = stmt.varType && stmt.varType->isAuto;
     if(!stmt.name.empty() && m_checker.FindScopedVar(scope, stmt.name)){
         m_checker.reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
         ok = false;
@@ -234,8 +235,22 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     info.isConst = stmt.isConst || (varRefMode == ParamPassingMode::In);
     info.isParam = false;
     info.declaredParallelDepth = m_checker.m_parallelDepth;
-    if(stmt.expr && stmt.expr->kind == ExprKind::Lambda)
+    const TypeRef* const declaredType = m_checker.m_symbols.unwrapTypeAlias(info.type);
+    const b8 tracksCallable = isAutoDeclaration || (declaredType && declaredType->isFuncType);
+    if(tracksCallable && stmt.expr && stmt.expr->kind == ExprKind::Lambda)
         info.lambdaExpr = stmt.expr;
+    else if(tracksCallable && stmt.expr && stmt.expr->kind == ExprKind::Identifier){
+        if(const ScopedVarInfo* source = m_checker.FindScopedVar(scope, stmt.expr->text)){
+            info.lambdaExpr = source->lambdaExpr;
+            info.callableFunction = source->callableFunction;
+        }
+        else if(!m_checker.m_symbols.findGlobalConstant(stmt.expr->text)){
+            b8 ambiguous = false;
+            info.callableFunction = m_checker.m_symbols.findUniqueFreeFunction(stmt.expr->text, ambiguous);
+            if(info.callableFunction)
+                stmt.expr->resolvedCppNamespace = info.callableFunction->cppNamespace;
+        }
+    }
     const MStringView effectiveVarBase = m_checker.resolveScopedVarBaseType(info);
     const Expr* stringViewInitExpr = stmt.expr
         ? stmt.expr

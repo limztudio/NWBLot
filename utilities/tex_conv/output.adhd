@@ -29,10 +29,7 @@ Expected<TexConvOutputPaths> ResolveTexConvOutputPaths(in Path inputPath, in Str
     }
     else{
         const Path outputBase(outputArgument);
-        b8 hasExtension = false;
-        native(in outputBase, mut hasExtension){
-            hasExtension = !outputBase.extensionView().empty();
-        }
+        const b8 hasExtension = !outputBase.extensionView().empty();
         if(!hasExtension || IsNwbTexConvOutputPath(outputBase))
             paths.metadata = outputBase;
         else{

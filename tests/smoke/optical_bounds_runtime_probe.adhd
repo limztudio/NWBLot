@@ -18,6 +18,7 @@ native{
 
 #include <loader/project_entry.adhd.h>
 #include <impl/assets_graphics/transparent_subsystem.adhd.h>
+#include <impl/assets_scene/asset.adhd.h>
 #include <impl/assets_shader/loader.adhd.h>
 #include <impl/ecs_render/optics/optical_scene.adhd.h>
 #include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
@@ -33,6 +34,7 @@ native{
 
 
 namespace NWB::Tests::Smoke{
+using Impl::ActiveSceneSubsystems;
 [[nodiscard]] Expected<void> RunOpticalBoundsRuntimeProbe(const ActiveSceneSubsystems& scene, ProjectRuntimeContext& context);
 };
 
@@ -47,14 +49,7 @@ namespace NWB::Tests::Smoke{
 
 
 b8 RunOpticalBoundsProbe(in ActiveSceneSubsystems scene, mut ProjectRuntimeContext context){
-    b8 passed = false;
-    native(in scene, mut context, mut passed){
-        const auto result = RunOpticalBoundsRuntimeProbe(scene, context);
-        if(!result)
-            return false;
-        passed = true;
-    }
-    return passed;
+    return RunOpticalBoundsRuntimeProbe(scene, context).has_value();
 }
 
 

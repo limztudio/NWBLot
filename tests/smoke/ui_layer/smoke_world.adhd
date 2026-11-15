@@ -36,7 +36,7 @@ public:
     return Move(world);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World> world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World>& world)noexcept{
     if(!world)
         return MakeUnexpected(Failure{});
     return MakeNotNullUnique(Move(world));
@@ -469,13 +469,13 @@ Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeCont
 
     SpawnManySmokeRootsIfEnabled(SmokeWorldRef(world));
     AttachUiLayerSmokeScene(context, SmokeWorldRef(world), modes);
-    return world;
+    return TakeUiLayerSmokeWorld(world);
 }
 
 void ClearUiLayerSmokeWorld(mut ProjectRuntimeContext context, mut World world){
     b8 hasLayer = false;
+    world.taskScope().wait();
     native(mut context, mut world, mut hasLayer){
-        world.taskScope().wait();
         if(auto* const layer = world.getSystem<Impl::UiLayerSystem>()){
             context.graphics.removeRenderPass(*layer);
             hasLayer = true;

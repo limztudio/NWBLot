@@ -56,8 +56,6 @@ namespace Key = Core::Key;
 using ::s_PI;
 using ::s_2PI;
 using ::s_PIDIV2;
-using PerfCaptureOptions = Core::Perf::CaptureOptions;
-using TelemetryCaptureOptions = Core::Telemetry::CaptureOptions;
 
 [[nodiscard]] FOUNDATION_INLINE Core::Perf::CaptureOptions SmokePerfGpuTimingOnly()noexcept{
     return Core::Perf::CaptureOptions::GpuTimingOnly();

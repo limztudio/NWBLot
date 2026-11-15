@@ -45,17 +45,13 @@ native{
 namespace NWB::Tests::Smoke{
 inline constexpr AStringView s_CsgSkinnedProjectName = "CsgSkinnedVisibleSmokeProject";
 
-using CsgSkinnedModelRef = Core::Assets::AssetRef<Impl::Model>;
 using CsgSkinnedMaterialRef = Core::Assets::AssetRef<Impl::Material>;
 
-inline constexpr CsgSkinnedModelRef s_CsgSkinnedModel{"project/characters/body/model"};
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
 inline constexpr CsgSkinnedMaterialRef s_CsgSkinnedReceiverMaterial{"project/smoke/transparent_multi/materials/shared"};
 #else
 inline constexpr CsgSkinnedMaterialRef s_CsgSkinnedReceiverMaterial{"project/smoke/csg_visible/materials/solid"};
 #endif
-inline constexpr Name s_CsgSkinnedReceiverGroup = s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver;
-inline constexpr Name s_CsgSkinnedCutterAnchorBoneName = s_SmokeNameHip;
 inline constexpr f32 s_CsgSkinnedCameraDistance = 1.75f;
 inline constexpr f32 s_CsgSkinnedCameraHeight = 0.92f;
 inline constexpr f32 s_CsgSkinnedDefaultDirectionalLightPitch = -0.62f;
@@ -65,8 +61,6 @@ inline constexpr f32 s_CsgSkinnedCutterAnimationSpeed = 0.18f;
 inline constexpr f32 s_CsgSkinnedReceiverYawSpeed = 0.92f;
 inline constexpr f32 s_CsgSkinnedMaxAnimationDelta = s_SmokeSpinMaxDelta;
 inline constexpr f32 s_CsgSkinnedInitialAnimationTime = s_PIDIV2 / s_CsgSkinnedReceiverYawSpeed;
-inline constexpr u16 s_CsgSkinnedFrameClientWidth = 1280u;
-inline constexpr u16 s_CsgSkinnedFrameClientHeight = 900u;
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
 inline constexpr f32 s_CsgSkinnedTransparentReceiverAlpha = 0.44f;
 #endif
@@ -116,6 +110,16 @@ namespace ModelObjectKind = Impl::ModelObjectKind;
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const SmokeModelRef s_CsgSkinnedModel = "project/characters/body/model";
+const Name s_CsgSkinnedReceiverGroup = s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver;
+const Name s_CsgSkinnedCutterAnchorBoneName = s_SmokeNameHip;
+const u16 s_CsgSkinnedFrameClientWidth = 1280u;
+const u16 s_CsgSkinnedFrameClientHeight = 900u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -342,22 +346,9 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
         const f32x4 storedReceiverRotation = f32x4(receiverRotation);
         const VectorSingle cutterCenter = BuildCsgSkinnedCutterWorldCenter(cutterLocalCenter, receiverRotation);
         const VectorSingle cutterRotation = BuildCsgSkinnedCutterWorldRotation(this.m_animationTime, receiverRotation);
-        native(
-            in plainReceiver = this.m_plainReceiver,
-            in csgReceiver = this.m_receiver,
-            in cutterEntity = this.m_cutter,
-            in storedReceiverRotation,
-            in cutterCenter,
-            in cutterRotation,
-            mut world = this.m_world
-        ){
-            for(const Core::ECS::EntityID entity : { plainReceiver, csgReceiver }){
-                if(auto* transform = world->tryGetComponent<Impl::Scene::TransformComponent>(entity))
-                    transform->rotation = storedReceiverRotation;
-            }
-            if(auto* cutter = world->tryGetComponent<Impl::CsgCutterComponent>(cutterEntity))
-                AssignCsgCutterTransform(cutterCenter, cutterRotation, *cutter);
-        }
+        SetSmokeEntityRotationIfPresent(this.m_plainReceiver, VectorSingle(storedReceiverRotation), SmokeWorldRef(this.m_world));
+        SetSmokeEntityRotationIfPresent(this.m_receiver, VectorSingle(storedReceiverRotation), SmokeWorldRef(this.m_world));
+        SetSmokeCsgCutterTransform(this.m_cutter, cutterCenter, cutterRotation, SmokeWorldRef(this.m_world));
     }
 
     private Float4 m_cutterLocalCenter = Float4(0.0f, s_CsgSkinnedCutterAnchorFallbackY, 0.0f, 0.0f);

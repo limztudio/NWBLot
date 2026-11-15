@@ -77,18 +77,13 @@ EntityID CreateCsgVisibleSolidCubeEntity(
 
 void ApplyCsgVisibleCubeRotation(in EntityID entity, in VectorSingle rotation, mut World world){
     const f32x4 storedRotation = f32x4(rotation);
-    native(in entity, in storedRotation, mut world){
-        if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity))
-            transform->rotation = storedRotation;
-    }
+    if(!SetSmokeEntityRotation(entity, storedRotation, world))
+        return;
 }
 
 void ApplyCsgVisibleCutterTransform(in EntityID cutterEntity, in VectorSingle receiverCenter, in VectorSingle receiverRotation, in VectorSingle cutterLocalOffset, mut World world){
     const VectorSingle cutterCenter = receiverCenter + Vector3Rotate(cutterLocalOffset, receiverRotation);
-    native(in cutterEntity, in cutterCenter, in receiverRotation, mut world){
-        if(auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity))
-            AssignCsgCutterTransform(cutterCenter, receiverRotation, *cutter);
-    }
+    SetSmokeCsgCutterTransform(cutterEntity, cutterCenter, receiverRotation, world);
 }
 
 EntityID CreateCsgVisibleCutter(in usize shapeSlot, in Name receiverGroup, in VectorSingle center, mut World world){

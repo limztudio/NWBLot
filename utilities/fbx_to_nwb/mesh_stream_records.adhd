@@ -120,7 +120,7 @@ class PositionKey{
 }
 
 class PositionNormalRecord{
-    public f32x4 value(0.0f, 0.0f, 0.0f, 0.0f);
+    public f64x4u value(0.0, 0.0, 0.0, 0.0);
 }
 
 class AssignmentRange{

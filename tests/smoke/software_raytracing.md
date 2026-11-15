@@ -1,17 +1,24 @@
 # Software ray tracing qualification
 
-Loader apps take `--disable-hardware-ray-tracing`. This picks `Core::HardwareRayTracingPolicy::Disabled` before card box/card make. Plain start keeps auto card ray-trace pick.
+Loader-based applications accept `--disable-hardware-ray-tracing`. This selects
+`Core::HardwareRayTracingPolicy::Disabled` before graphics instance/device
+creation. Normal startup keeps automatic hardware ray tracing selection.
 
-The picked back sets the off card ray-trace rule before card make. The set cannot move after box make. Use a new run to weigh auto and off rules.
+The selected backend applies the disabled hardware ray tracing policy before
+device creation. The setting cannot change after instance creation; use a new
+process to compare automatic and disabled policies.
 
-The scene tests need the picked rule and true soft-walk proof:
+The scene tests require selected policy and actual software traversal evidence:
 
 ```text
 Loader: hardware ray tracing disabled before device creation
 RendererSystem: dispatched software shadow traversal
 ```
 
-The draw log tracks true soft-walk takes. Part notes also need soft burn, surfel walk, or screen look proof. These checks run the picked soft path on a card that can ray-trace.
+The renderer record follows actual software traversal recording. Feature-specific
+registrations also require software caustic, surfel tracing or screen-space
+optical evidence. These checks exercise the selected software route on a
+hardware ray tracing capable adapter.
 
 ## Expected fallback behavior
 
@@ -24,32 +31,34 @@ The draw log tracks true soft-walk takes. Part notes also need soft burn, surfel
 | Camera refraction | Screen-space resolve |
 | Transparency | AVBOIT remains enabled |
 
-Screen bounce/bend cannot bring back free off-shot shapes. The rule keeps the old fall-back way. It does not vow same shots as card RT or card-path frame rates.
+Screen-space reflection/refraction cannot recover arbitrary off-screen geometry.
+The policy preserves the existing fallback behavior and does not promise image
+identity with hardware RT or hardware-path frame rates.
 
 ## Running the scene matrix
 
-Make these builds in the picked form so their match run files
+Build these targets in the chosen configuration so their matching runtime assets
 are cooked: `nwb_transparent_multi_smoke`, `nwb_transparent_csg_smoke`,
 `nwb_caustic_sphere_smoke`, `nwb_skinned_caustic_smoke`,
 `nwb_stress_test_smoke`, and `nwb_gi_test_smoke`.
 
-From the repo root, pick a match board/chip set preform. Make with no scene start:
+From the repository root, select a matching platform/architecture configure preset and build without launching a scene:
 
 ```text
 python -m launcher build nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_caustic_sphere_smoke nwb_skinned_caustic_smoke nwb_stress_test_smoke nwb_gi_test_smoke --configure-preset <configure-preset> --build-dir <build-directory> --config opt -D NWB_BUILD_TESTS=ON
 ctest --test-dir <build-directory> -C opt -L software_raytracing --output-on-failure
 ```
 
-The seven scene tests span lap clear webs, two cut CSG poses,
-joined ball burns with bend, moved skinned glass, the full
-20-thing scene past an odd-size grow, and the set GI scene.
-They need the Loader off rule and soft dark send. They turn down
-card walk/make marks. They ask set card proof
-out of the End set. Caustic
-cases also require the software photon producer. Warnings, errors,
+The seven scene tests cover overlapping transparent meshes, two clipped CSG poses,
+converged sphere caustics with refraction, animated skinned glass, the full
+20-body scene before/after an odd-sized resize, and the dedicated GI scene.
+They require the Loader disabled policy and software shadow dispatch, reject
+hardware traversal/producer markers, and request selected GPU validation
+outside the Final configuration. Caustic
+cases additionally require the software photon producer. Warnings, errors,
 assertions and validation diagnostics fail the capture harness.
 
-These set-policy tests do not skip merely because the physical adapter
+These explicit-policy tests do not skip merely because the physical adapter
 supports RayQuery. The existing natural-capability software smoke remains
 available for adapters that lack RayQuery without an override. Captures are
 written under `<build-directory>/Testing/smoke/<configuration>`.
@@ -59,10 +68,10 @@ sphere captures with reflection, refraction and caustics independently disabled.
 A fixed striped opaque backdrop supplies screen-space depth and visible
 refractive displacement in all four captures. The test requires each optical
 contribution to be visible and the caustic gain to concentrate on the receiver. It explicitly excludes the hardware-only exterior
-ray-miss radiometric oracle: projected screen-space hits do not prove the
+ray-miss radiometric oracle: projected screen-space hits do not establish the
 same off-screen transport. Its report records that distinction.
 
-The scene captures prove startup, traversal-route and rendered-output
+The scene captures establish startup, traversal-route and rendered-output
 coverage. The ECS graphics unit tests retain neutral empty-input, geometry
 layout, identity, shadow quality and history edge cases. Native metadata-only
 fixtures and their resource-dependent cases have been removed. A visually
@@ -76,16 +85,32 @@ Build `nwb_gi_test_smoke` through the launcher, then run:
 ctest --test-dir <build-directory> -C opt -L csg_gi --output-on-failure
 ```
 
-The GI set owns its test mats, BXDF sets, and scene list under
+The GI fixture owns its diagnostic materials, BXDF families, and scene manifest under
 `tests/smoke/gi_assets`. Building `nwb_gi_test_smoke` also runs
 `nwb_gi_smoke_assets`, which cooks `tests/smoke/gi_assets` alongside
 `tests/smoke/assets` and `impl/assets` into
-`<build-directory>/Testing/gi_smoke_runtime/<config>/res`. These shots and the cover probe run from that folder. The formal surfel-GI base scene keeps the shared `skinning_culling_benchmark_runtime` cook.
+`<build-directory>/Testing/gi_smoke_runtime/<config>/res`. These
+captures and the coverage probe run from that directory; the formal surfel-GI
+baseline scene keeps the shared `skinning_culling_benchmark_runtime` cook.
 
-The free and off card ray-trace rules use the same still scene and shot true-model after plain back pick. Each weighs plain cut mesh shape, same CSG with two lap box cutters, and a no-cut kept shot. One zone weighs blue bounced light through a gap. One more weighs green light bounced from a made wall to the cut hole. A free pane must take GI in each arm. The plain base must move from the no-cut kept shot first. Then CSG same can pass.
-Shown grids also need 95% or more lap of the through gap and back wall in both the plain base and CSG shots. They need 5% or less in the no-cut shot. These gates spot half gaps and in lap walls that a small zone GI mean can miss.
+The natural and disabled hardware ray tracing policies use the same static scene
+and image oracle after normal backend selection. Each compares ordinary carved
+mesh geometry, equivalent CSG with two overlapping box cutters, and an uncut
+control. One region measures blue indirect light passing through an opening;
+another measures green light bounced from a generated wall into the removed
+cavity. An unobstructed panel must receive GI in every arm, and the ordinary
+reference must differ from the uncut control before CSG equivalence is admitted.
+Projected grids also require at least 95% coverage of the through opening and
+back wall in both the ordinary reference and CSG images, with at most 5% in the
+uncut image. These gates detect partial openings and internal overlap walls that
+a small regional GI average can miss.
 
-A third build puts a shut box and an open quad in one mesh. The same cutter cuts a bar from both. Its base uses match cut shape and kept open side quads. A no-cut green bar gives the false-good kept shot. The true-model checks pass cover and GI. It checks red floor light from kept open tris. It checks seen kept-face glow. It checks RGB match that turns down light from cut green tris.
+A third assembly places a closed box and an open quad in one mesh. The same
+cutter removes a stripe from both. Its reference uses matching carved geometry
+and retained open side quads; an uncut green stripe supplies the false-positive
+control. The oracle checks passage coverage and GI, red floor light from retained
+open triangles, visible retained-surface brightness, and RGB agreement that rejects
+light from removed green triangles.
 
 Captures wait for 360 successful presentations and retain the three images,
 runtime logs, and regional color metrics under
@@ -98,27 +123,42 @@ Adapters without a dedicated compute queue skip this async qualification through
 the existing capability diagnostic. Lagged artifacts use the _lagged suffix.
 
 GI uses current CSG geometry independently of retained light-space shadow maps.
-Both walk makes cut the cutter join from shut-part spans. They tint the picked live tri or made wall with the catcher
+Both traversal implementations subtract the cutter union from closed-component
+spans and shade the selected surviving triangle or generated wall with the receiver
 material. Cooked membership bits identify closed components in the final ray-triangle
 order. Zero-volume components remain surfaces, with volume measured relative to a
 stable component origin. Open components in the same mesh remain clipped surface
 hits and do not generate walls. Light-space shadows consume the same membership
 without interpreting open events as unmatched volume exits. Nonzero oriented
-winding preserves reversed closed shells and nested cavity cancellation. Shared in-house shape and capped cutter help keep the now CSG snap deal. Lost or past-cap shape tells a note and uses softservative occlusion.
+winding preserves reversed closed shells and nested cavity cancellation. Shared
+built-in shape and bounded cutter support follow the current CSG snapshot contract;
+unsupported
+or over-budget geometry reports a diagnostic and uses conservative occlusion.
 
 ## Temporal CSG direct/GI sequence
 
 `tests/smoke/csg_gi_temporal_smoke.py` records 32 framebuffer captures from one
-`nwb_csg_visible_smoke` process. Live draw first hits card frame 360. Then it runs 30 or more true-clock secs. Then it picks and logs the true first grab frame. Compilation, asset loading, and startup
+`nwb_csg_visible_smoke` process. Live rendering first reaches graphics frame 360,
+then continues for at least 30 steady-clock seconds before selecting and logging
+the actual first capture frame. Compilation, asset loading, and startup
 preparation are outside that timed interval. Samples use graphics frame
 `firstCaptureFrame + sampleIndex * frameInterval` and retain the actual
 1280 x 900 framebuffer. `--frame-interval` accepts 1 through 64 and defaults to
 8, spanning 248 graphics frames after the first capture. Interval 1 captures 32
 consecutive frames and waits for GPU completion before reusing the capture
 observer; other intervals poll readbacks asynchronously. The driver requires one
-It logs warm start/done, 30 or more passed secs, the true frame line, and all took read-backs. Lost, half, old-folder, or wrong-size shots fail. This set GI take rule does not vow draw meet-up. It is not a rule for each smoke test.
+logged warm-up start/completion, at least 30 elapsed seconds, the exact relative
+source-frame sequence, and all accepted readbacks. Missing, partial,
+stale-directory, or wrong-size captures fail. This settled GI acquisition
+protocol is not a renderer convergence guarantee or a rule for every smoke test.
 
-The set owns its test mats, nine BXDF sets, and scene list under `tests/smoke/csg_visible_assets`. Plain smoke/speed cooks use `tests/smoke/shared_assets` with `tests/smoke/assets`. The exe asset need gives `impl/assets`, `tests/smoke/assets`, and `tests/smoke/csg_visible_assets` straight to the asset pipe. It cooks only files found from `tests/smoke/csg_visible_assets/scenes/main.nwb` to `<build-directory>/Testing/csg_visible_smoke_runtime/<config>/res`.
+The fixture owns its diagnostic materials, nine BXDF families, and scene manifest under
+`tests/smoke/csg_visible_assets`; ordinary smoke/performance cooks use
+`tests/smoke/shared_assets` with `tests/smoke/assets`. The executable's asset
+dependency passes `impl/assets`, `tests/smoke/assets`, and
+`tests/smoke/csg_visible_assets` directly to the asset pipeline, cooking only the
+assets reachable from `tests/smoke/csg_visible_assets/scenes/main.nwb` into
+`<build-directory>/Testing/csg_visible_smoke_runtime/<config>/res`.
 
 Build the scene and its matching assets through the launcher, then acquire one
 sequence from the repository root:
@@ -128,27 +168,29 @@ python -m launcher build nwb_csg_visible_smoke --configure-preset <configure-pre
 python tests/smoke/csg_gi_temporal_smoke.py --executable <built-nwb_csg_visible_smoke> --working-directory <build-directory>/Testing/csg_visible_smoke_runtime/opt --output-directory <empty-capture-directory> --route software --view full --motion animated
 ```
 
-Use one more blank out folder and run per weigh arm. Base form is full look, still pose, free path, and gap 8. Late light and GPU checks are a choice:
+Use a separate empty output directory and process for each comparison arm.
+Defaults are full view, static pose, natural route, and interval 8; lagged
+lighting and GPU validation are opt-in:
 
 | Option | Comparison arm |
 | --- | --- |
-| `--view full`, `direct`, or `indirect` | Show plain light, straight light with no shown GI, or bounced-only light |
-| `--view normal` or `position` | Show the coded face tilt or world spot for still shape probes |
-| `--view cap_state`, `interval_state`, or `event_state` | See now cut-cap, gap-make, or catch-event state through test-owned mats |
-| `--view event_data` or `event_order` | See same-frame catch-event good, lost-span flags, or proved raw front/back come order |
-| `--view span_state` | See catch span count, live span flags, and raw catch-event count |
-| `--motion static` or `animated` | Hold the first pose, or use an art-frame-run front tri-wave pose with set cam and light |
-| `--overlapping` | Add one still pane catch at same x/y and z + 0.125. It shares the set, cutter, and test mat |
-| `--route natural` or `software` | Use plain back skill pick, or turn off card ray-trace before card make |
-| `--frame-interval <1..64>` | Pick shot gaps. Base is 8, or 1 for back-to-back frames with lined-up read-back done |
-| `--lagged-lighting` | Turn on late light. It needs took start and live-past proof |
+| `--view full`, `direct`, or `indirect` | Display normal lighting, direct lighting without displayed GI, or indirect-only lighting |
+| `--view normal` or `position` | Display the encoded shading normal or world position for static geometry probes |
+| `--view cap_state`, `interval_state`, or `event_state` | Inspect current removed-cap, interval-production, or receiver-event state through test-owned materials |
+| `--view event_data` or `event_order` | Inspect same-frame receiver event validity, missing-span flags, or validated raw front/back arrival order |
+| `--view span_state` | Inspect receiver span count, existing span flags, and raw receiver event count |
+| `--motion static` or `animated` | Hold the initial pose or use a graphics-frame-driven, front-facing triangle-wave pose with fixed camera and light |
+| `--overlapping` | Add one static plane receiver at the same x/y and z + 0.125, sharing the group, cutter, and diagnostic material |
+| `--route natural` or `software` | Use normal backend capability selection or disable hardware ray tracing before device creation |
+| `--frame-interval <1..64>` | Select capture spacing; default 8, or 1 for consecutive frames with serialized readback completion |
+| `--lagged-lighting` | Enable frame-lagged lighting and require accepted bootstrap and active-history evidence |
 | `--gpu-validation` | Request selected GPU validation for a diagnostic run |
 | `--gpu-timing-output <path>` | Retain the GPU timing sidecar through `NWB_GPU_TIMING_FILE` |
 | `--timeout <seconds>` | Bound acquisition; default 90 seconds |
-| `--check-quality` | Use the set light, time, and space back-slide caps on full/direct/indirect looks |
-| `--check-geometry` | Check four math cap probes in each frame. It needs still plain or spot look |
-| `--check-cap-state` | Need made seen caps that hold done depth at 16 probes in each frame. It needs still cap_state look |
-| `--check-spans` | Check two free lap catch spans and three kept shots in each frame. It needs still span_state look and --overlapping |
+| `--check-quality` | Apply the fixture's lighting, temporal, and spatial regression limits to full/direct/indirect views |
+| `--check-geometry` | Check four analytical cap probes in every frame; requires static normal or position view |
+| `--check-cap-state` | Require produced, visible caps that own completed depth at 16 probes in every frame; requires static cap_state view |
+| `--check-spans` | Check two independent overlapping receiver spans and three controls in every frame; requires static span_state view and --overlapping |
 | `--overwrite` | Replace only this sequence's known capture files, partial files, manifest, and log |
 
 The direct view omits the displayed GI contribution while retaining the same GI
@@ -182,7 +224,7 @@ rather than relabeling the images. Acquisition and analysis both reject runtime
 warning/error/assertion and validation diagnostics. Timing identities in
 `opt`/`fin` may need the matching `.namesym` sidecar for readable scope names.
 Without a check option, success establishes sequence, log, and readback
-admission. `--check-quality` also rejects a static 95th-percentile
+admission. `--check-quality` additionally rejects a static 95th-percentile
 temporal channel range above 6, per-frame horizontal or vertical jump fractions
 above 10%, and background means more than 2 channel levels from the fixture's
 fixed RGB `(88, 98, 113)`. Full and indirect views require the box, sphere, and
@@ -191,9 +233,21 @@ capsule to retain their expected tint with a dominant-channel mean of at least
 box and capsule must also differ from the background by at least 8. These are
 8-bit scene-specific regression limits, not general image-quality criteria.
 
-`--check-geometry` weighs the four set cap pixels in each of the 32 frames. That is 128 probes per run. The cover flips the set show move and show map first. Then it weighs math ray/cutter cuts. Plain L2 gap must stay at 0.04 or less. Spot part pass holds the shot half-lane round gap and a 0.005 math spare, capped at 0.06. Full test colors fail. They do not make a fake back change. The probes tell true cap walls from hold faces. They do not check each cap pixel. They do not swap straight and bounced light weighs. Bad checks stay in `manifest.json` and fail the run.
+`--check-geometry` compares the four fixed cap pixels in each of the 32 frames,
+for 128 probes per sequence. The harness reverses the fixture's display transfer
+and presentation mapping before comparing with analytical ray/cutter
+intersections. Normal L2 error must not exceed 0.04. Position component
+tolerances include the capture's half-channel quantization interval and a 0.005
+arithmetic allowance, capped at 0.06. Saturated diagnostic colors fail instead
+of producing an invented inverse. The probes distinguish physical cap walls
+from enclosing faces; they do not verify every cap pixel or replace direct and
+indirect lighting comparisons. Failed checks remain in `manifest.json` and make
+the driver fail.
 
-The five state looks live only under `tests/smoke/assets/`. The smoke set picks their mats with no ship test knobs. They show the old now-frame CSG shots through the plain held mat path:
+The five state views are authored only under `tests/smoke/assets/`; the smoke
+fixture selects their materials without adding production diagnostic switches.
+They display the existing current-frame CSG textures through the normal deferred
+material path:
 
 | State view | Encoded RGB channels |
 | --- | --- |
@@ -204,7 +258,11 @@ The five state looks live only under `tests/smoke/assets/`. The smoke set picks 
 | `event_order` | Span-present marker or missing-span flags divided by 33; raw event 0 face; raw event 1 face. Faces encode front as 1 and back as 0.5 only after the same-frame two-event pair passes receiver, opposite-face, finite-depth, and back-greater-than-front checks; invalid pairs encode both face channels as 0 |
 | `span_state` | Receiver span count divided by 33; existing span flags divided by 33; raw receiver event count divided by 33 |
 
-The event look scans at most 32 made coats. Raw count 33 means flood, not a 33rd kept event. The cover flips show and show map for all state looks. Cap/gap lanes turn true/false at a read mark of 0.5. Event-state lanes turn counts through `round(channel * 33)`. `raw_count_overflow` stays split.
+The event inspector scans at most 32 allocated layers; raw count 33 identifies
+overflow rather than a 33rd stored event. The harness reverses display and
+presentation mapping for all state views. Cap/interval channels become booleans
+with a decoded threshold of 0.5; event-state channels become counts through
+`round(channel * 33)`, with `raw_count_overflow` retained separately.
 Span-state channels decode independently with `round(channel * 33)` and require
 the logged count/flag encoding marker.
 For event-data/order, red is 1 when a span exists; otherwise
@@ -215,7 +273,12 @@ uses a threshold of 0.75 for front; invalid face fields remain null. The driver
 requires each view's encoding marker in the log before interpreting those fields.
 Each frame's manifest includes the four geometry-probe pixels and a 5 x 4 capsule
 patch at `[783, 788)` x `[604, 608)`, recording display RGB, decoded values, and
-channel meanings. State looks turn down the light good and still shape gates. Still `cap_state` also takes `--check-cap-state`. All three read lanes must be true at the four math hubs and the 12 pill edge pixels at `[784, 787)` x `[604, 608)` in each frame. That is 512 must probes in 32 shots. The eight far-edge pixels stay watch-only. A checked list writes `cap_state_required_probes`, `cap_state_gate_contract`,
+channel meanings. State views reject the lighting quality and static geometry
+gates. Static `cap_state` additionally supports `--check-cap-state`: all three
+decoded channels must be true at the four analytical centers and the 12 capsule
+rim pixels at `[784, 787)` x `[604, 608)` in every frame. This gives 512 required
+probes across 32 captures. The eight outer-rim pixels remain observational. A
+checked manifest records `cap_state_required_probes`, `cap_state_gate_contract`,
 and `cap_state_failures`; a false channel fails the gate.
 
 Static `span_state` with `--overlapping --check-spans` checks the generic
@@ -227,7 +290,7 @@ logged mode to the requested controls. Its checked manifest records
 `span_required_probes`, `span_expectations`, and `span_failures`, alongside the
 encoding and overlap contracts. Natural and software overlapping cases are
 registered in CTest. Other state views remain observational;
-these finite probes do not prove general topology or complete cap coverage.
+these finite probes do not establish general topology or complete cap coverage.
 
 CTest registers fourteen sequences as `nwb_csg_gi_<suffix>_smoke`:
 
@@ -248,8 +311,15 @@ CTest registers fourteen sequences as `nwb_csg_gi_<suffix>_smoke`:
 | `overlapping_spans` | Span state, static, natural, 8, with overlapping receivers |
 | `overlapping_spans_software` | Span state, static, software, 8, with overlapping receivers |
 
-The light runs arm the grade gate. Straight/spot runs arm the shape gate. Cap-state runs arm the cap-state gate. Lap span runs arm the span gate. All ask for card proof. They use the match run root and log-server when near. They wipe only their own known grab files. They line up display use through the test resource lock. Unsupported capture
-environments may skip with exit 77. A won gate proves those set backslide checks on the true run. Wider look right and speed still need their own match weigh. Interval-1 GPU
+The lighting sequences enable the quality gate; normal/position sequences enable
+the geometry gate; cap-state sequences enable the cap-state gate; overlapping
+span-state sequences enable the span gate. All request
+GPU validation, use the matching runtime directory
+and logserver when available, overwrite only their own known capture artifacts,
+and serialize display use through the test resource lock. Unsupported capture
+environments may skip with exit 77. A passing gate verifies those finite
+regression conditions on the actual run; broader optical correctness and
+performance still require their own matched comparisons. Interval-1 GPU
 timings describe the serialized capture workload.
 
 CSG performance qualification also needs a matched scene containing no CSG
@@ -272,5 +342,5 @@ The skinned scene smoke exercises the production shader through the selected
 disabled hardware ray tracing route.
 
 Caustic photon emission-target domains remain a separate approximation based
-on CPU geometry bounds; these smoke scenes do not prove coverage for every
+on CPU geometry bounds; these smoke scenes do not establish coverage for every
 possible skeletal deformation.

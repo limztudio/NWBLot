@@ -28,7 +28,6 @@ native{
 #include <impl/ecs_mesh/skinning/system.adhd.h>
 
 namespace NWB::Tests::Smoke{
-inline constexpr AStringView s_SkinningBenchmarkProjectName = "SkinningCullingBenchmark";
 
 enum class BenchmarkMode : u8{
     NoCulling,
@@ -140,6 +139,7 @@ class BenchmarkCase{
     }
 }
 
+const StringView s_SkinningBenchmarkProjectName = "SkinningCullingBenchmark";
 const StringView s_SkinningUnknownLabel = "unknown";
 const u32 s_SkinningCharacterCount = 64u;
 const u32 s_BenchmarkRepeatCount = 4u;

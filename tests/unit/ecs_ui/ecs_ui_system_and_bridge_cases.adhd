@@ -64,8 +64,6 @@ using TestArena = NWB::Tests::TestArena<>;
 using ScopedTestTrace = NWB::Tests::ScopedTestTrace;
 using TextInputEvent = NWB::Core::TextInputEvent;
 namespace TextInputPollResult = NWB::Core::TextInputPollResult;
-using TextInputPollResultEnum = NWB::Core::TextInputPollResult::Enum;
-using TextInputAdmissionEnum = NWB::Core::TextInputAdmission::Enum;
 namespace TextInputEventKind = NWB::Core::TextInputEventKind;
 using UiEditLimits = NWB::Impl::Ui::EditLimits;
 using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
@@ -113,6 +111,9 @@ inline constexpr TextInputRect s_SessionTestCaret{ 100, 32, 1, 18 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type TextInputPollResultEnum = TextInputPollResult;
+type TextInputAdmissionEnum = TextInputAdmission;
 
 UiTextEditOwner MakeSelectionDeletionOwner(in u64 modelGeneration){
     UiTextEditOwner owner = UiTextEditOwner();

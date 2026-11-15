@@ -170,11 +170,7 @@ class CsgCausticTimingProbe{
     }
 
     public b8 initialize(in b8 diagnostic, in b8 csg, in b8 hardware, in StringView outputPath, in StringView cpuOutputPath, in StringView startPath){
-        b8 hasQuitCallback = false;
-        native(in ctx = this.m_context, mut hasQuitCallback){
-            hasQuitCallback = static_cast<b8>(ctx.requestQuit);
-        }
-        if(!hasQuitCallback || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
+        if(!this.m_context.requestQuit || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
             error("CsgCausticTiming: explicit outputs, focus gate and quit callback are required");
             return false;
         }
@@ -275,7 +271,7 @@ class CsgCausticTimingProbe{
         if(!this.m_measuring)
             return true;
 
-        const CaptureOptions options = this.m_context.perfSession.captureOptions();
+        const auto options = this.m_context.perfSession.captureOptions();
         if(!options.gpuTimingActive() || options.cpuTimingActive() != this.m_diagnostic || options.memoryActive()){
             error("CsgCausticTiming: capture mode changed inside measurement");
             return false;

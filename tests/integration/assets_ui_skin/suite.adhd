@@ -49,10 +49,8 @@ struct SkinTestArena : TestArena<UiSkinTestArenaTag>{
 using AssetArena = Core::Assets::AssetArena;
 using AssetBytes = Core::Assets::AssetBytes;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-using MetascriptDocument = Core::Metascript::Document;
 using MetascriptValue = Core::Metascript::Value;
 using MipLevelVector = Impl::Texture::MipLevelVector;
-using TextureDimensionEnum = TextureDimension::Enum;
 using Impl::Texture;
 using Impl::UiSkin;
 using Impl::UiSkinAssetCodec;
@@ -170,6 +168,8 @@ inline constexpr Array<AStringView, 6u> s_DuplicateAndOverflowOverrides = {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type TextureDimensionEnum = TexturePayloadDimension;
 
 const StringView s_SkinPath = "test/skin";
 const StringView s_LastRegionName = "last";

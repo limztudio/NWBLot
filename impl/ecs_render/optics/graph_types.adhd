@@ -2,36 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/optics/optical_scene_upload.adhd>
+#include <impl/ecs_render/optics/optical_bounds_finalize.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
-#include <impl/ecs_render/optics/optical_bounds_finalize.adhd.h>
-
-#include <core/task/gpu/types.h>
-namespace NWB::Impl{
-using OpticalGpuGraphResourceId = Core::GpuGraphResourceId;
-using OpticalGpuTaskId = Core::GpuTaskId;
-using OpticalBufferHandle = Core::BufferHandle;
-using OpticalFinalizeHandle = RayTracingOpticalBoundsFinalizeHandle;
-using OpticalUploadHandle = RayTracingOpticalSceneUploadHandle;
-using OpticalUploadControlHandle = RayTracingOpticalUploadControlHandle;
-using OpticalDescriptorHandle = Core::GpuDescriptorHandle;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+type OpticalGpuGraphResourceId = GpuGraphResourceId;
+type OpticalGpuTaskId = GpuTaskId;
+type OpticalBufferHandle = BufferHandle;
+type OpticalDescriptorHandle = GpuDescriptorHandle;
+type OpticalFinalizeHandle = RayTracingOpticalBoundsFinalizeHandle;
+type OpticalUploadHandle = RayTracingOpticalSceneUploadHandle;
+type OpticalUploadControlHandle = RayTracingOpticalUploadControlHandle;
 
 const Name s_RenderNameRaytraceOpticalRuntimeInputs = "raytrace_optical_runtime_inputs";
 const Name s_RenderNameRaytraceOpticalResolvedScene = "raytrace_optical_resolved_scene";

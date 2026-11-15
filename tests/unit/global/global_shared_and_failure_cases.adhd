@@ -810,12 +810,14 @@ void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
     wideSumOverflow[0u] = u64.max;
     wideSumOverflow[1u] = 1u;
     EXPECT_FALSE(TrySumUnsignedWithU64Limit<u64>(wideSumOverflow).has_value());
-    EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(Span<u64>()).value(), 0u);
+    const u64 emptyUnsignedSum = TrySumUnsignedWithU64Limit<u64>(Span<u64>()).value();
+    EXPECT_EQ(emptyUnsignedSum, 0u);
 
     Array<u64, 2> exactMaximumSum = Array<u64, 2>();
     exactMaximumSum[0u] = u64.max - 1u;
     exactMaximumSum[1u] = 1u;
-    EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(exactMaximumSum).value(), u64.max);
+    const u64 exactUnsignedSum = TrySumUnsignedWithU64Limit<u64>(exactMaximumSum).value();
+    EXPECT_EQ(exactUnsignedSum, u64.max);
 
     Array<u64, 2> maximumThenZero = Array<u64, 2>();
     maximumThenZero[0u] = u64.max;
@@ -829,8 +831,10 @@ void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
     overflowingCounts[1u] = 1u;
     Array<u64, 1> zeroCount = Array<u64, 1>();
     zeroCount[0u] = 0u;
-    EXPECT_EQ(TrySumNonzeroU64(Span<u64>()).value(), 0u);
-    EXPECT_EQ(TrySumNonzeroU64(maximumCount).value(), u64.max);
+    const u64 emptyNonzeroSum = TrySumNonzeroU64(Span<u64>()).value();
+    EXPECT_EQ(emptyNonzeroSum, 0u);
+    const u64 maximumNonzeroSum = TrySumNonzeroU64(maximumCount).value();
+    EXPECT_EQ(maximumNonzeroSum, u64.max);
     EXPECT_FALSE(TrySumNonzeroU64(overflowingCounts).has_value());
     EXPECT_FALSE(TrySumNonzeroU64(zeroCount).has_value());
 
@@ -856,7 +860,8 @@ void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
     EXPECT_FALSE(DifferentF64Bits(bit_cast<f64>(cast<u64>(0x7ff8000000001234u)), bit_cast<f64>(cast<u64>(0x7ff8000000001234u))));
     EXPECT_TRUE(DifferentF64Bits(bit_cast<f64>(cast<u64>(0x7ff8000000001234u)), bit_cast<f64>(cast<u64>(0x7ff8000000001235u))));
     EXPECT_EQ(SaturateU64ToI32(cast<u64>(i32.max) + 1u), i32.max);
-    EXPECT_EQ(AddSignedOffset(cast<u64>(1u) << 63u, i64.min).value(), 0u);
+    const u64 minimumSignedOffset = AddSignedOffset(cast<u64>(1u) << 63u, i64.min).value();
+    EXPECT_EQ(minimumSignedOffset, 0u);
     EXPECT_FALSE(AddSignedOffset(0u, i64.min).has_value());
     EXPECT_FALSE(AddSignedOffset(u64.max, 1).has_value());
     EXPECT_EQ(DivideUpWrapping(cast<usize>(9u), cast<usize>(8u)), cast<usize>(2u));
@@ -901,14 +906,15 @@ void VerifyGlobal_CollectionSharedHelpersPreserveEdgeCases(){
     EXPECT_EQ(LowerBoundIndex(orderedSpan, 3u), 1u);
     EXPECT_EQ(LowerBoundIndex(orderedSpan, 9u), ordered.size());
 
-    native{
-        Array<u64, s_BitsPerU64> matrix{};
-        matrix[1u] = u64(1) << 63u;
-        TransposeBitMatrix64(matrix);
-        EXPECT_EQ(matrix[63u], 2u);
-        TransposeBitMatrix64(matrix);
-        EXPECT_EQ(matrix[1u], u64(1) << 63u);
+    Array<u64, 64u> matrix = Array<u64, 64u>();
+    matrix[1u] = cast<u64>(1u) << 63u;
+    TransposeBitMatrix64(matrix);
+    EXPECT_EQ(matrix[63u], 2u);
+    TransposeBitMatrix64(matrix);
+    EXPECT_EQ(matrix[1u], cast<u64>(1u) << 63u);
 
+    native{
+        static_assert(s_BitsPerU64 == 64u);
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
         ::Vector<u32, NWB::Core::Alloc::ScratchArena> cachedValues(scratchArena);
         cachedValues.push_back(1u);

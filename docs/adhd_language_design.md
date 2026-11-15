@@ -10,9 +10,9 @@
 - **File Extension**: `.adhd`
 - **Compilation Pipeline**: `.adhd` source -> `adhd` compiler -> generated `.h` / `.cpp` C++ source + reflection tables.
 - **Core Guarantees**:
-  1. **Zero manual allocator boilerplate**: Every class/component owns a static arena for persistent member allocations; functions use a local `ScratchArena` for temporary allocations.
-  2. **First-class Reflection**: Every `class`, `interface`, `enum`, member field, and method is reflected for `.nwb` asset cooking, binary serialization, and ECS inspection.
-  3. **SIMD Alignment & Optimal Memory Layout**: All SIMD types are strictly aligned (never unaligned `*U`). The `adhd` compiler automatically reorders class members to minimize padding.
+  1. **Arena propagation**: Root arena owners provide persistent storage. Other arena-backed classes borrow their owner's arena, while local temporary allocations use a `ScratchArena`.
+  2. **Reflection**: Selected declarations expose generated reflection for `.nwb` cooking, binary serialization, and inspection.
+  3. **SIMD and layout**: Calculation types stay in registers, while aligned and unaligned storage types hold values in memory. The compiler reorders ordinary class members to reduce padding; `[serialize]` preserves authored order.
   4. **Explicit Mutability & Access**: Mandatory member access determiners (`public`, `private`, `protected`) and parameter passing determiners (`in`, `mut`).
   5. **Built-in Parallel Multithreading**: First-class `parallel_for` and `parallel` blocks integrated with `Core::CpuTaskScheduler`.
 
@@ -118,16 +118,16 @@
   - Omitting the determiner is a compile-time error.
 - **Automatic Member Reordering (Padding Reduction)**:
   - Because SIMD types require `alignas(16)` or `alignas(32)` and scalar/container fields have alignments of `32`, `16`, `8`, `4`, `2`, or `1` bytes, authored declaration order could introduce large alignment holes.
-  - The `adhd` compiler **automatically reorders member variables** when emitting the C++ class definition (sorting by descending alignment and size, and packing tail/gap slots) to minimize struct padding and cache footprint.
+  - The compiler reorders members of ordinary non-`[serialize]` classes by alignment and size to reduce padding. `[serialize]` classes keep their authored order.
   - Generated constructors, initializers, binary serializers, and reflection tables use the compiler's resolved layout transparently so user code can declare members in logical/semantic grouping order without paying a memory penalty.
   - **No C-Style Bitfields**: C-style bitfield members (`u8 a : 3;`) are prohibited because their layout is compiler/ABI-dependent; use `flag<SizeType> Name` instead.
 - **Constructors, Destructors & Single-Source Field Initialization**:
   - `class` supports custom constructors (`public ClassName(in f32 s)`) and destructors (`public ~ClassName()`).
-  - The `adhd` compiler automatically injects the class's static arena into all owning member container initializers (`Vector`, `HashMap`, `String`, etc.) in the generated C++ constructor initializer list.
+  - The compiler passes the owning root or mother arena to arena-backed member containers (`Vector`, `HashMap`, `String`, etc.) in generated constructors.
   - Inline field default values (`public f32 speed = 1.0f;`) are supported.
   - **No Double Initialization (Compile-Time Error)**: If a member variable has an inline default initializer (`public f32 speed = 1.0f;`) **and** is also initialized inside a constructor, the `adhd` compiler reports a compile-time error. A member must be initialized either inline or in the constructor, never both.
 - **Operator Overloading (Instance Member Methods Only — Never Static/Free)**:
-  - Built-in SIMD (`f32x4`, `f64x4`, `f32x4x4`, etc.), container, and string types natively support arithmetic, comparison, and indexing operators.
+  - SIMD calculation types support the applicable arithmetic and comparison operations. Memory-layout types hold values; load them into calculation types before SIMD arithmetic. Containers and strings support their own indexing and comparison operations.
   - User-defined `class` types may overload safe value/math/comparison/indexing operators strictly as **instance member methods** (`this` is always the left-hand side):
  ```cpp
  class WeightPair {
@@ -190,7 +190,7 @@
  - `switch` accepts not only integers and `enum`s, but **also strings (`String`, `CompactString`, `StringView`, `Name`) and any custom `class` that supports equality comparison (`operator==`)**.
  - For non-integral types (strings and custom classes), the `adhd` compiler automatically lowers the `switch` statement into an `if` / `else if` / `else` chain in generated C++.
   - **No Exceptions (`try` / `catch` / `throw` Prohibited)**:
- - Exceptions (`try`, `catch`, `throw`) are not allowed in `adhd`. Fallible functions return `Expected<T, E>`, and all generated `adhd` functions emit `noexcept` in C++.
+ - Exceptions (`try`, `catch`, `throw`) are not allowed in `adhd`. Fallible functions return `Expected<T, E>`. A function can declare `noexcept`; the generated C++ keeps that declaration.
   - **Built-In Diagnostics (`assert`, `info`, `warning`, `error` & `[essential]` Attribute)**:
  - `adhd` provides built-in `assert`, `info`, `warning`, and `error` statements (`global/assert.h`, `core/common/log.h`), optionally prefixed with the `[essential]` attribute:
  - `assert(cond);` / `assert(cond, "msg", ...);` -> `FOUNDATION_ASSERT` / `FOUNDATION_ASSERT_MSG`
@@ -237,7 +237,7 @@
   - **No `Move` Keyword (Rust-Style Borrowing & Automatic Last-Use Move)**:
  - Like Rust, `adhd` has **no `Move(x)` or rvalue reference (`T&&`) syntax**.
  - Function parameters strictly use `in` (read-only borrow) or `mut` (mutable borrow).
- - Whenever a local variable is transferred by value at its last use, the `adhd` compiler automatically emits `Move(...)` in the generated C++.
+ - The compiler may emit `Move(...)` for a value at its last use when its analysis permits it. Calls without a known signature are handled conservatively.
   - **Automatic Compiler-Managed Inlining (No `[inline]` / `[noinline]` or `inline` / `noinline` Keywords)**:
  - There are **no `[inline]` or `[noinline]` attributes** and **no `inline` or `noinline` keywords** in `adhd`.
  - Whether a function or method is emitted inline in `.adhd.h` or out-of-line in `.adhd.cpp` is decided **exclusively and automatically by the `adhd` compiler itself**, never by the user. Specifying `[inline]`, `[noinline]`, `inline`, or `noinline` in `.adhd` source is a compile-time error.
@@ -276,26 +276,26 @@
 | `void` | `void` | — | Return-only empty type |
 
 ### 5.2 SIMD Calculation Types vs. Memory-Layout Types (`VectorSingle`/`MatrixSingle` vs. `f32x4~`)
-- **Rule**: `.adhd` keeps **SIMD math types** (`VectorSingle`, `VectorDouble`, `MatrixSingle`, `MatrixDouble`) apart from **store types** (`f32x4~` and raw `*u` types):
+- **Rule**: `.adhd` distinguishes **SIMD calculation types** (`VectorSingle`, `VectorDouble`, `MatrixSingle`, `MatrixDouble`) from **storage types** (`f32x4~` and raw `*u` types):
   - **SIMD Calculation & Parameter Types** (`type_register.h`, `result.h`):
  - `VectorSingle` (`::SIMDVectorSingle`, passed by value on `in`), `VectorDouble` (`::SIMDVectorDouble`, passed by value on `in`), `MatrixSingle` (`::SIMDMatrix`, passed by `const &` on `in`), `MatrixDouble` (`::SIMDMatrixDouble`, passed by `const &` on `in`). Inside `Expected<...>` and `Optional<...>`, `VectorSingle` and `VectorDouble` lower to `::SIMDVectorSingleResult` and `::SIMDVectorDoubleResult`.
- - All SIMD math, multi-lane swizzle, SIMD math calls, and SIMD func/method/lambda/`Func` args must use `VectorSingle`, `VectorDouble`, `MatrixSingle`, or `MatrixDouble`. They cannot sit in store as `class` fields, box/array/span items, or file `const` notes.
+ - Use `VectorSingle`, `VectorDouble`, `MatrixSingle`, or `MatrixDouble` for SIMD arithmetic, multi-lane swizzles, math calls, and SIMD parameters. Do not store these register types as class fields, container elements, or file-scope constants.
   - **Aligned Memory-Layout Types** (`type_vector_aligned.h`, `type_matrix_storage.h`):
  - **16-byte Aligned (`alignas(16)`)**: `f32x4` (`Float4`), `i32x4` (`Int4`), `u32x4` (`UInt4`), `f32x3_i32` (`Float3Int`), `f32x3_u32` (`Float3UInt`), `f32x3x4` (`Float34`), `f32x4x4` (`Float44`).
  - **32-byte Aligned (`alignas(32)`)**: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`), `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44`).
- - Used whenever SIMD values are held in memory (all `class` member fields, container/array/span elements, and file-scope constants); prohibited as direct callable parameters or direct operands of SIMD arithmetic/intrinsics.
+ - Use these storage types when SIMD values are held in memory, including fields, container elements, and file-scope constants. Convert them to calculation types before SIMD arithmetic or SIMD parameters.
 - **Explicit Load/Store & Shader-Style Swizzling**:
   - Load from memory layout into calculation registers via `VectorSingle(storage)` / `VectorDouble(storage)` / `MatrixSingle(storage)` / `MatrixDouble(storage)` (or `VectorSingle(storage, w)`), and store back via `f32x4(vec)` / `f32x3u(vec)` / `f32x3_i32(vec, w)` / `f32x3x4(mat)`.
   - Single-lane access via `.x`, `.y`, `.z`, `.w` and `.r`, `.g`, `.b`, `.a`.
   - Shader-style multi-lane swizzling on `VectorSingle`/`VectorDouble` (e.g., `v.xyz`, `v.zyx`, `v.xxxx`, `v.xyzw`, `v.rgba`) lowers directly to `global/simd/vector_swizzle.h`.
 - **Built-In Math & SIMD Intrinsics (No `native` Block Required)**:
   - Scalar & SIMD vector/matrix intrinsics are available out of the box and lower directly to `global/simplemath.h` and `global/simdmath.h`:
- - **Scalar & Vector**: `abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`
- - **SIMD Vector & Matrix**: `dot(a, b)`, `cross(a, b)`, `length(v)`, `lengthSq(v)`, `normalize(v)`, `mul(a, b)`, `transpose(m)`, `inverse(m)`, `isFinite(v)`, `any(v)`, `all(v)`
- - **SIMD Floating-Point Safety**: `isFinite(v)` lowers to integer exponent-mask comparisons (`VectorIsFinite` / `VectorDoubleIsFinite`), and the `adhd` compiler automatically emits `#pragma STDC FENV_ACCESS ON` for blocks, lambdas, and parallel tasks that evaluate SIMD floating-point expressions so inactive or short-circuited lanes never raise spurious `FE_INVALID` traps.
+ - **Scalar & Vector**: `Abs`, `Min`, `Max`, `Clamp`, `Lerp`, `Sqrt`, `Rsqrt`, `Sin`, `Cos`, `Tan`, `Floor`, `Ceil`, `Round`
+ - **SIMD Vector & Matrix**: `Dot(a, b)`, `Cross(a, b)`, `Length(v)`, `LengthSq(v)`, `Normalize(v)`, `Mul(a, b)`, `Transpose(m)`, `Inverse(m)`, `IsFinite(v)`
+ - **SIMD Floating-Point Safety**: `IsFinite(v)` lowers to integer exponent-mask comparisons (`VectorIsFinite` / `VectorDoubleIsFinite`) so signaling NaNs do not raise `FE_INVALID` in that test. The compiler emits `#pragma STDC FENV_ACCESS ON` for blocks, lambdas, and parallel tasks that evaluate SIMD floating-point expressions. Other SIMD operations still need inputs that are safe for every evaluated lane.
 
 ### 5.3 Default Containers & Strings
-All owning containers are automatically bound to the enclosing class's static arena (for members) or the active function's `ScratchArena` (for local variables):
+Owning container fields use their root or mother arena. Local containers use the active function's `ScratchArena`:
 - **Sequential Containers** (Option 1 container syntax only; C-style `T[N]` / `new T[N]` is prohibited):
   - `Array<T, Capacity>` (compile-time fixed size, inline storage via `global/array.h`: e.g., `Array<i32, 6> a;`)
   - `Vector<T>` (runtime size, arena-allocated: e.g., `Vector<i32> b(6);`)
@@ -316,12 +316,12 @@ All owning containers are automatically bound to the enclosing class's static ar
   - `ParallelQueue<T>`
   - `ParallelBlockQueue<T, BlockSize>`
 - **Strings & Identifiers (UTF-8 Exclusively)**:
-  - `adhd` uses **UTF-8 (`char`) exclusively** for all source files, string literals (`"..."`, including `\xHH`, `\uXXXX`, and `\UXXXXXXXX` escapes), and string types (`String` = `AString`, `StringView` = `AStringView`, `CompactString` = `ACompactString`, `Name` = `Core::Common::Name`). There are no `wchar` / `tchar` string types in `.adhd`.
-  - `Name` (`Core::Common::Name`)
+  - `adhd` uses **UTF-8 (`char`) exclusively** for all source files, string literals (`"..."`, including `\xHH`, `\uXXXX`, and `\UXXXXXXXX` escapes), and string types (`String` = `AString`, `StringView` = `AStringView`, `CompactString` = `ACompactString`, `Name` = `::Name`). There are no `wchar` / `tchar` string types in `.adhd`.
+  - `Name` (`::Name`)
   - `Path` (`Path`)
   - `String` (`BasicString<char, ArenaAllocator<...>>`)
   - `CompactString` (`ACompactString`)
-  - **Auto text form (`"..."`) and UTF-8 bridge**: Coders write plain UTF-8 `"..."` text in all `.adhd` (never `FOUNDATION_TEXT("...")`). The `adhd` tool puts out UTF-8 `"..."` for `String`, `StringView`, `CompactString`, and `Name`. It auto fits UTF-8 text (`FOUNDATION_TEXT("...")` / `ConvertString` in `global/basic_string.h`) when sent to `assert`, `info`, `warning`, `error`, or `Path`.
+  - **Text literals and the UTF-8 bridge**: Write plain UTF-8 `"..."` literals in `.adhd`, without `FOUNDATION_TEXT`. The compiler emits UTF-8 literals for `String`, `StringView`, `CompactString`, and `Name`. It adapts text for `assert`, `info`, `warning`, `error`, and `Path` using `FOUNDATION_TEXT` from `global/type.h` and `ConvertString` from `global/basic_string.h` where needed.
 - **Views, Value Wrappers, Callables & References**:
   - `Span<T>`, `StringView` (`AStringView`)
   - `Optional<T>`, `Expected<T, E>`
@@ -332,14 +332,14 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 6. Arena Memory Management Model (Zero Manual Configuration)
-1. **Per-Class / Per-Component Static Arena**:
- - Each generated `adhd` class defines/binds a dedicated static `Core::Alloc::GlobalArena` named after the class.
- - All owning container fields and polymorphic `interface` allocations inside the class automatically receive this arena in generated constructors.
+1. **Root and Mother Arenas**:
+ - Standalone `[arena]` roots and components own a `GlobalArena`. Asset and subsystem roots use their asset arena; systems borrow their mother arena.
+ - Other arena-backed classes borrow a mother arena. Generated constructors pass the correct arena to owning fields.
 2. **Automatic Cache Alignment for Parallel Containers**:
  - `ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, and `ParallelBlockQueue` automatically use `ContainerDetail::ArenaCacheAlignedAllocator` (`global/containers.h`) by default, while standard containers use `ContainerDetail::ArenaAllocator`.
 3. **Function-Local Scratch Arena**:
  - Local containers/strings inside `adhd` functions or `parallel` blocks automatically allocate from a stack-scoped `Core::Alloc::ScratchArena` without heap churn.
- - Because arenas scale and align automatically (`alignof(T)` and cache-aligned for `Parallel*`), no user-facing arena customization attribute is required.
+ - Arena ownership is declared with `[arena]` on root owners. The compiler propagates that ownership to nested arena-backed values.
 
 ---
 
@@ -388,13 +388,13 @@ All owning containers are automatically bound to the enclosing class's static ar
  ```
  - **Loop-Safe Argument Evaluation**: `in` arguments are evaluated immediately on the submitting thread and captured **by value** into the `Core::CpuTaskScope::submit(...)` closure (preventing loop-counter data races), while `mut` arguments and `[mut ...]` captures are bound by reference.
 - **Compile-Time Concurrency Rules**:
-  - Within `parallel_for` or concurrent `parallel` bodies, shared `mut` container access is restricted to thread-safe containers (`ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, `ParallelBlockQueue`, `Atomic<T>`) or per-worker disjoint elements/slices (`Span<T>`).
-  - Read-only `in` captures may be shared freely across worker threads.
+  - The checker restricts shared mutation of known non-thread-safe containers in `parallel_for` and concurrent `parallel` bodies. Use thread-safe containers or disjoint elements where appropriate.
+  - The author must ensure that slices are disjoint and that foreign C++ aliases, calls, and `native` bodies are safe. A const view may still refer to mutable data; an `in` capture alone does not make that data thread-safe.
 
 ---
 
 ## 8. Preprocessor & Macro System
-- `adhd` takes a C/C++-form pre pass before tree read, plan fix, and tag make (no `#pragma` needed in `.adhd`; the `adhd` tool drops repeat `#include` on its own and puts `#pragma once` in made C++ heads):
+- `adhd` preprocesses source before parsing, semantic analysis, and code generation. It deduplicates included `.adhd` files and emits `#pragma once` in generated C++ headers:
   - **File Inclusion (`.adhd` vs C++)**:
  - Outside `native {}`, `#include "..."` / `#include <...>` includes **`.adhd` files only**.
  - C++-side `#include` directives must be placed inside a `native { ... }` block.
@@ -404,7 +404,7 @@ All owning containers are automatically bound to the enclosing class's static ar
  - `#undef NAME`
   - **Conditional Compilation**:
  - `#if <expr>`, `#ifdef NAME`, `#ifndef NAME`, `#elif <expr>`, `#else`, `#endif`
- - Supports `defined(NAME)`, integer/boolean constant expressions (`&&`, `||`, `!`, `==`, `!=`, `<`, `>`, bitwise ops), and engine build/platform macros (e.g., `NWB_DEBUG`, `NWB_OPTIMIZE`, `NWB_FINAL`).
+ - Supports `defined(NAME)` and integer/boolean constant expressions (`&&`, `||`, `!`, `==`, `!=`, `<`, `>`, bitwise ops). The compiler API can receive macro definitions. The current CLI passes none automatically, so C++ target build or platform macros must not be assumed to be defined during ADHD preprocessing.
   - **Interaction with Member Reordering & Reflection**:
  - Running the preprocessor stage inside the `adhd` compiler resolves active `#if` branches and expands `#define` macros before AST construction, allowing the `adhd` compiler to reorder the active class members and generate exact reflection tables without layout mismatches.
 
@@ -412,10 +412,10 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ## 9. Attribute System (`[...]`) & `.nwb` Reflection Binding
 - **Single `[...]` Bracket with Comma-Separated Attributes**:
-  - Attributes `[...]` can be placed above any **`class`**, **`interface`**, **member variable**, **function/method**, or **`parallel`** block.
+  - Attributes apply to specific declaration kinds. For example, `[reflect]` applies to classes, interfaces, enums, flags, fields, and methods; scheduling attributes apply to `parallel` blocks.
   - When a declaration has multiple attributes, they **must** be comma-separated inside a single `[...]` bracket (stacked `[...]` `[...]` blocks on the same declaration are prohibited):
  ```csharp
- [asset("model_component"), serialize]
+ [arena, asset("model_component")]
  class ModelComponent : IComponent {
  public AssetRef<Model> asset;
 
@@ -427,16 +427,14 @@ All owning containers are automatically bound to the enclosing class's static ar
  }
  ```
 - **Automatic `.nwb` & `[serialize]` Codegen**:
-  - When a `class` is marked with `[asset("type_name")]` and/or `[serialize]`, the `adhd` compiler automatically generates:
- 1. `.nwb` property parsing for all `public` (non-`[transient]`) fields,
- 2. Automatic `AssetRef<T>` dependency extraction for `dependency_computer`, and
- 3. `1`-byte-packed binary serialization and deserialization.
+  - A `[serialize]` class generates `.nwb` metadata parsing, `AssetRef<T>` dependency extraction, and binary serialization for supported fields.
+  - An `[arena, asset("type_name")]` class derives from `TypedAsset` and emits asset type information. It can emit a codec and registrar when it declares `loadBinary` under the conditions described in `.helper/adhd.md`. It cannot also use `[serialize]`.
 - **Categories of Attributes**:
   1. **Serialization & Layout Attributes**:
  - **Default (No `[serialize]`)**: Follows natural/SIMD alignment (`16`-byte / `32`-byte for SIMD types, natural alignment for scalars) with automatic compiler member reordering to minimize padding.
- - **`[serialize]`**: Always packs in `1` byte (`1`-byte packed binary representation / serialization layout with zero padding holes), and connects the reflected fields to binary serialization / `.nwb` cooking.
+ - **`[serialize]`**: Preserves authored field order and generates binary serialization and `.nwb` support. The compiler uses 1-byte packing only when its fields do not require over-aligned storage.
   2. **Reflection & `.nwb` Asset Connection Attributes** (`class` / `interface` / variable / method):
- - `[reflect]` / `[asset("type_name")]`: Exposes the `class`, `interface`, or method to the reflection registry and connects it directly to `.nwb` authoring, dependency scanning, and cooking.
+ - `[reflect]` exposes a supported declaration to reflection. `[asset("type_name")]` marks an asset class or interface; asset classes also require `[arena]`.
  - `[transient]`: Marks a member variable as runtime-only (excluded from `[serialize]` and `.nwb` authoring).
   3. **Scheduling & Diagnostic Attributes**:
  - `[core(...)]` / `[priority(...)]` (for `parallel` and `parallel_for`)
@@ -446,10 +444,11 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 10. C++ Interop (`native` & `native(in ..., mut ...)` Blocks)
-- C++-side `#include` directives, calling C++ functions, or embedding native C++ statements inside `.adhd` **must** always be enclosed in an explicit `native` block.
+- C++ `#include` directives and raw C++ statements belong in explicit `native` blocks. Registered C++ functions may also be called directly from ordinary `.adhd`.
 - **Passing `.adhd` Variables / Members into `native` (`native(in ..., mut ...)` Capture List)**:
   - When a `native` block inside a function accesses `.adhd` variables or `this.XXX` members, they are explicitly bound in the `native(...)` header using `in` or `mut`:
  ```cpp
+ [header]
  native {
  #include <global/simdmath.h>
  }
@@ -465,8 +464,8 @@ All owning containers are automatically bound to the enclosing class's static ar
   - The `adhd` compiler binds `in` captures as `const` C++ references/values and `mut` captures as mutable C++ references inside the generated C++ block.
 - **Passing Containers / Values as `void*` or `const void*` Inside `native`**:
   - Because the body of `native(...) { ... }` is raw C++, any contiguous container (`Array<T, N>`, `Vector<T>`, `FixedVector<T, N>`, `Span<T>`, `String`, `CompactString`) captured via `in` or `mut` exposes `.data()` and `.size()`:
- - `in` capture: `buf.data()` yields `const T*` (implicitly convertible to `const void*`).
- - `mut` capture: `buf.data()` yields `T*` (implicitly convertible to `void*`).
+ - `in` captures bind a const object, but C++ constness can be shallow. A mutable view may still expose writable elements; the author must keep the referenced data read-only.
+ - `mut` captures permit mutation through the bound object.
  ```cpp
  Array<i32, 6> a;
  Vector<i32> b(6);
@@ -488,12 +487,12 @@ All owning containers are automatically bound to the enclosing class's static ar
 - **Benefits of `native(in ..., mut ...) { ... }`**:
   - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
-  - Because `native(in ..., mut ...)` declares which `.adhd` variables are read (`in`) vs. Mutated (`mut`), the `adhd` compiler can still enforce `in`/`mut` parameter safety, `const` method rules, and `parallel` data-race checks without needing a full C++ parser inside `{ ... }`.
+  - Because `native(in ..., mut ...)` declares which `.adhd` variables are read (`in`) vs. Mutated (`mut`), the compiler checks the declared `in`/`mut` modes. The C++ body remains a trusted boundary: authors must honor read-only captures and parallel safety, including for shallow-const views.
 
 ---
 
 ## 11. Templates & Generics (`<T>`, `<T : IInterface>`, `<T, const usize N>`)
-- `adhd` uses Rust-form in-line `<...>` kind args (no `template<typename ...>` head word):
+- `adhd` declares generic parameters inline in `<...>` without the C++ `template<typename ...>` prefix:
   1. **Inline `<T>` Syntax on Classes, Interfaces & Functions**:
  ```cpp
  class Pair<T, U> {
@@ -507,7 +506,7 @@ All owning containers are automatically bound to the enclosing class's static ar
  this.second = defaultSecond;
  }
 
- void swapValues<T>(mut T a, mut T b) {
+ void SwapValues<T>(mut T a, mut T b) {
  auto temp = a;
  a = b;
  b = temp;
@@ -516,7 +515,7 @@ All owning containers are automatically bound to the enclosing class's static ar
   2. **Interface Bounds (`<T : IInterface>` & `<T : IFirst + ISecond>`)**:
  - If a generic class or function invokes methods on `T`, `T` must be constrained by one or more `interface`s (separated by `+`):
  ```cpp
- void attach<T : IComponent>(mut Entity entity, in T component) {
+ void Attach<T : IComponent>(mut Entity entity, in T component) {
  component.onAttach(entity);
  }
 
@@ -537,19 +536,19 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 12. Compiler Architecture & Domain-Split Module Layout (`core/metascript` & `pipeline/adhd_compiler`)
-Each source and head file is split firm by field job, so no one file grows too big:
+The compiler is split into modules by responsibility:
 
 1. **Shared Foundation & `.nwb` Evaluation (`core/metascript/`)**:
  - `lexer.h` / `lexer.cpp`: Unified lexical scanner and token definitions.
  - `parser_cursor.h` / `parser_cursor.cpp`: Token stream navigation and `ParseError` diagnostics.
  - `preprocessor.h` / `preprocessor.cpp` / `preprocessor_eval.cpp`: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`, and `#if` constant expression evaluation for both `.nwb` and `.adhd`.
- - `attribute_parser.h` / `attribute_parser.cpp`: Parses single-bracket comma-separated attribute lists (`[asset("..."), serialize]`).
+ - `attribute_parser.h` / `attribute_parser.cpp`: Parses single-bracket comma-separated attribute lists (`[arena, asset("...")]`).
  - `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`: `.nwb` document data evaluation.
 
 2. **`adhd` Language & Compiler Library (`core/metascript/adhd/`)**:
  - `compiler.h` / `compiler.cpp`: Top-level `Compiler` pipeline entry (preprocess, parse, type-check, layout, emit); `export_functions.h`, `export_keywords.h`, `export_operators.h`, and `export_types.h` declare the centralized X-macro language tables consumed across the parser, semantic analyzer, and code generators.
  - **AST (`core/metascript/adhd/ast/`)**:
- - `global.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
+ - `ast_common.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
  - `ast_types.h`: Scalar, SIMD (`f32x4`, `f32x4x4`), `Func<...>`, `enum<SizeType> Name` / `flag<SizeType> Name`, and template bound (`<T : IBar, const usize N>`) nodes.
  - `ast_expr.h`: Expressions (`this.XXX`, calls, operators, `cast<T>`, `bit_cast<T>`, `lambda`, vector swizzles).
  - `ast_stmt.h`: Statements (`if`/`else`, `switch`/`case`, `for`, `parallel_for`, `parallel`, `native`, variable declarations).
@@ -567,10 +566,10 @@ Each source and head file is split firm by field job, so no one file grows too b
  - `parallel_graph.h` / `parallel_graph.cpp`: Validates `parallel name : dep` task DAGs, cycle detection, and `[core(...), priority(...)]` attributes.
  - **Code & Reflection Generation (`core/metascript/adhd/codegen/`)**:
  - `cpp_type_emitter.h` / `cpp_type_emitter.cpp`: Shared C++ type emission, arena-parameterized container mapping, and identifier/literal formatting.
- - `simd_codegen_utils.h` / `simd_codegen_utils.cpp` / `simd_binding_analyzer.h` / `simd_binding_analyzer.cpp`: SIMD intrinsic/type mapping and block-scoped SIMD register binding analysis.
+ - `simd_codegen_utils.h` / `simd_codegen_utils.cpp`: SIMD code-generation utilities.
  - `header_emitter.h` / `header_emitter.cpp` / `header_emitter_decl.cpp` / `header_emitter_class.cpp`: Emits `.adhd.h` (`class ... final`, `namespace EnumName`, `s_ClassArena`, inline templates).
  - `source_emitter.h` / `source_emitter.cpp` / `source_emitter_expr.cpp` / `source_emitter_stmt.cpp` / `source_emitter_parallel.cpp` / `source_emitter_simd_expr.cpp` / `source_emitter_simd_stmt.cpp`: Emits `.adhd.cpp` method bodies, statement lists, `ScratchArena` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, SIMD register lowering, and `native` blocks.
- - `reflection_emitter.h` / `reflection_emitter.cpp` / `reflection_emitter_nwb.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
+ - `reflection_emitter.h` / `reflection_emitter.cpp` / `reflection_emitter_nwb.cpp`: Emit serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and asset registration support.
 
 3. **Pipeline Tool (`pipeline/adhd_compiler/`)**:
  - `global.h`: Defines `NWB_ADHD_COMPILER_BEGIN` / `NWB_ADHD_COMPILER_END` (`NWB::Pipeline::AdhdCompiler`).
@@ -578,7 +577,7 @@ Each source and head file is split firm by field job, so no one file grows too b
  - `module.cpp`: Implements `RunPipelineTool(int argc, char** argv)` using `PipelineCommandLine(PipelineTool::AdhdCompiler)` and shared `pipeline/main.cpp`.
 
 4. **Build & C++ Integration Rules**:
- - **CLI / CMake Namespace (`--namespace`)**: Since `.adhd` has no `namespace` keyword, the generated C++ declarations are wrapped in the C++ namespace passed via `--namespace <ns>` (defaulting to `NWB`).
+ - **CLI / CMake Namespace (`--namespace`)**: Since `.adhd` has no `namespace` keyword, the generated C++ declarations use the namespace passed via `--namespace <ns>`. When omitted, the compiler derives a namespace rooted at `NWB` from the virtual source path.
  - **Cross-File `#include "other.adhd"`**: The compiler parses included `.adhd` files (with automatic deduplication) to resolve `interface` methods, `enum` / `flag` underlying sizes, and exact `sizeof` / `alignof` of embedded `class` types during member layout optimization, and emits `#include "other.adhd.h"` in the generated header.
  - **No Positional Aggregate Init (`Foo{a, b}`)**: Because `layout_optimizer` reorders class fields automatically, classes are constructed via constructors (`Foo(a, b)`) or default construction + named member assignment (`Foo f; f.x = ...;`).
  - **CMake Helper (`nwb_target_adhd_sources`)**: Runs `nwb_adhd_compiler` per `.adhd` source, emits `.adhd.h` / `.adhd.cpp` into the target's generated build directory, and attaches the generated C++ sources and include paths to the target.

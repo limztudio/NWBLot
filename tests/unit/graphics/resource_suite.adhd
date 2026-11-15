@@ -185,7 +185,6 @@ namespace GpuQueueCapability = Core::GpuQueueCapability;
 using BlasOpacityMicromapPolicy = Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy;
 using OpacityMicromapIndexFormat = decltype(Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(Core::Format::UNKNOWN, {}))::value_type;
 namespace RayTracingClusterOperationType = Core::RayTracingClusterOperationType;
-using RayTracingClusterOperationTypeEnum = Core::RayTracingClusterOperationType::Enum;
 using RayTracingClusterOperationParams = Core::RayTracingClusterOperationParams;
 
 using GpuCrashTracker = Core::GpuCrashTracker;
@@ -254,6 +253,8 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type RayTracingClusterOperationTypeEnum = RayTracingClusterOperationType;
 
 const StringView s_RetainedMarkerLabel = "Retained marker view";
 const StringView s_DuplicateRootLabel = "Duplicate root";

@@ -10,33 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/perf/session.h>
-
-namespace NWB::Tests::Smoke{
-using Core::Perf::CaptureOptions;
-using Core::Perf::Session;
-using Core::Perf::TimingScopeId;
-using Core::Perf::TimingStats;
-using Core::Perf::TimingView;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const usize s_MaxScopesPerDomain = 512u;
 const usize s_MaxRecords = s_SmokeTimingMaxRecords;
 const i32 s_SmokeCpuGpuTimingPrecision = 17;
@@ -90,7 +63,7 @@ class SmokeCpuGpuTimingProbe{
     public b8 observe(in Session session, in PresentationFpsProbe presentation, in u64 successfulPresentations, in b8 complete){
         if(!this.m_enabled || this.m_complete || !presentation.measurementStarted())
             return true;
-        const CaptureOptions options = session.captureOptions();
+        const auto options = session.captureOptions();
         if(!options.cpuTimingActive() || !options.gpuTimingActive() || options.memoryActive()){
             error("SmokeCpuGpuTimingProbe: active capture options disagree with requested diagnostics");
             return false;

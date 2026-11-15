@@ -39,30 +39,6 @@ native{
 
 #include <global/simd/frame.h>
 
-namespace NWB::Tests::Smoke{
-using SoftShadowModelRef = Core::Assets::AssetRef<Impl::Model>;
-using SoftShadowMaterialRef = Core::Assets::AssetRef<Impl::Material>;
-using SoftShadowMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
-using Core::Perf::CaptureOptions;
-namespace Feature = Core::Feature;
-
-// Opaque and glass casters under directional, point, and spot soft shadows.
-inline constexpr SoftShadowModelRef s_SoftShadowModel{"project/characters/body/model"};
-inline constexpr SoftShadowMaterialRef s_SoftShadowOpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
-inline constexpr SoftShadowMaterialRef s_SoftShadowTransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
-inline constexpr SoftShadowMaterialRef s_SoftShadowTimingOpaqueMaterial{"project/smoke/soft_shadow/materials/timing_opaque"};
-inline constexpr SoftShadowMaterialRef s_SoftShadowTimingTransparentMaterial{"project/smoke/soft_shadow/materials/timing_transparent"};
-inline constexpr SoftShadowMeshRef s_SoftShadowGroundMesh{"project/meshes/shadow_plane"};
-
-inline constexpr AStringView s_SoftShadowProjectName = "SoftShadowTestSmokeProject";
-inline constexpr f32 s_SoftShadowDefaultAngularRadius = 0.03f;
-inline constexpr f32 s_SoftShadowDefaultSourceRadius = 0.15f;
-inline constexpr f32 s_SoftShadowSpinSpeed = s_SmokeSpinSpeed;
-inline constexpr f32 s_SoftShadowManualYawSpeed = 0.6f;
-inline constexpr f32 s_SoftShadowMaxSpinDelta = 1.0f / 15.0f;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -72,12 +48,30 @@ inline constexpr f32 s_SoftShadowMaxSpinDelta = 1.0f / 15.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Opaque and glass casters under directional, point, and spot soft shadows.
+const SmokeModelRef s_SoftShadowModel = "project/characters/body/model";
+const SmokeMaterialRef s_SoftShadowOpaqueMaterial = "project/smoke/transparent_multi/materials/ground";
+const SmokeMaterialRef s_SoftShadowTransparentMaterial = "project/smoke/transparent_multi/materials/shared";
+const SmokeMaterialRef s_SoftShadowTimingOpaqueMaterial = "project/smoke/soft_shadow/materials/timing_opaque";
+const SmokeMaterialRef s_SoftShadowTimingTransparentMaterial = "project/smoke/soft_shadow/materials/timing_transparent";
+const SmokeMeshRef s_SoftShadowGroundMesh = "project/meshes/shadow_plane";
+
+const StringView s_SoftShadowProjectName = "SoftShadowTestSmokeProject";
+const f32 s_SoftShadowDefaultAngularRadius = 0.03f;
+const f32 s_SoftShadowDefaultSourceRadius = 0.15f;
+const f32 s_SoftShadowSpinSpeed = s_SmokeSpinSpeed;
+const f32 s_SoftShadowManualYawSpeed = 0.6f;
+const f32 s_SoftShadowMaxSpinDelta = 1.0f / 15.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SoftShadowScene{
     public b8 create(mut World world, in b8 timingEnabled, in f32 angularRadius, in f32 sourceRadius){
         b8 ok = true;
-        native(mut world, in timingEnabled, in angularRadius, in sourceRadius, mut ok){
-            const Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_SoftShadowCameraHeight, s_SoftShadowCameraDistance, s_SoftShadowCameraPitch, world);
-
+        const EntityID activeCamera = CreateSmokeCamera(s_SoftShadowCameraHeight, s_SoftShadowCameraDistance, s_SoftShadowCameraPitch, world);
+        native(mut world, in timingEnabled, in angularRadius, in sourceRadius, in activeCamera, mut ok){
             const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(world, s_SoftShadowDirectionalLightPitch, s_SoftShadowDirectionalLightYaw, 0.0f, Float4(1.00f, 0.96f, 0.88f), s_SoftShadowDirectionalLightIntensity);
             if(auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(directionalLight)){
                 light->angularRadius = angularRadius;
@@ -152,12 +146,8 @@ class SoftShadowScene{
 
     public void spinCasters(mut World world, in f32 yaw)const{
         const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f)));
-        native(in characterOwner = this.m_characterOwner, in glassOwner = this.m_glassOwner, in rotation, mut world){
-            for(const Core::ECS::EntityID owner : { characterOwner, glassOwner }){
-                if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(owner))
-                    transform->rotation = rotation;
-            }
-        }
+        SetSmokeEntityRotationIfPresent(this.m_characterOwner, VectorSingle(rotation), world);
+        SetSmokeEntityRotationIfPresent(this.m_glassOwner, VectorSingle(rotation), world);
     }
 
     private EntityID m_characterOwner = s_InvalidEntityId;
@@ -210,7 +200,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     public b8 onStartup()override{
         this.m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
         if(this.m_timingEnabled){
-            this.m_context.setPerfCapture(CaptureOptions::GpuTimingOnly());
+            this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
             if(!this.m_timingRenderPass.start())
                 return false;
         }

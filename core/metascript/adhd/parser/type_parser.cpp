@@ -304,7 +304,7 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     return expectClosingAngle();
 }
 
-b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams){
+b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto){
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for parameter list"))
         return false;
 
@@ -318,7 +318,7 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams){
                 return false;
             }
 
-            param.type = parseType(false, false);
+            param.type = parseType(false, allowAuto);
             if(!param.type)
                 return false;
 

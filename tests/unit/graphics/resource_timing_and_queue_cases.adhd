@@ -245,7 +245,6 @@ using GpuTimingSampleAttribution = Core::GpuTimingSampleAttribution;
 using TimerQueryResult = Core::TimerQueryResult;
 using Viewport = Core::Viewport;
 using VulkanViewportPolicy = Core::GraphicsBackend::VulkanViewportPolicy;
-using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
 
 using Core::TryComputeGpuTimestampOverlap;
 using Core::TryAggregateGpuPacketEnvelopeMetrics;
@@ -271,6 +270,8 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type ResourceQueueSharingMask = ResourceQueueSharing;
 
 const u64 s_F64InfinityBits = 0x7ff0000000000000u;
 const u64 s_F64QuietNanBits = 0x7ff8000000000000u;

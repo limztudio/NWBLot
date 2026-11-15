@@ -17,6 +17,10 @@ native{
 
 #include <logger/rgd/decode.adhd.h>
 
+namespace NWB::Tests::Smoke{
+using Log::Rgd::DecodeCrashDumpToText;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,18 +42,10 @@ const StringView s_RgdGarbagePayload = "not a valid radeon gpu detective capture
 
 
 Expected<u8, StringView> ProbeRgdCrashDumpDecode(in StringView path){
-    b8 succeeded = false;
-    StringView errorText = "";
-    native(in path, mut succeeded, mut errorText){
-        const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(path);
-        if(result)
-            succeeded = true;
-        else
-            errorText = result.error();
-    }
-    if(succeeded)
+    const auto result = DecodeCrashDumpToText(path);
+    if(result.has_value())
         return 1u;
-    return MakeUnexpected(errorText);
+    return MakeUnexpected(result.error());
 }
 
 void VerifyRgdFixtureRejectsPayload(in StringView fixturePath, in Span<u8> payload, in StringView cleanupFailureMessage, in StringView expectedError){

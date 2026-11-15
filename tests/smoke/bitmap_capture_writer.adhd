@@ -10,44 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/rhi/command.h>
-#include <core/graphics/rhi/resource.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/presentation_contributor.h>
-#include <core/task/gpu/task_graph.h>
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/refcount_ptr.h>
-
-namespace NWB::Tests::Smoke{
-namespace Format = Core::Format;
-using FormatEnum = Core::Format::Enum;
-using Core::TextureDesc;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const usize s_BitmapPixelOffset = s_BitmapFileHeaderSize + s_BitmapInfoHeaderSize;
 const u32 s_BitmapMaxSignedDimension = 2147483647u;
 const u64 s_BitmapMaxU32Bytes = 4294967295u;
@@ -73,11 +35,11 @@ void WriteBitmapU32LE(in u32 value, in usize offset, mut Vector<u8> destination)
     destination[offset + 3u] = cast<u8>((value >> s_BitmapByte3Shift) & s_BitmapByteMask);
 }
 
-b8 IsBitmapBgraFormat(in FormatEnum format){
+b8 IsBitmapBgraFormat(in Format format){
     return format == Format::BGRA8_UNORM || format == Format::BGRA8_UNORM_SRGB;
 }
 
-b8 IsSupportedFramebufferSdrFormat(in FormatEnum format){
+b8 IsSupportedFramebufferSdrFormat(in Format format){
     return format == Format::RGBA8_UNORM
         || format == Format::RGBA8_UNORM_SRGB
         || format == Format::BGRA8_UNORM
@@ -176,7 +138,7 @@ class BitmapCaptureWriter{
 
     private u32 m_width;
     private u32 m_height;
-    private FormatEnum m_format;
+    private Format m_format;
 }
 
 

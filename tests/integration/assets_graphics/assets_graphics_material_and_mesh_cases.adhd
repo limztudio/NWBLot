@@ -3,6 +3,7 @@
 
 
 #include "suite.adhd"
+#include <impl/assets_material/bind_codegen_constants.adhd>
 #include <tests/common/gtest_macros.adhd>
 
 
@@ -153,16 +154,17 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
 }
 
 void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
-    native{
-        const Array<AStringView, 8u> expectedSymbols = {
-            "NWB_MATERIAL_BIND_INTERFACE_HASH_0", "NWB_MATERIAL_BIND_INTERFACE_HASH_1",
-            "NWB_MATERIAL_BIND_INTERFACE_HASH_2", "NWB_MATERIAL_BIND_INTERFACE_HASH_3",
-            "NWB_MATERIAL_BIND_INTERFACE_HASH_4", "NWB_MATERIAL_BIND_INTERFACE_HASH_5",
-            "NWB_MATERIAL_BIND_INTERFACE_HASH_6", "NWB_MATERIAL_BIND_INTERFACE_HASH_7",
-        };
-        for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
-            EXPECT_EQ(::NWB::Impl::MaterialBindInterfaceHashSymbol(lane), expectedSymbols[lane]);
-    }
+    Array<StringView, 8u> expectedSymbols = Array<StringView, 8u>();
+    expectedSymbols[0u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_0";
+    expectedSymbols[1u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_1";
+    expectedSymbols[2u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_2";
+    expectedSymbols[3u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_3";
+    expectedSymbols[4u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_4";
+    expectedSymbols[5u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_5";
+    expectedSymbols[6u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_6";
+    expectedSymbols[7u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_7";
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
+        EXPECT_EQ(MaterialBindInterfaceHashSymbol(lane), expectedSymbols[lane]);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();

@@ -20,7 +20,6 @@ native{
 #include <core/alloc/general.h>
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
-#include <core/perf/report.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/packet_runtime.h>
 #include <impl/ecs_render/module.adhd.h>
@@ -29,10 +28,8 @@ native{
 #include <global/simplemath.h>
 
 namespace NWB::Tests::Smoke{
-using PerfSessionReport = Core::Perf::SessionReport;
 using PerfMemorySnapshot = Core::Perf::MemorySnapshot;
 namespace MemorySource = Core::Perf::MemorySource;
-using NameTextErrorEnum = NameTextError::Enum;
 
 [[nodiscard]] FOUNDATION_INLINE Expected<Name, NameTextError::Enum> SmokeNameFromText(const AStringView text){
     return Name::FromText(text);
@@ -249,6 +246,9 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type PerfSessionReport = SessionReport;
+type NameTextErrorEnum = NameTextError;
 
 const usize s_CompilerStatisticsProbeCapacity = 1024;
 const u32 s_GatherBenchmarkWarmupFrames = 96u;

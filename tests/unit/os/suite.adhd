@@ -412,18 +412,7 @@ FOUNDATION_INLINE void AppendByteGlobalString(GlobalString& target, const u8 byt
 namespace NWB::Tests::OS{
 using namespace NWB::Core;
 
-using ClipboardAdmissionEnum = NWB::Core::ClipboardAdmission::Enum;
-using ClipboardChannelEnum = NWB::Core::ClipboardChannel::Enum;
-using ClipboardOperationEnum = NWB::Core::ClipboardOperation::Enum;
-using ClipboardPollResultEnum = NWB::Core::ClipboardPollResult::Enum;
-using ClipboardStatusEnum = NWB::Core::ClipboardStatus::Enum;
 
-using TextInputAdmissionEnum = NWB::Core::TextInputAdmission::Enum;
-using TextInputCancelReasonEnum = NWB::Core::TextInputCancelReason::Enum;
-using TextInputChangeCauseEnum = NWB::Core::TextInputChangeCause::Enum;
-using TextInputDeletionBasisEnum = NWB::Core::TextInputDeletionBasis::Enum;
-using TextInputEventKindEnum = NWB::Core::TextInputEventKind::Enum;
-using TextInputPollResultEnum = NWB::Core::TextInputPollResult::Enum;
 
 using __hidden_os_suite_support::GlobalString;
 using __hidden_os_suite_support::SelectionTextInput;
@@ -460,6 +449,19 @@ using __hidden_os_suite_support::ViewGlobalString;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type ClipboardChannelEnum = ClipboardChannel;
+type ClipboardOperationEnum = ClipboardOperation;
+type ClipboardPollResultEnum = ClipboardPollResult;
+type ClipboardStatusEnum = ClipboardStatus;
+type TextInputCancelReasonEnum = TextInputCancelReason;
+type TextInputChangeCauseEnum = TextInputChangeCause;
+type TextInputPollResultEnum = TextInputPollResult;
+
+type ClipboardAdmissionEnum = ClipboardAdmission;
+type TextInputAdmissionEnum = TextInputAdmission;
+type TextInputDeletionBasisEnum = TextInputDeletionBasis;
+type TextInputEventKindEnum = TextInputEventKind;
 
 void VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits(){
     SelectionTextInputContext ctx = SelectionTextInputContext();

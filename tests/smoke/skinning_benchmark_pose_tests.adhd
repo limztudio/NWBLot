@@ -21,9 +21,6 @@ native{
 #include <impl/ecs_skeleton/components.adhd.h>
 #include <core/ecs/entity.h>
 
-namespace NWB::Tests::Smoke{
-using EcsTestWorld = NWB::Tests::EcsTestWorld;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

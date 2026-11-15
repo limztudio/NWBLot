@@ -30,9 +30,6 @@ namespace NWB::Tests::TextureDecodeCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetArena = Core::Assets::AssetArena;
-using ScratchArena = Core::Alloc::ScratchArena;
-using MetascriptDocument = Core::Metascript::Document;
 using Impl::Texture;
 using Impl::TextureCookEntry;
 using Impl::TextureMipLevel;

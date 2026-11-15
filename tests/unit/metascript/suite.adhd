@@ -1776,6 +1776,54 @@ void VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisito
     EXPECT_NE(hdrView.find("guard.release();"), usize.max);
 }
 
+void VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    CompileResult nativeRes = CompileResult(arena.arena);
+    const StringView nativeSrc = "void NativeInEdges(mut Vector<i32> items){\r\n    const usize count = 8u;\r\n    usize sum = 0u;\r\n    native(in items, in count, mut sum){\r\n        sum = items.size() + count;\r\n    }\r\n}\r\n";
+    ASSERT_TRUE(Compile(nativeSrc, "impl/sim/native_in_edges.adhd", arena.arena, nativeRes));
+
+    const StringView hdrView = GeneratedHeaderView(nativeRes);
+    const StringView srcView = GeneratedSourceView(nativeRes);
+    EXPECT_TRUE(hdrView.find("::AddressOf(items)") != usize.max || srcView.find("::AddressOf(items)") != usize.max);
+    EXPECT_TRUE(hdrView.find("const auto& items = *__adhd_native_ptr_0;") != usize.max || srcView.find("const auto& items = *__adhd_native_ptr_0;") != usize.max);
+    EXPECT_EQ(hdrView.find("::AddressOf(count)"), usize.max);
+    EXPECT_EQ(srcView.find("::AddressOf(count)"), usize.max);
+
+    CompileResult unknownRes = CompileResult(arena.arena);
+    const StringView unknownSrc = "void UnresolvedLastUse(in Vector<i32> ro){\r\n    Vector<i32> rw;\r\n    UnknownTake(rw, ro);\r\n}\r\n";
+    ASSERT_TRUE(Compile(unknownSrc, "impl/sim/unknown_last_use.adhd", arena.arena, unknownRes));
+    const StringView unkHdr = GeneratedHeaderView(unknownRes);
+    const StringView unkSrc = GeneratedSourceView(unknownRes);
+    EXPECT_TRUE(unkHdr.find("UnknownTake(rw, ro)") != usize.max || unkSrc.find("UnknownTake(rw, ro)") != usize.max);
+    EXPECT_EQ(unkHdr.find("::Move(rw)"), usize.max);
+    EXPECT_EQ(unkSrc.find("::Move(rw)"), usize.max);
+
+    ExpectCompileFails(arena, "void BadParCall(mut Vector<i32> items){\r\n    parallel UnknownMut(items);\r\n}\r\n", "impl/sim/bad_par_unknown_call.adhd");
+    ExpectCompileFails(arena, "void BadParFor(mut Vector<i32> items){\r\n    parallel_for(usize i = 0u; i < 4u; ++i){\r\n        UnknownMut(items);\r\n    }\r\n}\r\n", "impl/sim/bad_par_unknown_for.adhd");
+    const StringView badMemberSrc = "class Box{\r\n    public Vector<i32> items;\r\n}\r\nvoid BadParMember(mut Box box){\r\n    parallel_for(usize i = 0u; i < 4u; ++i){\r\n        UnknownMut(box.items);\r\n    }\r\n}\r\n";
+    ExpectCompileFails(arena, badMemberSrc, "impl/sim/bad_par_unknown_member.adhd");
+    const StringView badThisSrc = "class Holder{\r\n    public Vector<i32> items;\r\n    public void run(){\r\n        parallel_for(usize i = 0u; i < 4u; ++i){\r\n            UnknownMut(this.items);\r\n        }\r\n    }\r\n}\r\n";
+    ExpectCompileFails(arena, badThisSrc, "impl/sim/bad_par_unknown_this.adhd");
+    ExpectCompileFails(arena, "void BadParMethod(mut Vector<i32> items){\r\n    parallel_for(usize i = 0u; i < 4u; ++i){\r\n        items.unknownMutMethod();\r\n    }\r\n}\r\n", "impl/sim/bad_par_unknown_method.adhd");
+
+    CompileResult safeInRes = CompileResult(arena.arena);
+    EXPECT_TRUE(Compile(
+        "void GoodParIn(in Vector<i32> items){\r\n    parallel_for(usize i = 0u; i < 4u; ++i){\r\n        items.unknownConstMethod();\r\n        UnknownRead(items);\r\n    }\r\n}\r\n",
+        "impl/sim/good_par_unknown_in.adhd",
+        arena.arena,
+        safeInRes
+    ));
+
+    CompileResult safeLocalRes = CompileResult(arena.arena);
+    EXPECT_TRUE(Compile(
+        "void GoodParLocal(){\r\n    parallel_for(usize i = 0u; i < 4u; ++i){\r\n        Vector<i32> localVec;\r\n        UnknownMut(localVec);\r\n        localVec.unknownMutMethod();\r\n    }\r\n}\r\n",
+        "impl/sim/good_par_unknown_local.adhd",
+        arena.arena,
+        safeLocalRes
+    ));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1909,8 +1957,8 @@ NWB_ADHD_GTEST(AdhdCompiler, ResolvesCoreAndGlobalExportsShadowingAbstractInterf
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesHandleDerefRhiAndAssetExports, VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports)
 NWB_ADHD_GTEST(AdhdCompiler, QualifiesCrossNamespaceImportsRespectingShadowing, VerifyAdhdCompiler_QualifiesCrossNamespaceImportsRespectingShadowing)
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors, VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors)
+NWB_ADHD_GTEST(AdhdCompiler, EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety, VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

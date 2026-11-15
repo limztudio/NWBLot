@@ -34,11 +34,10 @@ namespace LoggerCrashSymbolicateDetail{
 class CrashReportComposer final{
 public:
     template<typename ArenaT>
-    [[nodiscard]] static AString<ArenaT> BuildOrderedCrashReport(const CrashPackageSummary& summary, AString<ArenaT>&& detailReport){
+    [[nodiscard]] static AString<ArenaT> BuildOrderedCrashReport(const CrashPackageSummary& summary, AString<ArenaT> detailReport){
         ArenaT& outArena = detailReport.get_allocator().arena();
-        const AString<ArenaT> sourceReport(Move(detailReport));
         AString<ArenaT> ordered(outArena);
-        BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, AStringView(sourceReport), ordered);
+        BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, AStringView(detailReport), ordered);
         return ordered;
     }
 };

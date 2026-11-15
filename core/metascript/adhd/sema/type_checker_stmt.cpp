@@ -431,7 +431,8 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     }
     case StmtKind::NativeBlock:{
         for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
-            const NativeBinding& binding = stmt.nativeBindings[i];
+            NativeBinding& binding = stmt.nativeBindings[i];
+            binding.needsConstShadow = false;
             for(usize j = 0u; j < i; ++j){
                 if(!binding.aliasName.empty() && stmt.nativeBindings[j].aliasName == binding.aliasName){
                     reportError(errors, binding.span, "duplicate binding name in 'native(...)' capture list");
@@ -444,6 +445,15 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                     binding.sourceExpr->isMutArg = true;
                 if(!checkExpr(ownerClass, scope, binding.mode == ParamPassingMode::Mut, method, *binding.sourceExpr, errors))
                     ok = false;
+                if(
+                    binding.mode == ParamPassingMode::In
+                    && binding.sourceExpr->kind == ExprKind::Identifier
+                    && binding.sourceExpr->text == binding.aliasName
+                    && !binding.sourceExpr->derefNotNull
+                    && FindScopedVar(scope, binding.sourceExpr->text) != nullptr
+                    && !isReceiverConst(ownerClass, method, *binding.sourceExpr, scope)
+                )
+                    binding.needsConstShadow = true;
             }
         }
         break;

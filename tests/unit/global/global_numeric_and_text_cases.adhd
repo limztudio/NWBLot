@@ -756,11 +756,11 @@ void VerifyGlobal_TextUtilitiesRejectNullShortAndOverflowingInput(){
 
     native{
         EXPECT_TRUE(SafeStringView(static_cast<const char*>(nullptr)).empty());
-        EXPECT_TRUE(CanRepresentU64<u32>(Limit<u32>::s_Max));
-        EXPECT_FALSE(CanRepresentU64<u32>(static_cast<u64>(Limit<u32>::s_Max) + 1u));
-        EXPECT_TRUE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max)));
-        EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
     }
+    EXPECT_TRUE(CanRepresentU64<u32>(u32.max));
+    EXPECT_FALSE(CanRepresentU64<u32>(cast<u64>(u32.max) + 1u));
+    EXPECT_TRUE(CanRepresentU64<i64>(cast<u64>(i64.max)));
+    EXPECT_FALSE(CanRepresentU64<i64>(cast<u64>(i64.max) + 1u));
 }
 
 void VerifyGlobal_CallAndOptionTextRejectInvalidBoundaries(){

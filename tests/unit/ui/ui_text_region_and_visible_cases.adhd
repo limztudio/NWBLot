@@ -1165,7 +1165,8 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             ASSERT_TRUE(self.finishPanel());
             const DrawSnapshot actual = self.m_paint.freeze();
             ASSERT_TRUE(self.m_context.commitFrame(generation));
-            EXPECT_FLOAT_EQ(state.placement.bounds.height, Max(32.0f, measured.value().height + 8.0f + 8.0f));
+            const f32 expectedHeight = Max(32.0f, measured.value().height + 8.0f + 8.0f);
+            EXPECT_FLOAT_EQ(state.placement.bounds.height, expectedHeight);
             EXPECT_FLOAT_EQ(state.placement.scroll, 0.0f);
             const f32 inkTop = state.placement.textOrigin.y + measured.value().y;
             const f32 contentBottom = state.placement.content.y + state.placement.content.height;
@@ -1180,7 +1181,8 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             ASSERT_TRUE(expectedCoverage.has_value());
             ASSERT_TRUE(actualCoverage.has_value());
             ASSERT_GT(expectedCoverage.value(), 0.0);
-            EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), Max(0.00001, expectedCoverage.value() * 0.000002));
+            const f64 coverageTolerance = Max(0.00001, expectedCoverage.value() * 0.000002);
+            EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), coverageTolerance);
         }
     }
 }

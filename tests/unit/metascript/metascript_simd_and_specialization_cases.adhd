@@ -46,6 +46,7 @@ namespace Tests::Metascript{
 class TransitiveSplitResolver final : public Core::Metascript::IIncludeResolver{
 public:
     [[nodiscard]] virtual b8 resolveInclude(MStringView includePath, b8 isSystem, MetaArena& rArena, MString& outResolvedKey, MString& outContent)override;
+    [[nodiscard]] virtual MStringView resolveIncludeNamespace(MStringView resolvedKey)const noexcept override;
     virtual void popIncludeScope()noexcept override;
 
 
@@ -883,6 +884,42 @@ void VerifyAdhdCompiler_KeepsDynamicLaneIndicesDynamicWhileFoldingConstantIndice
 }
 
 
+void VerifyAdhdCompiler_VisitorContractsRejectMutableOrWrongCallbacks(){
+    AdhdTestArena arena = AdhdTestArena();
+    CompileResult result = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("b8 Read(in MetascriptValue value){ return value.isNull(); }\r\nb8 Valid(in MetascriptDocument frozen, mut MetascriptDocument live, in Func<b8(in MetascriptValue)> callback){\r\n    const auto first = lambda[](in MetascriptValue value) -> b8{ return value.isNull(); };\r\n    const auto second = first;\r\n    const b8 a = frozen.visitVariable(\"x\", second);\r\n    const b8 b = frozen.visitVariable(\"x\", callback);\r\n    const b8 c = frozen.visitVariable(\"x\", Read);\r\n    auto fnAlias = Read;\r\n    fnAlias = fnAlias;\r\n    const auto fnAlias2 = fnAlias;\r\n    const b8 e = frozen.visitVariable(\"x\", fnAlias2);\r\n    const b8 d = live.visitVariable(\"x\", lambda[](mut MetascriptValue value) -> b8{ value.makeMap(); return true; });\r\n    const b8 g = frozen.visitVariable(\"x\", lambda[](in auto value) -> b8{ return true; });\r\n    const b8 h = live.visitVariable(\"x\", lambda[](mut auto value) -> b8{ value.makeMap(); return true; });\r\n    return a || b || c || d || e || g || h;\r\n}\r\nb8 Map(in MetascriptValue value){return value.forEachMapEntry(lambda[](in auto key, in auto entry)->b8{return true;});}\r\n", "impl/visitor_valid.adhd", arena.arena, result));
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){ return d.visitVariable(\"x\", lambda[](mut MetascriptValue v) -> b8{ v.makeMap(); return true; }); }\r\n", "impl/visitor_const_direct.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "in MetascriptDocument Read(in MetascriptDocument d){return d;} b8 Bad(in MetascriptDocument d){return Read(d).visitVariable(\"x\", lambda[](mut MetascriptValue v)->b8{v.makeMap(); return true;});}", "impl/visitor_const_return.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "class Box{public in MetascriptDocument document; public Box(in MetascriptDocument d){this.document = d;}} b8 Bad(in Box box){return box.document.visitVariable(\"x\", lambda[](mut MetascriptValue v)->b8{v.makeMap(); return true;});}", "impl/visitor_const_member.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){ const auto first = lambda[](mut MetascriptValue v) -> b8{ v.makeMap(); return true; }; const auto second = first; return d.visitVariable(\"x\", second); }\r\n", "impl/visitor_const_alias.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d, in Func<b8(mut MetascriptValue)> cb){ return d.visitVariable(\"x\", cb); }\r\n", "impl/visitor_const_func.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(mut MetascriptValue v){ return v.visitField(\"x\", lambda[](mut MetascriptValue x) -> b8{ x.makeMap(); return true; }); }\r\n", "impl/visitor_field_mut.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptValue v){ return v.forEachMapEntry(lambda[](mut StringView k, in MetascriptValue x) -> b8{ return true; }); }\r\n", "impl/visitor_map_key_mut.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptValue v){ return v.forEachMapEntry(lambda[](in StringView k, mut MetascriptValue x) -> b8{ return true; }); }\r\n", "impl/visitor_map_value_mut.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){ return d.visitVariable(\"x\", lambda[](in u32 x) -> b8{ return true; }); }\r\n", "impl/visitor_wrong_type.adhd", "visitor parameter has the wrong type");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){ return d.visitVariable(\"x\", lambda[]() -> b8{ return true; }); }\r\n", "impl/visitor_wrong_arity.adhd", "visitor has the wrong number of parameters");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){ return d.visitVariable(\"x\", 7u); }\r\n", "impl/visitor_not_callable.adhd", "visitor must have a known callable signature");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){ return d.visitVariable(\"x\", lambda[](in MetascriptValue v) -> String{ return \"x\"; }); }\r\n", "impl/visitor_arena_return.adhd", "visitor return value cannot require a caller arena");
+    ExpectCompileFailsWithMessage(arena, "b8 Read(in MetascriptValue v){return true;} b8 Read(in u32 v){return true;} b8 Bad(in MetascriptDocument d){return d.visitVariable(\"x\", Read);}\r\n", "impl/visitor_overloaded.adhd", "visitor must have an unambiguous callable signature");
+    ExpectCompileFailsWithMessage(arena, "type MutVisitor = Func<b8(mut MetascriptValue)>; b8 Bad(in MetascriptDocument d, in MutVisitor v){return d.visitVariable(\"x\", v);}\r\n", "impl/visitor_func_alias.adhd", "visitor cannot mutate a read-only value");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(mut MetascriptValue v, in Func<b8(mut MetascriptValue)> cb){return v.visitField(\"x\", cb);}\r\n", "impl/visitor_field_func.adhd", "visitor cannot mutate a read-only value");
+    CompileResult declared = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("b8 Read(in MetascriptValue v);\r\nb8 Read(in MetascriptValue v){return true;}\r\nb8 Probe(in MetascriptDocument d){return d.visitVariable(\"x\", Read);}", "impl/visitor_declared.adhd", arena.arena, declared));
+    TransitiveSplitResolver resolver = TransitiveSplitResolver();
+    CompileResult imported = CompileResult(arena.arena);
+    ASSERT_TRUE(CompileWithResolver("#include \"visitor_decl.adhd\"\r\nb8 Probe(in MetascriptDocument d){return d.visitVariable(\"x\", ForeignVisit);}", "impl/visitor_import.adhd", resolver, arena.arena, imported));
+    EXPECT_NE(GeneratedHeaderView(imported).find("::NWB::MockVisitor::ForeignVisit"), usize.max);
+    ExpectCompileFailsWithMessage(arena, "class MetascriptValue{} b8 Bad(in MetascriptDocument d){return d.visitVariable(\"x\", lambda[](in MetascriptValue v)->b8{return true;});}", "impl/visitor_shadowed_value.adhd", "visitor parameter has the wrong type");
+    ExpectCompileFailsWithMessage(arena, "b8 Change(mut MetascriptValue v){v.makeMap(); return true;} b8 Bad(in MetascriptDocument d){const auto cb = Change; const auto alias = cb; return d.visitVariable(\"x\", alias);}", "impl/visitor_function_alias.adhd", "visitor cannot mutate a read-only value");
+    CompileResult importedAlias = CompileResult(arena.arena);
+    ASSERT_TRUE(CompileWithResolver("#include \"visitor_decl.adhd\"\r\nb8 Probe(in MetascriptDocument d){const auto cb = ForeignVisit; return d.visitVariable(\"x\", cb);}", "impl/visitor_import_alias.adhd", resolver, arena.arena, importedAlias));
+    EXPECT_NE(GeneratedSourceView(importedAlias).find("::NWB::MockVisitor::ForeignVisit"), usize.max);
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d, in Func<String(in MetascriptValue)> cb){return d.visitVariable(\"x\", cb);}", "impl/visitor_func_arena.adhd", "visitor return value cannot require a caller arena");
+    ExpectCompileFailsWithMessage(arena, "b8 Bad(in MetascriptDocument d){return d.visitVariable(\"x\", lambda[](mut auto v)->b8{return true;});}", "impl/visitor_generic_mut.adhd", "visitor cannot mutate a read-only value");
+    CompileResult shadowed = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("class MetascriptDocument{public b8 visitVariable(in u32 x)const{return true;}} b8 Ok(in MetascriptDocument d){return d.visitVariable(7u);}", "impl/visitor_shadowed.adhd", arena.arena, shadowed));
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -906,6 +943,11 @@ namespace Tests::Metascript{
 
 
 b8 TransitiveSplitResolver::resolveInclude(const MStringView includePath, const b8, MetaArena& rArena, MString& outResolvedKey, MString& outContent){
+    if(includePath == "visitor_decl.adhd"){
+        outResolvedKey = MString("/abs/visitor_decl.adhd", rArena);
+        outContent = MString("b8 ForeignVisit(in MetascriptValue value){return value.isNull();}", rArena);
+        return true;
+    }
     if(includePath == "split_decl.adhd"){
         outResolvedKey = MString("/abs/split_decl.adhd", rArena);
         static constexpr MStringView s_DeclCode =
@@ -926,6 +968,12 @@ b8 TransitiveSplitResolver::resolveInclude(const MStringView includePath, const 
         return true;
     }
     return false;
+}
+
+MStringView TransitiveSplitResolver::resolveIncludeNamespace(const MStringView resolvedKey)const noexcept{
+    if(resolvedKey == "/abs/visitor_decl.adhd")
+        return "NWB::MockVisitor";
+    return {};
 }
 
 void TransitiveSplitResolver::popIncludeScope()noexcept{
@@ -954,6 +1002,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ADHD_GTEST(AdhdCompiler, VisitorContractsRejectMutableOrWrongCallbacks, VerifyAdhdCompiler_VisitorContractsRejectMutableOrWrongCallbacks)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget, VerifyAdhdCompiler_RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsMismatchedTemplatedInterfaceOverrideSignature, VerifyAdhdCompiler_RejectsMismatchedTemplatedInterfaceOverrideSignature)
 NWB_ADHD_GTEST(AdhdCompiler, HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDuplicateCallableSignatures, VerifyAdhdCompiler_HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDuplicateCallableSignatures)

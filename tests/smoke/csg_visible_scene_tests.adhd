@@ -2,33 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_csg/module.adhd>
+#include <impl/ecs_scene/module.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/ecs_test_world.adhd>
 #include "csg_visible_scene.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-namespace NWB::Tests::Smoke{
-using EcsTestWorld = NWB::Tests::EcsTestWorld;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,12 +60,19 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
         }
     }
     ASSERT_TRUE(hadBeforeComponents);
+    const VectorSingle markerRotation = VectorSingle(0.0f, 0.25f, 0.0f, 1.0f);
+    SetSmokeEntityRotationIfPresent(missingReceiver, markerRotation, testWorld.world);
+    SetSmokeEntityRotationIfPresent(remainingReceiver, markerRotation, testWorld.world);
 
+    b8 markerApplied = false;
     b8 hadAfterComponents = false;
     f32x4 newRotation = f32x4();
     f32x3x4 newCutterTransform = f32x3x4();
-    native(mut testWorld, mut scene, in remainingReceiver, in remainingCutter, mut hadAfterComponents, mut newRotation, mut newCutterTransform){
+    native(mut testWorld, mut scene, in remainingReceiver, in remainingCutter, mut markerApplied, mut hadAfterComponents, mut newRotation, mut newCutterTransform){
         auto& world = testWorld.world;
+        const auto* markerTransform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(remainingReceiver);
+        if(markerTransform)
+            markerApplied = markerTransform->rotation.x == 0.0f && markerTransform->rotation.y == 0.25f && markerTransform->rotation.z == 0.0f && markerTransform->rotation.w == 1.0f;
         scene.update(1.0f, world);
         const auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(remainingReceiver);
         const auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(remainingCutter);
@@ -97,6 +82,7 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
             newCutterTransform = cutter->shapeToWorld;
         }
     }
+    ASSERT_TRUE(markerApplied);
     ASSERT_TRUE(hadAfterComponents);
     EXPECT_NE(newRotation.y, oldRotation.y);
     const b8 cutterUnchanged = EqualF32x4Bits(LoadFloat(newCutterTransform.rows[0u]), LoadFloat(oldCutterTransform.rows[0u]))
@@ -105,6 +91,17 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
     EXPECT_FALSE(cutterUnchanged);
 }
 
+void VerifyCsgVisibleSceneMissingComponentsAreIgnored(){
+    EcsTestWorld testWorld = EcsTestWorld();
+    const EntityID entity = testWorld.world.createEntity().id();
+    ASSERT_TRUE(entity.valid());
+    SetSmokeEntityRotationIfPresent(entity, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), testWorld.world);
+    ApplyCsgVisibleCubeRotation(entity, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), testWorld.world);
+    ApplyCsgVisibleCutterTransform(entity, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), testWorld.world);
+    EXPECT_TRUE(testWorld.world.alive(entity));
+}
+
+NWB_ADHD_GTEST(CsgVisibleScene, MissingComponentsAreIgnored, VerifyCsgVisibleSceneMissingComponentsAreIgnored)
 NWB_ADHD_GTEST(CsgVisibleScene, MissingReceiverDoesNotStopOtherPoseUpdates, VerifyCsgVisibleSceneMissingReceiverPoseUpdates)
 
 

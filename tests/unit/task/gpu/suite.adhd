@@ -145,8 +145,8 @@ Expected<ExternalFinalReadPair> AddExternalFinalReadPair(
     finalizingDesc.setIdentity(Name(s_GpuCaseTaskGraphExternalFinalTerminalReader));
     finalizingDesc.setMarkerLabel("External Final Terminal Reader");
     finalizingDesc.setScheduling(finalizingScheduling);
+    Array<GpuTaskId, 1> deps = Array<GpuTaskId, 1>();
     if(finalizerDependsOnEarlier){
-        Array<GpuTaskId, 1> deps = Array<GpuTaskId, 1>();
         deps[0u] = earlierReader;
         finalizingDesc.setDependencies(deps);
     }

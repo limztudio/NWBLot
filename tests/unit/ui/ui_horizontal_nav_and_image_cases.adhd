@@ -574,11 +574,9 @@ namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
 namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
 namespace TextureAlphaMode = ::TextureAlphaMode;
 namespace AssetTextureDimension = ::TextureDimension;
-using TextureDimensionEnum = ::TextureDimension::Enum;
 namespace TexturePayloadFormat = ::TexturePayloadFormat;
 namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
 namespace CoreKey = ::NWB::Core::Key;
-using CoreKeyEnum = ::NWB::Core::Key::Enum;
 
 using ::NWB::Impl::Ui::LoadImageSource;
 using ::NWB::Impl::Ui::MakeImageSource;
@@ -689,6 +687,9 @@ FOUNDATION_INLINE void UiImageSourceExpectCopy(const Texture& original, const Sh
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type TextureDimensionEnum = TexturePayloadDimension;
+type CoreKeyEnum = Key;
 
 const StringView s_UiGpuVersionedImagePath = "tests/ui/versioned_gpu_image";
 const StringView s_UiGpuOverflowImagePath = "tests/ui/overflow_gpu_image";
@@ -1728,7 +1729,8 @@ void VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndI
         EXPECT_EQ(UiReadImageTexture(source).payloadBytes().size(), 144u);
         EXPECT_EQ(UiReadImageTexture(source).width(), 9u);
     }
-    EXPECT_EQ(UiReadImageIdentity(source).name(), s_UiImageSourceTempExpectedName);
+    const auto sourceIdentity = UiReadImageIdentity(source);
+    EXPECT_EQ(sourceIdentity.name(), s_UiImageSourceTempExpectedName);
     EXPECT_EQ(UiReadImageTexture(source).height(), 5u);
     EXPECT_EQ(UiReadImageTexture(source).alphaMode(), TextureAlphaMode::EmbeddedLdr);
     ASSERT_EQ(UiReadImageTexture(source).payloadBytes().size(), 144u);
@@ -1871,7 +1873,8 @@ void VerifyUiImageSourceTests_RejectedSamePathReplacementPreservesPreviouslyAcce
     self.installTransportVariant(texture, 0u);
     EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
     EXPECT_EQ(UiReadImageGeneration(accepted), generation);
-    EXPECT_EQ(UiReadImageIdentity(accepted).name(), texture.virtualPath());
+    const auto acceptedIdentity = UiReadImageIdentity(accepted);
+    EXPECT_EQ(acceptedIdentity.name(), texture.virtualPath());
     ASSERT_EQ(UiReadImageTexture(accepted).payloadBytes().size(), 144u);
     EXPECT_EQ(UiReadImageTexture(accepted).payloadBytes()[143u], cast<u8>(37u + 143u * 17u));
     UiImageSourceTextureDescription replacement = UiImageSourceTextureDescription();

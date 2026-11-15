@@ -17,6 +17,7 @@ native{
 
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
+#include <impl/assets/graphics/refraction/diagnostics_layout.h>
 #include <impl/ecs_mesh/system.adhd.h>
 #include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
 #include <impl/ecs_render/mesh/runtime_mesh_pruning.adhd.h>
@@ -662,7 +663,8 @@ void VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues(
         const ReflectionHistoryPlan plan = state.plan(Stamp(), settings, 100u + index);
         const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(plan, true);
         EXPECT_EQ(outcome.sampleIndex, index);
-        EXPECT_EQ(outcome.sampleCount, Min(index + 1u, 8u));
+        const u32 expectedSampleCount = Min(index + 1u, 8u);
+        EXPECT_EQ(outcome.sampleCount, expectedSampleCount);
         EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
         ReflectionHistory_Accept(plan, state);
     }

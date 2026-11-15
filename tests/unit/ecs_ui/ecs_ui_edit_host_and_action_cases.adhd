@@ -105,7 +105,6 @@ using DelayedClipboard = __hidden_ui_edit_clipboard_tests::DelayedClipboard;
 using DelayedClipboardRig = __hidden_ui_edit_clipboard_tests::DelayedClipboardRig;
 using FakeClipboardRig = __hidden_ui_edit_clipboard_tests::FakeClipboardRig;
 using TestArena = NWB::Tests::TestArena<>;
-using ClipboardChannelEnum = NWB::Core::ClipboardChannel::Enum;
 using UiConfigurableEditInputTests = __hidden_ui_configurable_edit_input_tests::UiConfigurableEditInputTests;
 using UiClipboardPublicationResult = NWB::Impl::UiClipboardPublicationResult;
 using UiClipboardPublications = NWB::Impl::UiClipboardPublications;
@@ -140,6 +139,8 @@ inline constexpr usize s_TextInputMaxEvents = NWB::Core::s_TextInputMaxEvents;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type ClipboardChannelEnum = ClipboardChannel;
 
 UiTextEditOwner MakeHostEditOwner(in u64 widgetValue, in u64 declarationGeneration, in u64 modelGeneration){
     UiTextEditOwner owner = UiTextEditOwner();

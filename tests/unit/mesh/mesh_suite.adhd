@@ -152,6 +152,16 @@ template<typename ScratchT, typename VertexVectorT>
     return RebuildTangentFrames(scratchArena, indices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size()));
 }
 
+template<typename ScratchT, typename VertexVectorT>
+[[nodiscard]] FOUNDATION_INLINE Expected<TangentFrameRebuildResult> RebuildTangentFramesForVerticesWithEpsilon(
+    ScratchT&& scratchArena,
+    const Span<const u32> indices,
+    VertexVectorT& vertices,
+    const f64 minimumTriangleAreaLengthSquared
+){
+    return RebuildTangentFrames(scratchArena, indices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size()), minimumTriangleAreaLengthSquared);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -926,6 +936,85 @@ void VerifyMesh_RejectsDegenerateTangentFrameTriangle(){
     EXPECT_FALSE(RebuildTangentFramesForVertices(scratchArena, s_TriangleIndices, vertices).has_value());
 }
 
+void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
+    ScratchArena scratchArena(s_TestArena);
+
+    // Default 3-arg epsilon still rejects triangles at the 1e-8 area-normal length-squared boundary.
+    Vector<TangentFrameRebuildVertex> cmTriangle = Vector<TangentFrameRebuildVertex>();
+    cmTriangle.reserve(3u);
+    cmTriangle.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    cmTriangle.push_back(MakeTangentVertex(0.01f, 0.0f, 0.0f, 1.0f, 0.0f));
+    cmTriangle.push_back(MakeTangentVertex(0.0f, 0.01f, 0.0f, 0.0f, 1.0f));
+    EXPECT_FALSE(RebuildTangentFramesForVertices(scratchArena, s_TriangleIndices, cmTriangle).has_value());
+
+    // Explicit small epsilon preserves unit normals, tangents, and handedness on tiny meshes.
+    Vector<TangentFrameRebuildVertex> rightHanded = Vector<TangentFrameRebuildVertex>();
+    rightHanded.reserve(3u);
+    rightHanded.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    rightHanded.push_back(MakeTangentVertex(0.0001f, 0.0f, 0.0f, 1.0f, 0.0f));
+    rightHanded.push_back(MakeTangentVertex(0.0f, 0.0001f, 0.0f, 0.0f, 1.0f));
+    const Expected<TangentFrameRebuildResult> rightResult = RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_TriangleIndices, rightHanded, 0.0);
+    ASSERT_TRUE(rightResult.has_value());
+    EXPECT_EQ(rightResult.value().degenerateUvTriangleCount, 0u);
+    EXPECT_EQ(rightResult.value().fallbackTangentVertexCount, 0u);
+    for(in TangentFrameRebuildVertex vertex : rightHanded){
+        const VectorSingle normal = VectorSingle(vertex.normal.x, vertex.normal.y, vertex.normal.z, vertex.normal.w);
+        const VectorSingle tangent = VectorSingle(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+        EXPECT_TRUE(NearlyEqual3(normal, 0.0f, 0.0f, 1.0f));
+        EXPECT_TRUE(NearlyEqual3(tangent, 1.0f, 0.0f, 0.0f));
+        EXPECT_TRUE(NearlyEqual(tangent.w, 1.0f));
+    }
+
+    Vector<TangentFrameRebuildVertex> leftHanded = Vector<TangentFrameRebuildVertex>();
+    leftHanded.reserve(3u);
+    leftHanded.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    leftHanded.push_back(MakeTangentVertex(0.0001f, 0.0f, 0.0f, 0.0f, 1.0f));
+    leftHanded.push_back(MakeTangentVertex(0.0f, 0.0001f, 0.0f, 1.0f, 0.0f));
+    const Expected<TangentFrameRebuildResult> leftResult = RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_TriangleIndices, leftHanded, 0.0);
+    ASSERT_TRUE(leftResult.has_value());
+    EXPECT_EQ(leftResult.value().degenerateUvTriangleCount, 0u);
+    EXPECT_EQ(leftResult.value().fallbackTangentVertexCount, 0u);
+    for(in TangentFrameRebuildVertex vertex : leftHanded){
+        const VectorSingle normal = VectorSingle(vertex.normal.x, vertex.normal.y, vertex.normal.z, vertex.normal.w);
+        const VectorSingle tangent = VectorSingle(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+        EXPECT_TRUE(NearlyEqual3(normal, 0.0f, 0.0f, 1.0f));
+        EXPECT_TRUE(NearlyEqual3(tangent, 0.0f, 1.0f, 0.0f));
+        EXPECT_TRUE(NearlyEqual(tangent.w, -1.0f));
+    }
+
+    Vector<TangentFrameRebuildVertex> smallFallback = Vector<TangentFrameRebuildVertex>();
+    smallFallback.reserve(4u);
+    smallFallback.push_back(MakeTangentVertex(-0.0001f, -0.0001f, 0.0f, 0.0f, 0.0f));
+    smallFallback.push_back(MakeTangentVertex(0.0001f, -0.0001f, 0.0f, 0.0f, 0.0f));
+    smallFallback.push_back(MakeTangentVertex(0.0001f, 0.0001f, 0.0f, 0.0f, 0.0f));
+    smallFallback.push_back(MakeTangentVertex(-0.0001f, 0.0001f, 0.0f, 0.0f, 0.0f));
+    const Expected<TangentFrameRebuildResult> fallbackResult = RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_QuadTriangleIndices, smallFallback, 0.0);
+    ASSERT_TRUE(fallbackResult.has_value());
+    EXPECT_EQ(fallbackResult.value().degenerateUvTriangleCount, 2u);
+    EXPECT_EQ(fallbackResult.value().fallbackTangentVertexCount, smallFallback.size());
+}
+
+void VerifyMesh_RebuildTangentFramesRejectsInvalidEpsilonAndSubThresholdTriangles(){
+    ScratchArena scratchArena(s_TestArena);
+    Vector<TangentFrameRebuildVertex> vertices = Vector<TangentFrameRebuildVertex>();
+    vertices.reserve(3u);
+    vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    vertices.push_back(MakeTangentVertex(0.0001f, 0.0f, 0.0f, 1.0f, 0.0f));
+    vertices.push_back(MakeTangentVertex(0.0f, 0.0001f, 0.0f, 0.0f, 1.0f));
+
+    const f64 nanEpsilon = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
+    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_TriangleIndices, vertices, -1e-12).has_value());
+    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_TriangleIndices, vertices, nanEpsilon).has_value());
+    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_TriangleIndices, vertices, 1e-12).has_value());
+
+    Vector<TangentFrameRebuildVertex> zeroArea = Vector<TangentFrameRebuildVertex>();
+    zeroArea.reserve(3u);
+    zeroArea.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    zeroArea.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
+    zeroArea.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena, s_TriangleIndices, zeroArea, 0.0).has_value());
+}
+
 NWB_ADHD_GTEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence, VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags, VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsChangedFlags)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRecovers, VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceAndRecovers)
@@ -982,6 +1071,8 @@ TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers)
 NWB_ADHD_GTEST(SkinningDeformation, MissingResourceRejectsWithoutCandidateOrArenaPublication, VerifySkinningDeformation_MissingResourceRejectsWithoutCandidateOrArenaPublication)
 NWB_ADHD_GTEST(Mesh, DegenerateUvsUseStableTangentFallback, VerifyMesh_DegenerateUvsUseStableTangentFallback)
 NWB_ADHD_GTEST(Mesh, RejectsDegenerateTangentFrameTriangle, VerifyMesh_RejectsDegenerateTangentFrameTriangle)
+NWB_ADHD_GTEST(Mesh, RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame, VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame)
+NWB_ADHD_GTEST(Mesh, RebuildTangentFramesRejectsInvalidEpsilonAndSubThresholdTriangles, VerifyMesh_RebuildTangentFramesRejectsInvalidEpsilonAndSubThresholdTriangles)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

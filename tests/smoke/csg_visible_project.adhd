@@ -40,8 +40,6 @@ native{
 #include <global/timer.h>
 
 namespace NWB::Tests::Smoke{
-using CsgVisibleMaterialRef = SmokeMaterialRef;
-using Core::Perf::CaptureOptions;
 
 [[nodiscard]] FOUNDATION_INLINE FramebufferCaptureOptions MakeCsgTemporalCaptureOptions(u64& nextCaptureFrame)noexcept{
     return FramebufferCaptureOptions{
@@ -63,21 +61,7 @@ inline constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 inline constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 inline constexpr f32 s_CubeRotationSpeed = 0.25f;
 inline constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
-inline constexpr CsgVisibleMaterialRef s_SolidMaterial{"project/smoke/csg_visible/materials/solid"};
-inline constexpr CsgVisibleMaterialRef s_IndirectMaterial{"project/smoke/csg_visible/materials/indirect"};
-inline constexpr CsgVisibleMaterialRef s_DirectMaterial{"project/smoke/csg_visible/materials/direct"};
-inline constexpr CsgVisibleMaterialRef s_NormalMaterial{"project/smoke/csg_visible/materials/normal"};
-inline constexpr CsgVisibleMaterialRef s_PositionMaterial{"project/smoke/csg_visible/materials/position"};
-inline constexpr CsgVisibleMaterialRef s_CapStateMaterial{"project/smoke/csg_visible/materials/cap_state"};
-inline constexpr CsgVisibleMaterialRef s_IntervalStateMaterial{"project/smoke/csg_visible/materials/interval_state"};
-inline constexpr CsgVisibleMaterialRef s_EventStateMaterial{"project/smoke/csg_visible/materials/event_state"};
-inline constexpr CsgVisibleMaterialRef s_EventDataMaterial{"project/smoke/csg_visible/materials/event_data"};
-inline constexpr CsgVisibleMaterialRef s_EventOrderMaterial{"project/smoke/csg_visible/materials/event_order"};
-inline constexpr CsgVisibleMaterialRef s_SpanStateMaterial{"project/smoke/csg_visible/materials/span_state"};
-inline constexpr u32 s_TemporalSampleCount = 32u;
-inline constexpr u64 s_TemporalMinimumFrame = 360u;
-inline constexpr f64 s_TemporalWarmupSeconds = 30.0;
-inline constexpr u64 s_TemporalFrameInterval = 8u;
+
 
 [[nodiscard]] FOUNDATION_INLINE AStringView CsgVisibleFpsLabel()noexcept{
     return "CsgVisibleSmokeProject";
@@ -113,6 +97,28 @@ inline constexpr u64 s_TemporalFrameInterval = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type CsgVisibleMaterialRef = SmokeMaterialRef;
+
+const CsgVisibleMaterialRef s_SolidMaterial = "project/smoke/csg_visible/materials/solid";
+const CsgVisibleMaterialRef s_IndirectMaterial = "project/smoke/csg_visible/materials/indirect";
+const CsgVisibleMaterialRef s_DirectMaterial = "project/smoke/csg_visible/materials/direct";
+const CsgVisibleMaterialRef s_NormalMaterial = "project/smoke/csg_visible/materials/normal";
+const CsgVisibleMaterialRef s_PositionMaterial = "project/smoke/csg_visible/materials/position";
+const CsgVisibleMaterialRef s_CapStateMaterial = "project/smoke/csg_visible/materials/cap_state";
+const CsgVisibleMaterialRef s_IntervalStateMaterial = "project/smoke/csg_visible/materials/interval_state";
+const CsgVisibleMaterialRef s_EventStateMaterial = "project/smoke/csg_visible/materials/event_state";
+const CsgVisibleMaterialRef s_EventDataMaterial = "project/smoke/csg_visible/materials/event_data";
+const CsgVisibleMaterialRef s_EventOrderMaterial = "project/smoke/csg_visible/materials/event_order";
+const CsgVisibleMaterialRef s_SpanStateMaterial = "project/smoke/csg_visible/materials/span_state";
+const u32 s_TemporalSampleCount = 32u;
+const u64 s_TemporalMinimumFrame = 360u;
+const f64 s_TemporalWarmupSeconds = 30.0;
+const u64 s_TemporalFrameInterval = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [arena]
 class CsgVisibleSmokeProject : IProjectEntryCallbacks{
     public CsgVisibleSmokeProject(mut ProjectRuntimeContext context){
@@ -127,15 +133,13 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
-        native(mut context = this.m_context){
-            if(!RunCsgRayRuntimeProbe(context))
-                return false;
-        }
+        if(!RunCsgRayRuntimeProbe(this.m_context).has_value())
+            return false;
         this.m_temporalEnabled = ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
         const b8 overlapping = this.m_temporalEnabled && ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;
         if(this.m_temporalEnabled){
-            this.m_context.setPerfCapture(CaptureOptions::GpuTimingOnly());
+            this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
             const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
             const Expected<String> viewText = ReadSmokeEnvironmentString("NWB_CSG_GI_TEMPORAL_VIEW");
             if(!output.has_value() || !viewText.has_value())
@@ -207,14 +211,16 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
         }
 
         EntityID cameraEntity = s_InvalidEntityId;
-        EntityID directionalLight = s_InvalidEntityId;
-        native(mut world = this.m_world, mut cameraEntity, mut directionalLight){
+        native(mut world = this.m_world, mut cameraEntity){
             auto activeCameraEntity = world->createEntity();
             auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
             activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(*world, Float4(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth));
             cameraEntity = activeCamera.camera;
-            directionalLight = Impl::Scene::CreateDirectionalLightEntity(*world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
         }
+        const EntityID directionalLight = CreateSmokeDirectionalLight(
+            s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f,
+            f32x4(1.0f, 0.96f, 0.88f, 0.0f), s_DefaultDirectionalLightIntensity, SmokeWorldRef(this.m_world)
+        );
         this.m_scene.create(material, overlapping, cameraEntity, directionalLight, SmokeWorldRef(this.m_world));
         [essential] info("CsgVisibleSmokeProject: visible CSG interval receiver scene created");
         return true;

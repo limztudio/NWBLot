@@ -492,9 +492,7 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     const Path spoolPath = SpoolDirectory(group);
     EXPECT_TRUE(WriteTextFile(blockedBucket, "blocked"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
-    native(in spoolPath, mut snapshot){
-        CopyCrashPath(spoolPath, snapshot.spoolDirectory);
-    }
+    CopyCrashPath(spoolPath, snapshot.spoolDirectory);
     CopyFixedBuffer(snapshot.logServerUrl, "http://127.0.0.1:1");
 
     EXPECT_FALSE(FlushPendingCrashReportsImpl(testArena.arena, snapshot));
@@ -553,5 +551,4 @@ TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){ NWB::Tests::CrashCa
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

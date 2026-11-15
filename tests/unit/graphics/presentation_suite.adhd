@@ -106,9 +106,7 @@ namespace Tests::GraphicsPresentation{
 using CooperativeVectorQueryHarness = Tests::GraphicsPresentationDetail::CooperativeVectorQueryHarness;
 using CooperativeVectorDeviceFeatures = Core::CooperativeVectorDeviceFeatures;
 namespace CooperativeVectorDataType = Core::CooperativeVectorDataType;
-using CooperativeVectorDataTypeEnum = Core::CooperativeVectorDataType::Enum;
 namespace CooperativeVectorMatrixLayout = Core::CooperativeVectorMatrixLayout;
-using CooperativeVectorMatrixLayoutEnum = Core::CooperativeVectorMatrixLayout::Enum;
 using CooperativeVectorMatrixPolicy = Core::GraphicsBackend::CooperativeVectorMatrixPolicy;
 using StandardMatrixLayout = Core::GraphicsBackend::CooperativeVectorMatrixPolicy::StandardMatrixLayout;
 
@@ -120,7 +118,6 @@ namespace CommandQueue = Core::CommandQueue;
 namespace GpuQueueCapability = Core::GpuQueueCapability;
 namespace ResourceStates = Core::ResourceStates;
 namespace HardwareRayTracingPolicy = Core::HardwareRayTracingPolicy;
-using HardwareRayTracingPolicyEnum = Core::HardwareRayTracingPolicy::Enum;
 
 using PhysicalQueueRegistrationPolicy = Core::GraphicsBackend::PhysicalQueueRegistrationPolicy;
 using PhysicalQueueRegistrationResult = Core::GraphicsBackend::PhysicalQueueRegistrationPolicy::Result;
@@ -166,6 +163,10 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type CooperativeVectorDataTypeEnum = CooperativeVectorDataType;
+type CooperativeVectorMatrixLayoutEnum = CooperativeVectorMatrixLayout;
+type HardwareRayTracingPolicyEnum = HardwareRayTracingPolicy;
 
 AcquiredBackBuffer MakeAcquisition(in u64 value, in u32 imageIndex){
     AcquiredBackBuffer acquired = AcquiredBackBuffer();

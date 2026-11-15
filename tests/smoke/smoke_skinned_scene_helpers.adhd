@@ -88,9 +88,9 @@ void AddSmokeSkinnedRenderSystems(mut World world, mut ProjectRuntimeContext con
         auto& meshSkinningSystem = world.addSystem<Impl::MeshSkinningSystem>(world, context.graphics, context.assetManager, systems.mesh, context.shaderPathResolver);
 
         context.graphics.addRenderPassToBack(meshSkinningSystem);
-        context.graphics.addRenderPassToBack(systems.renderer);
-        context.frameGraphRegistry.registerContributor(systems.renderer);
     }
+    context.graphics.addRenderPassToBack(systems.renderer);
+    context.frameGraphRegistry.registerContributor(systems.renderer);
 }
 
 void AddSmokeSkinnedRenderSystems(mut World world, mut ProjectRuntimeContext context){

@@ -106,9 +106,6 @@ using GpuGraphResourceVersionOriginEnum = Core::GpuGraphResourceVersionOrigin::E
 using GpuTaskResourceAccessEnum = Core::GpuTaskResourceAccess::Enum;
 using GpuTaskResourceVersionRoleEnum = Core::GpuTaskResourceVersionRole::Enum;
 using GpuTaskHazardTypeEnum = Core::GpuTaskHazardType::Enum;
-using GpuTaskCostHintEnum = Core::GpuTaskCostHint::Enum;
-using GpuTaskTimingPolicyEnum = Core::GpuTaskTimingPolicy::Enum;
-using GpuTaskGraphAnalysisStatusEnum = Core::GpuTaskGraphAnalysisStatus::Enum;
 using GpuCompiledBarrierTypeEnum = Core::GpuCompiledBarrierType::Enum;
 using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
 using ResourceStatesMask = Core::ResourceStates::Mask;
@@ -683,6 +680,10 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type GpuTaskCostHintEnum = GpuTaskCostHint;
+type GpuTaskTimingPolicyEnum = GpuTaskTimingPolicy;
+type GpuTaskGraphAnalysisStatusEnum = GpuTaskGraphAnalysisStatus;
 
 Expected<Name> IndexedName(in Name prefix, in usize index){
     CompactString text = CompactString();

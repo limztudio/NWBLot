@@ -151,6 +151,13 @@ inline constexpr BuiltinFunctionArgRuleInfo s_BuiltinFunctionArgRules[] = {
 #undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
 };
 
+inline constexpr BuiltinVisitorRuleInfo s_BuiltinVisitorRules[] = {
+#define NWB_ADHD_EXPORT_VISITOR_RULE(ruleName, valueType, keyType, mutableWithReceiver) \
+    BuiltinVisitorRuleInfo{ BuiltinFunctionArgRule::ruleName, valueType, keyType, mutableWithReceiver },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_VISITOR_RULE
+};
+
 static_assert(BuiltinFunctionArgRule::Any == 0u);
 
 inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
@@ -356,6 +363,14 @@ const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, con
 
 const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
     for(const BuiltinFunctionArgRuleInfo& info : __hidden_adhd_type_utils::s_BuiltinFunctionArgRules){
+        if(info.rule == rule)
+            return &info;
+    }
+    return nullptr;
+}
+
+const BuiltinVisitorRuleInfo* FindBuiltinVisitorRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
+    for(const BuiltinVisitorRuleInfo& info : __hidden_adhd_type_utils::s_BuiltinVisitorRules){
         if(info.rule == rule)
             return &info;
     }

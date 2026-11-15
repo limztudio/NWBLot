@@ -6,6 +6,7 @@
 
 #include "symbol_table.h"
 #include "type_substitution.h"
+#include "type_comparator.h"
 #include "callable_overload_selector.h"
 #include "type_utils.h"
 
@@ -196,6 +197,30 @@ MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* p
             return bestMatch;
     }
     return bestMatch;
+}
+
+const MethodDecl* SymbolTable::findUniqueFreeFunction(const MStringView name, b8& outAmbiguous)const noexcept{
+    outAmbiguous = false;
+    const MethodDecl* function = nullptr;
+    const TypeComparator comparator(*this);
+    for(const MethodDecl* candidate : m_freeFunctions){
+        if(!candidate || candidate->name != name)
+            continue;
+        if(
+            !candidate->templateParams.empty()
+            || (function && (
+                function->cppNamespace != candidate->cppNamespace
+                || !comparator.doParamListsMatch(function->params, candidate->params)
+                || !comparator.areEquivalent(function->returnType, candidate->returnType)
+            ))
+        ){
+            outAmbiguous = true;
+            return nullptr;
+        }
+        if(!function || candidate->hasBody)
+            function = candidate;
+    }
+    return function;
 }
 
 Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{

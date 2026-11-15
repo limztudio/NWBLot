@@ -382,7 +382,8 @@ void VerifyAllocationOwners_TransientScratchBulkReleaseRetainsChurnWithoutAccumu
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
     EXPECT_EQ(after.allocationCount - before.allocationCount, 6u);
     EXPECT_EQ(after.deallocationCount - before.deallocationCount, 6u);
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, cast<u64>(272u)));
+    const u64 expectedPeak = Max(before.peakUsedBytes, cast<u64>(272u));
+    EXPECT_EQ(after.peakUsedBytes, expectedPeak);
 }
 
 void VerifyAllocationOwners_PersistentPoolBulkReleaseRetainsReallocationHistory(){
@@ -456,7 +457,8 @@ void VerifyAllocationOwners_ResetPreservesRetiredCountersAndIndividualPeakExactl
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.allocationCount - before.allocationCount, 3u);
     EXPECT_EQ(after.deallocationCount - before.deallocationCount, 3u);
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, cast<u64>(192u)));
+    const u64 expectedPeak = Max(before.peakUsedBytes, cast<u64>(192u));
+    EXPECT_EQ(after.peakUsedBytes, expectedPeak);
 }
 
 void VerifyAllocationOwners_RetiredGlobalArenaPreservesUnreleasedOwnership(){
@@ -631,7 +633,8 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
     EXPECT_EQ(after.allocationCount - before.allocationCount, cast<u64>(threadCount * allocationCount));
     EXPECT_EQ(after.deallocationCount - before.deallocationCount, cast<u64>(threadCount * allocationCount));
-    EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, cast<u64>(128u)));
+    const u64 expectedPeak = Max(before.peakUsedBytes, cast<u64>(128u));
+    EXPECT_EQ(after.peakUsedBytes, expectedPeak);
     RecordUnsignedTestProperty("shared_owner_churn_ns", elapsed);
 }
 

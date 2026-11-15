@@ -56,6 +56,7 @@ public:
     [[nodiscard]] ClassDecl* findClass(MStringView name)const noexcept;
     [[nodiscard]] TypeAliasDecl* findTypeAlias(MStringView name)const noexcept;
     [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
+    [[nodiscard]] const MethodDecl* findUniqueFreeFunction(MStringView name, b8& outAmbiguous)const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
     [[nodiscard]] const MethodDecl* findClassMethod(

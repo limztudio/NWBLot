@@ -39,8 +39,6 @@ namespace Tests::TelemetryCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_ProbeRegressionLabel = "Probe regression";
-inline constexpr AStringView s_ProbeGrowthLabel = "Probe growth";
 inline constexpr AStringView s_ScalingTargetText = "target";
 
 struct ContributionFailure{};
@@ -253,6 +251,8 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_ProbeRegressionLabel = "Probe regression";
+const StringView s_ProbeGrowthLabel = "Probe growth";
 const Name s_QueueAliasOwnerName = "queue_alias_owner";
 const StringView s_QueueAliasOwnerLabel = "Queue alias owner";
 const StringView s_PacketIndex = "\"packet\": {\"index\":";

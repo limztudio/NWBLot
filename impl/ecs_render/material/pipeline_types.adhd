@@ -8,28 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/graphics/rhi/framebuffer.h>
-#include <core/graphics/rhi/pipeline.h>
-namespace NWB::Impl{
-using MaterialFramebufferInfo = Core::FramebufferInfo;
-using MaterialGraphicsPipelineHandle = Core::GraphicsPipelineHandle;
-using MaterialMeshletPipelineHandle = Core::MeshletPipelineHandle;
-using MaterialComputePipelineHandle = Core::ComputePipelineHandle;
-using MaterialShaderHandle = Core::ShaderHandle;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+type MaterialFramebufferInfo = FramebufferInfo;
+type MaterialGraphicsPipelineHandle = GraphicsPipelineHandle;
+type MaterialMeshletPipelineHandle = MeshletPipelineHandle;
+type MaterialComputePipelineHandle = ComputePipelineHandle;
+type MaterialShaderHandle = ShaderHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

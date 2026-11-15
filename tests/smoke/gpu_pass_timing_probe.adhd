@@ -10,30 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/perf/timing.h>
-
-namespace NWB::Tests::Smoke{
-using Core::Perf::TimingStats;
-using Core::Perf::TimingView;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Normalize asynchronous GPU timing windows by dispatch count.
 const f64 s_GpuTimingWarmupSeconds = 0.25;
 const f64 s_GpuTimingReportIntervalSeconds = s_SmokeProbeReportIntervalSeconds;
@@ -187,7 +163,7 @@ class GpuPassTimingProbe{
                 openFailed = true;
             }
             else{
-                timingFile.write(reportBlock.data(), static_cast<std::streamsize>(reportBlock.size()));
+                timingFile.write(reportBlock.data(), static_cast<StreamSize>(reportBlock.size()));
                 timingFile.close();
                 closeFailed = !timingFile.good();
             }

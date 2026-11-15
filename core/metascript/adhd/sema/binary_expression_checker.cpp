@@ -181,16 +181,29 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         }
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(lhsLocal->type, expr.rhs);
         if(expr.rhs){
+            const TypeRef* const assignedType = m_checker.m_symbols.unwrapTypeAlias(lhsLocal->type);
+            const b8 tracksCallable = lhsLocal->lambdaExpr || lhsLocal->callableFunction || (assignedType && assignedType->isFuncType);
             ScopedVarInfo* mutableLocal = const_cast<ScopedVarInfo*>(lhsLocal);
             if(expr.rhs->kind == ExprKind::Lambda){
                 mutableLocal->lambdaExpr = expr.rhs;
+                mutableLocal->callableFunction = nullptr;
             }
             else if(expr.rhs->kind == ExprKind::Identifier){
                 const ScopedVarInfo* rhsLocal = m_checker.FindScopedVar(scope, expr.rhs->text);
-                mutableLocal->lambdaExpr = rhsLocal ? rhsLocal->lambdaExpr : nullptr;
+                const Expr* const rhsLambda = rhsLocal ? rhsLocal->lambdaExpr : nullptr;
+                const MethodDecl* const rhsFunction = rhsLocal ? rhsLocal->callableFunction : nullptr;
+                mutableLocal->lambdaExpr = rhsLambda;
+                mutableLocal->callableFunction = rhsFunction;
+                if(!rhsLocal && tracksCallable && !m_checker.m_symbols.findGlobalConstant(expr.rhs->text)){
+                    b8 ambiguous = false;
+                    mutableLocal->callableFunction = m_checker.m_symbols.findUniqueFreeFunction(expr.rhs->text, ambiguous);
+                    if(mutableLocal->callableFunction)
+                        expr.rhs->resolvedCppNamespace = mutableLocal->callableFunction->cppNamespace;
+                }
             }
             else{
                 mutableLocal->lambdaExpr = nullptr;
+                mutableLocal->callableFunction = nullptr;
             }
         }
     }

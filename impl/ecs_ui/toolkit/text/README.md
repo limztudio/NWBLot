@@ -72,7 +72,7 @@ combining cluster, UTF-8 sequence, or CRLF separator are rejected.
 
 These APIs expose shaped cluster edges. They do not implement UAX #29 grapheme-based
 editing, intra-ligature caret positions, or complete visual selection/navigation.
-`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and hard-line pointer/vertical navigation. It does not provide RTL editing or paragraph bidi. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
+`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and hard-line pointer/vertical navigation; it does not provide RTL editing or paragraph bidi. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
 
 ## Glyph image selection and painting
 
@@ -166,7 +166,9 @@ The service admits every glyph and page binding before emitting any label quads.
 Capacity or raster failure leaves existing builder geometry and page bindings intact,
 although successful cache preparation may remain available for a retry. Limits are
 eight configured faces, 1 MiB per text request, 4096 cached glyph entries, and sixteen
-512 x 512 atlas pages. Exceeding a limit returns failure. In tint is straight plain RGBA. The paint make pre-times spots. The mark shader times their pre-timed tint and clear by tried coverage.
+512 x 512 atlas pages. Exceeding a limit returns failure. Input tint is linear straight
+RGBA; the paint builder premultiplies vertices, and the glyph shader multiplies their
+premultiplied color and alpha by sampled coverage.
 
 This example assumes the matching font/skin assets and typed identities are already
 loaded:
@@ -175,25 +177,25 @@ loaded:
 Core::Alloc::GlobalArena uiArena(Name("runtime/ui"));
 Ui::TextService text(uiArena);
 const Ui::FontSource fonts[]{
- { latinRef, latinFont, latinGeneration, &latinAtlas },
- { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
+    { latinRef, latinFont, latinGeneration, &latinAtlas },
+    { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
 };
 Core::Alloc::ScratchArena setupScratch(Name("runtime/ui/setup"));
 if(!text.setFonts(setupScratch, fonts, 2u))
- return false;
+    return false;
 
 Ui::ShapeRequest request{ "Hello, custom UI" };
 auto label = text.layout(request);
 if(!label)
- return false;
+    return false;
 
 Ui::PaintBuilder paint(uiArena);
 paint.begin({ 800.0f, 600.0f, 1.5f, 1.5f }, frameGeneration, skinGeneration, skinRef, skin);
 paint.pushClip({ 20.0f, 20.0f, 300.0f, 100.0f });
 if(!text.paint(paint, *label, { 24.0f, 24.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }))
- return false;
+    return false;
 if(!paint.popClip())
- return false;
+    return false;
 Ui::DrawSnapshot snapshot = paint.freeze();
 // The owner keeps uiArena alive until every submitted consumer of snapshot completes.
 ```

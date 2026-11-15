@@ -8,34 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/telemetry/frame_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
-using FrameGraphPayload = Core::Telemetry::FrameGraphPayload;
-using FrameGraphRuntimeStatistics = Core::Telemetry::FrameGraphRuntimeStatistics;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 ValidateNormalFrameSnapshotCompletion(in FrameGraphPayload payload, in FrameGraphRuntimeStatistics statistics){
     in auto compile = statistics.compile;
     in auto submission = statistics.submission;
@@ -95,7 +67,7 @@ b8 ValidateNormalFrameSnapshotCompletion(in FrameGraphPayload payload, in FrameG
         b8 accepted = false;
         for(in auto packet : payload.packetSubmissionStatistics)
             accepted = accepted || packet.packetIndex == node.compiledTask.packetIndex;
-        if(node.name == CommonCases::s_CommonCaseNameRenderFrameRecovery){
+        if(node.name == s_CommonCaseNameRenderFrameRecovery){
             if(!unusedRecovery || accepted)
                 return false;
             ++unusedRecoveryTasks;

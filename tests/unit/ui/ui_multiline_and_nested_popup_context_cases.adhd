@@ -368,7 +368,6 @@ public:
 
 namespace __hidden_ui_glyph_sdf_tests{
 using UiMultilineTextArena = ::NWB::Tests::TestArena<>;
-using UiMultilineTextGlobalArena = ::NWB::Core::Alloc::GlobalArena;
 using UiMultilineTextGlobalString = ::AString<::NWB::Core::Alloc::GlobalArena>;
 using UiMultilineTextAsciiSandwich = __hidden_ui_multiline_text_tests::AsciiSandwich;
 using UiMultilineTextC1Sandwich = __hidden_ui_multiline_text_tests::C1Sandwich;
@@ -516,6 +515,8 @@ FOUNDATION_INLINE void UiNestedPopupLifetimeTests::expectParentControls()const{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type UiMultilineTextGlobalArena = GlobalArena;
 
 const u32 s_UiMultilineTextUtf8OneByteMaxExclusive = 0x80u;
 const u32 s_UiMultilineTextUnicodeTab = 0x09u;
@@ -2179,5 +2180,4 @@ NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, AutomaticChildrenReserveTheirDeclar
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

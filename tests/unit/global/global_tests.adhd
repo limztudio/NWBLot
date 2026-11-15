@@ -748,9 +748,7 @@ void VerifyGlobal_DiagnosticEventTextViewsStopAtNullOrBufferBounds(){
     EXPECT_EQ(formattedView.size(), capacity - 1u);
     EXPECT_EQ(formattedView, fullView.substr(0u, capacity - 1u));
 
-    native(mut text){
-        text.value[3u] = '\0';
-    }
+    text.value[3u] = '\0';
     EXPECT_EQ(text.view(), StringView("xxx"));
 }
 

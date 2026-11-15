@@ -15,6 +15,27 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/command.h>
+#include <core/graphics/rhi/resource.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/presentation_contributor.h>
+#include <core/task/gpu/task_graph.h>
+
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
+#include <global/refcount_ptr.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 namespace Tests::Smoke{
@@ -713,18 +734,12 @@ b8 ConfigureSmokeFramebufferCapture(
     return ConfigureSmokeFramebufferCapture(context, projectName, defaultFrameCount, FramebufferCaptureOptions(), outCapture);
 }
 
+type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
+
 b8 TickSmokeWorld(in f32 delta, mut World world){
-    b8 succeeded = true;
-    u32 errorValue = 0u;
-    native(in delta, mut world, mut succeeded, mut errorValue){
-        const auto updated = world.tick(delta);
-        if(!updated){
-            succeeded = false;
-            errorValue = static_cast<u32>(updated.error());
-        }
-    }
-    if(!succeeded){
-        error("Project: world update rejected CPU work: {}", errorValue);
+    const TickAdmissionResult updated = world.tick(delta);
+    if(!updated.has_value()){
+        error("Project: world update rejected CPU work: {}", cast<u32>(updated.error()));
         return false;
     }
     return true;

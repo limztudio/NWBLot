@@ -663,7 +663,8 @@ void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSce
     EXPECT_FALSE(active.loadScene(SceneAssetRef(s_SceneCaseProjectScenesBroken), assets));
     EXPECT_EQ(active.scene().name(), s_SceneCaseProjectScenesMain);
     EXPECT_EQ(active.subsystemCount(), 4u);
-    EXPECT_EQ(active.findSceneAsset(s_SceneFixtureNameCesiumManModel).name(), Name("project/characters/cesium_man/model"));
+    const auto foundSceneAsset = active.findSceneAsset(s_SceneFixtureNameCesiumManModel);
+    EXPECT_EQ(foundSceneAsset.name(), Name("project/characters/cesium_man/model"));
 }
 
 

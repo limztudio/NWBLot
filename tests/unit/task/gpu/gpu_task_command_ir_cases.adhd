@@ -43,7 +43,6 @@ namespace TaskGraphTestUtils{
 using GpuCmdIrCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
 using GpuCmdIrValidationErrorEnum = Core::GpuCommandIrStreamValidationError::Enum;
 using GpuCmdIrReadStatusEnum = Core::GpuCommandIrStreamReadStatus::Enum;
-using GpuCmdIrReplayErrorEnum = Core::GpuCommandIrReplayError::Enum;
 using GpuCmdIrWireOpcodeEnum = Core::GpuCommandIrWireOpcode::Enum;
 using GpuCmdIrRasterReplayState = Core::GpuCommandIrDetail::RasterReplayState;
 using Core::GpuCommandIrDetail::ValidateRasterGraphOperation;
@@ -139,6 +138,8 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type GpuCmdIrReplayErrorEnum = GpuCommandIrReplayError;
 
 const usize s_GpuCmdIrTextureByteCount = 96u;
 const usize s_GpuCmdIrLargeBlobBytes = 70u * 1024u + 4u;

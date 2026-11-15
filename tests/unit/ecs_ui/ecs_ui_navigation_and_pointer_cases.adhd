@@ -186,7 +186,6 @@ using UiMultilineClipboardTests = __hidden_ui_multiline_clipboard_tests::UiMulti
 using UiMultilineNativeTests = __hidden_ui_multiline_native_tests::UiMultilineNativeTests;
 using MultilineSnapshot = UiMultilineTests::MultilineSnapshot;
 
-using KeyEnum = NWB::Core::Key::Enum;
 using UiContext = NWB::Impl::Ui::Context;
 using UiControlToken = NWB::Impl::Ui::ControlToken;
 using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
@@ -218,6 +217,8 @@ namespace UiTextEditStatus = NWB::Impl::UiTextEditStatus;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type KeyEnum = Key;
 
 enum<u8> CallbackMutation{
     IdenticalSelection,

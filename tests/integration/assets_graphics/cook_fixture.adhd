@@ -319,7 +319,6 @@ void CheckCodecRejectsBinary(const CodecT& codec, const Name& virtualPath, const
 
 using MetaArena = NWB::Core::Metascript::MetaArena;
 using MetaDocument = NWB::Core::Metascript::Document;
-using MetaValue = NWB::Core::Metascript::Value;
 using MetaString = ::AString<NWB::Core::Metascript::MetaArena>;
 using ScratchString = NWB::Core::Assets::ScratchString;
 using ScratchPath = ::Path<NWB::Core::Alloc::ScratchArena>;
@@ -327,7 +326,6 @@ using ExpandedAssetMetadata = NWB::Core::Assets::ExpandedAssetMetadata;
 using ExpandedAssetMetadataVector = NWB::Core::Assets::ExpandedAssetMetadataVector;
 using AssetBunchExpandContext = NWB::Core::Assets::AssetBunchExpandContext;
 namespace AssetBunchExpandFailure = NWB::Core::Assets::AssetBunchExpandFailure;
-using AssetBunchExpandFailureEnum = NWB::Core::Assets::AssetBunchExpandFailure::Enum;
 using ModelCookEntry = NWB::Impl::ModelCookEntry;
 using DiscoveredNwbFile = NWB::Core::Assets::DiscoveredNwbFile;
 using NwbFileAssetCacheRecord = NWB::Core::Assets::NwbFileAssetCacheRecord;
@@ -336,7 +334,6 @@ using AssetVolumePackManifest = NWB::Core::Assets::AssetsVolumeCookDetail::Asset
 using SamplerAsset = NWB::Impl::Sampler;
 using SamplerAssetCodec = NWB::Impl::SamplerAssetCodec;
 using SamplerDesc = NWB::Core::SamplerDesc;
-using SamplerColor = NWB::Core::Color;
 using AssetGatherOptions = NWB::Pipeline::AssetGatherer::AssetGatherOptions;
 template<typename T>
 using AssetTestVector = NWB::Core::Assets::AssetVector<T>;
@@ -410,10 +407,6 @@ struct BunchFixture{
 [[nodiscard]] FOUNDATION_INLINE b8 IsFirstMetaDeclaration(const Core::Metascript::Document& document, const AStringView name)noexcept{
     const auto* decl = document.findDeclaration(name);
     return decl != nullptr && !document.declarations().empty() && decl == &document.declarations().front();
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::Assets::ExpandedAssetMetadataVector MoveExpandedBunchVector(Core::Assets::ExpandedAssetMetadataVector&& source)noexcept{
-    return Move(source);
 }
 
 FOUNDATION_INLINE void VerifyOwnedBunchOutput(const Core::Assets::ExpandedAssetMetadataVector& output, const Core::Metascript::Document& document){
@@ -1036,7 +1029,6 @@ using CsgShapeTypeDesc = NWB::Impl::CsgShapeTypeDesc;
 using CsgShapeTypeInfo = NWB::Impl::CsgShapeTypeInfo;
 using CsgShapeRegistry = NWB::Impl::CsgShapeRegistry;
 using GlobalArenaString = ::AString<NWB::Core::Alloc::GlobalArena>;
-using ShaderArchiveRecord = NWB::Core::ShaderArchive::Record;
 using ShaderArchiveRecordVector = NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>;
 using GraphicsBytes = NWB::Core::GraphicsBytes;
 using GraphicsWordVector = NWB::Core::GraphicsVector<u32>;
@@ -1454,7 +1446,6 @@ using TextureAssetCodec = NWB::Impl::TextureAssetCodec;
 using TextureCookEntry = NWB::Impl::TextureCookEntry;
 using TextureMipDecoder = NWB::Impl::TextureMipDecoder;
 using TextureDimensionEnum = TextureDimension::Enum;
-using TexturePayloadFormatEnum = TexturePayloadFormat::Enum;
 using TextureAlphaModeEnum = TextureAlphaMode::Enum;
 using FormatEnum = NWB::Core::Format::Enum;
 using DiscoveredNwbFileVector = NWB::Core::Assets::DiscoveredNwbFileVector;
@@ -2497,6 +2488,12 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type MetaValue = MetascriptValue;
+type AssetBunchExpandFailureEnum = AssetBunchExpandFailure;
+type SamplerColor = Color;
+type ShaderArchiveRecord = Record;
+type TexturePayloadFormatEnum = TexturePayloadFormat;
+
 class SpirvModelStageCase{
     public ShaderStageMask stage = ShaderStageMask();
     public u32 model = 0u;
@@ -3352,5 +3349,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

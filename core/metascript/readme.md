@@ -48,7 +48,7 @@ Identifiers use ASCII letters, digits, and underscores, with a letter or undersc
 | `List` | `[1, 2]`, `{1, 2}`, `[]`, `{}` | Ordered values; square and brace list forms are both accepted. |
 | `Map` | `{"name": "example", "width": 512}` | Dictionary with string keys. |
 
-Lists and maps allow trailing commas. Duplicate dictionary keys replace earlier values. **`{}` is an empty list.** Maps can be created through dotted assignment or a nonempty dictionary literal. There is no empty map literal.
+Lists and maps allow trailing commas. Duplicate dictionary keys replace earlier values. **`{}` is an empty list.** Maps can be created through dotted assignment or a nonempty dictionary literal; there is no empty map literal.
 
 String contents retain backslashes verbatim. For example, `"a\nb"` contains a backslash and `n`, rather than a newline. A backslash lets the lexer skip the following character while finding the closing quote, but the parser does not decode escapes. Use forward slashes for asset paths.
 
@@ -76,11 +76,11 @@ On the right hand side, identifiers produce `Reference` values containing the do
 example asset;
 texture albedo;
 
-asset.texture = albedo; // Reference text: "albedo"
-asset.source = albedo.source; // Reference text: "albedo.source"
+asset.texture = albedo;             // Reference text: "albedo"
+asset.source = albedo.source;       // Reference text: "albedo.source"
 ```
 
-Only the root variable must exist at parse time. The parser does not validate the referenced fields or resolve the reference. Resolution belongs to the consumer. For the same reason, `number count = 2; asset.width = count + 1;` fails. `count` is a reference operand, not an integer expression. Use literal arithmetic or compound assignment on an initialized numeric target.
+Only the root variable must exist at parse time; the parser does not validate the referenced fields or resolve the reference. Resolution belongs to the consumer. For the same reason, `number count = 2; asset.width = count + 1;` fails: `count` is a reference operand, not an integer expression. Use literal arithmetic or compound assignment on an initialized numeric target.
 
 ## Using the C++ API
 
@@ -89,28 +89,29 @@ Construct a `Document` with a caller-owned `MetaArena`, which aliases `NWB::Core
 ```cpp
 #include <core/metascript/parser.h>
 
+#include <global/expected.h>
+
 namespace Meta = NWB::Core::Metascript;
 
-bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
- Meta::Document document(arena);
- if(!document.parse(LiteralView(R"(
- example settings;
- settings.width = 256 * 2;
- )"))){
- // Inspect document.errors() here for line, column, and message.
- return false;
- }
+Expected<i64> ReadExampleWidth(Meta::MetaArena& arena){
+    Meta::Document document(arena);
+    if(!document.parse(LiteralView(R"(
+        example settings;
+        settings.width = 256 * 2;
+    )"))){
+        // Inspect document.errors() here for line, column, and message.
+        return MakeUnexpected(Failure{});
+    }
 
- const Meta::Value* settings = document.findVariable(LiteralView("settings"));
- if(!settings || !settings->isMap())
- return false;
+    const Meta::Value* settings = document.findVariable(LiteralView("settings"));
+    if(!settings || !settings->isMap())
+        return MakeUnexpected(Failure{});
 
- const Meta::Value* width = settings->findField(LiteralView("width"));
- if(!width || !width->isInteger())
- return false;
+    const Meta::Value* width = settings->findField(LiteralView("width"));
+    if(!width || !width->isInteger())
+        return MakeUnexpected(Failure{});
 
- outWidth = width->asInteger();
- return true;
+    return width->asInteger();
 }
 ```
 
@@ -128,7 +129,7 @@ bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
 | `structs()` | Returns the independent struct definition map, keyed by struct name. Each value describes its attributes and fields. |
 | `hasErrors()`, `errors()` | Exposes parse diagnostics containing `line`, `column`, and `message`. |
 
-Each parse call clears the previous document contents and diagnostics. A failed parse can leave partially populated values. Consume the result only when parsing returns `true`. Source diagnostics use one-based line and column positions; reader failures use `(0, 0)`.
+Each parse call clears the previous document contents and diagnostics. A failed parse can leave partially populated values; consume the result only when parsing returns `true`. Source diagnostics use one-based line and column positions; reader failures use `(0, 0)`.
 
 `IMetaReader::read(buffer, maxBytes)` returns `Expected<usize>`. Return a positive byte count for data, zero for EOF, or an unexpected result for a read failure. The document requests chunks of 4096 bytes and buffers all input before parsing. A failure reports `"read error"`; a count larger than requested reports `"reader returned more bytes than requested"`. Exceptions from readers or allocations propagate to the caller.
 
@@ -136,11 +137,11 @@ Each parse call clears the previous document contents and diagnostics. A failed 
 
 Use `isInteger()`, `isMap()`, and the other `is*()` predicates before calling the corresponding `as*()` accessors. These accessors assert their required types. `toDouble()` accepts either numeric type. `Value::findField(name)` requires a map and returns `nullptr` for a missing field.
 
-For programmatic construction, `field(name)` promotes `Null` to a map and creates missing `Null` fields; `append(Value&&)` promotes `Null` to a list. `makeMap()`, `makeList()`, and the `set*()` methods replace the current value. `copyStringList(out)` first validates that every element is a string. Then it appends copies to the output container. It returns `false` for an incompatible value.
+For programmatic construction, `field(name)` promotes `Null` to a map and creates missing `Null` fields; `append(Value&&)` promotes `Null` to a list. `makeMap()`, `makeList()`, and the `set*()` methods replace the current value. `copyStringList(out)` first validates that every element is a string, then appends copies to the output container; it returns `false` for an incompatible value.
 
 The source buffer needs to remain valid only during the synchronous parse. Parsed text, keys, reference paths, declarations, and diagnostics are copied into the supplied arena. Keep the arena alive for the document and every value or copied string allocated from it. Views and pointers returned by the API borrow their underlying storage and can be invalidated by mutation, reparsing, or destruction.
 
-A `Value` copy constructor uses the source arena. Copy and move assignment retain the destination arena and recursively copy across different arenas. A cross-arena move clears the source after copying. To transfer data into another arena, construct a destination `Value` with that arena and assign into it.
+A `Value` copy constructor uses the source arena. Copy and move assignment retain the destination arena and recursively copy across different arenas; a cross-arena move clears the source after copying. To transfer data into another arena, construct a destination `Value` with that arena and assign into it.
 
 ## Structs and attributes
 
@@ -149,24 +150,24 @@ Struct declarations describe fields and attributes as metadata:
 ```text
 [mutable]
 struct Parameters {
- [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
- half4 tint;
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
+    half4 tint;
 };
 
 Parameters runtime;
 ```
 
-Attributes can appear on structs and fields. Each attribute accepts zero or more string arguments, for example `[flag]`, `[flag()]`, or `[name("a", "b")]`. Attribute argument lists do not allow a trailing comma. Field declarations consist of a type and name followed by a semicolon.
+Attributes can appear on structs and fields. Each attribute accepts zero or more string arguments, for example `[flag]`, `[flag()]`, or `[name("a", "b")]`; attribute argument lists do not allow a trailing comma. Field declarations consist of a type and name followed by a semicolon.
 
 Struct definitions have their own namespace and require no variable declaration or selected root. The example records this descriptor in `document.structs()`:
 
 ```text
 Parameters:
- attributes: [{"name": "mutable", "arguments": []}]
- fields:
- - {"type": "half4", "name": "tint",
- "attributes": [{"name": "default",
- "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
+    attributes: [{"name": "mutable", "arguments": []}]
+    fields:
+        - {"type": "half4", "name": "tint",
+           "attributes": [{"name": "default",
+                           "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
 ```
 
 `Parameters runtime;` is an ordinary variable declaration: `document.findDeclaration("runtime")` records the type `Parameters`, and `document.findVariable("runtime")` returns its initially `Null` value. Initializers and assignments follow the same rules as any other variable. The parser does not instantiate fields, check whether a declared type names a struct, or enforce a struct's field schema. Struct definitions can appear before or after variable declarations.

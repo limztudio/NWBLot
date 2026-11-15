@@ -327,9 +327,7 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     QueueSubmissionToken uploadToken = QueueSubmissionToken();
     b8 decoded = false;
     b8 uploaded = false;
-    native(in textureAsset, in format, mut graphics, mut texture, mut uploadToken, mut decoded, mut uploaded){
-        uploaded = __hidden_texture_loader::DecodeAndUploadStaticTextureMips(textureAsset, format, graphics, texture, uploadToken, decoded);
-    }
+    uploaded = __hidden_texture_loader::DecodeAndUploadStaticTextureMips(textureAsset, format, graphics, texture, uploadToken, decoded);
     if(!decoded)
         return false;
     if(!uploaded){

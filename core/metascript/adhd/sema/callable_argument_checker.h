@@ -16,10 +16,14 @@ public:
     explicit CallableArgumentChecker(TypeChecker& checker)noexcept : m_checker(checker){}
     [[nodiscard]] b8 check(
         ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, const MethodDecl* targetCallable, const ClassDecl* targetOwnerCls,
-        const TypeRef* recvTypeRef, const BuiltinReceiverSignatureInfo* builtinReceiverSignature, Span<const TypeArg> callTemplateArgs,
+        const TypeRef* recvTypeRef, const BuiltinReceiverSignatureInfo* builtinReceiverSignature, b8 builtinReceiverIsConst, b8 calleeSignatureKnown, Span<const TypeArg> callTemplateArgs,
         const TypeRef* invokedFuncType, const ScopedVarInfo* localCallable,
         MStringView calledMemberName, MethodDecl& method, MVector<Expr*>& arguments, MVector<ParseError>& errors
     );
+
+private:
+    [[nodiscard]] b8 checkBuiltinVisitor(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& arg, const BuiltinVisitorRuleInfo& rule, b8 receiverIsConst, MVector<ParseError>& errors);
+
 
 private:
     TypeChecker& m_checker;

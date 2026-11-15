@@ -3,6 +3,7 @@
 
 
 #include "logger_crash_fixture.adhd"
+#include <logger/server/crash_manifest_validator.adhd>
 #include <tests/common/gtest_macros.adhd>
 
 
@@ -45,24 +46,20 @@ void VerifyCrashReportComposerTests_TrimsAcrossRemovedSection(){
 }
 
 void VerifyCrashManifestTests_FindsExactKeysAtBoundaries(){
-    native{
-        using ::NWB::Log::FindGeneratedCrashJsonValueCursor;
-        const auto emptyKey = FindGeneratedCrashJsonValueCursor("\"\": ", "");
-        ASSERT_TRUE(emptyKey.has_value());
-        EXPECT_EQ(*emptyKey, 4u);
-        const AStringView collision = "\"ab\": 1, \"a\": ";
-        const auto exact = FindGeneratedCrashJsonValueCursor(collision, "a");
-        ASSERT_TRUE(exact.has_value());
-        EXPECT_EQ(*exact, collision.size());
-        EXPECT_FALSE(FindGeneratedCrashJsonValueCursor("\"a\":", "a").has_value());
-        using ::NWB::Log::HasGeneratedCrashJsonStringValue;
-        EXPECT_TRUE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\n\"", "a"));
-        EXPECT_FALSE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\x\"", "a"));
-        EXPECT_FALSE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\", "a"));
-        const auto quoted = FindGeneratedCrashJsonValueCursor("\"a\"b\": 0", "a\"b");
-        ASSERT_TRUE(quoted.has_value());
-        EXPECT_EQ(*quoted, 7u);
-    }
+    const Expected<usize> emptyKey = FindGeneratedCrashJsonValueCursor("\"\": ", "");
+    ASSERT_TRUE(emptyKey.has_value());
+    EXPECT_EQ(emptyKey.value(), 4u);
+    const StringView collision = "\"ab\": 1, \"a\": ";
+    const Expected<usize> exact = FindGeneratedCrashJsonValueCursor(collision, "a");
+    ASSERT_TRUE(exact.has_value());
+    EXPECT_EQ(exact.value(), collision.size());
+    EXPECT_FALSE(FindGeneratedCrashJsonValueCursor("\"a\":", "a").has_value());
+    EXPECT_TRUE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\n\"", "a"));
+    EXPECT_FALSE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\x\"", "a"));
+    EXPECT_FALSE(HasGeneratedCrashJsonStringValue("\"a\": \"value\\", "a"));
+    const Expected<usize> quoted = FindGeneratedCrashJsonValueCursor("\"a\"b\": 0", "a\"b");
+    ASSERT_TRUE(quoted.has_value());
+    EXPECT_EQ(quoted.value(), 7u);
 }
 
 
@@ -848,5 +845,4 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageDoesNotWrapSymbolOffset){ VerifyLogge
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

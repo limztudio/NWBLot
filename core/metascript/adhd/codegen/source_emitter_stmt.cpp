@@ -359,13 +359,13 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
     case StmtKind::NativeBlock:{
         emitIndent(out, indent);
         out.append("{\r\n");
-        b8 hasDerefShadowBindings = false;
+        b8 hasShadowBindings = false;
         b8 hasPrefixStatements = false;
         for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
             const NativeBinding& binding = stmt.nativeBindings[i];
             if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName){
-                if(binding.sourceExpr->derefNotNull){
-                    hasDerefShadowBindings = true;
+                if(binding.sourceExpr->derefNotNull || binding.needsConstShadow){
+                    hasShadowBindings = true;
                     hasPrefixStatements = true;
                     emitIndent(out, indent + 1u);
                     if(binding.mode == ParamPassingMode::In)
@@ -373,7 +373,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                     else
                         out.append("[[maybe_unused]] auto* __adhd_native_ptr_");
                     AppendUnsignedDecimal(out, static_cast<u32>(i));
-                    out.append(" = &(");
+                    out.append(" = ::AddressOf(");
                     emitExpr(out, *binding.sourceExpr);
                     out.append(");\r\n");
                 }
@@ -400,14 +400,14 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         }
         const MStringView trimmedNative = TrimView(stmt.nativeCode);
         const b8 wrapPragmaCompound = hasPrefixStatements && trimmedNative.starts_with("#pragma");
-        const u32 derefIndent = hasDerefShadowBindings ? (indent + 2u) : (indent + 1u);
+        const u32 derefIndent = hasShadowBindings ? (indent + 2u) : (indent + 1u);
         const u32 bodyIndent = wrapPragmaCompound ? (derefIndent + 1u) : derefIndent;
-        if(hasDerefShadowBindings){
+        if(hasShadowBindings){
             emitIndent(out, indent + 1u);
             out.append("{\r\n");
             for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
                 const NativeBinding& binding = stmt.nativeBindings[i];
-                if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName && binding.sourceExpr->derefNotNull){
+                if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName && (binding.sourceExpr->derefNotNull || binding.needsConstShadow)){
                     emitIndent(out, derefIndent);
                     if(binding.mode == ParamPassingMode::In)
                         out.append("[[maybe_unused]] const auto& ");
@@ -435,7 +435,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             emitIndent(out, derefIndent);
             out.append("}\r\n");
         }
-        if(hasDerefShadowBindings){
+        if(hasShadowBindings){
             emitIndent(out, indent + 1u);
             out.append("}\r\n");
         }

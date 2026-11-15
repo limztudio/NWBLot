@@ -946,7 +946,7 @@ static void DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, Sour
     inOutMesh.vertexRefs.assign(compact.begin(), compact.end());
 }
 
-[[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+[[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(const b8 usedDefaultUvs, const f64 triangleAreaLengthSquaredEpsilon, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     SourceTangentReport outTangentReport;
@@ -983,7 +983,7 @@ static void DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, Sour
         const SIMDVectorSingle p2 = LoadFloat(rebuildVertices[i2].position);
         const SIMDVectorDouble areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal));
-        if(!HasUsableSourceTriangleArea(areaLengthSquared, static_cast<f64>(::s_FrameDirectionEpsilon)))
+        if(!HasUsableSourceTriangleArea(areaLengthSquared, triangleAreaLengthSquaredEpsilon))
             continue;
 
         rebuildIndices.push_back(i0);
@@ -995,7 +995,7 @@ static void DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, Sour
         return MakeUnexpected(Failure{});
     }
 
-    const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildIndices, rebuildVertices);
+    const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildIndices, rebuildVertices, triangleAreaLengthSquaredEpsilon);
     if(!rebuildResult){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return MakeUnexpected(Failure{});
@@ -1171,24 +1171,23 @@ template<typename VisitTriangle>
         if(!HasUsableSourceTriangleArea(areaLengthSquared, options.triangleAreaLengthSquaredEpsilon))
             return true;
 
-        const SIMDVectorSingle areaNormal = ConvertVectorDoubleToSingle(areaNormal64);
         for(const SIMDVectorSingle position : positions){
             const PositionKey key = MakePositionKey(position);
             auto result = outNormals.emplace(key, PositionNormalRecord{});
             PositionNormalRecord& normal = result.first.value();
-            StoreFloat(result.second ? areaNormal : VectorAdd(LoadFloat(normal.value), areaNormal), normal.value);
+            StoreDouble(result.second ? areaNormal64 : VectorDoubleAdd(LoadDouble(normal.value), areaNormal64), normal.value);
         }
         return true;
     }, inOutTriangleIndices))
         return MakeUnexpected(Failure{});
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
-        const auto normal = Vector3TryNormalize(LoadFloat(it.value().value));
+        const auto normal = VectorDouble3TryNormalize(LoadDouble(it.value().value));
         if(!normal){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
-        StoreFloat(normal->value, it.value().value);
+        StoreDouble(normal->value, it.value().value);
     }
     return outNormals;
 }
@@ -1271,12 +1270,12 @@ template<typename VisitTriangle>
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                const auto generatedNormal = Vector3TryNormalize(LoadFloat(foundNormal.value().value));
+                const auto generatedNormal = VectorDouble3TryNormalize(LoadDouble(foundNormal.value().value));
                 if(!generatedNormal){
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                normal = generatedNormal->value;
+                normal = ConvertVectorDoubleToSingle(generatedNormal->value);
             }
             triangleNormals[triangleCornerIndex] = normal;
 
@@ -1323,14 +1322,14 @@ template<typename VisitTriangle>
 
         if(normalMode == NormalMode::Regenerate){
             const SIMDVectorDouble faceNormal64 = BuildTriangleAreaNormal64(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u]);
-            const SIMDVectorSingle faceNormal = ConvertVectorDoubleToSingle(faceNormal64);
-            const auto normalizedFaceNormal = Vector3TryNormalize(faceNormal);
+            const auto normalizedFaceNormal = VectorDouble3TryNormalize(faceNormal64);
             if(!normalizedFaceNormal){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }
+            const SIMDVectorSingle faceNormal = ConvertVectorDoubleToSingle(normalizedFaceNormal->value);
             for(SIMDVectorSingle& normal : triangleNormals)
-                normal = normalizedFaceNormal->value;
+                normal = faceNormal;
         }
 
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex){
@@ -2112,7 +2111,7 @@ Expected<MeshBuildResult> BuildMesh(
     }
     if(ShouldRegenerateSourceTangents(*normalMode, SourceVertexRefsHaveCompleteTangents(result.mesh.vertexRefs, result.mesh.tangents.size()))){
         DropSourceMeshTangents(scratchArena, result.mesh);
-        const auto tangentReport = GenerateSourceMeshTangents(usedDefaultUvs, scratchArena, result.mesh);
+        const auto tangentReport = GenerateSourceMeshTangents(usedDefaultUvs, options.triangleAreaLengthSquaredEpsilon, scratchArena, result.mesh);
         if(!tangentReport)
             return MakeUnexpected(Failure{});
         result.tangentReport = *tangentReport;

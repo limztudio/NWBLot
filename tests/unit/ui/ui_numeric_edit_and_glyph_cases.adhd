@@ -403,7 +403,6 @@ using NumericLifetimeIntegerFixture = __hidden_ui_numeric_model_lifetime_tests::
 using NumericLifetimeFloatFixture = __hidden_ui_numeric_model_lifetime_tests::NumericLifetimeTests<::NWB::Impl::Ui::FloatEditModel>;
 using IntegerLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::IntegerLifetimeTests;
 using FloatLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::FloatLifetimeTests;
-using UiNumericLifetimeGlobalArena = ::NWB::Core::Alloc::GlobalArena;
 using UiNumericLifetimeDraftSnapshot = ::NWB::UiNumericTests::DraftSnapshot;
 namespace UiNumericSelectionEpochMutation = __hidden_ui_numeric_selection_epoch_tests::EpochMutation;
 using UiNumericSelectionEpochMutationEnum = __hidden_ui_numeric_selection_epoch_tests::EpochMutation::Enum;
@@ -497,6 +496,8 @@ FOUNDATION_INLINE b8 SelectionEpochSource::mutate(EditModel& draft)const{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type UiNumericLifetimeGlobalArena = GlobalArena;
 
 b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutationEnum mutation, mut EditModel draft){
     const usize anchor = draft.anchor();

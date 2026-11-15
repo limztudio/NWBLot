@@ -69,8 +69,6 @@ using ExpandedAssetMetadataVector = Core::Assets::ExpandedAssetMetadataVector;
 using NameHashHasher = Hasher<NameHash>;
 using NameHashEqual = EqualTo<NameHash>;
 using CpuTaskScheduler = Core::CpuTaskScheduler;
-using MetascriptDocument = Core::Metascript::Document;
-using MetascriptValue = Core::Metascript::Value;
 using Core::Assets::RegisterAutoCollectedCookEntryTypes;
 using Core::Assets::AssetsBunchCook::ExpandAssetBunch;
 using Impl::FontCookEntry;
@@ -231,33 +229,22 @@ b8 TryGetAtlasGlyph(in FontAtlas atlas, in u32 glyphId, mut FontAtlasGlyph outGl
 }
 
 b8 CopyDocumentVariable(in MetascriptDocument document, in StringView name, mut MetascriptValue outValue){
-    b8 found = false;
-    native(in document, in name, mut outValue, mut found){
-        if(const MetascriptValue* const variable = document.findVariable(name)){
-            outValue = *variable;
-            found = true;
-        }
-    }
-    return found;
+    return document.visitVariable(name, lambda[mut outValue](in MetascriptValue variable) -> void{
+        outValue = variable;
+    });
 }
 
 b8 MakeDocumentVariableEmptyMap(mut MetascriptDocument document, in StringView name){
-    b8 ok = false;
-    native(in name, mut document, mut ok){
-        if(MetascriptValue* const variable = document.findVariable(name)){
-            variable->makeMap();
-            ok = variable->asMap().empty();
-        }
-    }
-    return ok;
+    return document.visitVariable(name, lambda[](mut MetascriptValue variable) -> b8{
+        variable.makeMap();
+        return variable.forEachMapEntry(lambda[](in StringView key, in MetascriptValue entry) -> b8{
+            return false;
+        });
+    });
 }
 
 b8 HasValueField(in MetascriptValue value, in StringView field){
-    b8 found = false;
-    native(in value, in field, mut found){
-        found = value.findField(field) != nullptr;
-    }
-    return found;
+    return value.hasField(field);
 }
 
 Path BundledFontRoot(){
@@ -776,6 +763,20 @@ void VerifyAssetsFontMetadata_FieldlessAndEmptyFontDeclarationsRejectNonmapValue
     ASSERT_TRUE(PrepareFiles(directory, testArena));
     MetascriptDocument document(testArena.arena);
     ASSERT_TRUE(document.parse("font asset;"));
+    b8 visitedMissing = false;
+    const b8 missingAccepted = document.visitVariable("missing", lambda[mut visitedMissing](mut MetascriptValue variable) -> b8{
+        visitedMissing = true;
+        return false;
+    });
+    EXPECT_FALSE(missingAccepted);
+    EXPECT_FALSE(visitedMissing);
+    b8 visitedExisting = false;
+    const b8 rejectedAccepted = document.visitVariable("asset", lambda[mut visitedExisting](mut MetascriptValue variable) -> b8{
+        visitedExisting = true;
+        return false;
+    });
+    EXPECT_FALSE(rejectedAccepted);
+    EXPECT_TRUE(visitedExisting);
     MetascriptValue asset(testArena.arena);
     ASSERT_TRUE(CopyDocumentVariable(document, "asset", asset));
     ASSERT_TRUE(asset.isNull());

@@ -9,13 +9,13 @@ wrapper is removed.
 
 ## Project selection
 
-Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace. The loader entry only delegates. This Testbed-shaped example assumes `Testbed::ProjectPatchFilesystem` is declared in the project-owned `project_patch_filesystem.h`:
+Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. This Testbed-shaped example assumes `Testbed::ProjectPatchFilesystem` is declared in the project-owned `project_patch_filesystem.h`:
 
 ```cpp
 #include "namespace.h"
 #include "project_patch_filesystem.h"
 
-#include <loader/project_entry.h>
+#include <loader/project_entry.adhd.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/filesystem/volume_file_system.h>
 #include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
@@ -23,26 +23,28 @@ Projects configure graphics and storage before device initialization through the
 TESTBED_BEGIN
 
 namespace __hidden_testbed_startup{
-static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
- if(!context.graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
- return false;
+static b8 ConfigureRuntime(NWB::ProjectStartupContext& context)noexcept{
+    if(!context.graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
+        return false;
 
- context.filesystemFactory = [](NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Filesystem::VolumeMountDesc& desc)
- -> Expected<UniquePtr<NWB::Core::Filesystem::IFilesystem>>{
- if(desc.volumeName.view() == AStringView("graphics"))
- return MakeUnique<ProjectPatchFilesystem>(arena);
- return MakeUnique<NWB::Core::Filesystem::VolumeFileSystem>(arena);
- };
- return true;
+    context.filesystemFactory = +[](NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Filesystem::VolumeMountDesc& desc)
+        -> Expected<UniquePtr<NWB::Core::Filesystem::IFilesystem>>{
+        if(desc.volumeName.view() == AStringView("graphics"))
+            return UniquePtr<NWB::Core::Filesystem::IFilesystem>(MakeUnique<ProjectPatchFilesystem>(arena));
+        return UniquePtr<NWB::Core::Filesystem::IFilesystem>(MakeUnique<NWB::Core::Filesystem::VolumeFileSystem>(arena));
+    };
+    return true;
 }
 };
 
 TESTBED_END
 
-bool NWB::ConfigureProjectRuntime(NWB::ProjectStartupContext& context){
- return Testbed::__hidden_testbed_startup::ConfigureRuntime(context);
+b8 NWB::ConfigureProjectRuntime(NWB::ProjectStartupContext& context)noexcept{
+    return Testbed::__hidden_testbed_startup::ConfigureRuntime(context);
 }
 ```
+
+The unary `+` converts the captureless factory lambda to a function pointer for the `noexcept` entry point.
 
 `Testbed::ProjectPatchFilesystem` implements `NWB::Core::Filesystem::IFilesystem`. The local `namespace.h`
 defines `TESTBED_BEGIN`/`TESTBED_END` independently of root `engine_namespace.h`; engine APIs supply their
@@ -90,7 +92,7 @@ custom implementation and may be a no-op.
 
 ## Reading and seeking
 
-`readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes. Reading beyond EOF returns an unexpected failure. Check admission before reading the count. Zero is a successful value. A nonzero capacity requires a valid buffer.
+`readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes; reading beyond EOF returns an unexpected failure. Check admission before reading the count; zero is a successful value. A nonzero capacity requires a valid buffer.
 
 `readFile(path, byteContainer)` obtains the file size, sizes the caller's container, and reads the complete
 payload through the virtual range operation. It clears the container on failure. Container overloads require

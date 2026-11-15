@@ -36,6 +36,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     const ClassDecl* targetOwnerCls = nullptr;
     const TypeRef* recvTypeRef = nullptr;
     const BuiltinReceiverSignatureInfo* builtinReceiverSignature = nullptr;
+    b8 builtinReceiverIsConst = false;
+    b8 calleeSignatureKnown = false;
     MStringView calledMemberName;
     const BuiltinReceiverMethodInfo* targetBuiltinRecvInfo = nullptr;
     const BuiltinMemberMethodInfo* targetBuiltinMemberInfo = nullptr;
@@ -172,6 +174,11 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     }
                 }
             }
+            calleeSignatureKnown = (targetCallable != nullptr)
+                || (invokedFuncType && invokedFuncType->isFuncType)
+                || (localCallable && localCallable->lambdaExpr)
+                || expr.isBuiltinCall
+                || isConstructibleTypeName(expr.lhs->text, baseCallee);
         }
         else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
             const b8 isConstThis = isThisConstInScope(method, scope);
@@ -196,6 +203,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     }
                 }
                 if(inheritedRecvInfo){
+                    calleeSignatureKnown = true;
                     recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeName);
                     recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeArgName);
                     recordBuiltinTypeHeader(inheritedRecvInfo->returnNestedTypeArgName);
@@ -213,6 +221,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     }
                 }
             }
+            if(targetCallable || (invokedFuncType && invokedFuncType->isFuncType))
+                calleeSignatureKnown = true;
             if(isConstThis && targetCallable && !targetCallable->isConst){
                 reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
                 ok = false;
@@ -223,6 +233,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             const MStringView mName = expr.lhs->text;
             calledMemberName = mName;
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
+            builtinReceiverIsConst = recvIsConst;
             const ClassDecl* targetCls = m_symbols.findClass(objType);
             const InterfaceDecl* targetIface = m_symbols.findInterface(objType);
             const b8 isAssetClassObj = (targetCls && (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty()))
@@ -324,7 +335,11 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     ok = false;
                 }
             }
-            else if(IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u && isMutatingContainerOp){
+            else if(
+                IsNonThreadSafeContainer(objType)
+                && m_parallelDepth > 0u
+                && (isMutatingContainerOp || (!builtinRecvInfo && !targetBuiltinMemberInfo && !(invokedFuncType && invokedFuncType->isFuncType) && !recvIsConst))
+            ){
                 b8 isTaskLocalContainer = false;
                 if(expr.lhs->lhs->kind == ExprKind::Identifier){
                     if(const ScopedVarInfo* recvLocal = FindScopedVar(scope, expr.lhs->lhs->text))
@@ -335,6 +350,15 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     ok = false;
                 }
             }
+            const b8 isKnownCalleeMember = (targetCallable != nullptr)
+                || (invokedFuncType && invokedFuncType->isFuncType)
+                || (builtinRecvInfo != nullptr)
+                || (targetBuiltinMemberInfo != nullptr)
+                || (targetCls != nullptr)
+                || (targetIface != nullptr)
+                || (FindTemplateParam(ownerClass, &method, objType) != nullptr);
+            if(isKnownCalleeMember)
+                calleeSignatureKnown = true;
 
             const b8 isStringFamily = !isUserObjType && IsStringLikeType(objType);
             if(isStringFamily && mName == "substr"){
@@ -374,7 +398,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 }
             }
 
-            if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp || expr.isStringByteMutRef || (isMutationTarget && builtinRecvInfo && builtinRecvInfo->returnTypeName.empty())){
+            if(
+                (targetCallable && !targetCallable->isConst)
+                || isMutatingContainerOp
+                || expr.isStringByteMutRef
+                || (isMutationTarget && builtinRecvInfo && builtinRecvInfo->returnTypeName.empty())
+                || (!isKnownCalleeMember && !recvIsConst && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs->lhs, scope))
+            ){
                 const b8 savedDeref = expr.lhs->lhs->derefNotNull;
                 if(!checkExpr(ownerClass, scope, true, method, *expr.lhs->lhs, errors))
                     ok = false;
@@ -385,6 +415,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             tempInlineLambdaVar.lambdaExpr = expr.lhs;
             tempInlineLambdaVar.declaredParallelDepth = m_parallelDepth;
             localCallable = &tempInlineLambdaVar;
+            calleeSignatureKnown = true;
         }
         else if(
             expr.lhs->kind == ExprKind::ScopeAccess
@@ -419,10 +450,12 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     ok = false;
                 }
             }
+            calleeSignatureKnown = expr.isBuiltinCall;
         }
         else{
             const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
             invokedFuncType = m_symbols.unwrapTypeAlias(lhsTypeRef);
+            calleeSignatureKnown = (invokedFuncType && invokedFuncType->isFuncType);
         }
     }
     if(m_parallelDepth > 0u && localCallable && localCallable->lambdaExpr && localCallable->lambdaExpr->hasMutContainerCapture && localCallable->declaredParallelDepth < m_parallelDepth){
@@ -527,6 +560,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         targetOwnerCls,
         recvTypeRef,
         builtinReceiverSignature,
+        builtinReceiverIsConst,
+        calleeSignatureKnown,
         expr.callTemplateArgs,
         invokedFuncType,
         localCallable,

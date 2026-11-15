@@ -81,14 +81,11 @@ using KernelComputePipelineHandle = Core::ComputePipelineHandle;
 using KernelBindingLayoutHandle = Core::BindingLayoutHandle;
 using KernelGraphicsPipelineHandle = Core::GraphicsPipelineHandle;
 using KernelBufferHandle = Core::BufferHandle;
-using KernelTextureHandle = Core::TextureHandle;
-using KernelFramebufferHandle = Core::FramebufferHandle;
 using KernelGpuDescriptorHandle = Core::GpuDescriptorHandle;
 using KernelGpuTaskId = Core::GpuTaskId;
 using KernelGpuGraphResourceSetId = Core::GpuGraphResourceSetId;
 using KernelGpuTaskGraph = Core::GpuTaskGraph;
 using KernelGpuTaskGraphPtr = Core::GpuTaskGraph*;
-using KernelScratchArena = Core::Alloc::ScratchArena;
 using KernelScratchArenaPtr = Core::Alloc::ScratchArena*;
 using KernelGpuTimingSubmissionTicket = Core::GpuTimingSubmissionTicket;
 using KernelGpuTimingSubmissionTicketPtr = Core::GpuTimingSubmissionTicket*;
@@ -313,6 +310,13 @@ NWB_IMPL_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+type KernelTextureHandle = TextureHandle;
+type KernelFramebufferHandle = FramebufferHandle;
+type KernelScratchArena = ScratchArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

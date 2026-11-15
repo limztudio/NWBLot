@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/paint.adhd>
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include <tests/smoke/smoke_environment.adhd>
 #include <tests/unit/ui/arithmetic_fixture_rows.adhd>
@@ -10,33 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-
-namespace NWB::Tests::Smoke{
-using Impl::Ui::Color;
-using Impl::Ui::DisplayMetrics;
-using EdgeInsets = Impl::Ui::Insets;
-using Impl::Ui::Point;
-using Impl::Ui::Rect;
-using SnapshotRect = Impl::Ui::Rect;
-using SnapshotDisplay = Impl::Ui::DisplayMetrics;
-using SnapshotPoint = Impl::Ui::Point;
-using UiWidgetTests::ArithmeticFixtureRowKey;
-using UiWidgetTests::FindArithmeticFixtureRowIndex;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+type EdgeInsets = Insets;
+type SnapshotRect = Rect;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,8 +37,8 @@ const u32 s_SmokeMarker24BitMask = 0xffffffu;
 // Snapshot of copied image declaration inputs and expected display geometry.
 class UiImageSnapshot{
     public Array<u64, 10u> values;
-    public Array<SnapshotRect, 16u> rectangles;
-    public SnapshotDisplay display = SnapshotDisplay();
+    public Array<Rect, 16u> rectangles;
+    public DisplayMetrics display = DisplayMetrics();
     public u64 sequence = 0u;
 }
 
@@ -71,8 +47,8 @@ class UiImageSnapshot{
 class UiSliderSnapshot{
     public Array<u64, 16u> values;
     public Array<u64, 4u> bits;
-    public Array<SnapshotRect, 29u> rectangles;
-    public SnapshotDisplay display = SnapshotDisplay();
+    public Array<Rect, 29u> rectangles;
+    public DisplayMetrics display = DisplayMetrics();
     public u64 sequence = 0u;
 }
 
@@ -80,8 +56,8 @@ class UiSliderSnapshot{
 // Copied post-scope observations and the GPU markers share this immutable sequence.
 class UiRadioGroupSnapshot{
     public Array<u64, 22u> values;
-    public Array<SnapshotRect, 41u> rectangles;
-    public SnapshotDisplay display = SnapshotDisplay();
+    public Array<Rect, 41u> rectangles;
+    public DisplayMetrics display = DisplayMetrics();
     public u32 sequence = 0u;
 }
 
@@ -90,8 +66,8 @@ class UiRadioGroupSnapshot{
 class UiProgressSnapshot{
     public Array<u64, 8u> values;
     public Array<u64, 2u> bits;
-    public Array<SnapshotRect, 15u> rectangles;
-    public SnapshotDisplay display = SnapshotDisplay();
+    public Array<Rect, 15u> rectangles;
+    public DisplayMetrics display = DisplayMetrics();
     public u64 sequence = 0u;
 }
 
@@ -99,8 +75,8 @@ class UiProgressSnapshot{
 // One owned observation is encoded in pixels after the enclosing Builder scope has ended.
 class UiNumericEditSnapshot{
     public Array<u64, 30u> values;
-    public Array<SnapshotRect, 12u> rectangles;
-    public SnapshotDisplay display = SnapshotDisplay();
+    public Array<Rect, 12u> rectangles;
+    public DisplayMetrics display = DisplayMetrics();
     public u32 sequence = 0u;
 }
 
@@ -109,8 +85,8 @@ class UiNumericEditSnapshot{
 class UiTextureImageSnapshot{
     public Array<u64, 16u> values;
     public Array<u64, 3u> generations;
-    public Array<SnapshotRect, 17u> rectangles;
-    public SnapshotDisplay display = SnapshotDisplay();
+    public Array<Rect, 17u> rectangles;
+    public DisplayMetrics display = DisplayMetrics();
     public u64 sequence = 0u;
 }
 
@@ -118,12 +94,12 @@ class UiTextureImageSnapshot{
 // One owned observation follows the completed Builder scope and travels with the same GPU marker sequence.
 class UiTextAreaSnapshot{
     public Array<u64, 25u> values;
-    public Array<SnapshotRect, 16u> rectangles;
-    public Array<SnapshotRect, 32u> selections;
-    public SnapshotDisplay display = SnapshotDisplay();
-    public SnapshotPoint scroll = SnapshotPoint();
-    public SnapshotPoint measure = SnapshotPoint();
-    public SnapshotPoint maximum = SnapshotPoint();
+    public Array<Rect, 16u> rectangles;
+    public Array<Rect, 32u> selections;
+    public DisplayMetrics display = DisplayMetrics();
+    public Point scroll = Point();
+    public Point measure = Point();
+    public Point maximum = Point();
     public f32 lineHeight = 0.0f;
     public u32 selectionCount = 0u;
     public u32 sequence = 0u;
@@ -740,7 +716,7 @@ class UiSearchComboSmokeSourceState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SameSmokeRect(in SnapshotRect left, in SnapshotRect right){
+b8 SameSmokeRect(in Rect left, in Rect right){
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
 }
 
@@ -764,7 +740,7 @@ b8 SameSmokeU64Span(in Span<u64> left, in Span<u64> right){
     return true;
 }
 
-b8 SameSmokeRectSpan(in Span<SnapshotRect> left, in Span<SnapshotRect> right){
+b8 SameSmokeRectSpan(in Span<Rect> left, in Span<Rect> right){
     if(left.size() != right.size())
         return false;
     for(usize index = 0u; index < left.size(); ++index){
@@ -774,7 +750,7 @@ b8 SameSmokeRectSpan(in Span<SnapshotRect> left, in Span<SnapshotRect> right){
     return true;
 }
 
-PassiveSmokeColumns ResolvePassiveSmokeColumns(in SnapshotDisplay display){
+PassiveSmokeColumns ResolvePassiveSmokeColumns(in DisplayMetrics display){
     PassiveSmokeColumns result();
     result.mainWidth = Max(300.0f, display.logicalWidth * 0.5f - 40.0f);
     result.rightColumn = 24.0f + result.mainWidth + 32.0f;
@@ -796,9 +772,9 @@ Color EncodeSmokeColor(in f32 value){
     return EncodeSmokeColor(cast<u64>(Max(0.0f, value) + 0.5f));
 }
 
-SnapshotRect ScaleSmokeSceneRect(in VectorSingle extent, in f32 x, in f32 y, in f32 w, in f32 h){
+Rect ScaleSmokeSceneRect(in VectorSingle extent, in f32 x, in f32 y, in f32 w, in f32 h){
     const VectorSingle scaled = VectorSingle(x, y, w, h) * extent;
-    return SnapshotRect(scaled.x, scaled.y, scaled.z, scaled.w);
+    return Rect(scaled.x, scaled.y, scaled.z, scaled.w);
 }
 
 StringView NestedPopupSmokeLabel(in u64 index){

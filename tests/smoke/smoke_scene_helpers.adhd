@@ -50,7 +50,6 @@ using NameTextErrorEnum = NameTextError::Enum;
 [[nodiscard]] FOUNDATION_INLINE Expected<SmokeMaterialRef, NameTextError::Enum> SmokeMaterialRefFromText(const AStringView path){
     return SmokeMaterialRef::FromText(path);
 }
-namespace Feature = Core::Feature;
 using Impl::CausticQualitySettings;
 using Impl::SurfelGiQualitySettings;
 namespace SurfelGiResolveResolution = Impl::SurfelGiResolveResolution;
@@ -612,6 +611,11 @@ SmokeTintedEntitySetup CreateSmokeTintedEntity(
     return setup;
 }
 
+void SetSmokeEntityRotationIfPresent(in EntityID entity, in VectorSingle rotation, mut World world){
+    if(!SetSmokeEntityRotation(entity, f32x4(rotation), world))
+        return;
+}
+
 b8 ApplySmokeMaterialTint(
     in SmokeTintedEntitySetup setup,
     in VectorSingle colorTint,
@@ -619,11 +623,7 @@ b8 ApplySmokeMaterialTint(
     mut World world
 ){
     const f32x4 storedTint = f32x4(colorTint);
-    b8 applied = false;
-    native(in setup, in storedTint, in tintParameterPath, mut world, mut applied){
-        applied = Impl::SetMaterialMutableHalf4(world, setup.entity, setup.materialInterface, tintParameterPath, storedTint);
-    }
-    return applied;
+    return SetSmokeMaterialHalf4(setup.entity, setup.materialInterface, tintParameterPath, storedTint, world);
 }
 
 EntityID CreateTintedStaticMeshEntityWithPath(
@@ -690,10 +690,8 @@ SmokeRenderSystems CreateSmokeRenderSystems(mut World world, mut ProjectRuntimeC
 
 void SetupSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context, in SmokeRenderQualitySettings baseSettings){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
-    native(in systems, mut context){
-        context.graphics.addRenderPassToBack(systems.renderer);
-        context.frameGraphRegistry.registerContributor(systems.renderer);
-    }
+    context.graphics.addRenderPassToBack(systems.renderer);
+    context.frameGraphRegistry.registerContributor(systems.renderer);
 }
 
 void SetupSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context){
@@ -704,18 +702,14 @@ void FinishDestroyingSmokeWorld(mut ProjectRuntimeContext context, mut NotNullUn
     const b8 deviceIdle = context.graphics.waitForIdle();
     [essential] assert(deviceIdle || context.graphics.isDeviceLost(), "Smoke-world destruction requires either a completed device join or terminal device loss");
 
-    native(mut world){
-        world->clear();
-        world.owner().reset();
-    }
+    SmokeWorldRef(world).clear();
+    world.owner().reset();
 }
 
 void RemoveSmokeRendererSystem(mut ProjectRuntimeContext context, mut World world){
-    native(mut context, mut world){
-        Impl::RendererSystem& rendererSystem = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
-        context.frameGraphRegistry.unregisterContributor(rendererSystem);
-        context.graphics.removeRenderPass(rendererSystem);
-    }
+    mut auto rendererSystem = SmokeRendererSystemRef(world);
+    context.frameGraphRegistry.unregisterContributor(rendererSystem);
+    context.graphics.removeRenderPass(rendererSystem);
 }
 
 void DestroySmokeRenderWorld(mut ProjectRuntimeContext context, mut NotNullUniquePtr<World> world){

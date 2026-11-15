@@ -39,19 +39,7 @@ native{
 #include <global/simd/frame.h>
 
 namespace NWB::Tests::Smoke{
-inline constexpr AStringView s_FlickerProjectName = "FlickerTestSmokeProject";
 
-using FlickerModelRef = Core::Assets::AssetRef<Impl::Model>;
-using FlickerMaterialRef = Core::Assets::AssetRef<Impl::Material>;
-using FlickerMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
-
-// Spinning opaque and glass bodies expose shadow flicker.
-inline constexpr FlickerModelRef s_FlickerModel{"project/characters/body/model"};
-inline constexpr FlickerModelRef s_FlickerCausticModel{"project/characters/caustic_closed_body/model"};
-inline constexpr FlickerMaterialRef s_FlickerOpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
-inline constexpr FlickerMaterialRef s_FlickerTransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
-inline constexpr FlickerMeshRef s_FlickerGroundMesh{"project/meshes/shadow_plane"};
-inline constexpr AStringView s_FlickerSmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 namespace ModelObjectKind = Impl::ModelObjectKind;
 };
@@ -65,6 +53,16 @@ namespace ModelObjectKind = Impl::ModelObjectKind;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const StringView s_FlickerProjectName = "FlickerTestSmokeProject";
+
+// Spinning opaque and glass bodies expose shadow flicker.
+const SmokeModelRef s_FlickerModel = "project/characters/body/model";
+const SmokeModelRef s_FlickerCausticModel = "project/characters/caustic_closed_body/model";
+const SmokeMaterialRef s_FlickerOpaqueMaterial = "project/smoke/transparent_multi/materials/ground";
+const SmokeMaterialRef s_FlickerTransparentMaterial = "project/smoke/transparent_multi/materials/shared";
+const SmokeMeshRef s_FlickerGroundMesh = "project/meshes/shadow_plane";
+const StringView s_FlickerSmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 const f32 s_FlickerGroundScale = 8.0f;
 const f32 s_FlickerCharacterSpacingX = 0.22f;
@@ -157,10 +155,13 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         SyncSmokeModelRuntimes(SmokeWorldRef(this.m_world));
         const EntityID meshEntity = FindSpawnedModelObject(this.m_transparentOwner, s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, SmokeWorldRef(this.m_world));
 
+        const EntityID directionalLight = CreateSmokeDirectionalLight(
+            s_FlickerDirectionalLightPitch, s_FlickerDirectionalLightYaw, 0.0f,
+            f32x4(1.0f, 0.96f, 0.88f, 0.0f), s_FlickerDirectionalLightIntensity, SmokeWorldRef(this.m_world)
+        );
         b8 ok = true;
-        native(in disableCaustics, in meshEntity, mut world = this.m_world, mut ok){
-            const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(*world, s_FlickerDirectionalLightPitch, s_FlickerDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_FlickerDirectionalLightIntensity);
-            const Core::ECS::EntityID pointLight = Impl::Scene::CreatePointLightEntity(*world, Float4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_FlickerPointLightIntensity, s_FlickerPointLightRange);
+        const EntityID pointLight = CreateSmokePointLight(f32x4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), f32x4(0.60f, 0.76f, 1.00f, 0.0f), s_FlickerPointLightIntensity, s_FlickerPointLightRange, SmokeWorldRef(this.m_world));
+        native(in disableCaustics, in meshEntity, in directionalLight, in pointLight, mut world = this.m_world, mut ok){
             if(disableCaustics){
                 for(const Core::ECS::EntityID lightEntity : { directionalLight, pointLight }){
                     if(auto* light = world->tryGetComponent<Impl::Scene::LightComponent>(lightEntity))
@@ -210,12 +211,8 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
 
     private void spinCharacters(){
         const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, this.m_yaw.yaw(), 0.0f, 0.0f)));
-        native(in opaqueOwner = this.m_opaqueOwner, in transparentOwner = this.m_transparentOwner, in rotation, mut world = this.m_world){
-            for(const Core::ECS::EntityID owner : { opaqueOwner, transparentOwner }){
-                if(auto* transform = world->tryGetComponent<Impl::Scene::TransformComponent>(owner))
-                    transform->rotation = rotation;
-            }
-        }
+        SetSmokeEntityRotationIfPresent(this.m_opaqueOwner, VectorSingle(rotation), SmokeWorldRef(this.m_world));
+        SetSmokeEntityRotationIfPresent(this.m_transparentOwner, VectorSingle(rotation), SmokeWorldRef(this.m_world));
     }
 
     private mut ProjectRuntimeContext m_context;

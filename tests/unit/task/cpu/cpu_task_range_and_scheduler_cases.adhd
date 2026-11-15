@@ -50,7 +50,6 @@ static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
 };
 
 namespace NWB::Tests::CpuTaskSuite{
-using CpuAffinityEnum = ::CpuAffinity::Enum;
 };
 
 
@@ -62,6 +61,8 @@ using CpuAffinityEnum = ::CpuAffinity::Enum;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type CpuAffinityEnum = CpuAffinity;
 
 const u32 s_SubmissionWorkerException = 0xE102u;
 const u32 s_WaitWatchdogTimeoutMS = 10000u;

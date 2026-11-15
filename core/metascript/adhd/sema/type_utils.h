@@ -261,6 +261,13 @@ struct BuiltinReceiverSignatureInfo{
     u8 arity;
 };
 
+struct BuiltinVisitorRuleInfo{
+    BuiltinFunctionArgRule::Enum rule;
+    MStringView valueType;
+    MStringView keyType;
+    b8 mutableWithReceiver;
+};
+
 struct BuiltinFieldInfo{
     MStringView receiverTypeName;
     MStringView fieldName;
@@ -342,6 +349,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(MStringView receiverTypeName, MStringView methodName)noexcept;
 [[nodiscard]] const BuiltinFieldInfo* FindBuiltinField(MStringView receiverTypeName, MStringView fieldName)noexcept;
 [[nodiscard]] const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(BuiltinFunctionArgRule::Enum rule)noexcept;
+[[nodiscard]] const BuiltinVisitorRuleInfo* FindBuiltinVisitorRule(BuiltinFunctionArgRule::Enum rule)noexcept;
 [[nodiscard]] const BuiltinFunctionInfo* FindBuiltinFunction(MStringView name)noexcept;
 [[nodiscard]] const BuiltinFunctionInfo* FindBuiltinScopedFunction(MStringView scopeTypeName, MStringView memberName)noexcept;
 [[nodiscard]] const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(MStringView name)noexcept;

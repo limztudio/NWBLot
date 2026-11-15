@@ -148,12 +148,6 @@ public:
         return {};
     }
 
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = UiTestSupport::FindHitTarget(m_context.input().targets(), widget))
-            return *found;
-        return {};
-    }
-
     [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         // Lanes are first U, last U, first V, last V.
         const SIMDVectorSingle expected = VectorSetW(VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f)), 0.5f);
@@ -172,6 +166,7 @@ public:
     }
 
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }
+    [[nodiscard]] virtual const InputRouter& inputRouter()const noexcept override{ return m_context.input(); }
 
 
 public:
@@ -396,11 +391,6 @@ using namespace NWB::UiComboTests;
 
 class UiComboBuilderTests : public ComboFixture{
 public:
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
 };
 
 // Source fixture that breaks stable-key lookup on the post-selection label read.
@@ -678,7 +668,7 @@ void VerifyUiBuilderTests_CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuil
     EXPECT_FALSE(self.m_builder.checkbox("enabled", "Enabled", checked));
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> control = self.findTarget(self.id("enabled"));
+    const Expected<HitTarget> control = self.tryTarget(self.id("enabled"));
     ASSERT_TRUE(control.has_value());
     const VectorSingle centerValue = VectorSingle(control.value().rectangle.x, control.value().rectangle.y, 0.0f, 0.0f) + VectorSingle(4.0f);
     const Point center = MakeUiBuilderPoint(centerValue.x, centerValue.y);
@@ -707,7 +697,7 @@ void VerifyUiBuilderTests_ButtonChecksCurrentEnabledValueBeforeTakingPendingActi
     ASSERT_FALSE(self.m_context.failed());
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    Optional<HitTarget> control = self.findTarget(self.id(s_UiBuilderApplyKey));
+    Expected<HitTarget> control = self.tryTarget(self.id(s_UiBuilderApplyKey));
     ASSERT_TRUE(control.has_value());
     const VectorSingle pointValue = VectorSingle(control.value().rectangle.x, control.value().rectangle.y, 0.0f, 0.0f) + VectorSingle(4.0f);
     const Point point = MakeUiBuilderPoint(pointValue.x, pointValue.y);
@@ -721,7 +711,7 @@ void VerifyUiBuilderTests_ButtonChecksCurrentEnabledValueBeforeTakingPendingActi
     EXPECT_TRUE(self.m_context.input().actions().empty());
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    control = self.findTarget(self.id(s_UiBuilderApplyKey));
+    control = self.tryTarget(self.id(s_UiBuilderApplyKey));
     ASSERT_TRUE(control.has_value());
     EXPECT_FALSE(control.value().enabled);
     EXPECT_FALSE(control.value().focusable);
@@ -734,7 +724,7 @@ void VerifyUiBuilderTests_ButtonChecksCurrentEnabledValueBeforeTakingPendingActi
     EXPECT_FALSE(self.m_context.failed());
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    const Optional<HitTarget> enabledControl = self.findTarget(self.id(s_UiBuilderApplyKey));
+    const Expected<HitTarget> enabledControl = self.tryTarget(self.id(s_UiBuilderApplyKey));
     ASSERT_TRUE(enabledControl.has_value());
     EXPECT_TRUE(enabledControl.value().enabled);
 }
@@ -800,7 +790,7 @@ void VerifyUiBuilderTests_RowUsesSkinMetricsPaddingAndClipsOverflowingControlHit
     const WidgetId rowId = self.id("actions");
     const WidgetId firstId = RequireUiWidgetId(rowId, "first");
     const WidgetId secondId = RequireUiWidgetId(rowId, "second");
-    const Optional<HitTarget> secondTarget = self.findTarget(secondId);
+    const Expected<HitTarget> secondTarget = self.tryTarget(secondId);
     ASSERT_TRUE(secondTarget.has_value());
     EXPECT_FLOAT_EQ(secondTarget.value().clip.width, 18.0f);
     EXPECT_EQ(self.m_context.input().hitTest(MakeUiBuilderPoint(100.0f, 40.0f)), secondId);
@@ -876,7 +866,7 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
     EXPECT_FALSE(self.m_builder.button(s_UiBuilderApplyKey, "Apply"));
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> target = self.findTarget(self.id(s_UiBuilderApplyKey));
+    const Expected<HitTarget> target = self.tryTarget(self.id(s_UiBuilderApplyKey));
     ASSERT_TRUE(target.has_value());
     const Point point = CenterUiRect(target.value().rectangle);
     u64 generation = 1u;
@@ -1636,7 +1626,7 @@ void VerifyUiComboBuilderTests_EscapeBeforeReleaseCancelsFieldOpeningAndPopupSub
 void VerifyUiComboBuilderTests_DisabledFieldFencesQueuedOpeningAndHasNoTabStop(mut UiComboBuilderTests self){
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> initialField = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> initialField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(initialField.has_value());
     self.click(CenterUiRect(initialField.value().rectangle));
     ComboOptions options = MakeUiComboBuilderDefaultOptions();
@@ -1646,11 +1636,11 @@ void VerifyUiComboBuilderTests_DisabledFieldFencesQueuedOpeningAndHasNoTabStop(m
     EXPECT_FALSE(self.m_result.opened);
     EXPECT_FALSE(self.m_result.committed);
     EXPECT_FALSE(self.m_result.focused);
-    const Optional<HitTarget> disabledField = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> disabledField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(disabledField.has_value());
     EXPECT_FALSE(disabledField.value().enabled);
     EXPECT_FALSE(disabledField.value().focusable);
-    EXPECT_FALSE(self.findTarget(self.list()).has_value());
+    EXPECT_FALSE(self.tryTarget(self.list()).has_value());
 }
 
 void VerifyUiComboBuilderTests_EmptySourceShowsPlaceholderAndSubmitCannotCommitAKey(mut UiComboBuilderTests self){
@@ -1710,7 +1700,7 @@ void VerifyUiComboBuilderTests_SourceRevisionFencesAcceptedRowActivationBeforeTh
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    const Optional<HitTarget> rowTarget = self.findTarget(self.row(2u));
+    const Expected<HitTarget> rowTarget = self.tryTarget(self.row(2u));
     ASSERT_TRUE(rowTarget.has_value());
     self.click(CenterUiRect(rowTarget.value().rectangle));
     self.m_source.reverse = true;
@@ -1725,7 +1715,7 @@ void VerifyUiComboBuilderTests_ReplacementSourceCannotBorrowThePreviousSelection
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    const Optional<HitTarget> rowTarget = self.findTarget(self.row(2u));
+    const Expected<HitTarget> rowTarget = self.tryTarget(self.row(2u));
     ASSERT_TRUE(rowTarget.has_value());
     self.click(CenterUiRect(rowTarget.value().rectangle));
     UiComboBuilderSource replacement = UiComboBuilderSource();
@@ -1737,26 +1727,26 @@ void VerifyUiComboBuilderTests_ReplacementSourceCannotBorrowThePreviousSelection
     EXPECT_TRUE(self.m_result.selectionChanged);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    const Optional<HitTarget> fieldTarget = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> fieldTarget = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(fieldTarget.has_value());
     EXPECT_EQ(fieldTarget.value().control.contentGeneration, replacement.generation);
-    EXPECT_FALSE(self.findTarget(self.popup()).has_value());
+    EXPECT_FALSE(self.tryTarget(self.popup()).has_value());
 }
 
 void VerifyUiComboBuilderTests_APreparedMoveKeepsAcceptedFieldAndPopupGeometryUntilCommit(mut UiComboBuilderTests self){
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    const Optional<HitTarget> fieldBefore = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
-    const Optional<HitTarget> popupBefore = self.findTarget(self.popup());
+    const Expected<HitTarget> fieldBefore = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> popupBefore = self.tryTarget(self.popup());
     ASSERT_TRUE(fieldBefore.has_value());
     ASSERT_TRUE(popupBefore.has_value());
     const Rect acceptedField = fieldBefore.value().rectangle;
     const Rect acceptedPopup = popupBefore.value().rectangle;
     ASSERT_TRUE(self.prepare(3u, MakeUiComboBuilderDefaultOptions(), MakeUiBuilderRect(300.0f, 300.0f, 320.0f, 240.0f)));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 2u);
-    const Optional<HitTarget> fieldPrepared = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
-    const Optional<HitTarget> popupPrepared = self.findTarget(self.popup());
+    const Expected<HitTarget> fieldPrepared = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> popupPrepared = self.tryTarget(self.popup());
     ASSERT_TRUE(fieldPrepared.has_value());
     ASSERT_TRUE(popupPrepared.has_value());
     ExpectUiRect(fieldPrepared.value().rectangle, acceptedField);
@@ -1764,8 +1754,8 @@ void VerifyUiComboBuilderTests_APreparedMoveKeepsAcceptedFieldAndPopupGeometryUn
     EXPECT_NE(self.m_state.bounds().x, acceptedField.x);
     EXPECT_FALSE(self.m_context.commitFrame(4u));
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    const Optional<HitTarget> fieldCommitted = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
-    const Optional<HitTarget> popupCommitted = self.findTarget(self.popup());
+    const Expected<HitTarget> fieldCommitted = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> popupCommitted = self.tryTarget(self.popup());
     ASSERT_TRUE(fieldCommitted.has_value());
     ASSERT_TRUE(popupCommitted.has_value());
     ExpectUiRect(fieldCommitted.value().rectangle, self.m_state.bounds());
@@ -1783,8 +1773,8 @@ void VerifyUiComboBuilderTests_MultipleFieldsHaveIndependentStableInternalIdsAnd
     ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, other, MakeUiComboBuilderDefaultOptions()).valid);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> firstTarget = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
-    const Optional<HitTarget> secondTarget = self.findTarget(self.id(s_UiComboBuilderSecondKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> firstTarget = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> secondTarget = self.tryTarget(self.id(s_UiComboBuilderSecondKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(firstTarget.has_value());
     ASSERT_TRUE(secondTarget.has_value());
     self.click(CenterUiRect(secondTarget.value().rectangle));
@@ -1800,8 +1790,8 @@ void VerifyUiComboBuilderTests_MultipleFieldsHaveIndependentStableInternalIdsAnd
     EXPECT_TRUE(other.isOpen());
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_EQ(other.selectedKey(), 2u);
-    EXPECT_FALSE(self.findTarget(self.popup()).has_value());
-    EXPECT_TRUE(self.findTarget(self.popup(s_UiComboBuilderSecondKey)).has_value());
+    EXPECT_FALSE(self.tryTarget(self.popup()).has_value());
+    EXPECT_TRUE(self.tryTarget(self.popup(s_UiComboBuilderSecondKey)).has_value());
     EXPECT_EQ(self.m_context.input().focus(), self.list(s_UiComboBuilderSecondKey));
 }
 
@@ -1833,12 +1823,12 @@ void VerifyUiComboBuilderTests_FullyClippedFieldCannotPublishItsPopupAboveThePar
     ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions()).valid);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> fieldTarget = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> fieldTarget = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(fieldTarget.has_value());
     EXPECT_GE(fieldTarget.value().rectangle.y, fieldTarget.value().clip.y + fieldTarget.value().clip.height);
     EXPECT_FLOAT_EQ(fieldTarget.value().clip.height, 0.0f);
-    EXPECT_FALSE(self.findTarget(self.popup()).has_value());
-    EXPECT_FALSE(self.findTarget(self.list()).has_value());
+    EXPECT_FALSE(self.tryTarget(self.popup()).has_value());
+    EXPECT_FALSE(self.tryTarget(self.list()).has_value());
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
@@ -1885,7 +1875,7 @@ void VerifyUiComboBuilderTests_OmissionRetiresThePopupAndHeldNavigationCannotOpe
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    const Optional<HitTarget> initialField = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> initialField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(initialField.has_value());
     const u64 oldDeclaration = initialField.value().declarationGeneration;
     InputEvent held = MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Down, false, false);
@@ -1896,15 +1886,15 @@ void VerifyUiComboBuilderTests_OmissionRetiresThePopupAndHeldNavigationCannotOpe
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_FALSE(self.m_context.input().hasPopup());
-    EXPECT_FALSE(self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey)).has_value());
-    EXPECT_FALSE(self.findTarget(self.list()).has_value());
+    EXPECT_FALSE(self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey)).has_value());
+    EXPECT_FALSE(self.tryTarget(self.list()).has_value());
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.accept(4u));
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_TRUE(self.m_result.closed);
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_EQ(self.m_state.listState().cursorKey(), 1u);
-    const Optional<HitTarget> recreatedField = self.findTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
+    const Expected<HitTarget> recreatedField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(recreatedField.has_value());
     EXPECT_NE(recreatedField.value().declarationGeneration, oldDeclaration);
     self.press(CoreKey::Tab);
@@ -1929,7 +1919,7 @@ void VerifyUiComboBuilderTests_ReplacementStateDiscardsAcceptedRowsAndItsQueuedA
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    const Optional<HitTarget> rowTarget = self.findTarget(self.row(2u));
+    const Expected<HitTarget> rowTarget = self.tryTarget(self.row(2u));
     ASSERT_TRUE(rowTarget.has_value());
     self.click(CenterUiRect(rowTarget.value().rectangle));
     ComboState replacement = ComboState();
@@ -1942,7 +1932,7 @@ void VerifyUiComboBuilderTests_ReplacementStateDiscardsAcceptedRowsAndItsQueuedA
     EXPECT_TRUE(self.m_state.isOpen());
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    EXPECT_FALSE(self.findTarget(self.popup()).has_value());
+    EXPECT_FALSE(self.tryTarget(self.popup()).has_value());
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
 }
 

@@ -163,16 +163,6 @@ public:
         return Control(width);
     }
 
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
-
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
-    }
-
     [[nodiscard]] b8 beginParent(u64 generation);
     [[nodiscard]] b8 prepareButtons(u64 generation);
     [[nodiscard]] b8 acceptButtons(u64 generation);
@@ -236,16 +226,6 @@ public:
         if(!declared)
             return MakeUnexpected(Failure{});
         return **declared;
-    }
-
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = UiTestSupport::FindHitTarget(m_context.input().targets(), widget))
-            return *found;
-        return {};
-    }
-
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return UiTestSupport::FindHitTarget(m_context.input().targets(), widget) != nullptr;
     }
 
     [[nodiscard]] Expected<PopupDeclaration> reserve(const AStringView key, const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
@@ -316,16 +296,6 @@ public:
         m_child.open();
         for(PopupState& state : m_deeper)
             state.open();
-    }
-
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
-
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
     }
 
     [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(parentId(), s_ComboKey); }
@@ -1417,9 +1387,9 @@ void VerifyUiNestedPopupBuilderTests_ChildLayoutDoesNotConsumeParentSpaceAndRest
     ASSERT_TRUE(self.finishRoot());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
 
-    const Optional<HitTarget> before = self.findTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderBeforeKey));
-    const Optional<HitTarget> after = self.findTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
-    const Optional<HitTarget> apply = self.findTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey));
+    const Expected<HitTarget> before = self.tryTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderBeforeKey));
+    const Expected<HitTarget> after = self.tryTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
+    const Expected<HitTarget> apply = self.tryTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey));
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     ASSERT_TRUE(apply.has_value());
@@ -1453,9 +1423,9 @@ void VerifyUiNestedPopupBuilderTests_ChildOpenedInsideARowRestoresTheSameParentC
     ASSERT_TRUE(self.finishRoot());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
 
-    const Optional<HitTarget> before = self.findTarget(RequireUiWidgetId(row, s_UiNestedPopupBuilderBeforeKey));
-    const Optional<HitTarget> after = self.findTarget(RequireUiWidgetId(row, s_UiNestedPopupBuilderAfterKey));
-    const Optional<HitTarget> apply = self.findTarget(RequireUiWidgetId(RequireUiWidgetId(row, s_UiNestedPopupContextChildKey), s_UiNestedPopupBuilderApplyKey));
+    const Expected<HitTarget> before = self.tryTarget(RequireUiWidgetId(row, s_UiNestedPopupBuilderBeforeKey));
+    const Expected<HitTarget> after = self.tryTarget(RequireUiWidgetId(row, s_UiNestedPopupBuilderAfterKey));
+    const Expected<HitTarget> apply = self.tryTarget(RequireUiWidgetId(RequireUiWidgetId(row, s_UiNestedPopupContextChildKey), s_UiNestedPopupBuilderApplyKey));
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     ASSERT_TRUE(apply.has_value());
@@ -1478,7 +1448,7 @@ void VerifyUiNestedPopupBuilderTests_ClosedChildBeginLeavesParentScopeAndFollowi
     ASSERT_TRUE(self.m_builder.endPopup());
     ASSERT_TRUE(self.finishRoot());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> after = self.findTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
+    const Expected<HitTarget> after = self.tryTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
     ASSERT_TRUE(after.has_value());
     EXPECT_FALSE(self.hasTarget(self.childId()));
     EXPECT_EQ(after.value().popup, parent);
@@ -1489,7 +1459,7 @@ void VerifyUiNestedPopupBuilderTests_ChildPaintEscapesParentClipAndLayersRemainO
     const DrawSnapshot snapshot = self.m_paint.freeze();
     ASSERT_FALSE(snapshot.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> apply = self.findTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey));
+    const Expected<HitTarget> apply = self.tryTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey));
     ASSERT_TRUE(apply.has_value());
     EXPECT_GT(apply.value().clip.x, self.m_parent.placement().bounds.x + self.m_parent.placement().bounds.width);
     EXPECT_LE(apply.value().clip.x, apply.value().rectangle.x);
@@ -1498,7 +1468,7 @@ void VerifyUiNestedPopupBuilderTests_ChildPaintEscapesParentClipAndLayersRemainO
     const VectorSingle edges = VectorSingle(apply.value().clip.x, apply.value().clip.y, apply.value().rectangle.x, apply.value().rectangle.y) + VectorSingle(apply.value().clip.width, apply.value().clip.height, apply.value().rectangle.width, apply.value().rectangle.height);
     EXPECT_GE(edges.x, edges.z);
     EXPECT_GE(edges.y, edges.w);
-    const Optional<HitTarget> after = self.findTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
+    const Expected<HitTarget> after = self.tryTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
     ASSERT_TRUE(after.has_value());
     EXPECT_GT(apply.value().layer, after.value().layer);
     const Point applyCenter = CenterUiRect(apply.value().rectangle);
@@ -1515,7 +1485,7 @@ void VerifyUiNestedPopupBuilderTests_ChildPaintEscapesParentClipAndLayersRemainO
 
 void VerifyUiNestedPopupBuilderTests_ChildActionLeavesBothParentControlsAvailableOnLaterDeclarations(mut UiNestedPopupBuilderTests self){
     ASSERT_TRUE(self.acceptButtons(1u));
-    const Optional<HitTarget> apply = self.findTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey));
+    const Expected<HitTarget> apply = self.tryTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey));
     ASSERT_TRUE(apply.has_value());
     const Point applyCenter = CenterUiRect(apply.value().rectangle);
     self.click(applyCenter);
@@ -1525,7 +1495,7 @@ void VerifyUiNestedPopupBuilderTests_ChildActionLeavesBothParentControlsAvailabl
     EXPECT_FALSE(self.m_afterActivated);
     self.m_child.close();
     ASSERT_TRUE(self.acceptButtons(3u));
-    const Optional<HitTarget> after = self.findTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
+    const Expected<HitTarget> after = self.tryTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupBuilderAfterKey));
     ASSERT_TRUE(after.has_value());
     EXPECT_FALSE(self.hasTarget(RequireUiWidgetId(self.childId(), s_UiNestedPopupBuilderApplyKey)));
     const Point afterCenter = CenterUiRect(after.value().rectangle);
@@ -1641,8 +1611,8 @@ void VerifyUiNestedPopupContextTests_ReservationOrderControlsLayersAcrossReactiv
     EXPECT_EQ(self.m_context.topPopupToken(), second.scope.token);
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> firstTarget = self.findTarget(first.action.id);
-    const Optional<HitTarget> secondTarget = self.findTarget(second.action.id);
+    const Expected<HitTarget> firstTarget = self.tryTarget(first.action.id);
+    const Expected<HitTarget> secondTarget = self.tryTarget(second.action.id);
     ASSERT_TRUE(firstTarget.has_value());
     ASSERT_TRUE(secondTarget.has_value());
     EXPECT_EQ(firstTarget.value().layer, 2u);
@@ -1908,7 +1878,7 @@ void VerifyUiNestedPopupContextTests_EighthNestedActivationIsBoundedAndNinthRese
 void VerifyUiNestedPopupLifetimeTests_ParentReopeningRetiresTheOldPlainChildAndKeepsParentControls(mut UiNestedPopupLifetimeTests self){
     ASSERT_TRUE(self.acceptPlain(1u));
     ASSERT_TRUE(self.m_childVisible);
-    const Optional<HitTarget> childTarget = self.findTarget(self.childId());
+    const Expected<HitTarget> childTarget = self.tryTarget(self.childId());
     ASSERT_TRUE(childTarget.has_value());
     const PopupToken oldChild = childTarget.value().popup;
     const u64 oldParentGeneration = self.m_parent.openGeneration();
@@ -1927,7 +1897,7 @@ void VerifyUiNestedPopupLifetimeTests_ParentReopeningRetiresTheOldPlainChildAndK
 
 void VerifyUiNestedPopupLifetimeTests_DeliberateChildReopeningAfterParentReopeningUsesANewPermittedLifetime(mut UiNestedPopupLifetimeTests self){
     ASSERT_TRUE(self.acceptPlain(1u));
-    const Optional<HitTarget> oldChildTarget = self.findTarget(self.childId());
+    const Expected<HitTarget> oldChildTarget = self.tryTarget(self.childId());
     ASSERT_TRUE(oldChildTarget.has_value());
     const PopupToken oldChild = oldChildTarget.value().popup;
     self.reopenParent();
@@ -1936,13 +1906,13 @@ void VerifyUiNestedPopupLifetimeTests_DeliberateChildReopeningAfterParentReopeni
     ASSERT_TRUE(self.acceptPlain(2u));
     EXPECT_TRUE(self.m_childVisible);
     EXPECT_TRUE(self.m_child.isOpen());
-    const Optional<HitTarget> newChildTarget = self.findTarget(self.childId());
+    const Expected<HitTarget> newChildTarget = self.tryTarget(self.childId());
     ASSERT_TRUE(newChildTarget.has_value());
     const PopupToken newChild = newChildTarget.value().popup;
     EXPECT_EQ(newChild.instanceGeneration, oldChild.instanceGeneration);
     EXPECT_NE(newChild.openGeneration, oldChild.openGeneration);
     const WidgetId applyId = RequireUiWidgetId(self.childId(), "apply");
-    const Optional<HitTarget> applyTarget = self.findTarget(applyId);
+    const Expected<HitTarget> applyTarget = self.tryTarget(applyId);
     ASSERT_TRUE(applyTarget.has_value());
     EXPECT_EQ(newChild, applyTarget.value().popup);
     EXPECT_EQ(self.m_context.input().focus(), applyId);
@@ -1961,7 +1931,7 @@ void VerifyUiNestedPopupLifetimeTests_ParentReopeningClosesTheOldComboPopupAndPr
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_EQ(self.m_state.selectedKey(), 2u);
     EXPECT_FALSE(self.hasTarget(RequireUiWidgetId(self.fieldId(), "rows")));
-    const Optional<HitTarget> fieldTarget = self.findTarget(self.fieldId());
+    const Expected<HitTarget> fieldTarget = self.tryTarget(self.fieldId());
     ASSERT_TRUE(fieldTarget.has_value());
     EXPECT_EQ(fieldTarget.value().popup.openGeneration, self.m_parent.openGeneration());
     self.expectParentControls();
@@ -1972,7 +1942,7 @@ void VerifyUiNestedPopupLifetimeTests_ExplicitComboOpeningAfterParentReopeningKe
     self.m_state.open();
     ASSERT_TRUE(self.acceptCombo(1u));
     const WidgetId rowsId = RequireUiWidgetId(self.fieldId(), s_UiNestedPopupLifetimeComboRowsKey);
-    const Optional<HitTarget> oldRowsTarget = self.findTarget(rowsId);
+    const Expected<HitTarget> oldRowsTarget = self.tryTarget(rowsId);
     ASSERT_TRUE(oldRowsTarget.has_value());
     const PopupToken oldCombo = oldRowsTarget.value().popup;
     self.reopenParent();
@@ -1980,7 +1950,7 @@ void VerifyUiNestedPopupLifetimeTests_ExplicitComboOpeningAfterParentReopeningKe
     ASSERT_TRUE(self.acceptCombo(2u));
     EXPECT_TRUE(self.m_state.isOpen());
     EXPECT_EQ(self.m_state.selectedKey(), 2u);
-    const Optional<HitTarget> newRowsTarget = self.findTarget(rowsId);
+    const Expected<HitTarget> newRowsTarget = self.tryTarget(rowsId);
     ASSERT_TRUE(newRowsTarget.has_value());
     EXPECT_NE(newRowsTarget.value().popup.openGeneration, oldCombo.openGeneration);
     EXPECT_EQ(newRowsTarget.value().popup.instanceGeneration, oldCombo.instanceGeneration);
@@ -1994,7 +1964,7 @@ void VerifyUiNestedPopupLifetimeTests_SearchParentReplacementCancelsStalePreedit
     self.m_search.combo().open();
     ASSERT_TRUE(self.acceptSearch(1u));
     const WidgetId queryId = RequireUiWidgetId(self.fieldId(), "query");
-    const Optional<HitTarget> oldQueryTarget = self.findTarget(queryId);
+    const Expected<HitTarget> oldQueryTarget = self.tryTarget(queryId);
     ASSERT_TRUE(oldQueryTarget.has_value());
     const PopupToken oldSearch = oldQueryTarget.value().popup;
     const u64 loans = self.m_host.loans;
@@ -2017,7 +1987,7 @@ void VerifyUiNestedPopupLifetimeTests_SearchParentReplacementCancelsStalePreedit
     ASSERT_TRUE(self.acceptSearch(3u));
     EXPECT_TRUE(self.m_search.combo().isOpen());
     EXPECT_EQ(self.m_search.combo().selectedKey(), 2u);
-    const Optional<HitTarget> newQueryTarget = self.findTarget(queryId);
+    const Expected<HitTarget> newQueryTarget = self.tryTarget(queryId);
     ASSERT_TRUE(newQueryTarget.has_value());
     EXPECT_NE(newQueryTarget.value().popup.openGeneration, oldSearch.openGeneration);
     EXPECT_GT(self.m_host.loans, loans);
@@ -2037,7 +2007,7 @@ void VerifyUiNestedPopupLifetimeTests_ParentReopeningClosesTheOldContextMenuWith
     EXPECT_FALSE(self.m_menu.isOpen());
     EXPECT_EQ(self.m_menu.cursorKey(), 0u);
     EXPECT_FALSE(self.hasTarget(self.menuRows()));
-    const Optional<HitTarget> anchor = self.findTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupLifetimeAnchorKey));
+    const Expected<HitTarget> anchor = self.tryTarget(RequireUiWidgetId(self.parentId(), s_UiNestedPopupLifetimeAnchorKey));
     ASSERT_TRUE(anchor.has_value());
     EXPECT_TRUE(anchor.value().contextMenu);
     EXPECT_EQ(anchor.value().popup.openGeneration, self.m_parent.openGeneration());
@@ -2047,7 +2017,7 @@ void VerifyUiNestedPopupLifetimeTests_ParentReopeningClosesTheOldContextMenuWith
 void VerifyUiNestedPopupLifetimeTests_ExplicitMenuOpeningAfterParentReopeningKeepsTheNewCommandLifetime(mut UiNestedPopupLifetimeTests self){
     ASSERT_TRUE(self.m_menu.open(MakeUiMultilinePopupRect(80.0f, 120.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.acceptMenu(1u));
-    const Optional<HitTarget> oldMenuTarget = self.findTarget(self.menuRows());
+    const Expected<HitTarget> oldMenuTarget = self.tryTarget(self.menuRows());
     ASSERT_TRUE(oldMenuTarget.has_value());
     const PopupToken oldMenu = oldMenuTarget.value().popup;
     self.reopenParent();
@@ -2055,7 +2025,7 @@ void VerifyUiNestedPopupLifetimeTests_ExplicitMenuOpeningAfterParentReopeningKee
     ASSERT_TRUE(self.acceptMenu(2u));
     EXPECT_TRUE(self.m_menu.isOpen());
     EXPECT_EQ(self.m_menu.cursorKey(), 1u);
-    const Optional<HitTarget> newMenuTarget = self.findTarget(self.menuRows());
+    const Expected<HitTarget> newMenuTarget = self.tryTarget(self.menuRows());
     ASSERT_TRUE(newMenuTarget.has_value());
     EXPECT_NE(newMenuTarget.value().popup.openGeneration, oldMenu.openGeneration);
     EXPECT_EQ(newMenuTarget.value().popup.instanceGeneration, oldMenu.instanceGeneration);
@@ -2073,11 +2043,11 @@ void VerifyUiNestedPopupLifetimeTests_AutomaticChildrenReserveTheirDeclaredLayer
     const WidgetId parentRows = RequireUiWidgetId(self.fieldId(), s_UiNestedPopupLifetimeComboRowsKey);
     const WidgetId childField = RequireUiWidgetId(self.childId(), s_UiNestedPopupLifetimeComboKey);
     const WidgetId childRows = RequireUiWidgetId(childField, s_UiNestedPopupLifetimeComboRowsKey);
-    const Optional<HitTarget> parentTarget = self.findTarget(self.parentId());
-    const Optional<HitTarget> parentRowsTarget = self.findTarget(parentRows);
-    const Optional<HitTarget> menuRowsTarget = self.findTarget(self.menuRows());
-    const Optional<HitTarget> childTarget = self.findTarget(self.childId());
-    const Optional<HitTarget> childRowsTarget = self.findTarget(childRows);
+    const Expected<HitTarget> parentTarget = self.tryTarget(self.parentId());
+    const Expected<HitTarget> parentRowsTarget = self.tryTarget(parentRows);
+    const Expected<HitTarget> menuRowsTarget = self.tryTarget(self.menuRows());
+    const Expected<HitTarget> childTarget = self.tryTarget(self.childId());
+    const Expected<HitTarget> childRowsTarget = self.tryTarget(childRows);
     ASSERT_TRUE(parentTarget.has_value());
     ASSERT_TRUE(parentRowsTarget.has_value());
     ASSERT_TRUE(menuRowsTarget.has_value());
@@ -2091,7 +2061,7 @@ void VerifyUiNestedPopupLifetimeTests_AutomaticChildrenReserveTheirDeclaredLayer
     WidgetId deepest = self.childId();
     for(usize index = 0u; index < 3u; ++index)
         deepest = RequireUiWidgetId(deepest, s_UiNestedPopupLifetimeDeepKey);
-    const Optional<HitTarget> deepestTarget = self.findTarget(deepest);
+    const Expected<HitTarget> deepestTarget = self.tryTarget(deepest);
     ASSERT_TRUE(deepestTarget.has_value());
     EXPECT_EQ(deepestTarget.value().layer, s_InputMaxPopups);
     const WidgetId leafId = RequireUiWidgetId(deepest, s_UiNestedPopupLifetimeLeafKey);
@@ -2108,7 +2078,7 @@ void VerifyUiNestedPopupLifetimeTests_AutomaticChildrenReserveTheirDeclaredLayer
     EXPECT_FALSE(self.m_context.finishFrame());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
-    const Optional<HitTarget> preservedRowsTarget = self.findTarget(parentRows);
+    const Expected<HitTarget> preservedRowsTarget = self.tryTarget(parentRows);
     ASSERT_TRUE(preservedRowsTarget.has_value());
     EXPECT_EQ(preservedRowsTarget.value().layer, 2u);
     EXPECT_EQ(self.m_context.input().focus(), leafId);

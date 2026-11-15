@@ -121,7 +121,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
             lightPitch,
             lightYaw,
             0.0f,
-            f32x4(1.00f, 0.96f, 0.88f, 1.0f),
+            VectorSingle(1.00f, 0.96f, 0.88f, 1.0f),
             s_GiDirectionalLightIntensity,
             SmokeWorldRef(this.m_world)
         );
@@ -319,7 +319,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
             VectorSingle(width, 1.0f, height, 0.0f),
             SmokeWorldRef(this.m_world)
         );
-        if(entity.valid() && !SetSmokeEntityRotation(entity, f32x4(wallRotation), SmokeWorldRef(this.m_world)))
+        if(entity.valid() && !SetSmokeEntityRotation(entity, wallRotation, SmokeWorldRef(this.m_world)))
             return s_InvalidEntityId;
         return entity;
     }

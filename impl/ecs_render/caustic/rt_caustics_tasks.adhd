@@ -190,8 +190,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
     hardwareCausticsScheduling.mergeWithPrevious = true;
     // Keep photon/geometry/resolve stages in one Hardware Caustics timing chain.
     hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
-    EnableSameFamilyComputeEffectRouting(hardwareCausticsScheduling);
-    EnableCrossFamilyComputeEffectRouting(hardwareCausticsScheduling);
+    ConfigureComputeEffectRoutingHint(true, hardwareCausticsScheduling);
 
     Core::GpuTaskDesc hardwarePhotonDesc;
     hardwarePhotonDesc

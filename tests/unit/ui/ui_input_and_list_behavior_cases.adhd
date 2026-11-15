@@ -352,12 +352,6 @@ FOUNDATION_INLINE void ExpectUiListBehaviorResult(const ListResult& actual, cons
     return ::UiTestSupport::RequireWidgetId(parent, stableKey);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<HitTarget> FindUiListScrollbarTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
-    if(const HitTarget* found = self.target(widget))
-        return *found;
-    return {};
-}
-
 [[nodiscard]] FOUNDATION_INLINE b8 UiListScrollbarPrepareSinglePopup(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState){
     return self.preparePopups(generation, lowerPopup, lowerState);
 }
@@ -1849,7 +1843,7 @@ void VerifyUiListBehaviorTests_RepeatedHomeNoopPreservesEarlierSelectionChange()
 void VerifyUiListBuilderScrollbarTests_ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightChanges(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
     const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
-    const Optional<HitTarget> acceptedOpt = FindUiListScrollbarTarget(self, thumb);
+    const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
     const Point origin = UiListScrollbarCenter(accepted.rectangle);
@@ -1862,7 +1856,7 @@ void VerifyUiListBuilderScrollbarTests_ThumbUsesItsAcceptedTrackMaximumWhenCandi
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), (10.0 / travel) * accepted.gestureMaximum);
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    const Optional<HitTarget> committedOpt = FindUiListScrollbarTarget(self, thumb);
+    const Expected<HitTarget> committedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(committedOpt.has_value());
     EXPECT_FLOAT_EQ(committedOpt.value().gestureReference.height, 190.0f);
 }
@@ -1870,7 +1864,7 @@ void VerifyUiListBuilderScrollbarTests_ThumbUsesItsAcceptedTrackMaximumWhenCandi
 void VerifyUiListBuilderScrollbarTests_LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
     const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
-    const Optional<HitTarget> acceptedOpt = FindUiListScrollbarTarget(self, thumb);
+    const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
     const Point origin = UiListScrollbarCenter(accepted.rectangle);
@@ -1893,7 +1887,7 @@ void VerifyUiListBuilderScrollbarTests_EmptyDatasetKeepsABoundedPageCountWithout
     self.m_source.count = 0u;
     const ListOptions options = MakeUiListScrollbarDefaultOptions();
     ASSERT_TRUE(self.accept(1u, options));
-    const Optional<HitTarget> hostTarget = FindUiListScrollbarTarget(self, self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
+    const Expected<HitTarget> hostTarget = self.tryTarget(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
     ASSERT_TRUE(hostTarget.has_value());
     EXPECT_EQ(hostTarget.value().pageRows, 1u);
     EXPECT_EQ(self.m_source.textCalls, 0u);
@@ -1903,7 +1897,7 @@ void VerifyUiListBuilderScrollbarTests_SmallDatasetBoundsPageSizeByRows(mut UiLi
     self.m_source.count = 2u;
     const ListOptions options = MakeUiListScrollbarDefaultOptions();
     ASSERT_TRUE(self.accept(1u, options));
-    const Optional<HitTarget> hostTarget = FindUiListScrollbarTarget(self, self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
+    const Expected<HitTarget> hostTarget = self.tryTarget(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
     ASSERT_TRUE(hostTarget.has_value());
     EXPECT_EQ(hostTarget.value().pageRows, 2u);
     EXPECT_EQ(self.m_source.textCalls, 2u);
@@ -1956,7 +1950,7 @@ void VerifyUiListBuilderScrollbarTests_PopupListsAutofocusAndRestoreEachCoveredL
 void VerifyUiListBuilderScrollbarTests_TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
     const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
-    const Optional<HitTarget> acceptedOpt = FindUiListScrollbarTarget(self, thumb);
+    const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
     const Point origin = UiListScrollbarCenter(accepted.rectangle);
@@ -1975,7 +1969,7 @@ void VerifyUiListBuilderScrollbarTests_FullHeightMinimumThumbFocusesItsHostWitho
     options.height.value = 20.0f;
     ASSERT_TRUE(self.accept(1u, options));
     const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
-    const Optional<HitTarget> acceptedOpt = FindUiListScrollbarTarget(self, thumb);
+    const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
     EXPECT_FLOAT_EQ(self.m_state.placement().track.height, self.m_state.placement().thumb.height);

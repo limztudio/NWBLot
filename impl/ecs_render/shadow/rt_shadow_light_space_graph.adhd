@@ -293,8 +293,7 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceSha
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
-    EnableSameFamilyComputeEffectRouting(scheduling);
-    EnableCrossFamilyComputeEffectRouting(scheduling);
+    ConfigureComputeEffectRoutingHint(true, scheduling);
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(s_LightSpaceDiagnosticsIdentity)

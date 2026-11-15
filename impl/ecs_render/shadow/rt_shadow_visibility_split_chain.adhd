@@ -338,8 +338,7 @@ b8 SoftShadowSplitTaskChainBuilder::declare(const SoftShadowSplitTaskChainInputs
     tailScheduling.allowPacketMerge = true;
     tailScheduling.mergeWithPrevious = true;
     tailScheduling.allowMergeAcrossConsumerFrontier = inputs.route.csgShadow;
-    EnableSameFamilyComputeEffectRouting(tailScheduling);
-    EnableCrossFamilyComputeEffectRouting(tailScheduling);
+    ConfigureComputeEffectRoutingHint(true, tailScheduling);
     if(!declareOpaqueTasks(inputs, uses, shadowTraceDependency, tailScheduling, tasks))
         return false;
     return declareTransparentTasks(inputs, uses, tailScheduling, csgShadowContext, scratchArena, tasks);
@@ -464,8 +463,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     opaqueScheduling.forceSubmissionBoundary = false;
     opaqueScheduling.allowPacketMerge = true;
     opaqueScheduling.mergeWithPrevious = false;
-    EnableSameFamilyComputeEffectRouting(opaqueScheduling, false);
-    EnableCrossFamilyComputeEffectRouting(opaqueScheduling);
+    ConfigureComputeEffectRoutingHint(false, opaqueScheduling);
     Core::GpuTaskDesc opaqueDesc;
     opaqueDesc
         .setIdentity(Name(s_ShadowPassOpaque))

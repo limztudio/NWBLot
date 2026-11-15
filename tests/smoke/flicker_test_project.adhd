@@ -90,11 +90,6 @@ const f32 s_FlickerMaxSpinDelta = 1.0f / 15.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Pin yaw for A/B captures that isolate flicker from motion.
-f32 FrozenYaw(){
-    return ReadSmokeFrozenYawCached("NWB_FLICKER_TEST_SPIN_ANGLE");
-}
-
 [arena]
 class FlickerTestSmokeProject : IProjectEntryCallbacks{
 
@@ -102,6 +97,7 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         this.m_context = context;
         this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_FlickerProjectName, SmokeRenderQualitySettings(), context);
         this.m_fpsProbe = FpsProbe(s_FlickerProjectName);
+        this.m_frozenYaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
     }
 
     public ~FlickerTestSmokeProject(){
@@ -157,10 +153,10 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
 
         const EntityID directionalLight = CreateSmokeDirectionalLight(
             s_FlickerDirectionalLightPitch, s_FlickerDirectionalLightYaw, 0.0f,
-            f32x4(1.0f, 0.96f, 0.88f, 0.0f), s_FlickerDirectionalLightIntensity, SmokeWorldRef(this.m_world)
+            VectorSingle(1.0f, 0.96f, 0.88f, 0.0f), s_FlickerDirectionalLightIntensity, SmokeWorldRef(this.m_world)
         );
         mut World world = SmokeWorldRef(this.m_world);
-        const EntityID pointLight = CreateSmokePointLight(f32x4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), f32x4(0.60f, 0.76f, 1.00f, 0.0f), s_FlickerPointLightIntensity, s_FlickerPointLightRange, world);
+        const EntityID pointLight = CreateSmokePointLight(VectorSingle(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), VectorSingle(0.60f, 0.76f, 1.00f, 0.0f), s_FlickerPointLightIntensity, s_FlickerPointLightRange, world);
         if(disableCaustics){
             Array<EntityID, 2u> lightEntities = Array<EntityID, 2u>();
             lightEntities[0u] = directionalLight;
@@ -198,8 +194,7 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
             safeDelta = Max(delta, 0.0f);
         this.m_fpsProbe.recordFrame(safeDelta);
         // Yaw priority: fixed override, manual scrub, then automatic spin.
-        const f32 frozen = FrozenYaw();
-        this.m_yaw.update(safeDelta, frozen, frozen >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
+        this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();
         SetSmokeYawWindowTitle(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI, this.m_context);
         return TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world));
@@ -210,9 +205,9 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
     }
 
     private void spinCharacters(){
-        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, this.m_yaw.yaw(), 0.0f, 0.0f)));
-        SetSmokeEntityRotationIfPresent(this.m_opaqueOwner, VectorSingle(rotation), SmokeWorldRef(this.m_world));
-        SetSmokeEntityRotationIfPresent(this.m_transparentOwner, VectorSingle(rotation), SmokeWorldRef(this.m_world));
+        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, this.m_yaw.yaw(), 0.0f, 0.0f));
+        SetSmokeEntityRotationIfPresent(this.m_opaqueOwner, rotation, SmokeWorldRef(this.m_world));
+        SetSmokeEntityRotationIfPresent(this.m_transparentOwner, rotation, SmokeWorldRef(this.m_world));
     }
 
     private mut ProjectRuntimeContext m_context;
@@ -223,6 +218,7 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
     private EntityID m_transparentOwner = s_InvalidEntityId;
     private EntityID m_groundEntity = s_InvalidEntityId;
     private YawSpinController m_yaw = YawSpinController();
+    private f32 m_frozenYaw;
 }
 
 

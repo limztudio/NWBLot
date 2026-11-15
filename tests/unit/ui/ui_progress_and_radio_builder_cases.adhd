@@ -108,12 +108,6 @@ public:
         m_builder.progressStyle().fillFallback = Name(s_MissingFillRegion);
     }
 
-    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        const HitTarget* hit = target(widget);
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
-    }
 };
 
 
@@ -374,16 +368,6 @@ using namespace NWB::UiRadioGroupTests;
 
 class UiRadioGroupBuilderTests : public RadioGroupFixture{
 public:
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
-    }
-
-    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        const HitTarget* hit = target(widget);
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
-    }
 
     [[nodiscard]] Expected<RadioGroupChoicePlacement> findChoice(const u64 keyValue)const noexcept{
         const RadioGroupChoicePlacement* found = choice(keyValue, m_state);
@@ -751,7 +735,7 @@ void VerifyUiProgressBuilderTests_InvalidFractionLeavesTheAcceptedTargetsAvailab
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId before = self.id("before", s_UiProgressCasePanelKey);
-    const auto acceptedResult = self.findTarget(before);
+    const auto acceptedResult = self.tryTarget(before);
     ASSERT_TRUE(acceptedResult.has_value());
     const HitTarget accepted = acceptedResult.value();
     const usize count = self.m_context.input().targets().size();
@@ -759,7 +743,7 @@ void VerifyUiProgressBuilderTests_InvalidFractionLeavesTheAcceptedTargetsAvailab
     EXPECT_FALSE(self.m_builder.progress("amount", bit_cast<f64>(cast<u64>(0x7ff8000000000001u)), MakeUiProgressDefaultOptions()));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
-    const auto currentResult = self.findTarget(before);
+    const auto currentResult = self.tryTarget(before);
     ASSERT_TRUE(currentResult.has_value());
     const HitTarget current = currentResult.value();
     EXPECT_EQ(current.declarationGeneration, accepted.declarationGeneration);
@@ -1741,7 +1725,7 @@ void VerifyUiRadioGroupBuilderTests_SelectedDisabledChoiceKeepsItsCheckedFrameAn
     EXPECT_EQ(self.m_state.selectedKey(), 30u);
     EXPECT_EQ(self.m_state.cursorKey(), 40u);
     const WidgetId part = RequireUiWidgetPartId(RequireUiWidgetId(self.host(), "choices"), 30u);
-    const auto partTarget = self.findTarget(part);
+    const auto partTarget = self.tryTarget(part);
     ASSERT_TRUE(partTarget.has_value());
     EXPECT_FALSE(partTarget.value().enabled);
     const DrawSnapshot snapshot = self.m_paint.freeze();
@@ -1758,7 +1742,7 @@ void VerifyUiRadioGroupBuilderTests_WholeDisabledGroupKeepsThePanelBarrierAndRet
     ASSERT_TRUE(self.accept(2u, options));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.activated);
-    const auto hostTarget = self.findTarget(self.host());
+    const auto hostTarget = self.tryTarget(self.host());
     ASSERT_TRUE(hostTarget.has_value());
     EXPECT_FALSE(hostTarget.value().enabled);
     EXPECT_FALSE(hostTarget.value().focusable);
@@ -1777,7 +1761,7 @@ void VerifyUiRadioGroupBuilderTests_EmptyAndAllDisabledSourcesAreValidWithoutATa
     ASSERT_TRUE(self.accept(1u));
     EXPECT_EQ(self.m_state.placement().count, 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
-    const auto emptyHost = self.findTarget(self.host());
+    const auto emptyHost = self.tryTarget(self.host());
     ASSERT_TRUE(emptyHost.has_value());
     EXPECT_FALSE(emptyHost.value().focusable);
     self.m_source.m_count = 5u;
@@ -1787,7 +1771,7 @@ void VerifyUiRadioGroupBuilderTests_EmptyAndAllDisabledSourcesAreValidWithoutATa
     ASSERT_TRUE(self.accept(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 30u);
     EXPECT_EQ(self.m_state.cursorKey(), 0u);
-    const auto disabledHost = self.findTarget(self.host());
+    const auto disabledHost = self.tryTarget(self.host());
     ASSERT_TRUE(disabledHost.has_value());
     EXPECT_FALSE(disabledHost.value().enabled);
     EXPECT_FALSE(self.m_result.activated);
@@ -1859,16 +1843,16 @@ void VerifyUiRadioGroupBuilderTests_RemovalAndKnownSourceReplacementClearTheComm
 
 void VerifyUiRadioGroupBuilderTests_PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit(mut UiRadioGroupBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const auto initialHost = self.findTarget(self.host());
+    const auto initialHost = self.tryTarget(self.host());
     ASSERT_TRUE(initialHost.has_value());
     const Rect oldBounds = initialHost.value().rectangle;
     ASSERT_TRUE(self.prepare(2u, RadioGroupOptions(), MakeUiProgressRect(80.0f, 40.0f, 420.0f, 360.0f)));
-    const auto preparedHost = self.findTarget(self.host());
+    const auto preparedHost = self.tryTarget(self.host());
     ASSERT_TRUE(preparedHost.has_value());
     ExpectUiRect(preparedHost.value().rectangle, oldBounds);
     EXPECT_NE(self.m_state.placement().bounds.x, oldBounds.x);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    const auto committedHost = self.findTarget(self.host());
+    const auto committedHost = self.tryTarget(self.host());
     ASSERT_TRUE(committedHost.has_value());
     ExpectUiRect(committedHost.value().rectangle, self.m_state.placement().bounds);
 }

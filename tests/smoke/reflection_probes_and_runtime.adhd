@@ -926,9 +926,9 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         const b8 projectionConfigured = SetSmokeCameraProjection(cameraId, s_ReflectionPi / 3.0f, aspectRatio, SmokeWorldRef(this.m_world));
         EntityID lightId = s_InvalidEntityId;
         if(this.m_opticalCase)
-            lightId = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, f32x4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, SmokeWorldRef(this.m_world));
+            lightId = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, SmokeWorldRef(this.m_world));
         else
-            lightId = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, f32x4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, SmokeWorldRef(this.m_world));
+            lightId = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, SmokeWorldRef(this.m_world));
         [essential] assert(cameraId.valid() && projectionConfigured && lightId.valid(), "ReflectionSmokeProject: camera/light creation failed");
         this.m_csgSliceRayCapacity = Min(this.m_configuration.settings().maxHardwareRaysPerFrame, 2u * extentWidth * extentHeight);
 

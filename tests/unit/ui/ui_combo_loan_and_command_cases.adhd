@@ -158,12 +158,6 @@ public:
         return declareCallbacks(generation) && finishPanel() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
-
     [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<32u>(m_context.input()); }
 
     void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
@@ -703,7 +697,7 @@ void VerifyUiComboLoanTests_ReconcileCallbackSelectionRejectsBeforeAnyQueuedComm
     self.m_state.select(1u);
     self.m_state.open();
     ASSERT_TRUE(self.acceptCallbacks(1u));
-    const Optional<HitTarget> rowTarget = self.findTarget(self.row(2u));
+    const Expected<HitTarget> rowTarget = self.tryTarget(self.row(2u));
     ASSERT_TRUE(rowTarget.has_value());
     self.click(CenterUiRect(rowTarget.value().rectangle));
     self.m_callbacks.arm(UiComboLoanMutationKind::KeySelect, 8u);
@@ -755,7 +749,7 @@ void VerifyUiComboLoanTests_MatchingPanelEndReleasesItsSourceAndStateBeforeTheNe
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     EXPECT_EQ(self.m_callbacks.mutations(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 8u);
-    EXPECT_TRUE(self.findTarget(self.popup()).has_value());
+    EXPECT_TRUE(self.tryTarget(self.popup()).has_value());
 }
 
 void VerifyUiComboLoanTests_LaterPopupTextCannotChangeAnEarlierComboAfterItsPaint(mut UiComboLoanTests self){

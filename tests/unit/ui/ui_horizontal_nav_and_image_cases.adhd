@@ -164,11 +164,6 @@ public:
         m_builder.setSkin(m_skin);
     }
 
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
 };
 
 
@@ -1410,12 +1405,12 @@ void VerifyUiImageBuilderTests_UnknownRegionRejectsWithoutReplacingAcceptedTarge
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId before = self.id(s_UiImageBuilderBeforeKey, s_UiImageBuilderPanelKey);
-    const Optional<HitTarget> accepted = self.findTarget(before);
+    const Expected<HitTarget> accepted = self.tryTarget(before);
     ASSERT_TRUE(accepted.has_value());
     ASSERT_TRUE(self.panel(2u));
     EXPECT_FALSE(self.m_builder.image("image", s_UiInputNameUnknownRegion));
     EXPECT_FALSE(self.m_context.commitFrame(2u));
-    const Optional<HitTarget> retained = self.findTarget(before);
+    const Expected<HitTarget> retained = self.tryTarget(before);
     ASSERT_TRUE(retained.has_value());
     EXPECT_EQ(retained.value().declarationGeneration, accepted.value().declarationGeneration);
 }
@@ -1427,14 +1422,14 @@ void VerifyUiImageBuilderTests_NonfiniteTintRejectsWithoutReplacingAcceptedTarge
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId before = self.id(s_UiImageBuilderBeforeKey, s_UiImageBuilderPanelKey);
-    const Optional<HitTarget> accepted = self.findTarget(before);
+    const Expected<HitTarget> accepted = self.tryTarget(before);
     ASSERT_TRUE(accepted.has_value());
     ASSERT_TRUE(self.panel(2u));
     ImageOptions options = ImageOptions();
     options.tint.r = bit_cast<f32>(0x7fc00001u);
     EXPECT_FALSE(self.m_builder.image("image", s_UiImageBuilderSpriteRegionName, options));
     EXPECT_FALSE(self.m_context.commitFrame(2u));
-    const Optional<HitTarget> retained = self.findTarget(before);
+    const Expected<HitTarget> retained = self.tryTarget(before);
     ASSERT_TRUE(retained.has_value());
     EXPECT_EQ(retained.value().declarationGeneration, accepted.value().declarationGeneration);
 }

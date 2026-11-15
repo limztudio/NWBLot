@@ -211,7 +211,7 @@ EntityID CreateReflectionOpticalPanel(
     );
     if(!entity.valid())
         return entity;
-    const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+    const VectorSingle verticalRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f));
     if(!SetSmokeEntityRotation(entity, verticalRot, world))
         return s_InvalidEntityId;
     if(!ApplyReflectionSurfaceParameters(entity, f0, 0.0f, world))
@@ -256,7 +256,7 @@ EntityID CreateReflectionOpticalBoundary(
         return entity;
     if(!ConfigureSmokeOpticalBoundary(entity, mode, priority, world))
         return s_InvalidEntityId;
-    if(!SetSmokeOpticalMaterialParameters(entity, s_ReflectionOpticalInterfaceName, ior, f32x4(transmission), world))
+    if(!SetSmokeOpticalMaterialParameters(entity, s_ReflectionOpticalInterfaceName, ior, transmission, world))
         return s_InvalidEntityId;
     return entity;
 }
@@ -550,7 +550,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
         );
         if(!entity.valid())
             return false;
-        const f32x4 torusRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+        const VectorSingle torusRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f));
         return SetSmokeEntityRotation(entity, torusRot, world);
     }
 
@@ -618,7 +618,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
     if(caseName == s_OpticalAlphaBeforeCase || caseName == "optical_alpha_after"){
         if(!CreateReflectionOpticalBox(-9.0f, 2.0f, 1.5f, tintedTrans, world).valid())
             return false;
-        const f32x4 paneRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+        const VectorSingle paneRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f));
         f32 paneZ = -11.0f;
         if(caseName == s_OpticalAlphaBeforeCase)
             paneZ = -7.0f;
@@ -669,7 +669,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
         count = 2u;
     const b8 mirrored = caseName == s_OpticalMirroredCase;
     const b8 tilted = caseName == s_OpticalTiltedCase;
-    const f32x4 tiltedRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.2f, 0.0f, 0.0f)));
+    const VectorSingle tiltedRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.2f, 0.0f, 0.0f));
     OpticalBoundaryMode boxMode = OpticalBoundaryMode::ClosedNested;
     if(caseName == s_OpticalUnspecifiedCase)
         boxMode = OpticalBoundaryMode::Unspecified;
@@ -1060,5 +1060,4 @@ class ReflectionCsgContextProbe{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

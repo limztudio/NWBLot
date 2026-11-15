@@ -4,6 +4,7 @@
 
 #include <impl/ecs_mesh/components.adhd>
 #include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/material/material_instance.adhd>
 #include <impl/ecs_scene/component_types.adhd>
 #include "smoke_environment.adhd"
 #include "smoke_project_helpers.adhd"
@@ -24,7 +25,6 @@ native{
 #include <impl/assets_material/asset.adhd.h>
 #include <impl/assets_mesh/asset.adhd.h>
 #include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
 #include <impl/ecs_render/module.adhd.h>
 #include <impl/ecs_render/reflection/statistics_types.adhd.h>
 #include <impl/ecs_scene/module.adhd.h>
@@ -83,284 +83,6 @@ using Impl::MeshSystem;
     return *MakeNotNull(world.getSystem<Impl::MeshSystem>());
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityRotation(const Core::ECS::EntityID entity, const Float4& rotation, Core::ECS::World& world)noexcept{
-    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-        transform->rotation = rotation;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityTransform(const Core::ECS::EntityID entity, const Float4& position, const Float4& rotation, Core::ECS::World& world)noexcept{
-    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-        transform->position = position;
-        transform->rotation = rotation;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityPosition(const Core::ECS::EntityID entity, const Float4& position, Core::ECS::World& world)noexcept{
-    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-        transform->position = position;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityPositionX(const Core::ECS::EntityID entity, const f32 x, Core::ECS::World& world)noexcept{
-    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-        transform->position.x = x;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityPositionZ(const Core::ECS::EntityID entity, const f32 z, Core::ECS::World& world)noexcept{
-    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-        transform->position.z = z;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityScaleX(const Core::ECS::EntityID entity, const f32 scaleX, Core::ECS::World& world)noexcept{
-    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-        transform->scale.x = scaleX;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityVisible(const Core::ECS::EntityID entity, const b8 visible, Core::ECS::World& world)noexcept{
-    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
-        renderer->visible = visible;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeOpticalBoundaryMode(const Core::ECS::EntityID entity, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world)noexcept{
-    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
-        renderer->opticalBoundaryMode = mode;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ConfigureSmokeOpticalBoundary(
-    const Core::ECS::EntityID entity,
-    const Impl::OpticalBoundaryMode::Enum mode,
-    const i32 priority,
-    Core::ECS::World& world
-)noexcept{
-    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
-        renderer->opticalBoundaryMode = mode;
-        renderer->opticalMediumPriority = priority;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ConfigureSmokeOpticalVolume(
-    const Core::ECS::EntityID entity,
-    const Name& group,
-    const i32 priority,
-    const Impl::OpticalVolumeCoincidence::Enum coincidence,
-    Core::ECS::World& world
-)noexcept{
-    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
-        renderer->opticalVolumeGroup = group;
-        renderer->opticalVolumePriority = priority;
-        renderer->opticalVolumeCoincidence = coincidence;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeMaterialHalf4(
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView parameterPath,
-    const Float4& value,
-    Core::ECS::World& world
-){
-    return Impl::SetMaterialMutableHalf4(world, entity, materialInterface, parameterPath, value);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeSurfaceRoughnessF0(
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView f0Path,
-    const AStringView roughnessPath,
-    const f32 f0,
-    const f32 roughness,
-    Core::ECS::World& world
-){
-    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.0f);
-    const Half packedRoughness = ConvertFloatToHalf(roughness);
-    return Impl::SetMaterialMutableParameter(
-        world,
-        entity,
-        materialInterface,
-        f0Path,
-        Impl::MaterialLayoutFieldType::f16x3,
-        Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))
-    ) && Impl::SetMaterialMutableParameter(
-        world,
-        entity,
-        materialInterface,
-        roughnessPath,
-        Impl::MaterialLayoutFieldType::f16,
-        Impl::PackMaterialInstanceValue(packedRoughness)
-    );
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeOpticalMaterialParameters(
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const f32 ior,
-    const Float4& transmission,
-    Core::ECS::World& world
-){
-    const Half packedIor = ConvertFloatToHalf(ior);
-    const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.0f);
-    return Impl::SetMaterialMutableParameter(
-        world,
-        entity,
-        materialInterface,
-        "runtime.ior",
-        Impl::MaterialLayoutFieldType::f16,
-        Impl::PackMaterialInstanceValue(packedIor)
-    ) && Impl::SetMaterialMutableParameter(
-        world,
-        entity,
-        materialInterface,
-        "runtime.unit_transmission",
-        Impl::MaterialLayoutFieldType::f16x3,
-        Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
-    );
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeLightColor(const Core::ECS::EntityID entity, const SIMDVectorSingle color, Core::ECS::World& world)noexcept{
-    if(auto* const light = world.tryGetComponent<Impl::Scene::LightComponent>(entity)){
-        light->setColor(color);
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeCameraVerticalFov(const Core::ECS::EntityID entity, const f32 verticalFov, Core::ECS::World& world)noexcept{
-    if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
-        camera->setVerticalFovRadians(verticalFov);
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeCameraProjection(const Core::ECS::EntityID entity, const f32 verticalFov, const f32 aspectRatio, Core::ECS::World& world)noexcept{
-    if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
-        camera->setVerticalFovRadians(verticalFov);
-        camera->setAspectRatio(aspectRatio);
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeCameraNearPlane(const Core::ECS::EntityID entity, const f32 nearPlane, Core::ECS::World& world)noexcept{
-    if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
-        camera->setNearPlane(nearPlane);
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 TryReadSmokeCameraProjection(
-    const Core::ECS::EntityID entity,
-    Core::ECS::World& world,
-    f32& outVerticalFov,
-    f32& outNearPlane,
-    f32& outFarPlane,
-    f32& outAspectRatio
-)noexcept{
-    if(const auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
-        outVerticalFov = camera->verticalFovRadians();
-        outNearPlane = camera->nearPlane();
-        outFarPlane = camera->farPlane();
-        outAspectRatio = camera->aspectRatio();
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokePointLight(
-    const Float4& position,
-    const Float4& color,
-    const f32 intensity,
-    const f32 range,
-    Core::ECS::World& world
-){
-    return Impl::Scene::CreatePointLightEntity(world, LoadFloat(position), LoadFloat(color), intensity, range);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 RecycleSmokeEntityGenerations(const u32 count, Core::ECS::World& world){
-    for(u32 generation = 0u; generation < count; ++generation){
-        const auto recycled = world.createEntity();
-        if(!recycled.id().valid())
-            return false;
-        world.destroyEntity(recycled.id());
-    }
-    return true;
-}
-
-[[nodiscard]] FOUNDATION_INLINE u32 SmokeEntityRawId(const Core::ECS::EntityID entity)noexcept{
-    return entity.id;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
-    const f32 pitch,
-    const f32 yaw,
-    const f32 roll,
-    const Float4& color,
-    const f32 intensity,
-    Core::ECS::World& world
-){
-    return Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, LoadFloat(color), intensity);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
-    const f32 pitch,
-    const f32 yaw,
-    const f32 roll,
-    const Float4& color,
-    const f32 intensity,
-    const b8 enableCaustics,
-    Core::ECS::World& world
-){
-    const auto light = Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, LoadFloat(color), intensity);
-    if(auto* const comp = world.tryGetComponent<Impl::Scene::LightComponent>(light))
-        comp->enableCaustics = enableCaustics;
-    return light;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokePointLight(
-    const Float4& position,
-    const Float4& color,
-    const f32 intensity,
-    const f32 range,
-    const f32 sourceRadius,
-    const b8 enableCaustics,
-    Core::ECS::World& world
-){
-    const auto light = Impl::Scene::CreatePointLightEntity(world, LoadFloat(position), LoadFloat(color), intensity, range);
-    if(auto* const comp = world.tryGetComponent<Impl::Scene::LightComponent>(light)){
-        comp->sourceRadius = sourceRadius;
-        comp->enableCaustics = enableCaustics;
-        return light;
-    }
-    return Core::ECS::s_InvalidEntityId;
-}
-
 struct SmokeRenderSystems{
     Impl::MeshSystem& mesh;
     Impl::RendererSystem& renderer;
@@ -394,6 +116,297 @@ class SmokeRenderQualitySettings{
     public SurfelGiQualitySettings surfelGi = SurfelGiQualitySettings();
     public ShadowQualitySettings shadow = ShadowQualitySettings();
     public SoftwareShadowSettings softwareShadow = SoftwareShadowSettings();
+}
+
+b8 SetSmokeEntityRotation(in EntityID entity, in VectorSingle rotation, mut World world){
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+
+    mut TransformComponent transform = world.getComponent<TransformComponent>(entity);
+    transform.rotation = f32x4(rotation);
+    return true;
+}
+
+b8 SetSmokeEntityTransform(in EntityID entity, in VectorSingle position, in VectorSingle rotation, mut World world){
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+
+    mut TransformComponent transform = world.getComponent<TransformComponent>(entity);
+    transform.position = f32x4(position);
+    transform.rotation = f32x4(rotation);
+    return true;
+}
+
+b8 SetSmokeEntityPosition(in EntityID entity, in VectorSingle position, mut World world){
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+
+    mut TransformComponent transform = world.getComponent<TransformComponent>(entity);
+    transform.position = f32x4(position);
+    return true;
+}
+
+b8 SetSmokeEntityPositionX(in EntityID entity, in f32 x, mut World world){
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+
+    mut TransformComponent transform = world.getComponent<TransformComponent>(entity);
+    transform.position.x = x;
+    return true;
+}
+
+b8 SetSmokeEntityPositionZ(in EntityID entity, in f32 z, mut World world){
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+
+    mut TransformComponent transform = world.getComponent<TransformComponent>(entity);
+    transform.position.z = z;
+    return true;
+}
+
+b8 SetSmokeEntityScaleX(in EntityID entity, in f32 scaleX, mut World world){
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+
+    mut TransformComponent transform = world.getComponent<TransformComponent>(entity);
+    transform.scale.x = scaleX;
+    return true;
+}
+
+b8 SetSmokeEntityVisible(in EntityID entity, in b8 visible, mut World world){
+    if(!world.hasComponent<RendererComponent>(entity))
+        return false;
+
+    mut RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+    renderer.visible = visible;
+    return true;
+}
+
+b8 SetSmokeOpticalBoundaryMode(in EntityID entity, in OpticalBoundaryMode mode, mut World world){
+    if(!world.hasComponent<RendererComponent>(entity))
+        return false;
+
+    mut RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+    renderer.opticalBoundaryMode = mode;
+    return true;
+}
+
+b8 ConfigureSmokeOpticalBoundary(in EntityID entity, in OpticalBoundaryMode mode, in i32 priority, mut World world){
+    if(!world.hasComponent<RendererComponent>(entity))
+        return false;
+
+    mut RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+    renderer.opticalBoundaryMode = mode;
+    renderer.opticalMediumPriority = priority;
+    return true;
+}
+
+b8 ConfigureSmokeOpticalVolume(
+    in EntityID entity,
+    in Name group,
+    in i32 priority,
+    in OpticalVolumeCoincidence coincidence,
+    mut World world
+){
+    if(!world.hasComponent<RendererComponent>(entity))
+        return false;
+
+    mut RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+    renderer.opticalVolumeGroup = group;
+    renderer.opticalVolumePriority = priority;
+    renderer.opticalVolumeCoincidence = coincidence;
+    return true;
+}
+
+b8 SetSmokeMaterialHalf4(
+    in EntityID entity,
+    in Name materialInterface,
+    in StringView parameterPath,
+    in VectorSingle value,
+    mut World world
+){
+    return SetMaterialMutableHalf4(world, entity, materialInterface, parameterPath, value);
+}
+
+b8 SetSmokeSurfaceRoughnessF0(
+    in EntityID entity,
+    in Name materialInterface,
+    in StringView f0Path,
+    in StringView roughnessPath,
+    in f32 f0,
+    in f32 roughness,
+    mut World world
+){
+    const f16x4u packedF0 = ConvertMaterialInstanceHalf4(VectorSingle(f0, f0, f0, 0.0f));
+    const u16 packedRoughness = ConvertFloatToHalf(roughness);
+    return SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        f0Path,
+        MaterialLayoutFieldType::f16x3,
+        PackMaterialInstanceHalf4U(packedF0)
+    ) && SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        roughnessPath,
+        MaterialLayoutFieldType::f16,
+        PackMaterialInstanceHalfBits(packedRoughness)
+    );
+}
+
+b8 SetSmokeOpticalMaterialParameters(
+    in EntityID entity,
+    in Name materialInterface,
+    in f32 ior,
+    in VectorSingle transmission,
+    mut World world
+){
+    const u16 packedIor = ConvertFloatToHalf(ior);
+    const f16x4u packedTransmission = ConvertMaterialInstanceHalf4(VectorSingle(transmission.x, transmission.y, transmission.z, 0.0f));
+    return SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        "runtime.ior",
+        MaterialLayoutFieldType::f16,
+        PackMaterialInstanceHalfBits(packedIor)
+    ) && SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        "runtime.unit_transmission",
+        MaterialLayoutFieldType::f16x3,
+        PackMaterialInstanceHalf4U(packedTransmission)
+    );
+}
+
+b8 SetSmokeLightColor(in EntityID entity, in VectorSingle color, mut World world){
+    if(!world.hasComponent<LightComponent>(entity))
+        return false;
+
+    mut LightComponent light = world.getComponent<LightComponent>(entity);
+    light.setColor(color);
+    return true;
+}
+
+b8 SetSmokeCameraVerticalFov(in EntityID entity, in f32 verticalFov, mut World world){
+    if(!world.hasComponent<CameraComponent>(entity))
+        return false;
+
+    mut CameraComponent camera = world.getComponent<CameraComponent>(entity);
+    camera.setVerticalFovRadians(verticalFov);
+    return true;
+}
+
+b8 SetSmokeCameraProjection(in EntityID entity, in f32 verticalFov, in f32 aspectRatio, mut World world){
+    if(!world.hasComponent<CameraComponent>(entity))
+        return false;
+
+    mut CameraComponent camera = world.getComponent<CameraComponent>(entity);
+    camera.setVerticalFovRadians(verticalFov);
+    camera.setAspectRatio(aspectRatio);
+    return true;
+}
+
+b8 SetSmokeCameraNearPlane(in EntityID entity, in f32 nearPlane, mut World world){
+    if(!world.hasComponent<CameraComponent>(entity))
+        return false;
+
+    mut CameraComponent camera = world.getComponent<CameraComponent>(entity);
+    camera.setNearPlane(nearPlane);
+    return true;
+}
+
+b8 TryReadSmokeCameraProjection(
+    in EntityID entity,
+    mut World world,
+    mut f32 outVerticalFov,
+    mut f32 outNearPlane,
+    mut f32 outFarPlane,
+    mut f32 outAspectRatio
+){
+    if(!world.hasComponent<CameraComponent>(entity))
+        return false;
+
+    const CameraComponent camera = world.getComponent<CameraComponent>(entity);
+    outVerticalFov = camera.verticalFovRadians();
+    outNearPlane = camera.nearPlane();
+    outFarPlane = camera.farPlane();
+    outAspectRatio = camera.aspectRatio();
+    return true;
+}
+
+b8 RecycleSmokeEntityGenerations(in u32 count, mut World world){
+    for(u32 generation = 0u; generation < count; ++generation){
+        const EntityID recycled = world.createEntity().id();
+        if(!recycled.valid())
+            return false;
+        world.destroyEntity(recycled);
+    }
+    return true;
+}
+
+u32 SmokeEntityRawId(in EntityID entity){
+    return entity.id;
+}
+
+EntityID CreateSmokePointLight(
+    in VectorSingle position,
+    in VectorSingle color,
+    in f32 intensity,
+    in f32 range,
+    mut World world
+){
+    return CreatePointLightEntity(world, position, color, intensity, range);
+}
+
+EntityID CreateSmokePointLight(
+    in VectorSingle position,
+    in VectorSingle color,
+    in f32 intensity,
+    in f32 range,
+    in f32 sourceRadius,
+    in b8 enableCaustics,
+    mut World world
+){
+    const EntityID light = CreatePointLightEntity(world, position, color, intensity, range);
+    if(!world.hasComponent<LightComponent>(light))
+        return s_InvalidEntityId;
+
+    mut LightComponent comp = world.getComponent<LightComponent>(light);
+    comp.sourceRadius = sourceRadius;
+    comp.enableCaustics = enableCaustics;
+    return light;
+}
+
+EntityID CreateSmokeDirectionalLight(
+    in f32 pitch,
+    in f32 yaw,
+    in f32 roll,
+    in VectorSingle color,
+    in f32 intensity,
+    mut World world
+){
+    return CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
+}
+
+EntityID CreateSmokeDirectionalLight(
+    in f32 pitch,
+    in f32 yaw,
+    in f32 roll,
+    in VectorSingle color,
+    in f32 intensity,
+    in b8 enableCaustics,
+    mut World world
+){
+    const EntityID light = CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
+    if(world.hasComponent<LightComponent>(light)){
+        mut LightComponent comp = world.getComponent<LightComponent>(light);
+        comp.enableCaustics = enableCaustics;
+    }
+    return light;
 }
 
 class SmokeTintedEntitySetup{
@@ -611,8 +624,7 @@ SmokeTintedEntitySetup CreateSmokeTintedEntity(
 }
 
 void SetSmokeEntityRotationIfPresent(in EntityID entity, in VectorSingle rotation, mut World world){
-    if(!SetSmokeEntityRotation(entity, f32x4(rotation), world))
-        return;
+    SetSmokeEntityRotation(entity, rotation, world);
 }
 
 b8 ApplySmokeMaterialTint(
@@ -621,8 +633,7 @@ b8 ApplySmokeMaterialTint(
     in StringView tintParameterPath,
     mut World world
 ){
-    const f32x4 storedTint = f32x4(colorTint);
-    return SetSmokeMaterialHalf4(setup.entity, setup.materialInterface, tintParameterPath, storedTint, world);
+    return SetSmokeMaterialHalf4(setup.entity, setup.materialInterface, tintParameterPath, colorTint, world);
 }
 
 EntityID CreateTintedStaticMeshEntityWithPath(

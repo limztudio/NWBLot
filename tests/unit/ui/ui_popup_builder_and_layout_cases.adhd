@@ -92,17 +92,6 @@ public:
         return UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), key);
     }
 
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
-    }
-
-    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        const HitTarget* hit = target(widget);
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
-    }
-
     void useEditHost(IEditBoxHost& host)noexcept{
         m_builder.setEditHost(&host);
     }
@@ -169,13 +158,6 @@ public:
 
     void clearRetainedRoots(){
         m_context.retainRoots({});
-    }
-
-    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        const HitTarget* hit = UiTestSupport::FindHitTarget(m_context.input().targets(), widget);
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
     }
 
     [[nodiscard]] Expected<WidgetState> declare(const AStringView key, const WidgetKind::Enum kind){
@@ -635,7 +617,7 @@ void VerifyUiPopupBuilderTests_ClosingFromTheBodySkipsBackdropBodyPaintAndCandid
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId closeId = self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey);
-    const auto closeTarget = self.findTarget(closeId);
+    const auto closeTarget = self.tryTarget(closeId);
     ASSERT_TRUE(closeTarget.has_value());
     self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
     ASSERT_TRUE(self.begin(2u));
@@ -675,8 +657,8 @@ void VerifyUiPopupBuilderTests_ClosingAfterTheFirstQueuedButtonPreventsLaterQueu
     const DrawSnapshot first = self.m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const auto closeTarget = self.findTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
-    const auto laterTarget = self.findTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
+    const auto closeTarget = self.tryTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
+    const auto laterTarget = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     ASSERT_TRUE(laterTarget.has_value());
     self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
@@ -707,7 +689,7 @@ void VerifyUiPopupBuilderTests_EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeH
     const DrawSnapshot first = self.m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const auto closeTarget = self.findTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
+    const auto closeTarget = self.tryTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
     EditModel model = EditModel(self.m_arena);
@@ -761,11 +743,11 @@ void VerifyUiPopupBuilderTests_CloseAndReopenInTheBodySkipsOldEpochPaintAndActio
     const DrawSnapshot first = self.m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const auto ownerTarget = self.findTarget(self.ownerId());
+    const auto ownerTarget = self.tryTarget(self.ownerId());
     ASSERT_TRUE(ownerTarget.has_value());
     const PopupToken oldToken = ownerTarget.value().popup;
-    const auto closeTarget = self.findTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
-    const auto laterTarget = self.findTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
+    const auto closeTarget = self.tryTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
+    const auto laterTarget = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     ASSERT_TRUE(laterTarget.has_value());
     self.click(MakeUiPopupPoint(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
@@ -795,12 +777,12 @@ void VerifyUiPopupBuilderTests_CloseAndReopenInTheBodySkipsOldEpochPaintAndActio
     const DrawSnapshot reopened = self.m_paint.freeze();
     EXPECT_FALSE(reopened.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    const auto reopenedOwnerTarget = self.findTarget(self.ownerId());
+    const auto reopenedOwnerTarget = self.tryTarget(self.ownerId());
     ASSERT_TRUE(reopenedOwnerTarget.has_value());
     EXPECT_EQ(reopenedOwnerTarget.value().popup.instanceGeneration, oldToken.instanceGeneration);
     EXPECT_EQ(reopenedOwnerTarget.value().popup.openGeneration, state.openGeneration());
     EXPECT_TRUE(self.m_context.input().actions().empty());
-    const auto reopenedLater = self.findTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
+    const auto reopenedLater = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(reopenedLater.has_value());
     self.click(MakeUiPopupPoint(reopenedLater.value().rectangle.x + 4.0f, reopenedLater.value().rectangle.y + 4.0f));
     ASSERT_TRUE(self.begin(4u));
@@ -867,7 +849,7 @@ void VerifyUiPopupBuilderTests_ReplacementClosedStateImmediatelyFencesPreviousAc
     EXPECT_FALSE(accepted.commands().empty());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId child = self.id(s_UiPopupBuilderApplyKey, s_UiPopupBuilderPopupKey);
-    const auto childTarget = self.findTarget(child);
+    const auto childTarget = self.tryTarget(child);
     ASSERT_TRUE(childTarget.has_value());
     self.click(MakeUiPopupPoint(childTarget.value().rectangle.x + 4.0f, childTarget.value().rectangle.y + 4.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
@@ -1148,12 +1130,12 @@ void VerifyUiPopupContextTests_TargetsInSequentialScopesReceiveDistinctLayersThe
     const WidgetState tail = tailResult.value();
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const auto baseHit = self.findTarget(base.id);
-    const auto firstOwnerHit = self.findTarget(firstOwner.id);
-    const auto firstChildHit = self.findTarget(firstChild.id);
-    const auto secondOwnerHit = self.findTarget(secondOwner.id);
-    const auto secondChildHit = self.findTarget(secondChild.id);
-    const auto tailHit = self.findTarget(tail.id);
+    const auto baseHit = self.tryTarget(base.id);
+    const auto firstOwnerHit = self.tryTarget(firstOwner.id);
+    const auto firstChildHit = self.tryTarget(firstChild.id);
+    const auto secondOwnerHit = self.tryTarget(secondOwner.id);
+    const auto secondChildHit = self.tryTarget(secondChild.id);
+    const auto tailHit = self.tryTarget(tail.id);
     ASSERT_TRUE(baseHit.has_value());
     ASSERT_TRUE(firstOwnerHit.has_value());
     ASSERT_TRUE(firstChildHit.has_value());

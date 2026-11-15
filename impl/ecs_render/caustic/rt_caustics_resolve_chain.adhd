@@ -228,8 +228,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     causticsScheduling.mergeWithPrevious = true;
     // Stages stay serial successors in one timing packet.
     causticsScheduling.allowMergeAcrossConsumerFrontier = true;
-    EnableSameFamilyComputeEffectRouting(causticsScheduling);
-    EnableCrossFamilyComputeEffectRouting(causticsScheduling);
+    ConfigureComputeEffectRoutingHint(true, causticsScheduling);
 
     Core::GpuTaskDesc photonDesc;
     photonDesc
@@ -377,8 +376,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
     // Allow physical queue balancing for the initial packet; successors retain its selected queue.
-    EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
-    EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling);
+    ConfigureComputeEffectRoutingHint(false, irradianceClearScheduling);
 
     Core::GpuTaskDesc irradianceClearDesc;
     irradianceClearDesc
@@ -414,8 +412,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         accumulatorBootstrapClearScheduling.allowPacketMerge = true;
         accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
         accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;
-        EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
-        EnableCrossFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
+        ConfigureComputeEffectRoutingHint(true, accumulatorBootstrapClearScheduling);
         Core::GpuTaskDesc accumulatorBootstrapClearDesc;
         accumulatorBootstrapClearDesc
             .setIdentity(inputs.hardwareCaustics ? Name(s_CausticsNameRenderHardwareCausticsAccumulatorBootstrapClear) : Name(s_CausticsNameRenderSoftwareCausticsAccumulatorBootstrapClear))
@@ -447,8 +444,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         accumulatorDecayScheduling.allowPacketMerge = true;
         accumulatorDecayScheduling.mergeWithPrevious = true;
         accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
-        EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
-        EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling);
+        ConfigureComputeEffectRoutingHint(true, accumulatorDecayScheduling);
         const Array<Core::GpuTaskResourceUse, 1u> accumulatorDecayUses = {
             ReadWriteTextureUse(inputs.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess),
         };

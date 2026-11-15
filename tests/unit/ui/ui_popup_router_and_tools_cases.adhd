@@ -147,17 +147,6 @@ using namespace NWB::UiPopupToolsTests;
 
 class PopupToolsCaseFixture : public PopupToolsFixture{
 public:
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
-    }
-
-    [[nodiscard]] Expected<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        const HitTarget* hit = target(widget);
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
-    }
-
     [[nodiscard]] b8 hasMenuHost()const noexcept{
         return menuHost() != nullptr;
     }
@@ -1272,11 +1261,11 @@ void VerifyUiPopupToolsBuilderTests_OmittedTooltipAttachmentCannotReuseDelayWhil
     ASSERT_TRUE(self.acceptTools(2u, true, false));
     ASSERT_TRUE(self.acceptTools(3u, true, false));
     EXPECT_FALSE(self.m_tooltip.visible());
-    const auto anchorBefore = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    const auto anchorBefore = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(anchorBefore.has_value());
     const u64 anchorDeclaration = anchorBefore.value().declarationGeneration;
     ASSERT_TRUE(self.acceptTools(4u, false, false));
-    const auto anchorAfter = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    const auto anchorAfter = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(anchorAfter.has_value());
     EXPECT_EQ(anchorAfter.value().declarationGeneration, anchorDeclaration);
     ASSERT_TRUE(self.acceptTools(5u, true, false));
@@ -1313,7 +1302,7 @@ void VerifyUiPopupToolsBuilderTests_TooltipInsideAPlainPopupPaintsAfterItsOverla
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiPopupToolsCaseAnchorKey, "plain"));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     ASSERT_FALSE(snapshot.commands().empty());
-    const auto anchorTarget = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, "plain"));
+    const auto anchorTarget = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, "plain"));
     ASSERT_TRUE(anchorTarget.has_value());
     EXPECT_GT(snapshot.commands().back().layer, anchorTarget.value().layer);
 }
@@ -1480,7 +1469,7 @@ void VerifyUiPopupToolsBuilderTests_EmptyMenuRemainsOpenAndCannotProduceACommand
 void VerifyUiPopupToolsBuilderTests_DisabledAttachmentDoesNotPublishAContextMenuTrigger(mut UiPopupToolsBuilderTests self){
     self.m_menuOptions.enabled = false;
     ASSERT_TRUE(self.acceptTools(1u, false));
-    const auto anchor = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    const auto anchor = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(anchor.has_value());
     EXPECT_FALSE(anchor.value().contextMenu);
     ASSERT_TRUE(self.moveToAnchor());
@@ -1499,7 +1488,7 @@ void VerifyUiPopupToolsBuilderTests_DisablingTheAnchorClosesItsOpenMenuAndRemove
     EXPECT_FALSE(self.m_menuResult.activated);
     EXPECT_FALSE(self.m_menu.isOpen());
     EXPECT_FALSE(self.m_context.input().hasPopup());
-    const auto anchor = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    const auto anchor = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(anchor.has_value());
     EXPECT_FALSE(anchor.value().contextMenu);
 }
@@ -1516,11 +1505,11 @@ void VerifyUiPopupToolsBuilderTests_FullyClippedAnchorCancelsItsOpenContextMenuD
 void VerifyUiPopupToolsBuilderTests_RecreatedMenuAttachmentClosesOldPopupWhileItsAnchorSurvives(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.openBySecondary(2u));
-    const auto anchorBefore = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    const auto anchorBefore = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(anchorBefore.has_value());
     const u64 anchorDeclaration = anchorBefore.value().declarationGeneration;
     ASSERT_TRUE(self.acceptTools(3u, false, false));
-    const auto anchorAfter = self.findTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    const auto anchorAfter = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
     ASSERT_TRUE(anchorAfter.has_value());
     EXPECT_EQ(anchorAfter.value().declarationGeneration, anchorDeclaration);
     EXPECT_FALSE(self.m_context.input().hasPopup());

@@ -890,7 +890,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     const auto timeResult = GetLocalTime();
     if(!timeResult)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to read local time for crash package name"));
+        server.enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Failed to read local time for crash package name")), Core::Common::LogType::Warning);
     const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
@@ -1264,5 +1264,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

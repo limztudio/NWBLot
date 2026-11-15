@@ -13,7 +13,7 @@ native{
 
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/skin_types.adhd.h>
-#include <impl/ecs_skeleton/runtime_helpers.adhd.h>
+#include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -151,7 +151,7 @@ namespace MeshSkinningPayload{
     payload.resolvedSkinningMode = static_cast<u32>(SkeletonSkinningMode::LinearBlend);
 
     if(skeletonPose && HasSkeletonPoseData(*skeletonPose)){
-        const Expected<u32> skinningMode = SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints);
+        const Expected<u32> skinningMode = TryBuildStoredJointPaletteVectorFromSkeletonPose(*skeletonPose, payload.poseJoints);
         if(!skinningMode.has_value()){
             payload.poseJoints.clear();
             LogInvalidMeshSkinningSkeletonPose(instance.handle.value);

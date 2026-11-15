@@ -88,7 +88,7 @@ class ReflectionFeedbackScene{
         if(!entity.valid())
             return entity;
         if(!horizontal){
-            const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+            const VectorSingle verticalRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f));
             if(!SetSmokeEntityRotation(entity, verticalRot, world))
                 return s_InvalidEntityId;
         }
@@ -247,7 +247,7 @@ class ReflectionReferenceScene{
         in f32 specularF0
     ){
         const EntityID entity = this.createMesh(s_ReflectionSuitePlaneMesh, material, color, position, scale, specularF0);
-        const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+        const VectorSingle verticalRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f));
         const b8 rotated = SetSmokeEntityRotation(entity, verticalRot, this.m_world);
         [essential] assert(rotated, "ReflectionSmokeProject: panel rotation failed");
     }
@@ -378,7 +378,7 @@ class ReflectionRoughnessScene{
             mutated = SetSmokeEntityPositionZ(this.m_red, -150.0f, world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Material){
-            mutated = SetSmokeMaterialHalf4(this.m_red, s_ReflectionSurfaceInterfaceName, "runtime.color_tint", f32x4(0.0f, 0.0f, 0.0f, 1.0f), world);
+            mutated = SetSmokeMaterialHalf4(this.m_red, s_ReflectionSurfaceInterfaceName, "runtime.color_tint", VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Light){
             // Keep a positive-intensity authored light present so scene gathering does not insert its default light.
@@ -430,7 +430,7 @@ class ReflectionRoughnessScene{
         );
         if(!entity.valid())
             return entity;
-        const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
+        const VectorSingle verticalRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f));
         if(!SetSmokeEntityRotation(entity, verticalRot, world))
             return s_InvalidEntityId;
         if(!ApplyReflectionSurfaceParameters(entity, f0, roughness, world))

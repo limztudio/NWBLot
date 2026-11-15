@@ -110,7 +110,7 @@ class RefractionGalleryBuilder{
         );
         [essential] assert(entity.valid(), "RefractionSmokeProject: gallery object creation failed");
 
-        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(pitch, yaw, roll, 0.0f)));
+        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(pitch, yaw, roll, 0.0f));
         const b8 rotated = SetSmokeEntityRotation(entity, rotation, this.m_world);
         [essential] assert(rotated, "RefractionSmokeProject: gallery object rotation failed");
         if(!this.m_preview){
@@ -182,7 +182,7 @@ class RefractionGalleryBuilder{
             entity,
             s_RefractionGalleryOpticalInterfaceName,
             ior,
-            f32x4(transmission),
+            transmission,
             this.m_world
         );
     }
@@ -371,7 +371,7 @@ class RefractionGalleryBuilder{
             this.m_world
         );
         [essential] assert(entity.valid(), "RefractionSmokeProject: gallery backdrop creation failed");
-        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_RefractionHalfPi, 0.0f, 0.0f, 0.0f)));
+        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_RefractionHalfPi, 0.0f, 0.0f, 0.0f));
         const b8 rotated = SetSmokeEntityRotation(entity, rotation, this.m_world);
         [essential] assert(rotated, "RefractionSmokeProject: gallery backdrop rotation failed");
     }
@@ -431,7 +431,7 @@ class RefractionGalleryBuilder{
 // Optional gallery cases use the same renderer and readback path as the original regression fixture.
 b8 CreateRefractionGalleryScene(in StringView caseName, in b8 geometryPreview, mut World world){
     const EntityID camera = CreateSmokeCamera(s_RefractionGalleryCenterHeight, s_RefractionGalleryCameraDistance, 0.0f, world);
-    const EntityID light = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, f32x4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, world);
+    const EntityID light = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, world);
     if(!camera.valid() || !light.valid())
         return false;
 

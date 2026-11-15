@@ -63,8 +63,7 @@ namespace __hidden_avboit_stage_record_and_tasks{
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     // Keep each effect in one recording packet while the compiler chooses its queue.
-    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(scheduling);
-    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(scheduling);
+    ConfigureComputeEffectRoutingHint(true, scheduling);
     // Accepted samples use the queue class and exact transport chosen by this compile.
     scheduling.allowTimingFeedbackRouting = true;
     scheduling.allowCrossClassTimingFeedbackRouting = true;

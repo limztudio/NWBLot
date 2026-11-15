@@ -322,13 +322,11 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
         primitiveScheduling.cost = Core::GpuTaskCostHint::Tiny;
         primitiveScheduling.forceSubmissionBoundary = false;
         primitiveScheduling.allowPacketMerge = true;
-        EnableSameFamilyComputeEffectRouting(primitiveScheduling, false);
-        EnableCrossFamilyComputeEffectRouting(primitiveScheduling);
+        ConfigureComputeEffectRoutingHint(false, primitiveScheduling);
 
         if(graphOwnedAdaptivePlan.compact){
             Core::GpuTaskSchedulingHint counterClearScheduling = primitiveScheduling;
             counterClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
-            EnableSameFamilyComputeEffectRouting(counterClearScheduling, adaptivePrimitivePrecedesVisibility);
             Core::GpuTaskDesc counterClearDesc;
             counterClearDesc.setIdentity(Name(s_ShadowPassAdaptiveCounterClear)).setMarkerLabel(s_ShadowAdaptiveCounterClearLabel).setScheduling(counterClearScheduling).setDependencies({ &shadowVisibilityDependency, 1u });
             const auto deferredShadowVisibilityAdaptiveCounterClearTaskResult = context.graph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u });
@@ -351,8 +349,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     allLitClearScheduling.forceSubmissionBoundary = false;
     allLitClearScheduling.allowPacketMerge = true;
     allLitClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
-    EnableSameFamilyComputeEffectRouting(allLitClearScheduling, adaptivePrimitivePrecedesVisibility);
-    EnableCrossFamilyComputeEffectRouting(allLitClearScheduling);
+    ConfigureComputeEffectRoutingHint(adaptivePrimitivePrecedesVisibility, allLitClearScheduling);
     const Core::GpuTaskResourceUse allLitClearResourceUse = WriteTextureUse(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     Core::GpuTaskDesc allLitClearDesc;
     allLitClearDesc
@@ -380,8 +377,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    EnableSameFamilyComputeEffectRouting(scheduling);
-    EnableCrossFamilyComputeEffectRouting(scheduling);
+    ConfigureComputeEffectRoutingHint(true, scheduling);
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name(s_ShadowVisibilityPass))

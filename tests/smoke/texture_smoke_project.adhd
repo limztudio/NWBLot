@@ -343,7 +343,7 @@ class TextureSmokeProject : IProjectEntryCallbacks{
 
         const EntityID directionalLight = CreateSmokeDirectionalLight(
             s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f,
-            f32x4(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity, SmokeWorldRef(this.m_world)
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity, SmokeWorldRef(this.m_world)
         );
         [essential] assert(
             activeCamera.valid() && directionalLight.valid() && this.m_whiteGround.valid() && this.m_texturedSphere.valid(),

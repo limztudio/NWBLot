@@ -207,11 +207,6 @@ f32 ConfiguredSourceRadius(){
     return 0.0f;
 }
 
-// Pin yaw for captures that isolate shimmer from motion.
-f32 FrozenYaw(){
-    return ReadSmokeFrozenYawCached("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
-}
-
 [arena]
 class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
@@ -221,6 +216,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         this.m_timingRenderPass = ShadowTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(s_SoftShadowProjectName);
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(s_SoftShadowProjectName);
+        this.m_frozenYaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
     }
 
     public ~SoftShadowTestSmokeProject(){
@@ -289,8 +285,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         if(this.m_timingEnabled)
             this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
         // Yaw priority: fixed override, manual scrub, then automatic spin.
-        const f32 frozen = FrozenYaw();
-        this.m_yaw.update(safeDelta, frozen, frozen >= 0.0f, this.m_arrowYawInput, s_SoftShadowManualYawSpeed, s_SoftShadowSpinSpeed, s_SoftShadowMaxSpinDelta);
+        this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_SoftShadowManualYawSpeed, s_SoftShadowSpinSpeed, s_SoftShadowMaxSpinDelta);
         this.updateWindowTitle();
         this.m_scene.spinCasters(SmokeWorldRef(this.m_world), this.m_yaw.yaw());
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
@@ -322,6 +317,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     private ArrowYawInputHandler m_arrowYawInput = ArrowYawInputHandler();
     private SoftShadowScene m_scene = SoftShadowScene();
     private YawSpinController m_yaw = YawSpinController();
+    private f32 m_frozenYaw;
     private f32 m_angularRadius = s_SoftShadowDefaultAngularRadius;
     private f32 m_sourceRadius = s_SoftShadowDefaultSourceRadius;
     private u32 m_rendererBaselineRenderedFrameCount = 0u;

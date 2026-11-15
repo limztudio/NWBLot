@@ -232,16 +232,6 @@ enum<u8> CallbackMutation{
     FailContext
 }
 
-Expected<UiHitTarget> TryFindEcsUiHitTarget(in UiContext context, in UiWidgetId id){
-    const auto targets = context.input().targets();
-    for(usize i = 0u; i < targets.size(); ++i){
-        if(targets[i].id == id){
-            return targets[i];
-        }
-    }
-    return MakeUnexpected(Failure());
-}
-
 UiControlToken MakeEcsUiControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
     UiControlToken token = UiControlToken();
     token.instanceGeneration = instanceGeneration;
@@ -407,7 +397,7 @@ void RejectEcsUiNavigationMutation(mut UiEditNavigationGuardTests self, in Callb
 
 b8 PublishEcsUiPointerCapturePart(mut UiEditPointerCaptureTests self, in b8 gesture){
     Array<UiHitTarget, 2> targets = Array<UiHitTarget, 2>();
-    const Expected<UiHitTarget> foundTarget = TryFindEcsUiHitTarget(self.m_context, self.m_widget.id);
+    const Expected<UiHitTarget> foundTarget = self.m_context.input().tryFindTarget(self.m_widget.id);
     if(!foundTarget.has_value()){
         return false;
     }

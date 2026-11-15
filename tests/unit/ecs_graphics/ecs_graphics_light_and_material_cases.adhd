@@ -38,6 +38,7 @@ native{
 #include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
+#include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/ecs/entity.h>
 #include <core/task/gpu/compiler_internal.h>
@@ -647,7 +648,7 @@ using EcsGraphicsLightMaterialDetail::MakeTranslationJointMatrix;
 using EcsGraphicsLightMaterialDetail::MakeNonUniformScaleJointMatrix;
 using EcsGraphicsLightMaterialDetail::MakeTwoJointSkeletonPose;
 FOUNDATION_INLINE b8 BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, SkeletonPoseScratch& scratch){
-    return Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, scratch.resolvedJoints).has_value();
+    return Impl::TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, scratch.resolvedJoints).has_value();
 }
 
 using PhysicalQueueRuntimeSnapshots = EcsGraphicsLightMaterialDetail::PhysicalQueueRuntimeSnapshots;

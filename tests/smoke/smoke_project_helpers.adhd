@@ -91,7 +91,7 @@ FOUNDATION_INLINE void RequestSmokeQuit(ProjectRuntimeContext& context){
 }
 
 FOUNDATION_INLINE void SetSmokeWindowTitleSuffix(ProjectRuntimeContext& context, const AStringView suffix){
-    Core::Alloc::ScratchArena scratch(s_NameNone);
+    Core::Alloc::ScratchArena scratch(Name("SetSmokeWindowTitleSuffix"));
     const TStringView prefix = QueryProjectWindowTitle();
     const TString<Core::Alloc::ScratchArena> suffixText = ConvertString(scratch, suffix);
     TString<Core::Alloc::ScratchArena> title(scratch);
@@ -182,15 +182,6 @@ f32 ReadSmokeFrozenYawFromEnvironment(in StringView variableName){
     if(parsed.has_value())
         return parsed.value();
     return -1.0f;
-}
-
-f32 ReadSmokeFrozenYawCached(in StringView variableName){
-    f32 cachedYaw = -1.0f;
-    native(in variableName, mut cachedYaw){
-        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment(variableName);
-        cachedYaw = s_Yaw;
-    }
-    return cachedYaw;
 }
 
 u32 ParseRendererBaselineCaptureFreezeFrame(){

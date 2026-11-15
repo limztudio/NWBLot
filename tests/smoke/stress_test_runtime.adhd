@@ -104,6 +104,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_cpuTimingProbe = SmokeCpuGpuTimingProbe(StressCpuTimingOwnerName());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(StressTestProjectName());
         this.m_m4PixelCaptureFreezeFrame = ResolveStressM4PixelCaptureFreezeFrame();
+        this.m_frozenYaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
         this.m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
         this.m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
     }
@@ -238,8 +239,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
         if(!this.samplePresentationFps())
             return false;
         this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
-        const f32 frozen = StressFrozenYaw();
-        this.m_yaw.update(safeDelta, frozen, frozen >= 0.0f, this.m_arrowYawInput, s_StressManualYawSpeed, s_StressSpinSpeed, s_StressMaxSpinDelta);
+        this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_StressManualYawSpeed, s_StressSpinSpeed, s_StressMaxSpinDelta);
 
         const f32 currentYaw = this.m_yaw.yaw();
         if(!this.m_scene.update(currentYaw, SmokeWorldRef(this.m_world)))
@@ -362,6 +362,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
     private u64 m_reflectionStatisticsSequence = 0u;
     private u64 m_reflectionStatisticsGeneration = 0u;
     private YawSpinController m_yaw = YawSpinController();
+    private f32 m_frozenYaw;
     private u32 m_charactersPerClass = s_StressDefaultCharactersPerClass;
     private u32 m_m4PixelCaptureFreezeFrame;
     private u32 m_m4RenderedFrameCount = 0u;
@@ -443,10 +444,6 @@ Expected<u32> ReadStressCharactersPerClass(){
         return MakeUnexpected(Failure());
     }
     return s_StressDefaultCharactersPerClass;
-}
-
-f32 StressFrozenYaw(){
-    return ReadSmokeFrozenYawCached("NWB_STRESS_TEST_SPIN_ANGLE");
 }
 
 b8 ValidateStressM4QueueTopology(mut ProjectRuntimeContext context){
@@ -628,5 +625,4 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

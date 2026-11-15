@@ -56,6 +56,13 @@ public:
 
 public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept = 0;
+    [[nodiscard]] virtual const InputRouter& inputRouter()const noexcept = 0;
+    [[nodiscard]] const HitTarget* target(const WidgetId widget)const noexcept{ return UiTestSupport::FindHitTarget(inputRouter().targets(), widget); }
+    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{ return target(widget) != nullptr; }
+    [[nodiscard]] Expected<HitTarget> tryTarget(const WidgetId widget)const noexcept{
+        const HitTarget* found = target(widget);
+        return found ? Expected<HitTarget>(*found) : MakeUnexpected(Failure{});
+    }
     InputRoutingResult send(const InputEvent& event){ return SendUiNativeInput(inputRouter(), event); }
     InputRoutingResult send(const PointerInput& input){ return SendUiPointerInput(inputRouter(), input); }
     void click(const Point& position = { 15.0f, 15.0f }){ ClickUiInputRouter(inputRouter(), position); }
@@ -76,6 +83,7 @@ public:
 
 public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_router; }
+    [[nodiscard]] virtual const InputRouter& inputRouter()const noexcept override{ return m_router; }
 
 
 public:
@@ -92,6 +100,7 @@ public:
 
 public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }
+    [[nodiscard]] virtual const InputRouter& inputRouter()const noexcept override{ return m_context.input(); }
 
 
 public:

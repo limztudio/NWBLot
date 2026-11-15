@@ -274,7 +274,7 @@ EntityID CreateRefractionScenePanel(
     );
     [essential] assert(entity.valid(), "RefractionSmokeProject: panel creation failed");
     // Rotate the XZ plane to face the camera along -Z.
-    const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_RefractionHalfPi, 0.0f, 0.0f, 0.0f)));
+    const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_RefractionHalfPi, 0.0f, 0.0f, 0.0f));
     const b8 rotated = SetSmokeEntityRotation(entity, rotation, world);
     [essential] assert(rotated, "RefractionSmokeProject: panel rotation failed");
     return entity;
@@ -339,7 +339,7 @@ Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world,
     const f32 verticalFov = s_RefractionPi / 3.0f;
     if(!SetSmokeCameraProjection(camera, verticalFov, aspect, world))
         return MakeUnexpected(Failure());
-    const EntityID light = CreateSmokeDirectionalLight(0.0f, 0.0f, 0.0f, f32x4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, world);
+    const EntityID light = CreateSmokeDirectionalLight(0.0f, 0.0f, 0.0f, VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, world);
     if(!light.valid())
         return MakeUnexpected(Failure());
 
@@ -527,7 +527,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
             0.6f,
             0.4f,
             0.0f,
-            f32x4(1.0f, 1.0f, 1.0f, 1.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
             1.0f,
             false,
             SmokeWorldRef(this.m_world)
@@ -752,7 +752,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
         const RefractionLifecyclePhase phase = RefractionLifecyclePhaseAt(this.m_lifecyclePhase);
         const b8 moved = SetSmokeEntityPosition(
             this.m_glass,
-            f32x4(phase.glassX, 1.4f, 0.0f, 0.0f),
+            VectorSingle(phase.glassX, 1.4f, 0.0f, 0.0f),
             SmokeWorldRef(this.m_world)
         );
         [essential] assert(moved, "RefractionSmokeProject: failed to move lifecycle glass");

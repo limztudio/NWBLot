@@ -305,26 +305,42 @@ using CrashText = CrashReportText;
     return outSummary;
 }
 
+static void CaptureCrashIngestWarning(const StringView message, const StringView file, const u32 line)noexcept{
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Warning,
+        .category = "logger_server_crash_ingest",
+        .message = message,
+        .file = file,
+        .line = line,
+    });
+}
+
 static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestConfig& config){
     const CrashScratchPath storageDirectory = CrashStorageDirectory(arena, config.storageDirectory);
     const auto extracted = ApplyDirectoryRetention(arena, storageDirectory / s_CrashExtractedDirectoryName, config.retention.maxExtractedPackages);
-    if(!extracted)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to apply retention to extracted crash packages: {}"), ConvertString(extracted.error().message()));
+    if(!extracted){
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to apply retention to extracted crash packages: {}", extracted.error().message());
+        CaptureCrashIngestWarning(detail.view(), __FILE__, __LINE__);
+    }
     const auto raw = ApplyDirectoryRetention(arena, storageDirectory / s_CrashRawDirectoryName, config.retention.maxRawArchives);
-    if(!raw)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to apply retention to raw crash archives: {}"), ConvertString(raw.error().message()));
+    if(!raw){
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to apply retention to raw crash archives: {}", raw.error().message());
+        CaptureCrashIngestWarning(detail.view(), __FILE__, __LINE__);
+    }
     const auto invalid = ApplyDirectoryRetention(arena, storageDirectory / s_CrashInvalidDirectoryName, config.retention.maxInvalidArchives);
-    if(!invalid)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to apply retention to invalid crash archives: {}"), ConvertString(invalid.error().message()));
+    if(!invalid){
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to apply retention to invalid crash archives: {}", invalid.error().message());
+        CaptureCrashIngestWarning(detail.view(), __FILE__, __LINE__);
+    }
 }
 
 [[nodiscard]] static CrashIngestResult RejectCrashUpload(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory, const CrashIngestConfig& config, const CrashIngestFailure& failure){
     if(!RemoveAllIfExists(packageDirectory))
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to remove rejected crash package directory"));
+        CaptureCrashIngestWarning("Failed to remove rejected crash package directory", __FILE__, __LINE__);
 
     const auto invalidPath = ::MovePathToDirectory(archivePath, CrashInvalidDirectory(scratchArena, config.storageDirectory));
     if(!invalidPath)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to move rejected crash archive to invalid directory"));
+        CaptureCrashIngestWarning("Failed to move rejected crash archive to invalid directory", __FILE__, __LINE__);
     ApplyRetention(scratchArena, config);
 
     CrashIngestResult result(arena);
@@ -366,13 +382,13 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     CrashReportText symbolicationReport = BuildCrashSymbolicationReport(packageDirectory, summary, config.symbolication, arena, scratchArena);
     // Report-write failure retains the valid package and in-memory report; it is not a malformed crash.
     if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport)))
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
+        Ingest::CaptureCrashIngestWarning("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report", __FILE__, __LINE__);
 
     const auto rawPath = ::MovePathToDirectory(operationArchivePath, CrashRawDirectory(scratchArena, config.storageDirectory));
     const b8 rawArchived = rawPath.has_value();
     if(!rawArchived){
         if(const auto removed = RemoveFile(archivePath); !removed || !*removed)
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to remove crash archive that could not be retained"));
+            Ingest::CaptureCrashIngestWarning("Failed to remove crash archive that could not be retained", __FILE__, __LINE__);
     }
     Ingest::ApplyRetention(scratchArena, config);
 

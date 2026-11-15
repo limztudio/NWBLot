@@ -86,6 +86,11 @@ public:
     [[nodiscard]] const HitTarget* findTarget(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
         return m_targetTable.find(id, declarationGeneration);
     }
+    [[nodiscard]] Expected<HitTarget> tryFindTarget(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
+        if(const HitTarget* target = findTarget(id, declarationGeneration))
+            return *target;
+        return MakeUnexpected(Failure{});
+    }
 
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popupState.records().empty() ? PopupToken{} : m_popupState.records().back().scope.token; }
 

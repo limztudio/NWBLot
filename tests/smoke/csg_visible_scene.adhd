@@ -76,9 +76,7 @@ EntityID CreateCsgVisibleSolidCubeEntity(
 }
 
 void ApplyCsgVisibleCubeRotation(in EntityID entity, in VectorSingle rotation, mut World world){
-    const f32x4 storedRotation = f32x4(rotation);
-    if(!SetSmokeEntityRotation(entity, storedRotation, world))
-        return;
+    SetSmokeEntityRotation(entity, rotation, world);
 }
 
 void ApplyCsgVisibleCutterTransform(in EntityID cutterEntity, in VectorSingle receiverCenter, in VectorSingle receiverRotation, in VectorSingle cutterLocalOffset, mut World world){
@@ -149,6 +147,14 @@ class CsgVisibleScene{
             ApplyCsgVisibleCubeRotation(this.m_receivers[shapeSlot], rotation, world);
             ApplyCsgVisibleCutterTransform(this.m_cutters[shapeSlot], VectorSingle(this.m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot), world);
         }
+    }
+
+    public EntityID receiverEntity(in usize shapeSlot)const{
+        return this.m_receivers[shapeSlot];
+    }
+
+    public EntityID cutterEntity(in usize shapeSlot)const{
+        return this.m_cutters[shapeSlot];
     }
 
     private Array<f32x4, s_CsgVisibleShapeCount> m_receiverCenters;

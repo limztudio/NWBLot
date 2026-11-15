@@ -444,13 +444,10 @@ b8 RunDepthWarpProbeProjectUpdate(
 }
 
 void FreeDepthWarpProbeDescriptors(mut ProjectRuntimeContext context, mut DescriptorHandleArray4 descriptors){
-    native(mut context, mut descriptors){
-        auto& heap = context.graphics.getDevice().getDescriptorHeap();
-        for(auto& descriptor : descriptors){
-            if(descriptor.valid()){
-                heap.free(descriptor);
-                descriptor = Core::GpuDescriptorHandle::Invalid();
-            }
+    for(usize i = 0u; i < descriptors.size(); ++i){
+        if(descriptors[i].valid()){
+            context.graphics.getDevice().getDescriptorHeap().free(descriptors[i]);
+            descriptors[i] = GpuDescriptorHandleInvalid();
         }
     }
 }

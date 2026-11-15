@@ -118,7 +118,7 @@ class TransparentMultiSceneTransforms{
 
 
 void SetOptionalSmokeEntityTransform(in EntityID entity, in VectorSingle position, in VectorSingle rotation, mut World world){
-    if(!entity.valid() || !SetSmokeEntityTransform(entity, f32x4(position), f32x4(rotation), world))
+    if(!entity.valid() || !SetSmokeEntityTransform(entity, position, rotation, world))
         return;
 }
 
@@ -136,7 +136,7 @@ void ApplyTransparentEntityTransform(
 }
 
 b8 CreateCausticRefractionBackdrop(mut World world){
-    const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_TransparentMultiHalfPi, 0.0f, 0.0f, 0.0f)));
+    const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_TransparentMultiHalfPi, 0.0f, 0.0f, 0.0f));
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         f32 value = 0.04f;
         if((stripe & 1u) != 0u)
@@ -207,7 +207,7 @@ b8 PopulateTransparentMultiScene(
         s_TransparentMultiDefaultDirectionalLightPitch,
         s_TransparentMultiDefaultDirectionalLightYaw,
         0.0f,
-        f32x4(1.0f, 0.96f, 0.88f, 0.0f),
+        VectorSingle(1.0f, 0.96f, 0.88f, 0.0f),
         s_TransparentMultiDefaultDirectionalLightIntensity,
         causticsEnabled,
         world

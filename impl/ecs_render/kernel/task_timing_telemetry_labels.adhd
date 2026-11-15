@@ -542,13 +542,10 @@ RendererTaskTimingFeedbackDrainResult DrainRendererTaskTimingPendingSamples(
     return result;
 }
 
-void ConfigureSameFamilyComputeEffectRoutingHint(in b8 preserveDirectDependency, mut KernelGpuTaskSchedulingHint scheduling){
+void ConfigureComputeEffectRoutingHint(in b8 preserveDirectDependency, mut KernelGpuTaskSchedulingHint scheduling){
     scheduling.allowSameClassQueueRouting = true;
     scheduling.preferNonPrimarySameClassQueue = true;
     scheduling.preserveSameClassQueueWithDirectDependency = preserveDirectDependency;
-}
-
-void ConfigureCrossFamilyComputeEffectRoutingHint(mut KernelGpuTaskSchedulingHint scheduling){
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }
 

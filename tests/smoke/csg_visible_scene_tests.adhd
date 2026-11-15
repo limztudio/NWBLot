@@ -21,26 +21,12 @@ const SmokeMaterialRef s_CsgVisibleTestMaterial = "project/smoke/csg_visible/mat
 void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
     EcsTestWorld testWorld = EcsTestWorld();
     CsgVisibleScene scene = CsgVisibleScene();
-    EntityID missingReceiver = s_InvalidEntityId;
-    EntityID remainingReceiver = s_InvalidEntityId;
-    EntityID remainingCutter = s_InvalidEntityId;
-    native(mut testWorld, mut scene, mut missingReceiver, mut remainingReceiver, mut remainingCutter){
-        auto& world = testWorld.world;
-        const EntityID camera = world.createEntity().id();
-        const EntityID light = world.createEntity().id();
-        scene.create(s_CsgVisibleTestMaterial, false, camera, light, world);
-
-        world.view<NWB::Impl::StaticCsgMeshComponent>().each([&](const EntityID entity, NWB::Impl::StaticCsgMeshComponent& receiver){
-            if(receiver.receiverGroup == s_SmokeSceneNameProjectSmokeCsgVisiblePlaneReceiver)
-                missingReceiver = entity;
-            if(receiver.receiverGroup == s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver)
-                remainingReceiver = entity;
-        });
-        world.view<NWB::Impl::CsgCutterComponent>().each([&](const EntityID entity, NWB::Impl::CsgCutterComponent& cutter){
-            if(cutter.receiverGroup == s_SmokeSceneNameProjectSmokeCsgVisibleSphereReceiver)
-                remainingCutter = entity;
-        });
-    }
+    const EntityID camera = testWorld.world.createEntity().id();
+    const EntityID light = testWorld.world.createEntity().id();
+    scene.create(s_CsgVisibleTestMaterial, false, camera, light, testWorld.world);
+    const EntityID missingReceiver = scene.receiverEntity(cast<usize>(CsgVisibleShapeSlot::Plane));
+    const EntityID remainingReceiver = scene.receiverEntity(cast<usize>(CsgVisibleShapeSlot::Sphere));
+    const EntityID remainingCutter = scene.cutterEntity(cast<usize>(CsgVisibleShapeSlot::Sphere));
     ASSERT_TRUE(missingReceiver.valid());
     ASSERT_TRUE(remainingReceiver.valid());
     ASSERT_TRUE(remainingCutter.valid());

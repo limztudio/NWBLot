@@ -76,11 +76,6 @@ public:
         m_host.resetBuilder = &m_builder;
     }
 
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
 };
 
 
@@ -823,7 +818,7 @@ void VerifyUiNumericEditBuilderTests_DisabledAbandonRestoresBeforeIgnoredInput(m
     EXPECT_FALSE(result.edit.focused || result.numeric.committed || result.numeric.cancelled);
     EXPECT_EQ(self.m_integer.draft().text(), "12");
     ASSERT_TRUE(self.acceptNumeric());
-    const Optional<HitTarget> field = self.findTarget(self.id(s_UiNumericEditIntegerKey, s_UiNumericEditPanelKey));
+    const Expected<HitTarget> field = self.tryTarget(self.id(s_UiNumericEditIntegerKey, s_UiNumericEditPanelKey));
     ASSERT_TRUE(field.has_value());
     EXPECT_FALSE(field.value().enabled || field.value().focusable);
 }

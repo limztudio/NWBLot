@@ -211,10 +211,6 @@ public:
         m_child.open();
     }
 
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
-    }
-
     [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions());
     }
@@ -758,16 +754,6 @@ public:
         m_source.disabled = 3u;
         m_parent.open();
         m_child.open();
-    }
-
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
-
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
-        return target(widget) != nullptr;
     }
 
     [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(childId(), s_ComboKey); }
@@ -1775,7 +1761,7 @@ void VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRe
 
 void VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivatingUserAncestors(mut UiNestedPopupTriggerTests self){
     ASSERT_TRUE(self.acceptChildCombo(1u));
-    const Optional<HitTarget> fieldTarget = self.findTarget(self.fieldId());
+    const Expected<HitTarget> fieldTarget = self.tryTarget(self.fieldId());
     ASSERT_TRUE(fieldTarget.has_value());
     EXPECT_FALSE(self.hasTarget(self.rowsId()));
     self.click(CenterUiRect(fieldTarget.value().rectangle));
@@ -1783,7 +1769,7 @@ void VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivat
     EXPECT_FALSE(self.m_result.committed);
     EXPECT_TRUE(self.m_state.isOpen());
     ASSERT_TRUE(self.hasTarget(self.rowsId()));
-    const Optional<HitTarget> row3Target = self.findTarget(self.comboRow(3u));
+    const Expected<HitTarget> row3Target = self.tryTarget(self.comboRow(3u));
     ASSERT_TRUE(row3Target.has_value());
     EXPECT_FALSE(row3Target.value().enabled);
     self.click(CenterUiRect(row3Target.value().rectangle));
@@ -1792,7 +1778,7 @@ void VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivat
     EXPECT_TRUE(self.m_state.isOpen());
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
 
-    const Optional<HitTarget> row4Target = self.findTarget(self.comboRow(4u));
+    const Expected<HitTarget> row4Target = self.tryTarget(self.comboRow(4u));
     ASSERT_TRUE(row4Target.has_value());
     self.click(CenterUiRect(row4Target.value().rectangle));
     ASSERT_TRUE(self.acceptChildCombo(4u));
@@ -1807,7 +1793,7 @@ void VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivat
 
 void VerifyUiNestedPopupTriggerTests_NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors(mut UiNestedPopupTriggerTests self){
     ASSERT_TRUE(self.acceptChildMenu(1u));
-    const Optional<HitTarget> anchorTarget = self.findTarget(self.anchorId());
+    const Expected<HitTarget> anchorTarget = self.tryTarget(self.anchorId());
     ASSERT_TRUE(anchorTarget.has_value());
     const Point point = CenterUiRect(anchorTarget.value().rectangle);
     EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerPointEvent(InputEventType::SecondaryDown, point)).pointerConsumed);

@@ -650,7 +650,7 @@ class CsgShadowAtlas{
         }
         if(transparent && mode.openAtlas){
             const b8 opticalOk = SetSmokeOpticalMaterialParameters(
-                entity, Name(s_ShadowSmokeOpenInterface), 1.5f, f32x4(0.25f, 0.5f, 0.75f, 0.0f), world
+                entity, Name(s_ShadowSmokeOpenInterface), 1.5f, VectorSingle(0.25f, 0.5f, 0.75f, 0.0f), world
             );
             [essential] assert(opticalOk, "CsgShadowSmokeProject: open-sheet optical override failed");
         }

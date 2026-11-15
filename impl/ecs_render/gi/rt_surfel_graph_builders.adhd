@@ -233,8 +233,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     surfelIrradianceClearScheduling.mergeWithPrevious = !useLaggedLightingHistory;
     surfelIrradianceClearScheduling.allowMergeAcrossConsumerFrontier = !useLaggedLightingHistory;
     // Compatible live effects share the snapshot packet; the GI chain retains its selected queue.
-    EnableSameFamilyComputeEffectRouting(surfelIrradianceClearScheduling, false);
-    EnableCrossFamilyComputeEffectRouting(surfelIrradianceClearScheduling);
+    ConfigureComputeEffectRoutingHint(false, surfelIrradianceClearScheduling);
     const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse = WriteTextureUse(surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     Core::GpuTaskDesc surfelIrradianceClearDesc;
     surfelIrradianceClearDesc
@@ -261,8 +260,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     surfelGiScheduling.mergeWithPrevious = true;
     // GI stages share one accepted timing packet; cross-queue consumers wait for it.
     surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;
-    EnableSameFamilyComputeEffectRouting(surfelGiScheduling);
-    EnableCrossFamilyComputeEffectRouting(surfelGiScheduling);
+    ConfigureComputeEffectRoutingHint(true, surfelGiScheduling);
     if(graphOwnsSurfelGiResolve){
         const Array<Core::GpuTaskResourceUse, 4u> ageFreeResourceUses = {
             ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer),

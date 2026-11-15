@@ -159,12 +159,6 @@ public:
         return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), "rows"), 1u);
     }
 
-    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
-        if(const HitTarget* found = target(widget))
-            return *found;
-        return {};
-    }
-
     [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
 
     void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
@@ -293,12 +287,6 @@ FOUNDATION_INLINE void ExpectUiListBuilderRect(const Rect& actual, const Rect& e
     return ::UiTestSupport::RequireWidgetPartId(parent, partKey);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<HitTarget> FindUiListBuilderTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
-    if(const HitTarget* found = self.target(widget))
-        return *found;
-    return {};
-}
-
 [[nodiscard]] FOUNDATION_INLINE u32 MakeUiListLatnScriptTag()noexcept{
     return ::PackFourCharTag('L', 'a', 't', 'n');
 }
@@ -417,14 +405,14 @@ void VerifyUiListBuilderSelectionTests_InitialProgrammaticSelectionSurvivesAndEn
     self.m_state.select(50000u);
     ASSERT_TRUE(self.accept(1u));
     EXPECT_EQ(self.m_state.selectedKey(), 50000u);
-    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(50000u)).has_value());
+    ASSERT_TRUE(self.tryTarget(self.row(50000u)).has_value());
     self.press(CoreKey::Tab);
     self.press(CoreKey::End);
     ASSERT_TRUE(self.prepare(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 100000u);
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), self.m_state.placement().maxOffset);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(100000u)).has_value());
+    ASSERT_TRUE(self.tryTarget(self.row(100000u)).has_value());
     EXPECT_LE(self.m_source.textCalls, 12u);
 }
 
@@ -434,7 +422,7 @@ void VerifyUiListBuilderSelectionTests_UnseenTallCursorIsMeasuredBeforeRevealAnd
     ListOptions options = MakeUiListBuilderDefaultOptions();
     options.selectOnNavigate = false;
     ASSERT_TRUE(self.accept(1u, options));
-    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> firstRowOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(firstRowOpt.has_value());
     const f32 initialHeight = firstRowOpt.value().rectangle.height;
     self.press(CoreKey::Tab);
@@ -444,7 +432,7 @@ void VerifyUiListBuilderSelectionTests_UnseenTallCursorIsMeasuredBeforeRevealAnd
     ASSERT_TRUE(self.accept(2u, options));
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_EQ(self.m_state.cursorKey(), self.m_source.count);
-    Optional<HitTarget> cursorOpt = FindUiListBuilderTarget(self, self.row(self.m_source.count));
+    Expected<HitTarget> cursorOpt = self.tryTarget(self.row(self.m_source.count));
     ASSERT_TRUE(cursorOpt.has_value());
     HitTarget cursor = cursorOpt.value();
     EXPECT_GT(cursor.rectangle.height, initialHeight);
@@ -457,7 +445,7 @@ void VerifyUiListBuilderSelectionTests_UnseenTallCursorIsMeasuredBeforeRevealAnd
     ASSERT_TRUE(self.accept(3u, options));
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 0.0);
     EXPECT_EQ(self.m_state.cursorKey(), self.m_source.count);
-    EXPECT_FALSE(FindUiListBuilderTarget(self, self.row(self.m_source.count)).has_value());
+    EXPECT_FALSE(self.tryTarget(self.row(self.m_source.count)).has_value());
     ++self.m_source.contentRevision;
     const f32 fontSize = self.m_builder.style().fontSize;
     self.m_builder.style().fontSize = UiListMultilineQuietNaNF32();
@@ -469,7 +457,7 @@ void VerifyUiListBuilderSelectionTests_UnseenTallCursorIsMeasuredBeforeRevealAnd
     self.m_builder.reset();
     self.m_builder.style().fontSize = fontSize;
     ASSERT_TRUE(self.accept(5u, options));
-    cursorOpt = FindUiListBuilderTarget(self, self.row(self.m_source.count));
+    cursorOpt = self.tryTarget(self.row(self.m_source.count));
     ASSERT_TRUE(cursorOpt.has_value());
     cursor = cursorOpt.value();
     EXPECT_GE(cursor.rectangle.y, cursor.clip.y);
@@ -487,7 +475,7 @@ void VerifyUiListBuilderSelectionTests_ReorderPreservesSelectionByKeyAndRemovalC
     EXPECT_FALSE(self.m_result.selectionChanged);
     EXPECT_EQ(self.m_state.selectedKey(), 50000u);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(50000u)).has_value());
+    ASSERT_TRUE(self.tryTarget(self.row(50000u)).has_value());
     self.m_source.removed = 50000u;
     --self.m_source.count;
     ++self.m_source.contentRevision;
@@ -496,13 +484,13 @@ void VerifyUiListBuilderSelectionTests_ReorderPreservesSelectionByKeyAndRemovalC
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
     EXPECT_EQ(self.m_state.cursorKey(), 0u);
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    EXPECT_FALSE(FindUiListBuilderTarget(self, self.row(50000u)).has_value());
+    EXPECT_FALSE(self.tryTarget(self.row(50000u)).has_value());
 }
 
 void VerifyUiListBuilderSelectionTests_ProgrammaticSameSelectionFencesQueuedActivationAndWheel(mut UiListBuilderTests self){
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    const Expected<HitTarget> secondRowOpt = self.tryTarget(self.row(2u));
     ASSERT_TRUE(secondRowOpt.has_value());
     self.click(UiListBuilderCenter(secondRowOpt.value().rectangle));
     ASSERT_TRUE(self.wheel());
@@ -522,7 +510,7 @@ void VerifyUiListBuilderSelectionTests_ProgrammaticSameSelectionFencesQueuedActi
 
 void VerifyUiListBuilderSelectionTests_SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> firstRowOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(firstRowOpt.has_value());
     const Point point = UiListBuilderCenter(firstRowOpt.value().rectangle);
     EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
@@ -542,7 +530,7 @@ void VerifyUiListBuilderSelectionTests_SourceRevisionFencesHeldCaptureAndRestore
 void VerifyUiListBuilderSelectionTests_EscapeBeforeReleaseCancelsRowSelectionAndHostSubmission(mut UiListBuilderTests self){
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    const Expected<HitTarget> secondRowOpt = self.tryTarget(self.row(2u));
     ASSERT_TRUE(secondRowOpt.has_value());
     const Point point = UiListBuilderCenter(secondRowOpt.value().rectangle);
     EXPECT_TRUE(self.send(MakeUiListPointerAt(InputEventType::PrimaryDown, point)).pointerConsumed);
@@ -623,12 +611,12 @@ void VerifyUiListBuilderSelectionTests_ReplacementSourceResetsSelectionAndScroll
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 0.0);
     EXPECT_TRUE(self.m_result.selectionChanged);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_TRUE(FindUiListBuilderTarget(self, self.row(1u)).has_value());
+    EXPECT_TRUE(self.tryTarget(self.row(1u)).has_value());
 }
 
 void VerifyUiListBuilderSelectionTests_ReplacementStateRejectsOldActivationEvenForTheSameSourceAndHost(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    const Expected<HitTarget> secondRowOpt = self.tryTarget(self.row(2u));
     ASSERT_TRUE(secondRowOpt.has_value());
     self.click(UiListBuilderCenter(secondRowOpt.value().rectangle));
     ListState replacement = ListState();
@@ -637,14 +625,14 @@ void VerifyUiListBuilderSelectionTests_ReplacementStateRejectsOldActivationEvenF
     EXPECT_EQ(replacement.selectedKey(), 0u);
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    const Optional<HitTarget> hostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    const Expected<HitTarget> hostOpt = self.tryTarget(self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
     ASSERT_TRUE(hostOpt.has_value());
     EXPECT_EQ(hostOpt.value().control.instanceGeneration, replacement.inputGeneration());
 }
 
 void VerifyUiListBuilderSelectionTests_DisabledAndOmittedListsRetirePartsWithoutBorrowingQueuedActions(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> secondRowOpt = FindUiListBuilderTarget(self, self.row(2u));
+    const Expected<HitTarget> secondRowOpt = self.tryTarget(self.row(2u));
     ASSERT_TRUE(secondRowOpt.has_value());
     self.click(UiListBuilderCenter(secondRowOpt.value().rectangle));
     ListOptions disabled = MakeUiListBuilderDefaultOptions();
@@ -656,13 +644,13 @@ void VerifyUiListBuilderSelectionTests_DisabledAndOmittedListsRetirePartsWithout
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().targets().size(), 2u);
-    const Optional<HitTarget> hostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    const Expected<HitTarget> hostOpt = self.tryTarget(self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
     ASSERT_TRUE(hostOpt.has_value());
     EXPECT_FALSE(hostOpt.value().enabled);
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiListCasePanelKey, Rect(10.0f, 10.0f, 320.0f, 260.0f)));
     ASSERT_TRUE(self.finishPanel());
-    EXPECT_FALSE(FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey)).has_value());
+    EXPECT_FALSE(self.tryTarget(self.id(s_UiListCaseListKey, s_UiListCasePanelKey)).has_value());
     EXPECT_EQ(self.m_context.states().entries().size(), 1u);
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_EQ(self.m_context.input().targets().size(), 1u);
@@ -750,7 +738,7 @@ void VerifyUiListBuilderTests_SiblingListsPaintTheirOwnDeferredBackgroundStyles(
 void VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor(mut UiListBuilderTests self){
     self.m_source.specialIndex = 50000u;
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> firstRowOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(firstRowOpt.has_value());
     const f32 initialHeight = firstRowOpt.value().rectangle.height;
     const f64 within = cast<f64>(initialHeight) * 0.25;
@@ -761,7 +749,7 @@ void VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPi
     ASSERT_TRUE(self.accept(2u));
     const ScrollPlacement placement = self.m_state.placement();
     ASSERT_EQ(placement.firstRow, self.m_source.specialIndex);
-    const Optional<HitTarget> tallOpt = FindUiListBuilderTarget(self, self.row(self.m_source.specialIndex + 1u));
+    const Expected<HitTarget> tallOpt = self.tryTarget(self.row(self.m_source.specialIndex + 1u));
     ASSERT_TRUE(tallOpt.has_value());
     const HitTarget tall = tallOpt.value();
     const f32 grownHeight = tall.rectangle.height;
@@ -784,12 +772,12 @@ void VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPi
     EXPECT_LT(self.m_context.input().targets().size(), 16u);
     ASSERT_TRUE(self.m_state.scrollTo(0.0));
     ASSERT_TRUE(self.accept(3u));
-    const Optional<HitTarget> rowAfterScroll = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> rowAfterScroll = self.tryTarget(self.row(1u));
     ASSERT_TRUE(rowAfterScroll.has_value());
     EXPECT_FLOAT_EQ(rowAfterScroll.value().rectangle.height, grownHeight);
     ++self.m_source.contentRevision;
     ASSERT_TRUE(self.accept(4u));
-    const Optional<HitTarget> rowAfterRevision = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> rowAfterRevision = self.tryTarget(self.row(1u));
     ASSERT_TRUE(rowAfterRevision.has_value());
     EXPECT_FLOAT_EQ(rowAfterRevision.value().rectangle.height, initialHeight);
 }
@@ -809,14 +797,14 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
         ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         ++generation;
-        const Optional<HitTarget> seedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        const Expected<HitTarget> seedOpt = self.tryTarget(self.row(1u));
         ASSERT_TRUE(seedOpt.has_value());
         const f32 seed = seedOpt.value().rectangle.height;
         ASSERT_TRUE(state.scrollTo(cast<f64>(source.specialIndex) * cast<f64>(seed)));
         ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         ++generation;
-        const Optional<HitTarget> grownOpt = FindUiListBuilderTarget(self, self.row(source.specialIndex + 1u));
+        const Expected<HitTarget> grownOpt = self.tryTarget(self.row(source.specialIndex + 1u));
         ASSERT_TRUE(grownOpt.has_value());
         const f32 grown = grownOpt.value().rectangle.height;
         ASSERT_GT(grown, seed);
@@ -824,7 +812,7 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
         ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         ++generation;
-        const Optional<HitTarget> cachedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        const Expected<HitTarget> cachedOpt = self.tryTarget(self.row(1u));
         ASSERT_TRUE(cachedOpt.has_value());
         ASSERT_FLOAT_EQ(cachedOpt.value().rectangle.height, grown);
         switch(change){
@@ -857,7 +845,7 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
         ASSERT_TRUE(self.prepareSource(generation, source, state, MakeUiListBuilderDefaultOptions(), display));
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         ++generation;
-        const Optional<HitTarget> refreshedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        const Expected<HitTarget> refreshedOpt = self.tryTarget(self.row(1u));
         ASSERT_TRUE(refreshedOpt.has_value());
         const f32 refreshed = refreshedOpt.value().rectangle.height;
         EXPECT_LT(refreshed, grown);
@@ -886,18 +874,18 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
 void VerifyUiListBuilderTests_ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum(mut UiListBuilderTests self){
     self.m_source.specialIndex = 50000u;
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> seedOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> seedOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(seedOpt.has_value());
     const f32 seed = seedOpt.value().rectangle.height;
     ASSERT_TRUE(self.m_state.scrollTo(cast<f64>(self.m_source.specialIndex) * cast<f64>(seed)));
     ASSERT_TRUE(self.accept(2u));
-    const Optional<HitTarget> grownOpt = FindUiListBuilderTarget(self, self.row(self.m_source.specialIndex + 1u));
+    const Expected<HitTarget> grownOpt = self.tryTarget(self.row(self.m_source.specialIndex + 1u));
     ASSERT_TRUE(grownOpt.has_value());
     const f32 grown = grownOpt.value().rectangle.height;
     ASSERT_GT(grown, seed);
     ASSERT_TRUE(self.m_state.scrollTo(0.0));
     ASSERT_TRUE(self.accept(3u));
-    const Optional<HitTarget> cachedOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> cachedOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(cachedOpt.has_value());
     ASSERT_FLOAT_EQ(cachedOpt.value().rectangle.height, grown);
     TextService replacement = TextService(self.m_arena);
@@ -914,7 +902,7 @@ void VerifyUiListBuilderTests_ReplacingTextServiceWithTheSameGenerationInvalidat
     ASSERT_TRUE(self.m_context.endRoot());
     ASSERT_TRUE(self.m_context.finishFrame());
     ASSERT_TRUE(self.m_context.commitFrame(4u));
-    const Optional<HitTarget> finalOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> finalOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(finalOpt.has_value());
     EXPECT_FLOAT_EQ(finalOpt.value().rectangle.height, seed);
     EXPECT_EQ(replacement.generation(), self.m_text.generation());
@@ -943,11 +931,11 @@ void VerifyUiListBuilderTests_SharedStateDeclarationsMergeSameMetricMaximaWithou
         ASSERT_TRUE(self.finishPanel());
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         ++generation;
-        const Optional<HitTarget> firstOpt = FindUiListBuilderTarget(self, self.row(1u));
+        const Expected<HitTarget> firstOpt = self.tryTarget(self.row(1u));
         ASSERT_TRUE(firstOpt.has_value());
         const f32 firstHeight = firstOpt.value().rectangle.height;
         const WidgetId secondRow = UiListBuilderRequireWidgetPartId(UiListBuilderRequireWidgetId(self.id("second", s_UiListCasePanelKey), s_UiListCaseRowsKey), 1u);
-        const Optional<HitTarget> secondOpt = FindUiListBuilderTarget(self, secondRow);
+        const Expected<HitTarget> secondOpt = self.tryTarget(secondRow);
         ASSERT_TRUE(secondOpt.has_value());
         const f32 secondHeight = secondOpt.value().rectangle.height;
         ASSERT_GT(firstHeight, secondHeight);
@@ -955,7 +943,7 @@ void VerifyUiListBuilderTests_SharedStateDeclarationsMergeSameMetricMaximaWithou
         ASSERT_TRUE(self.prepareSource(generation, source, state, small));
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         ++generation;
-        const Optional<HitTarget> mergedOpt = FindUiListBuilderTarget(self, self.row(1u));
+        const Expected<HitTarget> mergedOpt = self.tryTarget(self.row(1u));
         ASSERT_TRUE(mergedOpt.has_value());
         if(differentMetrics){
             EXPECT_FLOAT_EQ(mergedOpt.value().rectangle.height, secondHeight);
@@ -970,7 +958,7 @@ void VerifyUiListBuilderTests_SharedStyledContentKeepsItsFractionalFirstRowAndIn
     self.m_builder.style().fontSize = 12.0f;
     self.m_source.specialIndex = 16u;
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> naturalOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> naturalOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(naturalOpt.has_value());
     const f32 naturalHeight = naturalOpt.value().rectangle.height;
     ASSERT_TRUE(self.m_state.scrollTo(cast<f64>(naturalHeight) * 10.25));
@@ -993,14 +981,14 @@ void VerifyUiListBuilderTests_SharedStyledContentKeepsItsFractionalFirstRowAndIn
         ASSERT_TRUE(self.m_builder.virtualList("later", self.m_source, self.m_state, MakeUiListBuilderDefaultOptions()).valid);
         ASSERT_TRUE(self.finishPanel());
         ASSERT_TRUE(self.m_context.commitFrame(generation));
-        const Optional<HitTarget> hostTargetOpt = FindUiListBuilderTarget(self, earlier);
-        const Optional<HitTarget> firstOpt = FindUiListBuilderTarget(self, UiListBuilderRequireWidgetPartId(earlierRows, 11u));
+        const Expected<HitTarget> hostTargetOpt = self.tryTarget(earlier);
+        const Expected<HitTarget> firstOpt = self.tryTarget(UiListBuilderRequireWidgetPartId(earlierRows, 11u));
         ASSERT_TRUE(hostTargetOpt.has_value());
         ASSERT_TRUE(firstOpt.has_value());
         const HitTarget hostTarget = hostTargetOpt.value();
         const HitTarget first = firstOpt.value();
-        EXPECT_FALSE(FindUiListBuilderTarget(self, UiListBuilderRequireWidgetPartId(earlierRows, 10u)).has_value());
-        EXPECT_FALSE(FindUiListBuilderTarget(self, UiListBuilderRequireWidgetPartId(earlierRows, 17u)).has_value());
+        EXPECT_FALSE(self.tryTarget(UiListBuilderRequireWidgetPartId(earlierRows, 10u)).has_value());
+        EXPECT_FALSE(self.tryTarget(UiListBuilderRequireWidgetPartId(earlierRows, 17u)).has_value());
         EXPECT_FLOAT_EQ(first.rectangle.height, naturalHeight);
         EXPECT_FLOAT_EQ(hostTarget.clip.height, clipped.height.value);
         EXPECT_GT(hostTarget.rectangle.height, hostTarget.clip.height);
@@ -1050,16 +1038,16 @@ void VerifyUiListBuilderTests_ContentViewportPreflightsTallSecondRowAtFractional
     EXPECT_FALSE(self.m_builder.button("after", ""));
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const Optional<HitTarget> listHostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
-    const Optional<HitTarget> row1Opt = FindUiListBuilderTarget(self, self.row(1u));
-    const Optional<HitTarget> row2Opt = FindUiListBuilderTarget(self, self.row(2u));
+    const Expected<HitTarget> listHostOpt = self.tryTarget(self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    const Expected<HitTarget> row1Opt = self.tryTarget(self.row(1u));
+    const Expected<HitTarget> row2Opt = self.tryTarget(self.row(2u));
     ASSERT_TRUE(listHostOpt.has_value());
     ASSERT_TRUE(row1Opt.has_value());
     ASSERT_TRUE(row2Opt.has_value());
     EXPECT_FLOAT_EQ(row1Opt.value().rectangle.height, finalHeight);
     EXPECT_FLOAT_EQ(row2Opt.value().rectangle.height, finalHeight);
     EXPECT_GE(self.m_state.placement().viewport.height + 0.0001f, finalHeight);
-    const Optional<HitTarget> afterOpt = FindUiListBuilderTarget(self, self.id("after", s_UiListCasePanelKey));
+    const Expected<HitTarget> afterOpt = self.tryTarget(self.id("after", s_UiListCasePanelKey));
     ASSERT_TRUE(afterOpt.has_value());
     EXPECT_FLOAT_EQ(afterOpt.value().rectangle.y, listHostOpt.value().rectangle.y + listHostOpt.value().rectangle.height + self.m_builder.style().gap);
     EXPECT_EQ(self.m_source.textCalls, 2u);
@@ -1069,8 +1057,8 @@ void VerifyUiListBuilderTests_ContentViewportPreflightsTallSecondRowAtFractional
 
 void VerifyUiListBuilderTests_ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const Optional<HitTarget> firstRowOpt = FindUiListBuilderTarget(self, self.row(1u));
-    const Optional<HitTarget> hostOpt = FindUiListBuilderTarget(self, self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
+    const Expected<HitTarget> firstRowOpt = self.tryTarget(self.row(1u));
+    const Expected<HitTarget> hostOpt = self.tryTarget(self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
     ASSERT_TRUE(firstRowOpt.has_value());
     ASSERT_TRUE(hostOpt.has_value());
     const Rect oldBounds = firstRowOpt.value().rectangle;
@@ -1079,7 +1067,7 @@ void VerifyUiListBuilderTests_ScrollingKeepsDisplayedRowsUntilTheMatchingCandida
     ASSERT_TRUE(self.prepare(2u));
     EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), acceptedStep);
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
-    const Optional<HitTarget> stillDisplayedOpt = FindUiListBuilderTarget(self, self.row(1u));
+    const Expected<HitTarget> stillDisplayedOpt = self.tryTarget(self.row(1u));
     ASSERT_TRUE(stillDisplayedOpt.has_value());
     EXPECT_FLOAT_EQ(stillDisplayedOpt.value().rectangle.y, oldBounds.y);
     EXPECT_EQ(self.m_context.states().entries().size(), 2u);
@@ -1087,8 +1075,8 @@ void VerifyUiListBuilderTests_ScrollingKeepsDisplayedRowsUntilTheMatchingCandida
     EXPECT_EQ(self.m_context.input().hitTest(oldRow), self.row(1u));
     EXPECT_FALSE(self.m_context.commitFrame(3u));
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_FALSE(FindUiListBuilderTarget(self, self.row(1u)).has_value());
-    ASSERT_TRUE(FindUiListBuilderTarget(self, self.row(4u)).has_value());
+    EXPECT_FALSE(self.tryTarget(self.row(1u)).has_value());
+    ASSERT_TRUE(self.tryTarget(self.row(4u)).has_value());
     EXPECT_EQ(self.m_context.input().hitTest(oldRow), self.row(4u));
 }
 
@@ -1114,7 +1102,7 @@ void VerifyUiListLoanTests_TextCallbackSelectionRejectsDeferredPaintWithoutRepla
 
 void VerifyUiListLoanTests_SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureStaysUnchanged(mut UiListLoanTests self){
     ASSERT_TRUE(self.acceptFirst());
-    const Optional<HitTarget> rowOpt = self.findTarget(self.firstRow());
+    const Expected<HitTarget> rowOpt = self.tryTarget(self.firstRow());
     ASSERT_TRUE(rowOpt.has_value());
     const HitTarget row = rowOpt.value();
     const VectorSingle pointValue = VectorSingle(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f) + VectorSingle(10.0f, 12.0f, 0.0f, 0.0f);

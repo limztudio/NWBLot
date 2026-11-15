@@ -171,6 +171,16 @@ struct CrashSymbolicationFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void CaptureServerDiagnosticWarning(const StringView category, const StringView message, const StringView file, const u32 line)noexcept{
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Warning,
+        .category = category,
+        .message = message,
+        .file = file,
+        .line = line,
+    });
+}
+
 static void AppendNativeFailure(const CrashSymbolicationFailure& failure, CrashReportText& outReport){
     const DiagnosticEventText detail = MakeDiagnosticEventText("operation={}\nnative_category={}\nnative_code={}\n", failure.operation, failure.code.category().name(), failure.code.value());
     outReport += detail.view();
@@ -275,11 +285,11 @@ static void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirecto
 
 // Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
 static void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
-    (void)arena;
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
     if(!regularCapture){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Log server: failed to inspect Radeon GPU Detective capture '{}': {}", PathToString<char>(arena, rgdCapture), regularCapture.error().message());
+        CaptureServerDiagnosticWarning("logger_server_rgd", detail.view(), __FILE__, __LINE__);
         outReport += s_CrashSymbolicateRgdGpuDetectiveSectionHeader;
         outReport += s_RgdInspectFailedStatusLine;
         return;
@@ -479,14 +489,16 @@ public:
     const auto captured = CaptureProcessOutput(output, arena, arguments);
     if(!captured){
         const ProcessCaptureFailure& failure = captured.error();
-        NWB_LOGGER_INFO(FOUNDATION_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
-            , static_cast<u32>(failure.kind)
-            , static_cast<i32>(failure.nativeError)
-            , static_cast<i32>(failure.completionError)
-            , failure.exitCode
-            , failure.terminationSignal
-            , failure.outputTruncated
+        const DiagnosticEventText detail = MakeDiagnosticEventText(
+            "Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}",
+            static_cast<u32>(failure.kind),
+            static_cast<i32>(failure.nativeError),
+            static_cast<i32>(failure.completionError),
+            failure.exitCode,
+            failure.terminationSignal,
+            failure.outputTruncated
         );
+        CaptureDiagnosticEvent("logger_server_linux_symbols", detail.view(), __FILE__, __LINE__);
         return MakeUnexpected(Failure{});
     }
 
@@ -537,7 +549,8 @@ public:
     CrashScratchPath modulePath(arena, modulePathText);
     const auto regularModule = IsRegularFile(modulePath);
     if(!regularModule){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Log server: failed to inspect Linux symbol module '{}': {}", PathToString<char>(arena, modulePath), regularModule.error().message());
+        CaptureServerDiagnosticWarning("logger_server_linux_symbols", detail.view(), __FILE__, __LINE__);
         return MakeUnexpected(Failure{});
     }
     if(*regularModule)
@@ -554,7 +567,8 @@ public:
     CrashScratchPath symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
     const auto regularCandidate = IsRegularFile(symbolStoreCandidate);
     if(!regularCandidate){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Log server: failed to inspect Linux symbol-store candidate '{}': {}", PathToString<char>(arena, symbolStoreCandidate), regularCandidate.error().message());
+        CaptureServerDiagnosticWarning("logger_server_linux_symbols", detail.view(), __FILE__, __LINE__);
         return MakeUnexpected(Failure{});
     }
     if(*regularCandidate)
@@ -692,7 +706,8 @@ static void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory,
     const auto corePath = packageDirectory / CrashNames::s_LinuxCoreFileName;
     const auto corePresent = IsRegularFile(corePath);
     if(!corePresent){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
+        const DiagnosticEventText detail = MakeDiagnosticEventText("Log server: failed to inspect Linux core artifact '{}': {}", PathToString<char>(scratchArena, corePath), corePresent.error().message());
+        CaptureServerDiagnosticWarning("logger_server_linux_symbols", detail.view(), __FILE__, __LINE__);
         outReport += s_LinuxCoreInspectFailedLine;
     }
     else
@@ -1362,5 +1377,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

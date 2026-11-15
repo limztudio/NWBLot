@@ -114,7 +114,7 @@ b8 AvboitRefractionCaptureResources::appendCsg(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& csgUses
 ){
     auto& graph = m_graph;
@@ -290,7 +290,7 @@ struct CaptureDrawTask{
     struct Payload{
         RendererMaterialSystem& materialSystem;
         AvboitFrameTargets avboitTargets;
-        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+        MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena> drawItems;
         usize instanceCount = 0u;
@@ -402,7 +402,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     RendererCsgSystem& csgSystem,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const MeshViewGpuData& meshViewState,
     Core::GpuTaskId dependency,
     const b8 enabled,

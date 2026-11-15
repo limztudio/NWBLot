@@ -48,9 +48,7 @@ namespace Scene{
     class TransformComponent;
 };
 
-namespace ECSRenderDetail{
-    struct MeshFrameBindingSnapshot;
-};
+class MeshFrameBindingSnapshot;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,7 +89,7 @@ public:
         DeferredFrameTargets& targets,
         const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+        const MeshFrameBindingSnapshot& frameBindings
     );
     void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
@@ -108,13 +106,13 @@ public:
         const DeferredFrameTargets& targets,
         const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+        const MeshFrameBindingSnapshot& frameBindings
     )const noexcept;
     [[nodiscard]] Expected<CsgIntervalSampleStateGpuData> prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+        const MeshFrameBindingSnapshot& frameBindings
     )const noexcept;
     [[nodiscard]] Expected<CsgReceiverClipDrawInfo> resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,

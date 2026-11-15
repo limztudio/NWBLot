@@ -33,15 +33,15 @@ NWB_IMPL_BEGIN
 
 class MeshFrameBindings final : NoCopy{
 public:
-    [[nodiscard]] b8 prepare(Core::GraphicsRuntime& graphics, const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer);
-    [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot snapshot(const Core::BufferHandle& meshViewBuffer)const noexcept;
-    [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot viewSnapshot(const Core::BufferHandle& meshViewBuffer)const noexcept;
+    [[nodiscard]] b8 prepare(Core::GraphicsRuntime& graphics, const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer);
+    [[nodiscard]] MeshFrameBindingSnapshot snapshot(const Core::BufferHandle& meshViewBuffer)const noexcept;
+    [[nodiscard]] MeshViewBufferSnapshot viewSnapshot(const Core::BufferHandle& meshViewBuffer)const noexcept;
     void release(Core::GraphicsRuntime& graphics);
     void reset()noexcept{ m_snapshot = {}; }
 
 
 private:
-    ECSRenderDetail::MeshFrameBindingSnapshot m_snapshot;
+    MeshFrameBindingSnapshot m_snapshot;
 };
 
 

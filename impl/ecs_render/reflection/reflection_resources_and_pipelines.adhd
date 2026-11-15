@@ -290,7 +290,7 @@ Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::acquireCsgDispat
 
 ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     const DeferredFrameTargets& targets,
-    const ECSRenderDetail::MeshViewBufferSnapshot& view,
+    const MeshViewBufferSnapshot& view,
     const RayTracingSceneGraphResources& scene,
     const ReflectionSettings& settings,
     const u32 frameIndex,

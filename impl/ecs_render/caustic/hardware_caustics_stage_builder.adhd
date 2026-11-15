@@ -37,7 +37,7 @@ struct DeferredFrameTargets;
 struct HardwareCausticsStageInputs{
     DeferredFrameTargets& targets;
     const DeferredLightingGraphResources& lightingResources;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const MeshViewBufferSnapshot& meshViewSnapshot;
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
     const RendererFrameGraphFeatures& features;
     Core::GpuGraphResourceId worldPosition;

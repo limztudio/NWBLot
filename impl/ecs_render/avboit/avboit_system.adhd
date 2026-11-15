@@ -73,9 +73,9 @@ struct CsgFrameGpuDataView;
 class CsgFrameState;
 struct MaterialPassDrawItemPartitionsView;
 struct MaterialPassDrawItemsView;
+class MeshFrameBindingSnapshot;
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
-    struct MeshFrameBindingSnapshot;
 };
 
 
@@ -136,7 +136,7 @@ public:
         const MaterialPassDrawItemsView& receiverSurfaceDrawItems,
         const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
         b8 materialGeometryStatesGraphOwned,
@@ -148,7 +148,7 @@ public:
         const MaterialPassDrawItemPartitionsView& preparedOccupancyDrawItems,
         const CsgFrameGpuDataView& preparedOccupancyCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedOccupancyCsgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
+        const MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
         usize preparedOccupancyInstanceCount,
         usize preparedOccupancyMaterialTypedByteCount,
         b8 occupancyMaterialFrameStatesGraphOwned = false,
@@ -165,7 +165,7 @@ public:
         const MaterialPassDrawItemPartitionsView& preparedExtinctionDrawItems,
         const CsgFrameGpuDataView& preparedExtinctionCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedExtinctionCsgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
+        const MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
         usize preparedExtinctionInstanceCount,
         usize preparedExtinctionMaterialTypedByteCount,
         b8 extinctionMaterialFrameStatesGraphOwned = false,
@@ -181,7 +181,7 @@ public:
         const MaterialPassDrawItemPartitionsView& preparedAccumulationDrawItems,
         const CsgFrameGpuDataView& preparedAccumulationCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedAccumulationCsgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
+        const MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
         usize preparedAccumulationInstanceCount,
         usize preparedAccumulationMaterialTypedByteCount,
         b8 accumulationMaterialFrameStatesGraphOwned = false,
@@ -204,7 +204,7 @@ private:
         const MaterialPassDrawItemPartitionsView& preparedDrawItems,
         const CsgFrameGpuDataView& preparedCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedCsgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedFrameBindings,
+        const MeshFrameBindingSnapshot& preparedFrameBindings,
         usize preparedInstanceCount,
         usize preparedMaterialTypedByteCount,
         b8 materialFrameStatesGraphOwned,

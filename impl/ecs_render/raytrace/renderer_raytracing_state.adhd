@@ -91,7 +91,7 @@ struct RtSceneBvhState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState, public RtRefractionState{
+class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
 public:
     // RtShadowState needs the renderer arena for its persistent tables.
     explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
@@ -110,6 +110,7 @@ public:
 
 public:
     HardwareTransparentShadowState m_hardwareTransparentShadow;
+    RtRefractionState m_refraction;
 };
 
 

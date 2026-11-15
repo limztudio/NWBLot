@@ -414,7 +414,7 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     // Material owns growth. Once every domain pass prepares, publish one Mesh generation; retain the prior one on refresh.
-    const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
+    const MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
     if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
         return false;
     if(hasCsgFrameWork && !materialBuffers.valid())

@@ -271,7 +271,7 @@ public:
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
         DeferredFrameTargets& targets;
-        ECSRenderDetail::MeshViewBufferSnapshot meshView;
+        MeshViewBufferSnapshot meshView;
         const b8& shadowVisibilityPrepared;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
@@ -320,7 +320,7 @@ public:
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
         DeferredLightingGraphResources deferredLightingResources;
-        ECSRenderDetail::MeshViewBufferSnapshot meshView;
+        MeshViewBufferSnapshot meshView;
         Core::GpuTimingSubmissionTicket& timingTicket;
         const b8& shadowVisibilityPrepared;
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
@@ -375,7 +375,7 @@ template<b8 Hardware>
     RendererRayTracingSystem& raytracingSystem,
     const Core::GpuTaskDesc& desc,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    const MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
     const b8 graphOwnsAccumulatorBootstrapClear,
     Core::GpuTaskGraph& graph,
@@ -539,7 +539,7 @@ public:
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    const MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
     const b8 hardwareCaustics,
     DeferredFrameTargets& targets,
@@ -564,7 +564,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    const MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
     const b8 graphOwnsAccumulatorBootstrapClear,
     DeferredFrameTargets& targets,
@@ -591,7 +591,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    const MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
     const b8 graphOwnsAccumulatorBootstrapClear,
     DeferredFrameTargets& targets,

@@ -121,7 +121,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const MaterialPassDrawItemPartitionsView& drawItems,
     const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const b8 materialFrameStatesGraphOwned,
@@ -259,7 +259,7 @@ void RendererMaterialSystem::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MaterialPassDrawRecorder::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+b8 MaterialPassDrawRecorder::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept{
     for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!materialPassDrawResourcesReady(drawItem.meshResources, frameBindings) || !drawItem.pipelineResources.meshletPipeline)
             return false;
@@ -267,7 +267,7 @@ b8 MaterialPassDrawRecorder::meshMaterialPassDrawResourcesReady(const Span<const
     return true;
 }
 
-b8 MaterialPassDrawRecorder::computeMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+b8 MaterialPassDrawRecorder::computeMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept{
     if(drawItems.empty())
         return true;
 

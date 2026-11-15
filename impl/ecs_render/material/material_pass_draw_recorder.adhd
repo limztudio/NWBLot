@@ -47,17 +47,17 @@ public:
 
 
 public:
-    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept{
+    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const MeshFrameBindingSnapshot& frameBindings)const noexcept{
         return mesh.valid() && frameBindings.bindingValid();
     }
-    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept{
         return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
     }
-    [[nodiscard]] b8 meshMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
-    [[nodiscard]] b8 indexedMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+    [[nodiscard]] b8 meshMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept;
+    [[nodiscard]] b8 indexedMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept{
         return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
     }
-    [[nodiscard]] b8 computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
+    [[nodiscard]] b8 computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept;
     [[nodiscard]] b8 prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
         return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
     }

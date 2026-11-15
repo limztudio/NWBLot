@@ -8,73 +8,71 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class RtRefractionState : NoCopy{
+    public Array<Array<ShaderHandle, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwShaders;
+    public Array<Array<ComputePipelineHandle, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwPipelines;
+    public Array<Array<b8, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwPipelineFailed;
+    public BindingLayoutHandle m_refractionBindingLayout = BindingLayoutHandle();
+    public ShaderHandle m_refractionClassifyTilesShader = ShaderHandle();
+    public ComputePipelineHandle m_refractionClassifyTilesPipeline = ComputePipelineHandle();
+    public ShaderHandle m_refractionFinalizeTilesShader = ShaderHandle();
+    public ComputePipelineHandle m_refractionFinalizeTilesPipeline = ComputePipelineHandle();
+    public ShaderHandle m_refractionScreenShader = ShaderHandle();
+    public ShaderHandle m_refractionHwShader = ShaderHandle();
+    public ShaderHandle m_refractionCsgHwShader = ShaderHandle();
+    public ShaderHandle m_refractionDenseScreenShader = ShaderHandle();
+    public ShaderHandle m_refractionDenseHwShader = ShaderHandle();
+    public ShaderHandle m_refractionDenseCsgHwShader = ShaderHandle();
+    public ComputePipelineHandle m_refractionScreenPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_refractionHwPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_refractionCsgHwPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_refractionDenseScreenPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_refractionDenseHwPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_refractionDenseCsgHwPipeline = ComputePipelineHandle();
+    public b8 m_refractionScreenPipelineFailed = false;
+    public b8 m_refractionHwPipelineFailed = false;
+    public b8 m_refractionCsgHwPipelineFailed = false;
+    public b8 m_refractionDenseScreenPipelineFailed = false;
+    public b8 m_refractionDenseHwPipelineFailed = false;
+    public b8 m_refractionDenseCsgHwPipelineFailed = false;
+    public u32 m_refractionCertifiedInstanceIndex = u32.max;
+    public b8 m_refractionUseHardwareTrace = false;
+    public b8 m_refractionHardwareTracingEnabled = true;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-
-#include <core/graphics/rhi/device.h>
-
-#include <global/containers.h>
-#include <global/limit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RtRefractionState{
-    Array<Array<Core::ShaderHandle, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwShaders;
-    Array<Array<Core::ComputePipelineHandle, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwPipelines;
-    Array<Array<b8, s_RefractionDiagnosticDensityVariantCount>, s_RefractionDiagnosticCsgVariantCount> m_refractionDiagnosticHwPipelineFailed = {};
-    Core::BindingLayoutHandle m_refractionBindingLayout;
-    Core::ShaderHandle m_refractionClassifyTilesShader;
-    Core::ComputePipelineHandle m_refractionClassifyTilesPipeline;
-    Core::ShaderHandle m_refractionFinalizeTilesShader;
-    Core::ComputePipelineHandle m_refractionFinalizeTilesPipeline;
-    Core::ShaderHandle m_refractionScreenShader;
-    Core::ShaderHandle m_refractionHwShader;
-    Core::ShaderHandle m_refractionCsgHwShader;
-    Core::ShaderHandle m_refractionDenseScreenShader;
-    Core::ShaderHandle m_refractionDenseHwShader;
-    Core::ShaderHandle m_refractionDenseCsgHwShader;
-    Core::ComputePipelineHandle m_refractionScreenPipeline;
-    Core::ComputePipelineHandle m_refractionHwPipeline;
-    Core::ComputePipelineHandle m_refractionCsgHwPipeline;
-    Core::ComputePipelineHandle m_refractionDenseScreenPipeline;
-    Core::ComputePipelineHandle m_refractionDenseHwPipeline;
-    Core::ComputePipelineHandle m_refractionDenseCsgHwPipeline;
-    b8 m_refractionScreenPipelineFailed = false;
-    b8 m_refractionHwPipelineFailed = false;
-    b8 m_refractionCsgHwPipelineFailed = false;
-    b8 m_refractionDenseScreenPipelineFailed = false;
-    b8 m_refractionDenseHwPipelineFailed = false;
-    b8 m_refractionDenseCsgHwPipelineFailed = false;
-    u32 m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
-    b8 m_refractionUseHardwareTrace = false;
-    b8 m_refractionHardwareTracingEnabled = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void invalidateResources(){
+        for(usize csg = 0u; csg < s_RefractionDiagnosticCsgVariantCount; ++csg){
+            for(usize dense = 0u; dense < s_RefractionDiagnosticDensityVariantCount; ++dense){
+                this.m_refractionDiagnosticHwShaders[csg][dense].reset();
+                this.m_refractionDiagnosticHwPipelines[csg][dense].reset();
+                this.m_refractionDiagnosticHwPipelineFailed[csg][dense] = false;
+            }
+        }
+        this.m_refractionBindingLayout.reset();
+        this.m_refractionClassifyTilesShader.reset();
+        this.m_refractionClassifyTilesPipeline.reset();
+        this.m_refractionFinalizeTilesShader.reset();
+        this.m_refractionFinalizeTilesPipeline.reset();
+        this.m_refractionScreenShader.reset();
+        this.m_refractionHwShader.reset();
+        this.m_refractionCsgHwShader.reset();
+        this.m_refractionDenseScreenShader.reset();
+        this.m_refractionDenseHwShader.reset();
+        this.m_refractionDenseCsgHwShader.reset();
+        this.m_refractionScreenPipeline.reset();
+        this.m_refractionHwPipeline.reset();
+        this.m_refractionCsgHwPipeline.reset();
+        this.m_refractionDenseScreenPipeline.reset();
+        this.m_refractionDenseHwPipeline.reset();
+        this.m_refractionDenseCsgHwPipeline.reset();
+        this.m_refractionScreenPipelineFailed = false;
+        this.m_refractionHwPipelineFailed = false;
+        this.m_refractionCsgHwPipelineFailed = false;
+        this.m_refractionDenseScreenPipelineFailed = false;
+        this.m_refractionDenseHwPipelineFailed = false;
+        this.m_refractionDenseCsgHwPipelineFailed = false;
+        this.m_refractionCertifiedInstanceIndex = u32.max;
+        this.m_refractionUseHardwareTrace = false;
+    }
 }
 
 

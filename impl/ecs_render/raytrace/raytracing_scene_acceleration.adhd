@@ -101,7 +101,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     using namespace RayTracingSoftwareBvhDetail;
 
     m_preparedSceneContentStamp = {};
-    m_rayTracingState.m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
+    m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
 
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -305,7 +305,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     if(CanCertifySingleRefractiveInstanceEntry(staticScene, opticalScene.boundsCompleteExceptRuntime, csg.hasCsg, allInstanceBoundsValid, refractiveInstanceCount, singleRefractiveInstanceIndex, instances.size())){
         if(RefractiveBoundsIsolation().isIsolated(instanceWorldBounds, singleRefractiveInstanceIndex)){
             instanceMaterials[singleRefractiveInstanceIndex].flags |= RtInstanceMaterialFlag::RefractionEntryCertified;
-            m_rayTracingState.m_refractionCertifiedInstanceIndex = singleRefractiveInstanceIndex;
+            m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = singleRefractiveInstanceIndex;
         }
     }
 

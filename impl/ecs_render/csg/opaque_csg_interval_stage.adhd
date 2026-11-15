@@ -42,7 +42,7 @@ class DeferredGraphResourceImportResult;
 struct OpaqueCsgIntervalStageInputs{
     DeferredFrameTargets& targets;
     const DeferredGraphResourceImportResult& resources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     MaterialPassDrawItemPartitionsView opaqueDrawItems{};
     CsgFrameGpuDataView csgFrameData{};
@@ -95,7 +95,7 @@ public:
 public:
     // Copies the frozen opaque draw stream and the G-buffer upload state into the CSG payloads.
     void capturePayloads(
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
         const CsgFrameGpuDataView& csgFrameData,

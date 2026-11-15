@@ -137,7 +137,7 @@ public:
         const MaterialPassDrawItemPartitionsView& drawItems,
         const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
         // The shared graph declares immutable mesh-view/material inputs; local phases establish these states.
@@ -195,7 +195,7 @@ public:
     [[nodiscard]] b8 prepareMaterialPassDrawBuffers(Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes);
     [[nodiscard]] b8 materialPassDrawBuffersReady(Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes)const noexcept;
     [[nodiscard]] b8 materialPassDrawBuffersReady(usize instanceCount, usize materialTypedByteCount)const noexcept;
-    [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
+    [[nodiscard]] MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
     // The CSG context descriptor is selected per instance heap-slot lane. Declaration patches the copy before recording.
     void prepareMaterialPassInstanceUploadData(const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, Span<InstanceGpuData> instanceData)noexcept;
 

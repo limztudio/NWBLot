@@ -131,7 +131,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     )
         return false;
 
-    const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = context.mesh.meshViewBufferSnapshot();
+    const MeshViewBufferSnapshot meshViewBufferSnapshot = context.mesh.meshViewBufferSnapshot();
     if(context.rayTracing.hasCausticWork(meshViewBufferSnapshot) && !opticalScene.valid())
         return false;
 

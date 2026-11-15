@@ -46,7 +46,7 @@ class CsgFrameState;
 struct TransparentCsgIntervalProducerInputs{
     DeferredFrameTargets& targets;
     const CsgFrameState& csgFrameState;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;

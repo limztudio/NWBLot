@@ -41,7 +41,7 @@ public:
         Core::Alloc::ScratchArena& scratchArena,
         const MaterialPassDrawItemPartitions& opaqueDrawItems,
         const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const MeshFrameBindingSnapshot& frameBindings,
         b8 hasOpaqueCsgFrameWork,
         b8 hasCsgFrameGpuWork,
         b8 gbufferMaterialSampledTexturesCollected,

@@ -498,7 +498,7 @@ Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    const MeshFrameBindingSnapshot& frameBindings
 )const noexcept{
     CsgClipContextSlots contextSlots{};
     if(!csgFrameData.hasWork())
@@ -521,7 +521,7 @@ Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSam
     const DeferredFrameTargets& targets,
     const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    const MeshFrameBindingSnapshot& frameBindings
 )const noexcept{
     CsgIntervalSampleStateGpuData state{};
     if(!csgFrameData.hasWork())

@@ -174,7 +174,7 @@ b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets&
         return true;
     if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargets.buffer)
         return true;
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    const MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return prepareCausticResources(meshView, false, targets);
 }
 
@@ -184,7 +184,7 @@ b8 RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& tar
         return true;
     if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || !m_rayTracingState.m_tlas || m_rayTracingState.m_shadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargets.buffer)
         return true;
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    const MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return prepareCausticResources(meshView, true, targets);
 }
 
@@ -196,11 +196,11 @@ CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivityS
 }
 
 b8 RendererRayTracingSystem::hasHwCausticWork()const noexcept{
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    const MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return hasHwCausticWork(meshView);
 }
 
-b8 RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasHwCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept{
     // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
     return
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
@@ -212,7 +212,7 @@ b8 RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBuf
     ;
 }
 
-b8 RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, const b8 hardware, DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::prepareCausticResources(const MeshViewBufferSnapshot& meshView, const b8 hardware, DeferredFrameTargets& targets){
     if(!targets.causticAccumulator || !targets.causticIrradiance || !meshView.buffer || !meshView.heapHandle.valid() || !m_rayTracingState.m_causticEmissionTargets.heapHandle.valid())
         return true;
     if(meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer || m_rayTracingState.m_causticEmissionTargets.heapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
@@ -261,7 +261,7 @@ b8 RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTar
     ;
 }
 
-b8 RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasCommonCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept{
     return
         m_shadowVisibilityTraceResourcesPreflighted
         && m_shadowVisibilityPreparedTargets

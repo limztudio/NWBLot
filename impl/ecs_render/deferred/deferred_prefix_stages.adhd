@@ -274,7 +274,7 @@ Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const Opaque
         return MakeUnexpected(Failure{});
 
     DeferredFrameTargets& deferredTargets = inputs.targets;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
     const MaterialPassDrawItemPartitionsView& opaqueDrawItems = inputs.drawItems;
     const Span<InstanceGpuData> instanceData = inputs.instanceData;

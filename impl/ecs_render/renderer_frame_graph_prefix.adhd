@@ -150,7 +150,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const GraphicsPrefixGraphContext& context,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const b8 hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,

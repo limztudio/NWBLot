@@ -369,7 +369,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
     Core::GraphicsRuntime& graphics,
     RendererMaterialSystem& materialSystem,
     Core::Alloc::ScratchArena& scratchArena,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitRecordInputsBase& inputs,
     const Core::GpuTaskId initialRasterDependency,

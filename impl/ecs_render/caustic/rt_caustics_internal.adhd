@@ -104,7 +104,7 @@ struct CausticsResolveChainNaming{
 
 struct CausticsStagePrefixInputs{
     DeferredFrameTargets& targets;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const MeshViewBufferSnapshot& meshViewSnapshot;
     const b8& shadowPreparationReady;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& photonTiming;

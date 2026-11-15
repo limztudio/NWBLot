@@ -50,7 +50,7 @@ public:
 public:
     [[nodiscard]] b8 prepare(
         Span<const MaterialPassDrawItem> draws,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const MeshFrameBindingSnapshot& frameBindings,
         Core::Alloc::ScratchArena& scratchArena,
         Core::GpuTaskId& dependency,
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,

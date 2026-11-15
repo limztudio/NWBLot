@@ -34,7 +34,7 @@ struct DeferredFrameTargets;
 struct AvboitMaterialUploadInputs{
     const DeferredFrameTargets& targets;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
     Core::GpuGraphResourceId csgReceiverRanges;
@@ -98,7 +98,7 @@ struct AvboitPassUploadInputs{
     Core::Framebuffer& framebuffer;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::AvboitOccupancy;
     const CsgFrameState& csgFrameState;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;
@@ -119,7 +119,7 @@ struct FrameGraphAvboitPassPhaseDesc{
 struct FrameGraphAvboitPassUploadInputs{
     DeferredFrameTargets& targets;
     const CsgFrameState& csgFrameState;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;
@@ -246,8 +246,8 @@ public:
 
 public:
     void reset()noexcept;
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
-    [[nodiscard]] b8 matches(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const MeshFrameBindingSnapshot& frameBindings, const MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
+    [[nodiscard]] b8 matches(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const MeshFrameBindingSnapshot& frameBindings, const MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
     // Publish the generation task or a dependent completion task proving all output writes; generation must disable pass-scissor culling.
     [[nodiscard]] b8 publishProducer(Core::GpuTaskId task)noexcept;
     [[nodiscard]] Core::GpuTaskId producerTask()const noexcept{ return m_producer; }
@@ -257,7 +257,7 @@ private:
     Core::Alloc::ScratchArena& m_arena;
     MaterialPassDrawItemVector m_draws;
     InstanceGpuDataVector m_instances;
-    ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;
+    MeshFrameBindingSnapshot m_frameBindings;
     Array<u8, sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT> m_viewBytes{};
     Core::GpuTaskId m_producer;
     b8 m_captured = false;

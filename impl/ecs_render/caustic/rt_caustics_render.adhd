@@ -182,7 +182,7 @@ namespace __hidden_rt_caustics_render{
 [[nodiscard]] static CausticPhotonPushConstants MakeCausticPhotonPushConstants(
     const RendererRayTracingState& state,
     const DeferredFrameTargets& targets,
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    const MeshViewBufferSnapshot& meshView,
     const CausticPhotonBudget& photonBudget,
     const u32 instanceCount,
     const u32 frameIndex,
@@ -333,7 +333,7 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     return true;
 }
 
-b8 RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept{
     // Software photons require a caustic light, refractor, and software scene BVH.
     const b8 hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
     return
@@ -345,7 +345,7 @@ b8 RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBuffe
     ;
 }
 
-b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, const MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Software photon producer runs before deferred lighting.
     if(!hasCausticWork(meshView))
         return false;
@@ -388,7 +388,7 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
     return true;
 }
 
-b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;

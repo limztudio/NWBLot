@@ -59,11 +59,11 @@ b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     return MeshEmulationResources{}.prepare(m_graphics, mesh);
 }
 
-b8 RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers){
+b8 RendererMeshSystem::prepareMeshFrameBindings(const MaterialPassBufferSnapshot& materialBuffers){
     return m_meshState.m_frameBindings.prepare(m_graphics, materialBuffers, m_meshState.m_meshViewBuffer);
 }
 
-ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const noexcept{
+MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const noexcept{
     return m_meshState.m_frameBindings.snapshot(m_meshState.m_meshViewBuffer);
 }
 
@@ -300,7 +300,7 @@ b8 MeshEmulationResources::prepare(Core::GraphicsRuntime& graphics, MeshResource
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshFrameBindings::prepare(Core::GraphicsRuntime& graphics, const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer){
+b8 MeshFrameBindings::prepare(Core::GraphicsRuntime& graphics, const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer){
     if(m_snapshot.matches(materialBuffers, meshViewBuffer))
         return true;
 
@@ -338,16 +338,16 @@ b8 MeshFrameBindings::prepare(Core::GraphicsRuntime& graphics, const ECSRenderDe
     if(!registered)
         return false;
 
-    ECSRenderDetail::MeshFrameBindingSnapshot replacement = {
-        .instanceBuffer = materialBuffers.instanceBuffer,
-        .materialTypedBuffer = materialBuffers.materialTypedBuffer,
-        .meshView = { .buffer = meshViewBuffer, .heapHandle = viewHandle, },
-        .instanceHeapHandle = instanceHandle,
-        .materialTypedHeapHandle = materialTypedHandle,
-        .instanceBufferCapacity = materialBuffers.instanceBufferCapacity,
-        .materialTypedBufferCapacity = materialBuffers.materialTypedBufferCapacity,
-    };
-    ECSRenderDetail::MeshFrameBindingSnapshot retired = Move(m_snapshot);
+    MeshFrameBindingSnapshot replacement(
+        materialBuffers.instanceBuffer,
+        materialBuffers.materialTypedBuffer,
+        MeshViewBufferSnapshot(meshViewBuffer, viewHandle),
+        instanceHandle,
+        materialTypedHandle,
+        materialBuffers.instanceBufferCapacity,
+        materialBuffers.materialTypedBufferCapacity
+    );
+    MeshFrameBindingSnapshot retired = Move(m_snapshot);
     m_snapshot = Move(replacement);
     retireInstance.release();
     retireMaterialTyped.release();
@@ -365,21 +365,21 @@ b8 MeshFrameBindings::prepare(Core::GraphicsRuntime& graphics, const ECSRenderDe
     return true;
 }
 
-ECSRenderDetail::MeshFrameBindingSnapshot MeshFrameBindings::snapshot(const Core::BufferHandle& meshViewBuffer)const noexcept{
-    const ECSRenderDetail::MeshFrameBindingSnapshot& bindings = m_snapshot;
-    return {
-        .instanceBuffer = bindings.instanceBuffer,
-        .materialTypedBuffer = bindings.materialTypedBuffer,
-        .meshView = viewSnapshot(meshViewBuffer),
-        .instanceHeapHandle = bindings.instanceHeapHandle,
-        .materialTypedHeapHandle = bindings.materialTypedHeapHandle,
-        .instanceBufferCapacity = bindings.instanceBufferCapacity,
-        .materialTypedBufferCapacity = bindings.materialTypedBufferCapacity,
-    };
+MeshFrameBindingSnapshot MeshFrameBindings::snapshot(const Core::BufferHandle& meshViewBuffer)const noexcept{
+    const MeshFrameBindingSnapshot& bindings = m_snapshot;
+    return MeshFrameBindingSnapshot(
+        bindings.instanceBuffer,
+        bindings.materialTypedBuffer,
+        viewSnapshot(meshViewBuffer),
+        bindings.instanceHeapHandle,
+        bindings.materialTypedHeapHandle,
+        bindings.instanceBufferCapacity,
+        bindings.materialTypedBufferCapacity
+    );
 }
 
-ECSRenderDetail::MeshViewBufferSnapshot MeshFrameBindings::viewSnapshot(const Core::BufferHandle& meshViewBuffer)const noexcept{
-    ECSRenderDetail::MeshViewBufferSnapshot snapshot;
+MeshViewBufferSnapshot MeshFrameBindings::viewSnapshot(const Core::BufferHandle& meshViewBuffer)const noexcept{
+    MeshViewBufferSnapshot snapshot;
     snapshot.buffer = meshViewBuffer;
     if(m_snapshot.meshView.buffer == meshViewBuffer)
         snapshot.heapHandle = m_snapshot.meshView.heapHandle;

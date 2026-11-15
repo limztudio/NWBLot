@@ -161,14 +161,14 @@ public:
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
     void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
     [[nodiscard]] b8 createMeshViewBuffer();
-    [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
+    [[nodiscard]] MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
     [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
     [[nodiscard]] MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const noexcept;
     void confirmMeshViewBufferUpload(const MeshViewGpuData& viewState)noexcept;
     void invalidateMeshViewBufferUploadMirror()noexcept{ m_meshState.m_meshViewGpuDataValid = false; }
-    [[nodiscard]] b8 prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
-    [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
+    [[nodiscard]] b8 prepareMeshFrameBindings(const MaterialPassBufferSnapshot& materialBuffers);
+    [[nodiscard]] MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
     void populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 

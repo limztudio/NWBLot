@@ -54,8 +54,8 @@ class ObjectGeometryCacheGraph;
 struct DeferredFrameTargets;
 class DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
+class MeshFrameBindingSnapshot;
 namespace ECSRenderDetail{
-    struct MeshFrameBindingSnapshot;
     struct CsgGraphResourceSnapshot;
 };
 
@@ -90,7 +90,7 @@ public:
         const GraphicsPrefixGraphContext& context,
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        const MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         b8 hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,

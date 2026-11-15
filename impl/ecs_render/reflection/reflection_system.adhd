@@ -139,7 +139,7 @@ public:
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept{ return m_statistics.latestStatistics(); }
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
         const DeferredFrameTargets& targets,
-        const ECSRenderDetail::MeshViewBufferSnapshot& view,
+        const MeshViewBufferSnapshot& view,
         const RayTracingSceneGraphResources& scene,
         const ReflectionSettings& settings,
         u32 frameIndex,

@@ -612,13 +612,13 @@ b8 RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCoun
     );
 }
 
-ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{
-    return {
-        .instanceBuffer = m_materialState.m_instanceBuffer,
-        .materialTypedBuffer = m_materialState.m_materialTypedBuffer,
-        .instanceBufferCapacity = m_materialState.m_instanceBufferCapacity,
-        .materialTypedBufferCapacity = m_materialState.m_materialTypedBufferCapacity,
-    };
+MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{
+    return MaterialPassBufferSnapshot(
+        m_materialState.m_instanceBuffer,
+        m_materialState.m_materialTypedBuffer,
+        m_materialState.m_instanceBufferCapacity,
+        m_materialState.m_materialTypedBufferCapacity
+    );
 }
 
 

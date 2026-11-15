@@ -37,8 +37,8 @@ struct RayTracingDeferredGraphResourceSnapshot;
 struct DeferredGraphResourceImportInputs{
     DeferredFrameTargets& targets;
     const DeferredLightingGraphResources& lightingResources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const MeshFrameBindingSnapshot& frameBindings;
+    const MeshViewBufferSnapshot& meshViewSnapshot;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
     const DeferredLaggedLightingHistoryResources* history = nullptr;

@@ -391,7 +391,7 @@ b8 RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& pres
     pipelineDesc
         .setVertexShader(m_shaderSystem.deferredCompositeVertexShader())
         .setPixelShader(m_deferredState.m_presentPixelShader)
-        .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
+        .setRenderState(BuildCompositeRenderState())
         .addBindingLayout(m_deferredState.m_presentBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())

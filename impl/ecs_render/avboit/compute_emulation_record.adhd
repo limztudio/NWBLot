@@ -53,7 +53,7 @@ struct AvboitComputeEmulationRecordTrait{
 struct AvboitComputeEmulationTaskPayload{
     Core::GraphicsRuntime& graphics;
     RendererMaterialSystem& materialSystem;
-    ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+    MeshFrameBindingSnapshot frameBindings;
     ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
     DeferredFrameTargets& targets;
     Core::GpuTimingSubmissionTicket& timingTicket;
@@ -95,7 +95,7 @@ struct AvboitSharedComputeEmulationTaskPayload{
     DeferredFrameTargets& targets;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& timing;
-    ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+    MeshFrameBindingSnapshot frameBindings;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
     usize drawIndex = 0u;
     usize instanceCount = 0u;
@@ -113,7 +113,7 @@ struct AvboitRasterPassTaskPayload{
     RendererAvboitSystem& avboitSystem;
     DeferredFrameTargets& targets;
     Core::GpuTimingSubmissionTicket& timingTicket;
-    ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+    MeshFrameBindingSnapshot frameBindings;
     ECSRenderDetail::TransparentMaterialPassGraphSnapshot snapshot;
     ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
     Optional<Core::GpuTimingMeasure>* computeEmulationTiming = nullptr;

@@ -39,7 +39,7 @@ class DeferredGraphResourceImportResult;
 struct OpaqueSharedComputeEmulationChainInputs{
     DeferredFrameTargets& targets;
     const DeferredGraphResourceImportResult& resources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan;
     Span<const Core::GpuTaskResourceUse> objectGeometryReads;
     Core::GpuTimingSubmissionTicket*& timingTicket;

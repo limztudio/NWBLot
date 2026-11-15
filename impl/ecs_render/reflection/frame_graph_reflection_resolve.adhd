@@ -41,7 +41,7 @@ class RendererReflectionSystem;
 // Reflection resolve owns reflection snapshot and reflection task declaration.
 struct FrameGraphReflectionResolveInputs{
     DeferredFrameTargets& targets;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const MeshViewBufferSnapshot& meshViewSnapshot;
     const RayTracingSceneGraphResources& sceneResources;
     const ReflectionSettings& reflectionSettings;
     const ReflectionSceneContentStamp& contentStamp;

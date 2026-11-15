@@ -37,7 +37,7 @@ class RendererMaterialSystem;
 // Opaque upload chain owns material plus CSG frame buffer uploads feeding G-buffer.
 struct OpaqueUploadChainInputs{
     DeferredFrameTargets& targets;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     MaterialPassDrawItemPartitionsView drawItems{};
     Span<InstanceGpuData> instanceData;

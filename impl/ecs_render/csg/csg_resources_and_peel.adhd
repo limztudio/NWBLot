@@ -152,7 +152,7 @@ namespace __hidden_csg_resources_and_peel{
     if(!heap.isInitialized())
         return false;
     Core::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.setVertexShader(vertexShader).setPixelShader(pixelShader).setRenderState(ECSRenderDetail::BuildCompositeRenderState()).addBindingLayout(clipBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    pipelineDesc.setVertexShader(vertexShader).setPixelShader(pixelShader).setRenderState(BuildCompositeRenderState()).addBindingLayout(clipBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
     auto pipelineResult = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(pipelineResult)
@@ -447,7 +447,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     DeferredFrameTargets& targets,
     const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    const MeshFrameBindingSnapshot& frameBindings
 ){
     if(!csgFrameData.hasWork())
         return;

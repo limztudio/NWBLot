@@ -364,7 +364,7 @@ public:
         RendererMaterialSystem& materialSystem;
         RendererMeshSystem& meshSystem;
         MaterialPassDrawItem draw;
-        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+        MeshFrameBindingSnapshot frameBindings;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
     };
@@ -417,7 +417,7 @@ public:
 
 b8 ObjectGeometryCacheGraph::prepare(
     const Span<const MaterialPassDrawItem> draws,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     Core::Alloc::ScratchArena& scratchArena,
     Core::GpuTaskId& dependency,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,

@@ -124,7 +124,7 @@ void OpaqueComputeEmulationPlanner::capture(
     Core::Alloc::ScratchArena& scratchArena,
     const MaterialPassDrawItemPartitions& opaqueDrawItems,
     const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const b8 hasOpaqueCsgFrameWork,
     const b8 hasCsgFrameGpuWork,
     const b8 gbufferMaterialSampledTexturesCollected,

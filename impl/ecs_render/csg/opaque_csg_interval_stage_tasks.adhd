@@ -103,7 +103,7 @@ NWB_IMPL_BEGIN
 
 
 void OpaqueCsgIntervalStage::capturePayloads(
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
     const CsgFrameGpuDataView& csgFrameData,

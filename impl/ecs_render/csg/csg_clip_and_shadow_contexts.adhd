@@ -363,7 +363,7 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
     return Optional<Core::GpuUploadBlobId>{*blobResult};
 }
 
-b8 RendererRayTracingSystem::prepareCausticOpticalReadTracking(const ECSRenderDetail::MeshViewBufferSnapshot& meshView){
+b8 RendererRayTracingSystem::prepareCausticOpticalReadTracking(const MeshViewBufferSnapshot& meshView){
     const b8 admitted = m_shadowVisibilityHardwareSupported ? hasHwCausticWork(meshView) : hasCausticWork(meshView);
     if(!ensureRayTraceContextReadTracking(admitted))
         return false;

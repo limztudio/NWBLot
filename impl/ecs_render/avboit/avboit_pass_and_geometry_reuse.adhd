@@ -130,7 +130,7 @@ static void DispatchAvboitCompute(const AvboitFrameTargets& targets, const u32 g
 [[nodiscard]] static b8 EligibleGroup(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const MaterialPipelinePass::Enum pass,
     Core::Alloc::ScratchArena& arena
 ){
@@ -211,7 +211,7 @@ static void DispatchAvboitCompute(const AvboitFrameTargets& targets, const u32 g
     return true;
 }
 
-[[nodiscard]] static b8 FrameBindingsMatch(const ECSRenderDetail::MeshFrameBindingSnapshot& left, const ECSRenderDetail::MeshFrameBindingSnapshot& right)noexcept{
+[[nodiscard]] static b8 FrameBindingsMatch(const MeshFrameBindingSnapshot& left, const MeshFrameBindingSnapshot& right)noexcept{
     return
         left.instanceBuffer == right.instanceBuffer && left.materialTypedBuffer == right.materialTypedBuffer
         && left.meshView.buffer == right.meshView.buffer && left.meshView.heapHandle == right.meshView.heapHandle
@@ -254,7 +254,7 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const MaterialPassDrawItemsView& receiverSurfaceDrawItems,
     const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const b8 materialGeometryStatesGraphOwned,
@@ -308,7 +308,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const MaterialPassDrawItemPartitionsView& preparedOccupancyDrawItems,
     const CsgFrameGpuDataView& preparedOccupancyCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedOccupancyCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
+    const MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
     const usize preparedOccupancyInstanceCount,
     const usize preparedOccupancyMaterialTypedByteCount,
     const b8 occupancyMaterialFrameStatesGraphOwned,
@@ -348,7 +348,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const MaterialPassDrawItemPartitionsView& preparedExtinctionDrawItems,
     const CsgFrameGpuDataView& preparedExtinctionCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedExtinctionCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
+    const MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
     const usize preparedExtinctionInstanceCount,
     const usize preparedExtinctionMaterialTypedByteCount,
     const b8 extinctionMaterialFrameStatesGraphOwned,
@@ -386,7 +386,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const MaterialPassDrawItemPartitionsView& preparedAccumulationDrawItems,
     const CsgFrameGpuDataView& preparedAccumulationCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedAccumulationCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
+    const MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
     const usize preparedAccumulationInstanceCount,
     const usize preparedAccumulationMaterialTypedByteCount,
     const b8 accumulationMaterialFrameStatesGraphOwned,
@@ -449,7 +449,7 @@ void RendererAvboitSystem::renderAvboitMaterialPass(
     const MaterialPassDrawItemPartitionsView& preparedDrawItems,
     const CsgFrameGpuDataView& preparedCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedFrameBindings,
+    const MeshFrameBindingSnapshot& preparedFrameBindings,
     const usize preparedInstanceCount,
     const usize preparedMaterialTypedByteCount,
     const b8 materialFrameStatesGraphOwned,
@@ -497,7 +497,7 @@ void AvboitGeneratedGeometryReuse::reset()noexcept{
 b8 AvboitGeneratedGeometryReuse::capture(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const MeshViewGpuData& view,
     const MaterialPipelinePass::Enum pass
 ){
@@ -519,7 +519,7 @@ b8 AvboitGeneratedGeometryReuse::capture(
 b8 AvboitGeneratedGeometryReuse::matches(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MeshFrameBindingSnapshot& frameBindings,
     const MeshViewGpuData& view,
     const MaterialPipelinePass::Enum pass
 ){

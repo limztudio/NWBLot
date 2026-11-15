@@ -52,8 +52,8 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
 
     DeferredFrameTargets& deferredTargets = inputs.targets;
     const DeferredLightingGraphResources& deferredLightingResources = inputs.lightingResources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = inputs.meshViewSnapshot;
+    const MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const MeshViewBufferSnapshot& meshViewBufferSnapshot = inputs.meshViewSnapshot;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
     const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources = inputs.rayTracingResources;
     const DeferredLaggedLightingHistoryResources* const history = inputs.history;

@@ -102,10 +102,10 @@ class RendererMaterialSystem;
 class RendererOpticalVolumeSelection;
 class CsgShapeRegistry;
 struct MaterialSurfaceInfo;
+class MeshViewBufferSnapshot;
 
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
-    struct MeshViewBufferSnapshot;
 };
 
 

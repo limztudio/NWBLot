@@ -2,54 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/avboit/avboit_raster_configuration.adhd>
+#include <impl/ecs_render/material/pipeline_enums.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit.adhd.h>
-#include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
+RenderState ApplyRenderStateTwoSided(in RenderState baseState, in b8 twoSided){
+    if(!twoSided)
+        return baseState;
+    RenderState result = baseState;
+    result.rasterState.setCullNone();
+    return result;
+}
 
-#include <core/graphics/api.h>
+RenderState BuildMeshRenderState(){
+    RenderState renderState;
+    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
+    renderState.rasterState.enableDepthClip();
+    return renderState;
+}
 
+RenderState BuildCsgReceiverSurfaceRenderState(){
+    RenderState renderState;
+    renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
+    BlendStateRenderTarget target;
+    target.setColorWriteMask(ColorMask::None);
+    for(u32 index = 0u; index < s_MaxRenderTargets; ++index)
+        renderState.blendState.setRenderTarget(index, target);
+    renderState.rasterState.enableDepthClip().setCullNone();
+    return renderState;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+RenderState BuildRenderStateForPass(in MaterialPipelinePass pass, in b8 twoSided){
+    switch(pass){
+    case MaterialPipelinePass::Opaque:
+        return ApplyRenderStateTwoSided(BuildMeshRenderState(), twoSided);
+    case MaterialPipelinePass::CsgReceiverSurface:
+        return BuildCsgReceiverSurfaceRenderState();
+    case MaterialPipelinePass::AvboitOccupancy:
+    case MaterialPipelinePass::AvboitExtinction:
+        return ApplyRenderStateTwoSided(BuildRendererAvboitVoxelRenderState(), twoSided);
+    case MaterialPipelinePass::AvboitAccumulate:
+        return ApplyRenderStateTwoSided(BuildRendererAvboitAccumulateRenderState(), twoSided);
+    case MaterialPipelinePass::AvboitRefractionCapture:
+        return ApplyRenderStateTwoSided(BuildRendererAvboitRefractionCaptureRenderState(), twoSided);
+    default:
+        return ApplyRenderStateTwoSided(BuildMeshRenderState(), twoSided);
+    }
+}
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Core::RenderState BuildMeshRenderState()noexcept;
-[[nodiscard]] Core::RenderState BuildRenderStateForPass(MaterialPipelinePass::Enum pass, b8 twoSided)noexcept;
-[[nodiscard]] Core::RenderState BuildCompositeRenderState()noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+RenderState BuildCompositeRenderState(){
+    RenderState renderState;
+    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
+    renderState.rasterState.enableDepthClip().setCullNone();
+    return renderState;
 }
 
 

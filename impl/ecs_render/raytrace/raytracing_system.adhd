@@ -99,7 +99,7 @@ public:
 
     [[nodiscard]] RefractionRenderer& refraction()noexcept{ return m_refraction; }
     [[nodiscard]] const RefractionRenderer& refraction()const noexcept{ return m_refraction; }
-    void setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{ m_rayTracingState.m_refractionHardwareTracingEnabled = enabled; }
+    void setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{ m_rayTracingState.m_refraction.m_refractionHardwareTracingEnabled = enabled; }
 
     // Identity freezes in the shared graph. Select/grow trace resources before compile; the prep packet works only on that set.
     [[nodiscard]] b8 preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
@@ -131,7 +131,7 @@ public:
     // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
     [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const;
-    [[nodiscard]] b8 prepareCausticOpticalReadTracking(const ECSRenderDetail::MeshViewBufferSnapshot& meshView);
+    [[nodiscard]] b8 prepareCausticOpticalReadTracking(const MeshViewBufferSnapshot& meshView);
     void confirmRayTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept;
     // Retain the preflight caustic AABB stream as a graph blob. Valid-empty means no refractive targets this frame.
     [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const;
@@ -230,7 +230,7 @@ public:
     void confirmCausticAccumulatorBootstrapClear()noexcept{ m_rayTracingState.m_causticAccumulatorInitialized = true; }
     // A warm accumulator decays in its own task before the photon producer, sharing its packet; the compiler owns the UAV handoff.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticAccumulatorDecayTask(
-        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+        Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const MeshViewBufferSnapshot& meshView,
         const b8& shadowVisibilityPrepared, b8 hardwareCaustics, DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticPhotonTiming
     );
@@ -245,18 +245,18 @@ public:
     [[nodiscard]] b8 prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareSoftwareCausticsTask(
         Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
-        const ECSRenderDetail::MeshViewBufferSnapshot& meshView, const b8& shadowVisibilityPrepared, b8 graphOwnsAccumulatorBootstrapClear,
+        const MeshViewBufferSnapshot& meshView, const b8& shadowVisibilityPrepared, b8 graphOwnsAccumulatorBootstrapClear,
         DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticPhotonTiming, b8& causticProducerDispatched
     );
-    [[nodiscard]] b8 hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
-    [[nodiscard]] b8 renderGpuBvhCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
+    [[nodiscard]] b8 hasCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept;
+    [[nodiscard]] b8 renderGpuBvhCaustics(Core::CommandList& commandList, const MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
     [[nodiscard]] b8 prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareHardwareCausticsTask(
         Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources,
-        const ECSRenderDetail::MeshViewBufferSnapshot& meshView, const b8& shadowVisibilityPrepared, b8 graphOwnsAccumulatorBootstrapClear,
+        const MeshViewBufferSnapshot& meshView, const b8& shadowVisibilityPrepared, b8 graphOwnsAccumulatorBootstrapClear,
         DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& causticPhotonTiming, b8& causticProducerDispatched
     );
-    [[nodiscard]] b8 renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
+    [[nodiscard]] b8 renderHwCaustics(Core::CommandList& commandList, const MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
     // Records downsample, resolve prepare, wavelets, upsample after the photon producer. Uses own the UAV-to-SRV handoffs.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched,
@@ -278,7 +278,7 @@ public:
     void dispatchCausticResolveWaveletPass(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 passIndex);
     void dispatchCausticResolveUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] b8 hasHwCausticWork()const noexcept;
-    [[nodiscard]] b8 hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
+    [[nodiscard]] b8 hasHwCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] b8 hasSurfelWork()const noexcept{ return m_rayTracingState.m_surfelEnabled; }
     [[nodiscard]] b8 needsSurfelResourceInitialization()const noexcept{
         return RequiresSurfelResourceInitialization(hasSurfelWork(), m_rayTracingState.m_surfelResourcesNeedClear);
@@ -387,9 +387,9 @@ private:
     [[nodiscard]] u32 transparentShadowSampleCount()const noexcept;
     void reportTransparentShadowSampling(u32 sampleCount);
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept;
-    [[nodiscard]] b8 prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, b8 hardware, DeferredFrameTargets& targets);
+    [[nodiscard]] b8 prepareCausticResources(const MeshViewBufferSnapshot& meshView, b8 hardware, DeferredFrameTargets& targets);
     [[nodiscard]] b8 causticResolveResourcesReady(const DeferredFrameTargets& targets)const noexcept;
-    [[nodiscard]] b8 hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
+    [[nodiscard]] b8 hasCommonCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept;
     void preflightLightSpaceShadowResources();
     [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(Span<const SceneLightGpuData> lights)const noexcept;
     void prepareLightSpaceShadows(Span<const SceneLightGpuData> lights);

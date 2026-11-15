@@ -45,7 +45,7 @@ struct MaterialPassDrawContext{
     // Prepared CSG draws consume the root tuple; regular paths leave it null.
     const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
     // Every material path consumes one immutable Mesh-published binding generation.
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const MeshFrameBindingSnapshot& frameBindings;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     // Graph declares mesh-view/material SRVs; frozen streams may retain mesh-source SRVs.
     b8 materialFrameStatesGraphOwned = false;

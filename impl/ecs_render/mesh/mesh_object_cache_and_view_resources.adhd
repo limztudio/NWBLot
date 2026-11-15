@@ -273,7 +273,7 @@ b8 RendererMeshSystem::createMeshViewBuffer(){
     return true;
 }
 
-ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const noexcept{
+MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const noexcept{
     return m_meshState.m_frameBindings.viewSnapshot(m_meshState.m_meshViewBuffer);
 }
 

@@ -12,6 +12,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TypeRef* TypeSubstitution::SubstituteAliasType(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena, List<MString, MetaArena>& ownedTexts){
     const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
     for(usize p = 0u; p < count; ++p){
@@ -125,6 +128,9 @@ TypeRef* TypeSubstitution::SubstituteAliasType(const TypeRef& origType, const Sp
     cloned->isConst = method->isConst;
     return cloned;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

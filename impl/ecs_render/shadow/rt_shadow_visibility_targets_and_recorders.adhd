@@ -454,11 +454,11 @@ void SoftShadowTemporalMergeRecorder::record(
         m_commandList.setTextureState(resources.momentsOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     }
     if(!graphOwnsMergeCurrentGeometryEntryState)
-        m_commandList.setTextureState(m_targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        m_commandList.setTextureState(m_targets.shadowSoftGeometry.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     if(!graphOwnsMergeStaticReadEntryStates){
         if(m_historyReadable)
-            m_commandList.setTextureState(m_targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        m_commandList.setTextureState(m_targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            m_commandList.setTextureState(m_targets.shadowSoftGeometryPrev.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        m_commandList.setTextureState(m_targets.worldPosition.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     }
     m_commandList.setEnableUavBarriersForTexture(resources.historyOut, true);
     m_commandList.setEnableUavBarriersForTexture(resources.momentsOut, true);
@@ -627,8 +627,8 @@ void SoftwareTransparentShadowTraceRecorder::Record(const SoftwareTransparentSha
     const b8 samplingHistoryUsable = CanUseSoftwareTransparentSamplingHistory(inputs, state.m_softTransparentTemporalReady, state.m_softwareTransparentSampling.m_history.usable());
     if(samplingHistoryUsable && !inputs.graphOwnsOpaqueToTransparentBoundary){
         // These reads also belong to the split trace task; unsplit phases retain local transitions.
-        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.shadowSoftGeometry.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(inputs.historyFrontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
     }

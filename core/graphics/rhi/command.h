@@ -130,6 +130,12 @@ struct GpuPhysicalQueueInfo{
 struct GpuPhysicalQueueTopology{
     const GpuPhysicalQueueInfo* queues = nullptr;
     usize queueCount = 0u;
+
+
+public:
+    [[nodiscard]] Span<const GpuPhysicalQueueInfo> queueSpan()const noexcept{
+        return queues ? Span<const GpuPhysicalQueueInfo>(queues, queueCount) : Span<const GpuPhysicalQueueInfo>();
+    }
 };
 
 // Native command storage for one queue. Snapshots sample thread-safe counters, so fields may advance mid-query.

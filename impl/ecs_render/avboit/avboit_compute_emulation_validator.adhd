@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 
 
@@ -29,101 +28,114 @@ b8 HasValidAvboitSharedPhaseBounds(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AvboitComputeEmulationValidator : NoCopy{
-    private KernelGpuCompiledGraphReadViewConstPtr m_compiledGraph;
+b8 IsAvboitQueueOnClass(in Optional<GpuPhysicalQueueInfo> queue, in CommandQueue queueClass){
+    return queue.has_value() && queue.value().queueClass == queueClass;
+}
 
-    public AvboitComputeEmulationValidator(in KernelGpuCompiledGraphReadView compiledGraph){
-        this.m_compiledGraph = AddressOfKernelCompiledGraphReadView(compiledGraph);
+b8 IsAvboitCompiledTaskValid(in GpuCompiledGraphReadView compiledGraph, in GpuTaskId task){
+    return compiledGraph.valid() && task.valid() && compiledGraph.findTask(task).valid();
+}
+
+b8 IsOptionalAvboitTaskPrecedingInSharedPacket(
+    in GpuCompiledGraphReadView compiledGraph,
+    in GpuTaskId optionalTask,
+    in GpuTaskId consumerTask
+){
+    return !optionalTask.valid()
+        || !compiledGraph.tasksSharePacket(optionalTask, consumerTask)
+        || compiledGraph.taskPrecedesInSamePacket(optionalTask, consumerTask);
+}
+
+b8 IsAvboitTaskBoundaryOrdered(
+    in GpuCompiledGraphReadView compiledGraph,
+    in GpuTaskId producerTask,
+    in GpuTaskId consumerTask
+){
+    if(!producerTask.valid() || !consumerTask.valid())
+        return false;
+    if(compiledGraph.tasksSharePacket(producerTask, consumerTask))
+        return compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask);
+    return compiledGraph.taskPrecedesOrSharesPacket(producerTask, consumerTask);
+}
+
+b8 IsAvboitReusedGeometryOrdered(
+    in GpuCompiledGraphReadView compiledGraph,
+    in GpuTaskId source,
+    in GpuTaskId consumer,
+    in GpuTaskId localProducer,
+    in usize sharedPhaseCount
+){
+    return !source.valid()
+        || (CanOrderReusedAvboitGeometry(localProducer.valid(), sharedPhaseCount, source == consumer)
+            && IsAvboitCompiledTaskValid(compiledGraph, source)
+            && IsAvboitTaskBoundaryOrdered(compiledGraph, source, consumer));
+}
+
+b8 IsAvboitComputeEmulationMerged(
+    in GpuCompiledGraphReadView compiledGraph,
+    in GpuTaskId computeEmulationTask,
+    in GpuTaskId rasterTask,
+    in GpuTaskId streamTask,
+    in Optional<GpuPhysicalQueueInfo> computeEmulationQueue,
+    in Optional<GpuPhysicalQueueInfo> rasterQueue
+){
+    if(!computeEmulationTask.valid())
+        return true;
+    if(
+        !streamTask.valid()
+        || !IsAvboitQueueOnClass(computeEmulationQueue, CommandQueue::Graphics)
+        || !IsAvboitQueueOnClass(rasterQueue, CommandQueue::Graphics)
+        || !compiledGraph.tasksSharePacket(computeEmulationTask, rasterTask)
+        || !compiledGraph.taskPrecedesOrSharesPacket(streamTask, computeEmulationTask)
+    )
+        return false;
+    Array<GpuTaskId, 2u> taskPair;
+    taskPair[0u] = computeEmulationTask;
+    taskPair[1u] = rasterTask;
+    return compiledGraph.tasksFormContiguousPacketSequence(taskPair)
+        && IsOptionalAvboitTaskPrecedingInSharedPacket(compiledGraph, streamTask, computeEmulationTask);
+}
+
+b8 IsAvboitSharedComputeEmulationChainValid(
+    in GpuCompiledGraphReadView compiledGraph,
+    in Span<GpuTaskId> sharedTasks,
+    in usize phaseCount,
+    in GpuTaskId regularComputeEmulationTask,
+    in GpuTaskId rasterTask,
+    in GpuTaskId streamTask,
+    in Optional<GpuPhysicalQueueInfo> sharedQueue,
+    in Optional<GpuPhysicalQueueInfo> rasterQueue
+){
+    if(phaseCount == 0u){
+        for(in GpuTaskId task : sharedTasks){
+            if(task.valid())
+                return false;
+        }
+        return true;
     }
-
-    public b8 optionalTaskPrecedesInSharedPacket(in KernelGpuTaskId optionalTask, in KernelGpuTaskId consumerTask)const{
-        return !optionalTask.valid()
-            || !CompiledGraphTasksSharePacket(this.m_compiledGraph, optionalTask, consumerTask)
-            || CompiledGraphTaskPrecedesInSamePacket(this.m_compiledGraph, optionalTask, consumerTask);
-    }
-
-    public b8 taskIsCompiled(in KernelGpuTaskId task)const{
-        return CompiledGraphTaskIsValid(this.m_compiledGraph, task);
-    }
-
-    public b8 taskBoundaryIsOrdered(in KernelGpuTaskId producerTask, in KernelGpuTaskId consumerTask)const{
-        if(!producerTask.valid() || !consumerTask.valid())
+    if(
+        !HasValidAvboitSharedPhaseBounds(phaseCount, sharedTasks.size(), regularComputeEmulationTask.valid(), streamTask.valid())
+        || !IsAvboitQueueOnClass(sharedQueue, CommandQueue::Graphics)
+        || !IsAvboitQueueOnClass(rasterQueue, CommandQueue::Graphics)
+        || rasterTask != sharedTasks[phaseCount - 1u]
+        || !compiledGraph.taskPrecedesOrSharesPacket(streamTask, sharedTasks[0u])
+    )
+        return false;
+    for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
+        const GpuTaskId task = sharedTasks[phaseIndex];
+        if(!task.valid())
             return false;
-        if(CompiledGraphTasksSharePacket(this.m_compiledGraph, producerTask, consumerTask))
-            return CompiledGraphTaskPrecedesInSamePacket(this.m_compiledGraph, producerTask, consumerTask);
-        return CompiledGraphTaskPrecedesOrSharesPacket(this.m_compiledGraph, producerTask, consumerTask);
-    }
-
-    public b8 reusedGeometryIsOrdered(
-        in KernelGpuTaskId source,
-        in KernelGpuTaskId consumer,
-        in KernelGpuTaskId localProducer,
-        in usize sharedPhaseCount
-    )const{
-        return !source.valid()
-            || (CanOrderReusedAvboitGeometry(localProducer.valid(), sharedPhaseCount, source == consumer)
-                && this.taskIsCompiled(source)
-                && this.taskBoundaryIsOrdered(source, consumer));
-    }
-
-    public b8 computeEmulationMerged(
-        in KernelGpuTaskId computeEmulationTask,
-        in KernelGpuTaskId rasterTask,
-        in KernelGpuTaskId streamTask,
-        in KernelGpuPhysicalQueueInfoConstPtr computeEmulationQueue,
-        in KernelGpuPhysicalQueueInfoConstPtr rasterQueue
-    )const{
-        if(!computeEmulationTask.valid())
-            return true;
         if(
-            !streamTask.valid()
-            || !QueueInfoIsGraphicsQueue(computeEmulationQueue)
-            || !QueueInfoIsGraphicsQueue(rasterQueue)
-            || !CompiledGraphTasksSharePacket(this.m_compiledGraph, computeEmulationTask, rasterTask)
-            || !CompiledGraphTaskPrecedesOrSharesPacket(this.m_compiledGraph, streamTask, computeEmulationTask)
+            !IsAvboitQueueOnClass(compiledGraph.findQueueInfoForTask(task), CommandQueue::Graphics)
+            || !compiledGraph.tasksSharePacket(sharedTasks[0u], task)
         )
             return false;
-        return CompiledGraphTaskPairIsContiguous(this.m_compiledGraph, computeEmulationTask, rasterTask)
-            && this.optionalTaskPrecedesInSharedPacket(streamTask, computeEmulationTask);
     }
-
-    public b8 sharedComputeEmulationChainValid(
-        in Span<KernelGpuTaskId> sharedTasks,
-        in usize phaseCount,
-        in KernelGpuTaskId regularComputeEmulationTask,
-        in KernelGpuTaskId rasterTask,
-        in KernelGpuTaskId streamTask,
-        in KernelGpuPhysicalQueueInfoConstPtr sharedQueue,
-        in KernelGpuPhysicalQueueInfoConstPtr rasterQueue
-    )const{
-        if(phaseCount == 0u){
-            for(in KernelGpuTaskId task : sharedTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(
-            !HasValidAvboitSharedPhaseBounds(phaseCount, sharedTasks.size(), regularComputeEmulationTask.valid(), streamTask.valid())
-            || !QueueInfoIsGraphicsQueue(sharedQueue)
-            || !QueueInfoIsGraphicsQueue(rasterQueue)
-            || rasterTask != sharedTasks[phaseCount - 1u]
-            || !CompiledGraphTaskPrecedesOrSharesPacket(this.m_compiledGraph, streamTask, sharedTasks[0u])
-        )
+    for(usize phaseIndex = phaseCount; phaseIndex < sharedTasks.size(); ++phaseIndex){
+        if(sharedTasks[phaseIndex].valid())
             return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const KernelGpuTaskId task = sharedTasks[phaseIndex];
-            if(!task.valid())
-                return false;
-            if(!CompiledGraphTaskIsOnGraphicsQueue(this.m_compiledGraph, task) || !CompiledGraphTasksSharePacket(this.m_compiledGraph, sharedTasks[0u], task))
-                return false;
-        }
-        for(usize phaseIndex = phaseCount; phaseIndex < sharedTasks.size(); ++phaseIndex){
-            if(sharedTasks[phaseIndex].valid())
-                return false;
-        }
-        return CompiledGraphTaskPrefixIsContiguous(this.m_compiledGraph, sharedTasks, phaseCount);
     }
+    return compiledGraph.tasksFormContiguousPacketSequence(sharedTasks.subspan(0u, phaseCount));
 }
 
 

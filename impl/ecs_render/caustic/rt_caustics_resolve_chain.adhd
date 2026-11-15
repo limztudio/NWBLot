@@ -150,9 +150,9 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
         softwareTraceGeometryStatesGraphOwned,
         softwareTraceGeometryResources.size()
     ));
-    photonResourceUses.push_back(ReadTextureUse(worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+    photonResourceUses.push_back(ReadTextureUse(worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     // Declared layout must match the shader read.
-    photonResourceUses.push_back(ReadTextureUse(depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+    photonResourceUses.push_back(ReadTextureUse(depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     photonResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     photonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
     photonResourceUses.push_back(ReadUse(stageTargets.sceneGeometryDomain));
@@ -389,7 +389,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
     ;
     Core::GpuClearTextureTaskDesc irradianceClear;
     irradianceClear.destination = inputs.causticIrradiance;
-    irradianceClear.subresources = ECSRenderDetail::s_FramebufferSubresources;
+    irradianceClear.subresources = s_FramebufferSubresources;
     irradianceClear.valueType = Core::GpuClearTextureTaskValueType::Float;
     irradianceClear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
     const auto irradianceClearTaskResult = m_graph.addClearTextureTask(irradianceClearDesc, irradianceClear);
@@ -484,9 +484,9 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
 Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareGeometryAndResolve(const CausticsGeometryAndResolveInputs& inputs){
     using namespace RendererTaskGraphDetail;
     const Array<Core::GpuTaskResourceUse, 3u> geometryResourceUses = {
-        ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        WriteTextureUse(inputs.stageTargets.causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+        ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(inputs.stageTargets.causticResolveGeometry, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
 
     // Prepare writes the parity-selected ping-pong target; wavelets own the alternating sequence.
@@ -495,25 +495,25 @@ Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareG
     const Core::GpuGraphResourceId oddWaveletDest = s_CausticResolvePrepareWritesHalf ? inputs.stageTargets.causticHistory : inputs.stageTargets.causticResolveHalf;
     const Array<Core::GpuTaskResourceUse, 3u> resolvePrepareResourceUses = {
         ReadTextureUse(inputs.stageTargets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        WriteTextureUse(oddWaveletSource, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(oddWaveletSource, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     const Array<Core::GpuTaskResourceUse, 3u> resolveOddWaveletResourceUses = {
-        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(oddWaveletSource, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        WriteTextureUse(oddWaveletDest, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(oddWaveletSource, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(oddWaveletDest, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     const Array<Core::GpuTaskResourceUse, 3u> resolveEvenWaveletResourceUses = {
-        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(oddWaveletDest, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        WriteTextureUse(oddWaveletSource, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(oddWaveletDest, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(oddWaveletSource, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     const Array<Core::GpuTaskResourceUse, 5u> resolveUpsampleResourceUses = {
-        ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.stageTargets.causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        WriteTextureUse(inputs.causticIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+        ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.stageTargets.causticResolveHalf, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.stageTargets.causticResolveGeometry, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(inputs.causticIrradiance, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
 
     Core::GpuTaskSchedulingHint geometryScheduling = inputs.baseScheduling;

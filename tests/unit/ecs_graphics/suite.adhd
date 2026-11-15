@@ -190,16 +190,7 @@ struct AvboitValidatorContext{
     ComputeOutputTestArena testArena;
     Core::GpuCompiledGraph graph{ testArena.arena };
     Core::GpuCompiledGraph::ReadView plan{ graph };
-    AvboitComputeEmulationValidator validator{ plan };
 };
-
-[[nodiscard]] inline constexpr const Core::GpuPhysicalQueueInfo* NullSuitePhysicalQueueInfo()noexcept{
-    return nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE const Core::GpuPhysicalQueueInfo* AddressOfSuitePhysicalQueueInfo(const Core::GpuPhysicalQueueInfo& info)noexcept{
-    return &info;
-}
 
 [[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueInfo MakeSuiteGraphicsPhysicalQueueInfo()noexcept{
     Core::GpuPhysicalQueueInfo info{};
@@ -466,7 +457,7 @@ using ComputeEmulationLayout = Impl::ComputeEmulationLayout;
 using MeshGeometryBufferPolicy = Impl::MeshGeometryBufferPolicy;
 using ComputeOutputTestArena = EcsGraphicsSuiteDetail::ComputeOutputTestArena;
 using ComputeOutputContext = EcsGraphicsSuiteDetail::ComputeOutputContext;
-using AvboitComputeEmulationValidator = Impl::AvboitComputeEmulationValidator;
+using Impl::IsAvboitSharedComputeEmulationChainValid;
 using CsgShaderVariantBuilder = Impl::CsgShaderVariantBuilder;
 
 using CsgShadowSnapshotContext = EcsGraphicsSuiteDetail::CsgShadowSnapshotContext;
@@ -513,12 +504,10 @@ using SuiteMeshAssetRef = Core::Assets::AssetRef<Impl::Mesh>;
 using SuiteMaterialAssetRef = Core::Assets::AssetRef<Impl::Material>;
 using SuiteTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadView;
 using AvboitValidatorContext = EcsGraphicsSuiteDetail::AvboitValidatorContext;
-using SuiteGpuPhysicalQueueInfoConstPtr = const Core::GpuPhysicalQueueInfo*;
+using SuiteOptionalPhysicalQueueInfo = Optional<Core::GpuPhysicalQueueInfo>;
 using SuiteSharedPhaseTaskArray = Array<Core::GpuTaskId, Impl::s_SharedComputeEmulationMaximumPhaseCount>;
 using MeshRayTracingResourceSnapshot = Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
 
-using EcsGraphicsSuiteDetail::NullSuitePhysicalQueueInfo;
-using EcsGraphicsSuiteDetail::AddressOfSuitePhysicalQueueInfo;
 using EcsGraphicsSuiteDetail::MakeSuiteGraphicsPhysicalQueueInfo;
 using EcsGraphicsSuiteDetail::MakeSuiteGpuTaskId;
 using EcsGraphicsSuiteDetail::AppendIdentityLightSpaceCsgReceiver;
@@ -1209,16 +1198,15 @@ void VerifyAvboitComputeEmulationValidator_RejectsStrayAndOversizedSharedPhases(
     AvboitValidatorContext context = AvboitValidatorContext();
     SuiteSharedPhaseTaskArray tasks = SuiteSharedPhaseTaskArray();
     const SuiteGpuTaskId emptyTask = SuiteGpuTaskId();
-    const SuiteGpuPhysicalQueueInfoConstPtr nullQueue = NullSuitePhysicalQueueInfo();
-    EXPECT_TRUE(context.validator.sharedComputeEmulationChainValid(tasks, 0u, emptyTask, emptyTask, emptyTask, nullQueue, nullQueue));
+    const SuiteOptionalPhysicalQueueInfo emptyQueue = SuiteOptionalPhysicalQueueInfo();
+    EXPECT_TRUE(IsAvboitSharedComputeEmulationChainValid(context.plan, tasks, 0u, emptyTask, emptyTask, emptyTask, emptyQueue, emptyQueue));
     tasks[0u] = MakeSuiteGpuTaskId(1u, 0u);
-    EXPECT_FALSE(context.validator.sharedComputeEmulationChainValid(tasks, 0u, emptyTask, emptyTask, emptyTask, nullQueue, nullQueue));
-    EXPECT_FALSE(context.validator.sharedComputeEmulationChainValid(tasks, s_SuiteSharedPhaseTaskCapacity + 1u, emptyTask, emptyTask, emptyTask, nullQueue, nullQueue));
-    const SuiteGpuPhysicalQueueInfo graphicsQueue = MakeSuiteGraphicsPhysicalQueueInfo();
-    const SuiteGpuPhysicalQueueInfoConstPtr graphicsQueuePtr = AddressOfSuitePhysicalQueueInfo(graphicsQueue);
+    EXPECT_FALSE(IsAvboitSharedComputeEmulationChainValid(context.plan, tasks, 0u, emptyTask, emptyTask, emptyTask, emptyQueue, emptyQueue));
+    EXPECT_FALSE(IsAvboitSharedComputeEmulationChainValid(context.plan, tasks, s_SuiteSharedPhaseTaskCapacity + 1u, emptyTask, emptyTask, emptyTask, emptyQueue, emptyQueue));
+    const SuiteOptionalPhysicalQueueInfo graphicsQueue = SuiteOptionalPhysicalQueueInfo(MakeSuiteGraphicsPhysicalQueueInfo());
     Array<SuiteGpuTaskId, 1> shortTasks = Array<SuiteGpuTaskId, 1>();
     shortTasks[0u] = tasks[0u];
-    EXPECT_FALSE(context.validator.sharedComputeEmulationChainValid(shortTasks, s_SuiteSupportedSharedPhaseCount, emptyTask, tasks[0u], tasks[0u], graphicsQueuePtr, graphicsQueuePtr));
+    EXPECT_FALSE(IsAvboitSharedComputeEmulationChainValid(context.plan, shortTasks, s_SuiteSupportedSharedPhaseCount, emptyTask, tasks[0u], tasks[0u], graphicsQueue, graphicsQueue));
 }
 
 void VerifyCsgShaderVariantBuilderTests_RejectsMalformedSegmentsAndEmptyAssignmentValues(){

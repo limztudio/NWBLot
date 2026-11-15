@@ -10,12 +10,12 @@
 
 class RendererGraphRuntimeLabel{
     public b8 append(
-        in KernelGpuTaskGraphRuntimeStatistics deferredRuntimeStatistics,
-        in KernelGpuPhysicalQueueTopology runtimeQueueTopology,
-        in KernelFrameGraphPhysicalQueueRuntimeStatisticsSpan physicalQueueRuntimeStatistics,
-        in KernelGpuCompiledGraphReadView deferredCompiledPlan,
-        in KernelGpuRecordedGraph recordedGraph,
-        mut KernelDevice device,
+        in GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics,
+        in GpuPhysicalQueueTopology runtimeQueueTopology,
+        in Span<FrameGraphPhysicalQueueRuntimeStatistics> physicalQueueRuntimeStatistics,
+        in GpuCompiledGraphReadView deferredCompiledPlan,
+        in GpuRecordedGraph recordedGraph,
+        mut Device device,
         mut String label
     )const{
         if(deferredRuntimeStatistics.valid()){
@@ -27,9 +27,10 @@ class RendererGraphRuntimeLabel{
             );
 
             // Borrows plan topology + packet slots under the serialization contract; never the registry (recompile can move the plan).
+            const Span<GpuPhysicalQueueInfo> runtimeQueues = runtimeQueueTopology.queueSpan();
             for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
                 if(!AppendPhysicalQueueRuntimeTelemetryEntry(
-                    KernelTopologyQueueAt(runtimeQueueTopology, queueIndex),
+                    runtimeQueues[queueIndex],
                     physicalQueueRuntimeStatistics[queueIndex],
                     physicalQueueRuntimeStatistics[queueIndex].submission,
                     physicalQueueRuntimeStatistics[queueIndex].compile,
@@ -42,9 +43,9 @@ class RendererGraphRuntimeLabel{
                     return false;
             }
 
-            const usize logicalOwnershipTransferCount = KernelLogicalOwnershipTransferCount(deferredCompiledPlan);
-            for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex)
-                AppendLogicalOwnershipTransferTelemetryEntry(transferIndex, KernelLogicalOwnershipTransferAt(deferredCompiledPlan, transferIndex), label);
+            const Span<GpuCompiledOwnershipTransfer> logicalOwnershipTransfers = deferredCompiledPlan.logicalOwnershipTransferSpan();
+            for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransfers.size(); ++transferIndex)
+                AppendLogicalOwnershipTransferTelemetryEntry(transferIndex, logicalOwnershipTransfers[transferIndex], label);
         }
         else
             label += s_RendererFrameTitle;

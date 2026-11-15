@@ -3,15 +3,14 @@
 
 
 #include <impl/ecs_render/deferred/deferred_internal.adhd>
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class OpaqueGbufferMaterialResources{
-    public KernelGpuGraphResourceSetId geometrySet = KernelGpuGraphResourceSetId();
-    public KernelGpuGraphResourceSetId sampledTextureSet = KernelGpuGraphResourceSetId();
+    public GpuGraphResourceSetId geometrySet = GpuGraphResourceSetId();
+    public GpuGraphResourceSetId sampledTextureSet = GpuGraphResourceSetId();
     public b8 geometryStatesGraphOwned = false;
     public b8 sampledTexturesCollected = false;
 }
@@ -20,48 +19,37 @@ class OpaqueGbufferMaterialResources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class OpaqueGbufferMaterialResourceCollector : NoCopy{
-    private KernelGpuTaskGraphPtr m_graph;
-    private DeferredRendererMaterialSystemConstPtr m_materialSystem;
-    private KernelScratchArenaPtr m_scratchArena;
-
-    public OpaqueGbufferMaterialResourceCollector(
-        mut KernelGpuTaskGraph graph,
-        in DeferredRendererMaterialSystem materialSystem,
-        mut KernelScratchArena scratchArena
-    ){
-        this.m_graph = AddressOfKernelGpuTaskGraph(graph);
-        this.m_materialSystem = AddressOfDeferredRendererMaterialSystem(materialSystem);
-        this.m_scratchArena = AddressOfKernelScratchArena(scratchArena);
-    }
-
-    public Expected<OpaqueGbufferMaterialResources> gather(in DeferredMaterialPassDrawItemPartitions drawItems){
-        OpaqueGbufferMaterialResources resources;
-        if(!HasOpaquePartitionMaterialGeometry(drawItems))
-            return resources;
-
-        const Expected<KernelGpuGraphResourceSetId> geometrySet = GatherOpaqueGbufferGeometrySet(this.m_graph, this.m_scratchArena, drawItems);
-        resources.geometryStatesGraphOwned = geometrySet.has_value();
-        if(!resources.geometryStatesGraphOwned){
-            warning("RendererSystem: could not declare prepared opaque material geometry states");
-            return MakeUnexpected(Failure());
-        }
-        resources.geometrySet = geometrySet.value();
-
-        const Expected<KernelGpuGraphResourceSetId> sampledTextureSet = GatherOpaqueGbufferSampledTextureSet(
-            this.m_graph,
-            this.m_materialSystem,
-            this.m_scratchArena,
-            drawItems
-        );
-        resources.sampledTexturesCollected = sampledTextureSet.has_value();
-        if(!resources.sampledTexturesCollected){
-            warning("RendererSystem: could not declare prepared opaque material sampled textures");
-            return MakeUnexpected(Failure());
-        }
-        resources.sampledTextureSet = sampledTextureSet.value();
+Expected<OpaqueGbufferMaterialResources> GatherOpaqueGbufferMaterialResources(
+    in MaterialPassDrawItemPartitions drawItems,
+    in DeferredRendererMaterialSystem materialSystem,
+    mut GpuTaskGraph graph,
+    mut ScratchArena scratchArena
+){
+    OpaqueGbufferMaterialResources resources;
+    if(!HasOpaquePartitionMaterialGeometry(drawItems))
         return resources;
+
+    const Expected<GpuGraphResourceSetId> geometrySet = GatherOpaqueGbufferGeometrySet(drawItems, graph, scratchArena);
+    resources.geometryStatesGraphOwned = geometrySet.has_value();
+    if(!resources.geometryStatesGraphOwned){
+        warning("RendererSystem: could not declare prepared opaque material geometry states");
+        return MakeUnexpected(Failure());
     }
+    resources.geometrySet = geometrySet.value();
+
+    const Expected<GpuGraphResourceSetId> sampledTextureSet = GatherOpaqueGbufferSampledTextureSet(
+        drawItems,
+        materialSystem,
+        graph,
+        scratchArena
+    );
+    resources.sampledTexturesCollected = sampledTextureSet.has_value();
+    if(!resources.sampledTexturesCollected){
+        warning("RendererSystem: could not declare prepared opaque material sampled textures");
+        return MakeUnexpected(Failure());
+    }
+    resources.sampledTextureSet = sampledTextureSet.value();
+    return resources;
 }
 
 

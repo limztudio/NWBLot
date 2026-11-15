@@ -343,7 +343,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         switch(stage){
             case ShadowResolveStage::Wavelet:
                 if(!dispatch.graphOwnsWaveletGeometryEntryState)
-                    commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.shadowSoftGeometry.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                 if(!graphOwnsInputColorState)
                     commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(dispatch.temporalMomentsValid && !dispatch.graphOwnsWaveletMomentsEntryState)
@@ -354,9 +354,9 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
                 break;
             case ShadowResolveStage::Upsample:
                 if(!dispatch.graphOwnsUpsampleStaticEntryStates){
-                    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.depth.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.worldPosition.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.normal.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
                 }
                 if(!graphOwnsInputColorState)

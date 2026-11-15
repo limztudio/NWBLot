@@ -430,17 +430,17 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
     // Active lagged Lighting receives compiler-owned state seeds for its shared prefix inputs while it reads history.
     // Transparent depth is the exception: the finalizer above orders its temporary DepthRead layout before Lighting samples it.
     const Array<Core::GpuTaskResourceUse, 11u> resourceUses = {
-        ReadTextureUse(inputs.albedo, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.normal, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.albedo, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.normal, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources),
-        ReadTextureUse(inputs.causticIrradiance, ECSRenderDetail::s_FramebufferSubresources),
-        ReadTextureUse(inputs.surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(inputs.causticIrradiance, s_FramebufferSubresources),
+        ReadTextureUse(inputs.surfelIrradiance, s_FramebufferSubresources),
         ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer),
         ReadUse(inputs.lights, Core::ResourceStates::ShaderResource),
         ReadUse(inputs.bindlessSlots, Core::ResourceStates::ConstantBuffer),
-        WriteTextureUse(inputs.opaqueColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+        WriteTextureUse(inputs.opaqueColor, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;

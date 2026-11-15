@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/deferred/presentation_settings.adhd>
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,18 +17,18 @@ const usize s_DeferredLightGpuByteCount = 5120u;
 
 class RendererDeferredState : NoCopy{
     public PresentationSettings m_presentationSettings = PresentationSettings();
-    public KernelBindingLayoutHandle m_lightingBindingLayout = KernelBindingLayoutHandle();
-    public KernelBufferHandle m_sceneShadingBuffer = KernelBufferHandle();
-    public KernelBufferHandle m_lightBuffer = KernelBufferHandle();
-    public KernelShaderHandle m_lightingComputeShader = KernelShaderHandle();
-    public KernelComputePipelineHandle m_lightingPipeline = KernelComputePipelineHandle();
-    public KernelBindingLayoutHandle m_compositeComputeBindingLayout = KernelBindingLayoutHandle();
-    public KernelShaderHandle m_compositeComputeShader = KernelShaderHandle();
-    public KernelComputePipelineHandle m_compositeComputePipeline = KernelComputePipelineHandle();
-    public KernelBindingLayoutHandle m_presentBindingLayout = KernelBindingLayoutHandle();
-    public KernelSamplerHandle m_sampler = KernelSamplerHandle();
-    public KernelShaderHandle m_presentPixelShader = KernelShaderHandle();
-    public KernelGraphicsPipelineHandle m_presentPipeline = KernelGraphicsPipelineHandle();
+    public BindingLayoutHandle m_lightingBindingLayout = BindingLayoutHandle();
+    public BufferHandle m_sceneShadingBuffer = BufferHandle();
+    public BufferHandle m_lightBuffer = BufferHandle();
+    public ShaderHandle m_lightingComputeShader = ShaderHandle();
+    public ComputePipelineHandle m_lightingPipeline = ComputePipelineHandle();
+    public BindingLayoutHandle m_compositeComputeBindingLayout = BindingLayoutHandle();
+    public ShaderHandle m_compositeComputeShader = ShaderHandle();
+    public ComputePipelineHandle m_compositeComputePipeline = ComputePipelineHandle();
+    public BindingLayoutHandle m_presentBindingLayout = BindingLayoutHandle();
+    public SamplerHandle m_sampler = SamplerHandle();
+    public ShaderHandle m_presentPixelShader = ShaderHandle();
+    public GraphicsPipelineHandle m_presentPipeline = GraphicsPipelineHandle();
     public u32 m_lightGpuDataCount = 0u;
     public Array<u8, s_DeferredSceneShadingGpuByteCount> m_sceneShadingGpuData;
     public b8 m_sceneShadingGpuDataValid = false;

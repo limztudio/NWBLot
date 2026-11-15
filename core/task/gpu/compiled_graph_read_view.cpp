@@ -166,6 +166,11 @@ const GpuPhysicalQueueInfo* GpuCompiledGraph::ReadView::queueInfoForTask(const G
     return m_graph ? m_graph->queueInfoForTask(task) : nullptr;
 }
 
+Optional<GpuPhysicalQueueInfo> GpuCompiledGraph::ReadView::findQueueInfoForTask(const GpuTaskId& task)const noexcept{
+    const GpuPhysicalQueueInfo* const info = queueInfoForTask(task);
+    return info ? Optional<GpuPhysicalQueueInfo>(*info) : Optional<GpuPhysicalQueueInfo>();
+}
+
 GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPacketId& packet)const & noexcept{
     if(!m_graph || !m_graph->validPacket(packet))
         return {};
@@ -196,6 +201,14 @@ usize GpuCompiledGraph::ReadView::logicalOwnershipTransferCount()const noexcept{
 
 const GpuCompiledOwnershipTransfer* GpuCompiledGraph::ReadView::logicalOwnershipTransfers()const & noexcept{
     return m_graph ? m_graph->logicalOwnershipTransfers() : nullptr;
+}
+
+Span<const GpuCompiledOwnershipTransfer> GpuCompiledGraph::ReadView::logicalOwnershipTransferSpan()const & noexcept{
+    if(!m_graph)
+        return {};
+    const GpuCompiledOwnershipTransfer* const transfers = m_graph->logicalOwnershipTransfers();
+    const usize transferCount = m_graph->m_ownershipTransfers.size();
+    return transfers ? Span<const GpuCompiledOwnershipTransfer>(transfers, transferCount) : Span<const GpuCompiledOwnershipTransfer>();
 }
 
 const GpuCompiledOwnershipTransfer* GpuCompiledGraph::ReadView::logicalOwnershipTransferAt(const usize index)const & noexcept{

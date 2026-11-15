@@ -9,30 +9,30 @@
 
 
 // G-buffer sentinels; keep creation and clears in lockstep.
-const KernelColor s_GBufferNormalClearColor = MakeKernelColor(0.5f, 0.5f, 1.0f, 1.0f);
-const KernelColor s_GBufferWorldPositionClearColor = MakeKernelColor(0.0f, 0.0f, 0.0f, 1.0f);
-const KernelColor s_GBufferSpecularRoughnessClearColor = MakeKernelColor(0.0f, 0.0f, 0.0f, 1.0f);
+const Color s_GBufferNormalClearColor = Color(0.5f, 0.5f, 1.0f, 1.0f);
+const Color s_GBufferWorldPositionClearColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
+const Color s_GBufferSpecularRoughnessClearColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
 
-KernelFormat SelectGBufferAlbedoFormat(mut KernelDevice device){
-    Array<KernelFormat, 1u> candidates;
-    candidates[0u] = s_KernelFormatRGBA16Float;
-    const KernelFormatSupportMask requiredSupport = s_KernelFormatSupportTexture | s_KernelFormatSupportRenderTarget;
-    return SelectKernelSupportedFormat(device, candidates, requiredSupport);
+Format SelectGBufferAlbedoFormat(mut Device device){
+    Array<Format, 1u> candidates;
+    candidates[0u] = Format::RGBA16_FLOAT;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::RenderTarget;
+    return SelectSupportedFormat(candidates, requiredSupport, device);
 }
 
-KernelFormat SelectDeferredOpaqueColorFormat(mut KernelDevice device){
-    Array<KernelFormat, 1u> candidates;
-    candidates[0u] = s_KernelFormatRGBA16Float;
-    const KernelFormatSupportMask requiredSupport = s_KernelFormatSupportTexture | s_KernelFormatSupportShaderUavStore;
-    return SelectKernelSupportedFormat(device, candidates, requiredSupport);
+Format SelectDeferredOpaqueColorFormat(mut Device device){
+    Array<Format, 1u> candidates;
+    candidates[0u] = Format::RGBA16_FLOAT;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::ShaderUavStore;
+    return SelectSupportedFormat(candidates, requiredSupport, device);
 }
 
-KernelFormat SelectGBufferDepthFormat(mut KernelDevice device){
-    Array<KernelFormat, 3u> candidates;
-    candidates[0u] = s_KernelFormatD32;
-    candidates[1u] = s_KernelFormatD24S8;
-    candidates[2u] = s_KernelFormatD16;
-    return SelectKernelSupportedFormat(device, candidates, s_KernelFormatSupportDepthStencil);
+Format SelectGBufferDepthFormat(mut Device device){
+    Array<Format, 3u> candidates;
+    candidates[0u] = Format::D32;
+    candidates[1u] = Format::D24S8;
+    candidates[2u] = Format::D16;
+    return SelectSupportedFormat(candidates, FormatSupport::DepthStencil, device);
 }
 
 

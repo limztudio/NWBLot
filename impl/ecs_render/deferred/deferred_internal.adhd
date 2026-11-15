@@ -37,32 +37,23 @@ static_assert(s_DeferredLightGpuByteCount == sizeof(f32) * NWB_SCENE_LIGHT_RECOR
 class RendererMaterialSystem;
 
 using DeferredRendererMaterialSystem = RendererMaterialSystem;
-using DeferredRendererMaterialSystemConstPtr = const RendererMaterialSystem*;
 using DeferredMaterialPassDrawItemPartitions = MaterialPassDrawItemPartitions;
-
-[[nodiscard]] FOUNDATION_INLINE constexpr DeferredRendererMaterialSystemConstPtr NullDeferredRendererMaterialSystemConstPtr()noexcept{
-    return nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE DeferredRendererMaterialSystemConstPtr AddressOfDeferredRendererMaterialSystem(const RendererMaterialSystem& system)noexcept{
-    return &system;
-}
 
 [[nodiscard]] FOUNDATION_INLINE b8 HasOpaquePartitionMaterialGeometry(const MaterialPassDrawItemPartitions& drawItems)noexcept{
     return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
 }
 
 [[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
-    Core::GpuTaskGraph* graph,
-    Core::Alloc::ScratchArena* scratchArena,
-    const MaterialPassDrawItemPartitions& drawItems
+    const MaterialPassDrawItemPartitions& drawItems,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 [[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
-    Core::GpuTaskGraph* graph,
-    const RendererMaterialSystem* materialSystem,
-    Core::Alloc::ScratchArena* scratchArena,
-    const MaterialPassDrawItemPartitions& drawItems
+    const MaterialPassDrawItemPartitions& drawItems,
+    const RendererMaterialSystem& materialSystem,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 

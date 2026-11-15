@@ -497,11 +497,11 @@ Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass,
     }
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
-        return applyTwoSided(AvboitRasterConfiguration::BuildRendererAvboitVoxelRenderState());
+        return applyTwoSided(BuildRendererAvboitVoxelRenderState());
     case MaterialPipelinePass::AvboitAccumulate:
-        return applyTwoSided(AvboitRasterConfiguration::BuildRendererAvboitAccumulateRenderState());
+        return applyTwoSided(BuildRendererAvboitAccumulateRenderState());
     case MaterialPipelinePass::AvboitRefractionCapture:
-        return applyTwoSided(AvboitRasterConfiguration::BuildRendererAvboitRefractionCaptureRenderState());
+        return applyTwoSided(BuildRendererAvboitRefractionCaptureRenderState());
     default:
         return applyTwoSided(BuildMeshRenderState());
     }

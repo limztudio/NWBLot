@@ -88,8 +88,8 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
         hardwareTraceGeometryStatesGraphOwned,
         inputs.hardwareTraceGeometryResources.size()
     ));
-    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, Core::ResourceStates::ShaderResource));

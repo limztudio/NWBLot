@@ -2,53 +2,106 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-
-#include <core/graphics/rhi/pipeline.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+const u32 s_AvboitAccumColorLocation = 0u;
+const u32 s_AvboitAccumExtinctionLocation = 1u;
+const u32 s_AvboitAccumForegroundColorLocation = 2u;
+const u32 s_AvboitAccumForegroundExtinctionLocation = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AvboitRasterConfiguration final{
-public:
-    [[nodiscard]] static Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device)noexcept;
-    [[nodiscard]] static Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device)noexcept;
-    [[nodiscard]] static Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device)noexcept;
-    [[nodiscard]] static Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device)noexcept;
-    [[nodiscard]] static Core::RenderState BuildRendererAvboitVoxelRenderState()noexcept;
-    [[nodiscard]] static Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept;
-    [[nodiscard]] static Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+BlendStateRenderTarget BuildAdditiveBlendTarget(in ColorMask colorWriteMask){
+    BlendStateRenderTarget target;
+    target
+        .enableBlend()
+        .setSrcBlend(BlendFactor::One)
+        .setDestBlend(BlendFactor::One)
+        .setBlendOp(BlendOp::Add)
+        .setSrcBlendAlpha(BlendFactor::One)
+        .setDestBlendAlpha(BlendFactor::One)
+        .setBlendOpAlpha(BlendOp::Add)
+        .setColorWriteMask(colorWriteMask)
+    ;
+    return target;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Format SelectRendererAvboitAccumColorFormat(mut Device device){
+    Array<Format, 2u> candidates;
+    candidates[0u] = Format::RGBA16_FLOAT;
+    candidates[1u] = Format::RGBA8_UNORM;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::RenderTarget | FormatSupport::Blendable;
+
+    return SelectSupportedFormat(candidates, requiredSupport, device);
+}
+
+Format SelectRendererAvboitAccumExtinctionFormat(mut Device device){
+    Array<Format, 5u> candidates;
+    candidates[0u] = Format::R16_FLOAT;
+    candidates[1u] = Format::R32_FLOAT;
+    candidates[2u] = Format::RGBA16_FLOAT;
+    candidates[3u] = Format::R8_UNORM;
+    candidates[4u] = Format::RGBA8_UNORM;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::RenderTarget | FormatSupport::Blendable;
+
+    return SelectSupportedFormat(candidates, requiredSupport, device);
+}
+
+Format SelectRendererAvboitTransmittanceFormat(mut Device device){
+    Array<Format, 1u> candidates;
+    candidates[0u] = Format::R16_FLOAT;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::ShaderSample | FormatSupport::ShaderUavStore;
+
+    return SelectSupportedFormat(candidates, requiredSupport, device);
+}
+
+Format SelectRendererAvboitLowRasterFormat(mut Device device){
+    Array<Format, 2u> candidates;
+    candidates[0u] = Format::R8_UNORM;
+    candidates[1u] = Format::RGBA8_UNORM;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::RenderTarget;
+
+    return SelectSupportedFormat(candidates, requiredSupport, device);
+}
+
+RenderState BuildRendererAvboitVoxelRenderState(){
+    RenderState renderState;
+    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
+    renderState.rasterState.enableDepthClip().setCullBack();
+    renderState.blendState.targets[0u].setColorWriteMask(ColorMask::None);
+    return renderState;
+}
+
+RenderState BuildRendererAvboitAccumulateRenderState(){
+    RenderState renderState;
+    renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
+    renderState.rasterState.enableDepthClip().setCullBack();
+    renderState.blendState
+        .setRenderTarget(s_AvboitAccumColorLocation, BuildAdditiveBlendTarget(ColorMask::All))
+        .setRenderTarget(s_AvboitAccumExtinctionLocation, BuildAdditiveBlendTarget(ColorMask::Red))
+        .setRenderTarget(s_AvboitAccumForegroundColorLocation, BuildAdditiveBlendTarget(ColorMask::All))
+        .setRenderTarget(s_AvboitAccumForegroundExtinctionLocation, BuildAdditiveBlendTarget(ColorMask::Red))
+    ;
+    return renderState;
+}
+
+RenderState BuildRendererAvboitRefractionCaptureRenderState(){
+    RenderState renderState;
+    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
+    renderState.rasterState.enableDepthClip().setCullBack();
+    // Nearest fragment wins; no attachment blends.
+    return renderState;
+}
 
 b8 AreAvboitTargetFormatsSupported(
     in b8 lowRasterKnown,

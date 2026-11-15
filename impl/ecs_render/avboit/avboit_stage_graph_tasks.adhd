@@ -515,7 +515,7 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         const auto makeAvboitFloatClearDesc = [](const Core::GpuGraphResourceId destination, const Core::Color& value, const Core::GpuClearTextureTaskRecordHooks& recordHooks = {})noexcept{
             Core::GpuClearTextureTaskDesc clearDesc;
             clearDesc.destination = destination;
-            clearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
+            clearDesc.subresources = s_FramebufferSubresources;
             clearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
             clearDesc.floatValue = value;
             clearDesc.recordHooks = recordHooks;

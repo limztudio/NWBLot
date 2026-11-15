@@ -16,6 +16,9 @@ native{
 #include <impl/ecs_render/material/pipeline_types.adhd.h>
 
 #include <core/alloc/global.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,6 +76,18 @@ struct MaterialPassDrawItemsView;
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
     struct MeshFrameBindingSnapshot;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RendererAvboitTaskGraphTimingTickets{
+    Core::GpuTimingSubmissionTicket& pre;
+    Core::GpuTimingSubmissionTicket& depthWarp;
+    Core::GpuTimingSubmissionTicket& extinction;
+    Core::GpuTimingSubmissionTicket& integration;
+    Core::GpuTimingSubmissionTicket& accumulation;
 };
 
 

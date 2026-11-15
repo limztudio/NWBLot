@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/optional.h>
 #include <global/sync.h>
 
 
@@ -70,6 +71,11 @@ struct GpuCompiledPacketView{
 public:
     [[nodiscard]] b8 valid()const noexcept{
         return id.valid() && plan && (plan->taskCount == 0u || tasks) && (plan->dependencyCount == 0u || dependencies) && (plan->externalDependencyCount == 0u || externalDependencies);
+    }
+    [[nodiscard]] Optional<GpuSubmissionPacket> packetPlan()const noexcept{
+        if(!plan)
+            return Optional<GpuSubmissionPacket>();
+        return Optional<GpuSubmissionPacket>(*plan);
     }
 };
 
@@ -386,6 +392,7 @@ public:
         [[nodiscard]] b8 taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const & noexcept;
         const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const && = delete;
+        [[nodiscard]] Optional<GpuPhysicalQueueInfo> findQueueInfoForTask(const GpuTaskId& task)const noexcept;
         [[nodiscard]] GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const & noexcept;
         GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const && = delete;
         [[nodiscard]] GpuCompiledPacketView packetWithTasks(const GpuSubmissionPacketId& packet)const & noexcept;
@@ -393,6 +400,8 @@ public:
         [[nodiscard]] usize logicalOwnershipTransferCount()const noexcept;
         [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const & noexcept;
         const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const && = delete;
+        [[nodiscard]] Span<const GpuCompiledOwnershipTransfer> logicalOwnershipTransferSpan()const & noexcept;
+        Span<const GpuCompiledOwnershipTransfer> logicalOwnershipTransferSpan()const && = delete;
         [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const & noexcept;
         const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const && = delete;
         [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExport(const GpuGraphResourceId& resource)const & noexcept;

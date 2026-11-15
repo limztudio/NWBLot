@@ -247,13 +247,13 @@ public:
             && appendTicket(hardwareShadowSupported ? renderer.m_causticsGraph.m_deferredHardwareCausticsTask : renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket)
             && appendTicket(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, surfelGiTimingTicket)
         ;
-        RendererAvboitTaskGraphTimingTickets avboitTimingTickets(
+        RendererAvboitTaskGraphTimingTickets avboitTimingTickets{
             avboitPreTimingTicket,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
             avboitIntegrationTimingTicket,
             avboitAccumulationTimingTicket
-        );
+        };
         ready = ready
             && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, tickets, ticketCount)
             && appendTicket(renderer.m_deferredLightingTask, deferredLightingTimingTicket)

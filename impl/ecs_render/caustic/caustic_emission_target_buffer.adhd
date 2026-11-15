@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 #include <impl/ecs_render/caustic/rt_caustics_internal.adhd>
 
 
@@ -10,28 +9,28 @@
 
 
 class CausticEmissionTargetBuffer{
-    public KernelBufferHandle buffer = KernelBufferHandle();
-    public KernelGpuDescriptorHandle heapHandle = KernelGpuDescriptorHandle();
+    public BufferHandle buffer = BufferHandle();
+    public GpuDescriptorHandle heapHandle = GpuDescriptorHandle();
     public usize capacity = 0u;
 
-    public b8 ensure(mut KernelGraphicsRuntime graphics, in usize targetCount){
-        if(HasLiveKernelBuffer(this.buffer) && this.capacity >= targetCount && this.heapHandle.valid()){
+    public b8 ensure(mut GraphicsRuntime graphics, in usize targetCount){
+        if(this.buffer.valid() && this.capacity >= targetCount && this.heapHandle.valid()){
             AssertCausticEmissionTargetStorageDescriptor(this.heapHandle);
             return true;
         }
         return EnsureCausticEmissionTargetBufferStorage(graphics, targetCount, this.buffer, this.heapHandle, this.capacity);
     }
 
-    public void releaseDescriptor(mut KernelGraphicsRuntime graphics){
+    public void releaseDescriptor(mut GraphicsRuntime graphics){
         if(!this.heapHandle.valid())
             return;
         FreeCausticEmissionTargetDescriptor(graphics, this.heapHandle);
-        this.heapHandle = KernelGpuDescriptorHandle();
+        this.heapHandle = GpuDescriptorHandle();
     }
 
     public void reset(){
         this.buffer.reset();
-        this.heapHandle = KernelGpuDescriptorHandle();
+        this.heapHandle = GpuDescriptorHandle();
         this.capacity = 0u;
     }
 }

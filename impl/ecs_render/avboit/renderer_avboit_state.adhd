@@ -2,12 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_AvboitDepthWarpShaderDebugName = "ECSRender_AvboitDepthWarpCS";
 const Name s_AvboitIntegrateShaderDebugName = "ECSRender_AvboitIntegrateCS";
 
@@ -16,11 +10,11 @@ const Name s_AvboitIntegrateShaderDebugName = "ECSRender_AvboitIntegrateCS";
 
 
 class RendererAvboitState : NoCopy{
-    public KernelSamplerHandle m_linearSampler = KernelSamplerHandle();
-    public KernelShaderHandle m_depthWarpComputeShader = KernelShaderHandle();
-    public KernelShaderHandle m_integrateComputeShader = KernelShaderHandle();
-    public KernelComputePipelineHandle m_depthWarpPipeline = KernelComputePipelineHandle();
-    public KernelComputePipelineHandle m_integratePipeline = KernelComputePipelineHandle();
+    public SamplerHandle m_linearSampler = SamplerHandle();
+    public ShaderHandle m_depthWarpComputeShader = ShaderHandle();
+    public ShaderHandle m_integrateComputeShader = ShaderHandle();
+    public ComputePipelineHandle m_depthWarpPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_integratePipeline = ComputePipelineHandle();
     public b8 m_targetsNeedClear = true;
 
     public void invalidateResources(){

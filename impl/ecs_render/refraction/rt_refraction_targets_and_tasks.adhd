@@ -103,11 +103,11 @@ b8 RefractionTargetBuilder::createImages(DeferredFrameTargets& createdTargets, A
     avboitTargets.refractionSpecularRoughness = Move(*refractionSpecularRoughnessResult);
     Core::FramebufferDesc refractionFramebufferDesc;
     refractionFramebufferDesc
-        .addColorAttachment(avboitTargets.refractionNormalIor.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.refractionTintCoverage.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.refractionInstance.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionNormalIor.get(), s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionTintCoverage.get(), s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionInstance.get(), s_FramebufferSubresources)
         // Fourth output carries reflection inputs; keep it off foreground extinction.
-        .addColorAttachment(avboitTargets.refractionSpecularRoughness.get(), ECSRenderDetail::s_FramebufferSubresources).setDepthAttachment(avboitTargets.refractionDepth.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionSpecularRoughness.get(), s_FramebufferSubresources).setDepthAttachment(avboitTargets.refractionDepth.get(), s_FramebufferSubresources)
     ;
     auto refractionFramebufferResult = device.createFramebuffer(refractionFramebufferDesc);
     if(refractionFramebufferResult)
@@ -260,7 +260,7 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
         clearDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolveClear).setMarkerLabel(s_RefractionResolveClearLabel).setDependencies({ &inputs.avboitFinalTask, 1u });
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = refractionResolve;
-        clear.subresources = ECSRenderDetail::s_FramebufferSubresources;
+        clear.subresources = s_FramebufferSubresources;
         clear.valueType = Core::GpuClearTextureTaskValueType::Float;
         clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
         return m_graph.addClearTextureTask(clearDesc, clear);

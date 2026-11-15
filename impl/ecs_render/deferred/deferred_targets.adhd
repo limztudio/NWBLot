@@ -55,6 +55,7 @@ native{
 #include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
 #include <impl/ecs_render/kernel/renderer_format_private.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 
@@ -261,7 +262,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setFormat(createdTargets.albedoFormat)
         .setIsRenderTarget(true)
         // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(ECSRenderDetail::s_ClearColor)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(s_ClearColor)
     ;
     auto albedoResult = m_graphics.createTexture(albedoDesc);
     if(albedoResult)
@@ -343,7 +344,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/opaque_color")
-        .setClearValue(ECSRenderDetail::s_ClearColor)
+        .setClearValue(s_ClearColor)
     ;
     auto opaqueColorResult = m_graphics.createTexture(opaqueColorDesc);
     if(opaqueColorResult)
@@ -365,7 +366,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/composite_color")
-        .setClearValue(ECSRenderDetail::s_ClearColor)
+        .setClearValue(s_ClearColor)
     ;
     auto compositeColorResult = m_graphics.createTexture(compositeColorDesc);
     if(compositeColorResult)
@@ -390,14 +391,14 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     }
 
     Array<Core::FramebufferAttachment, NWB_MESH_GBUFFER_TARGET_COUNT> gbufferAttachments = {};
-    gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION].setTexture(createdTargets.albedo.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
-    gbufferAttachments[NWB_MESH_GBUFFER_NORMAL_LOCATION].setTexture(createdTargets.normal.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
-    gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION].setTexture(createdTargets.worldPosition.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
-    gbufferAttachments[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION].setTexture(createdTargets.specularRoughness.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION].setTexture(createdTargets.albedo.get()).setSubresources(s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_NORMAL_LOCATION].setTexture(createdTargets.normal.get()).setSubresources(s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION].setTexture(createdTargets.worldPosition.get()).setSubresources(s_FramebufferSubresources);
+    gbufferAttachments[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION].setTexture(createdTargets.specularRoughness.get()).setSubresources(s_FramebufferSubresources);
     Core::FramebufferDesc framebufferDesc;
     for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
         framebufferDesc.addColorAttachment(attachment);
-    framebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
+    framebufferDesc.setDepthAttachment(createdTargets.depth.get(), s_FramebufferSubresources);
     auto framebufferResult = device.createFramebuffer(framebufferDesc);
     if(framebufferResult)
         createdTargets.framebuffer = Move(*framebufferResult);
@@ -544,7 +545,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
             Core::GpuDescriptorClass::SampledImage,
             history.causticIrradiance,
             targets.causticIrradianceFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
+            s_FramebufferSubresources,
             Core::TextureDimension::Texture2D,
             history.causticIrradianceDescriptor
         )
@@ -553,7 +554,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
             Core::GpuDescriptorClass::SampledImage,
             history.surfelIrradiance,
             targets.surfelIrradianceFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
+            s_FramebufferSubresources,
             Core::TextureDimension::Texture2D,
             history.surfelIrradianceDescriptor
         )

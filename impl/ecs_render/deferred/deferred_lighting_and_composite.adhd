@@ -222,7 +222,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         return false;
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
+    if(!CreateClampSampler(false, device, m_deferredState.m_sampler)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
@@ -345,7 +345,7 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
+    if(!CreateClampSampler(false, device, m_deferredState.m_sampler)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
     }

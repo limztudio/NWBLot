@@ -4,7 +4,6 @@
 
 #include <impl/ecs_csg/frame_types.adhd>
 #include <impl/ecs_render/csg/work_region.adhd>
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,32 +11,32 @@
 
 class RendererCsgState : NoCopy{
     // CSG layouts are push-only; resources use the global heap.
-    public KernelBindingLayoutHandle m_clipBindingLayout = KernelBindingLayoutHandle();
-    public KernelBindingLayoutHandle m_intervalPeelBindingLayout = KernelBindingLayoutHandle();
-    public KernelBindingLayoutHandle m_receiverSpanBuildBindingLayout = KernelBindingLayoutHandle();
-    public KernelBindingLayoutHandle m_intervalCombineBindingLayout = KernelBindingLayoutHandle();
-    public KernelShaderHandle m_intervalPeelComputeShader = KernelShaderHandle();
-    public KernelShaderHandle m_receiverSpanBuildComputeShader = KernelShaderHandle();
-    public KernelShaderHandle m_intervalCombineComputeShader = KernelShaderHandle();
-    public KernelShaderHandle m_intervalCapFillPixelShader = KernelShaderHandle();
-    public KernelShaderHandle m_refractionCapFillPixelShader = KernelShaderHandle();
-    public KernelComputePipelineHandle m_intervalPeelPipeline = KernelComputePipelineHandle();
-    public KernelComputePipelineHandle m_receiverSpanBuildPipeline = KernelComputePipelineHandle();
-    public KernelComputePipelineHandle m_intervalCombinePipeline = KernelComputePipelineHandle();
-    public KernelGraphicsPipelineHandle m_intervalCapFillPipeline = KernelGraphicsPipelineHandle();
-    public KernelGraphicsPipelineHandle m_refractionCapFillPipeline = KernelGraphicsPipelineHandle();
-    public KernelBufferHandle m_receiverRangeBuffer = KernelBufferHandle();
-    public KernelBufferHandle m_cutterBuffer = KernelBufferHandle();
-    public KernelBufferHandle m_clipContextSlotsBuffer = KernelBufferHandle();
-    public KernelBufferHandle m_intervalSampleStateBuffer = KernelBufferHandle();
+    public BindingLayoutHandle m_clipBindingLayout = BindingLayoutHandle();
+    public BindingLayoutHandle m_intervalPeelBindingLayout = BindingLayoutHandle();
+    public BindingLayoutHandle m_receiverSpanBuildBindingLayout = BindingLayoutHandle();
+    public BindingLayoutHandle m_intervalCombineBindingLayout = BindingLayoutHandle();
+    public ShaderHandle m_intervalPeelComputeShader = ShaderHandle();
+    public ShaderHandle m_receiverSpanBuildComputeShader = ShaderHandle();
+    public ShaderHandle m_intervalCombineComputeShader = ShaderHandle();
+    public ShaderHandle m_intervalCapFillPixelShader = ShaderHandle();
+    public ShaderHandle m_refractionCapFillPixelShader = ShaderHandle();
+    public ComputePipelineHandle m_intervalPeelPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_receiverSpanBuildPipeline = ComputePipelineHandle();
+    public ComputePipelineHandle m_intervalCombinePipeline = ComputePipelineHandle();
+    public GraphicsPipelineHandle m_intervalCapFillPipeline = GraphicsPipelineHandle();
+    public GraphicsPipelineHandle m_refractionCapFillPipeline = GraphicsPipelineHandle();
+    public BufferHandle m_receiverRangeBuffer = BufferHandle();
+    public BufferHandle m_cutterBuffer = BufferHandle();
+    public BufferHandle m_clipContextSlotsBuffer = BufferHandle();
+    public BufferHandle m_intervalSampleStateBuffer = BufferHandle();
     public CsgFrameStateCacheSignature m_frameStateCacheSignature = CsgFrameStateCacheSignature();
     public CsgFrameState m_frameStateCache = CsgFrameState();
     public usize m_receiverRangeBufferCapacity = 0u;
     public usize m_cutterBufferCapacity = 0u;
-    public KernelGpuDescriptorHandle m_receiverRangeBufferHeapHandle = KernelGpuDescriptorHandle();
-    public KernelGpuDescriptorHandle m_cutterBufferHeapHandle = KernelGpuDescriptorHandle();
-    public KernelGpuDescriptorHandle m_clipContextSlotsHeapHandle = KernelGpuDescriptorHandle();
-    public KernelGpuDescriptorHandle m_intervalSampleStateHeapHandle = KernelGpuDescriptorHandle();
+    public GpuDescriptorHandle m_receiverRangeBufferHeapHandle = GpuDescriptorHandle();
+    public GpuDescriptorHandle m_cutterBufferHeapHandle = GpuDescriptorHandle();
+    public GpuDescriptorHandle m_clipContextSlotsHeapHandle = GpuDescriptorHandle();
+    public GpuDescriptorHandle m_intervalSampleStateHeapHandle = GpuDescriptorHandle();
     public b8 m_frameStateCacheValid = false;
 
     public void invalidateResources(){
@@ -58,11 +57,11 @@ class RendererCsgState : NoCopy{
         this.m_receiverRangeBuffer.reset();
         this.m_cutterBuffer.reset();
         this.m_clipContextSlotsBuffer.reset();
-        this.m_receiverRangeBufferHeapHandle = KernelGpuDescriptorHandle();
-        this.m_cutterBufferHeapHandle = KernelGpuDescriptorHandle();
-        this.m_clipContextSlotsHeapHandle = KernelGpuDescriptorHandle();
+        this.m_receiverRangeBufferHeapHandle = GpuDescriptorHandle();
+        this.m_cutterBufferHeapHandle = GpuDescriptorHandle();
+        this.m_clipContextSlotsHeapHandle = GpuDescriptorHandle();
         this.m_intervalSampleStateBuffer.reset();
-        this.m_intervalSampleStateHeapHandle = KernelGpuDescriptorHandle();
+        this.m_intervalSampleStateHeapHandle = GpuDescriptorHandle();
         this.m_frameStateCacheSignature = CsgFrameStateCacheSignature();
         this.m_frameStateCache = CsgFrameState();
         this.m_receiverRangeBufferCapacity = 0u;

@@ -8,17 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const KernelFormatSupportMask s_CsgStorageFormatSupport = s_KernelFormatSupportTexture | s_KernelFormatSupportShaderUavStore;
-const KernelFormatSupportMask s_CsgPeelFormatSupport = s_CsgStorageFormatSupport | s_KernelFormatSupportRenderTarget;
+const FormatSupport s_CsgStorageFormatSupport = FormatSupport::Texture | FormatSupport::ShaderUavStore;
+const FormatSupport s_CsgPeelFormatSupport = s_CsgStorageFormatSupport | FormatSupport::RenderTarget;
 
-KernelFormat SelectCsgFormat(
-    in KernelFormat candidate,
-    in KernelFormatSupportMask requiredSupport,
-    mut KernelDevice device
+Format SelectCsgFormat(
+    in Format candidate,
+    in FormatSupport requiredSupport,
+    mut Device device
 ){
-    Array<KernelFormat, 1u> candidates;
+    Array<Format, 1u> candidates;
     candidates[0u] = candidate;
-    return SelectKernelSupportedFormat(device, candidates, requiredSupport);
+    return SelectSupportedFormat(candidates, requiredSupport, device);
 }
 
 

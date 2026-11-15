@@ -421,36 +421,32 @@ Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const Opaque
 
 
 Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
-    Core::GpuTaskGraph* const graph,
-    Core::Alloc::ScratchArena* const scratchArena,
-    const MaterialPassDrawItemPartitions& drawItems
+    const MaterialPassDrawItemPartitions& drawItems,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace RendererTaskGraphDetail;
 
-    if(!graph || !scratchArena)
-        return MakeUnexpected(Failure{});
     const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
-    return GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_GbufferMaterialGeometrySet), "Opaque Material Geometry", *graph, *scratchArena);
+    return GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_GbufferMaterialGeometrySet), "Opaque Material Geometry", graph, scratchArena);
 }
 
 Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
-    Core::GpuTaskGraph* const graph,
-    const RendererMaterialSystem* const materialSystem,
-    Core::Alloc::ScratchArena* const scratchArena,
-    const MaterialPassDrawItemPartitions& drawItems
+    const MaterialPassDrawItemPartitions& drawItems,
+    const RendererMaterialSystem& materialSystem,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace RendererTaskGraphDetail;
 
-    if(!graph || !materialSystem || !scratchArena)
-        return MakeUnexpected(Failure{});
     const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
     return GatherPreparedMaterialSampledTextureResourceSet(
-        *materialSystem,
+        materialSystem,
         drawSets,
         Name(s_FrameGraphNameRenderGraphicsPrefixGbufferMaterialSampledTextures),
         "Opaque Material Sampled Textures",
-        *graph,
-        *scratchArena
+        graph,
+        scratchArena
     );
 }
 

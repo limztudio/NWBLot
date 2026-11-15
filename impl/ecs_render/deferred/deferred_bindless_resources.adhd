@@ -158,7 +158,7 @@ namespace __hidden_deferred_bindless_resources{
         Core::GpuDescriptorClass::SampledImage,
         texture,
         format,
-        ECSRenderDetail::s_FramebufferSubresources,
+        s_FramebufferSubresources,
         Core::TextureDimension::Texture2D,
         outHandle
     );
@@ -292,7 +292,7 @@ Expected<void> DeferredBindlessDescriptorRegistrar::registerTransparencyTargets(
             Core::GpuDescriptorClass::SampledImage3D,
             m_targets.avboit.transmittanceTexture,
             m_targets.avboit.transmittanceFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
+            s_FramebufferSubresources,
             Core::TextureDimension::Texture3D,
             m_bindless.avboitTransmittance
         )

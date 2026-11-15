@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 
 
@@ -33,7 +32,7 @@ b8 ShouldAppendPhysicalQueueRuntimeTelemetry(
     ;
 }
 
-void AppendCommandArenaWorkerStatistics(in KernelGpuCommandArenaWorkerStatistics statistics, mut String label){
+void AppendCommandArenaWorkerStatistics(in GpuCommandArenaWorkerStatistics statistics, mut String label){
     StringAppendFormat(
         label,
         "\n    Worker arena domain={} index={}: epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
@@ -53,9 +52,9 @@ void AppendCommandArenaWorkerStatistics(in KernelGpuCommandArenaWorkerStatistics
 }
 
 void AppendGraphSummaryTelemetry(
-    in KernelGpuTaskGraphCompileStatistics compileStatistics,
-    in KernelGpuTaskGraphRecordingStatistics recordingStatistics,
-    in KernelGpuTaskGraphSubmissionStatistics submissionStatistics,
+    in GpuTaskGraphCompileStatistics compileStatistics,
+    in GpuTaskGraphRecordingStatistics recordingStatistics,
+    in GpuTaskGraphSubmissionStatistics submissionStatistics,
     mut String label
 ){
     const VectorDouble millisecondsScale = VectorDouble(s_MillisecondsPerSecondTelemetry);
@@ -120,9 +119,9 @@ void AppendGraphSummaryTelemetry(
         compileStatistics.repeatedOwnershipTransferSignatureCount,
         compileStatistics.concurrentSharingCouldAvoidTransferCount,
         compileStatistics.concurrentSharingAdviceResourceCount,
-        KernelOwnershipTransferCountByRoute(compileStatistics, 0u),
-        KernelOwnershipTransferCountByRoute(compileStatistics, 1u),
-        KernelOwnershipTransferCountByRoute(compileStatistics, 2u),
+        compileStatistics.logicalOwnershipTransferCountByRoute[0u],
+        compileStatistics.logicalOwnershipTransferCountByRoute[1u],
+        compileStatistics.logicalOwnershipTransferCountByRoute[2u],
         recordingStatistics.packetCount,
         recordingStatistics.taskCount,
         recordingStatistics.commandListCount,
@@ -166,12 +165,12 @@ void AppendGraphSummaryTelemetry(
 }
 
 void AppendPhysicalQueueSummaryTelemetry(
-    in KernelGpuPhysicalQueueInfo queueInfo,
-    in KernelFrameGraphPhysicalQueueRuntimeStatistics queueRuntimeStatistics,
-    in KernelFrameGraphPhysicalQueueSubmissionRuntimeStatistics queueStatistics,
-    in KernelFrameGraphPhysicalQueueCompileRuntimeStatistics queueCompileStatistics,
-    in KernelFrameGraphPhysicalQueueRecordingRuntimeStatistics queueRecordingStatistics,
-    in KernelGpuCommandArenaStatistics commandArenaStatistics,
+    in GpuPhysicalQueueInfo queueInfo,
+    in FrameGraphPhysicalQueueRuntimeStatistics queueRuntimeStatistics,
+    in FrameGraphPhysicalQueueSubmissionRuntimeStatistics queueStatistics,
+    in FrameGraphPhysicalQueueCompileRuntimeStatistics queueCompileStatistics,
+    in FrameGraphPhysicalQueueRecordingRuntimeStatistics queueRecordingStatistics,
+    in GpuCommandArenaStatistics commandArenaStatistics,
     mut String label
 ){
     const VectorDouble millisecondsScale = VectorDouble(s_MillisecondsPerSecondTelemetry);
@@ -187,7 +186,7 @@ void AppendPhysicalQueueSummaryTelemetry(
         "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} inherited wait elisions={} accepted frontier={} recovery submissions={} CPU={:.3f} ms\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}\n  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms\n  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
         queueRuntimeStatistics.queue.index,
         queueRuntimeStatistics.queue.deviceGeneration,
-        ResolveTelemetryPhysicalQueueClassLabel(KernelQueueInfoClassValue(queueInfo)),
+        ResolveTelemetryPhysicalQueueClassLabel(cast<u8>(queueInfo.queueClass)),
         queueInfo.familyIndex,
         queueInfo.queueIndex,
         queueInfo.dedicated,
@@ -244,15 +243,48 @@ void AppendPhysicalQueueSummaryTelemetry(
     );
 }
 
+b8 InspectCompiledPacketForQueue(
+    in GpuCompiledGraphReadView plan,
+    in GpuRecordedGraph recordedGraph,
+    in usize packetIndex,
+    in GpuPhysicalQueueId queueId,
+    mut b8 outMatchesQueue,
+    mut b8 outHasRecordedWorker,
+    mut u32 outWorkerDomain,
+    mut u32 outWorkerIndex
+){
+    outMatchesQueue = false;
+    outHasRecordedWorker = false;
+    outWorkerDomain = 0u;
+    outWorkerIndex = 0u;
+    const GpuSubmissionPacketId packet = plan.packetIdAt(packetIndex);
+    const GpuCompiledPacketView packetView = plan.packet(packet);
+    if(!packetView.valid())
+        return false;
+    const Optional<GpuSubmissionPacket> packetPlan = packetView.packetPlan();
+    if(!packetPlan.has_value())
+        return false;
+    if(packetPlan.value().queue != queueId)
+        return true;
+    outMatchesQueue = true;
+    const Optional<GpuRecordedPacket> recordedPacket = recordedGraph.packetSnapshot(packet);
+    if(!recordedPacket.has_value())
+        return true;
+    outHasRecordedWorker = true;
+    outWorkerDomain = recordedPacket.value().recordingWorkerDomain;
+    outWorkerIndex = recordedPacket.value().recordingWorkerIndex;
+    return true;
+}
+
 b8 AppendPhysicalQueueRuntimeTelemetryEntry(
-    in KernelGpuPhysicalQueueInfo queueInfo,
-    in KernelFrameGraphPhysicalQueueRuntimeStatistics queueRuntimeStatistics,
-    in KernelFrameGraphPhysicalQueueSubmissionRuntimeStatistics queueStatistics,
-    in KernelFrameGraphPhysicalQueueCompileRuntimeStatistics queueCompileStatistics,
-    in KernelFrameGraphPhysicalQueueRecordingRuntimeStatistics queueRecordingStatistics,
-    in KernelGpuCompiledGraphReadView deferredCompiledPlan,
-    in KernelGpuRecordedGraph recordedGraph,
-    mut KernelDevice device,
+    in GpuPhysicalQueueInfo queueInfo,
+    in FrameGraphPhysicalQueueRuntimeStatistics queueRuntimeStatistics,
+    in FrameGraphPhysicalQueueSubmissionRuntimeStatistics queueStatistics,
+    in FrameGraphPhysicalQueueCompileRuntimeStatistics queueCompileStatistics,
+    in FrameGraphPhysicalQueueRecordingRuntimeStatistics queueRecordingStatistics,
+    in GpuCompiledGraphReadView deferredCompiledPlan,
+    in GpuRecordedGraph recordedGraph,
+    mut Device device,
     mut String label
 ){
     if(!ShouldAppendPhysicalQueueRuntimeTelemetry(
@@ -268,7 +300,7 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
     ))
         return true;
 
-    const KernelGpuCommandArenaStatistics commandArenaStatistics = device.getCommandArenaStatistics(queueInfo.id);
+    const GpuCommandArenaStatistics commandArenaStatistics = device.getCommandArenaStatistics(queueInfo.id);
     if(!commandArenaStatistics.valid())
         return true;
 
@@ -282,7 +314,7 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
         label
     );
 
-    const KernelGpuCommandArenaWorkerStatistics directCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u);
+    const GpuCommandArenaWorkerStatistics directCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u);
     if(directCommandArenaStatistics.valid())
         AppendCommandArenaWorkerStatistics(directCommandArenaStatistics, label);
 
@@ -317,7 +349,7 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
         if(alreadyAppended)
             continue;
 
-        const KernelGpuCommandArenaWorkerStatistics workerCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, workerDomain, workerIndex);
+        const GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, workerDomain, workerIndex);
         if(workerCommandArenaStatistics.valid())
             AppendCommandArenaWorkerStatistics(workerCommandArenaStatistics, label);
     }
@@ -327,17 +359,17 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
 
 void AppendLogicalOwnershipTransferTelemetryEntry(
     in usize transferIndex,
-    in KernelGpuCompiledOwnershipTransfer transfer,
+    in GpuCompiledOwnershipTransfer transfer,
     mut String label
 ){
     assert(transfer.valid());
-    const u8 sharingValue = KernelOwnershipTransferSharingValue(transfer);
+    const u8 sharingValue = cast<u8>(transfer.declaredQueueSharing);
     StringAppendFormat(
         label,
         "\nLogical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}",
         transferIndex,
         transfer.resourceIdentity.resolvedText(),
-        ResolveTelemetryOwnershipTransferRouteLabel(KernelOwnershipTransferRouteValue(transfer)),
+        ResolveTelemetryOwnershipTransferRouteLabel(cast<u8>(transfer.route)),
         transfer.sourceQueue.index,
         transfer.sourceQueue.deviceGeneration,
         transfer.sourceQueueFamilyIndex,
@@ -355,10 +387,10 @@ void AppendLogicalOwnershipTransferTelemetryEntry(
 
 
 class RendererTaskTimingPendingSample{
-    public KernelGpuTimingSampleAttribution attribution = s_KernelNoGpuTimingSampleAttribution;
+    public GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
     public Name scopeName = s_NameNone;
-    public KernelGpuTaskTimingKey key = KernelGpuTaskTimingKey();
-    public KernelGpuPhysicalQueueId expectedQueue = KernelGpuPhysicalQueueId();
+    public GpuTaskTimingKey key = GpuTaskTimingKey();
+    public GpuPhysicalQueueId expectedQueue = GpuPhysicalQueueId();
     public u64 sourceFrameIndex = 0u;
     public f64 durationSeconds = 0.0;
     public b8 recordsNonCommittingTimingSample = false;
@@ -371,7 +403,7 @@ class RendererTaskTimingPendingSample{
 
 usize FindRendererTaskTimingPendingSample(
     in Span<RendererTaskTimingPendingSample> pendingSamples,
-    in KernelGpuTimingSampleAttribution attribution
+    in GpuTimingSampleAttribution attribution
 ){
     for(usize pendingIndex = 0u; pendingIndex < pendingSamples.size(); ++pendingIndex){
         if(pendingSamples[pendingIndex].attribution == attribution)
@@ -389,10 +421,10 @@ void RetireRendererTaskTimingPendingSample(in usize pendingIndex, mut Vector<Ren
 }
 
 b8 TrackRendererTaskTimingSample(
-    in KernelGpuTimingSampleAttribution attribution,
+    in GpuTimingSampleAttribution attribution,
     in Name scopeName,
-    in KernelGpuTaskTimingKey key,
-    in KernelGpuPhysicalQueueId expectedQueue,
+    in GpuTaskTimingKey key,
+    in GpuPhysicalQueueId expectedQueue,
     in u64 sourceFrameIndex,
     in b8 recordsNonCommittingTimingSample,
     mut Vector<RendererTaskTimingPendingSample> pendingSamples
@@ -414,8 +446,8 @@ b8 TrackRendererTaskTimingSample(
 }
 
 void AcceptRendererTaskTimingSubmission(
-    in KernelGpuTimingSampleAttribution attribution,
-    in KernelQueueSubmissionToken token,
+    in GpuTimingSampleAttribution attribution,
+    in QueueSubmissionToken token,
     in b8 feedbackActive,
     in b8 submissionAccepted,
     mut Vector<RendererTaskTimingPendingSample> pendingSamples
@@ -436,13 +468,13 @@ void AcceptRendererTaskTimingSubmission(
         && feedbackActive
         && token.valid()
         && token.hasPhysicalQueueIdentity()
-        && KernelTokenMatchesTimingKeyQueue(token, pendingSamples[pendingIndex].key)
+        && token.queue == pendingSamples[pendingIndex].key.queue
         && physicalQueueMatches
     ;
 }
 
 void DiscardRendererTaskTimingRecording(
-    in KernelGpuTimingSampleAttribution attribution,
+    in GpuTimingSampleAttribution attribution,
     mut Vector<RendererTaskTimingPendingSample> pendingSamples
 ){
     const usize pendingIndex = FindRendererTaskTimingPendingSample(pendingSamples, attribution);
@@ -456,7 +488,7 @@ void DiscardRendererTaskTimingRecording(
 }
 
 void CompleteRendererTaskTimingSample(
-    in KernelGpuTimingSample sample,
+    in GpuTimingSample sample,
     in b8 feedbackActive,
     mut Vector<RendererTaskTimingPendingSample> pendingSamples
 ){
@@ -485,7 +517,7 @@ void CompleteRendererTaskTimingSample(
 }
 
 RendererTaskTimingFeedbackDrainResult DrainRendererTaskTimingPendingSamples(
-    mut KernelGpuTaskTimingHistoryStore history,
+    mut GpuTaskTimingHistoryStore history,
     in u16 deviceGeneration,
     mut Vector<RendererTaskTimingPendingSample> pendingSamples
 ){
@@ -542,7 +574,7 @@ RendererTaskTimingFeedbackDrainResult DrainRendererTaskTimingPendingSamples(
     return result;
 }
 
-void ConfigureComputeEffectRoutingHint(in b8 preserveDirectDependency, mut KernelGpuTaskSchedulingHint scheduling){
+void ConfigureComputeEffectRoutingHint(in b8 preserveDirectDependency, mut GpuTaskSchedulingHint scheduling){
     scheduling.allowSameClassQueueRouting = true;
     scheduling.preferNonPrimarySameClassQueue = true;
     scheduling.preserveSameClassQueueWithDirectDependency = preserveDirectDependency;

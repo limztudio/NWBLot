@@ -274,9 +274,9 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     deferredClearDesc.setIdentity(Name(s_FrameGraphNameRenderGraphicsPrefixDeferredClearOpaqueColor)).setMarkerLabel("Deferred Clear Opaque Color").setScheduling(clearScheduling).setDependencies({ &m_graphicsPrefixSceneShadingSetupTask, 1u });
     Core::GpuClearTextureTaskDesc opaqueColorClearDesc;
     opaqueColorClearDesc.destination = resources.opaqueColor;
-    opaqueColorClearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
+    opaqueColorClearDesc.subresources = s_FramebufferSubresources;
     opaqueColorClearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
-    opaqueColorClearDesc.floatValue = ECSRenderDetail::s_ClearColor;
+    opaqueColorClearDesc.floatValue = s_ClearColor;
     opaqueColorClearDesc.recordHooks = deferredClearHooks;
     const auto graphicsPrefixDeferredClearTaskResult = context.graph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
     if(!graphicsPrefixDeferredClearTaskResult){
@@ -419,8 +419,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const Core::BufferRange csgCutterRange(0u, ComputeOpaqueBufferByteRangeLength(csgFrameData.cutters.size(), sizeof(CsgCutterGpuData)));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
-    OpaqueGbufferMaterialResourceCollector gbufferMaterialResourceCollector(context.graph, context.material, scratchArena);
-    const auto gbufferMaterialResources = gbufferMaterialResourceCollector.gather(opaqueDrawItems);
+    const auto gbufferMaterialResources = GatherOpaqueGbufferMaterialResources(opaqueDrawItems, context.material, context.graph, scratchArena);
     if(!gbufferMaterialResources)
         return MakeUnexpected(Failure{});
     gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialResources->geometryStatesGraphOwned;

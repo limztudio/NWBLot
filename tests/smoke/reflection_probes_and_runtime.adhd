@@ -22,14 +22,6 @@ native{
 namespace NWB::Tests::Smoke{
 namespace ReflectionGpuTimingScope = Impl::ReflectionGpuTimingScope;
 inline constexpr u32 s_ReflectionMaxDepthMipsCap = NWB_REFLECTION_MAX_DEPTH_MIPS;
-
-[[nodiscard]] FOUNDATION_INLINE AStringView ReflectionSmokeProjectName()noexcept{
-    return "ReflectionSmokeProject";
-}
-
-[[nodiscard]] FOUNDATION_INLINE AStringView ReflectionCpuTimingOwnerLabel()noexcept{
-    return "reflection";
-}
 };
 
 
@@ -41,6 +33,14 @@ inline constexpr u32 s_ReflectionMaxDepthMipsCap = NWB_REFLECTION_MAX_DEPTH_MIPS
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView ReflectionSmokeProjectName(){
+    return "ReflectionSmokeProject";
+}
+
+StringView ReflectionCpuTimingOwnerLabel(){
+    return "reflection";
+}
 
 const u64 s_ReflectionCpuTimingPrepPresentations = 64u;
 const u32 s_ReflectionCpuTimingMinPositiveIntervals = 11u;

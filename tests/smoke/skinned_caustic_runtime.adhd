@@ -23,22 +23,8 @@ native{
 #include <global/simd/matrix_decompose.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] FOUNDATION_INLINE AStringView SkinnedCausticProjectName()noexcept{
-    return "SkinnedCausticSmokeProject";
-}
-
 inline constexpr f32 s_SkinnedCausticAffineEpsilon = Impl::s_SkeletonAffineEpsilon;
 inline constexpr f32 s_SkinnedCausticDeterminantEpsilon = Impl::s_SkeletonJointDeterminantEpsilon;
-using ::MatrixIsInvertibleAffine;
-
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> CreateSkinnedCausticWorldOrDie(ProjectRuntimeContext& context){
-    auto world = CreateSmokeSkinnedRenderWorldOrDie(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
-    if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment)){
-        auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-        renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgLaggedEnvironment));
-    }
-    return world;
-}
 };
 
 
@@ -65,6 +51,17 @@ const SmokeModelRef s_SkinnedCausticPrismModel = "project/characters/skinned_cau
 const SmokeMaterialRef s_SkinnedCausticGlassMaterial = "project/smoke/transparent_multi/materials/shared";
 const SmokeMaterialRef s_SkinnedCausticGroundMaterial = "project/smoke/transparent_multi/materials/ground";
 const SmokeMeshRef s_SkinnedCausticGroundMesh = "project/meshes/shadow_plane";
+
+StringView SkinnedCausticProjectName(){
+    return "SkinnedCausticSmokeProject";
+}
+
+NotNullUniquePtr<World> CreateSkinnedCausticWorldOrDie(mut ProjectRuntimeContext context){
+    NotNullUniquePtr<World> world = CreateSmokeSkinnedRenderWorldOrDie(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
+    if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment))
+        SmokeRendererSystemRef(SmokeWorldRef(world)).setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgLaggedEnvironment));
+    return world;
+}
 
 MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f32 jointIndex, in f32 timeSeconds){
     const f32 angle = Sin(timeSeconds * s_SkinnedCausticPoseAnimationSpeed + jointIndex * 0.7f) * s_SkinnedCausticPoseAnimationAngle;

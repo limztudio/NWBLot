@@ -6,6 +6,7 @@
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <CoolStuff/Testbed/fly_camera_motion.adhd>
+#include <impl/ecs_scene/camera_types.adhd>
 #include <tests/unit/scene/name_cases.adhd>
 
 
@@ -667,6 +668,11 @@ void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSce
     EXPECT_EQ(foundSceneAsset.name(), Name("project/characters/cesium_man/model"));
 }
 
+void VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission(){
+    const f32 fov = bit_cast<f32>(0x40490fd2u);
+    EXPECT_TRUE(TryComputeCameraTanHalfVerticalFov(fov).has_value());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -683,35 +689,5 @@ NWB_ADHD_GTEST(FlyCameraInput, InvalidKeyIndicesAndClearPreserveInputBounds, Ver
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic, VerifySceneSubsystemAssets_RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic)
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems, VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
 NWB_ADHD_GTEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure, VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_scene_camera_fenv_tests{
-
-
-TEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission){
-    const f32 fov = BitCast<f32>(u32{ 0x40490fd2u });
-    EXPECT_TRUE(::NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(fov).has_value());
-}
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_ADHD_GTEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission, VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission)
 

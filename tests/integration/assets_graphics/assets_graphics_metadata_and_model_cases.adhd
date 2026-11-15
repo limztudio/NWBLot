@@ -3,6 +3,7 @@
 
 
 #include "suite.adhd"
+#include <impl/assets_mesh/cook_meshlet_score_state.adhd>
 #include <tests/common/gtest_macros.adhd>
 
 
@@ -15,8 +16,6 @@ native{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/assets_mesh/cook_meshlet_score_state.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -1070,38 +1069,13 @@ NWB_ADHD_GTEST(ModelPayload, RevalidatesReplacedObjectsAndRecoversAfterRejection
 NWB_ADHD_GTEST(ModelPayload, SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkeleton, VerifyModelPayload_SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkeleton)
 NWB_ADHD_GTEST(ModelPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejection, VerifyModelPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejection)
 NWB_ADHD_GTEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPayload, VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPayload)
-NWB_ADHD_GTEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload, VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_meshlet_score_fenv_tests{
-
-
-TEST(AssetsGraphics, MeshletScoreRetainsOrderingAtFloatPrecisionBoundary){
-    const f32 farther = ::NWB::Impl::EvaluateMeshletCandidateScore(1u, 1u, 0.25f, 16777216.0f, 0.0f, 0.0f, false);
-    const f32 nearer = ::NWB::Impl::EvaluateMeshletCandidateScore(1u, 1u, 0.25f, 16777215.0f, 0.0f, 0.0f, false);
+void VerifyAssetsGraphics_MeshletScoreRetainsOrderingAtFloatPrecisionBoundary(){
+    const f32 farther = EvaluateMeshletCandidateScore(1u, 1u, 0.25f, 16777216.0f, 0.0f, 0.0f, false);
+    const f32 nearer = EvaluateMeshletCandidateScore(1u, 1u, 0.25f, 16777215.0f, 0.0f, 0.0f, false);
     EXPECT_LT(farther, nearer);
 }
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_ADHD_GTEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload, VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload)
+NWB_ADHD_GTEST(AssetsGraphics, MeshletScoreRetainsOrderingAtFloatPrecisionBoundary, VerifyAssetsGraphics_MeshletScoreRetainsOrderingAtFloatPrecisionBoundary)
 
 

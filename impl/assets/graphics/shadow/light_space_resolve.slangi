@@ -150,12 +150,52 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
         return false;
 #endif
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+    const int2 coord = int2(pixel);
+    const int2 maxCoord = int2(view.map.xy) - 1;
+    const int2 offsets[4] = { int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1) };
+    const bool isDirectional = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) == 0u;
+    const float res = float(max(view.map.x, view.map.y));
     float depth = 1.0;
-    if(!nwbCsgShadowHardwareCompose())
-        depth = nwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
+    if(!nwbCsgShadowHardwareCompose()){
+        const int slice = (int)view.map.w;
+        depth = nwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(coord, slice, 0)).r;
+        float neighborDepths[4];
+        [unroll] for(int i = 0; i < 4; ++i)
+            neighborDepths[i] = nwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(clamp(coord + offsets[i], int2(0, 0), maxCoord), slice, 0)).r;
+        const float ndcScale = isDirectional ? (1.0 / res) : max(1.0 - min(depth, projectedDepth), 1e-4) / res;
+        const float kink = max(abs((neighborDepths[0] + neighborDepths[1]) - 2.0 * depth), abs((neighborDepths[2] + neighborDepths[3]) - 2.0 * depth));
+        const float minNeighbor = min(min(neighborDepths[0], neighborDepths[1]), min(neighborDepths[2], neighborDepths[3]));
+        // Fall back across corner creases, silhouette borders, and off-surface samples where one texel center misclassifies.
+        if(depth > projectedDepth + 8.0 * ndcScale && (depth < 1.0 || minNeighbor < 1.0))
+            return false;
+        if(kink > 0.25 * ndcScale && (depth >= projectedDepth || projectedDepth - depth <= 12.0 * ndcScale))
+            return false;
+    }
     bool csgBlocked = false;
-    if(nwbCsgShadowEnabled())
-        csgBlocked = nwbCsgShadowOpaqueDepth(nwbLightSpacePixelIndex(view, pixel)) < receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE;
+    if(nwbCsgShadowEnabled()){
+        const float csgDepth = nwbCsgShadowOpaqueDepth(nwbLightSpacePixelIndex(view, pixel));
+        csgBlocked = csgDepth < receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE;
+        if(csgBlocked){
+            const float linearScale = (isDirectional ? view.depthRange.y : receiverDepth) / res;
+            if(receiverDepth - csgDepth <= 12.0 * linearScale){
+                const float maxDepth = (isDirectional ? 1.0 : 2.0) * view.depthRange.y;
+                float neighborCsg[4];
+                bool anyMissing = false;
+                [unroll] for(int i = 0; i < 4; ++i){
+                    const uint2 nPixel = uint2(clamp(coord + offsets[i], int2(0, 0), maxCoord));
+                    const float nd = nwbCsgShadowOpaqueDepth(nwbLightSpacePixelIndex(view, nPixel));
+                    if(!isfinite(nd) || nd > maxDepth)
+                        anyMissing = true;
+                    neighborCsg[i] = nd;
+                }
+                if(anyMissing)
+                    return false;
+                const float csgKink = max(abs((neighborCsg[0] + neighborCsg[1]) - 2.0 * csgDepth), abs((neighborCsg[2] + neighborCsg[3]) - 2.0 * csgDepth));
+                if(csgKink > 0.25 * linearScale)
+                    return false;
+            }
+        }
+    }
     visibility = depth < projectedDepth || csgBlocked ? half3(0.0h) : half3(1.0h);
     return true;
 #else

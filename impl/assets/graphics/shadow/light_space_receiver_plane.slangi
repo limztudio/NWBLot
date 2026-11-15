@@ -73,8 +73,8 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
 #endif
     const float planeError = dot(abs(receiverNormal), positionError) + normalError * length(relativeHit) + roundoff * (length(relativeAnchor) + abs(distance));
     const float depthError = planeError / (abs(denominator) - denominatorError);
-    // Never convert an unstable plane into an unbounded depth bias. A sub-texel uncertainty is the map's limit.
-    if(!isfinite(depthError) || !isfinite(footprint) || footprint <= 0.0 || depthError > footprint)
+    // Never convert an unstable plane into an unbounded depth bias. Keep error well inside a texel to avoid light leaks.
+    if(!isfinite(depthError) || !isfinite(footprint) || footprint <= 0.0 || depthError > 0.25 * footprint)
         return false;
     const float3 corrected = hit - direction * depthError;
     const float4 clip = nwbLightSpaceProject(view, corrected);

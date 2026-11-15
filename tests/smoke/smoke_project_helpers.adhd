@@ -4,6 +4,7 @@
 
 #include "framebuffer_capture.adhd"
 #include "smoke_environment.adhd"
+#include <impl/ecs_scene/module.adhd>
 #include "scene_types.adhd"
 
 
@@ -22,6 +23,7 @@ native{
 #include <impl/ecs_scene/module.adhd.h>
 
 #include <core/common/log.h>
+#include <core/alloc/scratch.h>
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
@@ -86,6 +88,17 @@ FOUNDATION_INLINE void RequestSmokeQuit(ProjectRuntimeContext& context){
 
 [[nodiscard]] FOUNDATION_INLINE const Core::ECS::World& SmokeWorldRef(const NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return *world;
+}
+
+FOUNDATION_INLINE void SetSmokeWindowTitleSuffix(ProjectRuntimeContext& context, const AStringView suffix){
+    Core::Alloc::ScratchArena scratch(s_NameNone);
+    const TStringView prefix = QueryProjectWindowTitle();
+    const TString<Core::Alloc::ScratchArena> suffixText = ConvertString(scratch, suffix);
+    TString<Core::Alloc::ScratchArena> title(scratch);
+    title.reserve(prefix.size() + suffixText.size());
+    title.append(prefix);
+    title.append(suffixText);
+    context.graphics.setWindowTitle(TStringView(title));
 }
 };
 
@@ -225,36 +238,30 @@ void SetSmokeYawWindowTitle(in f32 yaw, in b8 manualControl, in f32 twoPi, mut P
     const VectorSingle display = CalculateSmokeYawDisplay(VectorSingle(yaw), VectorSingle(twoPi));
     const f32 radians = display.x;
     const f32 degrees = display.y;
-    native(in radians, in degrees, in manualControl, mut context){
-        constexpr usize s_TitleCapacity = 192u;
-        Array<tchar, s_TitleCapacity> title{};
-        FOUNDATION_TSPRINTF(
-            title.data(),
-            s_TitleCapacity,
-            FOUNDATION_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
-            static_cast<i32>(QueryProjectWindowTitle().size()),
-            QueryProjectWindowTitle().data(),
-            radians,
-            degrees,
-            manualControl ? FOUNDATION_TEXT("  [manual: <- ->]") : FOUNDATION_TEXT("")
-        );
-        context.graphics.setWindowTitle(TStringView(title.data()));
-    }
+    StringView manualSuffix = "";
+    if(manualControl)
+        manualSuffix = "  [manual: <- ->]";
+    const String suffix = StringFormat("  |  yaw {:.4f} rad ({:.2f} deg){}", radians, degrees, manualSuffix);
+    SetSmokeWindowTitleSuffix(context, suffix);
+}
+
+EntityID CreateSmokeCameraAt(in VectorSingle position, in VectorSingle rotation, mut World world){
+    Entity activeCameraEntity = world.createEntity();
+    mut ActiveCameraComponent activeCamera = activeCameraEntity.addComponent<ActiveCameraComponent>();
+    activeCamera.camera = CreateSceneCameraEntity(world, position);
+    Entity cameraEntity = world.entity(activeCamera.camera);
+    mut TransformComponent cameraTransform = cameraEntity.getComponent<TransformComponent>();
+    cameraTransform.rotation = f32x4(rotation);
+    return activeCamera.camera;
+}
+
+EntityID CreateSmokeCameraAt(in VectorSingle position, mut World world){
+    return CreateSmokeCameraAt(position, QuaternionIdentity(), world);
 }
 
 EntityID CreateSmokeCamera(in f32 cameraHeight, in f32 cameraDistance, in f32 cameraPitch, mut World world){
     const VectorSingle pitchRotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(cameraPitch, 0.0f, 0.0f, 0.0f));
-    const f32x4 cameraRotation = f32x4(pitchRotation);
-    EntityID cameraEntity = s_InvalidEntityId;
-    native(in cameraHeight, in cameraDistance, in cameraRotation, mut world, mut cameraEntity){
-        auto activeCameraEntity = world.createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, Float4(0.0f, cameraHeight, -cameraDistance, 0.0f));
-        auto& cameraTransform = *MakeNotNull(world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera));
-        cameraTransform.rotation = cameraRotation;
-        cameraEntity = activeCamera.camera;
-    }
-    return cameraEntity;
+    return CreateSmokeCameraAt(VectorSingle(0.0f, cameraHeight, -cameraDistance, 0.0f), pitchRotation, world);
 }
 
 

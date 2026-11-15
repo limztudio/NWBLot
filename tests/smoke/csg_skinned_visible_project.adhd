@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_scene/module.adhd>
 #include "csg_smoke_helpers.adhd"
 #include "presentation_types.adhd"
 #include "smoke_scene_helpers.adhd"
@@ -68,14 +69,16 @@ inline constexpr f32 s_CsgSkinnedReceiverOffsetX = 0.48f;
 inline constexpr f32 s_CsgSkinnedCutterGentleRollSpeed = 0.18f;
 inline constexpr f32 s_CsgSkinnedCutterAnchorFallbackY = 0.90f;
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+inline constexpr b8 s_CsgSkinnedSphereCutter = true;
 inline constexpr f32 s_CsgSkinnedSphereCutterRadius = 0.18f;
+inline constexpr f32 s_CsgSkinnedCapsuleCutterRadius = 0.0f;
+inline constexpr f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.0f;
 #else
+inline constexpr b8 s_CsgSkinnedSphereCutter = false;
+inline constexpr f32 s_CsgSkinnedSphereCutterRadius = 0.0f;
 inline constexpr f32 s_CsgSkinnedCapsuleCutterRadius = 0.105f;
 inline constexpr f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.27f;
 #endif
-inline constexpr Float4 s_CsgSkinnedPlainReceiverTint = Float4(0.86f, 0.88f, 0.90f, 1.0f);
-inline constexpr Float4 s_CsgSkinnedCsgReceiverTint = Float4(0.85f, 0.72f, 1.0f, 1.0f);
-inline constexpr Float4 s_CsgSkinnedWarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f);
 
 [[nodiscard]] FOUNDATION_INLINE AStringView CsgSkinnedVisibleFpsLabel()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
@@ -102,6 +105,18 @@ inline constexpr b8 s_CsgSkinnedTransparentReceiver = true;
 #else
 inline constexpr b8 s_CsgSkinnedTransparentReceiver = false;
 #endif
+
+[[nodiscard]] FOUNDATION_INLINE AStringView CsgSkinnedStartupSummary()noexcept{
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return "CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created";
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return "CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created";
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return "CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created";
+#else
+    return "CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created";
+#endif
+}
 namespace ModelObjectKind = Impl::ModelObjectKind;
 };
 
@@ -120,6 +135,9 @@ const Name s_CsgSkinnedReceiverGroup = s_SmokeNameProjectSmokeCsgSkinnedVisibleF
 const Name s_CsgSkinnedCutterAnchorBoneName = s_SmokeNameHip;
 const u16 s_CsgSkinnedFrameClientWidth = 1280u;
 const u16 s_CsgSkinnedFrameClientHeight = 900u;
+const f32x4 s_CsgSkinnedPlainReceiverTint(0.86f, 0.88f, 0.90f, 1.0f);
+const f32x4 s_CsgSkinnedCsgReceiverTint(0.85f, 0.72f, 1.0f, 1.0f);
+const f32x4 s_CsgSkinnedWarmDirectionalLightColor(1.0f, 0.96f, 0.88f, 0.0f);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,43 +182,37 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
-        native{
-            auto activeCameraEntity = this->m_world->createEntity();
-            auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-            activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(*this->m_world, Float4(0.0f, s_CsgSkinnedCameraHeight, -s_CsgSkinnedCameraDistance, 0.0f));
-            const auto directionalLight = Impl::Scene::CreateDirectionalLightEntity(*this->m_world, s_CsgSkinnedDefaultDirectionalLightPitch, s_CsgSkinnedDefaultDirectionalLightYaw, 0.0f, s_CsgSkinnedWarmDirectionalLightColor, s_CsgSkinnedDefaultDirectionalLightIntensity);
-
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-            if(auto* light = this->m_world->tryGetComponent<Impl::Scene::LightComponent>(directionalLight))
-                light->enableCaustics = false;
-#endif
-
-            this->createReceiver();
-            SyncSmokeModelRuntimes(*this->m_world);
-            const b8 receiverReady = this->installCsgReceiverOnSpawnedModelObject();
-            const SIMDVectorSingle cutterLocalCenter = this->loadCutterAnchorLocalCenter();
-            StoreFloat(cutterLocalCenter, this->m_cutterLocalCenter);
-            this->createCutter(cutterLocalCenter);
-            FOUNDATION_FATAL_ASSERT_MSG(
-                activeCamera.camera.valid() && directionalLight.valid()
-                    && this->m_plainReceiver.valid()
-                    && this->m_receiver.valid()
-                    && this->m_receiverObject.valid()
-                    && this->m_cutter.valid(),
-                FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
-            );
-            FOUNDATION_FATAL_ASSERT_MSG(receiverReady, FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object"));
-
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
-#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created"));
-#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created"));
-#else
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created"));
-#endif
+        mut World world = SmokeWorldRef(this.m_world);
+        const EntityID activeCamera = CreateSmokeCameraAt(VectorSingle(0.0f, s_CsgSkinnedCameraHeight, -s_CsgSkinnedCameraDistance, 0.0f), world);
+        const EntityID directionalLight = CreateDirectionalLightEntity(
+            world,
+            s_CsgSkinnedDefaultDirectionalLightPitch,
+            s_CsgSkinnedDefaultDirectionalLightYaw,
+            0.0f,
+            VectorSingle(s_CsgSkinnedWarmDirectionalLightColor),
+            s_CsgSkinnedDefaultDirectionalLightIntensity
+        );
+        if(s_CsgSkinnedTransparentReceiver && world.hasComponent<LightComponent>(directionalLight)){
+            mut LightComponent light = world.entity(directionalLight).getComponent<LightComponent>();
+            light.enableCaustics = false;
         }
+
+        this.createReceiver();
+        SyncSmokeModelRuntimes(world);
+        const b8 receiverReady = this.installCsgReceiverOnSpawnedModelObject();
+        const VectorSingle cutterLocalCenter = this.loadCutterAnchorLocalCenter();
+        this.m_cutterLocalCenter = f32x4(cutterLocalCenter);
+        this.createCutter(cutterLocalCenter);
+        [essential] assert(
+            activeCamera.valid() && directionalLight.valid()
+                && this.m_plainReceiver.valid()
+                && this.m_receiver.valid()
+                && this.m_receiverObject.valid()
+                && this.m_cutter.valid(),
+            "CsgSkinnedVisibleSmokeProject failed to create all scene entities"
+        );
+        [essential] assert(receiverReady, "CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object");
+        [essential] info("{}", CsgSkinnedStartupSummary());
         return true;
     }
 
@@ -322,24 +334,31 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
     }
 
     private void createCutter(in VectorSingle cutterLocalCenter){
-        native(in cutterLocalCenter){
-            auto entity = this->m_world->createEntity();
-            auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
-            cutter.receiverGroup = s_CsgSkinnedReceiverGroup;
-#if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-            cutter.shapeType = Name(Impl::s_CsgSphereShapeName);
-            Impl::CsgSphereShapeParameters parameters;
-            parameters.radius = Float4(s_CsgSkinnedSphereCutterRadius, 0.0f, 0.0f, 0.0f);
-#else
-            cutter.shapeType = Name(Impl::s_CsgCapsuleShapeName);
-            Impl::CsgCapsuleShapeParameters parameters;
-            parameters.radiusHalfHeight = Float4(s_CsgSkinnedCapsuleCutterRadius, s_CsgSkinnedCapsuleCutterHalfHeight, 0.0f, 0.0f);
-#endif
-            AssignCsgCutterParameters(parameters, cutter);
-            const SIMDVectorSingle receiverRotation = BuildCsgSkinnedReceiverRotation(0.0f);
-            AssignCsgCutterTransform(BuildCsgSkinnedCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCsgSkinnedCutterWorldRotation(0.0f, receiverRotation), cutter);
-            this->m_cutter = entity.id();
+        mut World world = SmokeWorldRef(this.m_world);
+        const VectorSingle receiverRotation = BuildCsgSkinnedReceiverRotation(0.0f);
+        const VectorSingle worldCenter = BuildCsgSkinnedCutterWorldCenter(cutterLocalCenter, receiverRotation);
+        const VectorSingle worldRotation = BuildCsgSkinnedCutterWorldRotation(0.0f, receiverRotation);
+        if(s_CsgSkinnedSphereCutter){
+            this.m_cutter = CreateSmokeCsgSphereCutter(
+                s_CsgSkinnedReceiverGroup,
+                s_CsgSphereShapeName,
+                true,
+                f32x4(s_CsgSkinnedSphereCutterRadius, 0.0f, 0.0f, 0.0f),
+                worldCenter,
+                worldRotation,
+                world
+            );
+            return;
         }
+        this.m_cutter = CreateSmokeCsgCapsuleCutter(
+            s_CsgSkinnedReceiverGroup,
+            s_CsgCapsuleShapeName,
+            true,
+            f32x4(s_CsgSkinnedCapsuleCutterRadius, s_CsgSkinnedCapsuleCutterHalfHeight, 0.0f, 0.0f),
+            worldCenter,
+            worldRotation,
+            world
+        );
     }
 
     private void updateSceneTransforms(in VectorSingle receiverRotation, in VectorSingle cutterLocalCenter){

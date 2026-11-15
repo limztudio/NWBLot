@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_scene/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -21,42 +27,6 @@ native{
 
 
 NWB_IMPL_SCENE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, const f32 pitchRadians, const f32 yawRadians, const f32 rollRadians, const Float4& color, const f32 intensity){
-    auto lightEntity = world.createEntity();
-    lightEntity.addComponent<TransformComponent>() = MakeEulerTransformComponent(pitchRadians, yawRadians, rollRadians);
-    lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(LoadFloat(color), intensity);
-    return lightEntity.id();
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, const f32 intensity, const f32 range){
-    auto lightEntity = world.createEntity();
-    lightEntity.addComponent<TransformComponent>() = MakePositionTransformComponent(LoadFloat(position));
-    lightEntity.addComponent<LightComponent>() = MakePointLightComponent(LoadFloat(color), intensity, range);
-    return lightEntity.id();
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSpotLightEntity(
-    Core::ECS::World& world,
-    const Float4& position,
-    const f32 pitchRadians,
-    const f32 yawRadians,
-    const f32 rollRadians,
-    const Float4& color,
-    const f32 intensity,
-    const f32 range,
-    const f32 innerConeCos,
-    const f32 outerConeCos
-){
-    auto lightEntity = world.createEntity();
-    lightEntity.addComponent<TransformComponent>() = MakePositionEulerTransformComponent(LoadFloat(position), pitchRadians, yawRadians, rollRadians);
-    lightEntity.addComponent<LightComponent>() = MakeSpotLightComponent(LoadFloat(color), intensity, range, innerConeCos, outerConeCos);
-    return lightEntity.id();
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,6 +88,42 @@ NWB_IMPL_SCENE_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EntityID CreateDirectionalLightEntity(mut World world, in f32 pitchRadians, in f32 yawRadians, in f32 rollRadians, in VectorSingle color, in f32 intensity){
+    Entity lightEntity = world.createEntity();
+    lightEntity.addComponent<TransformComponent>() = MakeEulerTransformComponent(pitchRadians, yawRadians, rollRadians);
+    lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(color, intensity);
+    return lightEntity.id();
+}
+
+EntityID CreatePointLightEntity(mut World world, in VectorSingle position, in VectorSingle color, in f32 intensity, in f32 range){
+    Entity lightEntity = world.createEntity();
+    lightEntity.addComponent<TransformComponent>() = MakePositionTransformComponent(position);
+    lightEntity.addComponent<LightComponent>() = MakePointLightComponent(color, intensity, range);
+    return lightEntity.id();
+}
+
+EntityID CreateSpotLightEntity(
+    mut World world,
+    in VectorSingle position,
+    in f32 pitchRadians,
+    in f32 yawRadians,
+    in f32 rollRadians,
+    in VectorSingle color,
+    in f32 intensity,
+    in f32 range,
+    in f32 innerConeCos,
+    in f32 outerConeCos
+){
+    Entity lightEntity = world.createEntity();
+    lightEntity.addComponent<TransformComponent>() = MakePositionEulerTransformComponent(position, pitchRadians, yawRadians, rollRadians);
+    lightEntity.addComponent<LightComponent>() = MakeSpotLightComponent(color, intensity, range, innerConeCos, outerConeCos);
+    return lightEntity.id();
 }
 
 

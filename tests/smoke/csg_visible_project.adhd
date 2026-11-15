@@ -210,13 +210,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                 [essential] info("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame");
         }
 
-        EntityID cameraEntity = s_InvalidEntityId;
-        native(mut world = this.m_world, mut cameraEntity){
-            auto activeCameraEntity = world->createEntity();
-            auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-            activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(*world, Float4(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth));
-            cameraEntity = activeCamera.camera;
-        }
+        const EntityID cameraEntity = CreateSmokeCameraAt(VectorSingle(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth, 0.0f), SmokeWorldRef(this.m_world));
         const EntityID directionalLight = CreateSmokeDirectionalLight(
             s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f,
             f32x4(1.0f, 0.96f, 0.88f, 0.0f), s_DefaultDirectionalLightIntensity, SmokeWorldRef(this.m_world)

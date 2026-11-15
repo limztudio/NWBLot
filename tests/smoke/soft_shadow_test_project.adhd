@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_scene/module.adhd>
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
 #include "smoke_project_helpers.adhd"
@@ -69,79 +70,110 @@ const f32 s_SoftShadowMaxSpinDelta = 1.0f / 15.0f;
 
 class SoftShadowScene{
     public b8 create(mut World world, in b8 timingEnabled, in f32 angularRadius, in f32 sourceRadius){
-        b8 ok = true;
         const EntityID activeCamera = CreateSmokeCamera(s_SoftShadowCameraHeight, s_SoftShadowCameraDistance, s_SoftShadowCameraPitch, world);
-        native(mut world, in timingEnabled, in angularRadius, in sourceRadius, in activeCamera, mut ok){
-            const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(world, s_SoftShadowDirectionalLightPitch, s_SoftShadowDirectionalLightYaw, 0.0f, Float4(1.00f, 0.96f, 0.88f), s_SoftShadowDirectionalLightIntensity);
-            if(auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(directionalLight)){
-                light->angularRadius = angularRadius;
-                light->enableCaustics = false;
-            }
+        const EntityID directionalLight = CreateDirectionalLightEntity(world, s_SoftShadowDirectionalLightPitch, s_SoftShadowDirectionalLightYaw, 0.0f, VectorSingle(1.00f, 0.96f, 0.88f, 0.0f), s_SoftShadowDirectionalLightIntensity);
+        if(world.hasComponent<LightComponent>(directionalLight)){
+            mut LightComponent light = world.entity(directionalLight).getComponent<LightComponent>();
+            light.angularRadius = angularRadius;
+            light.enableCaustics = false;
+        }
 
-            const Core::ECS::EntityID pointLight = Impl::Scene::CreatePointLightEntity(world, Float4(1.5f, 2.2f, 0.3f, 0.0f), Float4(1.00f, 0.35f, 0.30f), s_SoftShadowPointLightIntensity, s_SoftShadowPointLightRange);
-            if(auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(pointLight)){
-                light->sourceRadius = sourceRadius;
-                light->enableCaustics = false;
-            }
+        const EntityID pointLight = CreatePointLightEntity(world, VectorSingle(1.5f, 2.2f, 0.3f, 0.0f), VectorSingle(1.00f, 0.35f, 0.30f, 0.0f), s_SoftShadowPointLightIntensity, s_SoftShadowPointLightRange);
+        if(world.hasComponent<LightComponent>(pointLight)){
+            mut LightComponent light = world.entity(pointLight).getComponent<LightComponent>();
+            light.sourceRadius = sourceRadius;
+            light.enableCaustics = false;
+        }
 
-            const Core::ECS::EntityID spotLight = Impl::Scene::CreateSpotLightEntity(
-                world,
-                Float4(0.4f, 3.0f, 0.4f, 0.0f),
-                s_SoftShadowSpotLightPitch,
-                s_SoftShadowSpotLightYaw,
-                0.0f,
-                Float4(0.35f, 0.55f, 1.00f),
-                s_SoftShadowSpotLightIntensity,
-                s_SoftShadowSpotLightRange,
-                s_SoftShadowSpotInnerConeCos,
-                s_SoftShadowSpotOuterConeCos
-            );
-            if(auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(spotLight)){
-                light->sourceRadius = sourceRadius;
-                light->enableCaustics = false;
-            }
+        const EntityID spotLight = CreateSpotLightEntity(
+            world,
+            VectorSingle(0.4f, 3.0f, 0.4f, 0.0f),
+            s_SoftShadowSpotLightPitch,
+            s_SoftShadowSpotLightYaw,
+            0.0f,
+            VectorSingle(0.35f, 0.55f, 1.00f, 0.0f),
+            s_SoftShadowSpotLightIntensity,
+            s_SoftShadowSpotLightRange,
+            s_SoftShadowSpotInnerConeCos,
+            s_SoftShadowSpotOuterConeCos
+        );
+        if(world.hasComponent<LightComponent>(spotLight)){
+            mut LightComponent light = world.entity(spotLight).getComponent<LightComponent>();
+            light.sourceRadius = sourceRadius;
+            light.enableCaustics = false;
+        }
 
-            // Timing materials omit stochastic surfel GI while keeping direct shadows.
-            const auto& opaqueMaterial = timingEnabled ? s_SoftShadowTimingOpaqueMaterial : s_SoftShadowOpaqueMaterial;
-            const auto& transparentMaterial = timingEnabled ? s_SoftShadowTimingTransparentMaterial : s_SoftShadowTransparentMaterial;
-            this->m_groundEntity = CreateTintedStaticMeshEntity(s_SoftShadowGroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, VectorSet(0.82f, 0.82f, 0.85f, 1.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), VectorSet(s_SoftShadowGroundScale, 1.0f, s_SoftShadowGroundScale, 0.0f), world);
+        // Timing materials omit stochastic surfel GI while keeping direct shadows.
+        SmokeMaterialRef opaqueMaterial = s_SoftShadowOpaqueMaterial;
+        SmokeMaterialRef transparentMaterial = s_SoftShadowTransparentMaterial;
+        if(timingEnabled){
+            opaqueMaterial = s_SoftShadowTimingOpaqueMaterial;
+            transparentMaterial = s_SoftShadowTimingTransparentMaterial;
+        }
+        this.m_groundEntity = CreateTintedStaticMeshEntity(
+            s_SoftShadowGroundMesh,
+            opaqueMaterial,
+            s_SmokeSurfaceMaterialInterface,
+            VectorSet(0.82f, 0.82f, 0.85f, 1.0f),
+            VectorSet(0.0f, 0.0f, 0.0f, 0.0f),
+            VectorSet(s_SoftShadowGroundScale, 1.0f, s_SoftShadowGroundScale, 0.0f),
+            world
+        );
 
-            // The opaque caster provides the contact-hardening reference.
-            const auto characterModel = CreateTintedModelEntity(s_SoftShadowModel, opaqueMaterial, s_SmokeSurfaceMaterialInterface, VectorSet(0.86f, 0.80f, 0.74f, 1.0f), VectorSet(0.7f, 0.0f, -1.1f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), world);
-            this->m_characterOwner = characterModel.entity;
-            if(!characterModel.tintApplied)
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
+        // The opaque caster provides the contact-hardening reference.
+        const SmokeTintedModelEntityResult characterModel = CreateTintedModelEntity(
+            s_SoftShadowModel,
+            opaqueMaterial,
+            s_SmokeSurfaceMaterialInterface,
+            VectorSet(0.86f, 0.80f, 0.74f, 1.0f),
+            VectorSet(0.7f, 0.0f, -1.1f, 0.0f),
+            VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
+            world
+        );
+        this.m_characterOwner = characterModel.entity;
+        if(!characterModel.tintApplied)
+            error("SoftShadowTestSmokeProject: failed to set character tint");
 
-            // The glass caster must preserve tint while its penumbra widens with receiver distance.
-            const auto glassModel = CreateTintedModelEntity(
-                s_SoftShadowModel,
-                transparentMaterial,
-                s_SmokeSurfaceMaterialInterface,
-                // Glass caster tint and density for Beer-Lambert shadow absorption.
-                VectorSet(0.20f, 0.55f, 0.12f, 0.6f), VectorSet(-0.6f, 0.0f, -1.1f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
-                world
-            );
-            this->m_glassOwner = glassModel.entity;
-            if(!glassModel.tintApplied)
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
+        // The glass caster must preserve tint while its penumbra widens with receiver distance.
+        const SmokeTintedModelEntityResult glassModel = CreateTintedModelEntity(
+            s_SoftShadowModel,
+            transparentMaterial,
+            s_SmokeSurfaceMaterialInterface,
+            // Glass caster tint and density for Beer-Lambert shadow absorption.
+            VectorSet(0.20f, 0.55f, 0.12f, 0.6f),
+            VectorSet(-0.6f, 0.0f, -1.1f, 0.0f),
+            VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
+            world
+        );
+        this.m_glassOwner = glassModel.entity;
+        if(!glassModel.tintApplied)
+            error("SoftShadowTestSmokeProject: failed to set glass tint");
 
-            SyncSmokeModelRuntimes(world);
+        SyncSmokeModelRuntimes(world);
 
-            FOUNDATION_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_characterOwner.valid() && this->m_glassOwner.valid(), FOUNDATION_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
+        [essential] assert(
+            activeCamera.valid() && this.m_groundEntity.valid() && this.m_characterOwner.valid() && this.m_glassOwner.valid(),
+            "SoftShadowTestSmokeProject failed to create all scene entities"
+        );
 
-            if(timingEnabled){
-                const Array<Core::ECS::EntityID, 3> lights = { directionalLight, pointLight, spotLight };
-                for(const auto lightEntity : lights){
-                    const auto* light = world.tryGetComponent<Impl::Scene::LightComponent>(lightEntity);
-                    if(!light || light->enableCaustics){
-                        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShadowTimingProbe: timing light policy unavailable"));
-                        ok = false;
-                        break;
-                    }
+        if(timingEnabled){
+            Array<EntityID, 3u> lights = Array<EntityID, 3u>();
+            lights[0u] = directionalLight;
+            lights[1u] = pointLight;
+            lights[2u] = spotLight;
+            for(in EntityID lightEntity : lights){
+                if(!world.hasComponent<LightComponent>(lightEntity)){
+                    error("ShadowTimingProbe: timing light policy unavailable");
+                    return false;
+                }
+                in LightComponent light = world.entity(lightEntity).getComponent<LightComponent>();
+                if(light.enableCaustics){
+                    error("ShadowTimingProbe: timing light policy unavailable");
+                    return false;
                 }
             }
         }
-        return ok;
+        return true;
     }
 
     public void spinCasters(mut World world, in f32 yaw)const{
@@ -275,19 +307,11 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         const VectorSingle display = CalculateSmokeYawDisplay(VectorSingle(this.m_yaw.yaw()), VectorSingle(s_2PI));
         const f32 yawDegrees = display.y;
         const f32 angleDegrees = this.m_angularRadius * 360.0f / s_2PI;
-        const f32 srcRadius = this.m_sourceRadius;
-        const b8 manualControl = this.m_yaw.manualControl();
-        native(in yawDegrees, in angleDegrees, in srcRadius, in manualControl, mut ctx = this.m_context){
-            static constexpr usize s_TitleCapacity = 256u;
-            Array<tchar, s_TitleCapacity> title{};
-            FOUNDATION_TSPRINTF(
-                title.data(), title.size(),
-                FOUNDATION_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-                static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDegrees, angleDegrees, srcRadius,
-                manualControl ? FOUNDATION_TEXT("  [manual: <- ->]") : FOUNDATION_TEXT("")
-            );
-            ctx.graphics.setWindowTitle(TStringView(title.data()));
-        }
+        StringView manualSuffix = "";
+        if(this.m_yaw.manualControl())
+            manualSuffix = "  [manual: <- ->]";
+        const String suffix = StringFormat("  |  yaw {:.2f} deg  |  sun {:.2f} deg  |  src r {:.3f}{}", yawDegrees, angleDegrees, this.m_sourceRadius, manualSuffix);
+        SetSmokeWindowTitleSuffix(this.m_context, suffix);
     }
 
     private mut ProjectRuntimeContext m_context;

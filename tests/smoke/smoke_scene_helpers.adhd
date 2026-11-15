@@ -300,7 +300,7 @@ using Impl::MeshSystem;
     const f32 range,
     Core::ECS::World& world
 ){
-    return Impl::Scene::CreatePointLightEntity(world, position, color, intensity, range);
+    return Impl::Scene::CreatePointLightEntity(world, LoadFloat(position), LoadFloat(color), intensity, range);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 RecycleSmokeEntityGenerations(const u32 count, Core::ECS::World& world){
@@ -325,7 +325,7 @@ using Impl::MeshSystem;
     const f32 intensity,
     Core::ECS::World& world
 ){
-    return Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
+    return Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, LoadFloat(color), intensity);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
@@ -337,7 +337,7 @@ using Impl::MeshSystem;
     const b8 enableCaustics,
     Core::ECS::World& world
 ){
-    const auto light = Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
+    const auto light = Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, LoadFloat(color), intensity);
     if(auto* const comp = world.tryGetComponent<Impl::Scene::LightComponent>(light))
         comp->enableCaustics = enableCaustics;
     return light;
@@ -352,7 +352,7 @@ using Impl::MeshSystem;
     const b8 enableCaustics,
     Core::ECS::World& world
 ){
-    const auto light = Impl::Scene::CreatePointLightEntity(world, position, color, intensity, range);
+    const auto light = Impl::Scene::CreatePointLightEntity(world, LoadFloat(position), LoadFloat(color), intensity, range);
     if(auto* const comp = world.tryGetComponent<Impl::Scene::LightComponent>(light)){
         comp->sourceRadius = sourceRadius;
         comp->enableCaustics = enableCaustics;

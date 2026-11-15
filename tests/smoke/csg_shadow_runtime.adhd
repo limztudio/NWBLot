@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_scene/module.adhd>
 #include "csg_shadow_probes_and_atlas.adhd"
 
 
@@ -100,60 +101,43 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
             [essential] info("CsgCausticSmokeProject: photons {}", photonState);
         }
 
-        b8 atlasCreated = false;
-        b8 hardware = false;
-        native(
-            in cameraX,
-            in pointLight = this.m_mode.pointLight,
-            in angularRadius,
-            in sourceRadius,
-            in enableCaustics,
-            in mode = this.m_mode,
-            mut atlas = this.m_atlas,
-            mut world = this.m_world,
-            mut ctx = this.m_context,
-            mut atlasCreated,
-            mut hardware
-        ){
-            const auto camera = CreateSmokeCamera(0.0f, -s_ShadowSmokeCameraDepth, 0.0f, *world);
-            FOUNDATION_FATAL_ASSERT_MSG(camera.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: camera creation failed"));
-            auto& cameraTransform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(camera));
-            cameraTransform.position.x = cameraX;
+        mut World world = SmokeWorldRef(this.m_world);
+        const EntityID camera = CreateSmokeCamera(0.0f, -s_ShadowSmokeCameraDepth, 0.0f, world);
+        [essential] assert(camera.valid(), "CsgShadowSmokeProject: camera creation failed");
+        mut TransformComponent cameraTransform = world.entity(camera).getComponent<TransformComponent>();
+        cameraTransform.position.x = cameraX;
 
-            const auto receiver = CreateTintedStaticMeshEntity(
-                s_CsgShadowPlaneMesh,
-                s_CsgShadowOpaqueMaterial,
-                NameTextAscii(s_ShadowSmokeMaterialInterface),
-                VectorSet(1.0f, 1.0f, 1.0f, 1.0f),
-                VectorZero(),
-                VectorSet(4.0f, 1.0f, 3.0f, 0.0f),
-                *world
-            );
-            FOUNDATION_FATAL_ASSERT_MSG(receiver.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
-            auto& receiverTransform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(receiver));
-            StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
+        const EntityID receiver = CreateTintedStaticMeshEntity(
+            s_CsgShadowPlaneMesh,
+            s_CsgShadowOpaqueMaterial,
+            NameTextAscii(s_ShadowSmokeMaterialInterface),
+            VectorSet(1.0f, 1.0f, 1.0f, 1.0f),
+            VectorZero(),
+            VectorSet(4.0f, 1.0f, 3.0f, 0.0f),
+            world
+        );
+        [essential] assert(receiver.valid(), "CsgShadowSmokeProject: camera/receiver creation failed");
+        mut TransformComponent receiverTransform = world.entity(receiver).getComponent<TransformComponent>();
+        receiverTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_PIDIV2, 0.0f, 0.0f, 0.0f)));
 
-            const auto light = pointLight
-                ? Impl::Scene::CreatePointLightEntity(*world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
-                : Impl::Scene::CreateDirectionalLightEntity(*world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-            FOUNDATION_FATAL_ASSERT_MSG(light.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: light creation failed"));
-            auto& lightComponent = *MakeNotNull(world->tryGetComponent<Impl::Scene::LightComponent>(light));
-            lightComponent.angularRadius = angularRadius;
-            lightComponent.sourceRadius = sourceRadius;
-            lightComponent.enableCaustics = enableCaustics;
+        EntityID light = s_InvalidEntityId;
+        if(this.m_mode.pointLight)
+            light = CreatePointLightEntity(world, VectorSingle(0.0f, 0.0f, -12.0f, 0.0f), VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f);
+        else
+            light = CreateDirectionalLightEntity(world, 0.0f, 0.0f, 0.0f, VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+        [essential] assert(light.valid(), "CsgShadowSmokeProject: light creation failed");
+        mut LightComponent lightComponent = world.entity(light).getComponent<LightComponent>();
+        lightComponent.angularRadius = angularRadius;
+        lightComponent.sourceRadius = sourceRadius;
+        lightComponent.enableCaustics = enableCaustics;
 
-            const AStringView sourceLabel = mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard;
-            NWB_LOGGER_ESSENTIAL_INFO(
-                FOUNDATION_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}"),
-                ConvertString(sourceLabel),
-                static_cast<f64>(angularRadius),
-                static_cast<f64>(sourceRadius)
-            );
-            atlasCreated = atlas.create(mode, s_CsgShadowOpaqueMaterial, *world);
-            hardware = ctx.graphics.queryFeatureSupport(Core::Feature::RayQuery) && ctx.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-        }
-        if(!atlasCreated)
+        StringView sourceLabel = s_ShadowSmokeHard;
+        if(this.m_mode.finiteLightSource)
+            sourceLabel = s_ShadowSmokeFinite;
+        [essential] info("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}", sourceLabel, angularRadius, sourceRadius);
+        if(!this.m_atlas.create(this.m_mode, s_CsgShadowOpaqueMaterial, world))
             return false;
+        const b8 hardware = this.m_context.graphics.queryFeatureSupport(Feature::RayQuery) && this.m_context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
 
         StringView lightLabel = s_ShadowSmokeDirectional;
         if(this.m_mode.pointLight)
@@ -220,27 +204,17 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
         if(route.has_value())
             routeView = StringView(route.value());
 
-        b8 hasCaptureOrMissingQuit = false;
-        b8 rayTracing = false;
-        b8 rayQuery = false;
+        const b8 rayTracing = this.m_context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
+        const b8 rayQuery = this.m_context.graphics.queryFeatureSupport(Feature::RayQuery);
+        b8 hasCapture = false;
         usize receivers = 0u;
         usize cutters = 0u;
-        native(
-            in capture = this.m_capture,
-            in ctx = this.m_context,
-            in world = this.m_world,
-            mut hasCaptureOrMissingQuit,
-            mut rayTracing,
-            mut rayQuery,
-            mut receivers,
-            mut cutters
-        ){
-            hasCaptureOrMissingQuit = static_cast<b8>(capture) || !ctx.requestQuit;
-            rayTracing = ctx.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-            rayQuery = ctx.graphics.queryFeatureSupport(Core::Feature::RayQuery);
+        native(in capture = this.m_capture, in world = this.m_world, mut hasCapture, mut receivers, mut cutters){
+            hasCapture = static_cast<b8>(capture);
             receivers = world->view<Impl::StaticCsgMeshComponent>().candidateCount() + world->view<Impl::SkinnedCsgMeshComponent>().candidateCount();
             cutters = world->view<Impl::CsgCutterComponent>().candidateCount();
         }
+        const b8 hasCaptureOrMissingQuit = hasCapture || !SmokeContextHasQuitCallback(this.m_context);
 
         if(
             (modeView != "performance" && modeView != "diagnostic")

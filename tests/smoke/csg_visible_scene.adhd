@@ -87,50 +87,22 @@ void ApplyCsgVisibleCutterTransform(in EntityID cutterEntity, in VectorSingle re
 }
 
 EntityID CreateCsgVisibleCutter(in usize shapeSlot, in Name receiverGroup, in VectorSingle center, mut World world){
-    const VectorSingle identityRotation = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
-    EntityID cutterId = s_InvalidEntityId;
-    native(in shapeSlot, in receiverGroup, in center, in identityRotation, mut world, mut cutterId){
-        auto cutterEntity = world.createEntity();
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-        cutter.receiverGroup = receiverGroup;
-        AssignCsgCutterTransform(center, identityRotation, cutter);
+    const VectorSingle identityRotation = QuaternionIdentity();
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Plane))
+        return CreateSmokeCsgPlaneCutter(receiverGroup, s_CsgPlaneShapeName, true, f32x4(0.0f, 0.0f, 1.0f, 0.0f), center, identityRotation, world);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Box))
+        return CreateSmokeCsgBoxCutter(receiverGroup, s_CsgBoxShapeName, true, f32x4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f), center, identityRotation, world);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Sphere))
+        return CreateSmokeCsgSphereCutter(receiverGroup, s_CsgSphereShapeName, true, f32x4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f), center, identityRotation, world);
+    if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Capsule))
+        return CreateSmokeCsgCapsuleCutter(receiverGroup, s_CsgCapsuleShapeName, true, f32x4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f), center, identityRotation, world);
 
-        switch(shapeSlot){
-        case static_cast<usize>(CsgVisibleShapeSlot::Plane):{
-            cutter.shapeType = Name(Impl::s_CsgPlaneShapeName);
-            Impl::CsgPlaneShapeParameters parameters;
-            parameters.normalDistance = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-            AssignCsgCutterParameters(parameters, cutter);
-            break;
-        }
-        case static_cast<usize>(CsgVisibleShapeSlot::Box):{
-            cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
-            Impl::CsgBoxShapeParameters parameters;
-            parameters.halfExtents = Float4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f);
-            AssignCsgCutterParameters(parameters, cutter);
-            break;
-        }
-        case static_cast<usize>(CsgVisibleShapeSlot::Sphere):{
-            cutter.shapeType = Name(Impl::s_CsgSphereShapeName);
-            Impl::CsgSphereShapeParameters parameters;
-            parameters.radius = Float4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f);
-            AssignCsgCutterParameters(parameters, cutter);
-            break;
-        }
-        case static_cast<usize>(CsgVisibleShapeSlot::Capsule):{
-            cutter.shapeType = Name(Impl::s_CsgCapsuleShapeName);
-            Impl::CsgCapsuleShapeParameters parameters;
-            parameters.radiusHalfHeight = Float4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f);
-            AssignCsgCutterParameters(parameters, cutter);
-            break;
-        }
-        default:
-            cutter.active = false;
-            break;
-        }
-        cutterId = cutterEntity.id();
-    }
-    return cutterId;
+    Entity cutterEntity = world.createEntity();
+    mut CsgCutterComponent cutter = cutterEntity.addComponent<CsgCutterComponent>();
+    cutter.receiverGroup = receiverGroup;
+    cutter.active = false;
+    AssignCsgCutterTransform(center, identityRotation, cutter);
+    return cutterEntity.id();
 }
 
 class CsgVisibleScene{

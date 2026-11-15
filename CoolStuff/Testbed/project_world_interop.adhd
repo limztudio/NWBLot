@@ -186,7 +186,7 @@ type CpuTaskAdmissionErrorCode = CpuTaskAdmissionError;
 b8 CreateStartupCameraAndLightsOnWorld(mut World world){
     Entity activeCameraEntity = world.createEntity();
     mut ActiveCameraComponent activeCamera = activeCameraEntity.addComponent<ActiveCameraComponent>();
-    const f32x4 cameraPosition(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth, 0.0f);
+    const VectorSingle cameraPosition = VectorSingle(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth, 0.0f);
     activeCamera.camera = CreateSceneCameraEntity(world, cameraPosition);
     assert(activeCamera.camera.valid());
     Entity cameraEntity = world.entity(activeCamera.camera);
@@ -197,13 +197,13 @@ b8 CreateStartupCameraAndLightsOnWorld(mut World world){
         s_DefaultDirectionalLightPitch,
         s_DefaultDirectionalLightYaw,
         s_DefaultDirectionalLightRoll,
-        s_DefaultDirectionalLightColor,
+        VectorSingle(s_DefaultDirectionalLightColor),
         s_DefaultDirectionalLightIntensity
     );
     const EntityID pointLight = CreatePointLightEntity(
         world,
-        s_PointLightPosition,
-        s_PointLightColor,
+        VectorSingle(s_PointLightPosition),
+        VectorSingle(s_PointLightColor),
         s_PointLightIntensity,
         s_PointLightRange
     );

@@ -337,14 +337,14 @@ AssetBytes BuildTestEntityBinary(in Span<ComponentAssetRef> components, mut Asse
 
 void VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover(){
     EcsTestWorld testWorld = EcsTestWorld();
-    const EntityID fallback = CreateSceneCameraEntity(testWorld.world, f32x4(1.0f, 0.0f, 0.0f, 0.0f));
-    const EntityID original = CreateSceneCameraEntity(testWorld.world, f32x4(2.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID fallback = CreateSceneCameraEntity(testWorld.world, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID original = CreateSceneCameraEntity(testWorld.world, VectorSingle(2.0f, 0.0f, 0.0f, 0.0f));
     const EntityID selector = testWorld.world.createEntity().id();
     testWorld.world.entity(selector).addComponent<ActiveCameraComponent>().camera = original;
     EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, original);
 
     testWorld.world.destroyEntity(original);
-    const EntityID replacement = CreateSceneCameraEntity(testWorld.world, f32x4(3.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID replacement = CreateSceneCameraEntity(testWorld.world, VectorSingle(3.0f, 0.0f, 0.0f, 0.0f));
     ASSERT_EQ(original.index(), replacement.index());
     ASSERT_NE(original.generation(), replacement.generation());
     EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, fallback);
@@ -363,8 +363,8 @@ void VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover(){
 
 void VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding(){
     EcsTestWorld testWorld = EcsTestWorld();
-    const EntityID first = CreateSceneCameraEntity(testWorld.world, f32x4(1.0f, 0.0f, 0.0f, 0.0f));
-    const EntityID second = CreateSceneCameraEntity(testWorld.world, f32x4(2.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID first = CreateSceneCameraEntity(testWorld.world, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID second = CreateSceneCameraEntity(testWorld.world, VectorSingle(2.0f, 0.0f, 0.0f, 0.0f));
     const EntityID firstSelector = testWorld.world.createEntity().id();
     testWorld.world.entity(firstSelector).addComponent<ActiveCameraComponent>().camera = second;
     const EntityID secondSelector = testWorld.world.createEntity().id();
@@ -381,9 +381,9 @@ void VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAn
 
 void VerifySceneCameraSelection_FallbackPreservesSparseViewOrderAfterRemoval(){
     EcsTestWorld testWorld = EcsTestWorld();
-    const EntityID first = CreateSceneCameraEntity(testWorld.world, f32x4(1.0f, 0.0f, 0.0f, 0.0f));
-    const EntityID second = CreateSceneCameraEntity(testWorld.world, f32x4(2.0f, 0.0f, 0.0f, 0.0f));
-    const EntityID third = CreateSceneCameraEntity(testWorld.world, f32x4(3.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID first = CreateSceneCameraEntity(testWorld.world, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID second = CreateSceneCameraEntity(testWorld.world, VectorSingle(2.0f, 0.0f, 0.0f, 0.0f));
+    const EntityID third = CreateSceneCameraEntity(testWorld.world, VectorSingle(3.0f, 0.0f, 0.0f, 0.0f));
     testWorld.world.entity(first).removeComponent<CameraComponent>();
     EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, third);
 

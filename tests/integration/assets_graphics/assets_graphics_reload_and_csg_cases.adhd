@@ -202,11 +202,9 @@ void VerifyBuildInputSelection_ExactInputsPreserveDiscoveredOrderAndDuplicateRec
     self.addInput(s_BuildInputAssetsANwb);
     ASSERT_TRUE(self.select());
     ASSERT_EQ(self.fileCount(), 3u);
-    native(in self){
-        EXPECT_EQ(self.filenameAt(0u), TStringView(FOUNDATION_TEXT("z.nwb")));
-        EXPECT_EQ(self.filenameAt(1u), TStringView(FOUNDATION_TEXT("a.nwb")));
-        EXPECT_EQ(self.filenameAt(2u), TStringView(FOUNDATION_TEXT("a.nwb")));
-    }
+    EXPECT_EQ(self.filenameTextAt(0u), "z.nwb");
+    EXPECT_EQ(self.filenameTextAt(1u), "a.nwb");
+    EXPECT_EQ(self.filenameTextAt(2u), "a.nwb");
 }
 
 void VerifyBuildInputSelection_DirectoryInputsRespectBoundariesAndAllowEmptyRoots(mut BuildInputSelection self){
@@ -218,10 +216,8 @@ void VerifyBuildInputSelection_DirectoryInputsRespectBoundariesAndAllowEmptyRoot
     self.addInput("assets/empty");
     ASSERT_TRUE(self.select());
     ASSERT_EQ(self.fileCount(), 2u);
-    native(in self){
-        EXPECT_EQ(self.filenameAt(0u), TStringView(FOUNDATION_TEXT("a.nwb")));
-        EXPECT_EQ(self.filenameAt(1u), TStringView(FOUNDATION_TEXT("c.nwb")));
-    }
+    EXPECT_EQ(self.filenameTextAt(0u), "a.nwb");
+    EXPECT_EQ(self.filenameTextAt(1u), "c.nwb");
 }
 
 void VerifyBuildInputSelection_RejectedInputsLeaveDiscoveredFilesIntact(mut BuildInputSelection self){
@@ -251,9 +247,7 @@ void VerifyBuildInputSelection_DirectoryCaseFollowsHostFilesystemContract(mut Bu
     }
     else{
         ASSERT_EQ(self.fileCount(), 1u);
-        native(in self){
-            EXPECT_EQ(self.filenameAt(0u), TStringView(FOUNDATION_TEXT("a.nwb")));
-        }
+        EXPECT_EQ(self.filenameTextAt(0u), "a.nwb");
     }
 }
 

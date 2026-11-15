@@ -829,8 +829,8 @@ public:
         return m_files.size();
     }
 
-    [[nodiscard]] TStringView filenameAt(const usize index)const noexcept{
-        return m_files[index].filePath.filenameView();
+    [[nodiscard]] Core::Assets::CookString filenameTextAt(const usize index){
+        return PathToString<char>(m_testArena.arena, m_files[index].filePath.filenameView());
     }
 
     [[nodiscard]] Core::Assets::CookVector<Core::Assets::CookString> makeCookSources(){

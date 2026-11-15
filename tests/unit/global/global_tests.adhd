@@ -473,26 +473,41 @@ void VerifyGlobal_DirectionalSearchHandlesChangingCountsAndThrows(){
     EXPECT_FALSE(FindDirectionalIndex(3u, false, countRows, matchFirst).has_value());
     EXPECT_EQ(countCalls, 1u);
 
+    const auto matchNone = lambda[](in u64 index) -> b8{
+        return false;
+    };
+    EXPECT_FALSE(FindDirectionalIndex(0u, true, countRows, matchNone).has_value());
+
+    u32 shrinkingCalls = 0u;
+    u32 matchedCalls = 0u;
+    const auto shrinkingCount = lambda[mut shrinkingCalls]() -> u64{
+        ++shrinkingCalls;
+        if(shrinkingCalls == 1u)
+            return 3u;
+        return 1u;
+    };
+    const auto trackMatch = lambda[mut matchedCalls](in u64 index) -> b8{
+        ++matchedCalls;
+        return true;
+    };
+    EXPECT_FALSE(FindDirectionalIndex(2u, false, shrinkingCount, trackMatch).has_value());
+    EXPECT_EQ(shrinkingCalls, 2u);
+    EXPECT_EQ(matchedCalls, 0u);
+
+    const auto maximumRowCount = lambda[]() -> u64{
+        return u64.max;
+    };
+    EXPECT_FALSE(FindDirectionalIndex(u64.max - 1u, false, maximumRowCount, matchNone).has_value());
+
     native{
-        u32 nativeCountCalls = 0u;
-        const auto nativeCountRows = [&nativeCountCalls]()noexcept{ ++nativeCountCalls; return u64(3u); };
-        const auto matchNone = [](const u64)noexcept{ return false; };
-        EXPECT_FALSE(FindDirectionalIndex(0u, true, nativeCountRows, matchNone));
+        const auto nativeCountRows = []()noexcept{ return u64(3u); };
+        const auto nativeMatchNone = [](const u64)noexcept{ return false; };
         const auto throwingMatch = [](const u64) -> b8{ throw RuntimeException("directional predicate failure"); };
         static_assert(!noexcept(FindDirectionalIndex(0u, false, nativeCountRows, throwingMatch)));
         EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, nativeCountRows, throwingMatch)), RuntimeException);
-        u32 shrinkingCalls = 0u;
-        u32 matchedCalls = 0u;
-        const auto shrinkingCount = [&shrinkingCalls]()noexcept{ return ++shrinkingCalls == 1u ? u64(3u) : u64(1u); };
-        const auto trackMatch = [&matchedCalls](const u64)noexcept{ ++matchedCalls; return true; };
-        EXPECT_FALSE(FindDirectionalIndex(2u, false, shrinkingCount, trackMatch));
-        EXPECT_EQ(shrinkingCalls, 2u);
-        EXPECT_EQ(matchedCalls, 0u);
-        const auto maximumRowCount = []()noexcept{ return Limit<u64>::s_Max; };
-        EXPECT_FALSE(FindDirectionalIndex(Limit<u64>::s_Max - 1u, false, maximumRowCount, matchNone));
         const auto throwingCount = []() -> u64{ throw RuntimeException("directional count failure"); };
-        static_assert(!noexcept(FindDirectionalIndex(0u, false, throwingCount, matchNone)));
-        EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, throwingCount, matchNone)), RuntimeException);
+        static_assert(!noexcept(FindDirectionalIndex(0u, false, throwingCount, nativeMatchNone)));
+        EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, throwingCount, nativeMatchNone)), RuntimeException);
     }
 }
 
@@ -735,12 +750,9 @@ void VerifyGlobal_DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters(
 
 void VerifyGlobal_DiagnosticEventTextViewsStopAtNullOrBufferBounds(){
     DiagnosticEventText text = DiagnosticEventText();
-    usize capacity = 0u;
-    native(mut text, mut capacity){
-        capacity = sizeof(text.value);
-        for(char& character : text.value)
-            character = 'x';
-    }
+    const usize capacity = text.value.size();
+    for(usize i = 0u; i < capacity; ++i)
+        text.value[i] = 'x';
     const StringView fullView = text.view();
     EXPECT_EQ(fullView.size(), capacity);
     const DiagnosticEventText formatted = MakeDiagnosticEventText("{}", text);

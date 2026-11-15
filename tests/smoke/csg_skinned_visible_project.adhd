@@ -106,15 +106,15 @@ inline constexpr b8 s_CsgSkinnedTransparentReceiver = true;
 inline constexpr b8 s_CsgSkinnedTransparentReceiver = false;
 #endif
 
-[[nodiscard]] FOUNDATION_INLINE AStringView CsgSkinnedStartupSummary()noexcept{
+[[nodiscard]] FOUNDATION_INLINE TStringView CsgSkinnedStartupSummary()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return "CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created";
+    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return "CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created";
+    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return "CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created";
+    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created");
 #else
-    return "CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created";
+    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created");
 #endif
 }
 namespace ModelObjectKind = Impl::ModelObjectKind;

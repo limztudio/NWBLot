@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit_target_factory.adhd>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/ecs_render/refraction/refraction_target_builder.adhd>
 #include <impl/ecs_render/refraction/types.adhd>
 
 
@@ -28,6 +31,96 @@ b8 CanRecordRefractionStatisticsReadback(in b8 hasSource, in b8 hasDestination, 
 
 b8 RequiresRefractionSceneReadsImport(in b8 sceneReadsValid, in b8 usesHardwareTrace){
     return !sceneReadsValid && usesHardwareTrace;
+}
+
+Expected<BufferHandle> CreateRefractionTileBuffer(mut GraphicsRuntime graphics, in u64 byteSize, in Name name, in b8 indirect){
+    BufferDesc desc = BufferDesc();
+    desc.setByteSize(byteSize).setStructStride(s_AvboitU32WordByteSize).setCanHaveUAVs(true).setCanHaveRawViews(true).setIsDrawIndirectArgs(indirect)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(ResourceStates::Common);
+    return graphics.createBuffer(desc);
+}
+
+b8 RefractionTargetBuilder::createImages(
+    mut DeferredFrameTargets createdTargets,
+    mut AvboitFrameTargets avboitTargets,
+    in Format accumColorFormat,
+    in Format accumExtinctionFormat,
+    in Color transparentBlack
+){
+    mut Device device = this.m_graphics.getDevice();
+    Expected<TextureHandle> foregroundAccumColorResult = CreateAvboitRenderTarget(this.m_graphics, createdTargets.width, createdTargets.height, accumColorFormat, Name("engine/avboit/foreground_color"), transparentBlack, true);
+    Expected<TextureHandle> foregroundAccumExtinctionResult = CreateAvboitRenderTarget(this.m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat, Name("engine/avboit/foreground_extinction"), transparentBlack, true);
+    Expected<TextureHandle> refractionNormalIorResult = CreateAvboitRenderTarget(this.m_graphics, createdTargets.width, createdTargets.height, Format::RGBA16_FLOAT, Name("engine/avboit/refraction_normal_ior"), transparentBlack, true);
+    Expected<TextureHandle> refractionTintCoverageResult = CreateAvboitRenderTarget(this.m_graphics, createdTargets.width, createdTargets.height, Format::RGBA16_FLOAT, Name("engine/avboit/refraction_tint_coverage"), transparentBlack, true);
+    Expected<TextureHandle> refractionInstanceResult = CreateAvboitRenderTarget(this.m_graphics, createdTargets.width, createdTargets.height, Format::RG32_FLOAT, Name("engine/avboit/refraction_instance"), transparentBlack, true);
+    Expected<TextureHandle> refractionSpecularRoughnessResult = CreateAvboitRenderTarget(this.m_graphics, createdTargets.width, createdTargets.height, Format::RGBA16_FLOAT, Name("engine/avboit/refraction_specular_roughness"), Color(0.0f, 0.0f, 0.0f, 1.0f), true);
+    TextureDesc refractionDepthDesc = createdTargets.depth.deref().getCreationDescription();
+    refractionDepthDesc.setName(s_RefractionDepthTargetName).setInitialState(ResourceStates::Common).setKeepInitialState(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute);
+    Expected<TextureHandle> refractionDepthResult = this.m_graphics.createTexture(refractionDepthDesc);
+    if(refractionDepthResult.has_value())
+        avboitTargets.refractionDepth = refractionDepthResult.value();
+    else
+        avboitTargets.refractionDepth.reset();
+    TextureDesc refractionResolveDesc = TextureDesc();
+    refractionResolveDesc.setWidth(createdTargets.width).setHeight(createdTargets.height)
+        .setFormat(Format::RGBA16_FLOAT).setIsUAV(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName(s_RefractionResolveTargetName).setClearValue(transparentBlack)
+        .setInitialState(ResourceStates::Common).setKeepInitialState(true)
+    ;
+    Expected<TextureHandle> refractionResolveResult = this.m_graphics.createTexture(refractionResolveDesc);
+    if(refractionResolveResult.has_value())
+        avboitTargets.refractionResolve = refractionResolveResult.value();
+    else
+        avboitTargets.refractionResolve.reset();
+    if(
+        !foregroundAccumColorResult.has_value()
+        || !foregroundAccumExtinctionResult.has_value()
+        || !refractionNormalIorResult.has_value()
+        || !refractionTintCoverageResult.has_value()
+        || !refractionInstanceResult.has_value()
+        || !refractionSpecularRoughnessResult.has_value()
+        || !refractionDepthResult.has_value()
+        || !refractionResolveResult.has_value()
+    )
+        return false;
+    avboitTargets.foregroundAccumColor = foregroundAccumColorResult.value();
+    avboitTargets.foregroundAccumExtinction = foregroundAccumExtinctionResult.value();
+    avboitTargets.refractionNormalIor = refractionNormalIorResult.value();
+    avboitTargets.refractionTintCoverage = refractionTintCoverageResult.value();
+    avboitTargets.refractionInstance = refractionInstanceResult.value();
+    avboitTargets.refractionSpecularRoughness = refractionSpecularRoughnessResult.value();
+    FramebufferDesc refractionFramebufferDesc = FramebufferDesc();
+    refractionFramebufferDesc
+        .addColorAttachment(avboitTargets.refractionNormalIor.deref(), s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionTintCoverage.deref(), s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionInstance.deref(), s_FramebufferSubresources)
+        // Fourth output carries reflection inputs; keep it off foreground extinction.
+        .addColorAttachment(avboitTargets.refractionSpecularRoughness.deref(), s_FramebufferSubresources)
+        .setDepthAttachment(avboitTargets.refractionDepth.deref(), s_FramebufferSubresources)
+    ;
+    Expected<FramebufferHandle> refractionFramebufferResult = device.createFramebuffer(refractionFramebufferDesc);
+    if(refractionFramebufferResult.has_value())
+        avboitTargets.refractionFramebuffer = refractionFramebufferResult.value();
+    else
+        avboitTargets.refractionFramebuffer.reset();
+    if(!refractionFramebufferResult.has_value())
+        return false;
+
+    return true;
+}
+
+b8 RefractionTargetBuilder::createTileBuffers(in u64 tileCount, mut AvboitFrameTargets avboitTargets){
+    Expected<BufferHandle> tileList = CreateRefractionTileBuffer(this.m_graphics, ComputeRefractionTileListByteSize(tileCount), s_RenderIdentityEngineRefractionTileList, false);
+    Expected<BufferHandle> tileArguments = CreateRefractionTileBuffer(this.m_graphics, cast<u64>(s_RefractionTileArgumentBytes), s_RenderIdentityEngineRefractionTileArguments, true);
+    if(!tileList.has_value() || !tileArguments.has_value()){
+        LogFailedRefractionTileBuffers();
+        return false;
+    }
+    avboitTargets.refractionTileList = tileList.value();
+    avboitTargets.refractionTileArguments = tileArguments.value();
+
+    return true;
 }
 
 
@@ -64,80 +157,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RefractionTargetBuilder::createImages(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets, const Core::Format::Enum accumColorFormat, const Core::Format::Enum accumExtinctionFormat, const Core::Color& transparentBlack){
-    auto& device = m_graphics.getDevice();
-    auto foregroundAccumColorResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumColorFormat, "engine/avboit/foreground_color", transparentBlack, true);
-    auto foregroundAccumExtinctionResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat, "engine/avboit/foreground_extinction", transparentBlack, true);
-    auto refractionNormalIorResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_normal_ior", transparentBlack, true);
-    auto refractionTintCoverageResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_tint_coverage", transparentBlack, true);
-    auto refractionInstanceResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RG32_FLOAT, "engine/avboit/refraction_instance", transparentBlack, true);
-    auto refractionSpecularRoughnessResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
-    Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
-    refractionDepthDesc.setName(s_RefractionDepthTargetName).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-    auto refractionDepthResult = m_graphics.createTexture(refractionDepthDesc);
-    if(refractionDepthResult)
-        avboitTargets.refractionDepth = Move(*refractionDepthResult);
-    else
-        avboitTargets.refractionDepth.reset();
-    Core::TextureDesc refractionResolveDesc;
-    refractionResolveDesc.setWidth(createdTargets.width).setHeight(createdTargets.height)
-        .setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName(s_RefractionResolveTargetName).setClearValue(transparentBlack)
-        .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
-    ;
-    auto refractionResolveResult = m_graphics.createTexture(refractionResolveDesc);
-    if(refractionResolveResult)
-        avboitTargets.refractionResolve = Move(*refractionResolveResult);
-    else
-        avboitTargets.refractionResolve.reset();
-    if(!foregroundAccumColorResult || !foregroundAccumExtinctionResult || !refractionNormalIorResult || !refractionTintCoverageResult || !refractionInstanceResult || !refractionSpecularRoughnessResult || !refractionDepthResult || !refractionResolveResult)
-        return false;
-    avboitTargets.foregroundAccumColor = Move(*foregroundAccumColorResult);
-    avboitTargets.foregroundAccumExtinction = Move(*foregroundAccumExtinctionResult);
-    avboitTargets.refractionNormalIor = Move(*refractionNormalIorResult);
-    avboitTargets.refractionTintCoverage = Move(*refractionTintCoverageResult);
-    avboitTargets.refractionInstance = Move(*refractionInstanceResult);
-    avboitTargets.refractionSpecularRoughness = Move(*refractionSpecularRoughnessResult);
-    Core::FramebufferDesc refractionFramebufferDesc;
-    refractionFramebufferDesc
-        .addColorAttachment(avboitTargets.refractionNormalIor.get(), s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.refractionTintCoverage.get(), s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.refractionInstance.get(), s_FramebufferSubresources)
-        // Fourth output carries reflection inputs; keep it off foreground extinction.
-        .addColorAttachment(avboitTargets.refractionSpecularRoughness.get(), s_FramebufferSubresources).setDepthAttachment(avboitTargets.refractionDepth.get(), s_FramebufferSubresources)
-    ;
-    auto refractionFramebufferResult = device.createFramebuffer(refractionFramebufferDesc);
-    if(refractionFramebufferResult)
-        avboitTargets.refractionFramebuffer = Move(*refractionFramebufferResult);
-    else
-        avboitTargets.refractionFramebuffer.reset();
-    if(!refractionFramebufferResult)
-        return false;
-
-    return true;
-}
-
-b8 RefractionTargetBuilder::createTileBuffers(const u64 tileCount, AvboitFrameTargets& avboitTargets){
-    const auto createTileBuffer = [&](const u64 byteSize, const Name name, const b8 indirect){
-        Core::BufferDesc desc;
-        desc.setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).setIsDrawIndirectArgs(indirect)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
-        return m_graphics.createBuffer(desc);
-    };
-    auto tileList = createTileBuffer(ComputeRefractionTileListByteSize(tileCount), s_RenderIdentityEngineRefractionTileList, false);
-    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, s_RenderIdentityEngineRefractionTileArguments, true);
-    if(!tileList || !tileArguments){
-        LogFailedRefractionTileBuffers();
-        return false;
-    }
-    avboitTargets.refractionTileList = Move(*tileList);
-    avboitTargets.refractionTileArguments = Move(*tileArguments);
-
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,82 +2,84 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/input/target_table.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/input/target_table.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class InputPopupState final : NoCopy{
-public:
-    explicit InputPopupState(Core::Alloc::GlobalArena& arena)
-        : m_popups(arena)
-        , m_stagedPopups(arena)
-        , m_popupDismissals(arena)
-    {
-        m_popups.reserve(s_InputMaxPopups);
-        m_stagedPopups.reserve(s_InputMaxPopups);
-        m_popupDismissals.reserve(s_InputMaxPopups);
+class InputPopupState : NoCopy{
+    public InputPopupState(){
+        this.m_popups.reserve(s_InputMaxPopups);
+        this.m_stagedPopups.reserve(s_InputMaxPopups);
+        this.m_popupDismissals.reserve(s_InputMaxPopups);
     }
 
-
-public:
-    [[nodiscard]] b8 stage(const Span<const PopupScope> scopes)noexcept{ return TryStageRouterPopups(scopes, m_popups, m_stagedPopups); }
-    [[nodiscard]] Span<const PopupRecord> staged()const noexcept{ return m_stagedPopups; }
-    [[nodiscard]] Span<const PopupRecord> records()const noexcept{ return m_popups; }
-    [[nodiscard]] b8 canAppendDismissal()const noexcept{ return m_popupDismissals.size() != s_InputMaxPopups; }
-    [[nodiscard]] b8 apply(const PopupDismissRequest& request)noexcept{ return ApplyRouterPopupDismissRequest(request, m_popups, m_popupDismissals); }
-    [[nodiscard]] Expected<PopupDismissReason::Enum> consumeDismissal(const PopupToken& token)noexcept{ return TryConsumeRouterPopupDismissal(token, m_popupDismissals); }
-    [[nodiscard]] b8 dismiss(const PopupDismissReason::Enum reason)noexcept{ return TryDismissRouterPopup(reason, m_popups, m_popupDismissals); }
-    void close(const PopupToken& token)noexcept{ CloseRouterPopupSubtree(token, m_popups); }
-    void fence(const PopupToken& token)noexcept{ FenceRouterPopup(token, m_popups); }
-    void cancelFocus()noexcept{ CancelRouterPopupFocus(m_popups, m_popupDismissals); }
-    void reset()noexcept{ ResetRouterPopupState(m_popups, m_stagedPopups, m_popupDismissals); }
-    [[nodiscard]] Optional<InputPopupRetirement> retire(InputTargetTable& targets, const WidgetId id){ return targets.retirePopup(id, m_popups, m_popupDismissals); }
-    void install(
-        const Span<const HitTarget> targets,
-        const Span<const TargetLookup> lookup,
-        const b8 windowFocused,
-        const u64 focusLossGeneration,
-        const u64 expectedFocusLossGeneration,
-        Vector<CommandSource, Core::Alloc::GlobalArena>& commandSources,
-        WidgetId& inOutFocus,
-        u64& inOutFocusDeclaration,
-        ControlToken& inOutFocusControl
-    )noexcept{
-        InstallRouterPopups(targets, lookup, windowFocused, focusLossGeneration, expectedFocusLossGeneration, m_popupDismissals, m_stagedPopups, m_popups, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+    public b8 stage(in Span<PopupScope> scopes){
+        return TryStageRouterPopups(scopes, this.m_popups, this.m_stagedPopups);
     }
 
+    public Span<PopupRecord> staged()const{
+        return this.m_stagedPopups;
+    }
 
-private:
-    Vector<PopupRecord, Core::Alloc::GlobalArena> m_popups;
-    Vector<PopupRecord, Core::Alloc::GlobalArena> m_stagedPopups;
-    Vector<PopupDismissal, Core::Alloc::GlobalArena> m_popupDismissals;
-};
+    public Span<PopupRecord> records()const{
+        return this.m_popups;
+    }
 
+    public b8 canAppendDismissal()const{
+        return this.m_popupDismissals.size() != s_InputMaxPopups;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public b8 apply(in PopupDismissRequest request){
+        return ApplyRouterPopupDismissRequest(request, this.m_popups, this.m_popupDismissals);
+    }
 
+    public Expected<PopupDismissReason> consumeDismissal(in PopupToken token){
+        return TryConsumeRouterPopupDismissal(token, this.m_popupDismissals);
+    }
 
-NWB_IMPL_UI_END
+    public b8 dismiss(in PopupDismissReason reason){
+        return TryDismissRouterPopup(reason, this.m_popups, this.m_popupDismissals);
+    }
 
+    public void close(in PopupToken token){
+        CloseRouterPopupSubtree(token, this.m_popups);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void fence(in PopupToken token){
+        FenceRouterPopup(token, this.m_popups);
+    }
 
+    public void cancelFocus(){
+        CancelRouterPopupFocus(this.m_popups, this.m_popupDismissals);
+    }
 
+    public void reset(){
+        ResetRouterPopupState(this.m_popups, this.m_stagedPopups, this.m_popupDismissals);
+    }
+
+    public Optional<InputPopupRetirement> retire(mut InputTargetTable targets, in WidgetId id){
+        return targets.retirePopup(id, this.m_popups, this.m_popupDismissals);
+    }
+
+    public void install(
+        in Span<HitTarget> targets,
+        in Span<TargetLookup> lookup,
+        in b8 windowFocused,
+        in u64 focusLossGeneration,
+        in u64 expectedFocusLossGeneration,
+        mut Vector<CommandSource> commandSources,
+        mut WidgetId inOutFocus,
+        mut u64 inOutFocusDeclaration,
+        mut ControlToken inOutFocusControl
+    ){
+        InstallRouterPopups(targets, lookup, windowFocused, focusLossGeneration, expectedFocusLossGeneration, this.m_popupDismissals, this.m_stagedPopups, this.m_popups, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+    }
+
+    private Vector<PopupRecord> m_popups;
+    private Vector<PopupRecord> m_stagedPopups;
+    private Vector<PopupDismissal> m_popupDismissals;
 }
 
 

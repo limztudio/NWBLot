@@ -225,15 +225,14 @@ VectorSingle CalculateSmokeYawDisplay(in VectorSingle yaw, in VectorSingle turn)
     return VectorSingle(wrapped, degrees, wrapped, wrapped);
 }
 
-void SetSmokeYawWindowTitle(in f32 yaw, in b8 manualControl, in f32 twoPi, mut ProjectRuntimeContext context){
+String FormatSmokeYawWindowTitleSuffix(in f32 yaw, in b8 manualControl, in f32 twoPi){
     const VectorSingle display = CalculateSmokeYawDisplay(VectorSingle(yaw), VectorSingle(twoPi));
     const f32 radians = display.x;
     const f32 degrees = display.y;
     StringView manualSuffix = "";
     if(manualControl)
         manualSuffix = "  [manual: <- ->]";
-    const String suffix = StringFormat("  |  yaw {:.4f} rad ({:.2f} deg){}", radians, degrees, manualSuffix);
-    SetSmokeWindowTitleSuffix(context, suffix);
+    return StringFormat("  |  yaw {:.4f} rad ({:.2f} deg){}", radians, degrees, manualSuffix);
 }
 
 EntityID CreateSmokeCameraAt(in VectorSingle position, in VectorSingle rotation, mut World world){

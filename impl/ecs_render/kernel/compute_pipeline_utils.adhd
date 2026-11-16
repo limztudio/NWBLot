@@ -2,121 +2,83 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_shader/asset.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererComputePipelineDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE b8 EnsurePushConstantBindingLayout(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsBackend::Device& device,
-    const u32 pushConstantBytes,
-    const Core::ShaderType::Mask visibility,
-    Core::BindingLayoutHandle& inOutLayout
+b8 EnsurePushConstantBindingLayout(
+    mut GlobalArena arena,
+    mut Device device,
+    in u32 pushConstantBytes,
+    in ShaderTypeMask visibility,
+    mut BindingLayoutHandle inOutLayout
 ){
-    if(inOutLayout)
+    if(inOutLayout.valid())
         return true;
 
-    Core::BindingLayoutDesc desc(arena);
+    BindingLayoutDesc desc = BindingLayoutDesc(arena);
     desc.setVisibility(visibility);
-    desc.addItem(Core::BindingLayoutItem::PushConstants(0u, pushConstantBytes));
-    auto layoutResult = device.createBindingLayout(desc);
-    if(layoutResult)
-        inOutLayout = Move(*layoutResult);
-    else
-        inOutLayout.reset();
-    return static_cast<b8>(layoutResult);
+    desc.addItem(BindingLayoutItemPushConstants(0u, pushConstantBytes));
+    const Expected<BindingLayoutHandle> layoutResult = device.createBindingLayout(desc);
+    if(layoutResult.has_value()){
+        inOutLayout = layoutResult.value();
+        return true;
+    }
+    inOutLayout.reset();
+    return false;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 CreateHeapComputePipeline(
-    Core::GraphicsBackend::Device& device,
-    const Core::ShaderHandle& shader,
-    const Core::BindingLayoutHandle& bindingLayout,
-    const b8 includeAccelStruct,
-    Core::ComputePipelineHandle& outPipeline
+b8 CreateHeapComputePipeline(
+    mut Device device,
+    in ShaderHandle shader,
+    in BindingLayoutHandle bindingLayout,
+    in b8 includeAccelStruct,
+    mut ComputePipelineHandle outPipeline
 ){
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    in GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || (includeAccelStruct && !heap.hasAccelStructLayout()))
         return false;
 
-    Core::ComputePipelineDesc desc;
+    ComputePipelineDesc desc = ComputePipelineDesc();
     desc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     if(includeAccelStruct)
         desc.addBindingLayout(heap.getAccelStructLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        outPipeline = Move(*pipelineResult);
-    else
-        outPipeline.reset();
-    return static_cast<b8>(pipelineResult);
+    const Expected<ComputePipelineHandle> pipelineResult = device.createComputePipeline(desc);
+    if(pipelineResult.has_value()){
+        outPipeline = pipelineResult.value();
+        return true;
+    }
+    outPipeline.reset();
+    return false;
 }
 
-template<typename SubsystemT>
-[[nodiscard]] FOUNDATION_INLINE b8 EnsurePushConstantComputePipeline(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsBackend::Device& device,
-    RendererShaderSystem& shaderSystem,
-    const Core::Assets::AssetRef<ComputeShader> SubsystemT::* member,
-    const AStringView variantName,
-    const Name& debugName,
-    const u32 pushConstantBytes,
-    const b8 includeAccelStruct,
-    Core::BindingLayoutHandle& inOutLayout,
-    Core::ShaderHandle& inOutShader,
-    Core::ComputePipelineHandle& inOutPipeline
+b8 EnsurePushConstantComputePipeline<SubsystemT>(
+    mut GlobalArena arena,
+    mut Device device,
+    mut RendererShaderSystem shaderSystem,
+    in SubsystemAssetSelector<SubsystemT, ComputeShader> selector,
+    in StringView variantName,
+    in Name debugName,
+    in u32 pushConstantBytes,
+    in b8 includeAccelStruct,
+    mut BindingLayoutHandle inOutLayout,
+    mut ShaderHandle inOutShader,
+    mut ComputePipelineHandle inOutPipeline
 ){
-    if(inOutPipeline)
+    if(inOutPipeline.valid())
         return true;
 
-    const Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    in GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || (includeAccelStruct && !heap.hasAccelStructLayout()))
         return false;
-    if(!EnsurePushConstantBindingLayout(arena, device, pushConstantBytes, Core::ShaderType::Compute, inOutLayout))
+    if(!EnsurePushConstantBindingLayout(arena, device, pushConstantBytes, ShaderTypeMask::Compute, inOutLayout))
         return false;
-    if(!shaderSystem.loadShader<ComputeShader>(member, variantName, debugName, inOutShader))
+    if(!shaderSystem.loadShader<ComputeShader, SubsystemT>(selector, variantName, debugName, inOutShader))
         return false;
     return CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

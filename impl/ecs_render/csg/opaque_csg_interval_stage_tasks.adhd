@@ -625,18 +625,16 @@ b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList&
     if(csgDrawResourcesReady && csgComputeEmulationReady){
         Core::ViewportState deferredViewportState;
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
-        const MaterialPassDrawContext csgDrawContext{
+        MaterialPassDrawContext csgDrawContext(
             commandList,
-            deferredTargets.framebuffer.get(),
-            nullptr,
             deferredViewportState,
-            &payload.csgResources,
             payload.frameBindings,
             MaterialPipelinePass::Opaque,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.csgComputeEmulationOutputStatesGraphOwned
-        };
+        );
+        csgDrawContext.setFramebuffer(deferredTargets.framebuffer).setCsgResources(payload.csgResources);
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){
                 materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);

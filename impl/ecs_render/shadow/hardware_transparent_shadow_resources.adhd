@@ -43,7 +43,7 @@ NWB_IMPL_BEGIN
 
 
 class RendererShaderSystem;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 class HardwareTransparentShadowState;
 
 

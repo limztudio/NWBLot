@@ -2,22 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-class GraphicsRuntime;
-NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,39 +28,6 @@ class RendererRayTracingState;
 class RendererRayTracingSystem;
 
 
-class DeferredFrameTargetBuilder final : NoCopy{
-public:
-    DeferredFrameTargetBuilder(
-        Core::GraphicsRuntime& graphics,
-        RendererRayTracingState& rayTracingState,
-        RendererDeferredSystem& deferred,
-        RendererAvboitSystem& avboit,
-        RendererCsgSystem& csg,
-        RendererRayTracingSystem& rayTracing
-    )noexcept
-        : m_graphics(graphics)
-        , m_rayTracingState(rayTracingState)
-        , m_deferred(deferred)
-        , m_avboit(avboit)
-        , m_csg(csg)
-        , m_rayTracing(rayTracing)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<DeferredFrameTargets> build(u32 width, u32 height, u32 shadowReceiverFactor, u32 surfelResolveFactor);
-
-
-private:
-    Core::GraphicsRuntime& m_graphics;
-    RendererRayTracingState& m_rayTracingState;
-    RendererDeferredSystem& m_deferred;
-    RendererAvboitSystem& m_avboit;
-    RendererCsgSystem& m_csg;
-    RendererRayTracingSystem& m_rayTracing;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -78,6 +37,49 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererAvboitSystem")]
+extern class RendererAvboitSystem;
+[cpp_name("::NWB::Impl::RendererCsgSystem")]
+extern class RendererCsgSystem;
+[cpp_name("::NWB::Impl::RendererDeferredSystem")]
+extern class RendererDeferredSystem;
+[cpp_name("::NWB::Impl::RendererRayTracingState")]
+extern class RendererRayTracingState;
+[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
+extern class RendererRayTracingSystem;
+
+[modular]
+class DeferredFrameTargetBuilder : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererRayTracingState m_rayTracingState;
+    private mut RendererDeferredSystem m_deferred;
+    private mut RendererAvboitSystem m_avboit;
+    private mut RendererCsgSystem m_csg;
+    private mut RendererRayTracingSystem m_rayTracing;
+
+    public DeferredFrameTargetBuilder(
+        mut GraphicsRuntime graphics,
+        mut RendererRayTracingState rayTracingState,
+        mut RendererDeferredSystem deferred,
+        mut RendererAvboitSystem avboit,
+        mut RendererCsgSystem csg,
+        mut RendererRayTracingSystem rayTracing
+    ){
+        this.m_graphics = graphics;
+        this.m_rayTracingState = rayTracingState;
+        this.m_deferred = deferred;
+        this.m_avboit = avboit;
+        this.m_csg = csg;
+        this.m_rayTracing = rayTracing;
+    }
+
+    public Expected<DeferredFrameTargets> build(in u32 width, in u32 height, in u32 shadowReceiverFactor, in u32 surfelResolveFactor);
 }
 
 

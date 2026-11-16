@@ -26,7 +26,7 @@ NWB_IMPL_BEGIN
 
 class RendererAvboitSystem;
 class RendererTaskTimingFeedback;
-struct AvboitFrameTargets;
+class AvboitFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +57,7 @@ template<typename DispatchMethod>
         return false;
     }
     payload.timingAttribution = *timingAttribution;
-    (payload.avboitSystem.*dispatch)(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
+    dispatch(payload.avboitSystem, commandList, payload.targets, payload.timingAttribution, timingRecorded);
     if(!timingRecorded && payload.timingFeedback){
         payload.timingFeedback->discardRecording(payload.timingAttribution);
         payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 class RendererCsgSystem;
 class RendererMaterialSystem;
 class AvboitGeneratedGeometryReuse;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

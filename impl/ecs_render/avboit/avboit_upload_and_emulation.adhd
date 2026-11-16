@@ -469,7 +469,8 @@ b8 AvboitComputeEmulationOutputPlanner::Prepare(
 
 
 [[nodiscard]] b8 RecordAvboitComputeEmulation(const AvboitComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
-    if(!HasValidAvboitComputeEmulationRecordInputs(trait.framebuffer != nullptr, inputs.plan.captured, inputs.csgPlan.captured))
+    const Core::FramebufferHandle& traitFramebuffer = SelectAvboitTargetFramebuffer(inputs.targets.avboit, trait.framebufferKind);
+    if(!HasValidAvboitComputeEmulationRecordInputs(traitFramebuffer != nullptr, inputs.plan.captured, inputs.csgPlan.captured))
         return false;
 
     const AvboitComputeEmulationOutputPolicy outputPolicy;
@@ -499,27 +500,27 @@ b8 AvboitComputeEmulationOutputPlanner::Prepare(
     if(!Core::FinishSplitGpuTimingMarker(&inputs.timing))
         return false;
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect((inputs.targets.avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport());
-    const MaterialPassDrawContext drawContext{
+    viewportState.addViewportAndScissorRect(traitFramebuffer->getFramebufferInfo().getViewport());
+    MaterialPassDrawContext drawContext(
         commandList,
-        nullptr,
-        &inputs.targets.avboit,
         viewportState,
-        csgComputeEmulation ? &inputs.csgResources : nullptr,
         inputs.frameBindings,
         trait.pipelinePass,
         inputs.materialFrameStatesGraphOwned,
         inputs.materialGeometryStatesGraphOwned,
-        true,
-        inputs.conservativeGeometryScissor
-    };
+        true
+    );
+    drawContext.setAvboitTargets(inputs.targets.avboit).setConservativeGeometryScissor(inputs.conservativeGeometryScissor);
+    if(csgComputeEmulation)
+        drawContext.setCsgResources(inputs.csgResources);
     materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, computeDrawItems);
     return true;
 }
 
 [[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
     const b8 generatePhase = inputs.phase == SharedComputeEmulationPhase::Generate;
-    if(!trait.framebuffer || !HasValidAvboitSharedComputeEmulationRecordInputs((inputs.targets.avboit.*(trait.framebuffer)) != nullptr, inputs.plan.captured, inputs.drawIndex, inputs.plan.drawCount))
+    const Core::FramebufferHandle& traitFramebuffer = SelectAvboitTargetFramebuffer(inputs.targets.avboit, trait.framebufferKind);
+    if(!HasValidAvboitSharedComputeEmulationRecordInputs(traitFramebuffer != nullptr, inputs.plan.captured, inputs.drawIndex, inputs.plan.drawCount))
         return false;
 
     Core::GraphicsRuntime& graphics = inputs.graphics;
@@ -550,9 +551,19 @@ b8 AvboitComputeEmulationOutputPlanner::Prepare(
         return false;
 
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect((inputs.targets.avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport());
-    Core::Framebuffer* const rasterFramebuffer = generatePhase ? nullptr : (inputs.targets.avboit.*(trait.framebuffer)).get();
-    const MaterialPassDrawContext drawContext{ commandList, rasterFramebuffer, &inputs.targets.avboit, viewportState, nullptr, inputs.frameBindings, trait.pipelinePass, inputs.materialFrameStatesGraphOwned, inputs.materialGeometryStatesGraphOwned, true };
+    viewportState.addViewportAndScissorRect(traitFramebuffer->getFramebufferInfo().getViewport());
+    MaterialPassDrawContext drawContext(
+        commandList,
+        viewportState,
+        inputs.frameBindings,
+        trait.pipelinePass,
+        inputs.materialFrameStatesGraphOwned,
+        inputs.materialGeometryStatesGraphOwned,
+        true
+    );
+    drawContext.setAvboitTargets(inputs.targets.avboit);
+    if(!generatePhase)
+        drawContext.setFramebuffer(traitFramebuffer);
     if(generatePhase)
         materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
     else{

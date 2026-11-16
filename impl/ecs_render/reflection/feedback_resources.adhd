@@ -9,6 +9,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/reflection/types.adhd.h>
 #include <impl/ecs_render/reflection/feedback.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -41,15 +42,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct ReflectionFeedbackBinding{
-    Core::BufferHandle buffer;
-    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return buffer && descriptor.valid(); }
-};
 
 struct ReflectionFeedbackSnapshot{
     ReflectionFeedbackControlHandle control;

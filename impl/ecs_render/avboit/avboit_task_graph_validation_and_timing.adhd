@@ -315,67 +315,50 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
     );
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, const b8 clearTargets, const b8 hasTransparentRenderers)const noexcept{
-    return ValidateAvboitTaskGraphStage(m_taskGraphStage, compiledGraph, clearTargets, hasTransparentRenderers);
+RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(in GpuCompiledGraphReadView compiledGraph, in b8 clearTargets, in b8 hasTransparentRenderers)const{
+    return ValidateAvboitTaskGraphStage(this.m_taskGraphStage, compiledGraph, clearTargets, hasTransparentRenderers);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
-    const RendererAvboitTaskGraphValidation& validation,
-    RendererAvboitTaskGraphTimingTickets& timingTickets,
-    const Span<Core::GpuTaskGraphTaskTimingTicket> bindings,
-    usize& bindingCount
+    in RendererAvboitTaskGraphValidation validation,
+    mut RendererAvboitTaskGraphTimingTickets timingTickets,
+    in usize currentBindingCount,
+    in usize maxBindingCount,
+    in Func<64u, b8(in GpuTaskId, mut GpuTimingSubmissionTicket)> appendTicket
 )const{
     // Depth warp, extinction, integration, and accumulation tickets.
-    const auto requiredBindingCount = TryResolveAvboitRequiredTimingBindingCount(
+    const Expected<usize> requiredBindingCount = TryResolveAvboitRequiredTimingBindingCount(
         validation.valid(),
         validation.stage().hasTransparentTasks,
-        m_taskGraphStage.m_extinctionComputeEmulationTask.valid(),
-        m_taskGraphStage.m_accumulationComputeEmulationTask.valid(),
-        bindingCount,
-        bindings.size()
+        this.m_taskGraphStage.m_extinctionComputeEmulationTask.valid(),
+        this.m_taskGraphStage.m_accumulationComputeEmulationTask.valid(),
+        currentBindingCount,
+        maxBindingCount
     );
-    if(!requiredBindingCount)
+    if(!requiredBindingCount.has_value())
         return false;
 
-    const auto appendTimingTicket = [bindings, &bindingCount](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept{
-        bindings[bindingCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
-    };
-
-    appendTimingTicket(m_taskGraphStage.m_preTask, timingTickets.pre);
+    if(!appendTicket(this.m_taskGraphStage.m_preTask, timingTickets.pre))
+        return false;
     if(validation.stage().hasTransparentTasks){
-        appendTimingTicket(m_taskGraphStage.m_depthWarpTask, timingTickets.depthWarp);
-        if(m_taskGraphStage.m_extinctionComputeEmulationTask.valid()){
+        if(!appendTicket(this.m_taskGraphStage.m_depthWarpTask, timingTickets.depthWarp))
+            return false;
+        if(this.m_taskGraphStage.m_extinctionComputeEmulationTask.valid()){
             // Shares the one Extinction ticket.
-            appendTimingTicket(m_taskGraphStage.m_extinctionComputeEmulationTask, timingTickets.extinction);
+            if(!appendTicket(this.m_taskGraphStage.m_extinctionComputeEmulationTask, timingTickets.extinction))
+                return false;
         }
-        appendTimingTicket(m_taskGraphStage.m_extinctionTask, timingTickets.extinction);
-        appendTimingTicket(m_taskGraphStage.m_integrationTask, timingTickets.integration);
-        if(m_taskGraphStage.m_accumulationComputeEmulationTask.valid()){
+        if(!appendTicket(this.m_taskGraphStage.m_extinctionTask, timingTickets.extinction))
+            return false;
+        if(!appendTicket(this.m_taskGraphStage.m_integrationTask, timingTickets.integration))
+            return false;
+        if(this.m_taskGraphStage.m_accumulationComputeEmulationTask.valid()){
             // Shares the one Accumulation ticket.
-            appendTimingTicket(m_taskGraphStage.m_accumulationComputeEmulationTask, timingTickets.accumulation);
+            if(!appendTicket(this.m_taskGraphStage.m_accumulationComputeEmulationTask, timingTickets.accumulation))
+                return false;
         }
-        appendTimingTicket(m_taskGraphStage.m_accumulationTask, timingTickets.accumulation);
+        if(!appendTicket(this.m_taskGraphStage.m_accumulationTask, timingTickets.accumulation))
+            return false;
     }
     else{
         timingTickets.depthWarp.discard();
@@ -384,18 +367,6 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
         timingTickets.accumulation.discard();
     }
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -2,154 +2,78 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/deferred/renderer_deferred_state.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/deferred/renderer_deferred_state.adhd.h>
+[modular]
+class RendererDeferredSystem : NoCopy{
+    private mut GlobalArena m_arena;
+    private mut World m_world;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererDeferredState m_deferredState;
+    private mut RendererShaderSystem m_shaderSystem;
 
-#include <core/alloc/global.h>
-#include <core/ecs/global.h>
-#include <core/graphics/api.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+    public RendererDeferredSystem(
+        mut GlobalArena arena,
+        mut World world,
+        mut GraphicsRuntime graphics,
+        mut RendererDeferredState deferredState,
+        mut RendererShaderSystem shaderSystem
+    ){
+        this.m_arena = arena;
+        this.m_world = world;
+        this.m_graphics = graphics;
+        this.m_deferredState = deferredState;
+        this.m_shaderSystem = shaderSystem;
+    }
 
-#include <global/span.h>
+    public DeferredLightingGraphResources lightingGraphResources()const{
+        return DeferredLightingGraphResources(this.m_deferredState.m_sceneShadingBuffer, this.m_deferredState.m_lightBuffer);
+    }
 
+    public void invalidateSceneLightingUploadMirrors(){
+        this.m_deferredState.m_sceneShadingGpuDataValid = false;
+        this.m_deferredState.m_lightGpuDataValid = false;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void invalidateResources(){
+        this.m_deferredState.invalidateResources();
+    }
 
-
-NWB_ALLOC_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GlobalArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ALLOC_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class World;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererShaderSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredSystem final : NoCopy{
-public:
-    RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)noexcept
-        : m_arena(arena)
-        , m_world(world)
-        , m_graphics(graphics)
-        , m_deferredState(deferredState)
-        , m_shaderSystem(shaderSystem)
-    {}
-
-
-public:
-    [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept{ return { m_deferredState.m_sceneShadingBuffer, m_deferredState.m_lightBuffer, }; }
-    void invalidateSceneLightingUploadMirrors()noexcept;
-    void invalidateResources()noexcept{ m_deferredState.invalidateResources(); }
-    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
+    public b8 setPresentationSettings(in PresentationSettings settings);
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
-    [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept;
-    void confirmSceneShadingBufferUploads(Span<const SceneLightGpuData> lights, b8 lightUploadRequired, const SceneShadingGpuData& sceneShadingState, b8 sceneShadingUploadRequired)noexcept;
-    [[nodiscard]] b8 createDeferredLightingResources();
-    [[nodiscard]] b8 createDeferredLightingPipeline();
-    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
-    [[nodiscard]] b8 renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, b8 useLaggedLightingHistory = false);
-    [[nodiscard]] Expected<DeferredFrameTargets> createDeferredFrameTargets(u32 width, u32 height);
-    [[nodiscard]] b8 createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
-    [[nodiscard]] b8 createDeferredCompositeResources();
-    [[nodiscard]] b8 createDeferredCompositePipeline();
-    [[nodiscard]] b8 createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer);
-    void resetDeferredFrameTargets(DeferredFrameTargets& targets);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const ReflectionCompositeInputs& reflectionInputs, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
-    [[nodiscard]] b8 renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs);
-    [[nodiscard]] b8 renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, Core::GpuDescriptorHandle outputLayerImage);
+    public SceneShadingBufferUploads prepareSceneShadingBufferUploads(in f32 fallbackAspectRatio, in RayTracingLightingClassificationInput rayTracingInput)const;
+    public void confirmSceneShadingBufferUploads(in Span<SceneLightGpuData> lights, in b8 lightUploadRequired, in SceneShadingGpuData sceneShadingState, in b8 sceneShadingUploadRequired);
+    public b8 createDeferredLightingResources();
+    public b8 createDeferredLightingPipeline();
+    public Expected<GpuTaskId> declareDeferredLightingTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in b8 useLaggedLightingHistory, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket);
 
+    public b8 renderDeferredLighting(mut CommandList commandList, mut DeferredFrameTargets targets){
+        return this.renderDeferredLighting(commandList, targets, false);
+    }
 
-private:
-    [[nodiscard]] b8 createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
-    void resetDeferredBindlessFrameResources(DeferredFrameTargets& targets);
-    void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
-    [[nodiscard]] b8 createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
+    public b8 renderDeferredLighting(mut CommandList commandList, mut DeferredFrameTargets targets, in b8 useLaggedLightingHistory);
+    public Expected<DeferredFrameTargets> createDeferredFrameTargets(in u32 width, in u32 height);
+    public b8 createDeferredFrameTargetResources(mut DeferredFrameTargets targets, mut RhiSampler avboitLinearSampler);
+    public b8 createDeferredCompositeResources();
+    public b8 createDeferredCompositePipeline();
+    public b8 createDeferredPresentPipeline(mut Framebuffer presentationFramebuffer);
+    public void resetDeferredFrameTargets(mut DeferredFrameTargets targets);
+    public Expected<GpuTaskId> declareDeferredCompositeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in ReflectionCompositeInputs reflectionInputs, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket);
+    public b8 renderDeferredComposite(mut CommandList commandList, mut DeferredFrameTargets targets, in ReflectionCompositeInputs reflectionInputs);
+    public b8 renderDeferredPresent(mut CommandList commandList, mut DeferredFrameTargets targets, in AcquiredPresentationFrame presentationFrame, in GpuDescriptorHandle outputLayerImage);
 
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::ECS::World& m_world;
-    Core::GraphicsRuntime& m_graphics;
-    RendererDeferredState& m_deferredState;
-    RendererShaderSystem& m_shaderSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private b8 createDeferredBindlessFrameResources(mut DeferredFrameTargets targets, mut RhiSampler avboitLinearSampler);
+    private void resetDeferredBindlessFrameResources(mut DeferredFrameTargets targets);
+    private void resetLaggedLightingHistoryResources(mut DeferredFrameTargets targets);
+    private b8 createLaggedLightingHistoryResources(mut DeferredFrameTargets targets);
 }
 
 

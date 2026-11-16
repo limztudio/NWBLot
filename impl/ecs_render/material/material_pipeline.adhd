@@ -211,8 +211,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView pixelShaderVariant = SelectMaterialPassPixelShaderVariant(csgClipPipeline, avboitCsgClipPipeline, AStringView(csgShaderVariant), shaderVariant);
     const AStringView meshShaderVariant = SelectMaterialPassMeshShaderVariant(csgClipPipeline, AStringView(csgShaderVariant), shaderVariant);
 
-    const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::sharedMs);
-    const Name objectVertexShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::objectVs);
+    const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem, MeshShader>(SubsystemAssetSelector<MeshSubsystem, MeshShader>([](const MeshSubsystem& s){ return s.sharedMs; }));
+    const Name objectVertexShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem, VertexShader>(SubsystemAssetSelector<MeshSubsystem, VertexShader>([](const MeshSubsystem& s){ return s.objectVs; }));
     const b8 sharedObjectGeometry = UsesSharedMaterialMeshShader(sharedMeshShaderAssetName, materialInfo.meshShader, shaderVariant, Core::ShaderArchive::s_DefaultVariant);
 
     Name passPixelShaderName = s_NameNone;
@@ -346,7 +346,7 @@ b8 MaterialPipelineBuilder::loadPassPixelShader(){
     if(m_inputs.pass == MaterialPipelinePass::Opaque)
         return m_inputs.shaderSystem.loadShader<PixelShader>(m_inputs.materialInfo.pixelShader.name(), m_inputs.pixelShaderVariant, s_RendererPsDebugName, m_inputs.resources.pixelShader);
     if(m_inputs.pass == MaterialPipelinePass::CsgReceiverSurface)
-        return m_inputs.shaderSystem.loadShader<PixelShader>(&CsgSubsystem::receiverSurfacePs, Core::ShaderArchive::s_DefaultVariant, s_CsgReceiverSurfacePsDebugName, m_inputs.resources.pixelShader);
+        return m_inputs.shaderSystem.loadShader<PixelShader, CsgSubsystem>(SubsystemAssetSelector<CsgSubsystem, PixelShader>([](const CsgSubsystem& s){ return s.receiverSurfacePs; }), Core::ShaderArchive::s_DefaultVariant, s_CsgReceiverSurfacePsDebugName, m_inputs.resources.pixelShader);
     if(m_inputs.avboitCsgClipPipeline)
         return m_inputs.shaderSystem.loadShader<PixelShader>(m_inputs.passPixelShaderName, AStringView(m_inputs.avboitCsgShaderVariant), m_inputs.passPixelShaderDebugName, m_inputs.resources.pixelShader);
     // AVBOIT pixel shaders are generated per material with its binding/surface contract; load the resolved pass shader at its default variant.
@@ -417,12 +417,12 @@ b8 MaterialPipelineBuilder::buildCompute(){
     FOUNDATION_ASSERT(m_inputs.materialState.m_emulationVertexShader);
     FOUNDATION_ASSERT(m_inputs.materialState.m_emulationInputLayout);
     const Name& meshComputeArchiveStageName = ShaderBinaryPayload::s_MeshComputeArchiveStageName;
-    if(!m_inputs.shaderSystem.loadShader<ComputeShader>(m_inputs.materialInfo.meshShader.name(), m_inputs.meshShaderVariant, s_RendererCsDebugName, &meshComputeArchiveStageName, m_inputs.resources.computeShader))
+    if(!m_inputs.shaderSystem.loadShader<ComputeShader>(m_inputs.materialInfo.meshShader.name(), m_inputs.meshShaderVariant, s_RendererCsDebugName, meshComputeArchiveStageName, m_inputs.resources.computeShader))
         return false;
     if(!loadPassPixelShader())
         return false;
     // The compute-emulation mesh stage shares the mesh-shader source-stream runtime, so it needs the persistent tables too.
-    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_inputs.device, m_inputs.resources.computeShader, m_inputs.materialState.m_computeBindingLayout, false, m_inputs.resources.computePipeline)){
+    if(!CreateHeapComputePipeline(m_inputs.device, m_inputs.resources.computeShader, m_inputs.materialState.m_computeBindingLayout, false, m_inputs.resources.computePipeline)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }

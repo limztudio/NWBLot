@@ -2,20 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_mesh/runtime/mesh.adhd>
+#include <impl/ecs_render/avboit/avboit_frame_targets.adhd>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
+#include <impl/ecs_render/material/pipeline_types.adhd>
+#include <impl/ecs_render/material/renderer_pipeline_types.adhd>
+#include <impl/ecs_render/mesh/object_geometry_cache.adhd>
+#include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
-#include <impl/ecs_render/mesh/object_geometry_cache.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/assets/graphics/mesh/binding_slots.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/ecs_mesh/runtime/mesh.adhd.h>
+[header]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,73 +28,123 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AvboitFrameTargets;
+class MaterialPassDrawItem;
+using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
 
 namespace ECSRenderDetail{
-    struct CsgGraphResourceSnapshot;
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MaterialPassDrawContext{
-    Core::CommandList& commandList;
-    Core::Framebuffer* framebuffer = nullptr;
-    const AvboitFrameTargets* avboitTargets = nullptr;
-    const Core::ViewportState& viewportState;
-    // Prepared CSG draws consume the root tuple; regular paths leave it null.
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    // Every material path consumes one immutable Mesh-published binding generation.
-    const MeshFrameBindingSnapshot& frameBindings;
-    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialPassDrawContext{
+    public mut CommandList commandList;
+    public ViewportState viewportState;
+    public MeshFrameBindingSnapshot frameBindings;
+    public MaterialPipelinePass pass;
     // Graph declares mesh-view/material SRVs; frozen streams may retain mesh-source SRVs.
-    b8 materialFrameStatesGraphOwned = false;
+    public b8 materialFrameStatesGraphOwned;
     // Graph may retain source buffers; emulation vertices stay local by default.
-    b8 materialGeometryStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned;
     // Split pairs receive generated-output entry states; shared-output draws interleave generation and rasterization.
-    b8 emulationOutputEntryStateGraphOwned = false;
+    public b8 emulationOutputEntryStateGraphOwned;
+    public FramebufferHandle framebuffer;
+    public Optional<AvboitFrameTargets> avboitTargets;
+    // Prepared CSG draws consume the root tuple; regular paths leave it empty.
+    public Optional<CsgGraphResourceSnapshot> csgResources;
     // Shared generated output must retain triangles needed by every consuming viewport.
-    b8 conservativeGeometryScissor = false;
-};
+    public b8 conservativeGeometryScissor = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MaterialPassMeshResourceSnapshot{
-    RuntimeMeshBuffers sourceBuffers;
-    Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT> geometryHeapHandles{};
-    // Retains the same unified generated buffer for both vertex and index consumption.
-    Core::BufferHandle emulationVertexBuffer;
-    ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCache;
-    Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    u32 emulationIndexByteOffset = 0u;
-    u32 meshletCount = 0u;
-    u32 meshletPrimitiveIndexCount = 0u;
-    b8 runtimeMesh = false;
-    b8 dynamicMeshletBoundsFresh = false;
-    b8 dynamicMeshletConesFresh = false;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return sourceBuffers.buffersValid() && GeometryHeapHandlesReady(geometryHeapHandles) && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
+    public MaterialPassDrawContext(
+        mut CommandList inCommandList,
+        in ViewportState inViewportState,
+        in MeshFrameBindingSnapshot inFrameBindings,
+        in MaterialPipelinePass inPass,
+        in b8 inMaterialFrameStatesGraphOwned,
+        in b8 inMaterialGeometryStatesGraphOwned,
+        in b8 inEmulationOutputEntryStateGraphOwned
+    ){
+        this.commandList = inCommandList;
+        this.viewportState = inViewportState;
+        this.frameBindings = inFrameBindings;
+        this.pass = inPass;
+        this.materialFrameStatesGraphOwned = inMaterialFrameStatesGraphOwned;
+        this.materialGeometryStatesGraphOwned = inMaterialGeometryStatesGraphOwned;
+        this.emulationOutputEntryStateGraphOwned = inEmulationOutputEntryStateGraphOwned;
     }
-};
 
-struct MaterialPassPipelineResourceSnapshot{
-    Core::GraphicsPipelineHandle indexedPipeline;
-    Core::GraphicsPipelineHandle emulationPipeline;
-    Core::MeshletPipelineHandle meshletPipeline;
-    Core::ComputePipelineHandle computePipeline;
-    Core::ComputePipelineHandle objectGeometryDecodePipeline;
-    b8 sharedGeometryComputeProgram = false;
-    b8 indexedGeometryOutput = false;
-};
+    public mut MaterialPassDrawContext setFramebuffer(in FramebufferHandle value){
+        this.framebuffer = value;
+        return this;
+    }
 
-template<typename BufferHandler>
-void ForEachMaterialPassMeshSourceBuffer(const MaterialPassMeshResourceSnapshot& mesh, BufferHandler&& handler)noexcept(noexcept(handler(mesh.sourceBuffers.positionBuffer))){
+    public mut MaterialPassDrawContext setAvboitTargets(in AvboitFrameTargets value){
+        this.avboitTargets = value;
+        return this;
+    }
+
+    public mut MaterialPassDrawContext setCsgResources(in CsgGraphResourceSnapshot value){
+        this.csgResources = value;
+        return this;
+    }
+
+    public mut MaterialPassDrawContext setConservativeGeometryScissor(in b8 value){
+        this.conservativeGeometryScissor = value;
+        return this;
+    }
+}
+
+class MaterialPassMeshResourceSnapshot{
+    public RuntimeMeshBuffers sourceBuffers;
+    public Array<GpuDescriptorHandle, 12u> geometryHeapHandles;
+    // Retains the same unified generated buffer for both vertex and index consumption.
+    public BufferHandle emulationVertexBuffer;
+    public ObjectGeometryCacheSnapshot objectGeometryCache;
+    public GpuDescriptorHandle emulationVertexHeapHandle = GpuDescriptorHandleInvalid();
+    public u32 emulationIndexByteOffset = 0u;
+    public u32 meshletCount = 0u;
+    public u32 meshletPrimitiveIndexCount = 0u;
+    public b8 runtimeMesh = false;
+    public b8 dynamicMeshletBoundsFresh = false;
+    public b8 dynamicMeshletConesFresh = false;
+
+    public MaterialPassMeshResourceSnapshot(){
+        this.sourceBuffers = RuntimeMeshBuffers();
+        this.geometryHeapHandles = Array<GpuDescriptorHandle, 12u>();
+    }
+
+    public b8 valid()const{
+        return this.sourceBuffers.buffersValid() && GeometryHeapHandlesReady(this.geometryHeapHandles) && this.meshletCount > 0u && this.meshletPrimitiveIndexCount > 0u;
+    }
+}
+
+class MaterialPassPipelineResourceSnapshot{
+    public GraphicsPipelineHandle indexedPipeline;
+    public GraphicsPipelineHandle emulationPipeline;
+    public MeshletPipelineHandle meshletPipeline;
+    public ComputePipelineHandle computePipeline;
+    public ComputePipelineHandle objectGeometryDecodePipeline;
+    public b8 sharedGeometryComputeProgram = false;
+    public b8 indexedGeometryOutput = false;
+}
+
+type MaterialPassMeshBufferVisitor = Func<64u, void(in BufferHandle)>;
+
+void ForEachMaterialPassMeshSourceBuffer(in MaterialPassMeshResourceSnapshot mesh, in MaterialPassMeshBufferVisitor handler){
     handler(mesh.sourceBuffers.positionBuffer);
     handler(mesh.sourceBuffers.normalBuffer);
     handler(mesh.sourceBuffers.tangentBuffer);
@@ -111,153 +162,120 @@ void ForEachMaterialPassMeshSourceBuffer(const MaterialPassMeshResourceSnapshot&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MaterialPassDrawItem{
-    Name meshKey = s_NameNone;
-    MaterialPipelineKey pipelineKey;
-    MaterialPassMeshResourceSnapshot meshResources;
-    MaterialPassPipelineResourceSnapshot pipelineResources;
-    u32 instanceIndex = 0;
-    u32 materialConstantByteOffset = 0u;
-    u32 shadingModelId = 0u;
-    b8 meshletConeCullScaleSafe = false;
-};
+class MaterialPassDrawItem{
+    public Name meshKey = s_NameNone;
+    public MaterialPipelineKey pipelineKey;
+    public MaterialPassMeshResourceSnapshot meshResources;
+    public MaterialPassPipelineResourceSnapshot pipelineResources;
+    public u32 instanceIndex = 0u;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 shadingModelId = 0u;
+    public b8 meshletConeCullScaleSafe = false;
 
-struct MaterialInstanceMutableCacheEntry{
-    Name materialName = s_NameNone;
-    Name materialInterface = s_NameNone;
-    u64 typedLayoutHash = 0u;
-    u64 revision = 0u;
-    MaterialTypedByteVector mutableTypedBytes;
-
-
-public:
-    explicit MaterialInstanceMutableCacheEntry(Core::Alloc::GlobalArena& arena)noexcept
-        : mutableTypedBytes(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
-
-namespace ECSRenderDetail{
-    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MaterialPassDrawItems{
-    MaterialPassDrawItemVector meshDrawItems;
-    MaterialPassDrawItemVector indexedDrawItems;
-    MaterialPassDrawItemVector computeDrawItems;
-
-
-public:
-    explicit MaterialPassDrawItems(Core::Alloc::ScratchArena& arena)noexcept
-        : meshDrawItems(arena)
-        , indexedDrawItems(arena)
-        , computeDrawItems(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
-
-    void reserve(const usize capacity){
-        meshDrawItems.reserve(capacity);
-        indexedDrawItems.reserve(capacity);
-        computeDrawItems.reserve(capacity);
+    public MaterialPassDrawItem(){
+        this.pipelineKey = MaterialPipelineKey();
     }
-};
+}
 
-struct MaterialPassDrawItemsView{
-    Span<const MaterialPassDrawItem> meshDrawItems;
-    Span<const MaterialPassDrawItem> indexedDrawItems;
-    Span<const MaterialPassDrawItem> computeDrawItems;
-
-
-public:
-    constexpr MaterialPassDrawItemsView()noexcept = default;
-    constexpr MaterialPassDrawItemsView(const Span<const MaterialPassDrawItem> inMeshDrawItems, const Span<const MaterialPassDrawItem> inIndexedDrawItems, const Span<const MaterialPassDrawItem> inComputeDrawItems)noexcept
-        : meshDrawItems(inMeshDrawItems)
-        , indexedDrawItems(inIndexedDrawItems)
-        , computeDrawItems(inComputeDrawItems)
-    {}
-    MaterialPassDrawItemsView(const MaterialPassDrawItems& drawItems)noexcept
-        : meshDrawItems(drawItems.meshDrawItems)
-        , indexedDrawItems(drawItems.indexedDrawItems)
-        , computeDrawItems(drawItems.computeDrawItems)
-    {}
+class MaterialInstanceMutableCacheEntry{
+    public Name materialName = s_NameNone;
+    public Name materialInterface = s_NameNone;
+    public u64 typedLayoutHash = 0u;
+    public u64 revision = 0u;
+    public Vector<u8> mutableTypedBytes;
+}
 
 
-public:
-    [[nodiscard]] constexpr b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
-};
-
-using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
-
-struct MaterialPassDrawItemPartitions{
-    MaterialPassDrawItems regular;
-    MaterialPassDrawItems csg;
-    MaterialPassDrawItems csgReceiverSurface;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    explicit MaterialPassDrawItemPartitions(Core::Alloc::ScratchArena& arena)noexcept
-        : regular(arena)
-        , csg(arena)
-        , csgReceiverSurface(arena)
-    {}
+class MaterialPassDrawItems{
+    public Vector<MaterialPassDrawItem> meshDrawItems;
+    public Vector<MaterialPassDrawItem> indexedDrawItems;
+    public Vector<MaterialPassDrawItem> computeDrawItems;
 
-
-public:
-    [[nodiscard]] b8 empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
-
-    void reserve(const usize capacity){
-        regular.reserve(capacity);
-        csg.reserve(capacity);
-        csgReceiverSurface.reserve(capacity);
+    public b8 empty()const{
+        return this.meshDrawItems.empty() && this.indexedDrawItems.empty() && this.computeDrawItems.empty();
     }
-};
 
-struct MaterialPassDrawItemPartitionsView{
-    MaterialPassDrawItemsView regular;
-    MaterialPassDrawItemsView csg;
-    MaterialPassDrawItemsView csgReceiverSurface;
+    public void reserve(in usize capacity){
+        this.meshDrawItems.reserve(capacity);
+        this.indexedDrawItems.reserve(capacity);
+        this.computeDrawItems.reserve(capacity);
+    }
+}
 
+class MaterialPassDrawItemsView{
+    public Span<MaterialPassDrawItem> meshDrawItems;
+    public Span<MaterialPassDrawItem> indexedDrawItems;
+    public Span<MaterialPassDrawItem> computeDrawItems;
 
-public:
-    constexpr MaterialPassDrawItemPartitionsView()noexcept = default;
-    constexpr MaterialPassDrawItemPartitionsView(const MaterialPassDrawItemsView inRegular, const MaterialPassDrawItemsView inCsg, const MaterialPassDrawItemsView inCsgReceiverSurface = {})noexcept
-        : regular(inRegular)
-        , csg(inCsg)
-        , csgReceiverSurface(inCsgReceiverSurface)
-    {}
-    MaterialPassDrawItemPartitionsView(const MaterialPassDrawItemPartitions& partitions)noexcept
-        : regular(partitions.regular)
-        , csg(partitions.csg)
-        , csgReceiverSurface(partitions.csgReceiverSurface)
-    {}
+    public MaterialPassDrawItemsView(){
+    }
 
+    public MaterialPassDrawItemsView(in Span<MaterialPassDrawItem> inMeshDrawItems, in Span<MaterialPassDrawItem> inIndexedDrawItems, in Span<MaterialPassDrawItem> inComputeDrawItems){
+        this.meshDrawItems = inMeshDrawItems;
+        this.indexedDrawItems = inIndexedDrawItems;
+        this.computeDrawItems = inComputeDrawItems;
+    }
 
-public:
-    [[nodiscard]] constexpr b8 empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
-};
+    public MaterialPassDrawItemsView(in MaterialPassDrawItems drawItems){
+        this.meshDrawItems = drawItems.meshDrawItems;
+        this.indexedDrawItems = drawItems.indexedDrawItems;
+        this.computeDrawItems = drawItems.computeDrawItems;
+    }
 
+    public b8 empty()const{
+        return this.meshDrawItems.empty() && this.indexedDrawItems.empty() && this.computeDrawItems.empty();
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type AvboitGeometryDrawSets = Span<MaterialPassDrawItemsView>;
 
+class MaterialPassDrawItemPartitions{
+    public MaterialPassDrawItems regular;
+    public MaterialPassDrawItems csg;
+    public MaterialPassDrawItems csgReceiverSurface;
 
-NWB_IMPL_END
+    public b8 empty()const{
+        return this.regular.empty() && this.csg.empty() && this.csgReceiverSurface.empty();
+    }
 
+    public void reserve(in usize capacity){
+        this.regular.reserve(capacity);
+        this.csg.reserve(capacity);
+        this.csgReceiverSurface.reserve(capacity);
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MaterialPassDrawItemPartitionsView{
+    public MaterialPassDrawItemsView regular;
+    public MaterialPassDrawItemsView csg;
+    public MaterialPassDrawItemsView csgReceiverSurface;
 
+    public MaterialPassDrawItemPartitionsView(){
+    }
 
+    public MaterialPassDrawItemPartitionsView(in MaterialPassDrawItemsView inRegular, in MaterialPassDrawItemsView inCsg){
+        this.regular = inRegular;
+        this.csg = inCsg;
+    }
+
+    public MaterialPassDrawItemPartitionsView(in MaterialPassDrawItemsView inRegular, in MaterialPassDrawItemsView inCsg, in MaterialPassDrawItemsView inCsgReceiverSurface){
+        this.regular = inRegular;
+        this.csg = inCsg;
+        this.csgReceiverSurface = inCsgReceiverSurface;
+    }
+
+    public MaterialPassDrawItemPartitionsView(in MaterialPassDrawItemPartitions partitions){
+        this.regular = partitions.regular;
+        this.csg = partitions.csg;
+        this.csgReceiverSurface = partitions.csgReceiverSurface;
+    }
+
+    public b8 empty()const{
+        return this.regular.empty() && this.csg.empty() && this.csgReceiverSurface.empty();
+    }
 }
 
 

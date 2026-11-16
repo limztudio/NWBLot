@@ -91,11 +91,11 @@ b8 RefractionRenderer::prepareRefractionResources(){
         return false;
 
     if(
-        !RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        !EnsurePushConstantComputePipeline<RefractiveSubsystem>(
             m_system.m_arena,
             device,
             m_system.m_shaderSystem,
-            &RefractiveSubsystem::refractionClassifyTilesCs,
+            SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.refractionClassifyTilesCs; }),
             Core::ShaderArchive::s_DefaultVariant,
             s_RefractionClassifyTilesDebugName,
             sizeof(RefractionPushConstants),
@@ -104,11 +104,11 @@ b8 RefractionRenderer::prepareRefractionResources(){
             m_system.m_rayTracingState.m_refraction.m_refractionClassifyTilesShader,
             m_system.m_rayTracingState.m_refraction.m_refractionClassifyTilesPipeline
         )
-        || !RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        || !EnsurePushConstantComputePipeline<RefractiveSubsystem>(
             m_system.m_arena,
             device,
             m_system.m_shaderSystem,
-            &RefractiveSubsystem::refractionFinalizeTilesCs,
+            SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.refractionFinalizeTilesCs; }),
             Core::ShaderArchive::s_DefaultVariant,
             s_RefractionFinalizeTilesDebugName,
             sizeof(RefractionPushConstants),
@@ -142,9 +142,12 @@ b8 RefractionRenderer::prepareRefractionResources(){
         if(failed)
             return false;
         const AStringView variant = ResolveRefractionVariant(hardware, diagnostics, csg, dense);
+        const InplaceFunction<64u, Core::Assets::AssetRef<ComputeShader>(const RefractiveSubsystem&)> shaderSelector = hardware
+            ? InplaceFunction<64u, Core::Assets::AssetRef<ComputeShader>(const RefractiveSubsystem&)>([](const RefractiveSubsystem& s){ return s.refractionResolveHwCs; })
+            : InplaceFunction<64u, Core::Assets::AssetRef<ComputeShader>(const RefractiveSubsystem&)>([](const RefractiveSubsystem& s){ return s.refractionResolveScreenCs; });
         if(
-            !m_system.m_shaderSystem.loadShader<ComputeShader>(hardware ? &RefractiveSubsystem::refractionResolveHwCs : &RefractiveSubsystem::refractionResolveScreenCs, variant, ResolveRefractionPipelineDebugName(hardware, dense), shader)
-            || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, shader, refractionState.m_refractionBindingLayout, hardware, pipeline)
+            !m_system.m_shaderSystem.loadShader<ComputeShader, RefractiveSubsystem>(shaderSelector, variant, ResolveRefractionPipelineDebugName(hardware, dense), shader)
+            || !CreateHeapComputePipeline(device, shader, refractionState.m_refractionBindingLayout, hardware, pipeline)
         ){
             failed = true;
             return false;

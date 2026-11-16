@@ -222,7 +222,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
     ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,
     GraphClearTimingRecordState& intervalClearTimingState
-){
+)noexcept{
     using namespace RendererTaskGraphDetail;
     TransparentCsgIntervalProducerResult result{};
     if(!inputs.prefixTask.valid())
@@ -241,7 +241,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
         ECSRenderDetail::MaterialTypedInstanceRangeVector transparentCsgMaterialTypedRanges{ scratchArena };
 #endif
         MaterialTypedByteDataVector transparentCsgMaterialTypedBytes{ scratchArena };
-        m_materialSystem.gatherMaterialPassDrawItems(
+        m_materialSystem->gatherMaterialPassDrawItems(
             inputs.targets.framebuffer.get(),
             MaterialPipelinePass::CsgReceiverSurface,
             true,
@@ -267,14 +267,14 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
                 || !inputs.csgIntervalSampleState.valid()
                 || !(inputs.frameBindings).frameReady(transparentCsgInstanceData.size(), transparentCsgMaterialTypedBytes.size())
                 || !(inputs.csgResources).frameReady(transparentCsgFrameData)
-                || !m_materialSystem.drawRecorder().materialPassDrawResourcesReady(transparentCsgDrawItems.csgReceiverSurface, (inputs.frameBindings))
+                || !m_materialSystem->drawRecorder().materialPassDrawResourcesReady(transparentCsgDrawItems.csgReceiverSurface, (inputs.frameBindings))
             ){
                 NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
                 return MakeUnexpected(Failure{});
             }
 
             const Array<MaterialPassDrawItemsView, 1u> transparentCsgMaterialGeometryDrawSets = { transparentCsgDrawItems.csgReceiverSurface, };
-            const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(transparentCsgMaterialGeometryDrawSets, Name(s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialGeometry), "Transparent CSG Material Geometry", m_graph, scratchArena);
+            const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(transparentCsgMaterialGeometryDrawSets, Name(s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialGeometry), "Transparent CSG Material Geometry", *m_graph, scratchArena);
             avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = geometrySetResult.has_value();
             if(!geometrySetResult){
                 NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
@@ -282,11 +282,11 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             }
             transparentCsgMaterialGeometrySet = *geometrySetResult;
             const auto sampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
-                m_materialSystem,
+                *m_materialSystem,
                 transparentCsgMaterialGeometryDrawSets,
                 Name(s_RenderNameRenderAvboitIntervalsTransparentCsgMaterialSampledTextures),
                 "Transparent CSG Material Sampled Textures",
-                m_graph,
+                *m_graph,
                 scratchArena
             );
             if(!sampledTextureSetResult){
@@ -295,7 +295,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             }
             transparentCsgMaterialSampledTextureSet = *sampledTextureSetResult;
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(inputs.csgResources, transparentCsgInstanceData);
+            m_materialSystem->prepareMaterialPassInstanceUploadData(inputs.csgResources, transparentCsgInstanceData);
 #if defined(NWB_DEBUG)
             if(!HasValidTransparentCsgUploadElementCounts(
                 transparentCsgInstanceData.size(),
@@ -312,12 +312,12 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             ValidateMaterialTypedUploadRanges(transparentCsgMaterialTypedRanges, transparentCsgMaterialTypedBytes);
 #endif
 
-            const auto clipContextSlotResult = m_csgSystem.prepareCsgClipContextSlotData(inputs.targets, transparentCsgFrameData, inputs.csgResources, inputs.frameBindings);
+            const auto clipContextSlotResult = m_csgSystem->prepareCsgClipContextSlotData(inputs.targets, transparentCsgFrameData, inputs.csgResources, inputs.frameBindings);
             if(!clipContextSlotResult){
                 NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not snapshot transparent CSG interval auxiliary upload data"));
                 return MakeUnexpected(Failure{});
             }
-            const auto intervalSampleStateResult = m_csgSystem.prepareCsgIntervalSampleStateData(inputs.targets, transparentCsgFrameData, inputs.csgResources, inputs.frameBindings);
+            const auto intervalSampleStateResult = m_csgSystem->prepareCsgIntervalSampleStateData(inputs.targets, transparentCsgFrameData, inputs.csgResources, inputs.frameBindings);
             if(!intervalSampleStateResult){
                 NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not snapshot transparent CSG interval auxiliary upload data"));
                 return MakeUnexpected(Failure{});
@@ -325,12 +325,12 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             const CsgClipContextSlots& transparentCsgClipContextSlotData = *clipContextSlotResult;
             const CsgIntervalSampleStateGpuData& transparentCsgIntervalSampleStateData = *intervalSampleStateResult;
 
-            const auto transparentCsgInstanceBlobResult = m_graph.copyUploadData(transparentCsgInstanceData.data(), transparentCsgInstanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
-            const auto transparentCsgMaterialTypedBlobResult = m_graph.copyUploadData(transparentCsgMaterialTypedBytes.data(), transparentCsgMaterialTypedBytes.size(), alignof(u32));
-            const auto transparentCsgReceiverRangesBlobResult = m_graph.copyUploadData(transparentCsgFrameData.receiverRanges.data(), transparentCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData));
-            const auto transparentCsgCuttersBlobResult = m_graph.copyUploadData(transparentCsgFrameData.cutters.data(), transparentCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData));
-            const auto transparentCsgClipContextSlotsBlobResult = m_graph.copyUploadData(&transparentCsgClipContextSlotData, sizeof(transparentCsgClipContextSlotData), alignof(CsgClipContextSlots));
-            const auto transparentCsgIntervalSampleStateBlobResult = m_graph.copyUploadData(&transparentCsgIntervalSampleStateData, sizeof(transparentCsgIntervalSampleStateData), alignof(CsgIntervalSampleStateGpuData));
+            const auto transparentCsgInstanceBlobResult = m_graph->copyUploadData(transparentCsgInstanceData.data(), transparentCsgInstanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
+            const auto transparentCsgMaterialTypedBlobResult = m_graph->copyUploadData(transparentCsgMaterialTypedBytes.data(), transparentCsgMaterialTypedBytes.size(), alignof(u32));
+            const auto transparentCsgReceiverRangesBlobResult = m_graph->copyUploadData(transparentCsgFrameData.receiverRanges.data(), transparentCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData));
+            const auto transparentCsgCuttersBlobResult = m_graph->copyUploadData(transparentCsgFrameData.cutters.data(), transparentCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData));
+            const auto transparentCsgClipContextSlotsBlobResult = m_graph->copyUploadData(&transparentCsgClipContextSlotData, sizeof(transparentCsgClipContextSlotData), alignof(CsgClipContextSlots));
+            const auto transparentCsgIntervalSampleStateBlobResult = m_graph->copyUploadData(&transparentCsgIntervalSampleStateData, sizeof(transparentCsgIntervalSampleStateData), alignof(CsgIntervalSampleStateGpuData));
             if(
                 !transparentCsgInstanceBlobResult
                 || !transparentCsgMaterialTypedBlobResult
@@ -368,7 +368,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             ){
                 Core::GpuTaskDesc uploadDesc;
                 uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(scheduling).setDependencies({ &result.uploadTask, 1u });
-                const auto uploadTaskResult = m_graph.addUploadBufferTask(
+                const auto uploadTaskResult = m_graph->addUploadBufferTask(
                     uploadDesc,
                     Core::GpuUploadBufferTaskDesc{ .source = source, .destination = destination, .finalState = Core::ResourceStates::Common, });
                 if(!uploadTaskResult){
@@ -438,13 +438,13 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
         };
         if(!DeclareCsgIntervalRectClearTasks(
             clearDesc,
-            m_graph,
+            *m_graph,
             intervalClearTimingState,
-            m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask,
-            m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask
+            m_avboitSystem->taskGraphStage().m_transparentCsgIntervalClearFirstTask,
+            m_avboitSystem->taskGraphStage().m_transparentCsgIntervalClearTask
         ))
             return MakeUnexpected(Failure{});
-        result.uploadTask = m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask;
+        result.uploadTask = m_avboitSystem->taskGraphStage().m_transparentCsgIntervalClearTask;
         FOUNDATION_ASSERT(avboitPrePayload.transparentCsgStreamsUploaded && avboitPrePayload.transparentCsgSnapshot.captured);
     }
     result.materialGeometrySet = transparentCsgMaterialGeometrySet;
@@ -463,7 +463,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
     ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload
-){
+)noexcept{
     FrameGraphTransparentCsgTaskResult result{};
     using namespace RendererTaskGraphDetail;
     Core::GpuTaskId intervalDependency = inputs.transparentCsgUploadTask;
@@ -541,15 +541,15 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         intervalCombinePayload.transparentCsgSnapshot.captured,
         intervalCombinePayload.csgFrameBuffersUploaded
     );
-    const auto preTaskResult = m_graph.addTask<AvboitPreGraphTask>(avboitIntervalDesc, Move(prePayload));
+    const auto preTaskResult = m_graph->addTask<AvboitPreGraphTask>(avboitIntervalDesc, Move(prePayload));
     if(!preTaskResult){
-        m_avboitSystem.taskGraphStage().m_preTask = {};
+        m_avboitSystem->taskGraphStage().m_preTask = {};
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
         return MakeUnexpected(Failure{});
     }
-    m_avboitSystem.taskGraphStage().m_preTask = *preTaskResult;
+    m_avboitSystem->taskGraphStage().m_preTask = *preTaskResult;
 
-    Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_preTask;
+    Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem->taskGraphStage().m_preTask;
     b8 avboitIntervalOutputsGraphOwned = false;
     if(avboitCsgReceiverSpanGraphOwned){
         const Array<Core::GpuTaskResourceUse, 6u> avboitIntervalSpanResourceUses = {
@@ -570,17 +570,17 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setIdentity(Name(s_RenderNameRenderAvboitTransparentCsgReceiverSpan))
             .setMarkerLabel("Transparent CSG Receiver Span")
             .setScheduling(avboitIntervalSpanScheduling)
-            .setDependencies({ &m_avboitSystem.taskGraphStage().m_preTask, 1u })
+            .setDependencies({ &m_avboitSystem->taskGraphStage().m_preTask, 1u })
             .setResourceUses(avboitIntervalSpanResourceUses)
         ;
-        const auto csgReceiverSpanTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgReceiverSpanGraphTask >(avboitIntervalSpanDesc, Move(receiverSpanPayload));
+        const auto csgReceiverSpanTaskResult = m_graph->addTask< ECSRenderDetail::AvboitCsgReceiverSpanGraphTask >(avboitIntervalSpanDesc, Move(receiverSpanPayload));
         if(!csgReceiverSpanTaskResult){
-            m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = {};
+            m_avboitSystem->taskGraphStage().m_csgReceiverSpanTask = {};
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = *csgReceiverSpanTaskResult;
-        avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
+        m_avboitSystem->taskGraphStage().m_csgReceiverSpanTask = *csgReceiverSpanTaskResult;
+        avboitIntervalCompletionTask = m_avboitSystem->taskGraphStage().m_csgReceiverSpanTask;
     }
     if(avboitCsgIntervalCombineGraphOwned){
         const Array<Core::GpuTaskResourceUse, 11u> avboitIntervalCombineResourceUses = {
@@ -609,14 +609,14 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setDependencies({ &avboitIntervalCompletionTask, 1u })
             .setResourceUses(avboitIntervalCombineResourceUses)
         ;
-        const auto csgIntervalCombineTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgIntervalCombineGraphTask >(avboitIntervalCombineDesc, Move(intervalCombinePayload));
+        const auto csgIntervalCombineTaskResult = m_graph->addTask< ECSRenderDetail::AvboitCsgIntervalCombineGraphTask >(avboitIntervalCombineDesc, Move(intervalCombinePayload));
         if(!csgIntervalCombineTaskResult){
-            m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = {};
+            m_avboitSystem->taskGraphStage().m_csgIntervalCombineTask = {};
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG interval-combine graph task"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = *csgIntervalCombineTaskResult;
-        avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask;
+        m_avboitSystem->taskGraphStage().m_csgIntervalCombineTask = *csgIntervalCombineTaskResult;
+        avboitIntervalCompletionTask = m_avboitSystem->taskGraphStage().m_csgIntervalCombineTask;
         avboitIntervalOutputsGraphOwned = true;
     }
     result.intervalCompletionTask = avboitIntervalCompletionTask;

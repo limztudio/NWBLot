@@ -26,7 +26,7 @@ const f32 s_UiWindowSmokeGap = 4.0f;
 class UiTextAreaSmokeScene{
     private SmokeClipboardRef m_clipboard;
     private String m_longText = "";
-    private EditModel m_model;
+    private EditModel m_model(EditLimits(), EditTextMode::Multiline);
     private TextAreaState m_state = TextAreaState();
     private EditBoxView m_observed;
     private ClipboardCompletion m_completion;
@@ -458,7 +458,6 @@ Rect ResolveSmokeWindowButtonRect(in WindowState state, in WindowMetrics metrics
 
 UiTextAreaSmokeScene::UiTextAreaSmokeScene(mut GlobalArena arena, mut IClipboardService clipboard){
     this.m_clipboard = SmokeClipboardRef(clipboard);
-    this.m_model = EditModel(arena, EditLimits(), EditTextMode::Multiline);
     this.m_observed = EditBoxView(arena);
     this.m_completion = ClipboardCompletion(arena);
     this.m_longText.reserve(1044u);

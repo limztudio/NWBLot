@@ -150,6 +150,12 @@ b8 CallableArgumentChecker::check(
                 expectedParamTypeRef = subParamType;
                 expectedParamType = m_checker.m_symbols.resolveBaseTypeName(subParamType->name);
                 LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(targetCallable->params[i].type, arg);
+                if(arg->wrapInFuncType && subParamType != targetCallable->params[i].type){
+                    if(const TypeRef* unwrappedSubFunc = m_checker.m_symbols.unwrapTypeAlias(subParamType); unwrappedSubFunc && unwrappedSubFunc->isFuncType)
+                        LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(const_cast<TypeRef*>(unwrappedSubFunc), arg);
+                    else if(TypeRef* extractedSubFunc = TypeResolver(m_checker.m_symbols).extractUnderlyingFuncType(subParamType))
+                        LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(extractedSubFunc, arg);
+                }
                 if(targetOwnerCls){
                     if(const TypeRef* paramFunc = TypeResolver(m_checker.m_symbols).extractUnderlyingFuncType(targetCallable->params[i].type); paramFunc && paramFunc->inferredCaptureBytes > 0u){
                         for(FieldDecl* clsField : targetOwnerCls->fields){

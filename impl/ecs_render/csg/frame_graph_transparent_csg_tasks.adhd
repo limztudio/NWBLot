@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/graph_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -79,40 +85,49 @@ struct FrameGraphTransparentCsgTaskInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class FrameGraphTransparentCsgTasks final : NoCopy{
-public:
-    FrameGraphTransparentCsgTasks(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
-        : m_graph(graph)
-        , m_avboitSystem(avboitSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<FrameGraphTransparentCsgTaskResult> declare(
-        Core::Alloc::ScratchArena& scratchArena,
-        const FrameGraphTransparentCsgTaskInputs& inputs,
-        ObjectGeometryCacheGraph& objectGeometry,
-        RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
-        ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
-        ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererAvboitSystem& m_avboitSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererAvboitSystem")]
+extern class RendererAvboitSystem;
+[cpp_name("::NWB::Impl::ObjectGeometryCacheGraph")]
+extern class ObjectGeometryCacheGraph;
+[cpp_name("::NWB::Impl::FrameGraphTransparentCsgTaskInputs")]
+extern class FrameGraphTransparentCsgTaskInputs;
+[cpp_name("::NWB::Impl::RendererTaskGraphDetail::AvboitPreGraphTask::Payload")]
+extern class AvboitPreGraphTaskPayload;
+[cpp_name("::NWB::Impl::ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload")]
+extern class AvboitCsgReceiverSpanGraphTaskPayload;
+[cpp_name("::NWB::Impl::ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload")]
+extern class AvboitCsgIntervalCombineGraphTaskPayload;
+
+[modular]
+class FrameGraphTransparentCsgTasks : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererAvboitSystem m_avboitSystem;
+
+    public FrameGraphTransparentCsgTasks(mut GpuTaskGraph graph, mut RendererAvboitSystem avboitSystem){
+        this.m_graph = graph;
+        this.m_avboitSystem = avboitSystem;
+    }
+
+    public Expected<FrameGraphTransparentCsgTaskResult> declare(
+        mut ScratchArena scratchArena,
+        in FrameGraphTransparentCsgTaskInputs inputs,
+        mut ObjectGeometryCacheGraph objectGeometry,
+        mut AvboitPreGraphTaskPayload prePayload,
+        mut AvboitCsgReceiverSpanGraphTaskPayload receiverSpanPayload,
+        mut AvboitCsgIntervalCombineGraphTaskPayload intervalCombinePayload
+    );
 }
 
 

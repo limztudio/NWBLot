@@ -452,11 +452,11 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
 b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem& shaderSystem){
     if(m_pipeline)
         return true;
-    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+    if(!EnsurePushConstantComputePipeline<TransparentSubsystem>(
         m_arena,
         m_graphics.getDevice(),
         shaderSystem,
-        &TransparentSubsystem::opticalBoundsFinalizeCs,
+        SubsystemAssetSelector<TransparentSubsystem, ComputeShader>([](const TransparentSubsystem& s){ return s.opticalBoundsFinalizeCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         Name(s_RenderNameRayOpticalBoundsFinalize),
         NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES,

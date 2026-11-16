@@ -245,7 +245,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
         if(!this.m_scene.update(currentYaw, SmokeWorldRef(this.m_world)))
             return false;
 
-        SetSmokeYawWindowTitle(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi, this.m_context);
+        SetSmokeWindowTitleSuffix(this.m_context, FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi));
 
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;

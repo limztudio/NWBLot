@@ -155,6 +155,113 @@ template<typename CutterHandler>
     return resolved;
 }
 
+[[nodiscard]] static Expected<CsgReceiverClipDrawInfo> ResolveCsgReceiverClipDrawInfoImpl(
+    const CsgShapeRegistry& csgShapeRegistry,
+    const CsgFrameReceiverLookup& receiverLookup,
+    const CsgReceiverDrawState& receiverDrawState,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* const transform
+){
+    CsgReceiverClipDrawInfo info;
+    const SIMDVectorSingle receiverPosition = transform ? LoadFloat(transform->position) : VectorZero();
+    const SIMDVectorSingle receiverRotation = transform ? LoadFloat(transform->rotation) : VectorZero();
+    const SIMDVectorSingle receiverScale = transform ? LoadFloat(transform->scale) : VectorZero();
+    const CsgClipWorkBounds receiverWorldBounds = LoadCsgReceiverWorldBounds(receiverBounds, transform != nullptr, receiverPosition, receiverRotation, receiverScale);
+
+    const b8 resolved = ForEachReceiverClipCutter(
+        csgShapeRegistry,
+        receiverLookup,
+        receiverDrawState,
+        receiverWorldBounds,
+        [&](const CsgResolvedClipCutter& resolvedCutter)noexcept{
+            return TryAccumulateCsgReceiverClipDrawInfo(resolvedCutter.shapeType.desc.shaderModule, info);
+        });
+    if(!resolved)
+        return MakeUnexpected(Failure{});
+    return info;
+}
+
+[[nodiscard]] static Expected<CsgReceiverRangeGpuData> AppendCsgReceiverClipDataImpl(
+    const CsgShapeRegistry& csgShapeRegistry,
+    const RendererMeshSystem& meshSystem,
+    const CsgFrameReceiverLookup& receiverLookup,
+    const CsgReceiverDrawState& receiverDrawState,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* const transform,
+    const u32 frameWidth,
+    const u32 frameHeight,
+    const MeshViewGpuData* const csgWorkRegionMeshViewState,
+    CsgFrameGpuData& csgFrameData
+){
+    CsgReceiverRangeGpuData range;
+    if(csgFrameData.cutters.size() > static_cast<usize>(Limit<u32>::s_Max))
+        return MakeUnexpected(Failure{});
+
+    if(!receiverBounds.valid())
+        return MakeUnexpected(Failure{});
+    const SIMDVectorSingle receiverPosition = transform ? LoadFloat(transform->position) : VectorZero();
+    const SIMDVectorSingle receiverRotation = transform ? LoadFloat(transform->rotation) : VectorZero();
+    const SIMDVectorSingle receiverScale = transform ? LoadFloat(transform->scale) : VectorZero();
+    const CsgClipWorkBounds receiverWorldBounds = LoadCsgReceiverWorldBounds(receiverBounds, transform != nullptr, receiverPosition, receiverRotation, receiverScale);
+
+    const auto worldToReceiver = TryBuildCsgReceiverWorldToLocal(
+        transform != nullptr,
+        transform ? LoadFloat(transform->position) : VectorZero(),
+        transform ? LoadFloat(transform->rotation) : VectorZero(),
+        transform ? LoadFloat(transform->scale) : VectorZero()
+    );
+    if(!worldToReceiver)
+        return MakeUnexpected(Failure{});
+
+    b8 meshViewReady = false;
+    SIMDMatrix worldToClipSimd{};
+    if(csgWorkRegionMeshViewState){
+        worldToClipSimd = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
+        meshViewReady = IsFiniteCsgMatrix(worldToClipSimd);
+    }
+    else{
+        if(const auto acceptedWorldToClip = meshSystem.snapshotAcceptedMeshViewWorldToClip()){
+            worldToClipSimd = LoadFloat(*acceptedWorldToClip);
+            meshViewReady = IsFiniteCsgMatrix(worldToClipSimd);
+        }
+    }
+
+    StoreFloat(*worldToReceiver, range.worldToReceiver);
+    range.localBounds = receiverBounds;
+    range.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
+    CsgFrameWorkRegion receiverWorkRegion;
+    const b8 appended = ForEachReceiverClipCutter(
+        csgShapeRegistry,
+        receiverLookup,
+        receiverDrawState,
+        receiverWorldBounds,
+        [&](const CsgResolvedClipCutter& resolvedCutter){
+            if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max))
+                return false;
+            FOUNDATION_ASSERT(resolvedCutter.parameterBytes.size() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
+            FOUNDATION_ASSERT(resolvedCutter.parameterBytes.empty() || resolvedCutter.parameterBytes.data());
+            const CsgCutterGpuData cutterGpuData = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
+                resolvedCutter.shapeType.id,
+                LoadFloat(resolvedCutter.worldToShape),
+                resolvedCutter.parameterBytes,
+                resolvedCutter.workBounds,
+                meshViewReady,
+                worldToClipSimd,
+                frameWidth,
+                frameHeight,
+                receiverWorkRegion
+            );
+            csgFrameData.cutters.push_back(cutterGpuData);
+            ++range.cutterCount;
+            return true;
+        });
+
+    FinalizeCsgReceiverRangeWorkRegion(receiverWorkRegion, frameWidth, frameHeight, range, csgFrameData.workRegion);
+    if(!appended || range.cutterCount == 0u)
+        return MakeUnexpected(Failure{});
+    return range;
+}
+
 void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgReceiverDrawState& drawState, const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry, CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range){
     const SIMDVectorSingle receiverMin = LoadFloat(receiver.worldMin);
     const SIMDVectorSingle receiverMax = LoadFloat(receiver.worldMax);
@@ -233,117 +340,69 @@ b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShap
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CsgFrameGpuData::reserve(const usize receiverCapacity, const usize cutterCapacity){
-    receiverRanges.reserve(receiverCapacity);
-    cutters.reserve(cutterCapacity);
+Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
+    const CsgFrameReceiverLookup& receiverLookup,
+    const CsgReceiverDrawState& receiverDrawState,
+    const CsgReceiverCpuBounds& receiverBounds
+)const noexcept{
+    return __hidden_csg_clip_and_shadow_contexts::ResolveCsgReceiverClipDrawInfoImpl(*m_csgShapeRegistry, receiverLookup, receiverDrawState, receiverBounds, nullptr);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     const CsgFrameReceiverLookup& receiverLookup,
     const CsgReceiverDrawState& receiverDrawState,
     const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform
-)const{
-    CsgReceiverClipDrawInfo info;
-    const SIMDVectorSingle receiverPosition = transform ? LoadFloat(transform->position) : VectorZero();
-    const SIMDVectorSingle receiverRotation = transform ? LoadFloat(transform->rotation) : VectorZero();
-    const SIMDVectorSingle receiverScale = transform ? LoadFloat(transform->scale) : VectorZero();
-    const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_and_shadow_contexts::LoadCsgReceiverWorldBounds(receiverBounds, transform != nullptr, receiverPosition, receiverRotation, receiverScale);
-
-    const b8 resolved = __hidden_csg_clip_and_shadow_contexts::ForEachReceiverClipCutter(
-        m_csgShapeRegistry,
-        receiverLookup,
-        receiverDrawState,
-        receiverWorldBounds,
-        [&](const __hidden_csg_clip_and_shadow_contexts::CsgResolvedClipCutter& resolvedCutter)noexcept{
-            return TryAccumulateCsgReceiverClipDrawInfo(resolvedCutter.shapeType.desc.shaderModule, info);
-        });
-    if(!resolved)
-        return MakeUnexpected(Failure{});
-    return info;
+    const Scene::TransformComponent& transform
+)const noexcept{
+    return __hidden_csg_clip_and_shadow_contexts::ResolveCsgReceiverClipDrawInfoImpl(*m_csgShapeRegistry, receiverLookup, receiverDrawState, receiverBounds, &transform);
 }
 
 Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     const CsgFrameReceiverLookup& receiverLookup,
     const CsgReceiverDrawState& receiverDrawState,
     const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform,
     const u32 frameWidth,
     const u32 frameHeight,
-    const MeshViewGpuData* const csgWorkRegionMeshViewState,
     CsgFrameGpuData& csgFrameData
-)const{
-    CsgReceiverRangeGpuData range;
-    if(csgFrameData.cutters.size() > static_cast<usize>(Limit<u32>::s_Max))
-        return MakeUnexpected(Failure{});
+)const noexcept{
+    return __hidden_csg_clip_and_shadow_contexts::AppendCsgReceiverClipDataImpl(*m_csgShapeRegistry, *m_meshSystem, receiverLookup, receiverDrawState, receiverBounds, nullptr, frameWidth, frameHeight, nullptr, csgFrameData);
+}
 
-    if(!receiverBounds.valid())
-        return MakeUnexpected(Failure{});
-    const SIMDVectorSingle receiverPosition = transform ? LoadFloat(transform->position) : VectorZero();
-    const SIMDVectorSingle receiverRotation = transform ? LoadFloat(transform->rotation) : VectorZero();
-    const SIMDVectorSingle receiverScale = transform ? LoadFloat(transform->scale) : VectorZero();
-    const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_and_shadow_contexts::LoadCsgReceiverWorldBounds(receiverBounds, transform != nullptr, receiverPosition, receiverRotation, receiverScale);
+Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
+    const CsgFrameReceiverLookup& receiverLookup,
+    const CsgReceiverDrawState& receiverDrawState,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent& transform,
+    const u32 frameWidth,
+    const u32 frameHeight,
+    CsgFrameGpuData& csgFrameData
+)const noexcept{
+    return __hidden_csg_clip_and_shadow_contexts::AppendCsgReceiverClipDataImpl(*m_csgShapeRegistry, *m_meshSystem, receiverLookup, receiverDrawState, receiverBounds, &transform, frameWidth, frameHeight, nullptr, csgFrameData);
+}
 
-    const auto worldToReceiver = TryBuildCsgReceiverWorldToLocal(
-        transform != nullptr,
-        transform ? LoadFloat(transform->position) : VectorZero(),
-        transform ? LoadFloat(transform->rotation) : VectorZero(),
-        transform ? LoadFloat(transform->scale) : VectorZero()
-    );
-    if(!worldToReceiver)
-        return MakeUnexpected(Failure{});
+Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
+    const CsgFrameReceiverLookup& receiverLookup,
+    const CsgReceiverDrawState& receiverDrawState,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const u32 frameWidth,
+    const u32 frameHeight,
+    const MeshViewGpuData& csgWorkRegionMeshViewState,
+    CsgFrameGpuData& csgFrameData
+)const noexcept{
+    return __hidden_csg_clip_and_shadow_contexts::AppendCsgReceiverClipDataImpl(*m_csgShapeRegistry, *m_meshSystem, receiverLookup, receiverDrawState, receiverBounds, nullptr, frameWidth, frameHeight, &csgWorkRegionMeshViewState, csgFrameData);
+}
 
-    b8 meshViewReady = false;
-    SIMDMatrix worldToClipSimd{};
-    if(csgWorkRegionMeshViewState){
-        worldToClipSimd = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
-        meshViewReady = IsFiniteCsgMatrix(worldToClipSimd);
-    }
-    else{
-        if(const auto acceptedWorldToClip = m_meshSystem.snapshotAcceptedMeshViewWorldToClip()){
-            worldToClipSimd = LoadFloat(*acceptedWorldToClip);
-            meshViewReady = IsFiniteCsgMatrix(worldToClipSimd);
-        }
-    }
-
-    StoreFloat(*worldToReceiver, range.worldToReceiver);
-    range.localBounds = receiverBounds;
-    range.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
-    CsgFrameWorkRegion receiverWorkRegion;
-    const b8 appended = __hidden_csg_clip_and_shadow_contexts::ForEachReceiverClipCutter(
-        m_csgShapeRegistry,
-        receiverLookup,
-        receiverDrawState,
-        receiverWorldBounds,
-        [&](const __hidden_csg_clip_and_shadow_contexts::CsgResolvedClipCutter& resolvedCutter){
-            if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max))
-                return false;
-            FOUNDATION_ASSERT(resolvedCutter.parameterBytes.size() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
-            FOUNDATION_ASSERT(resolvedCutter.parameterBytes.empty() || resolvedCutter.parameterBytes.data());
-            const CsgCutterGpuData cutterGpuData = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
-                resolvedCutter.shapeType.id,
-                LoadFloat(resolvedCutter.worldToShape),
-                resolvedCutter.parameterBytes,
-                resolvedCutter.workBounds,
-                meshViewReady,
-                worldToClipSimd,
-                frameWidth,
-                frameHeight,
-                receiverWorkRegion
-            );
-            csgFrameData.cutters.push_back(cutterGpuData);
-            ++range.cutterCount;
-            return true;
-        });
-
-    FinalizeCsgReceiverRangeWorkRegion(receiverWorkRegion, frameWidth, frameHeight, range, csgFrameData.workRegion);
-    if(!appended || range.cutterCount == 0u)
-        return MakeUnexpected(Failure{});
-    return range;
+Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
+    const CsgFrameReceiverLookup& receiverLookup,
+    const CsgReceiverDrawState& receiverDrawState,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent& transform,
+    const u32 frameWidth,
+    const u32 frameHeight,
+    const MeshViewGpuData& csgWorkRegionMeshViewState,
+    CsgFrameGpuData& csgFrameData
+)const noexcept{
+    return __hidden_csg_clip_and_shadow_contexts::AppendCsgReceiverClipDataImpl(*m_csgShapeRegistry, *m_meshSystem, receiverLookup, receiverDrawState, receiverBounds, &transform, frameWidth, frameHeight, &csgWorkRegionMeshViewState, csgFrameData);
 }
 
 

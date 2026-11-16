@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_system.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidDeferredTargetExtent(in u32 width, in u32 height){
     return width > 0u && height > 0u;
 }
@@ -29,6 +35,52 @@ void LogUnsupportedDeferredTargetFormats(){
 
 void LogLaggedLightingHistoryHeapMissing(){
     error("RendererSystem: lagged lighting history requires the global descriptor heap");
+}
+
+b8 RendererDeferredSystem::setPresentationSettings(in PresentationSettings settings){
+    if(!ValidatePresentationSettings(settings))
+        return false;
+    this.m_deferredState.m_presentationSettings = settings;
+    return true;
+}
+
+b8 RendererDeferredSystem::createDeferredFrameTargetResources(mut DeferredFrameTargets targets, mut RhiSampler avboitLinearSampler){
+    if(!this.createDeferredBindlessFrameResources(targets, avboitLinearSampler))
+        return false;
+    if(this.createLaggedLightingHistoryResources(targets))
+        return true;
+    this.resetDeferredBindlessFrameResources(targets);
+    return false;
+}
+
+void RendererDeferredSystem::resetDeferredFrameTargets(mut DeferredFrameTargets targets){
+    this.resetLaggedLightingHistoryResources(targets);
+    this.resetDeferredBindlessFrameResources(targets);
+    targets.framebuffer.reset();
+
+    targets.albedo.reset();
+    targets.normal.reset();
+    targets.worldPosition.reset();
+    targets.specularRoughness.reset();
+    ResetCsgIntervalTargets(targets);
+    targets.opaqueColor.reset();
+    targets.compositeColor.reset();
+    targets.depth.reset();
+    targets.shadowVisibility.reset();
+
+    targets = DeferredFrameTargets();
+}
+
+void RendererDeferredSystem::resetLaggedLightingHistoryResources(mut DeferredFrameTargets targets){
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(targets.laggedLightingHistory.slotsBufferDescriptor);
+        heap.free(targets.laggedLightingHistory.shadowVisibilityDescriptor);
+        heap.free(targets.laggedLightingHistory.causticIrradianceDescriptor);
+        heap.free(targets.laggedLightingHistory.surfelIrradianceDescriptor);
+    }
+
+    targets.laggedLightingHistory = DeferredLaggedLightingHistoryResources();
 }
 
 
@@ -86,20 +138,6 @@ b8 DeferredLaggedLightingHistoryResources::valid()const noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void ResetCsgIntervalTargets(DeferredFrameTargets& targets)noexcept{
-    targets.csgCapBackNormal.reset();
-    targets.csgIntervalDepth.reset();
-    targets.csgIntervalId.reset();
-    targets.csgReceiverEventData.reset();
-    targets.csgReceiverEventCount.reset();
-    targets.csgReceiverSpanData.reset();
-    targets.csgReceiverSpanCount.reset();
-    targets.csgRemovedIntervalDepth.reset();
-    targets.csgRemovedIntervalCapNormal.reset();
-    targets.csgRemovedIntervalData.reset();
-    targets.csgRemovedIntervalCount.reset();
-}
 
 b8 DeferredFrameTargets::csgIntervalTargetsValid()const noexcept{
     return
@@ -161,23 +199,11 @@ b8 DeferredFrameTargets::valid()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererDeferredSystem::invalidateSceneLightingUploadMirrors()noexcept{
-    m_deferredState.m_sceneShadingGpuDataValid = false;
-    m_deferredState.m_lightGpuDataValid = false;
-}
-
-b8 RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
-    if(!ValidatePresentationSettings(settings))
-        return false;
-    m_deferredState.m_presentationSettings = settings;
-    return true;
-}
-
-Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
+Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height)noexcept{
     if(!ValidDeferredTargetExtent(width, height))
         return MakeUnexpected(Failure{});
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     const Core::Format::Enum albedoFormat = SelectGBufferAlbedoFormat(device);
     const Core::Format::Enum normalFormat = SelectGBufferAlbedoFormat(device);
     const Core::Format::Enum worldPositionFormat = SelectGBufferAlbedoFormat(device);
@@ -225,9 +251,9 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     if(!createDeferredCompositeResources())
         return MakeUnexpected(Failure{});
 
-    m_deferredState.m_lightingPipeline.reset();
-    m_deferredState.m_compositeComputePipeline.reset();
-    m_deferredState.m_presentPipeline.reset();
+    m_deferredState->m_lightingPipeline.reset();
+    m_deferredState->m_compositeComputePipeline.reset();
+    m_deferredState->m_presentPipeline.reset();
 
     DeferredFrameTargets createdTargets;
     createdTargets.width = width;
@@ -264,7 +290,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(s_ClearColor)
     ;
-    auto albedoResult = m_graphics.createTexture(albedoDesc);
+    auto albedoResult = m_graphics->createTexture(albedoDesc);
     if(albedoResult)
         createdTargets.albedo = Move(*albedoResult);
     else
@@ -284,7 +310,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/gbuffer_normal")
         .setClearValue(s_GBufferNormalClearColor)
     ;
-    auto normalResult = m_graphics.createTexture(normalDesc);
+    auto normalResult = m_graphics->createTexture(normalDesc);
     if(normalResult)
         createdTargets.normal = Move(*normalResult);
     else
@@ -304,7 +330,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/gbuffer_world_position")
         .setClearValue(s_GBufferWorldPositionClearColor)
     ;
-    auto worldPositionResult = m_graphics.createTexture(worldPositionDesc);
+    auto worldPositionResult = m_graphics->createTexture(worldPositionDesc);
     if(worldPositionResult)
         createdTargets.worldPosition = Move(*worldPositionResult);
     else
@@ -324,7 +350,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/gbuffer_specular_roughness")
         .setClearValue(s_GBufferSpecularRoughnessClearColor)
     ;
-    auto specularRoughnessResult = m_graphics.createTexture(specularRoughnessDesc);
+    auto specularRoughnessResult = m_graphics->createTexture(specularRoughnessDesc);
     if(specularRoughnessResult)
         createdTargets.specularRoughness = Move(*specularRoughnessResult);
     else
@@ -346,7 +372,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/opaque_color")
         .setClearValue(s_ClearColor)
     ;
-    auto opaqueColorResult = m_graphics.createTexture(opaqueColorDesc);
+    auto opaqueColorResult = m_graphics->createTexture(opaqueColorDesc);
     if(opaqueColorResult)
         createdTargets.opaqueColor = Move(*opaqueColorResult);
     else
@@ -368,7 +394,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/composite_color")
         .setClearValue(s_ClearColor)
     ;
-    auto compositeColorResult = m_graphics.createTexture(compositeColorDesc);
+    auto compositeColorResult = m_graphics->createTexture(compositeColorDesc);
     if(compositeColorResult)
         createdTargets.compositeColor = Move(*compositeColorResult);
     else
@@ -380,7 +406,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
 
     Core::TextureDesc depthDesc;
     depthDesc.setWidth(createdTargets.width).setHeight(createdTargets.height).setFormat(createdTargets.depthFormat).setIsRenderTarget(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/depth");
-    auto depthResult = m_graphics.createTexture(depthDesc);
+    auto depthResult = m_graphics->createTexture(depthDesc);
     if(depthResult)
         createdTargets.depth = Move(*depthResult);
     else
@@ -412,50 +438,11 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     return createdTargets;
 }
 
-b8 RendererDeferredSystem::createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler){
-    if(!createDeferredBindlessFrameResources(targets, avboitLinearSampler))
-        return false;
-    if(createLaggedLightingHistoryResources(targets))
-        return true;
-    resetDeferredBindlessFrameResources(targets);
-    return false;
-}
-
-void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& targets){
-    resetLaggedLightingHistoryResources(targets);
-    resetDeferredBindlessFrameResources(targets);
-    targets.framebuffer.reset();
-
-    targets.albedo.reset();
-    targets.normal.reset();
-    targets.worldPosition.reset();
-    targets.specularRoughness.reset();
-    ResetCsgIntervalTargets(targets);
-    targets.opaqueColor.reset();
-    targets.compositeColor.reset();
-    targets.depth.reset();
-    targets.shadowVisibility.reset();
-
-    targets = DeferredFrameTargets{};
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererDeferredSystem::resetLaggedLightingHistoryResources(DeferredFrameTargets& targets){
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        heap.free(targets.laggedLightingHistory.slotsBufferDescriptor);
-        heap.free(targets.laggedLightingHistory.shadowVisibilityDescriptor);
-        heap.free(targets.laggedLightingHistory.causticIrradianceDescriptor);
-        heap.free(targets.laggedLightingHistory.surfelIrradianceDescriptor);
-    }
-
-    targets.laggedLightingHistory = DeferredLaggedLightingHistoryResources{};
-}
-
-b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTargets& targets){
+b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTargets& targets)noexcept{
     DeferredLaggedLightingHistoryResources& history = targets.laggedLightingHistory;
     if(history.valid())
         return true;
@@ -467,7 +454,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
 
     resetLaggedLightingHistoryResources(targets);
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         LogLaggedLightingHistoryHeapMissing();
@@ -486,7 +473,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_shadow_visibility")
     ;
-    auto shadowVisibilityResult = m_graphics.createTexture(shadowHistoryDesc);
+    auto shadowVisibilityResult = m_graphics->createTexture(shadowHistoryDesc);
     if(shadowVisibilityResult)
         history.shadowVisibility = Move(*shadowVisibilityResult);
     else
@@ -507,7 +494,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_caustic_irradiance")
     ;
-    auto causticIrradianceResult = m_graphics.createTexture(irradianceHistoryDesc);
+    auto causticIrradianceResult = m_graphics->createTexture(irradianceHistoryDesc);
     if(causticIrradianceResult)
         history.causticIrradiance = Move(*causticIrradianceResult);
     else
@@ -519,7 +506,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     }
 
     irradianceHistoryDesc.setFormat(targets.surfelIrradianceFormat).setName("engine/temporal/lagged_surfel_irradiance");
-    auto surfelIrradianceResult = m_graphics.createTexture(irradianceHistoryDesc);
+    auto surfelIrradianceResult = m_graphics->createTexture(irradianceHistoryDesc);
     if(surfelIrradianceResult)
         history.surfelIrradiance = Move(*surfelIrradianceResult);
     else
@@ -579,7 +566,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    auto slotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    auto slotsBufferResult = m_graphics->createBuffer(slotsBufferDesc);
     if(slotsBufferResult)
         history.slotsBuffer = Move(*slotsBufferResult);
     else

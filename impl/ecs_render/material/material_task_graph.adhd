@@ -172,9 +172,9 @@ Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPrep
         // Identify source tuples first so repeated instances cost one pointer each.
         const auto hashSources = [](const MeshSourceRef& mesh)noexcept{
             usize hash = 0u;
-            ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer)noexcept{
+            ForEachMaterialPassMeshSourceBuffer(*mesh, MaterialPassMeshBufferVisitor([&](const Core::BufferHandle& buffer)noexcept{
                 HashCombine(hash, buffer.get());
-            });
+            }));
             return hash;
         };
         const auto equalSources = [](const MeshSourceRef& lhs, const MeshSourceRef& rhs)noexcept{
@@ -214,10 +214,10 @@ Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPrep
         using BufferPtr = NotNull<Core::Buffer*>;
         HashSet<BufferPtr, Core::Alloc::ScratchArena, Hasher<BufferPtr>, EqualTo<BufferPtr>> sourceBufferIdentities(AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<BufferPtr>(), EqualTo<BufferPtr>(), scratchArena);
         for(const MeshSourceRef& mesh : uniqueMeshes){
-            ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
+            ForEachMaterialPassMeshSourceBuffer(*mesh, MaterialPassMeshBufferVisitor([&](const Core::BufferHandle& buffer){
                 if(sourceBufferIdentities.insert(MakeNotNull(buffer.get())).second)
                     sourceBuffers.push_back(BufferRef(&buffer));
-            });
+            }));
         }
     }
 
@@ -378,7 +378,7 @@ public:
             timing.emplace(*ticket);
         commandList.endRenderPass();
         const Core::ViewportState viewport;
-        const MaterialPassDrawContext context{ commandList, nullptr, nullptr, viewport, nullptr, payload.frameBindings, MaterialPipelinePass::Opaque, true, true, true, };
+        MaterialPassDrawContext context(commandList, viewport, payload.frameBindings, MaterialPipelinePass::Opaque, true, true, true);
         if(!payload.materialSystem.recordObjectGeometryDecode(context, payload.draw))
             return false;
         commandList.setBufferState(payload.draw.meshResources.objectGeometryCache.buffer.get(), ECSRenderDetail::s_ObjectGeometryRasterState);
@@ -561,7 +561,7 @@ b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
-    const MaterialPassDrawContext drawContext{ commandList, nullptr, nullptr, deferredViewportState, nullptr, payload.frameBindings, MaterialPipelinePass::Opaque, payload.materialFrameStatesGraphOwned, payload.materialGeometryStatesGraphOwned, true };
+    MaterialPassDrawContext drawContext(commandList, deferredViewportState, payload.frameBindings, MaterialPipelinePass::Opaque, payload.materialFrameStatesGraphOwned, payload.materialGeometryStatesGraphOwned, true);
     materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, payload.plan.drawItems);
     return true;
 }
@@ -597,18 +597,17 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
-    const MaterialPassDrawContext drawContext{
+    MaterialPassDrawContext drawContext(
         commandList,
-        payload.phase == SharedComputeEmulationPhase::Raster ? payload.targets.framebuffer.get() : nullptr,
-        nullptr,
         deferredViewportState,
-        nullptr,
         payload.frameBindings,
         MaterialPipelinePass::Opaque,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true
-    };
+    );
+    if(payload.phase == SharedComputeEmulationPhase::Raster)
+        drawContext.setFramebuffer(payload.targets.framebuffer);
     if(payload.phase == SharedComputeEmulationPhase::Generate)
         materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
     else{

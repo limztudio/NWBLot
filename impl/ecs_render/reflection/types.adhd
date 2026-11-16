@@ -241,6 +241,55 @@ u32 BuildReflectionDepthPyramidMips(
     return mipCount;
 }
 
+class ReflectionRadianceBinding{
+    public ReflectionRadianceBinding(){
+        this.sampledSlot = 0u;
+        this.storageSlot = 0u;
+    }
+
+    public ReflectionRadianceBinding(in TextureHandle inTexture, in u32 inSampledSlot, in u32 inStorageSlot){
+        this.texture = inTexture;
+        this.sampledSlot = inSampledSlot;
+        this.storageSlot = inStorageSlot;
+    }
+
+    public TextureHandle texture;
+    public u32 sampledSlot;
+    public u32 storageSlot;
+}
+
+class ReflectionFeedbackBinding{
+    public ReflectionFeedbackBinding(){
+        this.descriptor = GpuDescriptorHandleInvalid();
+    }
+
+    public ReflectionFeedbackBinding(in BufferHandle inBuffer, in GpuDescriptorHandle inDescriptor){
+        this.buffer = inBuffer;
+        this.descriptor = inDescriptor;
+    }
+
+    public b8 valid()const{
+        return this.buffer.valid() && this.descriptor.valid();
+    }
+
+    public BufferHandle buffer;
+    public GpuDescriptorHandle descriptor;
+}
+
+// A native mip chain for u32 extents cannot contain more than 32 levels.
+class ReflectionDepthPyramidSnapshot{
+    public b8 valid()const{
+        return this.texture.valid() && this.pipeline.valid() && this.mipCount > 0u && this.mipCount <= s_ReflectionMaxDepthMips;
+    }
+
+    public TextureHandle texture;
+    public ComputePipelineHandle pipeline;
+    public Array<ReflectionDepthPyramidMip, s_ReflectionMaxDepthMips> mips;
+    public u32 mipCount = 0u;
+    public u32 sampledSlot = 0u;
+    public u32 sourceDepthSlot = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -14,6 +20,24 @@ native{
 #include <impl/assets/graphics/csg/ray_constants.h>
 
 #include <global/span.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class World;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,21 +60,8 @@ static_assert(s_CsgRayShapeBox == NWB_CSG_RAY_SHAPE_BOX);
 static_assert(s_CsgRayShapeSphere == NWB_CSG_RAY_SHAPE_SPHERE);
 static_assert(s_CsgRayShapeCapsule == NWB_CSG_RAY_SHAPE_CAPSULE);
 
-struct CsgShadowSnapshot{
-    Vector<CsgShadowReceiverRangeGpu, Core::Alloc::GlobalArena> receiverRanges;
-    // Built-in ray records use NWB_CSG_RAY_SHAPE_* in shapeType, with the existing CSG cutter layout.
-    Vector<CsgCutterGpuData, Core::Alloc::GlobalArena> cutters;
-    u64 identity = 0u;
-    u64 contentIdentity = 0u;
-    b8 hasCsg = false;
-
-
-public:
-    explicit CsgShadowSnapshot(Core::Alloc::GlobalArena& arena)noexcept
-        : receiverRanges(arena)
-        , cutters(arena)
-    {}
-};
+class CsgShapeRegistry;
+class CsgShadowSnapshot;
 
 // Receiver order must match the shadow instance table; an empty CSG scene leaves both vectors empty.
 [[nodiscard]] b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot);
@@ -65,6 +76,19 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgShadowSnapshot{
+    public Vector<CsgShadowReceiverRangeGpu> receiverRanges;
+    // Built-in ray records use NWB_CSG_RAY_SHAPE_* in shapeType, with the existing CSG cutter layout.
+    public Vector<CsgCutterGpuData> cutters;
+    public u64 identity = 0u;
+    public u64 contentIdentity = 0u;
+    public b8 hasCsg = false;
 }
 
 

@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 
 
 class RendererRayTracingSystem;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 
 
 class RefractionRenderer final : NoCopy{

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/graph_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -35,7 +41,7 @@ NWB_IMPL_BEGIN
 class RendererAvboitSystem;
 class RendererCsgSystem;
 class RendererMaterialSystem;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 class CsgFrameState;
 
 
@@ -67,44 +73,62 @@ struct TransparentCsgIntervalProducerInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TransparentCsgIntervalBuilder final : NoCopy{
-public:
-    TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem)noexcept
-        : m_graph(graph)
-        , m_materialSystem(materialSystem)
-        , m_csgSystem(csgSystem)
-        , m_avboitSystem(avboitSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<TransparentCsgIntervalProducerResult> declare(
-        Core::Alloc::ScratchArena& scratchArena,
-        const TransparentCsgIntervalProducerInputs& inputs,
-        RendererTaskGraphDetail::AvboitPreGraphTask::Payload& avboitPrePayload,
-        ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
-        ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,
-        GraphClearTimingRecordState& intervalClearTimingState
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererMaterialSystem& m_materialSystem;
-    RendererCsgSystem& m_csgSystem;
-    RendererAvboitSystem& m_avboitSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererMaterialSystem")]
+extern class RendererMaterialSystem;
+[cpp_name("::NWB::Impl::RendererCsgSystem")]
+extern class RendererCsgSystem;
+[cpp_name("::NWB::Impl::RendererAvboitSystem")]
+extern class RendererAvboitSystem;
+[cpp_name("::NWB::Impl::TransparentCsgIntervalProducerInputs")]
+extern class TransparentCsgIntervalProducerInputs;
+[cpp_name("::NWB::Impl::RendererTaskGraphDetail::AvboitPreGraphTask::Payload")]
+extern class AvboitPreGraphTaskPayload;
+[cpp_name("::NWB::Impl::ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload")]
+extern class AvboitCsgReceiverSpanGraphTaskPayload;
+[cpp_name("::NWB::Impl::ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload")]
+extern class AvboitCsgIntervalCombineGraphTaskPayload;
+[cpp_name("::NWB::Impl::GraphClearTimingRecordState")]
+extern class GraphClearTimingRecordState;
+
+[modular]
+class TransparentCsgIntervalBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererMaterialSystem m_materialSystem;
+    private mut RendererCsgSystem m_csgSystem;
+    private mut RendererAvboitSystem m_avboitSystem;
+
+    public TransparentCsgIntervalBuilder(
+        mut GpuTaskGraph graph,
+        mut RendererMaterialSystem materialSystem,
+        mut RendererCsgSystem csgSystem,
+        mut RendererAvboitSystem avboitSystem
+    ){
+        this.m_graph = graph;
+        this.m_materialSystem = materialSystem;
+        this.m_csgSystem = csgSystem;
+        this.m_avboitSystem = avboitSystem;
+    }
+
+    public Expected<TransparentCsgIntervalProducerResult> declare(
+        mut ScratchArena scratchArena,
+        in TransparentCsgIntervalProducerInputs inputs,
+        mut AvboitPreGraphTaskPayload avboitPrePayload,
+        mut AvboitCsgReceiverSpanGraphTaskPayload receiverSpanPayload,
+        mut AvboitCsgIntervalCombineGraphTaskPayload intervalCombinePayload,
+        mut GraphClearTimingRecordState intervalClearTimingState
+    );
 }
 
 

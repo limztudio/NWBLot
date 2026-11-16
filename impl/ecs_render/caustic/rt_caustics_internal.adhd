@@ -32,7 +32,7 @@ NWB_IMPL_BEGIN
 class RendererRayTracingSystem;
 class RendererShaderSystem;
 
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 struct RtCausticState;
 
 [[nodiscard]] b8 EnsureCausticEmissionTargetBufferStorage(

@@ -2,86 +2,65 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/input/input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/input/input.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class InputTargetTable final : NoCopy{
-public:
-    explicit InputTargetTable(Core::Alloc::GlobalArena& arena)
-        : m_targets(arena)
-        , m_stagedTargets(arena)
-        , m_lookup(arena)
-        , m_stagedLookup(arena)
-    {
-        m_targets.reserve(s_InputMaxTargets);
-        m_stagedTargets.reserve(s_InputMaxTargets);
-        m_lookup.reserve(s_InputMaxTargets);
-        m_stagedLookup.reserve(s_InputMaxTargets);
+class InputTargetTable : NoCopy{
+    public InputTargetTable(){
+        this.m_targets.reserve(s_InputMaxTargets);
+        this.m_stagedTargets.reserve(s_InputMaxTargets);
+        this.m_lookup.reserve(s_InputMaxTargets);
+        this.m_stagedLookup.reserve(s_InputMaxTargets);
     }
 
-
-public:
-    [[nodiscard]] b8 canPublish(const usize count, const u64 generation)const noexcept{
-        return CanPublishRouterTargetTable(count, generation, m_generation);
+    public b8 canPublish(in usize count, in u64 generation)const{
+        return CanPublishRouterTargetTable(count, generation, this.m_generation);
     }
-    [[nodiscard]] b8 publish(const Span<const HitTarget> targets, const Span<const PopupRecord> stagedPopups, const u64 generation){
-        return PublishRouterTargetTable(targets, stagedPopups, generation, m_targets, m_stagedTargets, m_lookup, m_stagedLookup, m_generation);
+
+    public b8 publish(in Span<HitTarget> targets, in Span<PopupRecord> stagedPopups, in u64 generation){
+        return PublishRouterTargetTable(targets, stagedPopups, generation, this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_generation);
     }
-    [[nodiscard]] const HitTarget* find(const WidgetId id, const u64 declarationGeneration)const noexcept{
-        const auto index = FindTargetIndexInTable(m_targets, m_lookup, id, declarationGeneration);
-        return index ? &m_targets[*index] : nullptr;
+
+    public Expected<usize> findIndex(in WidgetId id, in u64 declarationGeneration)const{
+        return FindTargetIndexInTable(this.m_targets, this.m_lookup, id, declarationGeneration);
     }
-    [[nodiscard]] b8 invalidate(const WidgetId id){
-        return InvalidateRouterTargetTable(id, m_lookup, m_targets);
+
+    public b8 invalidate(in WidgetId id){
+        return InvalidateRouterTargetTable(id, this.m_lookup, this.m_targets);
     }
-    [[nodiscard]] b8 fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
-        return FenceRouterControlTargets(host, declarationGeneration, token, m_lookup, m_targets);
+
+    public b8 fenceControl(in WidgetId host, in u64 declarationGeneration, in ControlToken token){
+        return FenceRouterControlTargets(host, declarationGeneration, token, this.m_lookup, this.m_targets);
     }
-    [[nodiscard]] Optional<InputPopupRetirement> retirePopup(const WidgetId id, Vector<PopupRecord, Core::Alloc::GlobalArena>& popups, Vector<PopupDismissal, Core::Alloc::GlobalArena>& dismissals){
-        return RetireRouterTargetTablePopup(id, popups, m_targets, dismissals, m_lookup);
+
+    public Optional<InputPopupRetirement> retirePopup(in WidgetId id, mut Vector<PopupRecord> popups, mut Vector<PopupDismissal> dismissals){
+        return RetireRouterTargetTablePopup(id, popups, this.m_targets, dismissals, this.m_lookup);
     }
-    void reset()noexcept{
-        ResetRouterTargetTable(m_targets, m_stagedTargets, m_lookup, m_stagedLookup, m_generation);
+
+    public void reset(){
+        ResetRouterTargetTable(this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_generation);
     }
-    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
-    [[nodiscard]] const Vector<HitTarget, Core::Alloc::GlobalArena>& targets()const noexcept{ return m_targets; }
-    [[nodiscard]] Span<const TargetLookup> lookup()const noexcept{ return m_lookup; }
 
+    public u64 generation()const{
+        return this.m_generation;
+    }
 
-private:
-    Vector<HitTarget, Core::Alloc::GlobalArena> m_targets;
-    Vector<HitTarget, Core::Alloc::GlobalArena> m_stagedTargets;
-    Vector<TargetLookup, Core::Alloc::GlobalArena> m_lookup;
-    Vector<TargetLookup, Core::Alloc::GlobalArena> m_stagedLookup;
-    u64 m_generation = 0u;
-};
+    public in Vector<HitTarget> targets()const{
+        return this.m_targets;
+    }
 
+    public Span<TargetLookup> lookup()const{
+        return this.m_lookup;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private Vector<HitTarget> m_targets;
+    private Vector<HitTarget> m_stagedTargets;
+    private Vector<TargetLookup> m_lookup;
+    private Vector<TargetLookup> m_stagedLookup;
+    private u64 m_generation = 0u;
 }
 
 

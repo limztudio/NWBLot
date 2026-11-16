@@ -168,6 +168,58 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_MeshDispatch"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeMeshDispatch;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_Raster"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeRaster;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_RefractionResolve"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeRefractionResolve;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_RefractionClassifyTiles"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeRefractionClassifyTiles;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_RefractionClearTileArguments"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeRefractionClearTileArguments;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_DeferredLighting"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeDeferredLighting;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_DeferredComposite"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeDeferredComposite;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_DeferredPresent"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeDeferredPresent;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgIntervalPeel"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeCsgIntervalPeel;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgReceiverSpanBuild"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeCsgReceiverSpanBuild;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgIntervalCombine"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeCsgIntervalCombine;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgCapFill"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeCsgCapFill;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_TransparentCsgIntervals"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeTransparentCsgIntervals;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitClear"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeAvboitClear;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitOccupancy"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeAvboitOccupancy;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitDepthWarp"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeAvboitDepthWarp;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitExtinction"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeAvboitExtinction;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitIntegration"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeAvboitIntegration;
+[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitAccumulate"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeAvboitAccumulate;
+[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeReflectionDepthPyramid;
+[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Classify"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeReflectionClassify;
+[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_BuildArgs"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeReflectionBuildArgs;
+[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Hardware"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeReflectionHardware;
+[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Temporal"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeReflectionTemporal;
+[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Spatial"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeReflectionSpatial;
+
+
 Expected<Optional<Name>> ResolveDeferredGraphQueueInternalIdleScope(in b8 queueValid, in u32 queueIndex){
     if(!queueValid)
         return Optional<Name>();

@@ -343,19 +343,20 @@ struct CaptureDrawTask{
         commandList.endRenderPass();
         Core::ViewportState viewport;
         viewport.addViewportAndScissorRect(payload.avboitTargets.refractionFramebuffer->getFramebufferInfo().getViewport());
-        const MaterialPassDrawContext drawContext{
+        MaterialPassDrawContext drawContext(
             commandList,
-            payload.generate ? nullptr : payload.avboitTargets.refractionFramebuffer.get(),
-            &payload.avboitTargets,
             viewport,
-            payload.csg ? &payload.csgResources : nullptr,
             payload.frameBindings,
             MaterialPipelinePass::AvboitRefractionCapture,
             true,
             true,
-            true,
-            payload.conservativeGeometryScissor
-        };
+            true
+        );
+        drawContext.setAvboitTargets(payload.avboitTargets).setConservativeGeometryScissor(payload.conservativeGeometryScissor);
+        if(!payload.generate)
+            drawContext.setFramebuffer(payload.avboitTargets.refractionFramebuffer);
+        if(payload.csg)
+            drawContext.setCsgResources(payload.csgResources);
         if(payload.generate)
             payload.materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
         else if(payload.renderPath == RenderPath::ComputeEmulation)

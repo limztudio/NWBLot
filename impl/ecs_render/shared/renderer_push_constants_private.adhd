@@ -154,9 +154,6 @@ FOUNDATION_INLINE void SetEmulatedVertexAttribute(const Core::Format::Enum forma
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -170,6 +167,48 @@ NWB_IMPL_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::ECSRenderDetail::ResolveMeshFrameHeapSlots"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
+extern MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings, in u32 generatedVertex);
+[cpp_name("::NWB::Impl::ECSRenderDetail::ResolveMeshFrameHeapSlots"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
+extern MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings);
+[cpp_name("::NWB::Impl::ECSRenderDetail::BuildShaderDrivenPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
+extern ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+    in u32 meshletCount,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in ViewportState viewportState,
+    in MeshFrameHeapSlots frameHeapSlots,
+    in u32 dispatchFlags
+);
+[cpp_name("::NWB::Impl::ECSRenderDetail::SetShaderDrivenPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
+extern void SetShaderDrivenPushConstants(
+    mut CommandList commandList,
+    in u32 meshletCount,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in ViewportState viewportState,
+    in MeshFrameHeapSlots frameHeapSlots,
+    in u32 dispatchFlags
+);
+[cpp_name("::NWB::Impl::ECSRenderDetail::SetTransparentDrawPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
+extern void SetTransparentDrawPushConstants(
+    mut CommandList commandList,
+    in u32 meshletCount,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in ViewportState viewportState,
+    in AvboitFrameTargets targets,
+    in MeshFrameHeapSlots frameHeapSlots,
+    in u32 dispatchFlags,
+    in b8 hdr10OutputActive,
+    in u32 csgContextHeapSlot,
+    in b8 refractionCapture
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

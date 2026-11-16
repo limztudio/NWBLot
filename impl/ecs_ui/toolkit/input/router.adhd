@@ -84,7 +84,8 @@ public:
     // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
     [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const noexcept;
     [[nodiscard]] const HitTarget* findTarget(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
-        return m_targetTable.find(id, declarationGeneration);
+        const Expected<usize> index = m_targetTable.findIndex(id, declarationGeneration);
+        return index ? &m_targetTable.targets()[*index] : nullptr;
     }
     [[nodiscard]] Expected<HitTarget> tryFindTarget(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
         if(const HitTarget* target = findTarget(id, declarationGeneration))
@@ -126,7 +127,7 @@ public:
 
     [[nodiscard]] u64 layoutGeneration()const noexcept{ return m_targetTable.generation(); }
 
-    [[nodiscard]] const InputVector<HitTarget>& targets()const noexcept{ return m_targetTable.targets(); }
+    [[nodiscard]] const Vector<HitTarget, ::ArenaBase>& targets()const noexcept{ return m_targetTable.targets(); }
 
     [[nodiscard]] const InputVector<InputAction>& actions()const noexcept{ return m_actions; }
 
@@ -190,15 +191,15 @@ private:
     void routePointerSource(const InputEvent& event, InputRoutingResult& result);
     void terminatePointerSource(InputSource source)noexcept;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const noexcept;
-    void routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
-    void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
+    void routeSecondary(const InputEvent& event, b8 hasHit, const HitTarget& hit, InputRoutingResult& result);
+    void routeWheel(const InputEvent& event, b8 hasHit, const HitTarget& hit, InputRoutingResult& result);
     [[nodiscard]] b8 stagePopups(Span<const PopupScope> scopes);
     void installPopups(u64 expectedFocusLossGeneration);
     void retirePopup(WidgetId id);
     void reconcileTargets()noexcept;
     void updateHover()noexcept;
     void cancelInteraction()noexcept;
-    void routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
+    void routePointer(const InputEvent& event, b8 hasHit, const HitTarget& hit, InputRoutingResult& result);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
 
 
@@ -552,13 +553,12 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         m_hoverState.advanceActivity();
     if(!shouldRoute)
         return;
-    const HitTarget* const hitPtr = hasHit ? &hit : nullptr;
     if(IsSecondaryButtonInputEventType(event.type))
-        routeSecondary(event, hitPtr, result);
+        routeSecondary(event, hasHit, hit, result);
     else if(event.type == InputEventType::PointerWheel)
-        routeWheel(event, hitPtr, result);
+        routeWheel(event, hasHit, hit, result);
     else
-        routePointer(event, hitPtr, result);
+        routePointer(event, hasHit, hit, result);
     if(IsPointerButtonReleaseEventType(event.type))
         RouterPointerSourceAdmission{}.finishRelease(heldIndex, m_pointerState.primaryDown(), m_pointerState.secondaryDown(), m_pointerState.sources(), m_pointerState.activeSource());
 }
@@ -593,8 +593,8 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept
     return hitIndex ? &m_targetTable.targets()[*hitIndex] : nullptr;
 }
 
-void InputRouter::routeSecondary(const InputEvent& event, const HitTarget* const hit, InputRoutingResult& result){
-    const auto effects = m_pointerState.routeSecondary(event, hit, m_targetTable, m_popupState, m_windowFocused, m_contextMenuActions, m_nextActionSequence, result);
+void InputRouter::routeSecondary(const InputEvent& event, const b8 hasHit, const HitTarget& hit, InputRoutingResult& result){
+    const auto effects = m_pointerState.routeSecondary(event, hasHit, hit, m_targetTable, m_popupState, m_windowFocused, m_contextMenuActions, m_nextActionSequence, result);
     if(effects.dismissedPopup && !m_popupState.apply(effects.popupDismissal))
         TerminateInvariant();
     if(effects.advanceHover)
@@ -605,8 +605,8 @@ void InputRouter::routeSecondary(const InputEvent& event, const HitTarget* const
     }
 }
 
-void InputRouter::routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
-    m_pointerState.routeWheel(event, hit, m_targetTable, m_popupState, m_controlActions, m_nextActionSequence, result);
+void InputRouter::routeWheel(const InputEvent& event, const b8 hasHit, const HitTarget& hit, InputRoutingResult& result){
+    m_pointerState.routeWheel(event, hasHit, hit, m_targetTable, m_popupState, m_controlActions, m_nextActionSequence, result);
 }
 
 b8 InputRouter::stagePopups(const Span<const PopupScope> scopes){
@@ -696,8 +696,8 @@ void InputRouter::cancelInteraction()noexcept{
     );
 }
 
-void InputRouter::routePointer(const InputEvent& event, const HitTarget* const hit, InputRoutingResult& result){
-    const auto effects = m_pointerState.routePrimary(event, hit, m_targetTable, m_popupState, m_commandSources, m_actions, m_controlActions, m_nextActionSequence, result);
+void InputRouter::routePointer(const InputEvent& event, const b8 hasHit, const HitTarget& hit, InputRoutingResult& result){
+    const auto effects = m_pointerState.routePrimary(event, hasHit, hit, m_targetTable, m_popupState, m_commandSources, m_actions, m_controlActions, m_nextActionSequence, result);
     if(effects.dismissedPopup && !m_popupState.apply(effects.popupDismissal))
         TerminateInvariant();
     if(effects.advanceHover)

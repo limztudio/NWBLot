@@ -256,18 +256,16 @@ b8 OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Co
 
     Core::ViewportState csgViewportState;
     csgViewportState.addViewport(payload.targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(payload.targets.width, payload.targets.height)));
-    const MaterialPassDrawContext drawContext{
+    MaterialPassDrawContext drawContext(
         commandList,
-        payload.targets.framebuffer.get(),
-        nullptr,
         csgViewportState,
-        &payload.csgResources,
         payload.frameBindings,
         MaterialPipelinePass::CsgReceiverSurface,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true
-    };
+    );
+    drawContext.setFramebuffer(payload.targets.framebuffer).setCsgResources(payload.csgResources);
     materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
@@ -311,18 +309,16 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& paylo
     // Close the marker here; the sample callback owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(&payload.opaqueCsgTiming))
         return false;
-    const MaterialPassDrawContext drawContext{
+    MaterialPassDrawContext drawContext(
         commandList,
-        nullptr,
-        nullptr,
         deferredViewportState,
-        &payload.csgResources,
         payload.frameBindings,
         MaterialPipelinePass::Opaque,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true
-    };
+    );
+    drawContext.setCsgResources(payload.csgResources);
     materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }

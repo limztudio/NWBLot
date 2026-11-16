@@ -9,6 +9,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/reflection/types.adhd.h>
 #include <impl/ecs_render/reflection/history.adhd.h>
 
 #include <impl/assets_graphics/reflection_subsystem.adhd.h>
@@ -47,12 +48,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererShaderSystem;
-
-struct ReflectionRadianceBinding{
-    Core::TextureHandle texture;
-    u32 sampledSlot = 0u;
-    u32 storageSlot = 0u;
-};
 
 struct ReflectionPostprocessSnapshot{
     ReflectionHistoryControlHandle control;

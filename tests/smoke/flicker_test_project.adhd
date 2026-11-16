@@ -196,7 +196,7 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         // Yaw priority: fixed override, manual scrub, then automatic spin.
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();
-        SetSmokeYawWindowTitle(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI, this.m_context);
+        SetSmokeWindowTitleSuffix(this.m_context, FormatSmokeYawWindowTitleSuffix(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI));
         return TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world));
     }
 

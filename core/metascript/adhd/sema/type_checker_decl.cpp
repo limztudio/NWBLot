@@ -269,6 +269,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         reportError(errors, classDecl.span, "'[arena]' class cannot be marked '[serialize]' (binary-serialized structs cannot own an arena)");
         ok = false;
     }
+    if(classDecl.isModular && !classDecl.templateParams.empty()){
+        reportError(errors, classDecl.span, "'[modular]' class cannot be a template");
+        ok = false;
+    }
 
     if(!classDecl.assetTypeName.empty()){
         if(!classDecl.isArenaOwner){
@@ -309,7 +313,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class must be marked '[arena, subsystem(\"...\")]'");
             ok = false;
         }
-        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
+        if(classDecl.isSerialize || classDecl.isModular || !classDecl.assetTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
             reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class may only declare 'public' AssetRef<T> or Vector<AssetRef<T>> fields");
             ok = false;
         }
@@ -597,8 +601,16 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             ok = false;
         if(!m->hasBody){
             if(!classDecl.isImported && !classDecl.isExtern && !m->isExtern && classDecl.assetTypeName.empty() && classDecl.systemTypeName.empty()){
-                reportError(errors, m->span, "declared class method has no implementation body");
-                ok = false;
+                if(classDecl.isModular){
+                    if(!m->templateParams.empty() || m->hasSynthesizedArenaParams){
+                        reportError(errors, m->span, "templated or arena-polymorphic method in '[modular]' class must define its body in the declaring class file");
+                        ok = false;
+                    }
+                }
+                else{
+                    reportError(errors, m->span, "declared class method has no implementation body");
+                    ok = false;
+                }
             }
             continue;
         }

@@ -25,6 +25,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ObjectGeometryCacheState;
+class ObjectGeometryCacheSnapshot;
 struct MeshResources;
 struct RuntimeMeshBuffers;
 
@@ -38,36 +40,10 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ObjectGeometryCacheState = ::NWB::Impl::ObjectGeometryCacheState;
+using ObjectGeometryCacheSnapshot = ::NWB::Impl::ObjectGeometryCacheSnapshot;
+
 inline constexpr Core::ResourceStates::Mask s_ObjectGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
-
-struct ObjectGeometryCacheState{
-    Core::BufferHandle buffer;
-    Core::ComputePipelineHandle decoderPipeline;
-    u64 acceptedContentRevision = 0u;
-    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
-    u32 indexByteOffset = 0u;
-    u32 indexCount = 0u;
-    b8 acceptedContent = false;
-    b8 initialized = false;
-};
-
-// The declaration retains the buffer and current content generation; acceptance validates them against the mesh owner.
-struct ObjectGeometryCacheSnapshot{
-    Core::BufferHandle buffer;
-    Core::ComputePipelineHandle decoderPipeline;
-    u64 sourceRevision = 0u;
-    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
-    u32 indexByteOffset = 0u;
-    u32 indexCount = 0u;
-    b8 initialized = false;
-    b8 requiresDecode = true;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer && indexByteOffset != 0u && indexCount != 0u;
-    }
-};
 
 [[nodiscard]] b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
 
@@ -87,6 +63,46 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::ECSRenderDetail::s_ObjectGeometryRasterState"), cpp_header("<core/graphics/rhi/resource.h>")]
+extern const ResourceStates s_ObjectGeometryRasterState;
+
+
+class ObjectGeometryCacheState{
+    public BufferHandle buffer;
+    public ComputePipelineHandle decoderPipeline;
+    public u64 acceptedContentRevision = 0u;
+    public GpuDescriptorHandle heapHandle = GpuDescriptorHandleInvalid();
+    public u32 indexByteOffset = 0u;
+    public u32 indexCount = 0u;
+    public b8 acceptedContent = false;
+    public b8 initialized = false;
+}
+
+// The declaration retains the buffer and current content generation; acceptance validates them against the mesh owner.
+class ObjectGeometryCacheSnapshot{
+    public BufferHandle buffer;
+    public ComputePipelineHandle decoderPipeline;
+    public u64 sourceRevision = 0u;
+    public GpuDescriptorHandle heapHandle = GpuDescriptorHandleInvalid();
+    public u32 indexByteOffset = 0u;
+    public u32 indexCount = 0u;
+    public b8 initialized = false;
+    public b8 requiresDecode = true;
+
+    public b8 valid()const{
+        return this.buffer.valid()
+            && this.decoderPipeline.valid()
+            && this.heapHandle.valid()
+            && this.heapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
+            && this.indexByteOffset != 0u
+            && this.indexCount != 0u;
+    }
 }
 
 

@@ -255,7 +255,7 @@ public:
             avboitAccumulationTimingTicket
         };
         ready = ready
-            && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, tickets, ticketCount)
+            && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, ticketCount, tickets.size(), InplaceFunction<64u, b8(Core::GpuTaskId, Core::GpuTimingSubmissionTicket&)>(appendTicket))
             && appendTicket(renderer.m_deferredLightingTask, deferredLightingTimingTicket)
             && appendTicket(renderer.m_deferredCompositeTask, deferredCompositeTimingTicket)
             && appendTicket(renderer.m_deferredPresentTask, deferredPresentTimingTicket)

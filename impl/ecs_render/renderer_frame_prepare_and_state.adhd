@@ -407,7 +407,7 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     // CSG receiver ranges are indexed by material-pass instance; an active pass reserves one range per renderer.
     const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
-    if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
+    if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer, MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState))
         return false;
 
     if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, m_preparedCsgFrameState, deferredTargets))

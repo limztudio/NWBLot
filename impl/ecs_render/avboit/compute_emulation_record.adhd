@@ -2,6 +2,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit_frame_targets.adhd>
+#include <impl/ecs_render/material/pipeline_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> AvboitTargetFramebufferKind{
+    Low = 0,
+    Accumulation = 1
+}
+
+// Pass traits select timing, pipeline and framebuffer kind for the common alias-free/CSG record sequence.
+class AvboitComputeEmulationRecordTrait{
+    public GpuTimingScopeDefinition timingScope;
+    public MaterialPipelinePass pipelinePass;
+    public AvboitTargetFramebufferKind framebufferKind;
+
+    public AvboitComputeEmulationRecordTrait(
+        in GpuTimingScopeDefinition inTimingScope,
+        in MaterialPipelinePass inPipelinePass,
+        in AvboitTargetFramebufferKind inFramebufferKind
+    ){
+        this.timingScope = inTimingScope;
+        this.pipelinePass = inPipelinePass;
+        this.framebufferKind = inFramebufferKind;
+    }
+}
+
+FramebufferHandle SelectAvboitTargetFramebuffer(in AvboitFrameTargets targets, in AvboitTargetFramebufferKind kind){
+    if(kind == AvboitTargetFramebufferKind::Accumulation)
+        return targets.accumulationFramebuffer;
+    return targets.lowFramebuffer;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -36,18 +75,12 @@ NWB_IMPL_BEGIN
 
 class RendererAvboitSystem;
 class RendererMaterialSystem;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
+class AvboitComputeEmulationRecordTrait;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Pass traits select timing, pipeline and framebuffer for the common alias-free/CSG record sequence.
-struct AvboitComputeEmulationRecordTrait{
-    const Core::GpuTimingScopeDefinition& timingScope;
-    MaterialPipelinePass::Enum pipelinePass = MaterialPipelinePass::AvboitOccupancy;
-    Core::FramebufferHandle AvboitFrameTargets::* framebuffer = nullptr;
-};
 
 // All bindings required: compute emulation always generates against this frame's bindings.
 struct AvboitComputeEmulationTaskPayload{
@@ -213,7 +246,8 @@ template<typename RenderPassMethod>
         preparedMaterialTypedByteCount = payload.snapshot.materialTypedByteCount;
     }
     if(payload.hasTransparentRenderers){
-        (payload.avboitSystem.*renderPass)(
+        renderPass(
+            payload.avboitSystem,
             commandList,
             payload.targets,
             drawItems,

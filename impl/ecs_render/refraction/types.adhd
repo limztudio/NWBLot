@@ -51,6 +51,7 @@ const StringView s_RefractionDiagnosticHwSparseVariant = "NWB_REFRACTION_DENSE_G
 const StringView s_RefractionDiagnosticHwDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0";
 const StringView s_RefractionDiagnosticCsgHwSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1";
 const StringView s_RefractionDiagnosticCsgHwDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1";
+const u32 s_RefractionGroupSize = 8u;
 const f32 s_RefractionCertifiedBoundsMargin = 0.016f;
 const usize s_RefractionPushConstantsByteSize = 44u;
 const usize s_RefractionDenseArgumentOffset = 16u;

@@ -315,7 +315,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         else if(csg)
             snapshot.hardwarePipeline = m_pipelines.csgHardwarePipeline();
     }
-    const ReflectionRadianceBinding base{ m_resources.opaqueRadiance, m_resources.parameters.opaqueRadianceSlot, m_resources.parameters.opaqueOutputSlot, };
+    const ReflectionRadianceBinding base(m_resources.opaqueRadiance, m_resources.parameters.opaqueRadianceSlot, m_resources.parameters.opaqueOutputSlot);
     snapshot.postprocess = m_postprocess.snapshot(base, stamp, settings, m_graphics.getFrameIndex());
     if(!snapshot.postprocess.control || !snapshot.postprocess.current.texture)
         return {};

@@ -45,8 +45,8 @@ NWB_IMPL_BEGIN
 
 class RendererFramePipeline;
 class RendererRayTracingSystem;
-struct DeferredFrameTargets;
-struct DeferredLightingGraphResources;
+class DeferredFrameTargets;
+class DeferredLightingGraphResources;
 struct RayTracingSceneGraphReads;
 
 

@@ -324,7 +324,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
     constexpr auto s_DepthSupport = Core::FormatSupport::Texture | Core::FormatSupport::DepthStencil | Core::FormatSupport::ShaderLoad;
     if(!heap.isInitialized() || (hardwareCsg && !heap.hasAccelStructLayout()) || (device.queryFormatSupport(Core::Format::D32) & s_DepthSupport) != s_DepthSupport)
         return false;
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(LightSpaceShadowPush), Core::ShaderType::All, snapshot.layout))
+    if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(LightSpaceShadowPush), Core::ShaderType::All, snapshot.layout))
         return false;
     using ComputeShaderMember = const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::*;
     const ComputeShaderMember csgResolveMember = hardwareCsg ? &ShadowSubsystem::lightSpaceResolveHwCs : &ShadowSubsystem::lightSpaceResolveCs;
@@ -366,7 +366,8 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
     for(u32 index = 0u; index < outputs.size(); ++index){
         if(ShouldSkipLightSpacePipeline(index, csg, hardwareCsg))
             continue;
-        if(!state.m_shaders[index] && !m_shaderSystem.loadShader<ComputeShader>(computeMembers[index], computeVariants[index], Name(s_LightSpaceShaderScope), state.m_shaders[index])){
+        const ComputeShaderMember shaderMember = computeMembers[index];
+        if(!state.m_shaders[index] && !m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([shaderMember](const ShadowSubsystem& s){ return s.*shaderMember; }), computeVariants[index], Name(s_LightSpaceShaderScope), state.m_shaders[index])){
             state.m_pipelineFailed = true;
             return false;
         }
@@ -374,8 +375,8 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
     Core::ShaderHandle& captureVs = state.m_shaders[s_LightSpaceCaptureVertexShaderIndex];
     Core::ShaderHandle& capturePs = state.m_shaders[s_LightSpaceCapturePixelShaderIndex];
     if(
-        (!captureVs && !m_shaderSystem.loadShader<VertexShader>(&ShadowSubsystem::lightSpaceCaptureVs, Core::ShaderArchive::s_DefaultVariant, Name(s_LightSpaceShaderScope), captureVs))
-        || (!capturePs && !m_shaderSystem.loadShader<PixelShader>(&ShadowSubsystem::lightSpaceCapturePs, Core::ShaderArchive::s_DefaultVariant, Name(s_LightSpaceShaderScope), capturePs))
+        (!captureVs && !m_shaderSystem.loadShader<VertexShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, VertexShader>([](const ShadowSubsystem& s){ return s.lightSpaceCaptureVs; }), Core::ShaderArchive::s_DefaultVariant, Name(s_LightSpaceShaderScope), captureVs))
+        || (!capturePs && !m_shaderSystem.loadShader<PixelShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, PixelShader>([](const ShadowSubsystem& s){ return s.lightSpaceCapturePs; }), Core::ShaderArchive::s_DefaultVariant, Name(s_LightSpaceShaderScope), capturePs))
     ){
         state.m_pipelineFailed = true;
         return false;
@@ -386,7 +387,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
         if(*outputs[index])
             continue;
         const b8 includeAccelStruct = IsLightSpaceCsgResolvePipelineIndex(index, hardwareCsg);
-        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, state.m_shaders[index], snapshot.layout, includeAccelStruct, *outputs[index]))
+        if(!CreateHeapComputePipeline(device, state.m_shaders[index], snapshot.layout, includeAccelStruct, *outputs[index]))
             return false;
     }
     for(u32 transparent = 0u; transparent < s_LightSpaceCapturePipelineKindCount; ++transparent){

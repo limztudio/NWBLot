@@ -217,16 +217,16 @@ namespace __hidden_rt_surfel_pipelines_and_render{
         inOutFailed = true;
         return false;
     }
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(arena, device, sizeof(SurfelHeapPushConstants), Core::ShaderType::Compute, inOutLayout)){
+    if(!EnsurePushConstantBindingLayout(arena, device, sizeof(SurfelHeapPushConstants), Core::ShaderType::Compute, inOutLayout)){
         LogSurfelBindingLayoutCreateFailed(passLabel);
         inOutFailed = true;
         return false;
     }
-    if(!shaderSystem.loadShader<ComputeShader>(member, variantName, debugName, inOutShader)){
+    if(!shaderSystem.loadShader<ComputeShader, GiSubsystem>(SubsystemAssetSelector<GiSubsystem, ComputeShader>([member](const GiSubsystem& s){ return s.*member; }), variantName, debugName, inOutShader)){
         inOutFailed = true;
         return false;
     }
-    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline)){
+    if(!CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline)){
         LogSurfelPipelineCreateFailed(passLabel);
         inOutFailed = true;
         return false;

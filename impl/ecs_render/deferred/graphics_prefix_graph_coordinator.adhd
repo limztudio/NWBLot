@@ -51,12 +51,13 @@ class RendererRayTracingSystem;
 class CsgFrameState;
 class MeshViewGpuData;
 class ObjectGeometryCacheGraph;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 class DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
 class MeshFrameBindingSnapshot;
+class CsgGraphResourceSnapshot;
 namespace ECSRenderDetail{
-    struct CsgGraphResourceSnapshot;
+    using CsgGraphResourceSnapshot = ::NWB::Impl::CsgGraphResourceSnapshot;
 };
 
 

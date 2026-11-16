@@ -65,8 +65,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class CsgGraphResourceSnapshot;
 namespace ECSRenderDetail{
-    struct CsgGraphResourceSnapshot;
+    using CsgGraphResourceSnapshot = ::NWB::Impl::CsgGraphResourceSnapshot;
 };
 
 class CsgShapeRegistry;
@@ -131,7 +132,7 @@ public:
     // Draw streams are gathered and uploaded before recording. This consumer performs no mesh/material updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
-        Core::Framebuffer* framebuffer,
+        const Core::FramebufferHandle& framebuffer,
         MaterialPipelinePass::Enum pass,
         const AvboitFrameTargets* avboitTargets,
         const MaterialPassDrawItemPartitionsView& drawItems,
@@ -156,7 +157,44 @@ public:
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
         Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr
     );
-    [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);
+    void renderPreparedAvboitMaterialPass(
+        Core::CommandList& commandList,
+        const Core::FramebufferHandle& framebuffer,
+        MaterialPipelinePass::Enum pass,
+        const AvboitFrameTargets& avboitTargets,
+        const MaterialPassDrawItemPartitionsView& drawItems,
+        const CsgFrameGpuDataView& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const MeshFrameBindingSnapshot& frameBindings,
+        usize instanceCount,
+        usize materialTypedByteCount,
+        b8 materialFrameStatesGraphOwned,
+        b8 materialGeometryStatesGraphOwned,
+        b8 emulationOutputEntryStateGraphOwned,
+        b8 csgEmulationOutputEntryStateGraphOwned,
+        b8 emulationOutputReused
+    );
+    void renderPreparedAvboitMaterialPass(
+        Core::CommandList& commandList,
+        const Core::FramebufferHandle& framebuffer,
+        MaterialPipelinePass::Enum pass,
+        const AvboitFrameTargets& avboitTargets,
+        const MaterialPassDrawItemPartitionsView& drawItems,
+        const CsgFrameGpuDataView& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const MeshFrameBindingSnapshot& frameBindings,
+        usize instanceCount,
+        usize materialTypedByteCount,
+        b8 materialFrameStatesGraphOwned,
+        b8 materialGeometryStatesGraphOwned,
+        b8 emulationOutputEntryStateGraphOwned,
+        b8 csgEmulationOutputEntryStateGraphOwned,
+        b8 emulationOutputReused,
+        Optional<Core::GpuTimingMeasure>& emulationOutputTiming
+    );
+    [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState);
+    [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets& avboitTargets);
+    [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);
     void gatherMaterialPassDrawItems(
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,

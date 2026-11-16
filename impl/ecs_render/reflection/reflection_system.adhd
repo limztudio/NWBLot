@@ -9,6 +9,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/reflection/types.adhd.h>
 #include <impl/ecs_render/reflection/frame_parameters.adhd.h>
 #include <impl/ecs_render/reflection/statistics_readback.adhd.h>
 #include <impl/ecs_render/reflection/postprocess_resources.adhd.h>
@@ -51,7 +52,7 @@ NWB_IMPL_BEGIN
 
 
 class RendererShaderSystem;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 
 static_assert(sizeof(ReflectionFrameParameters) == 176u);
 static_assert(offsetof(ReflectionFrameParameters, opaqueSpecularSlot) == 16u);
@@ -59,22 +60,6 @@ static_assert(offsetof(ReflectionFrameParameters, maxRayDistance) == 128u);
 static_assert(offsetof(ReflectionFrameParameters, environmentTopR) == 140u);
 static_assert(offsetof(ReflectionFrameParameters, environmentBottomR) == 152u);
 static_assert(offsetof(ReflectionFrameParameters, screenThickness) == 164u);
-
-struct ReflectionDepthPyramidSnapshot{
-    // A native mip chain for u32 extents cannot contain more than 32 levels.
-    Core::TextureHandle texture;
-    Core::ComputePipelineHandle pipeline;
-    Array<ReflectionDepthPyramidMip, s_ReflectionMaxDepthMips> mips{};
-    u32 mipCount = 0u;
-    u32 sampledSlot = 0u;
-    u32 sourceDepthSlot = 0u;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return texture && pipeline && mipCount > 0u && mipCount <= s_ReflectionMaxDepthMips;
-    }
-};
 
 // Copy handles and slots together before declaration; only parameter values vary per frame.
 struct ReflectionFrameSnapshot{

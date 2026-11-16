@@ -331,7 +331,7 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             };
         }
         else if(modes.popupToolsSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiPopupToolsSmokeScene>(context.objectArena, context.input, context.objectArena);
+            const auto scene = CreateSmokeInputSceneBox<UiPopupToolsSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
@@ -359,7 +359,7 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             };
         }
         else if(modes.popupSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiPopupSmokeScene>(context.objectArena, context.input, context.objectArena);
+            const auto scene = CreateSmokeInputSceneBox<UiPopupSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: popup UI paint failed"));

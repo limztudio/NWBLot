@@ -479,18 +479,16 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
     commandList.beginRenderPass(*deferredTargets.framebuffer, renderPassParameters);
 
     if(deferredResourcesReady){
-        const MaterialPassDrawContext opaqueDrawContext{
+        MaterialPassDrawContext opaqueDrawContext(
             commandList,
-            deferredTargets.framebuffer.get(),
-            nullptr,
             deferredViewportState,
-            nullptr,
             payload.frameBindings,
             MaterialPipelinePass::Opaque,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.regularComputeEmulationOutputStatesGraphOwned
-        };
+        );
+        opaqueDrawContext.setFramebuffer(deferredTargets.framebuffer);
         if(regularDrawResourcesReady && (payload.regularSharedComputeEmulationDrawsGraphOwned || !regularDrawItemsForGbuffer.empty())){
             if(payload.regularSharedComputeEmulationDrawsGraphOwned){
                 payload.regularSharedComputeEmulationTiming->emplace(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
@@ -509,18 +507,16 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
 
         Core::ViewportState csgIntervalViewportState;
         csgIntervalViewportState.addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height)));
-        const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
+        MaterialPassDrawContext csgReceiverSurfaceDrawContext(
             commandList,
-            deferredTargets.framebuffer.get(),
-            nullptr,
             csgIntervalViewportState,
-            &payload.csgResources,
             payload.frameBindings,
             MaterialPipelinePass::CsgReceiverSurface,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.csgReceiverComputeEmulationOutputStatesGraphOwned
-        };
+        );
+        csgReceiverSurfaceDrawContext.setFramebuffer(deferredTargets.framebuffer).setCsgResources(payload.csgResources);
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, graphics.getDevice(), commandList);
 

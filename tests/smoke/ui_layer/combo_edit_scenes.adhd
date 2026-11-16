@@ -354,8 +354,6 @@ void UiComboSmokeScene::observeState(){
 
 
 UiEditSmokeScene::UiEditSmokeScene(mut GlobalArena arena){
-    this.m_primary = EditModel(arena);
-    this.m_secondary = EditModel(arena);
     this.m_selectionView = EditBoxView(arena);
     this.resetModels();
 }

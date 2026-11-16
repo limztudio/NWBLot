@@ -293,11 +293,11 @@ b8 CausticPipelineSet::ensureSwCausticPipeline(){
     if(failed)
         return false;
 
-    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+    if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
         m_arena,
         m_graphics.getDevice(),
         m_shaderSystem,
-        &RefractiveSubsystem::causticPhotonSwCs,
+        SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.causticPhotonSwCs; }),
         SelectRayTracingCsgVariant(csg),
         "ECSRender_SwCausticPhotons",
         sizeof(CausticPhotonPushConstants),
@@ -328,7 +328,7 @@ b8 CausticPipelineSet::ensureCausticResolvePipeline(){
         return false;
 
     auto& device = m_graphics.getDevice();
-    if(!device.getDescriptorHeap().isInitialized() || !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CausticResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
+    if(!device.getDescriptorHeap().isInitialized() || !EnsurePushConstantBindingLayout(m_arena, device, sizeof(CausticResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
         resolve.m_failed = true;
         return false;
@@ -355,8 +355,8 @@ b8 CausticPipelineSet::ensureCausticResolvePipeline(){
         if(stage.m_state.m_pipeline)
             continue;
         if(
-            !m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::causticResolveCs, stage.m_variant, "ECSRender_CausticResolve", stage.m_state.m_shader)
-            || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, stage.m_state.m_shader, resolve.m_bindingLayout, false, stage.m_state.m_pipeline)
+            !m_shaderSystem.loadShader<ComputeShader, RefractiveSubsystem>(SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.causticResolveCs; }), stage.m_variant, "ECSRender_CausticResolve", stage.m_state.m_shader)
+            || !CreateHeapComputePipeline(device, stage.m_state.m_shader, resolve.m_bindingLayout, false, stage.m_state.m_pipeline)
         ){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create specialized caustic resolve pipeline"));
             resolve.m_failed = true;
@@ -372,11 +372,11 @@ b8 CausticPipelineSet::ensureCausticGeometryDownsamplePipeline(){
     if(m_caustic.m_causticGeometryDownsamplePipelineFailed)
         return false;
 
-    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+    if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
         m_arena,
         m_graphics.getDevice(),
         m_shaderSystem,
-        &RefractiveSubsystem::causticGeometryDownsampleCs,
+        SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.causticGeometryDownsampleCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_CausticGeometryDownsample",
         sizeof(CausticGeometryDownsamplePushConstants),
@@ -398,11 +398,11 @@ b8 CausticPipelineSet::ensureCausticAccumulatorDecayPipeline(){
     if(m_caustic.m_causticAccumulatorDecayPipelineFailed)
         return false;
 
-    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+    if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
         m_arena,
         m_graphics.getDevice(),
         m_shaderSystem,
-        &RefractiveSubsystem::causticAccumulatorDecayCs,
+        SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.causticAccumulatorDecayCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         "ECSRender_CausticAccumulatorDecay",
         sizeof(CausticAccumulatorDecayPushConstants),
@@ -447,7 +447,7 @@ b8 CausticPipelineSet::ensureCausticRtPipeline(){
         return false;
     }
 
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CausticPhotonPushConstants), Core::ShaderType::AllRayTracing, m_caustic.m_hwCausticBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(CausticPhotonPushConstants), Core::ShaderType::AllRayTracing, m_caustic.m_hwCausticBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware caustic binding layout"));
         failed = true;
         return false;
@@ -457,9 +457,9 @@ b8 CausticPipelineSet::ensureCausticRtPipeline(){
     Core::ShaderHandle missShader;
     Core::ShaderHandle closestHitShader;
     if(
-        !m_shaderSystem.loadShader<RayGenerationShader>(&RefractiveSubsystem::causticPhotonHwRaygen, SelectRayTracingCsgVariant(csg), "ECSRender_CausticHwRaygen", raygenShader)
-        || !m_shaderSystem.loadShader<MissShader>(&RefractiveSubsystem::causticPhotonHwMiss, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwMiss", missShader)
-        || !m_shaderSystem.loadShader<ClosestHitShader>(&RefractiveSubsystem::causticPhotonHwChit, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwClosestHit", closestHitShader)
+        !m_shaderSystem.loadShader<RayGenerationShader, RefractiveSubsystem>(SubsystemAssetSelector<RefractiveSubsystem, RayGenerationShader>([](const RefractiveSubsystem& s){ return s.causticPhotonHwRaygen; }), SelectRayTracingCsgVariant(csg), "ECSRender_CausticHwRaygen", raygenShader)
+        || !m_shaderSystem.loadShader<MissShader, RefractiveSubsystem>(SubsystemAssetSelector<RefractiveSubsystem, MissShader>([](const RefractiveSubsystem& s){ return s.causticPhotonHwMiss; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwMiss", missShader)
+        || !m_shaderSystem.loadShader<ClosestHitShader, RefractiveSubsystem>(SubsystemAssetSelector<RefractiveSubsystem, ClosestHitShader>([](const RefractiveSubsystem& s){ return s.causticPhotonHwChit; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwClosestHit", closestHitShader)
     ){
         failed = true;
         return false;

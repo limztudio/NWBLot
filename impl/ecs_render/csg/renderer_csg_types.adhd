@@ -72,49 +72,6 @@ namespace CsgFrameCacheDetail{
 // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
 [[nodiscard]] b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds);
 
-struct CsgFrameGpuData{
-    CsgReceiverRangeGpuDataVector receiverRanges;
-    CsgCutterGpuDataVector cutters;
-    CsgFrameWorkRegion workRegion;
-
-
-public:
-    explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)noexcept
-        : receiverRanges(arena)
-        , cutters(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
-    void reserve(usize receiverCapacity, usize cutterCapacity);
-};
-
-struct CsgFrameGpuDataView{
-    Span<const CsgReceiverRangeGpuData> receiverRanges;
-    Span<const CsgCutterGpuData> cutters;
-    CsgFrameWorkRegion workRegion;
-
-
-public:
-    constexpr CsgFrameGpuDataView()noexcept = default;
-    constexpr CsgFrameGpuDataView(const Span<const CsgReceiverRangeGpuData> inReceiverRanges, const Span<const CsgCutterGpuData> inCutters, const CsgFrameWorkRegion& inWorkRegion)noexcept
-        : receiverRanges(inReceiverRanges)
-        , cutters(inCutters)
-        , workRegion(inWorkRegion)
-    {}
-    CsgFrameGpuDataView(const CsgFrameGpuData& frameData)noexcept
-        : receiverRanges(frameData.receiverRanges)
-        , cutters(frameData.cutters)
-        , workRegion(frameData.workRegion)
-    {}
-
-
-public:
-    [[nodiscard]] constexpr b8 hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -124,6 +81,62 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::ToCoreRect"), cpp_header("<impl/ecs_render/csg/renderer_csg_types.adhd.h>")]
+extern Rect ToCoreRect(in CsgWorkRect rect);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgFrameGpuData{
+    public Vector<CsgReceiverRangeGpuData> receiverRanges;
+    public Vector<CsgCutterGpuData> cutters;
+    public CsgFrameWorkRegion workRegion;
+
+    public CsgFrameGpuData(){
+        this.workRegion = CsgFrameWorkRegion();
+    }
+
+    public b8 hasWork()const{
+        return !this.receiverRanges.empty() && !this.cutters.empty();
+    }
+
+    public void reserve(in usize receiverCapacity, in usize cutterCapacity){
+        this.receiverRanges.reserve(receiverCapacity);
+        this.cutters.reserve(cutterCapacity);
+    }
+}
+
+class CsgFrameGpuDataView{
+    public Span<CsgReceiverRangeGpuData> receiverRanges;
+    public Span<CsgCutterGpuData> cutters;
+    public CsgFrameWorkRegion workRegion;
+
+    public CsgFrameGpuDataView(){
+        this.workRegion = CsgFrameWorkRegion();
+    }
+
+    public CsgFrameGpuDataView(in Span<CsgReceiverRangeGpuData> inReceiverRanges, in Span<CsgCutterGpuData> inCutters, in CsgFrameWorkRegion inWorkRegion){
+        this.receiverRanges = inReceiverRanges;
+        this.cutters = inCutters;
+        this.workRegion = inWorkRegion;
+    }
+
+    public CsgFrameGpuDataView(in CsgFrameGpuData frameData){
+        this.receiverRanges = frameData.receiverRanges;
+        this.cutters = frameData.cutters;
+        this.workRegion = frameData.workRegion;
+    }
+
+    public b8 hasWork()const{
+        return !this.receiverRanges.empty() && !this.cutters.empty();
+    }
 }
 
 

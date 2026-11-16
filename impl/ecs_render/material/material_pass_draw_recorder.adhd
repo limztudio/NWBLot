@@ -2,102 +2,70 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
+[modular]
+class MaterialPassDrawRecorder : NoCopy{
+    private mut GraphicsRuntime m_graphics;
 
+    public MaterialPassDrawRecorder(mut GraphicsRuntime graphics){
+        this.m_graphics = graphics;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MaterialPassDrawRecorder final : NoCopy{
-public:
-    explicit MaterialPassDrawRecorder(Core::GraphicsRuntime& graphics)noexcept
-        : m_graphics(graphics)
-    {}
-
-
-public:
-    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const MeshFrameBindingSnapshot& frameBindings)const noexcept{
+    public b8 materialPassDrawResourcesReady(in MaterialPassMeshResourceSnapshot mesh, in MeshFrameBindingSnapshot frameBindings)const{
         return mesh.valid() && frameBindings.bindingValid();
     }
-    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept{
-        return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
+
+    public b8 materialPassDrawResourcesReady(in MaterialPassDrawItemsView drawItems, in MeshFrameBindingSnapshot frameBindings){
+        return this.meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings)
+            && this.indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings)
+            && this.computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings)
+        ;
     }
-    [[nodiscard]] b8 meshMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept;
-    [[nodiscard]] b8 indexedMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept{
-        return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
+
+    public b8 meshMaterialPassDrawResourcesReady(in Span<MaterialPassDrawItem> drawItems, in MeshFrameBindingSnapshot frameBindings);
+
+    public b8 indexedMaterialPassDrawResourcesReady(in Span<MaterialPassDrawItem> drawItems, in MeshFrameBindingSnapshot frameBindings){
+        return (drawItems.empty() || frameBindings.bindingValid()) && this.prepareIndexedMaterialPassResourceBindings(drawItems);
     }
-    [[nodiscard]] b8 computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const MeshFrameBindingSnapshot& frameBindings)noexcept;
-    [[nodiscard]] b8 prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
-        return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
+
+    public b8 computeMaterialPassDrawResourcesReady(in Span<MaterialPassDrawItem> drawItems, in MeshFrameBindingSnapshot frameBindings);
+
+    public b8 prepareMaterialPassResourceBindings(in MaterialPassDrawItemsView drawItems){
+        return this.prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems)
+            && this.prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems)
+            && this.prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems)
+        ;
     }
-    [[nodiscard]] b8 prepareMeshMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept{
-        return prepareMaterialPassResourceBindingsImpl(drawItems, false);
+
+    public b8 prepareMeshMaterialPassResourceBindings(in Span<MaterialPassDrawItem> drawItems){
+        return this.prepareMaterialPassResourceBindingsImpl(drawItems, false);
     }
-    [[nodiscard]] b8 prepareIndexedMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
-    [[nodiscard]] b8 prepareComputeMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept{
-        return prepareMaterialPassResourceBindingsImpl(drawItems, true);
+
+    public b8 prepareIndexedMaterialPassResourceBindings(in Span<MaterialPassDrawItem> drawItems);
+
+    public b8 prepareComputeMaterialPassResourceBindings(in Span<MaterialPassDrawItem> drawItems){
+        return this.prepareMaterialPassResourceBindingsImpl(drawItems, true);
     }
-    void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
-    [[nodiscard]] b8 setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
-    void dispatchComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);
-    void drawComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);
-    void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemsView& drawItems);
-    void renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
-    void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
+
+    public void setMaterialPassCommonBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh);
+    public b8 setMaterialPassDrawPushConstants(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh);
+    public void dispatchComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources);
+    public void drawComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources);
+    public void renderMaterialPassDrawItems(mut MaterialPassDrawContext context, in MaterialPassDrawItemsView drawItems);
+    public void renderIndexedMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
+    public void renderMeshMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
-    void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
+    public void generateComputeMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     // Graph-only raster half. The graph provides each output Combined; this method records state, heap, push constants, draws.
-    void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
+    public void renderComputeMaterialPassDrawItemsRasterOnly(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
-    void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
-    [[nodiscard]] b8 prepareMaterialPassResourceBindingsImpl(Span<const MaterialPassDrawItem> drawItems, b8 computeEmulation)noexcept;
-
-
-private:
-    Core::GraphicsRuntime& m_graphics;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void renderComputeMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
+    public b8 prepareMaterialPassResourceBindingsImpl(in Span<MaterialPassDrawItem> drawItems, in b8 computeEmulation);
 }
 
 

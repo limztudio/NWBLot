@@ -354,24 +354,24 @@ Expected<void> DeferredBindlessDescriptorRegistrar::registerSoftShadowTargets(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler){
-    auto& device = m_graphics.getDevice();
+b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler)noexcept{
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         LogDeferredBindlessHeapMissing();
         return false;
     }
-    FOUNDATION_ASSERT(m_deferredState.m_sampler);
-    FOUNDATION_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    FOUNDATION_ASSERT(m_deferredState.m_lightBuffer);
+    FOUNDATION_ASSERT(m_deferredState->m_sampler);
+    FOUNDATION_ASSERT(m_deferredState->m_sceneShadingBuffer);
+    FOUNDATION_ASSERT(m_deferredState->m_lightBuffer);
     FOUNDATION_ASSERT(targets.csgIntervalTargetsValid());
 
     DeferredBindlessFrameResources& bindless = targets.bindless;
     const DeferredBindlessDescriptorSources sources{
-        .sampler = *m_deferredState.m_sampler.get(),
+        .sampler = *m_deferredState->m_sampler.get(),
         .avboitLinearSampler = avboitLinearSampler,
-        .sceneShadingBuffer = *m_deferredState.m_sceneShadingBuffer.get(),
-        .lightBuffer = *m_deferredState.m_lightBuffer.get(),
+        .sceneShadingBuffer = *m_deferredState->m_sceneShadingBuffer.get(),
+        .lightBuffer = *m_deferredState->m_lightBuffer.get(),
     };
     DeferredBindlessDescriptorRegistrar registrar(heap, targets, sources);
     if(!registrar.registerAll()){
@@ -429,7 +429,7 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
         // Selector spans packets; retain descriptor-visible state at every native close.
         .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
     ;
-    auto slotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    auto slotsBufferResult = m_graphics->createBuffer(slotsBufferDesc);
     if(slotsBufferResult)
         bindless.slotsBuffer = Move(*slotsBufferResult);
     else
@@ -453,8 +453,8 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
     return true;
 }
 
-void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTargets& targets)noexcept{
+    Core::GpuDescriptorHeap& heap = m_graphics->getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(targets.bindless.slotsBufferDescriptor);
         heap.free(targets.bindless.gbufferBaseColor);
@@ -544,46 +544,46 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<DeferredFrameTargets> DeferredFrameTargetBuilder::build(const u32 width, const u32 height, const u32 shadowReceiverFactor, const u32 surfelResolveFactor){
-    auto createdTargetsResult = m_deferred.createDeferredFrameTargets(width, height);
+Expected<DeferredFrameTargets> DeferredFrameTargetBuilder::build(const u32 width, const u32 height, const u32 shadowReceiverFactor, const u32 surfelResolveFactor)noexcept{
+    auto createdTargetsResult = m_deferred->createDeferredFrameTargets(width, height);
     if(!createdTargetsResult)
         return MakeUnexpected(Failure{});
     DeferredFrameTargets& createdTargets = *createdTargetsResult;
     const auto resetCreatedTargets = [this, &createdTargets](){
-        m_avboit.resetAvboitFrameTargets(createdTargets.avboit);
-        m_deferred.resetDeferredFrameTargets(createdTargets);
+        m_avboit->resetAvboitFrameTargets(createdTargets.avboit);
+        m_deferred->resetDeferredFrameTargets(createdTargets);
     };
-    if(!m_avboit.createAvboitSampler()){
+    if(!m_avboit->createAvboitSampler()){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
-    if(!m_avboit.createAvboitFrameTargets(createdTargets)){
+    if(!m_avboit->createAvboitFrameTargets(createdTargets)){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
-    if(!m_csg.createCsgPeelTargets(createdTargets)){
+    if(!m_csg->createCsgPeelTargets(createdTargets)){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
     createdTargets.shadowReceiverFactor = shadowReceiverFactor;
-    if(!ShadowVisibilityTargetBuilder(m_graphics, m_rayTracingState).build(createdTargets)){
+    if(!ShadowVisibilityTargetBuilder(*m_graphics, *m_rayTracingState).build(createdTargets)){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
-    if(!m_rayTracing.createCausticTargets(createdTargets)){
+    if(!m_rayTracing->createCausticTargets(createdTargets)){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
     createdTargets.surfelResolveFactor = surfelResolveFactor;
-    if(!m_rayTracing.createSurfelTargets(createdTargets)){
+    if(!m_rayTracing->createSurfelTargets(createdTargets)){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
-    if(!m_deferred.createDeferredFrameTargetResources(createdTargets, m_avboit.linearSampler())){
+    if(!m_deferred->createDeferredFrameTargetResources(createdTargets, m_avboit->linearSampler())){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }
-    if(!m_avboit.registerAvboitFrameTargetDescriptors(createdTargets, createdTargets.avboit)){
+    if(!m_avboit->registerAvboitFrameTargetDescriptors(createdTargets, createdTargets.avboit)){
         resetCreatedTargets();
         return MakeUnexpected(Failure{});
     }

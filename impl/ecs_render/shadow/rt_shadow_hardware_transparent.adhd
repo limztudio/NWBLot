@@ -77,7 +77,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout())
         return false;
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
+    if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
         state.m_pipelineFailed = true;
         return false;
@@ -90,11 +90,12 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     for(u32 i = 0u; i < LengthOf(state.m_pipelines); ++i){
         if(state.m_pipelines[i])
             continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(shaderMembers[i], Core::ShaderArchive::s_DefaultVariant, s_HardwareTransparentShadowDebugName, state.m_shaders[i])){
+        const auto shaderMember = shaderMembers[i];
+        if(!m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([shaderMember](const ShadowSubsystem& s){ return s.*shaderMember; }), Core::ShaderArchive::s_DefaultVariant, s_HardwareTransparentShadowDebugName, state.m_shaders[i])){
             state.m_pipelineFailed = true;
             return false;
         }
-        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, state.m_shaders[i], state.m_bindingLayout, true, state.m_pipelines[i])){
+        if(!CreateHeapComputePipeline(device, state.m_shaders[i], state.m_bindingLayout, true, state.m_pipelines[i])){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
             state.m_pipelineFailed = true;
             return false;

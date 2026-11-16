@@ -208,7 +208,7 @@ f32 ComputePaddedWidth(in ElementBox box){
 - **Single-Bracket Attribute Rule**:
   - Combine multiple attributes in a single comma-separated bracket (`[arena, asset("foo")]`); stacked `[...][...]` blocks on the same declaration are prohibited.
 - **Permitted Attributes by Declaration Kind**:
-  - `class`: `[arena]`, `[serialize]`, `[reflect]`, `[asset("type_name")]`, `[subsystem("type_name")]`, `[component("type_name")]`, `[system("type_name")]`
+  - `class`: `[arena]`, `[modular]`, `[serialize]`, `[reflect]`, `[asset("type_name")]`, `[subsystem("type_name")]`, `[component("type_name")]`, `[system("type_name")]`
   - `interface`: `[reflect]`, `[asset("type_name")]`
   - `enum` / `flag`: `[reflect]`
   - `field`: `[transient]`, `[reflect]`, `[subsystem("type_name")]`

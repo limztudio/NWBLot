@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u32 ComputeDeferredDispatchGroupCount(in u32 extent, in u32 groupSize){
     return DivideUpWrapping(extent, groupSize);
 }
@@ -18,6 +25,25 @@ u32 SelectDeferredPresentOutputLayerSlot(in b8 valid, in u32 slot, in u32 invali
     if(valid)
         return slot;
     return invalidSlot;
+}
+
+void RendererDeferredSystem::confirmSceneShadingBufferUploads(
+    in Span<SceneLightGpuData> lights,
+    in b8 lightUploadRequired,
+    in SceneShadingGpuData sceneShadingState,
+    in b8 sceneShadingUploadRequired
+){
+    SceneShadingUploadTracker().confirm(
+        lights,
+        lightUploadRequired,
+        sceneShadingState,
+        sceneShadingUploadRequired,
+        this.m_deferredState.m_lightGpuData,
+        this.m_deferredState.m_lightGpuDataCount,
+        this.m_deferredState.m_lightGpuDataValid,
+        this.m_deferredState.m_sceneShadingGpuData,
+        this.m_deferredState.m_sceneShadingGpuDataValid
+    );
 }
 
 
@@ -112,13 +138,13 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(const f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept{
-    FOUNDATION_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    FOUNDATION_ASSERT(m_deferredState.m_lightBuffer);
+SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(const f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)const noexcept{
+    FOUNDATION_ASSERT(m_deferredState->m_sceneShadingBuffer);
+    FOUNDATION_ASSERT(m_deferredState->m_lightBuffer);
     SceneShadingBufferUploads uploads{};
 
     Array<f32, NWB_SCENE_MAX_LIGHTS> causticLightImportance{};
-    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, uploads.lightData, causticLightImportance);
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(*m_world, uploads.lightData, causticLightImportance);
 
     // Rank caustic lights into params.w; needs a refractive instance.
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
@@ -133,50 +159,31 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
 
     // A zero-light scene has nothing to copy; still record the empty mirror.
     uploads.lightUploadRequired = SceneShadingUploadTracker{}.lightUploadRequired(
-        m_deferredState.m_lightGpuDataValid,
-        m_deferredState.m_lightGpuDataCount,
-        m_deferredState.m_lightGpuData,
+        m_deferredState->m_lightGpuDataValid,
+        m_deferredState->m_lightGpuDataCount,
+        m_deferredState->m_lightGpuData,
         activeLights
     );
     uploads.lightCount = lightCount;
 
-    uploads.sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(fallbackAspectRatio, lightCount, m_world);
+    uploads.sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(fallbackAspectRatio, lightCount, *m_world);
     uploads.sceneShadingUploadRequired = SceneShadingUploadTracker{}.shadingUploadRequired(
-        m_deferredState.m_sceneShadingGpuDataValid,
-        m_deferredState.m_sceneShadingGpuData,
+        m_deferredState->m_sceneShadingGpuDataValid,
+        m_deferredState->m_sceneShadingGpuData,
         uploads.sceneShadingState
     );
     return uploads;
 }
 
-void RendererDeferredSystem::confirmSceneShadingBufferUploads(
-    const Span<const SceneLightGpuData> lights,
-    const b8 lightUploadRequired,
-    const SceneShadingGpuData& sceneShadingState,
-    const b8 sceneShadingUploadRequired
-)noexcept{
-    SceneShadingUploadTracker{}.confirm(
-        lights,
-        lightUploadRequired,
-        sceneShadingState,
-        sceneShadingUploadRequired,
-        m_deferredState.m_lightGpuData,
-        m_deferredState.m_lightGpuDataCount,
-        m_deferredState.m_lightGpuDataValid,
-        m_deferredState.m_sceneShadingGpuData,
-        m_deferredState.m_sceneShadingGpuDataValid
-    );
-}
-
-b8 RendererDeferredSystem::createDeferredLightingResources(){
-    auto& device = m_graphics.getDevice();
+b8 RendererDeferredSystem::createDeferredLightingResources()noexcept{
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
         return false;
     }
 
-    if(!m_deferredState.m_sceneShadingBuffer){
+    if(!m_deferredState->m_sceneShadingBuffer){
         Core::BufferDesc sceneShadingBufferDesc;
         sceneShadingBufferDesc
             .setByteSize(sizeof(SceneShadingGpuData))
@@ -185,18 +192,18 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        auto sceneShadingBufferResult = m_graphics.createBuffer(sceneShadingBufferDesc);
+        auto sceneShadingBufferResult = m_graphics->createBuffer(sceneShadingBufferDesc);
         if(sceneShadingBufferResult)
-            m_deferredState.m_sceneShadingBuffer = Move(*sceneShadingBufferResult);
+            m_deferredState->m_sceneShadingBuffer = Move(*sceneShadingBufferResult);
         else
-            m_deferredState.m_sceneShadingBuffer.reset();
+            m_deferredState->m_sceneShadingBuffer.reset();
         if(!sceneShadingBufferResult){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene shading buffer"));
             return false;
         }
     }
 
-    if(!m_deferredState.m_lightBuffer){
+    if(!m_deferredState->m_lightBuffer){
         Core::BufferDesc lightBufferDesc;
         lightBufferDesc
             .setByteSize(ComputeSceneLightBufferByteSize(sizeof(SceneLightGpuData), NWB_SCENE_MAX_LIGHTS))
@@ -205,11 +212,11 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        auto lightBufferResult = m_graphics.createBuffer(lightBufferDesc);
+        auto lightBufferResult = m_graphics->createBuffer(lightBufferDesc);
         if(lightBufferResult)
-            m_deferredState.m_lightBuffer = Move(*lightBufferResult);
+            m_deferredState->m_lightBuffer = Move(*lightBufferResult);
         else
-            m_deferredState.m_lightBuffer.reset();
+            m_deferredState->m_lightBuffer.reset();
         if(!lightBufferResult){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene light buffer"));
             return false;
@@ -217,31 +224,31 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     }
 
     // Local layout carries the heap slot plus the swap-chain mode.
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredLightingPushConstants), Core::ShaderType::Compute, m_deferredState.m_lightingBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(DeferredLightingPushConstants), Core::ShaderType::Compute, m_deferredState->m_lightingBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
         return false;
     }
 
-    if(!CreateClampSampler(false, device, m_deferredState.m_sampler)){
+    if(!CreateClampSampler(false, device, m_deferredState->m_sampler)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
 
     // Shading is material-driven via the generated BXDF dispatch.
-    if(!m_shaderSystem.loadShader<ComputeShader>(&DeferredSubsystem::lightingCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredLightingCS", m_deferredState.m_lightingComputeShader))
+    if(!m_shaderSystem->loadShader<ComputeShader, DeferredSubsystem>(SubsystemAssetSelector<DeferredSubsystem, ComputeShader>([](const DeferredSubsystem& s){ return s.lightingCs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredLightingCS", m_deferredState->m_lightingComputeShader))
         return false;
 
     return true;
 }
 
-b8 RendererDeferredSystem::createDeferredLightingPipeline(){
+b8 RendererDeferredSystem::createDeferredLightingPipeline()noexcept{
     if(!createDeferredLightingResources())
         return false;
 
-    if(m_deferredState.m_lightingPipeline)
+    if(m_deferredState->m_lightingPipeline)
         return true;
 
-    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), m_deferredState.m_lightingComputeShader, m_deferredState.m_lightingBindingLayout, false, m_deferredState.m_lightingPipeline)){
+    if(!CreateHeapComputePipeline(m_graphics->getDevice(), m_deferredState->m_lightingComputeShader, m_deferredState->m_lightingBindingLayout, false, m_deferredState->m_lightingPipeline)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
     }
@@ -249,14 +256,14 @@ b8 RendererDeferredSystem::createDeferredLightingPipeline(){
     return true;
 }
 
-Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket){
+Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket)noexcept{
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
         desc,
         __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .useLaggedLightingHistory = useLaggedLightingHistory, });
 }
 
-b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, const b8 useLaggedLightingHistory){
-    FOUNDATION_ASSERT(m_deferredState.m_lightingPipeline);
+b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, const b8 useLaggedLightingHistory)noexcept{
+    FOUNDATION_ASSERT(m_deferredState->m_lightingPipeline);
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory ? &targets.laggedLightingHistory : nullptr;
     if(!CanRenderDeferredLightingWithHistory(useLaggedLightingHistory, laggedHistory && laggedHistory->valid()))
@@ -266,13 +273,13 @@ b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList
 
     // Boundary transitions are graph-owned; this thunk holds upload + dispatch.
 
-    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, m_graphics.getDevice(), commandList);
+    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, m_graphics->getDevice(), commandList);
 
     Core::ComputeState computeState;
-    computeState.setPipeline(m_deferredState.m_lightingPipeline.get());
+    computeState.setPipeline(m_deferredState->m_lightingPipeline.get());
     commandList.setComputeState(computeState);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_lightingPipeline);
-    const DeferredLightingPushConstants pushConstants = ResolveDeferredLightingPushConstants(resourceSlots.slot(), m_graphics.isHDR10OutputActive());
+    m_graphics->getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState->m_lightingPipeline);
+    const DeferredLightingPushConstants pushConstants = ResolveDeferredLightingPushConstants(resourceSlots.slot(), m_graphics->isHDR10OutputActive());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     const u32 groupCountX = ComputeDeferredDispatchGroupCount(targets.width, NWB_DEFERRED_LIGHTING_GROUP_SIZE);
@@ -327,49 +334,49 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererDeferredSystem::createDeferredCompositeResources(){
-    auto& device = m_graphics.getDevice();
+b8 RendererDeferredSystem::createDeferredCompositeResources()noexcept{
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
         return false;
     }
 
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredCompositePushConstants), Core::ShaderType::Compute, m_deferredState.m_compositeComputeBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(DeferredCompositePushConstants), Core::ShaderType::Compute, m_deferredState->m_compositeComputeBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
         return false;
     }
 
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredPresentPushConstants), Core::ShaderType::Pixel, m_deferredState.m_presentBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(DeferredPresentPushConstants), Core::ShaderType::Pixel, m_deferredState->m_presentBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
         return false;
     }
 
-    if(!CreateClampSampler(false, device, m_deferredState.m_sampler)){
+    if(!CreateClampSampler(false, device, m_deferredState->m_sampler)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(&DeferredSubsystem::compositeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS", m_deferredState.m_compositeComputeShader))
+    if(!m_shaderSystem->loadShader<ComputeShader, DeferredSubsystem>(SubsystemAssetSelector<DeferredSubsystem, ComputeShader>([](const DeferredSubsystem& s){ return s.compositeCs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS", m_deferredState->m_compositeComputeShader))
         return false;
 
-    if(!m_shaderSystem.loadDeferredCompositeVertexShader())
+    if(!m_shaderSystem->loadDeferredCompositeVertexShader())
         return false;
 
-    if(!m_shaderSystem.loadShader<PixelShader>(&DeferredSubsystem::compositePs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS", m_deferredState.m_presentPixelShader))
+    if(!m_shaderSystem->loadShader<PixelShader, DeferredSubsystem>(SubsystemAssetSelector<DeferredSubsystem, PixelShader>([](const DeferredSubsystem& s){ return s.compositePs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS", m_deferredState->m_presentPixelShader))
         return false;
 
     return true;
 }
 
-b8 RendererDeferredSystem::createDeferredCompositePipeline(){
+b8 RendererDeferredSystem::createDeferredCompositePipeline()noexcept{
     if(!createDeferredCompositeResources())
         return false;
 
-    if(m_deferredState.m_compositeComputePipeline)
+    if(m_deferredState->m_compositeComputePipeline)
         return true;
 
-    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), m_deferredState.m_compositeComputeShader, m_deferredState.m_compositeComputeBindingLayout, false, m_deferredState.m_compositeComputePipeline)){
+    if(!CreateHeapComputePipeline(m_graphics->getDevice(), m_deferredState->m_compositeComputeShader, m_deferredState->m_compositeComputeBindingLayout, false, m_deferredState->m_compositeComputePipeline)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
         return false;
     }
@@ -377,31 +384,31 @@ b8 RendererDeferredSystem::createDeferredCompositePipeline(){
     return true;
 }
 
-b8 RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer){
+b8 RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer)noexcept{
     if(!createDeferredCompositeResources())
         return false;
 
     const Core::FramebufferInfo& framebufferInfo = presentationFramebuffer.getFramebufferInfo();
-    if(m_deferredState.m_presentPipeline && m_deferredState.m_presentPipeline->getFramebufferInfo() == framebufferInfo)
+    if(m_deferredState->m_presentPipeline && m_deferredState->m_presentPipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setVertexShader(m_shaderSystem.deferredCompositeVertexShader())
-        .setPixelShader(m_deferredState.m_presentPixelShader)
+        .setVertexShader(m_shaderSystem->deferredCompositeVertexShader())
+        .setPixelShader(m_deferredState->m_presentPixelShader)
         .setRenderState(BuildCompositeRenderState())
-        .addBindingLayout(m_deferredState.m_presentBindingLayout)
+        .addBindingLayout(m_deferredState->m_presentBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
     auto presentPipelineResult = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(presentPipelineResult)
-        m_deferredState.m_presentPipeline = Move(*presentPipelineResult);
+        m_deferredState->m_presentPipeline = Move(*presentPipelineResult);
     else
-        m_deferredState.m_presentPipeline.reset();
+        m_deferredState->m_presentPipeline.reset();
     if(!presentPipelineResult){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred presentation pipeline"));
         return false;
@@ -416,23 +423,23 @@ Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
     const ReflectionCompositeInputs& reflectionInputs,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket
-){
+)noexcept{
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,
         __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .reflectionInputs = reflectionInputs, });
 }
 
-b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs){
-    FOUNDATION_ASSERT(m_deferredState.m_compositeComputePipeline);
+b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs)noexcept{
+    FOUNDATION_ASSERT(m_deferredState->m_compositeComputePipeline);
 
     // Boundary states are graph-owned; this thunk holds only composite commands.
 
-    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, m_graphics.getDevice(), commandList);
+    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, m_graphics->getDevice(), commandList);
 
     Core::ComputeState computeState;
-    computeState.setPipeline(m_deferredState.m_compositeComputePipeline.get());
+    computeState.setPipeline(m_deferredState->m_compositeComputePipeline.get());
     commandList.setComputeState(computeState);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_compositeComputePipeline);
+    m_graphics->getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState->m_compositeComputePipeline);
     const DeferredCompositePushConstants pushConstants = ResolveDeferredCompositePushConstants(
         targets.bindless.slotsBufferDescriptor.slot(),
         targets.avboit.refractionFramebuffer != nullptr,
@@ -445,19 +452,19 @@ b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandLis
     return true;
 }
 
-b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage){
+b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage)noexcept{
     FOUNDATION_ASSERT(presentationFrame.valid());
-    FOUNDATION_ASSERT(m_deferredState.m_presentPipeline);
+    FOUNDATION_ASSERT(m_deferredState->m_presentPipeline);
     Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
     FOUNDATION_ASSERT(
         presentationFramebuffer.getDescription().colorAttachments.size() == 1u
         && presentationFramebuffer.getDescription().colorAttachments[0].texture == presentationFrame.backBuffer.texture.get()
-        && m_deferredState.m_presentPipeline->getFramebufferInfo() == presentationFramebuffer.getFramebufferInfo()
+        && m_deferredState->m_presentPipeline->getFramebufferInfo() == presentationFramebuffer.getFramebufferInfo()
     );
 
     // Graph owns the composite transition and the acquired texture's render-target state.
 
-    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, m_graphics.getDevice(), commandList);
+    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, m_graphics->getDevice(), commandList);
 
     // Discard avoids a tile restore; STORE keeps the image for UI and present.
     Core::RenderPassParameters renderPassParameters;
@@ -471,16 +478,16 @@ b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList,
     viewportState.addViewportAndScissorRect(presentationFramebuffer.getFramebufferInfo().getViewport());
 
     Core::GraphicsState graphicsState;
-    graphicsState.setPipeline(m_deferredState.m_presentPipeline.get());
+    graphicsState.setPipeline(m_deferredState->m_presentPipeline.get());
     graphicsState.setFramebuffer(&presentationFramebuffer);
     graphicsState.setViewport(viewportState);
 
     commandList.setGraphicsState(graphicsState);
-    m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *m_deferredState.m_presentPipeline);
+    m_graphics->getDevice().getDescriptorHeap().bindGraphics(commandList, *m_deferredState->m_presentPipeline);
     const DeferredPresentPushConstants pushConstants = ResolveDeferredPresentPushConstants(
         targets.bindless.slotsBufferDescriptor.slot(),
-        m_graphics.isHDR10OutputActive(),
-        m_deferredState.m_presentationSettings,
+        m_graphics->isHDR10OutputActive(),
+        m_deferredState->m_presentationSettings,
         SelectDeferredPresentOutputLayerSlot(outputLayerImage.valid(), outputLayerImage.slot(), Core::GpuDescriptorHandle::s_Invalid)
     );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));

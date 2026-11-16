@@ -128,7 +128,7 @@ class UiPopupSmokeScene{
     private b8 m_visible = true;
     private b8 m_displayChanged = false;
 
-    public UiPopupSmokeScene(mut GlobalArena arena);
+    public UiPopupSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
     public b8 paintLaterRoot(mut UiPaintContext context)const;
@@ -162,7 +162,7 @@ class UiPopupToolsSmokeScene{
     private b8 m_hoverObserved = false;
     private b8 m_anchorHovered = false;
 
-    public UiPopupToolsSmokeScene(mut GlobalArena arena);
+    public UiPopupToolsSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
     public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
@@ -333,9 +333,6 @@ void ObserveNestedPopupSmokeTargets(
 UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(mut GlobalArena arena){
     this.m_source = UiNestedPopupSmokeSource(arena);
     this.m_search = SearchComboState(arena);
-    this.m_beforeText = EditModel(arena);
-    this.m_afterText = EditModel(arena);
-    this.m_childText = EditModel(arena);
     const b8 initialized = this.m_beforeText.setText("Before") && this.m_afterText.setText("After") && this.m_childText.setText("Child");
     [essential] assert(initialized, "UI nested popup smoke models must initialize");
     this.m_combo.select(1u);
@@ -621,7 +618,6 @@ Rect UiNestedPopupSmokeScene::rowBounds(in ListState state, in IListDataSource s
 UiNumericEditSmokeScene::UiNumericEditSmokeScene(mut GlobalArena arena){
     this.m_integer = IntegerEditModel(arena);
     this.m_float = FloatEditModel(arena);
-    this.m_clipboard = EditModel(arena);
     this.m_selectionView = EditBoxView(arena);
     this.resetModels();
 }
@@ -856,9 +852,7 @@ void UiNumericEditSmokeScene::paintMarkers(mut UiPaintContext context)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiPopupSmokeScene::UiPopupSmokeScene(mut GlobalArena arena){
-    this.m_popupText = EditModel(arena);
-    this.m_outsideText = EditModel(arena);
+UiPopupSmokeScene::UiPopupSmokeScene(){
     const b8 initialized = this.m_popupText.setText("Popup") && this.m_outsideText.setText("Outside focus sentinel");
     [essential] assert(initialized, "Popup smoke text models must contain valid UTF8");
 }
@@ -1041,8 +1035,7 @@ void UiPopupSmokeScene::observeState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiPopupToolsSmokeScene::UiPopupToolsSmokeScene(mut GlobalArena arena){
-    this.m_sentinel = EditModel(arena);
+UiPopupToolsSmokeScene::UiPopupToolsSmokeScene(){
     const b8 initialized = this.m_sentinel.setText("Sentinel");
     [essential] assert(initialized, "UI popup tools smoke sentinel must initialize");
 }

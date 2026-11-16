@@ -200,6 +200,7 @@ struct ClassDecl{
     b8 isSerialize = false;
     b8 isReflect = false;
     b8 isArenaOwner = false;
+    b8 isModular = false;
     b8 needsClassArena = false;
     MStringView cppNamespace;
     MStringView cppExportName;

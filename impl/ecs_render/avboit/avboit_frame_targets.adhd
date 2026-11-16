@@ -13,9 +13,6 @@ native{
 #include <impl/ecs_render/avboit/types.adhd.h>
 #include <impl/assets/graphics/avboit/constants.h>
 
-#include <core/graphics/api.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,82 +33,102 @@ static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AvboitFrameTargets{
-    u32 fullWidth = 0;
-    u32 fullHeight = 0;
-    u32 lowWidth = 0;
-    u32 lowHeight = 0;
-    u32 virtualSliceCount = 0;
-    u32 physicalSliceCount = 0;
-    Core::Format::Enum lowRasterFormat = Core::Format::UNKNOWN;
-    Core::Format::Enum accumColorFormat = Core::Format::UNKNOWN;
-    Core::Format::Enum accumExtinctionFormat = Core::Format::UNKNOWN;
-    Core::Format::Enum transmittanceFormat = Core::Format::UNKNOWN;
-    // AVBOIT target-generation heap registrations.
-    Core::GpuDescriptorHandle coverageBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle depthWarpBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle controlBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle extinctionBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle refractionTileListDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle refractionTileArgumentsDescriptor = Core::GpuDescriptorHandle::Invalid();
-    // Borrowed shared target-slot payload; AVBOIT does not own it.
-    Core::GpuDescriptorHandle deferredSlotsBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::TextureHandle lowRasterTarget;
-    Core::TextureHandle accumColor;
-    Core::TextureHandle accumExtinction;
-    Core::TextureHandle transmittanceTexture;
-    Core::FramebufferHandle lowFramebuffer;
-    Core::FramebufferHandle accumulationFramebuffer;
-    Core::TextureHandle refractionDepth;
-    Core::TextureHandle refractionNormalIor;
-    Core::TextureHandle refractionTintCoverage;
-    Core::TextureHandle refractionInstance;
-    Core::TextureHandle refractionSpecularRoughness;
-    Core::TextureHandle refractionResolve;
-    Core::TextureHandle foregroundAccumColor;
-    Core::TextureHandle foregroundAccumExtinction;
-    Core::FramebufferHandle refractionFramebuffer;
-    Core::BufferHandle coverageBuffer;
-    Core::BufferHandle depthWarpBuffer;
-    Core::BufferHandle controlBuffer;
-    Core::BufferHandle extinctionBuffer;
-    Core::BufferHandle extinctionOverflowBuffer;
-    Core::BufferHandle refractionTileList;
-    Core::BufferHandle refractionTileArguments;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept;
-};
-static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle) + 2u * sizeof(Core::BufferHandle) + 2u * sizeof(Core::GpuDescriptorHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
-
-FOUNDATION_INLINE void ValidateAvboitPushConstantTargets(const AvboitFrameTargets& targets)noexcept{
-    (void)targets;
-    FOUNDATION_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
-    FOUNDATION_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
-}
-
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsFullWidth(const AvboitFrameTargets& targets)noexcept{ return targets.fullWidth; }
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsFullHeight(const AvboitFrameTargets& targets)noexcept{ return targets.fullHeight; }
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsLowWidth(const AvboitFrameTargets& targets)noexcept{ return targets.lowWidth; }
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsLowHeight(const AvboitFrameTargets& targets)noexcept{ return targets.lowHeight; }
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsVirtualSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.virtualSliceCount; }
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsPhysicalSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.physicalSliceCount; }
-[[nodiscard]] FOUNDATION_INLINE b8 AvboitTargetsHasRefractionFramebuffer(const AvboitFrameTargets& targets)noexcept{ return targets.refractionFramebuffer != nullptr; }
-[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsDeferredSlotsBufferSlot(const AvboitFrameTargets& targets)noexcept{ return targets.deferredSlotsBufferDescriptor.slot(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[modular]
+class AvboitFrameTargets{
+    public u32 fullWidth = 0u;
+    public u32 fullHeight = 0u;
+    public u32 lowWidth = 0u;
+    public u32 lowHeight = 0u;
+    public u32 virtualSliceCount = 0u;
+    public u32 physicalSliceCount = 0u;
+    public Format lowRasterFormat = Format::UNKNOWN;
+    public Format accumColorFormat = Format::UNKNOWN;
+    public Format accumExtinctionFormat = Format::UNKNOWN;
+    public Format transmittanceFormat = Format::UNKNOWN;
+    // AVBOIT target-generation heap registrations.
+    public GpuDescriptorHandle coverageBufferDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle depthWarpBufferDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle controlBufferDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle extinctionBufferDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle extinctionOverflowBufferDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle transmittanceTextureStorageDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle refractionTileListDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle refractionTileArgumentsDescriptor = GpuDescriptorHandleInvalid();
+    // Borrowed shared target-slot payload; AVBOIT does not own it.
+    public GpuDescriptorHandle deferredSlotsBufferDescriptor = GpuDescriptorHandleInvalid();
+    public TextureHandle lowRasterTarget;
+    public TextureHandle accumColor;
+    public TextureHandle accumExtinction;
+    public TextureHandle transmittanceTexture;
+    public FramebufferHandle lowFramebuffer;
+    public FramebufferHandle accumulationFramebuffer;
+    public TextureHandle refractionDepth;
+    public TextureHandle refractionNormalIor;
+    public TextureHandle refractionTintCoverage;
+    public TextureHandle refractionInstance;
+    public TextureHandle refractionSpecularRoughness;
+    public TextureHandle refractionResolve;
+    public TextureHandle foregroundAccumColor;
+    public TextureHandle foregroundAccumExtinction;
+    public FramebufferHandle refractionFramebuffer;
+    public BufferHandle coverageBuffer;
+    public BufferHandle depthWarpBuffer;
+    public BufferHandle controlBuffer;
+    public BufferHandle extinctionBuffer;
+    public BufferHandle extinctionOverflowBuffer;
+    public BufferHandle refractionTileList;
+    public BufferHandle refractionTileArguments;
+
+    public b8 valid()const;
+}
+
+void ValidateAvboitPushConstantTargets(in AvboitFrameTargets targets){
+    if(!targets.deferredSlotsBufferDescriptor.valid() || targets.deferredSlotsBufferDescriptor.descriptorClass() != GpuDescriptorClass::UniformBuffer)
+        assert(false);
+}
+
+u32 AvboitTargetsFullWidth(in AvboitFrameTargets targets){
+    return targets.fullWidth;
+}
+
+u32 AvboitTargetsFullHeight(in AvboitFrameTargets targets){
+    return targets.fullHeight;
+}
+
+u32 AvboitTargetsLowWidth(in AvboitFrameTargets targets){
+    return targets.lowWidth;
+}
+
+u32 AvboitTargetsLowHeight(in AvboitFrameTargets targets){
+    return targets.lowHeight;
+}
+
+u32 AvboitTargetsVirtualSliceCount(in AvboitFrameTargets targets){
+    return targets.virtualSliceCount;
+}
+
+u32 AvboitTargetsPhysicalSliceCount(in AvboitFrameTargets targets){
+    return targets.physicalSliceCount;
+}
+
+b8 AvboitTargetsHasRefractionFramebuffer(in AvboitFrameTargets targets){
+    return targets.refractionFramebuffer.valid();
+}
+
+u32 AvboitTargetsDeferredSlotsBufferSlot(in AvboitFrameTargets targets){
+    return targets.deferredSlotsBufferDescriptor.slot();
 }
 
 

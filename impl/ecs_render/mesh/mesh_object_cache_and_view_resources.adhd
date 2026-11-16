@@ -100,16 +100,16 @@ b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers&
 
 ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept{
     const ECSRenderDetail::ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
-    return {
-        .buffer = cache.buffer,
-        .decoderPipeline = cache.decoderPipeline,
-        .sourceRevision = mesh.runtimeGeometryContentRevision,
-        .heapHandle = cache.heapHandle,
-        .indexByteOffset = cache.indexByteOffset,
-        .indexCount = cache.indexCount,
-        .initialized = cache.initialized,
-        .requiresDecode = MeshGeometryBufferPolicy().requiresObjectCacheDecode(cache.acceptedContent, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, cache.acceptedContentRevision),
-    };
+    ECSRenderDetail::ObjectGeometryCacheSnapshot snapshot;
+    snapshot.buffer = cache.buffer;
+    snapshot.decoderPipeline = cache.decoderPipeline;
+    snapshot.sourceRevision = mesh.runtimeGeometryContentRevision;
+    snapshot.heapHandle = cache.heapHandle;
+    snapshot.indexByteOffset = cache.indexByteOffset;
+    snapshot.indexCount = cache.indexCount;
+    snapshot.initialized = cache.initialized;
+    snapshot.requiresDecode = MeshGeometryBufferPolicy().requiresObjectCacheDecode(cache.acceptedContent, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, cache.acceptedContentRevision);
+    return snapshot;
 }
 
 b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline){

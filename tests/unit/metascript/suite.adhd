@@ -56,6 +56,7 @@ public:
 
 void RunCoreCppHeaderImportVerification();
 void RunExternHeaderAndDeclEdgeCases();
+void RunModularClassEdgeCases();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,6 +99,10 @@ FOUNDATION_INLINE void InvokeCoreCppHeaderImportVerification(){
 
 FOUNDATION_INLINE void InvokeExternHeaderAndDeclEdgeCases(){
     AdhdCompilerTestsDetail::RunExternHeaderAndDeclEdgeCases();
+}
+
+FOUNDATION_INLINE void InvokeModularClassEdgeCases(){
+    AdhdCompilerTestsDetail::RunModularClassEdgeCases();
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
@@ -1857,6 +1862,15 @@ void VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases(){
     InvokeExternHeaderAndDeclEdgeCases();
 }
 
+void VerifyAdhdCompiler_CompilesModularClassEdgeCases(){
+    AdhdTestArena arena = AdhdTestArena();
+    ExpectCompileFails(arena, "class PlainMissing {\r\n    public void step();\r\n}\r\n", "impl/bad_plain_bodyless.adhd");
+    ExpectCompileFails(arena, "[modular]\r\nclass BadTmpl<T> {\r\n    public T item;\r\n}\r\n", "impl/bad_modular_tmpl.adhd");
+    ExpectCompileFails(arena, "[arena, modular, subsystem(\"bad\")]\r\nclass BadSub {\r\n}\r\n", "impl/bad_modular_sub.adhd");
+    ExpectCompileFails(arena, "[modular]\r\nclass BadMethodTmpl {\r\n    public void act<T>(in T val);\r\n}\r\n", "impl/bad_modular_method_tmpl.adhd");
+    InvokeModularClassEdgeCases();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1923,6 +1937,22 @@ b8 MockIncludeResolver::resolveInclude(const Core::Metascript::MStringView inclu
         outContent = Core::Metascript::MString(s_ForeignDefs.data(), s_ForeignDefs.size(), arena);
         return true;
     }
+    if(includePath == "impl/modular_box.adhd"){
+        static constexpr Core::Metascript::MStringView s_ModularBoxHeader =
+            "class RefTarget {\r\n"
+            "    public u32 value = 0u;\r\n"
+            "}\r\n"
+            "[modular]\r\n"
+            "class ModularBox : NoCopy {\r\n"
+            "    private mut RefTarget m_target;\r\n"
+            "    private Vector<u32> m_items;\r\n"
+            "    public ModularBox(mut RefTarget target, in u32 seed);\r\n"
+            "    public u32 read()const;\r\n"
+            "    public void append(in u32 val);\r\n"
+            "}\r\n";
+        outContent = Core::Metascript::MString(s_ModularBoxHeader.data(), s_ModularBoxHeader.size(), arena);
+        return true;
+    }
     static constexpr Core::Metascript::MStringView s_HeaderCode = "const u32 kSharedLimit = 16;\r\n";
     outContent = Core::Metascript::MString(s_HeaderCode.data(), s_HeaderCode.size(), arena);
     return true;
@@ -1932,6 +1962,82 @@ Core::Metascript::MStringView MockIncludeResolver::resolveIncludeNamespace(const
     if(resolvedKey == "foreign_defs.adhd")
         return "NWB::MockForeign";
     return {};
+}
+
+void RunModularClassEdgeCases(){
+    AdhdTestArena arena;
+    MockIncludeResolver resolver;
+    static constexpr const char kModularDeclSource[] =
+        "class RefTarget {\r\n"
+        "    public u32 value = 0u;\r\n"
+        "}\r\n"
+        "[modular]\r\n"
+        "class ModularBox : NoCopy {\r\n"
+        "    private mut RefTarget m_target;\r\n"
+        "    private Vector<u32> m_items;\r\n"
+        "    public ModularBox(mut RefTarget target, in u32 seed);\r\n"
+        "    public u32 read()const;\r\n"
+        "    public void append(in u32 val);\r\n"
+        "}\r\n";
+    Core::Metascript::Adhd::CompileResult declRes(arena.arena);
+    ASSERT_TRUE(CompileWithResolver(kModularDeclSource, "impl/modular_box.adhd", resolver, arena.arena, declRes));
+    EXPECT_NE(declRes.generatedHeader.find("m_items{(*this->__adhd_arena)};"), Core::Metascript::MString::npos);
+    EXPECT_NE(declRes.generatedHeader.find("u32 read()const"), Core::Metascript::MString::npos);
+    EXPECT_EQ(declRes.generatedSource.find("ModularBox::read"), Core::Metascript::MString::npos);
+
+    static constexpr const char kModularImplSource[] =
+        "#include \"impl/modular_box.adhd\"\r\n"
+        "ModularBox::ModularBox(mut RefTarget target, in u32 seed){\r\n"
+        "    this.m_target = target;\r\n"
+        "    this.m_items.push_back(seed);\r\n"
+        "}\r\n"
+        "u32 ModularBox::read()const{\r\n"
+        "    return this.m_target.value + u32(this.m_items.size());\r\n"
+        "}\r\n"
+        "void ModularBox::append(in u32 val){\r\n"
+        "    this.m_items.push_back(val);\r\n"
+        "}\r\n";
+    Core::Metascript::Adhd::CompileResult implRes(arena.arena);
+    ASSERT_TRUE(CompileWithResolver(kModularImplSource, "impl/modular_box_impl.adhd", resolver, arena.arena, implRes));
+    EXPECT_NE(implRes.generatedSource.find("__adhd_arena(::MakeNotNull(&__adhd_mother_arena)), m_target(::MakeNotNull(&(target)))"), Core::Metascript::MString::npos);
+    EXPECT_NE(implRes.generatedSource.find("ModularBox::read()const"), Core::Metascript::MString::npos);
+    EXPECT_NE(implRes.generatedSource.find("ModularBox::append("), Core::Metascript::MString::npos);
+
+    static constexpr const char kModularCallerSource[] =
+        "#include \"impl/modular_box.adhd\"\r\n"
+        "u32 UseModularBox(mut RefTarget target){\r\n"
+        "    ModularBox box = ModularBox(target, 7u);\r\n"
+        "    box.append(3u);\r\n"
+        "    return box.read();\r\n"
+        "}\r\n";
+    Core::Metascript::Adhd::CompileResult callerRes(arena.arena);
+    ASSERT_TRUE(CompileWithResolver(kModularCallerSource, "impl/modular_box_user.adhd", resolver, arena.arena, callerRes));
+    EXPECT_NE(callerRes.generatedSource.find("ModularBox box = ModularBox(__adhd_scratch, target, 7u);"), Core::Metascript::MString::npos);
+
+    static constexpr const char kGenericFuncLambdaSource[] =
+        "type PairMapper<InT, OutT> = Func<64u, OutT(in InT)>;\r\n"
+        "class Mapper {\r\n"
+        "    public OutT apply<OutT, InT>(in Func<64u, OutT(in InT)> fn, in InT v){\r\n"
+        "        return fn(v);\r\n"
+        "    }\r\n"
+        "    public OutT mapViaAlias<InT, OutT>(in PairMapper<InT, OutT> fn, in InT v){\r\n"
+        "        return fn(v);\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "i32 Run(in i32 seed){\r\n"
+        "    Mapper m;\r\n"
+        "    const i32 bias = 2;\r\n"
+        "    const i32 a = m.apply<i32, i32>(lambda[](in i32 x) -> i32{ return x + 1; }, seed);\r\n"
+        "    const i32 b = m.mapViaAlias<i32, i32>(lambda[in bias](in i32 x) -> i32{ return x + bias; }, a);\r\n"
+        "    return b;\r\n"
+        "}\r\n";
+    Core::Metascript::Adhd::CompileResult genericLambdaRes(arena.arena);
+    ASSERT_TRUE(CompileWithResolver(kGenericFuncLambdaSource, "impl/generic_func_lambda.adhd", resolver, arena.arena, genericLambdaRes))
+        << std::string_view(genericLambdaRes.errors.empty() ? "" : genericLambdaRes.errors[0].message.data(), genericLambdaRes.errors.empty() ? 0u : genericLambdaRes.errors[0].message.size());
+    EXPECT_NE(genericLambdaRes.generatedSource.find("::InplaceFunction<64u, i32(i32)>"), Core::Metascript::MString::npos)
+        << std::string_view(genericLambdaRes.generatedSource.data(), genericLambdaRes.generatedSource.size());
+    EXPECT_EQ(genericLambdaRes.generatedSource.find("OutT"), Core::Metascript::MString::npos);
+    EXPECT_EQ(genericLambdaRes.generatedSource.find("InT"), Core::Metascript::MString::npos);
 }
 
 void RunExternHeaderAndDeclEdgeCases(){
@@ -2372,6 +2478,7 @@ NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentV
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety, VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety)
 NWB_ADHD_GTEST(AdhdCompiler, ImportsCoreCppHeadersWithLibclang, VerifyAdhdCompiler_ImportsCoreCppHeadersWithLibclang)
 NWB_ADHD_GTEST(AdhdCompiler, CompilesExternHeaderAndDeclEdgeCases, VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases)
+NWB_ADHD_GTEST(AdhdCompiler, CompilesModularClassEdgeCases, VerifyAdhdCompiler_CompilesModularClassEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

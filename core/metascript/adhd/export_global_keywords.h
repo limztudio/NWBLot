@@ -45,6 +45,7 @@ NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("noinline", "'inline' and 'noinlin
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("serialize", isSerialize)
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("reflect",   isReflect)
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("arena",     isArenaOwner)
+NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("modular",   isModular)
 
 NWB_ADHD_EXPORT_FIELD_ATTRIBUTE("transient", isTransient, false)
 NWB_ADHD_EXPORT_FIELD_ATTRIBUTE("reflect",   isReflect,   true)

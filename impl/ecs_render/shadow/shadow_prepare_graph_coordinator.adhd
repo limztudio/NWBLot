@@ -47,7 +47,7 @@ NWB_IMPL_BEGIN
 class RendererFramePipeline;
 class RendererMeshSystem;
 class RendererRayTracingSystem;
-struct DeferredFrameTargets;
+class DeferredFrameTargets;
 
 
 struct ShadowPrepareGraphContext{

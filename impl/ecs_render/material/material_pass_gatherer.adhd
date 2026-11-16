@@ -250,7 +250,11 @@ void MaterialPassGatherer::gather(
             materialInfo->csgCapSurfaceDispatchUnavailableLogged
         );
         const b8 csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
-        const auto csgClipInfo = csgClipCandidate ? m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform) : Expected<CsgReceiverClipDrawInfo>(MakeUnexpected(Failure{}));
+        const auto csgClipInfo = csgClipCandidate
+            ? (transform
+                ? m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, *transform)
+                : m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds))
+            : Expected<CsgReceiverClipDrawInfo>(MakeUnexpected(Failure{}));
         const b8 csgClipActive = csgClipInfo && csgClipInfo->cutterCount > 0u;
         const MaterialPipelineKey pipelineKey = BuildMaterialPassPipelineKey(
             materialInfo->materialName,
@@ -383,7 +387,15 @@ void MaterialPassGatherer::gather(
         const auto& typedRanges = appendedInstance->typedRanges;
 
         if(csgClipActive){
-            auto csgRange = m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform, framebufferInfo.width, framebufferInfo.height, csgWorkRegionMeshViewState, csgFrameData);
+            auto csgRange = [&]() -> Expected<CsgReceiverRangeGpuData>{
+                if(transform && csgWorkRegionMeshViewState)
+                    return m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, *transform, framebufferInfo.width, framebufferInfo.height, *csgWorkRegionMeshViewState, csgFrameData);
+                if(transform)
+                    return m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, *transform, framebufferInfo.width, framebufferInfo.height, csgFrameData);
+                if(csgWorkRegionMeshViewState)
+                    return m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, framebufferInfo.width, framebufferInfo.height, *csgWorkRegionMeshViewState, csgFrameData);
+                return m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, framebufferInfo.width, framebufferInfo.height, csgFrameData);
+            }();
             if(!csgRange)
                 return false;
             // Cap shader shares the receiver surface hook; rangeInfo.w carries the BXDF id.
@@ -473,7 +485,7 @@ void MaterialPassGatherer::gather(
 
 Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
     // Every material pass uses this push-only layout; transparent consumes the full payload.
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
         return MakeUnexpected(Failure{});
     }
@@ -482,7 +494,7 @@ Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassB
 
 b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
-    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
         return false;
     }
@@ -495,7 +507,7 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
         return false;
 
     if(!m_materialState.m_emulationVertexShader){
-        if(!m_shaderSystem.loadShader<VertexShader>(&MeshSubsystem::emulationVs, Core::ShaderArchive::s_DefaultVariant, s_MeshEmulationVsDebugName, m_materialState.m_emulationVertexShader))
+        if(!m_shaderSystem.loadShader<VertexShader, MeshSubsystem>(SubsystemAssetSelector<MeshSubsystem, VertexShader>([](const MeshSubsystem& s){ return s.emulationVs; }), Core::ShaderArchive::s_DefaultVariant, s_MeshEmulationVsDebugName, m_materialState.m_emulationVertexShader))
             return false;
     }
 

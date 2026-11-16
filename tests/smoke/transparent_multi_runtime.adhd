@@ -227,7 +227,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         );
         const f32 currentYaw = this.m_sceneYaw.yaw();
         this.m_sceneTransforms.update(currentYaw, SmokeWorldRef(this.m_world));
-        SetSmokeYawWindowTitle(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi, this.m_context);
+        SetSmokeWindowTitleSuffix(this.m_context, FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi));
 
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;

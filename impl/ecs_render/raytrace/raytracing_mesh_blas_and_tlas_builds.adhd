@@ -556,7 +556,7 @@ Expected<Core::GpuDescriptorHandle> MeshHeapHandleGather::acquire(const Core::Bu
         return found.value().handle;
     }
 
-    const auto handle = RayTracingDetail::RegisterHeapBuffer(m_heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
+    const auto handle = RegisterHeapBuffer(m_heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
     if(!handle)
         return MakeUnexpected(Failure{});
 

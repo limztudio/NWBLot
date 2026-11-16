@@ -13,6 +13,7 @@ native{
 
 #include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/assets_mesh/skin_types.adhd.h>
+#include <impl/ecs_mesh/runtime/mesh.adhd.h>
 
 #include <core/graphics/api.h>
 
@@ -180,7 +181,7 @@ public:
     }
 };
 
-FOUNDATION_INLINE MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
+[[nodiscard]] FOUNDATION_INLINE MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
     return {
         instance.restPositionBuffer,
         instance.restNormalBuffer,

@@ -226,7 +226,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
     }
 
     const auto registerDescriptor = [&](Core::GpuDescriptorHandle& descriptor, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item){
-        return RendererDescriptorRegisterDetail::AssignDescriptor(heap, descriptorClass, item, descriptor);
+        return AssignDescriptor(heap, descriptorClass, item, descriptor);
     };
     if(
         !registerDescriptor(m_descriptors[DescriptorIndex::OpaqueSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.opaqueRadiance.get()))
@@ -376,12 +376,12 @@ void RendererReflectionSystem::releaseTargets(){
     m_feedback.invalidateResources();
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     for(Core::GpuDescriptorHandle& descriptor : m_descriptors)
-        RendererDescriptorRegisterDetail::RetireDescriptor(heap, descriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, m_depthSampledDescriptor);
+        RetireDescriptor(heap, descriptor);
+    RetireDescriptor(heap, m_depthSampledDescriptor);
     for(Core::GpuDescriptorHandle& descriptor : m_depthMipSampledDescriptors)
-        RendererDescriptorRegisterDetail::RetireDescriptor(heap, descriptor);
+        RetireDescriptor(heap, descriptor);
     for(Core::GpuDescriptorHandle& descriptor : m_depthMipStorageDescriptors)
-        RendererDescriptorRegisterDetail::RetireDescriptor(heap, descriptor);
+        RetireDescriptor(heap, descriptor);
     m_resources.opaqueRadiance = nullptr;
     m_resources.glassRadiance = nullptr;
     m_resources.queue = nullptr;
@@ -442,7 +442,7 @@ b8 RendererReflectionSystem::prepareQueue(const u32 capacity){
         return false;
     Core::BufferHandle queue = Move(*queueResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(!RendererDescriptorRegisterDetail::ReplaceDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, queue.get()), m_descriptors[DescriptorIndex::Queue]))
+    if(!ReplaceDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, queue.get()), m_descriptors[DescriptorIndex::Queue]))
         return false;
     m_resources.queue = Move(queue);
     m_resources.parameters.queueCapacity = capacity;
@@ -472,7 +472,7 @@ b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 slice
         return false;
     Core::BufferHandle arguments = Move(*argumentsResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(!RendererDescriptorRegisterDetail::ReplaceDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, arguments.get()), m_descriptors[DescriptorIndex::Args]))
+    if(!ReplaceDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, arguments.get()), m_descriptors[DescriptorIndex::Args]))
         return false;
     m_resources.indirectArgs = Move(arguments);
     m_resources.parameters.argsSlot = m_descriptors[DescriptorIndex::Args].slot();

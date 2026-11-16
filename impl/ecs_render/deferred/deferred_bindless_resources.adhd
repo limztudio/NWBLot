@@ -153,7 +153,7 @@ namespace __hidden_deferred_bindless_resources{
     const Core::Format::Enum format,
     Core::GpuDescriptorHandle& outHandle
 ){
-    return RendererDescriptorRegisterDetail::AssignSampledTexture(
+    return AssignSampledTexture(
         heap,
         Core::GpuDescriptorClass::SampledImage,
         texture,
@@ -170,7 +170,7 @@ namespace __hidden_deferred_bindless_resources{
     const Core::Format::Enum format,
     Core::GpuDescriptorHandle& outHandle
 ){
-    return RendererDescriptorRegisterDetail::AssignStorageTexture(heap, texture, format, Core::TextureDimension::Texture2D, outHandle);
+    return AssignStorageTexture(heap, texture, format, Core::TextureDimension::Texture2D, outHandle);
 }
 
 [[nodiscard]] static b8 AssignSampledAndStorage2D(
@@ -189,7 +189,7 @@ namespace __hidden_deferred_bindless_resources{
     const Core::Format::Enum format,
     Core::GpuDescriptorHandle& outHandle
 ){
-    return RendererDescriptorRegisterDetail::AssignStorageTexture(heap, texture, format, Core::TextureDimension::Texture2DArray, outHandle);
+    return AssignStorageTexture(heap, texture, format, Core::TextureDimension::Texture2DArray, outHandle);
 }
 
 [[nodiscard]] static b8 AssignSampledAndStorageShadowArray(
@@ -200,7 +200,7 @@ namespace __hidden_deferred_bindless_resources{
     Core::GpuDescriptorHandle& outStorageHandle
 ){
     return
-        RendererDescriptorRegisterDetail::AssignSampledTexture(
+        AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage2DArray,
             texture,
@@ -211,30 +211,6 @@ namespace __hidden_deferred_bindless_resources{
         )
         && AssignStorage2DArray(heap, texture, format, outStorageHandle)
     ;
-}
-
-[[nodiscard]] static b8 AssignSampler(Core::GpuDescriptorHeap& heap, Core::Sampler& sampler, Core::GpuDescriptorHandle& outHandle){
-    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterSampler(heap, sampler);
-    if(!descriptor)
-        return false;
-    outHandle = *descriptor;
-    return true;
-}
-
-[[nodiscard]] static b8 AssignConstantBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle){
-    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, buffer);
-    if(!descriptor)
-        return false;
-    outHandle = *descriptor;
-    return true;
-}
-
-[[nodiscard]] static b8 AssignStructuredBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle){
-    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterStructuredBuffer(heap, buffer);
-    if(!descriptor)
-        return false;
-    outHandle = *descriptor;
-    return true;
 }
 
 
@@ -287,7 +263,7 @@ Expected<void> DeferredBindlessDescriptorRegistrar::registerTransparencyTargets(
         || !AssignSampled2D(m_heap, m_targets.avboit.foregroundAccumColor, m_targets.avboit.accumColorFormat, m_bindless.avboitForegroundColor)
         || !AssignSampled2D(m_heap, m_targets.avboit.foregroundAccumExtinction, m_targets.avboit.accumExtinctionFormat, m_bindless.avboitForegroundExtinction)
         || !AssignStorage2D(m_heap, m_targets.avboit.refractionResolve, Core::Format::RGBA16_FLOAT, m_bindless.refractionResolveStorage)
-        || !RendererDescriptorRegisterDetail::AssignSampledTexture(
+        || !AssignSampledTexture(
             m_heap,
             Core::GpuDescriptorClass::SampledImage3D,
             m_targets.avboit.transmittanceTexture,
@@ -334,7 +310,7 @@ Expected<void> DeferredBindlessDescriptorRegistrar::registerCsgIntervalTargets()
 Expected<void> DeferredBindlessDescriptorRegistrar::registerCausticResolveTargets(){
     using namespace __hidden_deferred_bindless_resources;
     if(
-        !RendererDescriptorRegisterDetail::AssignSampledTexture(
+        !AssignSampledTexture(
             m_heap,
             Core::GpuDescriptorClass::SampledImage2DArrayUint,
             m_targets.causticAccumulator,
@@ -466,7 +442,7 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
 
     // The indirection payload is itself heap-addressable.
     // Every consumer takes this one slot in push constants, not a local selector; the heap stays the binding surface.
-    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, bindless.slotsBuffer);
+    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RegisterConstantBuffer(heap, bindless.slotsBuffer);
     bindless.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
     if(!slotsBufferDescriptor){
         LogDeferredBindlessSlotBufferRegisterFailed();

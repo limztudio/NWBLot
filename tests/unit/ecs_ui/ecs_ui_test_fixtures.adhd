@@ -173,7 +173,7 @@ public:
     explicit RecordingActions(Alloc::GlobalArena& arena) : committed(arena), records(arena), m_arena(arena){ committed.assign("0"); }
     virtual ~RecordingActions()noexcept override = default;
 
-    [[nodiscard]] virtual b8 apply(Ui::EditModel& draft, Ui::EditAction::Enum action, b8 readOnly)override;
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& draft, Ui::EditAction::Enum action, b8 readOnly)noexcept override;
     [[nodiscard]] Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     void resetIfConfigured()noexcept{ if(resetHost) resetHost->reset(); }
     void clear()noexcept{ records.clear(); }
@@ -268,7 +268,7 @@ FOUNDATION_INLINE b8 UiEditBoxHostTests::commit(){ return CommitEcsUiEditFrame(*
 FOUNDATION_INLINE b8 UiEditBoxHostTests::dispatch(const Ui::InputEvent& event){ return DispatchEcsUiEditEvent(*this, event); }
 FOUNDATION_INLINE b8 UiEditBoxHostTests::dispatchPointer(const Ui::PointerInput& input){ return DispatchEcsUiEditPointer(*this, input); }
 FOUNDATION_INLINE b8 UiEditBoxHostTests::emptyFrame(){ return EmptyEcsUiEditFrame(*this); }
-FOUNDATION_INLINE b8 RecordingActions::apply(Ui::EditModel& draft, const Ui::EditAction::Enum action, const b8 readOnly){ return ApplyEcsUiRecordingAction(*this, draft, action, readOnly); }
+FOUNDATION_INLINE b8 RecordingActions::apply(Ui::EditModel& draft, const Ui::EditAction::Enum action, const b8 readOnly)noexcept{ return ApplyEcsUiRecordingAction(*this, draft, action, readOnly); }
 FOUNDATION_INLINE b8 UiEditActionHostTests::activateActions(){ return ActivateEcsUiEditActions(*this); }
 FOUNDATION_INLINE usize UiEditActionHostTests::actionCount(const Ui::EditAction::Enum action)const noexcept{ return CountEcsUiRecordedActions(*this, action); }
 

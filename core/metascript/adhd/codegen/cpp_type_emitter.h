@@ -59,6 +59,10 @@ public:
 
 
 private:
+    void appendTemplateParamDeclCpp(MString& out, const TemplateParamDecl& param)const;
+
+
+private:
     const SymbolTable& m_symbols;
     mutable MStringView m_currentNamespace;
 };

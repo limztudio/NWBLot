@@ -169,21 +169,12 @@ Value ExpressionParser::parsePrimary(){
 }
 
 
-Value ExpressionParser::parseListLiteral(TokenType::Enum closeToken){
-    m_cursor.advance();
-
+Value ExpressionParser::parseListContinuation(Value&& firstElem, const TokenType::Enum closeToken){
     Value list(m_arena);
     list.makeList();
 
-    if(m_cursor.m_current.type == closeToken){
-        m_cursor.advance();
-        return list;
-    }
-
+    Value elem = Move(firstElem);
     for(;;){
-        Value elem = parseExpression();
-        if(m_cursor.failed())
-            return Value(m_arena);
         list.append(Move(elem));
 
         if(m_cursor.m_current.type == closeToken){
@@ -191,13 +182,33 @@ Value ExpressionParser::parseListLiteral(TokenType::Enum closeToken){
             return list;
         }
 
-        if(!m_cursor.expect(TokenType::Comma, "expected ',' or closing delimiter in list"))
+        if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_ListExpectedCommaOrCloseMessage))
             return Value(m_arena);
         if(m_cursor.m_current.type == closeToken){
             m_cursor.advance();
             return list;
         }
+
+        elem = parseExpression();
+        if(m_cursor.failed())
+            return Value(m_arena);
     }
+}
+
+Value ExpressionParser::parseListLiteral(TokenType::Enum closeToken){
+    m_cursor.advance();
+
+    if(m_cursor.m_current.type == closeToken){
+        m_cursor.advance();
+        Value list(m_arena);
+        list.makeList();
+        return list;
+    }
+
+    Value first = parseExpression();
+    if(m_cursor.failed())
+        return Value(m_arena);
+    return parseListContinuation(Move(first), closeToken);
 }
 
 Value ExpressionParser::parseBraceExpression(){
@@ -217,29 +228,7 @@ Value ExpressionParser::parseBraceExpression(){
     if(m_cursor.m_current.type == TokenType::Colon)
         return parseMapLiteralContinuation(Move(first));
 
-    Value list(m_arena);
-    list.makeList();
-
-    Value elem = Move(first);
-    for(;;){
-        list.append(Move(elem));
-
-        if(m_cursor.m_current.type == TokenType::RightBrace){
-            m_cursor.advance();
-            return list;
-        }
-
-        if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_ListExpectedCommaOrCloseMessage))
-            return Value(m_arena);
-        if(m_cursor.m_current.type == TokenType::RightBrace){
-            m_cursor.advance();
-            return list;
-        }
-
-        elem = parseExpression();
-        if(m_cursor.failed())
-            return Value(m_arena);
-    }
+    return parseListContinuation(Move(first), TokenType::RightBrace);
 }
 
 Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){

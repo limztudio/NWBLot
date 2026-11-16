@@ -116,9 +116,9 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         !heap.isInitialized()
         || !m_rayTracingState.m_tlasHeapHandle.valid()
         || !targets.bindless.valid()
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
     ){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: shadow trace heap resources are incomplete"));
         return MakeUnexpected(Failure{});
@@ -449,12 +449,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.sceneShading, Core::GpuDescriptorClass::UniformBuffer)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftGeometryStorage, Core::GpuDescriptorClass::StorageImage)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
-        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfBStorage, Core::GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(targets.bindless.sceneShading, Core::GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.shadowSoftGeometryStorage, Core::GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.shadowSoftHalfBStorage, Core::GpuDescriptorClass::StorageImage)
     )
         return;
 

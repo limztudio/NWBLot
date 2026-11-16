@@ -19,9 +19,9 @@ NWB_ADHD_BEGIN
 b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
     if(!expr.isBuiltinCall || !expr.lhs || expr.lhs->kind != ExprKind::Identifier)
         return false;
-    const MStringView name = expr.lhs->text;
-    const b8 lerp = name == "Lerp";
-    const b8 reciprocalRoot = name == "Rsqrt";
+    const SpecialFunctionKind::Enum specialFn = FindSpecialFunctionKind(expr.lhs->text);
+    const b8 lerp = specialFn == SpecialFunctionKind::Lerp;
+    const b8 reciprocalRoot = specialFn == SpecialFunctionKind::Rsqrt;
     if(!lerp && !reciprocalRoot)
         return false;
     const usize count = lerp ? 3u : 1u;
@@ -33,9 +33,9 @@ b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
         if(!lerp && expr.callTemplateArgs.empty() && argument->resolvedScalarType != expr.resolvedScalarType)
             return false;
     }
-    const b8 isDouble = expr.resolvedScalarType == "f64";
-    const MStringView prefix = isDouble ? "::VectorDouble" : "::Vector";
-    const MStringView scalar = isDouble ? "::f64" : "::f32";
+    const b8 isDouble = expr.resolvedScalarType == BuiltinTypeSemantics::Float64ScalarTypeName();
+    const MStringView prefix = CodegenSymbols::SimdPrefix(isDouble);
+    const MStringView scalar = CodegenSymbols::SimdScalarCppType(isDouble);
     const auto append = [&](const MStringView text){ out.append(text.data(), text.size()); };
     const auto replicate = [&](const MStringView value){
         append(prefix);
@@ -48,16 +48,17 @@ b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
     if(lerp){
         const MStringView first = expr.arguments[0]->resolvedScalarType;
         const MStringView second = expr.arguments[1]->resolvedScalarType;
-        const b8 doubleDifference = first == "f64" || second == "f64";
-        const b8 floatDifference = doubleDifference || first == "f32" || second == "f32";
-        const MStringView differencePrefix = doubleDifference ? "::VectorDouble" : "::Vector";
-        const MStringView differenceScalar = doubleDifference ? "::f64" : "::f32";
+        const MStringView promotedDiff = BuiltinTypeSemantics::PromoteFloatScalarTypes(first, second);
+        const b8 doubleDifference = promotedDiff == BuiltinTypeSemantics::Float64ScalarTypeName();
+        const b8 floatDifference = !promotedDiff.empty();
+        const MStringView differencePrefix = CodegenSymbols::SimdPrefix(doubleDifference);
+        const MStringView differenceScalar = CodegenSymbols::SimdScalarCppType(doubleDifference);
         out.append("([](const auto __a, const auto __b, const auto __t)noexcept{ const auto __difference = ");
         if(floatDifference){
             append(differencePrefix);
             out.append("Subtract(");
-            for(const MStringView value : { MStringView("__b"), MStringView("__a") }){
-                if(value == "__a")
+            for(const MStringView value : { CodegenSymbols::s_ScalarParamB, CodegenSymbols::s_ScalarParamA }){
+                if(value == CodegenSymbols::s_ScalarParamA)
                     out.append(", ");
                 append(differencePrefix);
                 out.append("Replicate(static_cast<");
@@ -75,7 +76,7 @@ b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
         out.append("GetX(");
         append(prefix);
         out.append("Add(");
-        replicate("__a");
+        replicate(CodegenSymbols::s_ScalarParamA);
         out.append(", ");
         append(prefix);
         out.append("Multiply(");
@@ -106,7 +107,7 @@ b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
         out.append("GetX(");
         append(prefix);
         out.append("Divide(");
-        replicate("1");
+        replicate(CodegenSymbols::s_ScalarUnitOne);
         out.append(", ");
         replicate("::Sqrt(__a)");
         out.append(")); }(");

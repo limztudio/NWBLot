@@ -438,19 +438,19 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     ))
         return false;
     if(buffer && buffer->getCreationDescription().byteSize >= byteCount)
-        return RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *buffer, handle);
+        return EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *buffer, handle);
     Core::BufferDesc desc;
     desc.setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_CsgContextDebug)).enableAutomaticStateTracking(Core::ResourceStates::Common);
     auto replacementResult = m_graphics.createBuffer(desc);
     if(!replacementResult)
         return false;
     Core::BufferHandle replacement = Move(*replacementResult);
-    const auto replacementHandle = RayTracingDetail::RegisterHeapBuffer(heap, *replacement, Core::GpuDescriptorClass::StorageBuffer, false);
+    const auto replacementHandle = RegisterHeapBuffer(heap, *replacement, Core::GpuDescriptorClass::StorageBuffer, false);
     if(!replacementHandle)
         return false;
     Core::GpuDescriptorRetirementGuard retireReplacement(heap, *replacementHandle);
 
-    RayTracingDetail::RetireHeapHandle(heap, handle);
+    RetireDescriptor(heap, handle);
     buffer = Move(replacement);
     handle = *replacementHandle;
     // Prior readers retain the old buffer, but also read the persistent selector; its next upload must drain them.

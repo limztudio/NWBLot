@@ -5,6 +5,7 @@
 # matched to the engine by the parent via nwb_match_engine_runtime.
 cmake_minimum_required(VERSION 3.10)
 project(RmvParser)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
 
 set(_3P "${CMAKE_SOURCE_DIR}/3rd_parties")
 

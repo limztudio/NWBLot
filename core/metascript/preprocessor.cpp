@@ -4,6 +4,7 @@
 
 #include "preprocessor.h"
 #include "preprocessor_macro_expander.h"
+#include "preprocessor_semantics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,16 +24,41 @@ namespace __hidden_metascript_preprocessor{
 
 constexpr u32 s_MaxIncludeDepth = 64u;
 
+[[nodiscard]] b8 ParseSingleMacroDirectiveName(
+    const MStringView rest,
+    const u32 line,
+    MetaArena& arena,
+    MVector<ParseError>& errors,
+    const MStringView expectedMsg,
+    const MStringView trailingMsg,
+    const b8 rejectDefined,
+    MStringView& outName
+){
+    if(rest.empty() || !IsAsciiIdentifierStart(rest[0])){
+        errors.push_back(ParseError{line, 1u, MString(expectedMsg.data(), expectedMsg.size(), arena)});
+        return false;
+    }
+    outName = ExtractLeadingIdentifier(rest);
+    if(rejectDefined && outName == PreprocessorSemantics::s_DefinedOperator){
+        errors.push_back(ParseError{line, 1u, MString("'defined' cannot be undefined", arena)});
+        return false;
+    }
+    if(!TrimView(rest.substr(outName.size())).empty()){
+        errors.push_back(ParseError{line, 1u, MString(trailingMsg.data(), trailingMsg.size(), arena)});
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] MStringView StripLineComment(const MStringView line, MString& outRewritten)noexcept{
     b8 inString = false;
     b8 inChar = false;
     for(usize i = 0u; i < line.size(); ++i){
         if(!inString && !inChar && line[i] == '"'){
-            MStringView rawDelim;
-            if(Preprocessor::TryParseRawStringOpening(line, i, rawDelim)){
-                const usize bodyStart = i + 1u + rawDelim.size() + 1u;
-                usize afterClose = 0u;
-                if(!Preprocessor::FindRawStringClosing(line, bodyStart, rawDelim, afterClose))
+            usize afterClose = 0u;
+            b8 unterminated = false;
+            if(PreprocessorSemantics::TrySkipRawStringLiteral(line, i, afterClose, unterminated)){
+                if(unterminated)
                     return line;
                 i = afterClose - 1u;
                 continue;
@@ -64,28 +90,10 @@ constexpr u32 s_MaxIncludeDepth = 64u;
 [[nodiscard]] b8 HasUnclosedFunctionMacroCall(const MStringView text, const Preprocessor::MacroMap& macros)noexcept{
     usize i = 0u;
     while(i < text.size()){
-        if(text[i] == '"'){
-            MStringView rawDelim;
-            if(Preprocessor::TryParseRawStringOpening(text, i, rawDelim)){
-                const usize bodyStart = i + 1u + rawDelim.size() + 1u;
-                usize afterClose = 0u;
-                if(!Preprocessor::FindRawStringClosing(text, bodyStart, rawDelim, afterClose))
-                    break;
-                i = afterClose;
-                continue;
-            }
-        }
-        if(text[i] == '"' || text[i] == '\''){
-            i = SkipQuotedLiteral(text, i);
-            continue;
-        }
-        if(i + 1u < text.size() && text[i] == '/' && text[i + 1u] == '/')
-            break;
-        if(i + 1u < text.size() && text[i] == '/' && text[i + 1u] == '*'){
-            const usize closeIdx = text.find("*/", i + 2u);
-            if(closeIdx == MStringView::npos)
+        b8 hitTerminator = false;
+        if(PreprocessorSemantics::AdvancePreprocessorScanStep(text, i, 0u, true, hitTerminator)){
+            if(hitTerminator)
                 break;
-            i = closeIdx + 2u;
             continue;
         }
         if(IsAsciiIdentifierStart(text[i])){
@@ -106,37 +114,13 @@ constexpr u32 s_MaxIncludeDepth = 64u;
             u32 parenDepth = 1u;
             usize scan = lookahead + 1u;
             while(scan < text.size() && parenDepth > 0u){
-                const MChar ch = text[scan];
-                if(ch == '\'' && scan > 0u && (IsAsciiDigit(text[scan - 1u]) || IsAsciiIdentifierChar(text[scan - 1u]))){
-                    ++scan;
-                    continue;
-                }
-                if(ch == '"'){
-                    MStringView rawDelim;
-                    if(Preprocessor::TryParseRawStringOpening(text, scan, rawDelim)){
-                        const usize bodyStart = scan + 1u + rawDelim.size() + 1u;
-                        usize afterClose = 0u;
-                        if(!Preprocessor::FindRawStringClosing(text, bodyStart, rawDelim, afterClose)){
-                            scan = text.size();
-                            break;
-                        }
-                        scan = afterClose;
-                        continue;
-                    }
-                }
-                if(ch == '"' || ch == '\''){
-                    scan = SkipQuotedLiteral(text, scan);
-                    continue;
-                }
-                if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '/')
-                    break;
-                if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '*'){
-                    const usize closeComment = text.find("*/", scan + 2u);
-                    if(closeComment == MStringView::npos)
+                b8 innerTerminator = false;
+                if(PreprocessorSemantics::AdvancePreprocessorScanStep(text, scan, 0u, true, innerTerminator)){
+                    if(innerTerminator)
                         break;
-                    scan = closeComment + 2u;
                     continue;
                 }
+                const MChar ch = text[scan];
                 if(ch == '(')
                     ++parenDepth;
                 else if(ch == ')')
@@ -163,66 +147,19 @@ constexpr u32 s_MaxIncludeDepth = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index, const b8 allowSignedExponent, MString& out){
-    while(index < text.size()){
-        const MChar c = text[index];
-        if(allowSignedExponent && (c == 'e' || c == 'E' || c == 'p' || c == 'P') && index + 1u < text.size() && (text[index + 1u] == '+' || text[index + 1u] == '-')){
-            out.push_back(text[index++]);
-            out.push_back(text[index++]);
-            continue;
-        }
-        if(c == '\'' && index + 1u < text.size() && (IsAsciiDigit(text[index + 1u]) || IsAsciiIdentifierChar(text[index + 1u]))){
-            out.push_back(text[index++]);
-            out.push_back(text[index++]);
-            continue;
-        }
-        if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.'){
-            out.push_back(text[index++]);
-            continue;
-        }
-        break;
-    }
-    return index;
+usize Preprocessor::AppendPreprocessorNumber(const MStringView text, const usize index, const b8 allowSignedExponent, MString& out){
+    const usize end = PreprocessorSemantics::SkipPreprocessorNumber(text, index, allowSignedExponent);
+    if(end > index)
+        out.append(text.data() + index, end - index);
+    return end;
 }
 
 b8 Preprocessor::TryParseRawStringOpening(const MStringView text, const usize quoteIndex, MStringView& outDelimiter)noexcept{
-    if(quoteIndex == 0u || quoteIndex >= text.size() || text[quoteIndex] != '"' || text[quoteIndex - 1u] != 'R')
-        return false;
-
-    usize prefixStart = quoteIndex - 1u;
-    while(prefixStart > 0u && IsAsciiIdentifierChar(text[prefixStart - 1u]))
-        --prefixStart;
-
-    const MStringView prefix = text.substr(prefixStart, (quoteIndex - 1u) - prefixStart);
-    if(!prefix.empty() && prefix != "L" && prefix != "u" && prefix != "U" && prefix != "u8")
-        return false;
-
-    const usize delimStart = quoteIndex + 1u;
-    usize cursor = delimStart;
-    while(cursor < text.size() && (cursor - delimStart) <= 16u){
-        const MChar c = text[cursor];
-        if(c == '('){
-            outDelimiter = text.substr(delimStart, cursor - delimStart);
-            return true;
-        }
-        if(c == ')' || c == '\\' || c == '"' || c == ' ' || c == '\t' || c == '\v' || c == '\f' || c == '\r' || c == '\n')
-            return false;
-        ++cursor;
-    }
-    return false;
+    return PreprocessorSemantics::TryParseRawStringOpening(text, quoteIndex, outDelimiter);
 }
 
 b8 Preprocessor::FindRawStringClosing(const MStringView text, const usize searchStart, const MStringView delimiter, usize& outAfterCloseQuote)noexcept{
-    const usize closeSeqLen = delimiter.size() + 2u;
-    if(searchStart + closeSeqLen > text.size())
-        return false;
-    for(usize pos = searchStart; pos + closeSeqLen <= text.size(); ++pos){
-        if(text[pos] == ')' && text[pos + 1u + delimiter.size()] == '"' && text.substr(pos + 1u, delimiter.size()) == delimiter){
-            outAfterCloseQuote = pos + closeSeqLen;
-            return true;
-        }
-    }
-    return false;
+    return PreprocessorSemantics::FindRawStringClosing(text, searchStart, delimiter, outAfterCloseQuote);
 }
 
 
@@ -237,13 +174,13 @@ Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, 
     , m_includes(arena, errors, includeResolver, allowNwbInclude)
 {
 #if defined(NWB_DEBUG) && NWB_DEBUG
-    defineObjectMacro("NWB_DEBUG", "1");
+    defineObjectMacro(PreprocessorSemantics::s_DebugConfigMacro, PreprocessorSemantics::s_DefaultDefinedMacroBody);
 #endif
 #if defined(NWB_OPTIMIZE) && NWB_OPTIMIZE
-    defineObjectMacro("NWB_OPTIMIZE", "1");
+    defineObjectMacro(PreprocessorSemantics::s_OptimizeConfigMacro, PreprocessorSemantics::s_DefaultDefinedMacroBody);
 #endif
 #if defined(NWB_FINAL) && NWB_FINAL
-    defineObjectMacro("NWB_FINAL", "1");
+    defineObjectMacro(PreprocessorSemantics::s_FinalConfigMacro, PreprocessorSemantics::s_DefaultDefinedMacroBody);
 #endif
 }
 
@@ -275,7 +212,7 @@ b8 Preprocessor::process(const MStringView source, MString& outProcessed){
     outProcessed.clear();
     outProcessed.reserve(source.size());
     m_includes.clearRanges();
-    return processInternal(source, 0u, "<root>", outProcessed);
+    return processInternal(source, 0u, PreprocessorSemantics::s_RootFileKey, outProcessed);
 }
 
 b8 Preprocessor::processInternal(const MStringView source, const u32 depth, const MStringView currentFileKey, MString& outProcessed){
@@ -339,7 +276,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                     ++scanIdx;
                 if(updateNativeBraces){
                     const MStringView idText = lineToScan.substr(idStart, scanIdx - idStart);
-                    if(idText == "native" && nativeBraceDepth == 0u)
+                    if(nativeBraceDepth == 0u && PreprocessorSemantics::IsRawBraceBlockKeyword(idText))
                         inNativeKeywordPendingBrace = true;
                 }
                 continue;
@@ -363,14 +300,19 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         }
     };
 
+    const auto readTrimmedLineAt = [&](const usize start, usize& outLineEnd)noexcept -> MStringView{
+        outLineEnd = start;
+        while(outLineEnd < source.size() && source[outLineEnd] != '\n')
+            ++outLineEnd;
+        MStringView line = source.substr(start, outLineEnd - start);
+        if(!line.empty() && line.back() == '\r')
+            line.remove_suffix(1u);
+        return line;
+    };
+
     while(pos < source.size()){
         usize lineEnd = pos;
-        while(lineEnd < source.size() && source[lineEnd] != '\n')
-            ++lineEnd;
-
-        MStringView rawLine = source.substr(pos, lineEnd - pos);
-        if(!rawLine.empty() && rawLine.back() == '\r')
-            rawLine.remove_suffix(1u);
+        MStringView rawLine = readTrimmedLineAt(pos, lineEnd);
 
         const b8 isActive = condStack.empty() || condStack.back().currentActive;
         const u32 startLine = currentLine;
@@ -384,39 +326,27 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
             b8 hasUnclosedMacro = !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(rawLine, m_macros);
 
             if(hasBackslashCont || hasUnclosedMacro){
-                if(hasBackslashCont){
-                    joinedBuffer.append(rawLine.data(), rawLine.size() - 1u);
-                }
-                else{
-                    MString rewrittenFirst(m_arena);
-                    const MStringView strippedFirst = StripLineComment(rawLine, rewrittenFirst);
-                    joinedBuffer.append(strippedFirst.data(), strippedFirst.size());
-                }
+                const auto appendJoinedSegment = [&](const MStringView segment, const b8 hasBackslash){
+                    if(!joinedBuffer.empty() && joinedBuffer.back() != ' ' && joinedBuffer.back() != '\t')
+                        joinedBuffer.push_back(' ');
+                    if(hasBackslash){
+                        joinedBuffer.append(segment.data(), segment.size() - 1u);
+                        return;
+                    }
+                    MString rewrittenSegment(m_arena);
+                    const MStringView strippedSegment = StripLineComment(segment, rewrittenSegment);
+                    joinedBuffer.append(strippedSegment.data(), strippedSegment.size());
+                };
+
+                appendJoinedSegment(rawLine, hasBackslashCont);
 
                 while((hasBackslashCont || hasUnclosedMacro) && lineEnd < source.size()){
                     pos = lineEnd + 1u;
                     ++currentLine;
                     ++joinedLines;
-                    lineEnd = pos;
-                    while(lineEnd < source.size() && source[lineEnd] != '\n')
-                        ++lineEnd;
-
-                    MStringView nextRaw = source.substr(pos, lineEnd - pos);
-                    if(!nextRaw.empty() && nextRaw.back() == '\r')
-                        nextRaw.remove_suffix(1u);
-
+                    const MStringView nextRaw = readTrimmedLineAt(pos, lineEnd);
                     hasBackslashCont = !nextRaw.empty() && nextRaw.back() == '\\';
-                    if(!joinedBuffer.empty() && joinedBuffer.back() != ' ' && joinedBuffer.back() != '\t')
-                        joinedBuffer.push_back(' ');
-                    if(hasBackslashCont){
-                        joinedBuffer.append(nextRaw.data(), nextRaw.size() - 1u);
-                    }
-                    else{
-                        MString rewrittenNext(m_arena);
-                        const MStringView strippedNext = StripLineComment(nextRaw, rewrittenNext);
-                        joinedBuffer.append(strippedNext.data(), strippedNext.size());
-                    }
-
+                    appendJoinedSegment(nextRaw, hasBackslashCont);
                     hasUnclosedMacro = !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(MStringView(joinedBuffer.data(), joinedBuffer.size()), m_macros);
                 }
                 rawLine = MStringView(joinedBuffer.data(), joinedBuffer.size());
@@ -534,8 +464,12 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
     const MStringView cmd = cleanLine.substr(0u, cmdEnd);
     const MStringView rest = TrimView(cleanLine.substr(cmdEnd));
     const b8 parentActive = condStack.empty() || condStack.back().currentActive;
+    const PreprocessorDirectiveKind::Enum kind = PreprocessorSemantics::ParseDirectiveKind(cmd);
 
-    if(cmd == "ifdef" || cmd == "ifndef" || cmd == "if"){
+    switch(kind){
+    case PreprocessorDirectiveKind::If:
+    case PreprocessorDirectiveKind::Ifdef:
+    case PreprocessorDirectiveKind::Ifndef:{
         ConditionalFrame frame;
         frame.line = line;
         frame.parentActive = parentActive;
@@ -546,22 +480,25 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
             return true;
         }
         b8 condResult = false;
-        if(cmd == "if"){
+        if(kind == PreprocessorDirectiveKind::If){
             if(!evaluateCondition(rest, line, condResult))
                 return false;
         }
         else{
-            if(rest.empty() || !IsAsciiIdentifierStart(rest[0])){
-                m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #ifdef/#ifndef", m_arena)});
+            MStringView macroName;
+            if(!__hidden_metascript_preprocessor::ParseSingleMacroDirectiveName(
+                rest,
+                line,
+                m_arena,
+                m_errors,
+                MStringView("expected macro name after #ifdef/#ifndef"),
+                MStringView("unexpected tokens after macro name in #ifdef/#ifndef"),
+                false,
+                macroName
+            ))
                 return false;
-            }
-            const MStringView macroName = ExtractLeadingIdentifier(rest);
-            if(!TrimView(rest.substr(macroName.size())).empty()){
-                m_errors.push_back(ParseError{line, 1u, MString("unexpected tokens after macro name in #ifdef/#ifndef", m_arena)});
-                return false;
-            }
             const b8 defined = m_macros.find(macroName) != m_macros.end();
-            condResult = (cmd == "ifdef") ? defined : !defined;
+            condResult = (kind == PreprocessorDirectiveKind::Ifdef) ? defined : !defined;
         }
         frame.currentActive = condResult;
         frame.branchTaken = condResult;
@@ -569,7 +506,7 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
         return true;
     }
 
-    if(cmd == "elif"){
+    case PreprocessorDirectiveKind::Elif:{
         if(condStack.empty() || condStack.back().seenElse){
             m_errors.push_back(ParseError{line, 1u, MString("unexpected #elif", m_arena)});
             return false;
@@ -587,7 +524,7 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
         return true;
     }
 
-    if(cmd == "else"){
+    case PreprocessorDirectiveKind::Else:{
         if(condStack.empty() || condStack.back().seenElse){
             m_errors.push_back(ParseError{line, 1u, MString("unexpected #else", m_arena)});
             return false;
@@ -599,7 +536,7 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
         return true;
     }
 
-    if(cmd == "endif"){
+    case PreprocessorDirectiveKind::Endif:{
         if(condStack.empty()){
             m_errors.push_back(ParseError{line, 1u, MString("unexpected #endif without matching #if", m_arena)});
             return false;
@@ -608,14 +545,18 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
         return true;
     }
 
+    default:
+        break;
+    }
+
     if(!parentActive)
         return true;
 
-    if(cmd == "define")
+    if(kind == PreprocessorDirectiveKind::Define)
         return handleDefine(rest, line);
-    if(cmd == "undef")
+    if(kind == PreprocessorDirectiveKind::Undef)
         return handleUndef(rest, line);
-    if(cmd == "include")
+    if(kind == PreprocessorDirectiveKind::Include)
         return m_includes.process(*this, rest, line, depth, currentFileKey, outProcessed);
 
     m_errors.push_back(ParseError{line, 1u, MString("unknown preprocessor directive", m_arena)});
@@ -631,7 +572,7 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
     }
 
     const MStringView name = ExtractLeadingIdentifier(rest);
-    if(name == "defined"){
+    if(name == PreprocessorSemantics::s_DefinedOperator){
         m_errors.push_back(ParseError{line, 1u, MString("'defined' cannot be used as a macro name", m_arena)});
         return false;
     }
@@ -655,15 +596,11 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
                 if(!hasComma)
                     comma = paramList.size();
                 const MStringView paramName = TrimView(paramList.substr(pStart, comma - pStart));
-                if(paramName == "..." && !hasComma){
+                if(paramName == PreprocessorSemantics::s_VariadicEllipsis && !hasComma){
                     macro.isVariadic = true;
                     break;
                 }
-                b8 validParam = !paramName.empty() && IsAsciiIdentifierStart(paramName[0]);
-                for(usize cIdx = 1u; validParam && cIdx < paramName.size(); ++cIdx){
-                    if(!IsAsciiIdentifierChar(paramName[cIdx]))
-                        validParam = false;
-                }
+                b8 validParam = IsAsciiIdentifier(paramName);
                 for(usize existingIdx = 0u; validParam && existingIdx < macro.parameters.size(); ++existingIdx){
                     if(MStringView(macro.parameters[existingIdx].data(), macro.parameters[existingIdx].size()) == paramName)
                         validParam = false;
@@ -692,19 +629,18 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
 }
 
 b8 Preprocessor::handleUndef(const MStringView rest, const u32 line){
-    if(rest.empty() || !IsAsciiIdentifierStart(rest[0])){
-        m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #undef", m_arena)});
+    MStringView name;
+    if(!__hidden_metascript_preprocessor::ParseSingleMacroDirectiveName(
+        rest,
+        line,
+        m_arena,
+        m_errors,
+        MStringView("expected macro name after #undef"),
+        MStringView("unexpected tokens after macro name in #undef"),
+        true,
+        name
+    ))
         return false;
-    }
-    const MStringView name = ExtractLeadingIdentifier(rest);
-    if(name == "defined"){
-        m_errors.push_back(ParseError{line, 1u, MString("'defined' cannot be undefined", m_arena)});
-        return false;
-    }
-    if(!TrimView(rest.substr(name.size())).empty()){
-        m_errors.push_back(ParseError{line, 1u, MString("unexpected tokens after macro name in #undef", m_arena)});
-        return false;
-    }
     undefineMacro(name);
     return true;
 }

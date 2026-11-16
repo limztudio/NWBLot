@@ -176,7 +176,7 @@ b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& 
             return false;
         }
         Core::BufferHandle buffer = Move(*bufferResult);
-        const Expected<Core::GpuDescriptorHandle> descriptorResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()));
+        const Expected<Core::GpuDescriptorHandle> descriptorResult = RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()));
         if(!descriptorResult){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;

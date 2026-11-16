@@ -108,7 +108,7 @@ Stmt* StmtParser::parseStatement(){
 #undef NWB_ADHD_EXPORT_FOR_STMT_KEYWORD
 #undef NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD
 
-    if(m_cursor.matchIdentifier("parallel"))
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Parallel))
         return parseParallelStatement(span, attributes);
 
     if(m_cursor.check(TokenType::Identifier)){
@@ -127,7 +127,7 @@ Stmt* StmtParser::parseStatement(){
             || !KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text).empty();
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);
-        if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
+        if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && KeywordSemantics::FindProhibitedPostfixKeywordError(m_cursor.current().text).empty())
             return parseVarDeclWithType(*maybeType, span, false);
         if(startsWithRefOrProhibitedType){
             if(maybeType)
@@ -211,6 +211,20 @@ Stmt* StmtParser::parseSimpleKeywordStatement(const StmtKind::Enum kind, const S
     return stmt;
 }
 
+Expr* StmtParser::expectParenthesizedExpr(const MStringView missingLeftParenMsg, const MStringView missingRightParenMsg){
+    if(!m_cursor.expect(TokenType::LeftParen, missingLeftParenMsg))
+        return nullptr;
+
+    Expr* expr = m_exprParser.parseExpression();
+    if(!expr)
+        return nullptr;
+
+    if(!m_cursor.expect(TokenType::RightParen, missingRightParenMsg))
+        return nullptr;
+
+    return expr;
+}
+
 b8 StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
     if(m_cursor.check(TokenType::LeftBrace))
         return parseBlockStatements(outStatements);
@@ -223,14 +237,8 @@ b8 StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
 }
 
 Stmt* StmtParser::parseIfStatement(const SourceSpan span){
-    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after 'if'"))
-        return nullptr;
-
-    Expr* cond = m_exprParser.parseExpression();
+    Expr* cond = expectParenthesizedExpr("expected '(' after 'if'", "expected ')' after 'if' condition");
     if(!cond)
-        return nullptr;
-
-    if(!m_cursor.expect(TokenType::RightParen, "expected ')' after 'if' condition"))
         return nullptr;
 
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
@@ -241,7 +249,7 @@ Stmt* StmtParser::parseIfStatement(const SourceSpan span){
     if(!parseScopedBodyStatements(stmt->statements))
         return nullptr;
 
-    if(m_cursor.matchIdentifier("else")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Else)){
         if(!parseScopedBodyStatements(stmt->elseStatements))
             return nullptr;
     }
@@ -250,14 +258,8 @@ Stmt* StmtParser::parseIfStatement(const SourceSpan span){
 }
 
 Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
-    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after 'switch'"))
-        return nullptr;
-
-    Expr* subject = m_exprParser.parseExpression();
+    Expr* subject = expectParenthesizedExpr("expected '(' after 'switch'", "expected ')' after 'switch' expression");
     if(!subject)
-        return nullptr;
-
-    if(!m_cursor.expect(TokenType::RightParen, "expected ')' after 'switch' expression"))
         return nullptr;
 
     if(!m_cursor.expect(TokenType::LeftBrace, "expected '{' to start 'switch' body"))
@@ -273,14 +275,14 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
         SwitchCase switchCase(m_cursor.arena());
         switchCase.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
 
-        if(m_cursor.matchIdentifier("case")){
+        if(m_cursor.matchIdentifier(KeywordSemantics::s_Case)){
             switchCase.matchExpr = m_exprParser.parseExpression();
             if(!switchCase.matchExpr)
                 return nullptr;
             if(!m_cursor.expect(TokenType::Colon, "expected ':' after 'case' value"))
                 return nullptr;
         }
-        else if(m_cursor.matchIdentifier("default")){
+        else if(m_cursor.matchIdentifier(KeywordSemantics::s_Default)){
             if(hasDefault){
                 m_cursor.error(switchCase.span.line, switchCase.span.column, "duplicate 'default' label in 'switch' statement");
                 return nullptr;
@@ -295,14 +297,14 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
             return nullptr;
         }
 
-        while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile) && !m_cursor.checkIdentifier("case") && !m_cursor.checkIdentifier("default")){
+        while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile) && !m_cursor.checkIdentifier(KeywordSemantics::s_Case) && !m_cursor.checkIdentifier(KeywordSemantics::s_Default)){
             Stmt* caseStmt = parseStatement();
             if(!caseStmt)
                 return nullptr;
             switchCase.statements.push_back(caseStmt);
         }
 
-        const b8 isStackedEmptyLabel = switchCase.statements.empty() && (m_cursor.checkIdentifier("case") || m_cursor.checkIdentifier("default"));
+        const b8 isStackedEmptyLabel = switchCase.statements.empty() && (m_cursor.checkIdentifier(KeywordSemantics::s_Case) || m_cursor.checkIdentifier(KeywordSemantics::s_Default));
         if(!isStackedEmptyLabel){
             if(switchCase.statements.empty()){
                 m_cursor.error(switchCase.span.line, switchCase.span.column, "'switch' case cannot be empty without 'break' or 'return'");
@@ -439,14 +441,8 @@ Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const b8 isParall
 }
 
 Stmt* StmtParser::parseWhileStatement(const SourceSpan span){
-    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after 'while'"))
-        return nullptr;
-
-    Expr* cond = m_exprParser.parseExpression();
+    Expr* cond = expectParenthesizedExpr("expected '(' after 'while'", "expected ')' after 'while' condition");
     if(!cond)
-        return nullptr;
-
-    if(!m_cursor.expect(TokenType::RightParen, "expected ')' after 'while' condition"))
         return nullptr;
 
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
@@ -468,19 +464,13 @@ Stmt* StmtParser::parseDoWhileStatement(const SourceSpan span){
     if(!parseScopedBodyStatements(stmt->statements))
         return nullptr;
 
-    if(!m_cursor.matchIdentifier("while")){
+    if(!m_cursor.matchIdentifier(KeywordSemantics::s_While)){
         m_cursor.errorExpected("expected 'while' after 'do' body");
         return nullptr;
     }
 
-    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after 'while' in do-while"))
-        return nullptr;
-
-    stmt->condition = m_exprParser.parseExpression();
+    stmt->condition = expectParenthesizedExpr("expected '(' after 'while' in do-while", "expected ')' after do-while condition");
     if(!stmt->condition)
-        return nullptr;
-
-    if(!m_cursor.expect(TokenType::RightParen, "expected ')' after do-while condition"))
         return nullptr;
 
     if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after do-while statement"))

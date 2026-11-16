@@ -483,15 +483,15 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
 
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelConstantsHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelGuidePoolHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCounterHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelFreeListHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolSnapshotHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelConstantsHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelPoolHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelGuidePoolHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelCellHeadHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelCounterHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelFreeListHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelPoolSnapshotHeapHandle);
+    RetireDescriptor(heap, m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle);
 }
 
 b8 RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
@@ -571,15 +571,15 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
 
     // Persistent descriptors own backing resources until deferred retirement.
     if(
-        !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_rayTracingState.m_surfelConstants.get(), m_rayTracingState.m_surfelConstantsHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelPoolBuffer.get(), m_rayTracingState.m_surfelPoolHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelGuidePoolBuffer.get(), m_rayTracingState.m_surfelGuidePoolHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelCellHeadBuffer.get(), m_rayTracingState.m_surfelCellHeadHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelCounterBuffer.get(), m_rayTracingState.m_surfelCounterHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(), m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelFreeListBuffer.get(), m_rayTracingState.m_surfelFreeListHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), m_rayTracingState.m_surfelPoolSnapshotHeapHandle)
-        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle)
+        !EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_rayTracingState.m_surfelConstants.get(), m_rayTracingState.m_surfelConstantsHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelPoolBuffer.get(), m_rayTracingState.m_surfelPoolHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelGuidePoolBuffer.get(), m_rayTracingState.m_surfelGuidePoolHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelCellHeadBuffer.get(), m_rayTracingState.m_surfelCellHeadHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelCounterBuffer.get(), m_rayTracingState.m_surfelCounterHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(), m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_surfelFreeListBuffer.get(), m_rayTracingState.m_surfelFreeListHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), m_rayTracingState.m_surfelPoolSnapshotHeapHandle)
+        || !EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle)
     ){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
         return false;
@@ -606,7 +606,7 @@ b8 RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& target
         return false;
 
     // GI consumes the same selector descriptor as the other current ray effects.
-    if(!targets.bindless.valid() || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer) || !RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle()){
+    if(!targets.bindless.valid() || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer) || !RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
     }

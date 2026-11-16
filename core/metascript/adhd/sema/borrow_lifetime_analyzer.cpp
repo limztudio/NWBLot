@@ -38,7 +38,7 @@ b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, con
         if(IsBorrowViewType(lhsBase))
             return false;
         const b8 recvIsConst = method ? m_checker.isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
-        if(const MethodDecl* customOp = m_checker.resolveCustomOperator(ownerClass, method, containerTypeRef, lhsBase, "[]", 1u, recvIsConst))
+        if(const MethodDecl* customOp = m_checker.resolveCustomOperator(ownerClass, method, containerTypeRef, lhsBase, OperatorSemantics::s_SubscriptSymbol, 1u, recvIsConst))
             return m_checker.m_symbols.resolveRefMode(customOp->returnType) == ParamPassingMode::None;
         return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
     }
@@ -86,13 +86,13 @@ b8 BorrowLifetimeAnalyzer::borrowsTemporaryStringOwner(const ClassDecl* ownerCla
     const MStringView baseType = m_checker.inferExprBaseType(ownerClass, method, expr, scope);
     if(IsOwningStringType(baseType))
         return isTemporaryOwnerExpr(ownerClass, method, expr, scope);
-    if(baseType != "StringView")
+    if(!IsStringBorrowViewType(baseType))
         return false;
 
     if(expr.kind == ExprKind::Call && expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_checker.m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
+            if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == BuiltinTypeSemantics::StringViewTypeName()) && !expr.arguments.empty() && expr.arguments[0])
                 return borrowsTemporaryStringOwner(ownerClass, method, *expr.arguments[0], scope);
         }
         else if(expr.lhs->kind == ExprKind::ScopeAccess && expr.lhs->scopeChain.size() == 2u){
@@ -124,16 +124,6 @@ b8 BorrowLifetimeAnalyzer::borrowsTemporaryStringOwner(const ClassDecl* ownerCla
 }
 
 b8 BorrowLifetimeAnalyzer::borrowsLocalStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, MStringView* outOwnerName, usize* outOwnerScopeIndex)const noexcept{
-    const auto resolveLocalIndex = [&](const MStringView name, usize& outIndex)noexcept -> const ScopedVarInfo*{
-        for(usize i = scope.size(); i > 0u; --i){
-            if(scope[i - 1u].name == name){
-                outIndex = i - 1u;
-                return &scope[i - 1u];
-            }
-        }
-        return nullptr;
-    };
-
     const auto checkRootLocalOwner = [&](const Expr& candidate)noexcept -> b8{
         const Expr* root = &candidate;
         while(root){
@@ -167,13 +157,13 @@ b8 BorrowLifetimeAnalyzer::borrowsLocalStringOwner(const ClassDecl* ownerClass, 
         if(!root || root->kind != ExprKind::Identifier)
             return false;
         usize localIdx = 0u;
-        const ScopedVarInfo* local = resolveLocalIndex(root->text, localIdx);
+        const ScopedVarInfo* local = TypeChecker::FindScopedVar(scope, root->text, &localIdx);
         if(!local)
             return false;
         if(local->borrowsLocalStringOwner){
             usize ownerIdx = localIdx;
             if(!local->borrowedLocalOwnerName.empty())
-                resolveLocalIndex(local->borrowedLocalOwnerName, ownerIdx);
+                (void)TypeChecker::FindScopedVar(scope, local->borrowedLocalOwnerName, &ownerIdx);
             if(outOwnerName)
                 *outOwnerName = local->borrowedLocalOwnerName;
             if(outOwnerScopeIndex)
@@ -181,11 +171,7 @@ b8 BorrowLifetimeAnalyzer::borrowsLocalStringOwner(const ClassDecl* ownerClass, 
             return true;
         }
         const MStringView candidateBase = m_checker.inferExprBaseType(ownerClass, method, candidate, scope);
-        if(IsOwningStringType(candidateBase)
-            && !local->isParam
-            && local->mode == ParamPassingMode::None
-            && m_checker.m_symbols.resolveRefMode(local->type) == ParamPassingMode::None
-            && !IsBorrowViewType(m_checker.resolveScopedVarBaseType(*local))){
+        if(IsOwningStringType(candidateBase) && m_checker.isOwnedStackLocalVar(*local)){
             if(outOwnerName)
                 *outOwnerName = local->name;
             if(outOwnerScopeIndex)
@@ -200,13 +186,13 @@ b8 BorrowLifetimeAnalyzer::borrowsLocalStringOwner(const ClassDecl* ownerClass, 
         return checkRootLocalOwner(expr);
     if(checkRootLocalOwner(expr))
         return true;
-    if(baseType != "StringView")
+    if(!IsStringBorrowViewType(baseType))
         return false;
 
     if(expr.kind == ExprKind::Call && expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_checker.m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
+            if((IsBuiltinStringViewBorrowFunction(expr.lhs->text) || baseCallee == BuiltinTypeSemantics::StringViewTypeName()) && !expr.arguments.empty() && expr.arguments[0])
                 return borrowsLocalStringOwner(ownerClass, method, *expr.arguments[0], scope, outOwnerName, outOwnerScopeIndex);
         }
         else if(expr.lhs->kind == ExprKind::ScopeAccess && expr.lhs->scopeChain.size() == 2u){

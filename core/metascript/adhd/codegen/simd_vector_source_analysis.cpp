@@ -23,7 +23,7 @@ NWB_ADHD_BEGIN
         if(!vecInfo || vecInfo->isDoubleReg != targetIsDouble)
             return false;
         if(vecInfo->isMixed){
-            outLoadFn = vecInfo->isDoubleReg ? "::LoadDoubleInt" : "::LoadFloatInt";
+            outLoadFn = vecInfo->isDoubleReg ? CodegenSymbols::s_SimdLoadDoubleInt : CodegenSymbols::s_SimdLoadFloatInt;
             outLanes = 3u;
             return true;
         }
@@ -36,14 +36,15 @@ NWB_ADHD_BEGIN
             return false;
         outLanes = unalignedInfo->lanes;
         if(unalignedInfo->isHalfFloat){
-            outLoadFn = targetIsDouble ? "::LoadDouble" : "::LoadHalf";
+            outLoadFn = targetIsDouble ? CodegenSymbols::s_SimdLoadDouble : CodegenSymbols::s_SimdLoadHalf;
             return true;
         }
-        const b8 srcIsDouble = (unalignedInfo->laneScalarType == "f64" || unalignedInfo->laneScalarType == "i64" || unalignedInfo->laneScalarType == "u64");
+        const BuiltinScalarTypeInfo* laneInfo = BuiltinTypeSemantics::FindBuiltinScalarType(unalignedInfo->laneScalarType);
+        const b8 srcIsDouble = laneInfo && laneInfo->byteSize == 8u;
         if(srcIsDouble != targetIsDouble)
             return false;
-        const b8 srcIsInt = BuiltinTypeSemantics::IsIntegerScalarType(unalignedInfo->laneScalarType);
-        outLoadFn = srcIsDouble ? (srcIsInt ? "::LoadDoubleInt" : "::LoadDouble") : (srcIsInt ? "::LoadInt" : "::LoadFloat");
+        const b8 srcIsInt = laneInfo && laneInfo->isInteger;
+        outLoadFn = CodegenSymbols::SimdLoadFunc(srcIsDouble, srcIsInt);
         return true;
     }
     return false;
@@ -53,7 +54,7 @@ NWB_ADHD_BEGIN
     outRegSimdType = {};
     outStorageLoadFn = {};
     outEffectiveZeroedAboveLane = 4u;
-    const MStringView expectedRegType = targetIsDouble ? "VectorDouble" : "VectorSingle";
+    const MStringView expectedRegType = FindFloatSimdRegisterTypeName(targetIsDouble);
     if(srcExpr.resolvedSimdType == expectedRegType){
         outRegSimdType = expectedRegType;
         return true;
@@ -71,10 +72,10 @@ NWB_ADHD_BEGIN
         const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(srcExpr.resolvedUnalignedType);
         if(!unalignedInfo || unalignedInfo->isHalfFloat || BuiltinTypeSemantics::IsIntegerScalarType(unalignedInfo->laneScalarType))
             return false;
-        const b8 srcIsDouble = (unalignedInfo->laneScalarType == "f64");
+        const b8 srcIsDouble = (unalignedInfo->laneScalarType == BuiltinTypeSemantics::Float64ScalarTypeName());
         if(srcIsDouble != targetIsDouble)
             return false;
-        outStorageLoadFn = srcIsDouble ? "::LoadDouble" : "::LoadFloat";
+        outStorageLoadFn = CodegenSymbols::SimdLoadFunc(srcIsDouble, false);
         outEffectiveZeroedAboveLane = unalignedInfo->lanes;
         return true;
     }

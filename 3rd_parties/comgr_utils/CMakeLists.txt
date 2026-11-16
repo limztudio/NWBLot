@@ -5,6 +5,7 @@
 
 cmake_minimum_required (VERSION 3.23)
 project (ComgrUtils)
+include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
 
 set (COMGR_UTILS_VERSION_MAJOR 1)
 set (COMGR_UTILS_VERSION_MINOR 0)

@@ -6,6 +6,7 @@
 # via nwb_match_engine_runtime.
 cmake_minimum_required(VERSION 3.10)
 project(RmvBackend)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
 
 set(_3P "${CMAKE_SOURCE_DIR}/3rd_parties")
 
@@ -36,3 +37,7 @@ set_target_properties(RmvBackend PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON)
 nwb_disable_vendor_warnings(RmvBackend)
+nwb_skip_unity_build_sources(
+    "${CMAKE_CURRENT_LIST_DIR}/rmt_data_snapshot.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/rmt_data_timeline.cpp"
+)

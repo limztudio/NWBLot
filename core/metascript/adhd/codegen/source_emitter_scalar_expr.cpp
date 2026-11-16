@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 
 
 b8 SourceEmitter::tryEmitScalarFloatExpr(MString& out, const Expr& expr)const{
-    if(!m_emittingScalarSimd || (expr.resolvedScalarType != "f32" && expr.resolvedScalarType != "f64") || !expr.lhs || !expr.resolvedSimdType.empty() || !expr.resolvedUnalignedType.empty())
+    if(!m_emittingScalarSimd || !BuiltinTypeSemantics::IsFloatScalarType(expr.resolvedScalarType) || !expr.lhs || !expr.resolvedSimdType.empty() || !expr.resolvedUnalignedType.empty())
         return false;
     if(expr.kind == ExprKind::Call)
         return tryEmitScalarFloatCall(out, expr);
@@ -26,22 +26,23 @@ b8 SourceEmitter::tryEmitScalarFloatExpr(MString& out, const Expr& expr)const{
     const b8 assignment = expr.kind == ExprKind::Binary && (expr.op == TokenType::PlusEqual || expr.op == TokenType::MinusEqual || expr.op == TokenType::StarEqual || expr.op == TokenType::SlashEqual);
     MStringView operation;
     if(unary && expr.op == TokenType::Minus)
-        operation = "Negate";
+        operation = CodegenSymbols::s_ScalarOpNegate;
     else if((expr.kind == ExprKind::Binary && (expr.op == TokenType::Plus || expr.op == TokenType::PlusEqual)) || (increment && expr.op == TokenType::PlusPlus))
-        operation = "Add";
+        operation = CodegenSymbols::s_ScalarOpAdd;
     else if((expr.kind == ExprKind::Binary && (expr.op == TokenType::Minus || expr.op == TokenType::MinusEqual)) || (increment && expr.op == TokenType::MinusMinus))
-        operation = "Subtract";
+        operation = CodegenSymbols::s_ScalarOpSubtract;
     else if(expr.kind == ExprKind::Binary && (expr.op == TokenType::Star || expr.op == TokenType::StarEqual))
-        operation = "Multiply";
+        operation = CodegenSymbols::s_ScalarOpMultiply;
     else if(expr.kind == ExprKind::Binary && (expr.op == TokenType::Slash || expr.op == TokenType::SlashEqual))
-        operation = "Divide";
+        operation = CodegenSymbols::s_ScalarOpDivide;
     else
         return false;
     if(!BuiltinTypeSemantics::IsScalarType(expr.lhs->resolvedScalarType) || (!unary && (!expr.rhs || !BuiltinTypeSemantics::IsScalarType(expr.rhs->resolvedScalarType))))
         return false;
-    const b8 isDouble = expr.lhs->resolvedScalarType == "f64" || (!unary && expr.rhs->resolvedScalarType == "f64");
-    const MStringView prefix = isDouble ? "::VectorDouble" : "::Vector";
-    const MStringView scalarType = isDouble ? "::f64" : "::f32";
+    const MStringView f64Name = BuiltinTypeSemantics::Float64ScalarTypeName();
+    const b8 isDouble = expr.lhs->resolvedScalarType == f64Name || (!unary && expr.rhs->resolvedScalarType == f64Name);
+    const MStringView prefix = CodegenSymbols::SimdPrefix(isDouble);
+    const MStringView scalarType = CodegenSymbols::SimdScalarCppType(isDouble);
     if(assignment){
         // Evaluate the right side before asking for the target, outside generated names.
         out.append("([](auto __target, const auto __rhs)noexcept -> decltype(auto){ auto& __lhs = __target(); __lhs = ");
@@ -68,10 +69,10 @@ b8 SourceEmitter::tryEmitScalarFloatExpr(MString& out, const Expr& expr)const{
             out.append(replacement.data(), replacement.size());
         out.append("))");
     };
-    emitOperand(expr.lhs, assignment || increment ? MStringView("__lhs") : MStringView{});
-    if(operation != "Negate"){
+    emitOperand(expr.lhs, assignment || increment ? CodegenSymbols::s_ScalarParamLhs : MStringView{});
+    if(operation != CodegenSymbols::s_ScalarOpNegate){
         out.append(", ");
-        emitOperand(expr.rhs, assignment ? MStringView("__rhs") : (increment ? MStringView("1") : MStringView{}));
+        emitOperand(expr.rhs, assignment ? CodegenSymbols::s_ScalarParamRhs : (increment ? CodegenSymbols::s_ScalarUnitOne : MStringView{}));
     }
     out.append("))");
     if(assignment){

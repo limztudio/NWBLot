@@ -29,7 +29,7 @@ b8 LambdaExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             m_checker.reportError(errors, cap.span, "duplicate capture name in lambda");
             ok = false;
         }
-        if(cap.name == "this"){
+        if(KeywordSemantics::IsThisKeyword(cap.name)){
             if(!ownerClass){
                 m_checker.reportError(errors, cap.span, "cannot capture 'this' in a free function");
                 ok = false;

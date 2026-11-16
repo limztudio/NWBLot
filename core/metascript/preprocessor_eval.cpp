@@ -5,6 +5,7 @@
 #include "preprocessor.h"
 #include "literal_decoder.h"
 #include "preprocessor_macro_expander.h"
+#include "preprocessor_semantics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -260,11 +261,10 @@ private:
         if(m_current.type == TokenType::Identifier){
             const MStringView ident = m_current.text;
             advance();
-            if(ident == "true")
-                return 1;
-            if(ident == "false")
-                return 0;
-            if(ident == "defined"){
+            i64 boolValue = 0;
+            if(PreprocessorSemantics::TryParseBoolLiteral(ident, boolValue))
+                return boolValue;
+            if(ident == PreprocessorSemantics::s_DefinedOperator){
                 b8 hasParen = false;
                 if(m_current.type == TokenType::LeftParen){
                     hasParen = true;
@@ -333,7 +333,7 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
             while(i < exprText.size() && IsAsciiIdentifierChar(exprText[i]))
                 ++i;
             const MStringView ident = exprText.substr(idStart, i - idStart);
-            if(ident == "defined"){
+            if(ident == PreprocessorSemantics::s_DefinedOperator){
                 expanded.append(ident.data(), ident.size());
                 i = PreprocessorMacroExpander::AppendDefinedOperand(exprText, i, expanded);
                 continue;
@@ -345,15 +345,13 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
                 u32 parenDepth = 0u;
                 usize scan = afterIdent;
                 while(scan < exprText.size()){
+                    b8 hitTerminator = false;
+                    if(PreprocessorSemantics::AdvancePreprocessorScanStep(exprText, scan, 0u, false, hitTerminator)){
+                        if(hitTerminator)
+                            break;
+                        continue;
+                    }
                     const MChar ch = exprText[scan];
-                    if(ch == '\'' && scan > 0u && (IsAsciiDigit(exprText[scan - 1u]) || IsAsciiIdentifierChar(exprText[scan - 1u]))){
-                        ++scan;
-                        continue;
-                    }
-                    if(ch == '"' || ch == '\''){
-                        scan = SkipQuotedLiteral(exprText, scan);
-                        continue;
-                    }
                     if(ch == '(')
                         ++parenDepth;
                     else if(ch == ')'){

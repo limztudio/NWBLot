@@ -66,14 +66,8 @@ b8 ReturnStatementChecker::check(ClassDecl* ownerClass, const Span<const ScopedV
                     }
                     if(root && root->kind == ExprKind::Identifier){
                         if(const ScopedVarInfo* rootLocal = m_checker.FindScopedVar(scope, root->text)){
-                            if(
-                                !rootLocal->isParam
-                                && rootLocal->mode == ParamPassingMode::None
-                                && m_checker.m_symbols.resolveRefMode(rootLocal->type) == ParamPassingMode::None
-                                && !IsBorrowViewType(m_checker.resolveScopedVarBaseType(*rootLocal))
-                            ){
+                            if(m_checker.isOwnedStackLocalVar(*rootLocal))
                                 isDanglingReturn = true;
-                            }
                         }
                     }
                 }
@@ -91,20 +85,13 @@ b8 ReturnStatementChecker::check(ClassDecl* ownerClass, const Span<const ScopedV
     }
     if(stmt.expr && !m_checker.checkExpr(ownerClass, scope, retRefMode == ParamPassingMode::Mut, method, *stmt.expr, errors))
         ok = false;
-    if(unwrappedRetType && stmt.expr && retRefMode == ParamPassingMode::None && !unwrappedRetType->templateArgs.empty() && unwrappedRetType->templateArgs[0].type){
-        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedRetType->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-            const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(unwrappedRetType->templateArgs[0].type->name);
-            if(SymbolTable::IsSimdRegisterVectorType(valBase) && stmt.expr->resolvedSimdType == valBase)
-                stmt.expr->wrapInSimdResult = true;
-        }
-    }
-    if(stmt.expr && retRefMode == ParamPassingMode::In && stmt.expr->isStringByteRead){
-        stmt.expr->isStringByteRead = false;
-        stmt.expr->isStringByteConstRef = true;
-    }
+    if(stmt.expr && retRefMode == ParamPassingMode::None)
+        m_checker.markSimdResultWrapperAdaptation(unwrappedRetType, *stmt.expr);
+    if(stmt.expr && retRefMode == ParamPassingMode::In)
+        PromoteStringByteReadToConstRef(*stmt.expr);
     if(activeRetType && stmt.expr && retRefMode == ParamPassingMode::None){
         const MStringView baseRetTypeName = m_checker.m_symbols.resolveBaseTypeName(activeRetType->name);
-        if(baseRetTypeName == "StringView"){
+        if(IsStringBorrowViewType(baseRetTypeName)){
             if(BorrowLifetimeAnalyzer(m_checker).borrowsTemporaryStringOwner(ownerClass, &method, *stmt.expr, scope)
                 || BorrowLifetimeAnalyzer(m_checker).borrowsLocalStringOwner(ownerClass, &method, *stmt.expr, scope)){
                 m_checker.reportError(errors, stmt.span, "cannot return 'StringView' borrowing a temporary or stack-local string");

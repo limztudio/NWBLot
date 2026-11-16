@@ -1541,6 +1541,19 @@ void VerifyAdhdCompiler_SuppressesLastUseMoveForMutCapturedLocalsAndRejectsMisma
     EXPECT_NE(srcView.find("return ConsumeIds(captured);"), usize.max);
     EXPECT_EQ(srcView.find("return ConsumeIds(::Move(captured));"), usize.max);
 
+    CompileResult assignRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(
+        "void AssignScratchToMutParam(in StringView src, mut String outAssign, mut String outEq) {\r\n    String scratchA;\r\n    scratchA.assign(src);\r\n    outAssign.assign(scratchA);\r\n    String scratchB;\r\n    scratchB.assign(src);\r\n    outEq = scratchB;\r\n}\r\n",
+        "impl/sim/assign_scratch.adhd",
+        arena.arena,
+        assignRes
+    ));
+    const StringView assignHdrView = GeneratedHeaderView(assignRes);
+    const StringView assignSrcView = GeneratedSourceView(assignRes);
+    EXPECT_EQ(assignHdrView.find("outAssign.assign(::Move(scratchA))"), usize.max);
+    EXPECT_EQ(assignSrcView.find("outAssign.assign(::Move(scratchA))"), usize.max);
+    EXPECT_NE(assignHdrView.find("::AdhdAssign(outEq, ::Move(scratchB))"), usize.max);
+
     ExpectCompileFails(arena, s_SuiteBadOolTemplateParamsSource, "impl/sim/bad_ool_tparams.adhd");
 }
 

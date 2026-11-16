@@ -110,14 +110,14 @@ namespace __hidden_avboit_system_and_targets{
 
 
 static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTargets& targets){
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.coverageBufferDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.depthWarpBufferDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.controlBufferDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.extinctionBufferDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.extinctionOverflowBufferDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.transmittanceTextureStorageDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.refractionTileListDescriptor);
-    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.refractionTileArgumentsDescriptor);
+    RetireDescriptor(heap, targets.coverageBufferDescriptor);
+    RetireDescriptor(heap, targets.depthWarpBufferDescriptor);
+    RetireDescriptor(heap, targets.controlBufferDescriptor);
+    RetireDescriptor(heap, targets.extinctionBufferDescriptor);
+    RetireDescriptor(heap, targets.extinctionOverflowBufferDescriptor);
+    RetireDescriptor(heap, targets.transmittanceTextureStorageDescriptor);
+    RetireDescriptor(heap, targets.refractionTileListDescriptor);
+    RetireDescriptor(heap, targets.refractionTileArgumentsDescriptor);
 }
 
 
@@ -378,19 +378,19 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTarge
     FOUNDATION_ASSERT(!avboitTargets.refractionTileArgumentsDescriptor.valid());
 
     const b8 targetResourcesRegistered =
-        RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.coverageBuffer, avboitTargets.coverageBufferDescriptor)
-        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.depthWarpBuffer, avboitTargets.depthWarpBufferDescriptor)
-        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.controlBuffer, avboitTargets.controlBufferDescriptor)
-        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.extinctionBuffer, avboitTargets.extinctionBufferDescriptor)
-        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.extinctionOverflowBuffer, avboitTargets.extinctionOverflowBufferDescriptor)
-        && RendererDescriptorRegisterDetail::AssignDescriptor(
+        AssignStructuredBufferUav(heap, *avboitTargets.coverageBuffer, avboitTargets.coverageBufferDescriptor)
+        && AssignStructuredBufferUav(heap, *avboitTargets.depthWarpBuffer, avboitTargets.depthWarpBufferDescriptor)
+        && AssignStructuredBufferUav(heap, *avboitTargets.controlBuffer, avboitTargets.controlBufferDescriptor)
+        && AssignStructuredBufferUav(heap, *avboitTargets.extinctionBuffer, avboitTargets.extinctionBufferDescriptor)
+        && AssignStructuredBufferUav(heap, *avboitTargets.extinctionOverflowBuffer, avboitTargets.extinctionOverflowBufferDescriptor)
+        && AssignDescriptor(
             heap,
             Core::GpuDescriptorClass::StorageImage,
             Core::DescriptorWriteItem::TextureUav(0u, avboitTargets.transmittanceTexture.get(), avboitTargets.transmittanceFormat, s_FramebufferSubresources, Core::TextureDimension::Texture3D),
             avboitTargets.transmittanceTextureStorageDescriptor
         )
-        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.refractionTileList, avboitTargets.refractionTileListDescriptor)
-        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.refractionTileArguments, avboitTargets.refractionTileArgumentsDescriptor)
+        && AssignStructuredBufferUav(heap, *avboitTargets.refractionTileList, avboitTargets.refractionTileListDescriptor)
+        && AssignStructuredBufferUav(heap, *avboitTargets.refractionTileArguments, avboitTargets.refractionTileArgumentsDescriptor)
     ;
     if(!targetResourcesRegistered){
         __hidden_avboit_system_and_targets::RetireTargetDescriptors(heap, avboitTargets);

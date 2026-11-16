@@ -50,10 +50,54 @@ inline constexpr BuiltinGenericTypeInfo s_BuiltinGenericTypes[] = {
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
 };
 
-inline constexpr MStringView s_NonCopyableBaseInterfaceNames[] = {
-#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName) MStringView(ifaceName),
+struct BuiltinNonCopyableBaseInterfaceInfo{
+    MStringView ifaceName;
+    MStringView cppExportName;
+};
+
+inline constexpr BuiltinNonCopyableBaseInterfaceInfo s_NonCopyableBaseInterfaces[] = {
+#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName, cppExportName) \
+    BuiltinNonCopyableBaseInterfaceInfo{ ifaceName, cppExportName },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
+};
+
+inline constexpr MStringView s_ArenaObjectTypeNames[] = {
+#define NWB_ADHD_EXPORT_ARENA_TYPE(adhdName) MStringView(adhdName),
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_ARENA_TYPE
+};
+
+struct PointerLikeGenericTypeEntry{
+    MStringView adhdName;
+    b8 allowsInterfaceArg;
+    b8 isSmartPtrDeref;
+};
+
+inline constexpr PointerLikeGenericTypeEntry s_PointerLikeGenericTypes[] = {
+#define NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE(adhdName, allowsInterfaceArg, isSmartPtrDeref) \
+    PointerLikeGenericTypeEntry{ adhdName, allowsInterfaceArg, isSmartPtrDeref },
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE
+};
+
+inline constexpr MStringView s_SubsystemVectorContainerTypeNames[] = {
+#define NWB_ADHD_EXPORT_SUBSYSTEM_VECTOR_CONTAINER_TYPE(adhdName) MStringView(adhdName),
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SUBSYSTEM_VECTOR_CONTAINER_TYPE
+};
+
+inline constexpr MStringView s_LiteralConstObjectTypeNames[] = {
+#define NWB_ADHD_EXPORT_LITERAL_CONST_OBJECT_TYPE(adhdName) MStringView(adhdName),
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_LITERAL_CONST_OBJECT_TYPE
+};
+
+inline constexpr BuiltinFormatArgWrapInfo s_FormatArgWraps[] = {
+#define NWB_ADHD_EXPORT_FORMAT_ARG_WRAP(wrapKindId, wrapInDiagnosticFormat, cppPrefix, cppSuffix) \
+    BuiltinFormatArgWrapInfo{ static_cast<u8>(wrapKindId), wrapInDiagnosticFormat, cppPrefix, cppSuffix },
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_FORMAT_ARG_WRAP
 };
 
 inline constexpr MStringView s_MoveOnlyTypeNames[] = {
@@ -189,11 +233,128 @@ inline constexpr BuiltinGlobalConstantInfo s_BuiltinGlobalConstants[] = {
 #undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
 };
 
+inline constexpr BuiltinFunctionArgRule::Enum s_NumericScalarArgRules[] = {
+#define NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE(ruleName) BuiltinFunctionArgRule::ruleName,
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE
+};
+
+inline constexpr BuiltinContainerArgConstraintInfo s_ContainerArgConstraints[] = {
+#define NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(ruleName, elementTypeName, templateArgCount, isExactElementCheck, checksContiguousSequence, countText) \
+    BuiltinContainerArgConstraintInfo{ BuiltinFunctionArgRule::ruleName, elementTypeName, templateArgCount, isExactElementCheck, checksContiguousSequence, countText },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT
+};
+
+inline constexpr BuiltinSpecialFunctionInfo s_SpecialFunctions[] = {
+#define NWB_ADHD_EXPORT_SPECIAL_FUNCTION_SEMANTICS(adhdName, kind) \
+    BuiltinSpecialFunctionInfo{ adhdName, SpecialFunctionKind::kind },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SPECIAL_FUNCTION_SEMANTICS
+};
+
+inline constexpr BuiltinSimdLaneZeroRuleInfo s_SimdLaneZeroRules[] = {
+#define NWB_ADHD_EXPORT_SIMD_LANE_ZERO_RULE(adhdName, ruleKind) \
+    BuiltinSimdLaneZeroRuleInfo{ adhdName, SimdLaneZeroRuleKind::ruleKind },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_LANE_ZERO_RULE
+};
+
+inline constexpr BuiltinSpecialMethodInfo s_SpecialMethods[] = {
+#define NWB_ADHD_EXPORT_SPECIAL_METHOD_SEMANTICS(methodName, kind) \
+    BuiltinSpecialMethodInfo{ methodName, SpecialMethodKind::kind },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SPECIAL_METHOD_SEMANTICS
+};
+
+template<usize N>
+[[nodiscard]] constexpr b8 ContainsName(const MStringView (&table)[N], const MStringView name)noexcept{
+    for(const MStringView entry : table){
+        if(entry == name)
+            return true;
+    }
+    return false;
+}
+
 template<typename EntryT, usize N>
 [[nodiscard]] constexpr const EntryT* FindBuiltinByAdhdName(const EntryT (&table)[N], const MStringView name)noexcept{
     for(const EntryT& info : table){
         if(info.adhdName == name)
             return &info;
+    }
+    return nullptr;
+}
+
+template<typename EntryT, usize N>
+[[nodiscard]] constexpr const EntryT* FindBuiltinByRule(const EntryT (&table)[N], const BuiltinFunctionArgRule::Enum rule)noexcept{
+    for(const EntryT& info : table){
+        if(info.rule == rule)
+            return &info;
+    }
+    return nullptr;
+}
+
+template<typename ObjPred, typename GenericPred>
+[[nodiscard]] b8 MatchObjectOrGenericType(const MStringView name, ObjPred&& objPred, GenericPred&& genericPred)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
+        return objPred(*objInfo);
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name))
+        return genericPred(*genericInfo);
+    return false;
+}
+
+[[nodiscard]] MStringView ResolveBuiltinScopePrefix(const MStringView scopeTypeName)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(scopeTypeName))
+        return objInfo->cppExportName;
+    if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(scopeTypeName))
+        return enumInfo->cppScopeName;
+    return {};
+}
+
+template<typename EntryT, usize N>
+[[nodiscard]] const EntryT* FindBuiltinScopedSymbol(
+    const EntryT (&table)[N],
+    const MStringView scopeTypeName,
+    const MStringView memberName,
+    const b8 allowArenaTemplateScope
+)noexcept{
+    if(memberName.empty())
+        return nullptr;
+    const MStringView prefix = ResolveBuiltinScopePrefix(scopeTypeName);
+    if(prefix.empty())
+        return nullptr;
+    constexpr MStringView s_ArenaSuffix = ContractSemantics::s_CppArenaTemplateScopeSep;
+    constexpr MStringView s_ScopeSep = ContractSemantics::s_CppScopeSeparator;
+    for(const auto& info : table){
+        if(!info.cppExportName.starts_with(prefix) || !info.cppExportName.ends_with(memberName))
+            continue;
+        if(info.cppExportName.size() == prefix.size() + s_ScopeSep.size() + memberName.size()
+            && info.cppExportName.substr(prefix.size(), s_ScopeSep.size()) == s_ScopeSep
+        ){
+            return &info;
+        }
+        if(allowArenaTemplateScope
+            && info.cppExportName.size() == prefix.size() + s_ArenaSuffix.size() + memberName.size()
+            && info.cppExportName.substr(prefix.size(), s_ArenaSuffix.size()) == s_ArenaSuffix
+        ){
+            return &info;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] const BuiltinImplicitConversionInfo* FindImplicitConversion(const MStringView fromTypeName, const MStringView toTypeName)noexcept{
+    for(const BuiltinImplicitConversionInfo& info : s_BuiltinImplicitConversions){
+        if(info.fromTypeName == fromTypeName && info.toTypeName == toTypeName)
+            return &info;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] const BuiltinNonCopyableBaseInterfaceInfo* FindNonCopyableBaseInterface(const MStringView name)noexcept{
+    for(const BuiltinNonCopyableBaseInterfaceInfo& entry : s_NonCopyableBaseInterfaces){
+        if(entry.ifaceName == name)
+            return &entry;
     }
     return nullptr;
 }
@@ -225,11 +386,11 @@ b8 HasBuiltinEnumEntry(const MStringView enumName, const MStringView entryName)n
 }
 
 b8 IsArenaFirstCtorType(const MStringView name)noexcept{
-    if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
-        return info->arenaCtorMode == 1u;
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name))
-        return genericInfo->arenaFirstInCtor;
-    return false;
+    return __hidden_adhd_type_utils::MatchObjectOrGenericType(
+        name,
+        [](const BuiltinObjectTypeInfo& info)noexcept{ return info.arenaCtorMode == 1u; },
+        [](const BuiltinGenericTypeInfo& genericInfo)noexcept{ return genericInfo.arenaFirstInCtor; }
+    );
 }
 
 b8 OmitsArenaInCtorType(const MStringView name)noexcept{
@@ -271,20 +432,17 @@ b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const u
         return argCount <= 4u;
     if(SymbolTable::IsSimdRegisterMatrixType(baseTypeName))
         return argCount == 0u || argCount == 1u || argCount == 3u || argCount == 4u || argCount == 9u || argCount == 12u || argCount == 16u;
-    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(baseTypeName)){
+    const auto hasValidLaneArity = [argCount](const u32 lanes, const u32 altCtorArity, const b8 allowTwoArg)noexcept -> b8{
         return argCount == 0u
             || argCount == 1u
-            || (vecInfo->lanes == 4u && argCount == 2u)
-            || argCount == vecInfo->lanes
-            || (vecInfo->altCtorArity > 0u && argCount == vecInfo->altCtorArity);
-    }
-    if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(baseTypeName)){
-        return argCount == 0u
-            || argCount == 1u
-            || (unalignedInfo->lanes == 4u && !unalignedInfo->isHalfFloat && argCount == 2u)
-            || argCount == unalignedInfo->lanes
-            || (unalignedInfo->altCtorArity > 0u && argCount == unalignedInfo->altCtorArity);
-    }
+            || (allowTwoArg && argCount == 2u)
+            || argCount == lanes
+            || (altCtorArity > 0u && argCount == altCtorArity);
+    };
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(baseTypeName))
+        return hasValidLaneArity(vecInfo->lanes, vecInfo->altCtorArity, vecInfo->lanes == 4u);
+    if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(baseTypeName))
+        return hasValidLaneArity(unalignedInfo->lanes, unalignedInfo->altCtorArity, unalignedInfo->lanes == 4u && !unalignedInfo->isHalfFloat);
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(baseTypeName))
         return argCount == 0u || argCount == 1u || argCount == matInfo->elemCount;
     return true;
@@ -362,19 +520,11 @@ const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, con
 }
 
 const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
-    for(const BuiltinFunctionArgRuleInfo& info : __hidden_adhd_type_utils::s_BuiltinFunctionArgRules){
-        if(info.rule == rule)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_BuiltinFunctionArgRules, rule);
 }
 
 const BuiltinVisitorRuleInfo* FindBuiltinVisitorRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
-    for(const BuiltinVisitorRuleInfo& info : __hidden_adhd_type_utils::s_BuiltinVisitorRules){
-        if(info.rule == rule)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_BuiltinVisitorRules, rule);
 }
 
 const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
@@ -382,31 +532,7 @@ const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
 }
 
 const BuiltinFunctionInfo* FindBuiltinScopedFunction(const MStringView scopeTypeName, const MStringView memberName)noexcept{
-    if(memberName.empty())
-        return nullptr;
-    MStringView prefix{};
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(scopeTypeName))
-        prefix = objInfo->cppExportName;
-    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(scopeTypeName))
-        prefix = enumInfo->cppScopeName;
-    if(prefix.empty())
-        return nullptr;
-    constexpr MStringView kArenaSuffix = "<::ArenaBase>::";
-    for(const BuiltinFunctionInfo& info : __hidden_adhd_type_utils::s_BuiltinFunctions){
-        if(!info.cppExportName.starts_with(prefix) || !info.cppExportName.ends_with(memberName))
-            continue;
-        if(info.cppExportName.size() == prefix.size() + 2u + memberName.size()
-            && info.cppExportName.substr(prefix.size(), 2u) == "::"
-        ){
-            return &info;
-        }
-        if(info.cppExportName.size() == prefix.size() + kArenaSuffix.size() + memberName.size()
-            && info.cppExportName.substr(prefix.size(), kArenaSuffix.size()) == kArenaSuffix
-        ){
-            return &info;
-        }
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinFunctions, scopeTypeName, memberName, true);
 }
 
 const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView name)noexcept{
@@ -414,59 +540,41 @@ const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView nam
 }
 
 const BuiltinGlobalConstantInfo* FindBuiltinScopedConstant(const MStringView scopeTypeName, const MStringView memberName)noexcept{
-    if(memberName.empty())
-        return nullptr;
-    MStringView prefix{};
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(scopeTypeName))
-        prefix = objInfo->cppExportName;
-    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(scopeTypeName))
-        prefix = enumInfo->cppScopeName;
-    if(prefix.empty())
-        return nullptr;
-    for(const BuiltinGlobalConstantInfo& info : __hidden_adhd_type_utils::s_BuiltinGlobalConstants){
-        if(info.cppExportName.size() == prefix.size() + 2u + memberName.size()
-            && info.cppExportName.starts_with(prefix)
-            && info.cppExportName.substr(prefix.size(), 2u) == "::"
-            && info.cppExportName.ends_with(memberName)
-        ){
-            return &info;
-        }
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, scopeTypeName, memberName, false);
 }
 
 b8 IsBorrowViewType(const MStringView name)noexcept{
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
-        return objInfo->isBorrowView;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->isBorrowView;
-    return false;
+    return __hidden_adhd_type_utils::MatchObjectOrGenericType(
+        name,
+        [](const BuiltinObjectTypeInfo& objInfo)noexcept{ return objInfo.isBorrowView; },
+        [](const BuiltinGenericTypeInfo& info)noexcept{ return info.isBorrowView; }
+    );
 }
 
 b8 IsNonSerializableBuiltinType(const MStringView name)noexcept{
     if(SymbolTable::IsSimdRegisterType(name))
         return true;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
-        return !objInfo->isBinarySerializable;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return !info->isBinarySerializable;
-    return false;
+    return __hidden_adhd_type_utils::MatchObjectOrGenericType(
+        name,
+        [](const BuiltinObjectTypeInfo& objInfo)noexcept{ return !objInfo.isBinarySerializable; },
+        [](const BuiltinGenericTypeInfo& info)noexcept{ return !info.isBinarySerializable; }
+    );
 }
 
 b8 IsSingleValueCtorBuiltinType(const MStringView name)noexcept{
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
-        return objInfo->isSingleValueCtor;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->isSingleValueCtor;
-    return false;
+    return __hidden_adhd_type_utils::MatchObjectOrGenericType(
+        name,
+        [](const BuiltinObjectTypeInfo& objInfo)noexcept{ return objInfo.isSingleValueCtor; },
+        [](const BuiltinGenericTypeInfo& info)noexcept{ return info.isSingleValueCtor; }
+    );
 }
 
 b8 NeedsBraceDefaultFieldInit(const MStringView name)noexcept{
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
-        return objInfo->emitsBraceFieldInit;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->emitsBraceFieldInit;
-    return false;
+    return __hidden_adhd_type_utils::MatchObjectOrGenericType(
+        name,
+        [](const BuiltinObjectTypeInfo& objInfo)noexcept{ return objInfo.emitsBraceFieldInit; },
+        [](const BuiltinGenericTypeInfo& info)noexcept{ return info.emitsBraceFieldInit; }
+    );
 }
 
 b8 IsStringLikeType(const MStringView name)noexcept{
@@ -491,14 +599,14 @@ b8 IsStringByteAccessorMethod(const MStringView receiverTypeName, const MStringV
     if(!IsStringLikeType(receiverTypeName))
         return false;
     const BuiltinReceiverMethodInfo* rm = FindBuiltinReceiverMethod(receiverTypeName, methodName);
-    return rm && rm->returnTypeName == "u8";
+    return rm && rm->returnTypeName == BuiltinTypeSemantics::ByteScalarTypeName();
 }
 
 b8 IsStringReceiverBorrowViewMethod(const MStringView receiverTypeName, const MStringView methodName)noexcept{
     if(!IsStringLikeType(receiverTypeName))
         return false;
     const BuiltinReceiverMethodInfo* rm = FindBuiltinReceiverMethod(receiverTypeName, methodName);
-    return rm && rm->returnTypeName == "StringView";
+    return rm && rm->returnTypeName == BuiltinTypeSemantics::StringViewTypeName();
 }
 
 b8 IsBuiltinStringViewBorrowFunction(const MStringView name)noexcept{
@@ -512,8 +620,8 @@ b8 IsContainerOrWrapperValueAccessMethod(const MStringView receiverTypeName, con
     const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(receiverTypeName);
     if(!genericInfo || genericInfo->isBorrowView)
         return false;
-    if(genericInfo->inlineLayoutKind == InlineLayoutKind::Optional || genericInfo->inlineLayoutKind == InlineLayoutKind::Expected)
-        return methodName == "value";
+    if(IsOptionalOrExpectedGenericType(receiverTypeName))
+        return FindSpecialMethodSemantics(methodName) == SpecialMethodKind::UnwrapValue;
     if(genericInfo->inlineLayoutKind == InlineLayoutKind::Atomic)
         return false;
     const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(methodName);
@@ -533,27 +641,20 @@ b8 RequiresTCharAdaptation(const MStringView name)noexcept{
 }
 
 b8 IsImplicitlyConvertibleBuiltinType(const MStringView fromTypeName, const MStringView toTypeName)noexcept{
-    for(const BuiltinImplicitConversionInfo& info : __hidden_adhd_type_utils::s_BuiltinImplicitConversions){
-        if(info.fromTypeName == fromTypeName && info.toTypeName == toTypeName)
-            return true;
-    }
-    return false;
+    return __hidden_adhd_type_utils::FindImplicitConversion(fromTypeName, toTypeName) != nullptr;
 }
 
 b8 DoesImplicitConversionPropagateFirstTypeArg(const MStringView fromTypeName, const MStringView toTypeName)noexcept{
-    for(const BuiltinImplicitConversionInfo& info : __hidden_adhd_type_utils::s_BuiltinImplicitConversions){
-        if(info.fromTypeName == fromTypeName && info.toTypeName == toTypeName)
-            return info.propagatesFirstTypeArg;
-    }
-    return false;
+    const BuiltinImplicitConversionInfo* info = __hidden_adhd_type_utils::FindImplicitConversion(fromTypeName, toTypeName);
+    return info && info->propagatesFirstTypeArg;
 }
 
 b8 IsNonThreadSafeContainer(const MStringView typeName)noexcept{
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
-        return objInfo->isNonThreadSafeContainer;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(typeName))
-        return info->isNonThreadSafeContainer;
-    return false;
+    return __hidden_adhd_type_utils::MatchObjectOrGenericType(
+        typeName,
+        [](const BuiltinObjectTypeInfo& objInfo)noexcept{ return objInfo.isNonThreadSafeContainer; },
+        [](const BuiltinGenericTypeInfo& info)noexcept{ return info.isNonThreadSafeContainer; }
+    );
 }
 
 b8 IsFixedArrayContainerType(const MStringView name)noexcept{
@@ -565,6 +666,12 @@ b8 IsFixedArrayContainerType(const MStringView name)noexcept{
 b8 IsOptionalContainerType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
         return info->inlineLayoutKind == InlineLayoutKind::Optional;
+    return false;
+}
+
+b8 IsOptionalOrExpectedGenericType(const MStringView name)noexcept{
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return info->inlineLayoutKind == InlineLayoutKind::Expected || info->inlineLayoutKind == InlineLayoutKind::Optional;
     return false;
 }
 
@@ -618,7 +725,7 @@ b8 CheckSwizzlePattern(const MStringView text, const u32 maxLanes, b8& outIsPatt
 b8 IsVoidTypeRef(const TypeRef* ref)noexcept{
     if(!ref)
         return true;
-    return ref->name == "void" && ref->refMode == ParamPassingMode::None && !ref->isAuto && !ref->isFuncType && ref->templateArgs.empty();
+    return BuiltinTypeSemantics::IsVoidTypeName(ref->name) && ref->refMode == ParamPassingMode::None && !ref->isAuto && !ref->isFuncType && ref->templateArgs.empty();
 }
 
 i32 ScoreCallableParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
@@ -655,19 +762,16 @@ b8 IsReflectedMapContainerType(const MStringView baseName)noexcept{
 }
 
 b8 IsNonCopyableBaseInterfaceName(const MStringView name)noexcept{
-    for(const MStringView entry : __hidden_adhd_type_utils::s_NonCopyableBaseInterfaceNames){
-        if(entry == name)
-            return true;
-    }
-    return false;
+    return __hidden_adhd_type_utils::FindNonCopyableBaseInterface(name) != nullptr;
+}
+
+MStringView FindNonCopyableBaseInterfaceCppName(const MStringView name)noexcept{
+    const __hidden_adhd_type_utils::BuiltinNonCopyableBaseInterfaceInfo* entry = __hidden_adhd_type_utils::FindNonCopyableBaseInterface(name);
+    return entry ? entry->cppExportName : name;
 }
 
 b8 IsMoveOnlyTypeName(const MStringView name)noexcept{
-    for(const MStringView entry : __hidden_adhd_type_utils::s_MoveOnlyTypeNames){
-        if(entry == name)
-            return true;
-    }
-    return false;
+    return __hidden_adhd_type_utils::ContainsName(__hidden_adhd_type_utils::s_MoveOnlyTypeNames, name);
 }
 
 b8 HasBuiltinSimdRegisterField(const MStringView typeName)noexcept{
@@ -684,7 +788,116 @@ b8 IsOverAlignedBuiltinType(const MStringView typeName)noexcept{
     return FindBuiltinFixedLayout(typeName, byteSize, byteAlign) && byteAlign >= 16u;
 }
 
+b8 IsStringBorrowViewType(const MStringView name)noexcept{
+    return IsStringLikeType(name) && IsBorrowViewType(name);
+}
 
+b8 IsArenaObjectType(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::ContainsName(__hidden_adhd_type_utils::s_ArenaObjectTypeNames, name);
+}
+
+b8 AllowsInterfaceTypeArg(const MStringView name)noexcept{
+    for(const __hidden_adhd_type_utils::PointerLikeGenericTypeEntry& entry : __hidden_adhd_type_utils::s_PointerLikeGenericTypes){
+        if(entry.allowsInterfaceArg && entry.adhdName == name)
+            return true;
+    }
+    return false;
+}
+
+b8 IsSmartPointerDerefType(const MStringView name)noexcept{
+    for(const __hidden_adhd_type_utils::PointerLikeGenericTypeEntry& entry : __hidden_adhd_type_utils::s_PointerLikeGenericTypes){
+        if(entry.isSmartPtrDeref && entry.adhdName == name)
+            return true;
+    }
+    return false;
+}
+
+b8 IsSubsystemVectorContainerType(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::ContainsName(__hidden_adhd_type_utils::s_SubsystemVectorContainerTypeNames, name);
+}
+
+b8 IsLiteralConstObjectType(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::ContainsName(__hidden_adhd_type_utils::s_LiteralConstObjectTypeNames, name);
+}
+
+const BuiltinFormatArgWrapInfo* FindFormatArgWrapInfo(const u8 wrapKindId)noexcept{
+    for(const BuiltinFormatArgWrapInfo& info : __hidden_adhd_type_utils::s_FormatArgWraps){
+        if(info.wrapKindId == wrapKindId)
+            return &info;
+    }
+    return nullptr;
+}
+
+MStringView FindFloatSimdRegisterTypeName(const b8 isDouble)noexcept{
+    for(const BuiltinSimdVectorInfo& info : __hidden_adhd_type_utils::s_BuiltinSimdVectorTypes){
+        if(info.cppExportName == info.regCppType && info.isFloatReg && !info.isIntReg && !info.isMixed && info.isDoubleReg == isDouble)
+            return info.adhdName;
+    }
+    return {};
+}
+
+MStringView FindIntSimdStorageVectorTypeName(const b8 isDouble, const b8 isSigned)noexcept{
+    for(const BuiltinSimdVectorInfo& info : __hidden_adhd_type_utils::s_BuiltinSimdVectorTypes){
+        if(info.isIntReg && !info.isMixed && info.lanes == 4u && info.isDoubleReg == isDouble && info.isSignedInt == isSigned)
+            return info.adhdName;
+    }
+    return {};
+}
+
+const BuiltinContainerArgConstraintInfo* FindContainerArgConstraint(const BuiltinFunctionArgRule::Enum rule)noexcept{
+    return __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_ContainerArgConstraints, rule);
+}
+
+b8 IsNumericScalarArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
+    for(const BuiltinFunctionArgRule::Enum entry : __hidden_adhd_type_utils::s_NumericScalarArgRules){
+        if(entry == rule)
+            return true;
+    }
+    return false;
+}
+
+SpecialFunctionKind::Enum FindSpecialFunctionKind(const MStringView name)noexcept{
+    for(const BuiltinSpecialFunctionInfo& info : __hidden_adhd_type_utils::s_SpecialFunctions){
+        if(info.adhdName == name)
+            return info.kind;
+    }
+    return SpecialFunctionKind::None;
+}
+
+SimdLaneZeroRuleKind::Enum FindSimdLaneZeroRule(const MStringView name)noexcept{
+    for(const BuiltinSimdLaneZeroRuleInfo& info : __hidden_adhd_type_utils::s_SimdLaneZeroRules){
+        if(info.adhdName == name)
+            return info.ruleKind;
+    }
+    return SimdLaneZeroRuleKind::None;
+}
+
+SpecialMethodKind::Enum FindSpecialMethodSemantics(const MStringView methodName)noexcept{
+    for(const BuiltinSpecialMethodInfo& info : __hidden_adhd_type_utils::s_SpecialMethods){
+        if(info.methodName == methodName)
+            return info.kind;
+    }
+    return SpecialMethodKind::None;
+}
+
+b8 BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(const MStringView name)noexcept{
+    for(const SpecialBuiltinTypeInfo& info : s_SpecialBuiltinTypes){
+        if(info.isReservedPrimitive && info.adhdName == name)
+            return true;
+    }
+    if(IsScalarType(name))
+        return true;
+    if(FindBuiltinSimdVectorType(name) != nullptr || FindBuiltinSimdMatrixType(name) != nullptr || FindBuiltinUnalignedVectorType(name) != nullptr)
+        return true;
+    const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name);
+    return genericInfo && genericInfo->requiredHeader.empty();
+}
+
+b8 BuiltinTypeSemantics::IsBuiltinTypeName(const MStringView name)noexcept{
+    if(IsReservedPrimitiveOrContainerTypeName(name))
+        return true;
+    return FindBuiltinGenericType(name) != nullptr || FindBuiltinObjectType(name) != nullptr || FindBuiltinEnum(name) != nullptr;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -59,6 +59,14 @@ b8 TypeComparator::areEquivalentWithSubst(const TypeRef* actual, const TypeRef* 
     return true;
 }
 
+b8 TypeComparator::hasEquivalentInPrefix(const Span<const TypeRef* const> types, const TypeRef* const target)const noexcept{
+    for(const TypeRef* existing : types){
+        if(existing && areEquivalent(existing, target))
+            return true;
+    }
+    return false;
+}
+
 b8 TypeComparator::areTemplateArgListsEqual(const Span<const TypeArg> a, const Span<const TypeArg> b)const noexcept{
     if(a.size() != b.size())
         return false;
@@ -75,12 +83,32 @@ b8 TypeComparator::areTemplateArgListsEqual(const Span<const TypeArg> a, const S
     return true;
 }
 
-b8 TypeComparator::doParamListsMatch(const Span<const ParamDecl> a, const Span<const ParamDecl> b)const noexcept{
-    if(a.size() != b.size())
+b8 TypeComparator::doTemplateParamHeaderMatch(const TemplateParamDecl& a, const TemplateParamDecl& b, const b8 checkName)const noexcept{
+    return (!checkName || a.name == b.name)
+        && (a.constValueType != nullptr) == (b.constValueType != nullptr)
+        && (!a.constValueType || areEquivalent(a.constValueType, b.constValueType))
+        && a.interfaceBounds.size() == b.interfaceBounds.size();
+}
+
+b8 TypeComparator::doTemplateParamBoundsMatch(const TemplateParamDecl& a, const TemplateParamDecl& b)const noexcept{
+    if(a.interfaceBounds.size() != b.interfaceBounds.size())
         return false;
-    for(usize i = 0u; i < a.size(); ++i){
-        if(a[i].mode != b[i].mode || !areEquivalent(a[i].type, b[i].type))
+    for(usize bIdx = 0u; bIdx < a.interfaceBounds.size(); ++bIdx){
+        if(!areEquivalent(a.interfaceBounds[bIdx], b.interfaceBounds[bIdx]))
             return false;
+    }
+    return true;
+}
+
+b8 TypeComparator::doParamListsMatchWithSubst(const Span<const ParamDecl> actual, const Span<const ParamDecl> pattern, const Span<const TemplateParamDecl> ifaceParams, const Span<const TypeArg> ifaceArgs, usize* const outMismatchIndex)const noexcept{
+    if(actual.size() != pattern.size())
+        return false;
+    for(usize i = 0u; i < actual.size(); ++i){
+        if(actual[i].mode != pattern[i].mode || !areEquivalentWithSubst(actual[i].type, pattern[i].type, ifaceParams, ifaceArgs)){
+            if(outMismatchIndex)
+                *outMismatchIndex = i;
+            return false;
+        }
     }
     return true;
 }

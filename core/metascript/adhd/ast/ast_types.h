@@ -93,6 +93,13 @@ constexpr MStringView TypeArg::constantOrTypeName()const noexcept{
     return nullptr;
 }
 
+[[nodiscard]] inline TypeRef* CloneTypeRefWithMode(MetaArena& arena, const TypeRef& src, const ParamPassingMode::Enum refMode){
+    TypeRef* cloned = AllocateAstNode<TypeRef>(arena);
+    *cloned = src;
+    cloned->refMode = refMode;
+    return cloned;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

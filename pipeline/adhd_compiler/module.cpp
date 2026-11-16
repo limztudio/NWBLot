@@ -40,17 +40,17 @@ int RunPipelineTool(const int argc, char** argv){
     PipelineCommandLine commandLine(PipelineTool::AdhdCompiler);
     return commandLine.run(argc, argv, [&](PipelineOptions& options){
         AdhdCompiler::AdhdCompileOptions compileOptions(arena);
-        compileOptions.inputs = Move(options.inputs);
-        compileOptions.includeDirectories = Move(options.includeDirectories);
-        compileOptions.cppHeaders = Move(options.cppHeaders);
-        compileOptions.cppIncludeDirectories = Move(options.cppIncludeDirectories);
-        compileOptions.cppDefines = Move(options.cppDefines);
-        compileOptions.cppCompilerArgs = Move(options.cppCompilerArgs);
-        compileOptions.outputDirectory = Move(options.outputPath);
-        compileOptions.customNamespace = Move(options.customNamespace);
-        compileOptions.namespaceMapPath = Move(options.namespaceMapPath);
-        compileOptions.depfilePath = Move(options.depfilePath);
-        compileOptions.emitCppExternsPath = Move(options.emitCppExternsPath);
+        compileOptions.inputs = options.inputs;
+        compileOptions.includeDirectories = options.includeDirectories;
+        compileOptions.cppHeaders = options.cppHeaders;
+        compileOptions.cppIncludeDirectories = options.cppIncludeDirectories;
+        compileOptions.cppDefines = options.cppDefines;
+        compileOptions.cppCompilerArgs = options.cppCompilerArgs;
+        compileOptions.outputDirectory = options.outputPath;
+        compileOptions.customNamespace = options.customNamespace;
+        compileOptions.namespaceMapPath = options.namespaceMapPath;
+        compileOptions.depfilePath = options.depfilePath;
+        compileOptions.emitCppExternsPath = options.emitCppExternsPath;
         return AdhdCompiler::CompileAdhd(compileOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
     }, arena, scratchArena);
 }

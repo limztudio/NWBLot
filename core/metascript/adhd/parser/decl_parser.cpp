@@ -20,28 +20,6 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize paramCount, MStringView& outErrorMsg)noexcept{
-    usize minParams = 1u;
-    usize maxParams = 1u;
-    b8 prohibitsUnary = false;
-    if(!OperatorSemantics::TryGetMemberOperatorArityRules(opName, minParams, maxParams, prohibitsUnary))
-        return false;
-    if(prohibitsUnary && paramCount == 0u){
-        outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
-        return false;
-    }
-    if(paramCount < minParams || paramCount > maxParams){
-        if(maxParams == 0u)
-            outErrorMsg = "member 'operator~' cannot take parameters";
-        else if(minParams == 0u)
-            outErrorMsg = "member 'operator+' and 'operator-' may take at most 1 parameter";
-        else
-            outErrorMsg = "binary or indexing member operator overload must take exactly 1 parameter";
-        return false;
-    }
-    return true;
-}
-
 b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
@@ -75,9 +53,10 @@ MStringView DeclParser::currentTokenImportedNamespace()const noexcept{
 
 b8 DeclParser::tryParseExternAttribute(const ParsedAttribute& attr, MStringView& outCppExportName, MStringView& outRequiredHeader, const b8 isExtern, b8& outMatched){
     outMatched = false;
-    const b8 isCppName = (attr.name == "cpp_name");
-    const b8 isCppHeader = (attr.name == "cpp_header");
-    if(!isCppName && !isCppHeader)
+    MStringView duplicateError;
+    MStringView argError;
+    const ExternAttributeKind::Enum kind = KeywordSemantics::TryParseExternAttribute(attr.name, &duplicateError, &argError);
+    if(kind == ExternAttributeKind::None)
         return true;
 
     if(!isExtern){
@@ -85,38 +64,29 @@ b8 DeclParser::tryParseExternAttribute(const ParsedAttribute& attr, MStringView&
         return false;
     }
     if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral || attr.arguments[0].text.empty()){
-        m_cursor.error(attr.line, attr.column, isCppName
-            ? "'[cpp_name(\"...\")]' requires a single non-empty string literal argument"
-            : "'[cpp_header(\"...\")]' requires a single non-empty string literal argument");
+        m_cursor.error(attr.line, attr.column, argError);
         return false;
     }
 
-    if(isCppName){
+    if(kind == ExternAttributeKind::CppName){
         if(!outCppExportName.empty()){
-            m_cursor.error(attr.line, attr.column, "duplicate '[cpp_name]' attribute");
+            m_cursor.error(attr.line, attr.column, duplicateError);
             return false;
         }
         outCppExportName = attr.arguments[0].text;
     }
-    else{
+    else if(kind == ExternAttributeKind::CppHeader){
         if(!outRequiredHeader.empty()){
-            m_cursor.error(attr.line, attr.column, "duplicate '[cpp_header]' attribute");
+            m_cursor.error(attr.line, attr.column, duplicateError);
             return false;
         }
         const MStringView rawHdr = attr.arguments[0].text;
-        const b8 alreadyDelimited = rawHdr.size() >= 2u
-            && ((rawHdr.front() == '<' && rawHdr.back() == '>') || (rawHdr.front() == '"' && rawHdr.back() == '"'));
-        if(alreadyDelimited){
-            outRequiredHeader = rawHdr;
-        }
-        else{
-            const usize wrappedLen = rawHdr.size() + 2u;
-            MChar* buf = static_cast<MChar*>(m_cursor.arena().allocate(alignof(MChar), wrappedLen));
-            buf[0] = '<';
-            CopyMemory(buf + 1u, rawHdr.data(), rawHdr.size());
-            buf[wrappedLen - 1u] = '>';
-            outRequiredHeader = MStringView(buf, wrappedLen);
-        }
+        b8 hadAngles = false;
+        b8 hadQuotes = false;
+        (void)StripHeaderDelimiters(rawHdr, &hadAngles, &hadQuotes);
+        outRequiredHeader = (hadAngles || hadQuotes)
+            ? rawHdr
+            : InternAngleBracketHeader(m_cursor.arena(), rawHdr);
     }
 
     outMatched = true;
@@ -132,7 +102,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return false;
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
-    const b8 isExtern = m_cursor.matchIdentifier("extern");
+    const b8 isExtern = m_cursor.matchIdentifier(KeywordSemantics::s_Extern);
 
     if(isExtern && m_cursor.check(TokenType::StringLiteral)){
         if(!attributes.empty()){
@@ -144,12 +114,9 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'extern \"...\"' header import"))
             return false;
 
-        MStringView inner = rawHeader;
-        if(inner.size() >= 2u && inner.front() == '"' && inner.back() == '"')
-            inner = inner.substr(1u, inner.size() - 2u);
-        const b8 hasAngles = inner.size() >= 2u && inner.front() == '<' && inner.back() == '>';
-        if(hasAngles)
-            inner = inner.substr(1u, inner.size() - 2u);
+        b8 hasAngles = false;
+        MStringView inner = StripHeaderDelimiters(rawHeader, nullptr, nullptr);
+        inner = StripHeaderDelimiters(inner, &hasAngles, nullptr);
         if(inner.empty()){
             m_cursor.error(span.line, span.column, "C++ header path in 'extern \"...\"' cannot be empty");
             return false;
@@ -171,7 +138,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         }
     }
 
-    if(m_cursor.matchIdentifier("native")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Native)){
         if(isExtern){
             m_cursor.error(span.line, span.column, "'extern' cannot be applied to 'native' blocks");
             return false;
@@ -214,7 +181,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    if(m_cursor.matchIdentifier("const")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Const)){
         MStringView extCppExportName;
         MStringView extRequiredHeader;
         for(const ParsedAttribute& attr : attributes){
@@ -240,7 +207,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    if(m_cursor.matchIdentifier("type")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Type)){
         TypeAliasDecl* aliasDecl = parseTypeAlias(span, attributes, isExtern);
         if(!aliasDecl)
             return false;
@@ -264,7 +231,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    if(m_cursor.matchIdentifier("interface")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Interface)){
         InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, attributes, isExtern);
         if(!ifaceDecl)
             return false;
@@ -275,7 +242,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    if(m_cursor.matchIdentifier("class")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Class)){
         ClassDecl* classDecl = parseClassDecl(span, attributes, isExtern);
         if(!classDecl)
             return false;
@@ -380,18 +347,23 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
     usize underlyingAlign = 4u;
     MStringView enumName;
 
-    if(m_cursor.match(TokenType::Less)){
+    const auto parseFixedWidthUnderlyingType = [&](const MStringView expectedIdentMsg) -> b8{
         if(!m_cursor.check(TokenType::Identifier)){
-            m_cursor.errorExpected(isFlag ? "expected integer size type inside 'flag<...>'" : "expected integer size type inside 'enum<...>'");
-            return nullptr;
+            m_cursor.errorExpected(expectedIdentMsg);
+            return false;
         }
-
         sizeTypeName = m_cursor.current().text;
         if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
             m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
-            return nullptr;
+            return false;
         }
         m_cursor.advance();
+        return true;
+    };
+
+    if(m_cursor.match(TokenType::Less)){
+        if(!parseFixedWidthUnderlyingType(isFlag ? "expected integer size type inside 'flag<...>'" : "expected integer size type inside 'enum<...>'"))
+            return nullptr;
 
         if(!m_cursor.expect(TokenType::Greater, "expected '>' after underlying size type"))
             return nullptr;
@@ -412,21 +384,12 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         m_cursor.advance();
 
         if(m_cursor.match(TokenType::Colon)){
-            if(!m_cursor.check(TokenType::Identifier)){
-                m_cursor.errorExpected("expected integer underlying type after ':'");
+            if(!parseFixedWidthUnderlyingType("expected integer underlying type after ':'"))
                 return nullptr;
-            }
-            sizeTypeName = m_cursor.current().text;
-            if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
-                m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
-                return nullptr;
-            }
-            m_cursor.advance();
         }
         else{
-            sizeTypeName = "u32";
-            underlyingSize = 4u;
-            underlyingAlign = 4u;
+            sizeTypeName = BuiltinTypeSemantics::UInt32ScalarTypeName();
+            (void)BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign);
         }
     }
     else{
@@ -448,7 +411,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
     decl->isImported = isExtern;
     decl->isExtern = isExtern;
     if(isExtern && !extCppExportName.empty()){
-        const b8 hasWrappedSuffix = extCppExportName.ends_with("::Enum") || extCppExportName.ends_with("::Flag");
+        const b8 hasWrappedSuffix = ContractSemantics::HasWrappedNwbEnumSuffix(extCppExportName);
         decl->isDirectCppEnum = !hasWrappedSuffix;
     }
 
@@ -530,20 +493,8 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
             return nullptr;
     }
 
-    if(m_cursor.match(TokenType::Colon)){
-        for(;;){
-            if(!m_cursor.check(TokenType::Identifier)){
-                m_cursor.errorExpected("expected base interface name after ':'");
-                return nullptr;
-            }
-            TypeRef* baseType = m_typeParser.parseType(false, false);
-            if(!baseType)
-                return nullptr;
-            decl->baseInterfaces.push_back(baseType);
-            if(!m_cursor.match(TokenType::Comma))
-                break;
-        }
-    }
+    if(!parseColonTypeList(decl->baseInterfaces, "expected base interface name after ':'", false))
+        return nullptr;
 
     if(!m_cursor.expect(TokenType::LeftBrace, "expected '{' to start interface body"))
         return nullptr;
@@ -584,21 +535,8 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;
 
-        if(m_cursor.matchIdentifier("operator")){
-            MStringView opName;
-            if(!parseOperatorName(opName))
-                return nullptr;
-            method->name = opName;
-            method->isOperator = true;
-        }
-        else if(m_cursor.check(TokenType::Identifier)){
-            method->name = m_cursor.current().text;
-            m_cursor.advance();
-        }
-        else{
-            m_cursor.errorExpected("expected interface method name");
+        if(!parseMethodOrOperatorName(method->name, method->isOperator, "expected interface method name"))
             return nullptr;
-        }
 
         if(m_cursor.check(TokenType::Less)){
             m_cursor.error(methodSpan.line, methodSpan.column, "interface methods cannot be templated; parameterize the enclosing 'interface' instead");
@@ -634,6 +572,87 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
     while(m_cursor.match(TokenType::Semicolon)){}
 
     return decl;
+}
+
+b8 DeclParser::parseColonTypeList(MVector<TypeRef*>& outTypes, const MStringView expectedTypeMsg, const b8 rejectAccessSpecifiers){
+    if(!m_cursor.match(TokenType::Colon))
+        return true;
+
+    for(;;){
+        if(rejectAccessSpecifiers && m_cursor.check(TokenType::Identifier) && KeywordSemantics::ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
+            m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd");
+            return false;
+        }
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.errorExpected(expectedTypeMsg);
+            return false;
+        }
+        TypeRef* baseType = m_typeParser.parseType(false, false);
+        if(!baseType)
+            return false;
+        outTypes.push_back(baseType);
+        if(!m_cursor.match(TokenType::Comma))
+            break;
+    }
+    return true;
+}
+
+b8 DeclParser::parseMethodOrOperatorName(MStringView& outName, b8& outIsOperator, const MStringView expectedNameMsg){
+    outIsOperator = false;
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Operator)){
+        if(!parseOperatorName(outName))
+            return false;
+        outIsOperator = true;
+        return true;
+    }
+    if(m_cursor.check(TokenType::Identifier)){
+        outName = m_cursor.current().text;
+        m_cursor.advance();
+        return true;
+    }
+    m_cursor.errorExpected(expectedNameMsg);
+    return false;
+}
+
+b8 DeclParser::initializeDestructorDecl(
+    MethodDecl& method,
+    const MStringView ownerName,
+    const MStringView missingLeftParenMsg,
+    MVector<MStringView>* const ownerTemplateParams,
+    MVector<TemplateParamDecl>* const ownerTemplateParamDecls
+){
+    method.ownerClassName = ownerName;
+    if(ownerTemplateParams)
+        method.ownerTemplateParams = Move(*ownerTemplateParams);
+    if(ownerTemplateParamDecls)
+        method.ownerTemplateParamDecls = Move(*ownerTemplateParamDecls);
+    method.name = ownerName;
+    method.isDestructor = true;
+    if(method.isReflect){
+        m_cursor.error(method.span.line, method.span.column, "'reflect' attribute is not permitted on constructors or destructors");
+        return false;
+    }
+    return parseDestructorEmptyParams(missingLeftParenMsg);
+}
+
+b8 DeclParser::initializeConstructorDecl(
+    MethodDecl& method,
+    const MStringView ownerName,
+    MVector<MStringView>* const ownerTemplateParams,
+    MVector<TemplateParamDecl>* const ownerTemplateParamDecls
+){
+    method.ownerClassName = ownerName;
+    if(ownerTemplateParams)
+        method.ownerTemplateParams = Move(*ownerTemplateParams);
+    if(ownerTemplateParamDecls)
+        method.ownerTemplateParamDecls = Move(*ownerTemplateParamDecls);
+    method.name = ownerName;
+    method.isConstructor = true;
+    if(method.isReflect){
+        m_cursor.error(method.span.line, method.span.column, "'reflect' attribute is not permitted on constructors or destructors");
+        return false;
+    }
+    return parseConstructorParamsAndRejectInitList(method);
 }
 
 

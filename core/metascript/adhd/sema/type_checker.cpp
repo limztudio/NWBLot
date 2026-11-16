@@ -160,12 +160,31 @@ namespace __hidden_adhd_type_checker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const ScopedVarInfo* TypeChecker::FindScopedVar(const Span<const ScopedVarInfo> scope, const MStringView name)noexcept{
+const ScopedVarInfo* TypeChecker::FindScopedVar(const Span<const ScopedVarInfo> scope, const MStringView name, usize* const outIndex)noexcept{
     for(usize i = scope.size(); i > 0u; --i){
-        if(scope[i - 1u].name == name)
+        if(scope[i - 1u].name == name){
+            if(outIndex)
+                *outIndex = i - 1u;
             return &scope[i - 1u];
+        }
     }
     return nullptr;
+}
+
+const Expr* TypeChecker::UnwrapMemberOrIndexRoot(const Expr* expr)noexcept{
+    while(expr && (expr->kind == ExprKind::MemberAccess || expr->kind == ExprKind::Index))
+        expr = expr->lhs;
+    return expr;
+}
+
+b8 TypeChecker::DoesSynthesizedClassCtorPassArena(const ClassDecl& ctorCls, const MStringView baseClassName, const usize argCount, const MStringView firstArgBaseType)noexcept{
+    if(argCount >= 2u)
+        return true;
+    if(argCount != 1u || firstArgBaseType == baseClassName)
+        return false;
+    if(!ctorCls.assetTypeName.empty() && (IsLiteralConstObjectType(firstArgBaseType) || IsStringLikeType(firstArgBaseType)))
+        return false;
+    return true;
 }
 
 b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
@@ -192,11 +211,11 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
 
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
             const EnumEntry& entry = enumDecl->entries[i];
-            if(!enumDecl->isImported && !enumDecl->isExtern && entry.name == "Count"){
-                reportError(errors, entry.span, enumDecl->isFlag
-                    ? "use 'kCount' instead of 'Count' for flag count sentries"
-                    : "use 'kCount' instead of 'Count' for enum count sentries");
-                ok = false;
+            if(!enumDecl->isImported && !enumDecl->isExtern){
+                if(const MStringView sentryErr = KeywordSemantics::FindForbiddenEnumSentryError(entry.name, enumDecl->isFlag); !sentryErr.empty()){
+                    reportError(errors, entry.span, sentryErr);
+                    ok = false;
+                }
             }
             for(usize j = 0u; j < i; ++j){
                 if(enumDecl->entries[j].name == entry.name){
@@ -318,21 +337,8 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             continue;
         }
         if(gc->isImported){
-            if(gc->expr && gc->varType && gc->varType->isAuto){
-                if(const TypeRef* inferredRef = inferExprTypeRef(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope); inferredRef && !inferredRef->isAuto){
-                    const SourceSpan savedSpan = gc->varType->span;
-                    *gc->varType = *inferredRef;
-                    gc->varType->span = savedSpan;
-                    gc->varType->isAuto = false;
-                }
-                else{
-                    const MStringView inferredName = inferExprTypeName(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope);
-                    if(!inferredName.empty()){
-                        gc->varType->isAuto = false;
-                        gc->varType->name = inferredName;
-                    }
-                }
-            }
+            if(gc->expr && gc->varType && gc->varType->isAuto)
+                deduceGlobalConstantAutoType(*gc, dummyGlobalCtx, emptyScope);
             continue;
         }
         m_recordGlobalHeaders = true;
@@ -340,7 +346,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             if(!checkTypeRef(*gc->varType, nullptr, nullptr, errors))
                 ok = false;
             const MStringView baseGcType = m_symbols.resolveBaseTypeName(gc->varType->name);
-            if(m_symbols.findInterface(baseGcType) || m_symbols.isAbstractBuiltinType(baseGcType)){
+            if(m_symbols.isInterfaceOrAbstractType(baseGcType)){
                 reportError(errors, gc->span, "file-level 'const' cannot have an 'interface' type");
                 ok = false;
             }
@@ -352,35 +358,13 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 reportError(errors, gc->span, "file-level 'const' cannot have an arena-backed or 'Atomic' type; use compile-time fixed types");
                 ok = false;
             }
-            if(!m_symbols.hasTypeSymbol(baseGcType) && RequiresTCharAdaptation(baseGcType)){
-                if(gc->expr)
-                    markStringToPathAdaptation(nullptr, &dummyGlobalCtx, emptyScope, *gc->expr);
-                for(Expr* arg : gc->arguments){
-                    if(arg)
-                        markStringToPathAdaptation(nullptr, &dummyGlobalCtx, emptyScope, *arg);
-                }
-            }
+            maybeAdaptInitToTChar(nullptr, dummyGlobalCtx, emptyScope, baseGcType, gc->expr, gc->arguments);
         }
         if(gc->expr){
             if(!checkExpr(nullptr, emptyScope, false, dummyGlobalCtx, *gc->expr, errors))
                 ok = false;
-            if(gc->varType && gc->varType->isAuto){
-                if(const TypeRef* inferredRef = inferExprTypeRef(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope); inferredRef && !inferredRef->isAuto){
-                    const SourceSpan savedSpan = gc->varType->span;
-                    *gc->varType = *inferredRef;
-                    gc->varType->span = savedSpan;
-                    gc->varType->isAuto = false;
-                }
-                else{
-                    const MStringView inferredName = !gc->expr->resolvedSimdType.empty()
-                        ? gc->expr->resolvedSimdType
-                        : inferExprTypeName(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope);
-                    if(!inferredName.empty()){
-                        gc->varType->isAuto = false;
-                        gc->varType->name = inferredName;
-                    }
-                }
-            }
+            if(gc->varType && gc->varType->isAuto)
+                deduceGlobalConstantAutoType(*gc, dummyGlobalCtx, emptyScope);
         }
         if(gc->varType && !gc->varType->isAuto && TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*gc->varType)){
             reportError(errors, gc->span, "file-level 'const' cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
@@ -454,11 +438,8 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
 void TypeChecker::recordRequiredHeader(const MStringView header)noexcept{
     if(!m_recordGlobalHeaders || !m_activeUnit || header.empty())
         return;
-    for(const MStringView existing : m_activeUnit->requiredGlobalHeaders){
-        if(existing == header)
-            return;
-    }
-    m_activeUnit->requiredGlobalHeaders.push_back(header);
+    if(!ContainsStringView(Span<const MStringView>(m_activeUnit->requiredGlobalHeaders.data(), m_activeUnit->requiredGlobalHeaders.size()), header))
+        m_activeUnit->requiredGlobalHeaders.push_back(header);
 }
 
 void TypeChecker::recordBuiltinTypeHeader(const MStringView typeName)noexcept{
@@ -483,6 +464,162 @@ void TypeChecker::recordBuiltinTypeHeader(const MStringView typeName)noexcept{
         recordRequiredHeader(enumInfo->requiredHeader);
     else if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(base))
         recordRequiredHeader(genericInfo->requiredHeader);
+}
+
+void TypeChecker::recordBuiltinReturnTypeHeaders(
+    const MStringView returnTypeName,
+    const MStringView returnTypeArgName,
+    const MStringView returnNestedTypeArgName,
+    const MStringView returnErrorTypeName
+)noexcept{
+    recordBuiltinTypeHeader(returnTypeName);
+    recordBuiltinTypeHeader(returnTypeArgName);
+    recordBuiltinTypeHeader(returnNestedTypeArgName);
+    recordBuiltinTypeHeader(returnErrorTypeName);
+}
+
+void TypeChecker::markScratchArenaUsed(MethodDecl& method)noexcept{
+    method.usesScratchArena = true;
+    m_activeParallelBlockUsesScratch = true;
+}
+
+b8 TypeChecker::isUnshadowedTypeScopeAccess(const Span<const ScopedVarInfo> scope, const MStringView scopeName)const noexcept{
+    return !FindScopedVar(scope, scopeName) && !m_symbols.findGlobalConstant(scopeName);
+}
+
+b8 TypeChecker::isOwnedStackLocalVar(const ScopedVarInfo& local)const noexcept{
+    return !local.isParam
+        && local.mode == ParamPassingMode::None
+        && m_symbols.resolveRefMode(local.type) == ParamPassingMode::None
+        && !IsBorrowViewType(resolveScopedVarBaseType(local));
+}
+
+b8 TypeChecker::isTaskLocalIdentifierExpr(const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    if(expr.kind != ExprKind::Identifier)
+        return false;
+    const ScopedVarInfo* local = FindScopedVar(scope, expr.text);
+    return local && local->declaredParallelDepth == m_parallelDepth;
+}
+
+void TypeChecker::markSimdResultWrapperAdaptation(const TypeRef* const targetTypeRef, Expr& argExpr)const noexcept{
+    if(!targetTypeRef)
+        return;
+    const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(targetTypeRef);
+    if(!unwrapped || unwrapped->templateArgs.empty() || !unwrapped->templateArgs[0].type || m_symbols.hasTypeSymbol(unwrapped->name))
+        return;
+    if(IsOptionalOrExpectedGenericType(unwrapped->name)){
+        const MStringView valBase = m_symbols.resolveBaseTypeName(unwrapped->templateArgs[0].type->name);
+        if(SymbolTable::IsSimdRegisterVectorType(valBase) && argExpr.resolvedSimdType == valBase)
+            argExpr.wrapInSimdResult = true;
+    }
+}
+
+void TypeChecker::markFormatArgWrap(
+    const ClassDecl* ownerClass,
+    const MethodDecl* method,
+    Expr& arg,
+    const Span<const ScopedVarInfo> scope,
+    const b8 requireDiagnosticWrapFlag
+)const noexcept{
+    const MStringView fmtArgType = inferExprBaseType(ownerClass, method, arg, scope);
+    if(m_symbols.hasTypeSymbol(fmtArgType))
+        return;
+    if(const BuiltinObjectTypeInfo* fmtObj = FindBuiltinObjectType(fmtArgType)){
+        if(!requireDiagnosticWrapFlag){
+            arg.formatArgWrapKind = fmtObj->formatArgWrapKind;
+        }
+        else if(const BuiltinFormatArgWrapInfo* wrapInfo = FindFormatArgWrapInfo(fmtObj->formatArgWrapKind); wrapInfo && wrapInfo->wrapInDiagnosticFormat){
+            arg.formatArgWrapKind = fmtObj->formatArgWrapKind;
+        }
+    }
+}
+
+void TypeChecker::maybeAdaptInitToTChar(
+    const ClassDecl* ownerClass,
+    const MethodDecl& method,
+    const Span<const ScopedVarInfo> scope,
+    const MStringView baseTypeName,
+    Expr* const initExpr,
+    const Span<Expr* const> ctorArgs
+)const noexcept{
+    if(m_symbols.hasTypeSymbol(baseTypeName) || !RequiresTCharAdaptation(baseTypeName))
+        return;
+    if(initExpr)
+        markStringToPathAdaptation(ownerClass, &method, scope, *initExpr);
+    for(Expr* arg : ctorArgs){
+        if(arg)
+            markStringToPathAdaptation(ownerClass, &method, scope, *arg);
+    }
+}
+
+void TypeChecker::deduceGlobalConstantAutoType(Stmt& gc, MethodDecl& dummyCtx, const Span<const ScopedVarInfo> emptyScope)const noexcept{
+    if(!gc.expr || !gc.varType || !gc.varType->isAuto)
+        return;
+    if(const TypeRef* inferredRef = inferExprTypeRef(nullptr, &dummyCtx, *gc.expr, emptyScope); inferredRef && !inferredRef->isAuto){
+        const SourceSpan savedSpan = gc.varType->span;
+        *gc.varType = *inferredRef;
+        gc.varType->span = savedSpan;
+        gc.varType->isAuto = false;
+        return;
+    }
+    const MStringView inferredName = inferExprTypeName(nullptr, &dummyCtx, *gc.expr, emptyScope);
+    if(!inferredName.empty()){
+        gc.varType->isAuto = false;
+        gc.varType->name = inferredName;
+    }
+}
+
+b8 TypeChecker::checkBuiltinVectorOrMatrixCtorCall(
+    const ClassDecl* ownerClass,
+    const MethodDecl& method,
+    const MStringView baseCallee,
+    const Span<Expr* const> arguments,
+    const Span<const ScopedVarInfo> scope,
+    const SourceSpan errorSpan,
+    MVector<ParseError>& errors,
+    const b8 checkSingleValueMaxArity
+)const{
+    b8 ok = true;
+    const b8 isBuiltin = !m_symbols.hasTypeSymbol(baseCallee);
+    b8 checkedVectorArity = false;
+    if(isBuiltin){
+        if(!IsValidBuiltinVectorOrMatrixCtorArity(baseCallee, arguments.size())){
+            reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
+            ok = false;
+            checkedVectorArity = true;
+        }
+        else if(arguments.size() == 2u && arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseCallee)){
+            const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee);
+            const BuiltinUnalignedVectorInfo* unalignedInfo = simdVecInfo ? nullptr : FindBuiltinUnalignedVectorType(baseCallee);
+            const b8 requiresSimdRegArg0 = (simdVecInfo && simdVecInfo->lanes == 4u && simdVecInfo->altCtorArity != 2u)
+                || (unalignedInfo && unalignedInfo->lanes == 4u && unalignedInfo->altCtorArity != 2u);
+            if(requiresSimdRegArg0 && !SymbolTable::IsSimdRegisterVectorType(inferExprTypeName(ownerClass, &method, *arguments[0], scope))){
+                reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
+                ok = false;
+                checkedVectorArity = true;
+            }
+        }
+        if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee); simdVecInfo && simdVecInfo->isMixed && arguments.size() == 1u && arguments[0]){
+            const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *arguments[0], scope);
+            if(arg0Type != baseCallee){
+                reportError(errors, errorSpan, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
+                ok = false;
+            }
+        }
+    }
+    if(
+        !checkedVectorArity
+        && checkSingleValueMaxArity
+        && arguments.size() > 1u
+        && (
+            m_symbols.isEnumType(baseCallee)
+            || (isBuiltin && (BuiltinTypeSemantics::IsScalarType(baseCallee) || IsSingleValueCtorBuiltinType(baseCallee)))
+        )
+    ){
+        reportError(errors, errorSpan, "scalar, enum, or single-value constructor accepts at most 1 argument");
+        ok = false;
+    }
+    return ok;
 }
 
 void TypeChecker::buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
@@ -521,7 +658,7 @@ MStringView TypeChecker::resolveScopedVarBaseType(const ScopedVarInfo& var)const
 }
 
 b8 TypeChecker::isThisConstInScope(const MethodDecl& method, const Span<const ScopedVarInfo> scope)const noexcept{
-    const ScopedVarInfo* lambdaThis = m_inLambda ? FindScopedVar(scope, "this") : nullptr;
+    const ScopedVarInfo* lambdaThis = m_inLambda ? FindScopedVar(scope, KeywordSemantics::s_This) : nullptr;
     return method.isConst || (lambdaThis && lambdaThis->isConst);
 }
 
@@ -530,7 +667,7 @@ b8 TypeChecker::validateThisAccess(const ClassDecl* ownerClass, const SourceSpan
         reportError(errors, span, "'this' cannot be used in a free function");
         return false;
     }
-    if(m_inLambda && !FindScopedVar(scope, "this")){
+    if(m_inLambda && !FindScopedVar(scope, KeywordSemantics::s_This)){
         reportError(errors, span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
         return false;
     }
@@ -597,11 +734,11 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
         return {};
 
     const MStringView rootName = expr.scopeChain[0];
-    if(expr.text == "this"){
+    if(KeywordSemantics::IsThisKeyword(expr.text)){
         if(ownerClass){
             if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, rootName); field && field->type){
                 const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
-                if(m_symbols.findEnum(fieldTypeName) || (!m_symbols.hasTypeSymbol(fieldTypeName) && FindBuiltinEnum(fieldTypeName)))
+                if(m_symbols.isEnumType(fieldTypeName))
                     return fieldTypeName;
             }
         }
@@ -618,14 +755,14 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
                     *outAccessedField = field;
                 const TypeRef* ft = m_symbols.substituteTypeParams(field->type, targetCls->templateParams, lhsTypeRef);
                 const MStringView fieldTypeName = ft ? m_symbols.resolveBaseTypeName(ft->name) : MStringView{};
-                if(!fieldTypeName.empty() && (m_symbols.findEnum(fieldTypeName) || (!m_symbols.hasTypeSymbol(fieldTypeName) && FindBuiltinEnum(fieldTypeName))))
+                if(!fieldTypeName.empty() && m_symbols.isEnumType(fieldTypeName))
                     return fieldTypeName;
             }
         }
         else if(!m_symbols.hasTypeSymbol(lhsBase)){
             if(const BuiltinFieldInfo* bf = FindBuiltinField(lhsBase, rootName)){
                 const MStringView bfTypeName = m_symbols.resolveBaseTypeName(bf->fieldTypeName);
-                if(!bfTypeName.empty() && (m_symbols.findEnum(bfTypeName) || (!m_symbols.hasTypeSymbol(bfTypeName) && FindBuiltinEnum(bfTypeName))))
+                if(!bfTypeName.empty() && m_symbols.isEnumType(bfTypeName))
                     return bfTypeName;
             }
         }
@@ -633,18 +770,18 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
     }
     if(const ScopedVarInfo* local = FindScopedVar(scope, rootName)){
         const MStringView localTypeName = resolveScopedVarBaseType(*local);
-        if(!localTypeName.empty() && (m_symbols.findEnum(localTypeName) || (!m_symbols.hasTypeSymbol(localTypeName) && FindBuiltinEnum(localTypeName))))
+        if(!localTypeName.empty() && m_symbols.isEnumType(localTypeName))
             return localTypeName;
         return {};
     }
     if(const Stmt* gc = m_symbols.findGlobalConstant(rootName); gc && gc->varType){
         const MStringView gcTypeName = m_symbols.resolveBaseTypeName(gc->varType->name);
-        if(!gcTypeName.empty() && (m_symbols.findEnum(gcTypeName) || (!m_symbols.hasTypeSymbol(gcTypeName) && FindBuiltinEnum(gcTypeName))))
+        if(!gcTypeName.empty() && m_symbols.isEnumType(gcTypeName))
             return gcTypeName;
         return {};
     }
     const MStringView resolvedRoot = m_symbols.resolveBaseTypeName(rootName);
-    if(!resolvedRoot.empty() && (m_symbols.findEnum(resolvedRoot) || (!m_symbols.hasTypeSymbol(resolvedRoot) && FindBuiltinEnum(resolvedRoot))))
+    if(!resolvedRoot.empty() && m_symbols.isEnumType(resolvedRoot))
         return resolvedRoot;
     return {};
 }

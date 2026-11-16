@@ -3,6 +3,7 @@
 
 
 #include "preprocessor_macro_expander.h"
+#include "preprocessor_semantics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,64 +15,12 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize PreprocessorMacroExpander::AppendDefinedOperand(const MStringView source, usize i, MString& out){
-    while(i < source.size() && (source[i] == ' ' || source[i] == '\t'))
-        out.push_back(source[i++]);
-    if(i < source.size() && source[i] == '('){
-        out.push_back(source[i++]);
-        while(i < source.size() && source[i] != ')')
-            out.push_back(source[i++]);
-        if(i < source.size())
-            out.push_back(source[i++]);
-    }
-    else if(i < source.size() && IsAsciiIdentifierStart(source[i])){
-        while(i < source.size() && IsAsciiIdentifierChar(source[i]))
-            out.push_back(source[i++]);
-    }
-    return i;
+usize PreprocessorMacroExpander::AppendDefinedOperand(const MStringView source, const usize i, MString& out){
+    const usize end = PreprocessorSemantics::SkipDefinedOperand(source, i);
+    if(end > i)
+        out.append(source.data() + i, end - i);
+    return end;
 }
-
-
-namespace __hidden_macro_expander{
-
-[[nodiscard]] static usize SkipDefinedOperand(const MStringView source, usize i)noexcept{
-    while(i < source.size() && (source[i] == ' ' || source[i] == '\t'))
-        ++i;
-    if(i < source.size() && source[i] == '('){
-        ++i;
-        while(i < source.size() && source[i] != ')')
-            ++i;
-        if(i < source.size())
-            ++i;
-    }
-    else if(i < source.size() && IsAsciiIdentifierStart(source[i])){
-        while(i < source.size() && IsAsciiIdentifierChar(source[i]))
-            ++i;
-    }
-    return i;
-}
-
-[[nodiscard]] static usize SkipNumber(const MStringView text, usize index)noexcept{
-    while(index < text.size()){
-        const MChar ch = text[index];
-        if((ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') && index + 1u < text.size() && (text[index + 1u] == '+' || text[index + 1u] == '-')){
-            index += 2u;
-            continue;
-        }
-        if(ch == '\'' && index + 1u < text.size() && (IsAsciiDigit(text[index + 1u]) || IsAsciiIdentifierChar(text[index + 1u]))){
-            index += 2u;
-            continue;
-        }
-        if(IsAsciiDigit(ch) || IsAsciiIdentifierChar(ch) || ch == '.'){
-            ++index;
-            continue;
-        }
-        break;
-    }
-    return index;
-}
-
-};
 
 
 b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line, MString& outExpanded, const b8 initialPendingNativeBrace, const u32 initialNativeBraceDepth){
@@ -106,37 +55,10 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
 
         usize i = 0u;
         while(i < currentView.size()){
-            if(currentView[i] == '\'' && i > 0u && (IsAsciiDigit(currentView[i - 1u]) || IsAsciiIdentifierChar(currentView[i - 1u]))){
-                ++i;
-                continue;
-            }
-            if(currentView[i] == '"'){
-                MStringView rawDelim;
-                if(Preprocessor::TryParseRawStringOpening(currentView, i, rawDelim)){
-                    const usize bodyStart = i + 1u + rawDelim.size() + 1u;
-                    usize afterClose = 0u;
-                    if(!Preprocessor::FindRawStringClosing(currentView, bodyStart, rawDelim, afterClose)){
-                        break;
-                    }
-                    i = afterClose;
-                    continue;
-                }
-            }
-            if(currentView[i] == '"' || currentView[i] == '\''){
-                i = SkipQuotedLiteral(currentView, i);
-                continue;
-            }
-
-            if(i + 1u < currentView.size() && currentView[i] == '/' && currentView[i + 1u] == '/'){
-                break;
-            }
-
-            if(i + 1u < currentView.size() && currentView[i] == '/' && currentView[i + 1u] == '*'){
-                const usize closeComment = currentView.find("*/", i + 2u);
-                if(closeComment == MStringView::npos){
+            b8 hitTerminator = false;
+            if(PreprocessorSemantics::AdvancePreprocessorScanStep(currentView, i, 0u, true, hitTerminator)){
+                if(hitTerminator)
                     break;
-                }
-                i = closeComment + 2u;
                 continue;
             }
 
@@ -163,7 +85,7 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
             }
 
             if(IsAsciiDigit(currentView[i])){
-                i = __hidden_macro_expander::SkipNumber(currentView, i);
+                i = PreprocessorSemantics::SkipPreprocessorNumber(currentView, i, true);
                 continue;
             }
 
@@ -174,9 +96,9 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
                 const MStringView ident(currentView.data() + idStart, i - idStart);
                 const auto it = m_macros.find(ident);
                 if(it == m_macros.end()){
-                    if(ident == "defined")
-                        i = __hidden_macro_expander::SkipDefinedOperand(currentView, i);
-                    else if(ident == "native")
+                    if(ident == PreprocessorSemantics::s_DefinedOperator)
+                        i = PreprocessorSemantics::SkipDefinedOperand(currentView, i);
+                    else if(PreprocessorSemantics::IsRawBraceBlockKeyword(ident))
                         pendingNativeBrace = true;
                     continue;
                 }
@@ -205,35 +127,13 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
                 MVector<MStringView> args(m_arena);
                 usize argStart = argScan;
                 while(argScan < currentView.size() && parenDepth > 0u){
-                    const MChar ch = currentView[argScan];
-                    if(ch == '\'' && argScan > lookahead + 1u && (IsAsciiDigit(currentView[argScan - 1u]) || IsAsciiIdentifierChar(currentView[argScan - 1u]))){
-                        ++argScan;
-                        continue;
-                    }
-                    if(ch == '"'){
-                        MStringView rawDelim;
-                        if(Preprocessor::TryParseRawStringOpening(currentView, argScan, rawDelim)){
-                            const usize bodyStart = argScan + 1u + rawDelim.size() + 1u;
-                            usize afterClose = 0u;
-                            if(!Preprocessor::FindRawStringClosing(currentView, bodyStart, rawDelim, afterClose)){
-                                argScan = currentView.size();
-                                break;
-                            }
-                            argScan = afterClose;
-                            continue;
-                        }
-                    }
-                    if(ch == '"' || ch == '\''){
-                        argScan = SkipQuotedLiteral(currentView, argScan);
-                        continue;
-                    }
-                    if(argScan + 1u < currentView.size() && ch == '/' && currentView[argScan + 1u] == '*'){
-                        const usize closeComment = currentView.find("*/", argScan + 2u);
-                        if(closeComment == MStringView::npos)
+                    b8 argTerminator = false;
+                    if(PreprocessorSemantics::AdvancePreprocessorScanStep(currentView, argScan, lookahead + 1u, false, argTerminator)){
+                        if(argTerminator)
                             break;
-                        argScan = closeComment + 2u;
                         continue;
                     }
+                    const MChar ch = currentView[argScan];
                     if(ch == '(')
                         ++parenDepth;
                     else if(ch == ')'){
@@ -294,9 +194,10 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
                         b = AppendQuotedLiteral(bodyView, b, next);
                         continue;
                     }
-                    if(macro.isVariadic && b + 2u < macro.body.size() && macro.body[b] == '.' && macro.body[b + 1u] == '.' && macro.body[b + 2u] == '.'){
+                    constexpr usize s_EllipsisLen = PreprocessorSemantics::s_VariadicEllipsis.size();
+                    if(macro.isVariadic && b + s_EllipsisLen <= macro.body.size() && bodyView.substr(b, s_EllipsisLen) == PreprocessorSemantics::s_VariadicEllipsis){
                         next.append(vaArgsText.data(), vaArgsText.size());
-                        b += 3u;
+                        b += s_EllipsisLen;
                         continue;
                     }
                     if(IsAsciiDigit(macro.body[b])){
@@ -308,7 +209,7 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
                         while(b < macro.body.size() && IsAsciiIdentifierChar(macro.body[b]))
                             ++b;
                         const MStringView tokenName(macro.body.data() + pStart, b - pStart);
-                        if(macro.isVariadic && tokenName == "__VA_ARGS__"){
+                        if(macro.isVariadic && tokenName == PreprocessorSemantics::s_VariadicArgsMacro){
                             next.append(vaArgsText.data(), vaArgsText.size());
                             continue;
                         }

@@ -37,7 +37,8 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.push_back(')');
             return true;
         }
-        if(callee == "IsFinite" && expr.arguments.size() == 1u && expr.arguments[0] && (expr.arguments[0]->resolvedSimdType == "VectorSingle" || expr.arguments[0]->resolvedSimdType == "VectorDouble")){
+        const SpecialFunctionKind::Enum specialFn = FindSpecialFunctionKind(callee);
+        if(specialFn == SpecialFunctionKind::IsFinite && expr.arguments.size() == 1u && expr.arguments[0] && (expr.arguments[0]->resolvedSimdType == FindFloatSimdRegisterTypeName(false) || expr.arguments[0]->resolvedSimdType == FindFloatSimdRegisterTypeName(true))){
             const Expr& arg0 = *expr.arguments[0];
             const b8 isDouble = IsDoubleSimdType(arg0.resolvedSimdType);
             u8 activeMask = 0xFu;
@@ -56,7 +57,8 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 }
             }
             const MStringView maskConst = SimdComponentMaskConstant(activeMask, isDouble);
-            out.append(isDouble ? "::VectorDoubleIsFinite(" : "::VectorIsFinite(");
+            const MStringView isFiniteFn = isDouble ? CodegenSymbols::s_SimdIsFiniteDouble : CodegenSymbols::s_SimdIsFiniteSingle;
+            out.append(isFiniteFn.data(), isFiniteFn.size());
             m_emitter.emitSimdRegExpr(out, *vecBase, arg0.resolvedSimdType);
             out.append(", ");
             out.append(maskConst.data(), maskConst.size());
@@ -73,7 +75,8 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 if(effLanes1 > effLanes)
                     effLanes = effLanes1;
             }
-            out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
+            const MStringView getXFn = isDouble ? CodegenSymbols::s_SimdGetXDouble : CodegenSymbols::s_SimdGetXSingle;
+            out.append(getXFn.data(), getXFn.size());
             AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
             for(usize i = 0u; i < expr.arguments.size(); ++i){
                 if(i > 0u)
@@ -84,8 +87,14 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.append("))");
             return true;
         }
-        if(callee == "Lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2] && expr.resolvedSimdType.empty()){
-            out.append("([](auto&& __adhd_lerp_a, auto&& __adhd_lerp_b, auto&& __adhd_lerp_t) -> decltype(auto) { return (::Forward<decltype(__adhd_lerp_a)>(__adhd_lerp_a) + ((::Forward<decltype(__adhd_lerp_b)>(__adhd_lerp_b) - __adhd_lerp_a) * ::Forward<decltype(__adhd_lerp_t)>(__adhd_lerp_t))); }(");
+        if(specialFn == SpecialFunctionKind::Lerp && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2] && expr.resolvedSimdType.empty()){
+            out.append("([](auto&& __adhd_lerp_a, auto&& __adhd_lerp_b, auto&& __adhd_lerp_t) -> decltype(auto) { return (");
+            out.append(CodegenSymbols::s_ForwardTemplate.data(), CodegenSymbols::s_ForwardTemplate.size());
+            out.append("<decltype(__adhd_lerp_a)>(__adhd_lerp_a) + ((");
+            out.append(CodegenSymbols::s_ForwardTemplate.data(), CodegenSymbols::s_ForwardTemplate.size());
+            out.append("<decltype(__adhd_lerp_b)>(__adhd_lerp_b) - __adhd_lerp_a) * ");
+            out.append(CodegenSymbols::s_ForwardTemplate.data(), CodegenSymbols::s_ForwardTemplate.size());
+            out.append("<decltype(__adhd_lerp_t)>(__adhd_lerp_t))); }(");
             m_emitter.emitExpr(out, *expr.arguments[0]);
             out.append(", ");
             m_emitter.emitExpr(out, *expr.arguments[1]);
@@ -94,10 +103,11 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.append("))");
             return true;
         }
-        if(callee == "Rsqrt" && expr.arguments.size() == 1u && expr.arguments[0] && expr.resolvedSimdType.empty()){
+        if(specialFn == SpecialFunctionKind::Rsqrt && expr.arguments.size() == 1u && expr.arguments[0] && expr.resolvedSimdType.empty()){
             out.append("(static_cast<decltype(");
             m_emitter.emitExpr(out, *expr.arguments[0]);
-            out.append(")>(1) / ::Sqrt(");
+            out.append(")>(1) / ");
+            out.append(CodegenSymbols::s_SqrtFunc.data(), CodegenSymbols::s_SqrtFunc.size());
             m_emitter.emitExpr(out, *expr.arguments[0]);
             out.append("))");
             return true;
@@ -112,7 +122,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                     out.push_back('(');
                     b8 hasArg = false;
                     if(fnInfo->prependsScratchArena){
-                        const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
+                        const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : CodegenSymbols::s_ScratchArenaVar;
                         out.append(arenaExpr.data(), arenaExpr.size());
                         hasArg = true;
                     }
@@ -121,7 +131,17 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                             out.append(", ");
                         hasArg = true;
                         if(i == byteViewArgIdx){
-                            out.append("([](const auto& __adhd_bytes)noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }; }else{ const ::AStringView __adhd_sv(__adhd_bytes); return ::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_sv.data()), __adhd_sv.size() }; } }(");
+                            out.append("([](const auto& __adhd_bytes)noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ");
+                            out.append(CodegenSymbols::s_BinaryByteViewType.data(), CodegenSymbols::s_BinaryByteViewType.size());
+                            out.append("{ reinterpret_cast<const ");
+                            out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
+                            out.append("*>(__adhd_bytes.data()), __adhd_bytes.size() }; }else{ const ");
+                            out.append(CodegenSymbols::s_StringViewCppType.data(), CodegenSymbols::s_StringViewCppType.size());
+                            out.append(" __adhd_sv(__adhd_bytes); return ");
+                            out.append(CodegenSymbols::s_BinaryByteViewType.data(), CodegenSymbols::s_BinaryByteViewType.size());
+                            out.append("{ reinterpret_cast<const ");
+                            out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
+                            out.append("*>(__adhd_sv.data()), __adhd_sv.size() }; } }(");
                             if(expr.arguments[i])
                                 m_emitter.emitExpr(out, *expr.arguments[i]);
                             out.append("))");
@@ -140,7 +160,9 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 break;
             case BuiltinCallLowering::StagedWriteTextAtomic:{
                 if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                    out.append("(::StagedFileWriter(");
+                    out.push_back('(');
+                    out.append(CodegenSymbols::s_StagedFileWriterType.data(), CodegenSymbols::s_StagedFileWriterType.size());
+                    out.push_back('(');
                     m_emitter.emitExpr(out, *expr.arguments[0]);
                     out.append(").writeTextAtomic(");
                     m_emitter.emitExpr(out, *expr.arguments[1]);
@@ -151,7 +173,9 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             }
             case BuiltinCallLowering::StagedWriteBinaryAtomic:{
                 if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                    out.append("(::StagedFileWriter(");
+                    out.push_back('(');
+                    out.append(CodegenSymbols::s_StagedFileWriterType.data(), CodegenSymbols::s_StagedFileWriterType.size());
+                    out.push_back('(');
                     m_emitter.emitExpr(out, *expr.arguments[0]);
                     out.append(").writeBinaryAtomic(");
                     m_emitter.emitExpr(out, *expr.arguments[1]);
@@ -162,7 +186,11 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             }
             case BuiltinCallLowering::StagedWriteAtomicChecked:{
                 if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                    out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ::StagedFileWriter(__adhd_p).writeAtomicChecked(reinterpret_cast<const ::u8*>(__adhd_b.data()), __adhd_b.size()); }(");
+                    out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ");
+                    out.append(CodegenSymbols::s_StagedFileWriterType.data(), CodegenSymbols::s_StagedFileWriterType.size());
+                    out.append("(__adhd_p).writeAtomicChecked(reinterpret_cast<const ");
+                    out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
+                    out.append("*>(__adhd_b.data()), __adhd_b.size()); }(");
                     m_emitter.emitExpr(out, *expr.arguments[0]);
                     out.append(", ");
                     m_emitter.emitExpr(out, *expr.arguments[1]);
@@ -175,7 +203,9 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                     out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ");
                     out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
-                    out.append("(__adhd_p, reinterpret_cast<const ::u8*>(__adhd_b.data()), __adhd_b.size()); }(");
+                    out.append("(__adhd_p, reinterpret_cast<const ");
+                    out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
+                    out.append("*>(__adhd_b.data()), __adhd_b.size()); }(");
                     m_emitter.emitExpr(out, *expr.arguments[0]);
                     out.append(", ");
                     m_emitter.emitExpr(out, *expr.arguments[1]);
@@ -192,7 +222,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 if(!expr.callTemplateArgs.empty())
                     m_emitter.m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
                 out.push_back('(');
-                const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
+                const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : CodegenSymbols::s_ScratchArenaVar;
                 out.append(arenaExpr.data(), arenaExpr.size());
                 for(usize i = 0u; i < expr.arguments.size(); ++i){
                     out.append(", ");

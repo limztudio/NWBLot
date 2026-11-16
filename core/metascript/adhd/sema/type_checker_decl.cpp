@@ -155,12 +155,9 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
         if(!baseType)
             continue;
         const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
-        for(usize j = 0u; j < i; ++j){
-            if(iface.baseInterfaces[j] && TypeComparator(m_symbols).areEquivalent(iface.baseInterfaces[j], baseType)){
-                reportError(errors, iface.span, "duplicate base interface in interface declaration");
-                ok = false;
-                break;
-            }
+        if(TypeComparator(m_symbols).hasEquivalentInPrefix(Span<const TypeRef* const>(iface.baseInterfaces.data(), i), baseType)){
+            reportError(errors, iface.span, "duplicate base interface in interface declaration");
+            ok = false;
         }
         if(m_symbols.findClass(baseName)){
             reportError(errors, iface.span, "'interface' cannot inherit from a concrete 'class'");
@@ -353,12 +350,9 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         const TypeRef* ifaceType = classDecl.implementedInterfaces[i];
         if(!ifaceType)
             continue;
-        for(usize j = 0u; j < i; ++j){
-            if(classDecl.implementedInterfaces[j] && TypeComparator(m_symbols).areEquivalent(classDecl.implementedInterfaces[j], ifaceType)){
-                reportError(errors, classDecl.span, "duplicate implemented interface in class declaration");
-                ok = false;
-                break;
-            }
+        if(TypeComparator(m_symbols).hasEquivalentInPrefix(Span<const TypeRef* const>(classDecl.implementedInterfaces.data(), i), ifaceType)){
+            reportError(errors, classDecl.span, "duplicate implemented interface in class declaration");
+            ok = false;
         }
         const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
         if(m_symbols.findClass(ifaceName)){
@@ -404,15 +398,8 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             MethodDecl* impl = nullptr;
             for(MethodDecl* m : classDecl.methods){
                 if(!m->isConstructor && !m->isDestructor && m->templateParams.empty() && m->isOperator == req->isOperator && m->name == req->name && m->params.size() == req->params.size()){
-                    b8 exactParamsMatch = (m->isConst == req->isConst);
-                    if(exactParamsMatch){
-                        for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
-                            if(m->params[pIdx].mode != req->params[pIdx].mode || !TypeComparator(m_symbols).areEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs)){
-                                exactParamsMatch = false;
-                                break;
-                            }
-                        }
-                    }
+                    const b8 exactParamsMatch = (m->isConst == req->isConst)
+                        && TypeComparator(m_symbols).doParamListsMatchWithSubst(m->params, req->params, ifaceParams, ifaceArgs);
                     if(exactParamsMatch){
                         impl = m;
                         break;
@@ -450,14 +437,9 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     reportError(errors, impl->span, "override method return type does not match interface contract");
                     ok = false;
                 }
-                for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
-                    const ParamDecl& implP = impl->params[pIdx];
-                    const ParamDecl& reqP = req->params[pIdx];
-                    if(implP.mode != reqP.mode || !TypeComparator(m_symbols).areEquivalentWithSubst(implP.type, reqP.type, ifaceParams, ifaceArgs)){
-                        reportError(errors, implP.span, "override method parameter 'in'/'mut' mode or type does not match interface contract");
-                        ok = false;
-                        break;
-                    }
+                if(usize mismatchIdx = 0u; !TypeComparator(m_symbols).doParamListsMatchWithSubst(impl->params, req->params, ifaceParams, ifaceArgs, &mismatchIdx)){
+                    reportError(errors, impl->params[mismatchIdx].span, "override method parameter 'in'/'mut' mode or type does not match interface contract");
+                    ok = false;
                 }
             }
         }
@@ -469,7 +451,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             && !m->isConstructor
             && !m->isDestructor
             && m->templateParams.empty()
-            && (m->name == "prepare" || m->name == "update" || m->name == "taskOptions")
+            && ContractSemantics::IsAutoOverrideMethod(ClassRoleKind::System, m->name)
         ){
             m->isOverride = true;
         }
@@ -486,8 +468,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     break;
                 }
             }
-            if(!matchesInterface && !classDecl.systemTypeName.empty() && FindBuiltinReceiverMethod("ISystem", m->name)){
-                matchesInterface = true;
+            if(!matchesInterface && !classDecl.systemTypeName.empty()){
+                const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
+                if(sysContract && FindBuiltinReceiverMethod(sysContract->implicitInterfaceAdhdName, m->name))
+                    matchesInterface = true;
             }
             if(!matchesInterface){
                 for(const TypeRef* ifaceType : classDecl.implementedInterfaces){

@@ -322,7 +322,7 @@ void RefractionStatisticsState::complete(const StatisticsReservationKey& key, co
 void RefractionStatisticsReadback::invalidateResources()noexcept{
     // Renderer invalidation follows the runtime's device join or terminal loss and graph-payload reset.
     // Retire the descriptor only at that boundary; disabling diagnostics keeps pending resources alive.
-    RendererDescriptorRegisterDetail::RetireDescriptor(m_graphics.getDevice().getDescriptorHeap(), m_counterDescriptor);
+    RetireDescriptor(m_graphics.getDevice().getDescriptorHeap(), m_counterDescriptor);
     m_counters = nullptr;
     resetReadbackBuffers();
 }
@@ -340,7 +340,7 @@ b8 RefractionStatisticsReadback::prepareResources(){
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    const auto descriptor = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get()));
+    const auto descriptor = RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get()));
     if(!descriptor)
         return false;
     Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);

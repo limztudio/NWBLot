@@ -23,7 +23,7 @@ namespace CppHeaderImportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_cpp_header_importer_record_builder{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +54,7 @@ struct ParentChain{
         if(pk == CXCursor_Namespace){
             const MString nsStr = ConsumeClangString(arena, ::clang_getCursorSpelling(parent));
             const MStringView nsView(nsStr.data(), nsStr.size());
-            if(IsInternalIdentifier(nsView)){
+            if(CppImporterSemantics::IsInternalIdentifierName(nsView)){
                 chain.isInternal = true;
                 return chain;
             }
@@ -64,7 +64,7 @@ struct ParentChain{
         else if(pk == CXCursor_StructDecl || pk == CXCursor_ClassDecl || pk == CXCursor_ClassTemplate || pk == CXCursor_ClassTemplatePartialSpecialization){
             const MString clsStr = ConsumeClangString(arena, ::clang_getCursorSpelling(parent));
             const MStringView clsView(clsStr.data(), clsStr.size());
-            if(IsInternalIdentifier(clsView)){
+            if(CppImporterSemantics::IsInternalIdentifierName(clsView)){
                 chain.isInternal = true;
                 return chain;
             }
@@ -90,25 +90,25 @@ struct ParentChain{
     MString out(arena);
     for(usize i = 0u; i < namespaces.size(); ++i){
         if(i > 0u)
-            out.append("::");
+            out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
         out.append(namespaces[i].data(), namespaces[i].size());
     }
-    return InternMString(arena, out);
+    return InternArenaString(arena, out);
 }
 
 [[nodiscard]] MStringView BuildCppExportName(MetaArena& arena, const Span<const MStringView> namespaces, const Span<const MStringView> classes, const MStringView leaf){
     MString out(arena);
     for(const MStringView ns : namespaces){
-        out.append("::");
+        out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
         out.append(ns.data(), ns.size());
     }
     for(const MStringView cls : classes){
-        out.append("::");
+        out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
         out.append(cls.data(), cls.size());
     }
-    out.append("::");
+    out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
     out.append(leaf.data(), leaf.size());
-    return InternMString(arena, out);
+    return InternArenaString(arena, out);
 }
 
 [[nodiscard]] MStringView BuildFlattenedClassName(MetaArena& arena, const Span<const MStringView> classes, const MStringView leaf){
@@ -118,7 +118,7 @@ struct ParentChain{
     for(const MStringView cls : classes)
         out.append(cls.data(), cls.size());
     out.append(leaf.data(), leaf.size());
-    return InternMString(arena, out);
+    return InternArenaString(arena, out);
 }
 
 
@@ -134,11 +134,11 @@ struct ParentChain{
 b8 FormatNormalizedAdhdDeclName(MetaArena& arena, CXCursor declCursor, MStringView& outName, MStringView& outNamespace, MStringView& outCppExportName, b8& outIsDirectEnum, b8& outIsFlag){
     const CXCursorKind kind = ::clang_getCursorKind(declCursor);
     const MString leafStr = ConsumeClangString(arena, ::clang_getCursorSpelling(declCursor));
-    if(IsInternalIdentifier(MStringView(leafStr.data(), leafStr.size())) || ::clang_Cursor_isAnonymous(declCursor))
+    if(CppImporterSemantics::IsInternalIdentifierName(leafStr) || ::clang_Cursor_isAnonymous(declCursor))
         return false;
-    const MStringView leaf = InternMString(arena, leafStr);
+    const MStringView leaf = InternArenaString(arena, leafStr);
 
-    const ParentChain parents = CollectSemanticParents(arena, declCursor);
+    const __hidden_cpp_header_importer_record_builder::ParentChain parents = __hidden_cpp_header_importer_record_builder::CollectSemanticParents(arena, declCursor);
     if(parents.isInternal)
         return false;
 
@@ -147,26 +147,21 @@ b8 FormatNormalizedAdhdDeclName(MetaArena& arena, CXCursor declCursor, MStringVi
 
     if(kind == CXCursor_EnumDecl){
         const b8 isScoped = ::clang_EnumDecl_isScoped(declCursor) != 0u;
-        const b8 isNwbEnumWrapper = !isScoped && parents.classes.empty() && !parents.namespaces.empty() && (leaf == "Enum" || leaf == "Flag");
+        const b8 isNwbEnumWrapper = !isScoped && parents.classes.empty() && !parents.namespaces.empty() && (leaf == ContractSemantics::s_EnumInnerName || leaf == ContractSemantics::s_FlagInnerName);
+        outIsFlag = (leaf == ContractSemantics::s_FlagInnerName);
         if(isNwbEnumWrapper){
             outName = parents.namespaces.back();
-            outNamespace = BuildNamespaceString(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size() - 1u));
-            outCppExportName = BuildCppExportName(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()), {}, leaf);
+            outNamespace = __hidden_cpp_header_importer_record_builder::BuildNamespaceString(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size() - 1u));
+            outCppExportName = __hidden_cpp_header_importer_record_builder::BuildCppExportName(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()), {}, leaf);
             outIsDirectEnum = false;
-            outIsFlag = (leaf == "Flag");
             return true;
         }
-        outName = BuildFlattenedClassName(arena, Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
-        outNamespace = BuildNamespaceString(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()));
-        outCppExportName = BuildCppExportName(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()), Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
         outIsDirectEnum = true;
-        outIsFlag = (leaf == "Flag");
-        return true;
     }
 
-    outName = BuildFlattenedClassName(arena, Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
-    outNamespace = BuildNamespaceString(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()));
-    outCppExportName = BuildCppExportName(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()), Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
+    outName = __hidden_cpp_header_importer_record_builder::BuildFlattenedClassName(arena, Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
+    outNamespace = __hidden_cpp_header_importer_record_builder::BuildNamespaceString(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()));
+    outCppExportName = __hidden_cpp_header_importer_record_builder::BuildCppExportName(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()), Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
     return true;
 }
 
@@ -181,13 +176,13 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
 
     const MString rawSpelling = ConsumeClangString(m_arena, ::clang_getCursorSpelling(cursor));
     const MStringView spellingView(rawSpelling.data(), rawSpelling.size());
-    if(spellingView.empty() || IsInternalIdentifier(spellingView))
+    if(spellingView.empty() || CppImporterSemantics::IsInternalIdentifierName(spellingView))
         return nullptr;
 
     const b8 isCtor = (kind == CXCursor_Constructor);
     b8 isOperator = false;
     MStringView methodName = InternArenaString(m_arena, spellingView);
-    if(!isCtor && spellingView.starts_with("operator")){
+    if(!isCtor && spellingView.starts_with(KeywordSemantics::s_Operator)){
         methodName = mapOperatorToken(spellingView);
         if(methodName.empty() || ownerClassName.empty())
             return nullptr;
@@ -232,9 +227,9 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
             if(ck == CXCursor_TemplateTypeParameter || ck == CXCursor_NonTypeTemplateParameter){
                 const MString tNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(child));
                 TemplateParamDecl tparam(m_arena);
-                MStringView paramName = tNameStr.empty() ? MStringView("T") : InternMString(m_arena, tNameStr);
-                if(paramName == "Func" || !KeywordSemantics::FindProhibitedTypeKeywordError(paramName).empty()){
-                    const MStringView safeName = (paramName == "Func") ? MStringView("FnT") : MStringView("ParamT");
+                MStringView paramName = tNameStr.empty() ? CppImporterSemantics::s_TemplateParamFallback : InternArenaString(m_arena, tNameStr);
+                if(BuiltinTypeSemantics::IsFuncTypeName(paramName) || !KeywordSemantics::FindProhibitedTypeKeywordError(paramName).empty()){
+                    const MStringView safeName = BuiltinTypeSemantics::IsFuncTypeName(paramName) ? CppImporterSemantics::s_ConflictTemplateParamFunc : CppImporterSemantics::s_ConflictTemplateParamOther;
                     tparamRenames.emplace_back(paramName, safeName);
                     paramName = safeName;
                 }
@@ -277,7 +272,7 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
         const CXCursor parm = paramCursors[idx];
         const CXType parmType = ::clang_getCursorType(parm);
         const MString parmTypeSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(parmType));
-        if(MStringView(parmTypeSpelling.data(), parmTypeSpelling.size()).find("...") != MStringView::npos)
+        if(MStringView(parmTypeSpelling.data(), parmTypeSpelling.size()).find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos)
             return nullptr;
 
         const b8 hasDefault = hasDefaultInitializerToken(parm);
@@ -296,9 +291,9 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
         ParamDecl param;
         const MString pNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(parm));
         const MStringView pNameView(pNameStr.data(), pNameStr.size());
-        param.name = (pNameView.empty() || !IsValidAdhdTypeIdentifier(pNameView))
-            ? MStringView("arg")
-            : InternMString(m_arena, pNameStr);
+        param.name = !IsAsciiIdentifier(pNameView)
+            ? CppImporterSemantics::s_ParamNameFallback
+            : InternArenaString(m_arena, pNameStr);
         param.type = mappedParamType;
         param.mode = mappedParamType->refMode;
         decl->params.push_back(param);
@@ -335,12 +330,12 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
             const MString baseNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(baseDecl));
             const MStringView baseName(baseNameStr.data(), baseNameStr.size());
 
-            if(baseName == "NoCopy"){
+            if(baseName == CppImporterSemantics::s_NoCopyBaseClass){
                 traits.isCopyConstructible = false;
                 traits.isCopyAssignable = false;
                 continue;
             }
-            if(baseName == "NoMove"){
+            if(baseName == CppImporterSemantics::s_NoMoveBaseClass){
                 traits.isMoveConstructible = false;
                 traits.isMoveAssignable = false;
                 continue;
@@ -440,10 +435,10 @@ b8 ImporterContext::hasClassFieldNamed(const ClassDecl& target, const MStringVie
 void ImporterContext::tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, const b8 isStatic){
     const MString fieldNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(child));
     const MStringView fieldNameView(fieldNameStr.data(), fieldNameStr.size());
-    if(!IsValidAdhdTypeIdentifier(fieldNameView) || IsInternalIdentifier(fieldNameView))
+    if(!IsAsciiIdentifier(fieldNameView) || CppImporterSemantics::IsInternalIdentifierName(fieldNameView))
         return;
 
-    const MStringView fieldName = InternMString(m_arena, fieldNameStr);
+    const MStringView fieldName = InternArenaString(m_arena, fieldNameStr);
     if(hasClassFieldNamed(targetClass, fieldName))
         return;
 
@@ -451,7 +446,7 @@ void ImporterContext::tryAddClassField(ClassDecl& targetClass, CXCursor child, C
     TypeRef* mappedType = mapType(ftype, false);
     if(!mappedType)
         return;
-    if(isStatic && (mappedType->refMode != ParamPassingMode::None || mappedType->name == "void"))
+    if(isStatic && (mappedType->refMode != ParamPassingMode::None || BuiltinTypeSemantics::IsVoidTypeName(mappedType->name)))
         return;
 
     FieldDecl* field = AllocateAstNode<FieldDecl>(m_arena);
@@ -553,7 +548,7 @@ void ImporterContext::extractClass(CXCursor classCursor){
     const long long sz = ::clang_Type_getSizeOf(recordType);
     const long long al = ::clang_Type_getAlignOf(recordType);
 
-    ClassDecl* cls = findExistingClassForMerge(adhdName, cppExportName);
+    ClassDecl* cls = findExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, cppExportName);
     const b8 isNew = (cls == nullptr);
     if(isNew){
         cls = AllocateAstNode<ClassDecl>(m_arena);
@@ -591,11 +586,11 @@ void ImporterContext::extractClass(CXCursor classCursor){
     for(const CXCursor baseRec : traits.publicBaseRecords)
         importClassMethodsFromCursor(baseRec, *cls, true);
 
-    // Keep backwards-compatible alias MetascriptDocument -> Document when parser.h is imported.
-    if(cppExportName == "::NWB::Core::Metascript::Document" && findExistingClassForMerge("MetascriptDocument", {}) == nullptr){
-        if(m_aliasByName.find(MStringView("MetascriptDocument")) == m_aliasByName.end()){
+    // Keep backwards-compatible alias when configured headers are imported.
+    if(const MStringView compatAliasName = CppImporterSemantics::FindCompatTypeAlias(cppExportName); !compatAliasName.empty() && findExistingDeclForMerge(m_classByExportName, m_classByName, compatAliasName, {}) == nullptr){
+        if(m_aliasByName.find(compatAliasName) == m_aliasByName.end()){
             TypeAliasDecl* compatAlias = AllocateAstNode<TypeAliasDecl>(m_arena);
-            compatAlias->name = "MetascriptDocument";
+            compatAlias->name = compatAliasName;
             compatAlias->cppNamespace = cls->cppNamespace;
             compatAlias->cppExportName = cls->cppExportName;
             compatAlias->requiredHeader = cls->requiredHeader;
@@ -604,7 +599,7 @@ void ImporterContext::extractClass(CXCursor classCursor){
             compatAlias->aliasedType = AllocateAstNode<TypeRef>(m_arena);
             compatAlias->aliasedType->name = cls->name;
             m_unit.typeAliases.push_back(compatAlias);
-            m_aliasByName.emplace(MString("MetascriptDocument", m_arena), compatAlias);
+            m_aliasByName.emplace(MString(compatAliasName.data(), compatAliasName.size(), m_arena), compatAlias);
         }
     }
 }

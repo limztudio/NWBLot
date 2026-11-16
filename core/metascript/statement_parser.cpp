@@ -78,11 +78,6 @@ b8 StatementParser::declareVariable(const MStringView typeName, const MStringVie
         m_cursor.error(variableLine, variableColumn, "variable name must not be empty");
         return false;
     }
-    if(m_variables.find(variableName) != m_variables.end()){
-        m_cursor.error(variableLine, variableColumn, __hidden_metascript_statement_parser::s_DuplicateVariableDeclarationMessage);
-        return false;
-    }
-
     MString key(variableName.data(), variableName.size(), m_arena);
     if(!m_variables.emplace(Move(key), Move(initialValue)).second){
         m_cursor.error(variableLine, variableColumn, __hidden_metascript_statement_parser::s_DuplicateVariableDeclarationMessage);

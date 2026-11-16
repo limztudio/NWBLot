@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/caustic/rt_caustics_internal.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,7 +16,7 @@ class CausticEmissionTargetBuffer{
 
     public b8 ensure(mut GraphicsRuntime graphics, in usize targetCount){
         if(this.buffer.valid() && this.capacity >= targetCount && this.heapHandle.valid()){
-            AssertCausticEmissionTargetStorageDescriptor(this.heapHandle);
+            assert(IsDescriptorClass(this.heapHandle, GpuDescriptorClass::StorageBuffer));
             return true;
         }
         return EnsureCausticEmissionTargetBufferStorage(graphics, targetCount, this.buffer, this.heapHandle, this.capacity);
@@ -24,8 +25,8 @@ class CausticEmissionTargetBuffer{
     public void releaseDescriptor(mut GraphicsRuntime graphics){
         if(!this.heapHandle.valid())
             return;
-        FreeCausticEmissionTargetDescriptor(graphics, this.heapHandle);
-        this.heapHandle = GpuDescriptorHandle();
+        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+        RetireDescriptor(heap, this.heapHandle);
     }
 
     public void reset(){

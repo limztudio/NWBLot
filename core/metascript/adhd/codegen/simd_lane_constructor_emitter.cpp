@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "simd_lane_constructor_emitter.h"
-#include "simd_scalar_lane_emitter.h"
+#include "simd_constructor_emitter.h"
 #include "simd_optimization_analysis.h"
 
 
@@ -16,12 +15,10 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SimdLaneConstructorEmitter::tryEmit()const{
+b8 SimdConstructorEmitter::tryEmitLaneConstructor(const b8 isDouble, const b8 isInt)const{
     MString& out = m_output;
     const MStringView simdType = m_simdType;
     const Span<const Expr* const> arguments = m_arguments;
-    const b8 isDouble = m_isDouble;
-    const b8 isInt = m_isInt;
     Array<const Expr*, 4> laneBases{};
     Array<u32, 4> laneIndices{};
     for(usize i = 0u; i < 4u && i < arguments.size(); ++i){
@@ -489,7 +486,7 @@ b8 SimdLaneConstructorEmitter::tryEmit()const{
         }
     }
 
-    return SimdScalarLaneEmitter(m_emitter, out, simdType, arguments, isDouble, isInt).tryEmit();
+    return tryEmitScalarLane(isDouble, isInt);
 }
 
 

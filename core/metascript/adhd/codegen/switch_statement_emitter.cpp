@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_source_emitter_stmt{
+namespace __hidden_adhd_switch_statement_emitter{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,9 +145,9 @@ void SwitchStatementEmitter::emit(MString& out, const Stmt& stmt, const u32 inde
         b8 needsEarlyBreakLowering = false;
         b8 hasOuterContinue = false;
         for(const SwitchCase& sc : stmt.switchCases){
-            if(__hidden_adhd_source_emitter_stmt::CaseNeedsDoWhileBreakLowering(sc.statements))
+            if(__hidden_adhd_switch_statement_emitter::CaseNeedsDoWhileBreakLowering(sc.statements))
                 needsEarlyBreakLowering = true;
-            if(__hidden_adhd_source_emitter_stmt::StatementsContainOuterLoopContinue(sc.statements))
+            if(__hidden_adhd_switch_statement_emitter::StatementsContainOuterLoopContinue(sc.statements))
                 hasOuterContinue = true;
         }
         const b8 needsDoWhileWrap = needsEarlyBreakLowering && !hasOuterContinue;

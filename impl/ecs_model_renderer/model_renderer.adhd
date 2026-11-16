@@ -3,73 +3,22 @@
 
 
 #include "types.adhd"
+#include <impl/ecs_model/system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_model/system.adhd.h>
-
-#include <core/ecs/entity.h>
-
-#include <global/optional.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using World = Core::ECS::World;
-using Entity = Core::ECS::Entity;
-
-void ApplyModelObjectRenderer(Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, World& world, Entity& entity)noexcept;
-
-[[nodiscard]] FOUNDATION_INLINE Optional<RendererComponent> TryGetOwnerRendererComponent(const World& world, const Core::ECS::EntityID owner)noexcept{
-    if(const RendererComponent* const ownerRenderer = world.tryGetComponent<RendererComponent>(owner))
-        return *ownerRenderer;
-    return {};
+Optional<RendererComponent> TryGetOwnerRendererComponent(in World world, in EntityID owner){
+    if(world.hasComponent<RendererComponent>(owner))
+        return world.getComponent<RendererComponent>(owner);
+    return Optional<RendererComponent>();
 }
 
-FOUNDATION_INLINE void CopyOwnerMaterialInstanceIfPresent(const World& world, const Core::ECS::EntityID owner, MaterialInstanceComponent& outMaterialInstance){
-    if(const MaterialInstanceComponent* const ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner))
-        CopyModelObjectMaterialInstance(*ownerMaterialInstance, outMaterialInstance);
+void CopyOwnerMaterialInstanceIfPresent(in World world, in EntityID owner, mut MaterialInstanceComponent outMaterialInstance){
+    if(world.hasComponent<MaterialInstanceComponent>(owner))
+        CopyModelObjectMaterialInstance(world.getComponent<MaterialInstanceComponent>(owner), outMaterialInstance);
 }
-
-[[nodiscard]] FOUNDATION_INLINE ModelObjectRendererHooks CreateModelObjectRendererHooks()noexcept{
-    static const Array<Core::ECS::ComponentAccess, 2> s_Accesses = {{
-        { Core::ECS::ComponentType<RendererComponent>(), Core::ECS::AccessMode::Write },
-        { Core::ECS::ComponentType<MaterialInstanceComponent>(), Core::ECS::AccessMode::Write },
-    }};
-    return ModelObjectRendererHooks{ &ApplyModelObjectRenderer, Span<const Core::ECS::ComponentAccess>(s_Accesses.data(), s_Accesses.size()) };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void ApplyModelObjectRenderer(in EntityID owner, in AssetRef<Material> material, mut World world, mut Entity entity){
     const Optional<RendererComponent> ownerRenderer = TryGetOwnerRendererComponent(world, owner);
@@ -89,6 +38,21 @@ void ApplyModelObjectRenderer(in EntityID owner, in AssetRef<Material> material,
 
     mut MaterialInstanceComponent materialInstance = entity.addComponent<MaterialInstanceComponent>();
     CopyOwnerMaterialInstanceIfPresent(world, owner, materialInstance);
+}
+
+ComponentAccess MakeWriteComponentAccess(in usize typeId){
+    ComponentAccess access = ComponentAccess();
+    access.typeId = typeId;
+    access.mode = AccessMode::Write;
+    return access;
+}
+
+ModelObjectRendererHooks CreateModelObjectRendererHooks(){
+    Array<ComponentAccess, 2u> accesses = Array<ComponentAccess, 2u>();
+    accesses[0u] = MakeWriteComponentAccess(ComponentType<RendererComponent>());
+    accesses[1u] = MakeWriteComponentAccess(ComponentType<MaterialInstanceComponent>());
+    const ModelObjectRendererApplyFn applyFn = ApplyModelObjectRenderer;
+    return ModelObjectRendererHooks(ModelObjectRendererCallback(applyFn), accesses);
 }
 
 

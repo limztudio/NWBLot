@@ -338,7 +338,7 @@ public:
 
 namespace __hidden_ui_glyph_sdf_tests{
 using UiMultilineTextArena = ::NWB::Tests::TestArena<>;
-using UiMultilineTextGlobalString = ::AString<::NWB::Core::Alloc::GlobalArena>;
+using UiMultilineTextGlobalString = ::AString<::ArenaBase>;
 using UiMultilineTextAsciiSandwich = __hidden_ui_multiline_text_tests::AsciiSandwich;
 using UiMultilineTextC1Sandwich = __hidden_ui_multiline_text_tests::C1Sandwich;
 using UiMultilineViewTests = ::NWB::__hidden_ui_multiline_view_tests::UiMultilineViewTests;

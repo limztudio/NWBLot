@@ -17,6 +17,9 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct BuiltinReceiverMethodInfo;
+
+
 class SymbolTable final{
 public:
     [[nodiscard]] static b8 IsArenaBackedContainer(MStringView typeName)noexcept;
@@ -31,8 +34,11 @@ public:
     [[nodiscard]] static b8 IsUnalignedVectorType(MStringView typeName)noexcept;
     [[nodiscard]] static b8 IsSimdMatrixType(MStringView typeName)noexcept;
     [[nodiscard]] static b8 IsSimdType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdOrUnalignedStorageType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdStorageOrUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
     [[nodiscard]] static b8 IsStringSwitchType(MStringView typeName)noexcept;
     [[nodiscard]] static const FieldDecl* FindClassField(const ClassDecl& classDecl, MStringView name)noexcept;
+    [[nodiscard]] static b8 HasCustomAssignOperator(const ClassDecl& classDecl)noexcept;
 
 
 public:
@@ -92,10 +98,14 @@ public:
     [[nodiscard]] b8 isSmallValueType(MStringView typeName)const noexcept;
     [[nodiscard]] MStringView findTypeNamespace(MStringView name)const noexcept;
     [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
+    [[nodiscard]] b8 isEnumType(MStringView name)const noexcept;
+    [[nodiscard]] b8 isInterfaceOrAbstractType(MStringView name)const noexcept;
     [[nodiscard]] b8 isAbstractBuiltinType(MStringView name)const noexcept;
     [[nodiscard]] b8 isPolymorphicBaseBuiltinType(MStringView name)const noexcept;
     [[nodiscard]] b8 hasPolymorphicInterface(const ClassDecl& classDecl)const noexcept;
     [[nodiscard]] b8 hasPolymorphicBase(const ClassDecl& classDecl)const noexcept;
+    [[nodiscard]] const BuiltinReceiverMethodInfo* findInheritedBuiltinReceiverMethod(const ClassDecl* cls, const InterfaceDecl* iface, MStringView methodName)const noexcept;
+    [[nodiscard]] MStringView resolveRoleScopeMemberType(MStringView scopeName, MStringView memberName, b8 allowStaticFields)const noexcept;
 
 
 private:

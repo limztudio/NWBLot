@@ -6,6 +6,7 @@
 
 
 #include "../sema/type_utils.h"
+#include "codegen_symbols.h"
 #include "simd_expression_analysis.h"
 #include "simd_constant_analysis.h"
 #include "simd_lane_zero_analysis.h"
@@ -26,7 +27,9 @@ NWB_ADHD_BEGIN
 [[nodiscard]] b8 IsIntSimdType(MStringView simdType)noexcept;
 [[nodiscard]] b8 IsSignedIntSimdType(MStringView simdType)noexcept;
 [[nodiscard]] MStringView IntSimdLaneType(MStringView simdType)noexcept;
-[[nodiscard]] constexpr MStringView IntSimdRawWordType(const b8 isDouble)noexcept{ return isDouble ? "u64" : "u32"; }
+[[nodiscard]] constexpr MStringView IntSimdRawWordType(const b8 isDouble)noexcept{
+    return isDouble ? BuiltinTypeSemantics::UInt64ScalarTypeName() : BuiltinTypeSemantics::UInt32ScalarTypeName();
+}
 [[nodiscard]] MStringView SimdLaneCallSuffix(u32 lane)noexcept;
 [[nodiscard]] MStringView SimdSplatIntrinsic(u32 lane, b8 isDouble)noexcept;
 [[nodiscard]] MStringView SimdInPlaceLaneMaskConstant(u8 laneMask, b8 isDouble)noexcept;

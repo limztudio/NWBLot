@@ -62,7 +62,7 @@ b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u
         return true;
     }
     const MStringView baseVarType = stmt.varType ? m_symbols.resolveBaseTypeName(stmt.varType->name) : MStringView{};
-    if(!baseVarType.empty() && (SymbolTable::IsSimdStorageType(baseVarType) || SymbolTable::IsUnalignedVectorType(baseVarType))){
+    if(!baseVarType.empty() && SymbolTable::IsSimdOrUnalignedStorageType(baseVarType)){
         Span<const Expr* const> storeArgs;
         if(stmt.isCtorInit && !stmt.arguments.empty()){
             storeArgs = stmt.arguments;
@@ -106,7 +106,7 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
 
         if(stmt.expr->op == TokenType::Equal && rhs.kind == ExprKind::Call && rhs.lhs && rhs.lhs->kind == ExprKind::Identifier && !rhs.arguments.empty()){
             const MStringView rhsBaseCallee = m_symbols.resolveBaseTypeName(rhs.lhs->text);
-            if(SymbolTable::IsSimdStorageType(rhsBaseCallee) || SymbolTable::IsUnalignedVectorType(rhsBaseCallee)){
+            if(SymbolTable::IsSimdOrUnalignedStorageType(rhsBaseCallee)){
                 MString lhsExprText(m_arena);
                 emitExpr(lhsExprText, lhs);
                 MString storeCallStr(m_arena);
@@ -193,7 +193,7 @@ b8 SourceEmitter::tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, const u3
         return false;
     if(stmt.expr && !stmt.expr->wrapInSimdResult && stmt.expr->kind == ExprKind::Call && stmt.expr->lhs && stmt.expr->lhs->kind == ExprKind::Identifier && !stmt.expr->arguments.empty()){
         const MStringView baseCallee = m_symbols.resolveBaseTypeName(stmt.expr->lhs->text);
-        if(SymbolTable::IsSimdStorageType(baseCallee) || SymbolTable::IsUnalignedVectorType(baseCallee)){
+        if(SymbolTable::IsSimdOrUnalignedStorageType(baseCallee)){
             MString storeCallStr(m_arena);
             if(SimdStorageEmitter(*this).tryEmit(storeCallStr, baseCallee, stmt.expr->arguments, "__adhd_simd_ret")){
                 TypeRef retType(m_arena);

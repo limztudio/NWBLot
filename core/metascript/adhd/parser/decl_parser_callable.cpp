@@ -69,22 +69,13 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         MVector<TemplateParamDecl> parsedOwnerTemplateParamDecls(m_cursor.arena());
         MVector<TemplateParamDecl> ignoredLookaheadTemplateParams(m_cursor.arena());
         if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, parsedOwnerTemplateParamDecls, ignoredLookaheadTemplateParams) && m_cursor.match(TokenType::ColonColon)){
-            if(decl->isReflect){
-                m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
-                return nullptr;
-            }
             if(m_cursor.match(TokenType::Tilde)){
                 if(!m_cursor.checkIdentifier(maybeClass)){
                     m_cursor.errorExpected("expected class name after '~' in out-of-line destructor");
                     return nullptr;
                 }
                 m_cursor.advance();
-                decl->ownerClassName = maybeClass;
-                decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
-                decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
-                decl->name = maybeClass;
-                decl->isDestructor = true;
-                if(!parseDestructorEmptyParams("expected '(' in out-of-line destructor"))
+                if(!initializeDestructorDecl(*decl, maybeClass, "expected '(' in out-of-line destructor", &parsedOwnerTemplateParams, &parsedOwnerTemplateParamDecls))
                     return nullptr;
                 decl->hasBody = true;
                 if(!m_stmtParser.parseBlockStatements(decl->body))
@@ -94,12 +85,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
 
             if(m_cursor.checkIdentifier(maybeClass)){
                 m_cursor.advance();
-                decl->ownerClassName = maybeClass;
-                decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
-                decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
-                decl->name = maybeClass;
-                decl->isConstructor = true;
-                if(!parseConstructorParamsAndRejectInitList(*decl))
+                if(!initializeConstructorDecl(*decl, maybeClass, &parsedOwnerTemplateParams, &parsedOwnerTemplateParamDecls))
                     return nullptr;
                 decl->hasBody = true;
                 if(!m_stmtParser.parseBlockStatements(decl->body))
@@ -116,7 +102,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         return nullptr;
     decl->returnsReference = (decl->returnType->refMode != ParamPassingMode::None);
 
-    if(m_cursor.checkIdentifier("operator")){
+    if(m_cursor.checkIdentifier(KeywordSemantics::s_Operator)){
         m_cursor.error("free operator overloads are prohibited in adhd; overload operators as instance member methods on a class");
         return nullptr;
     }
@@ -138,24 +124,11 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         decl->ownerClassName = firstName;
         decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
         decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
-        if(m_cursor.matchIdentifier("operator")){
-            MStringView opName;
-            if(!parseOperatorName(opName))
-                return nullptr;
-            decl->name = opName;
-            decl->isOperator = true;
-        }
-        else if(m_cursor.check(TokenType::Identifier)){
-            decl->name = m_cursor.current().text;
-            m_cursor.advance();
-            if(m_cursor.check(TokenType::Less)){
-                if(!m_typeParser.parseTemplateParamList(decl->templateParams))
-                    return nullptr;
-            }
-        }
-        else{
-            m_cursor.errorExpected("expected method name after '::'");
+        if(!parseMethodOrOperatorName(decl->name, decl->isOperator, "expected method name after '::'"))
             return nullptr;
+        if(!decl->isOperator && m_cursor.check(TokenType::Less)){
+            if(!m_typeParser.parseTemplateParamList(decl->templateParams))
+                return nullptr;
         }
     }
     else{
@@ -240,10 +213,14 @@ b8 DeclParser::parseOperatorName(MStringView& outOpName){
         return false;
     }
 
-    if(m_cursor.match(TokenType::LeftBracket)){
-        if(!m_cursor.expect(TokenType::RightBracket, "expected ']' after '[' in 'operator[]'"))
+    TokenType::Enum closeBracket = TokenType::EndOfFile;
+    MStringView bracketSym;
+    MStringView missingCloseErr;
+    if(OperatorSemantics::TryGetBracketOperator(m_cursor.current().type, closeBracket, bracketSym, missingCloseErr)){
+        m_cursor.advance();
+        if(!m_cursor.expect(closeBracket, missingCloseErr))
             return false;
-        outOpName = "[]";
+        outOpName = bracketSym;
         return true;
     }
 

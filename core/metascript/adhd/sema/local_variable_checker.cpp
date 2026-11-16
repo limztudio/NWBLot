@@ -30,7 +30,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         if(!m_checker.checkTypeRef(*stmt.varType, ownerClass, &method, errors))
             ok = false;
         const MStringView baseVarTypeName = m_checker.m_symbols.resolveBaseTypeName(stmt.varType->name);
-        if(m_checker.m_symbols.findInterface(baseVarTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseVarTypeName)){
+        if(m_checker.m_symbols.isInterfaceOrAbstractType(baseVarTypeName)){
             if(varRefMode == ParamPassingMode::None){
                 m_checker.reportError(errors, stmt.span, "local variable of 'interface' type must specify 'in' or 'mut'; interfaces cannot be instantiated by value");
                 ok = false;
@@ -70,13 +70,13 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             b8 callerPassedArena = false;
             if(stmt.isCtorInit && !stmt.arguments.empty()){
                 auto isExplicitArenaArg = [](const Expr& argExpr, const MStringView inferredType)noexcept -> b8{
-                    if(inferredType == "ArenaBase" || inferredType == "GlobalArena" || inferredType == "ScratchArena" || inferredType == "PersistentArena" || inferredType == "AssetArena" || inferredType == "CookArena")
+                    if(IsArenaObjectType(inferredType))
                         return true;
                     if(!inferredType.empty())
                         return false;
-                    if((argExpr.kind == ExprKind::MemberAccess || argExpr.kind == ExprKind::ThisMember) && (argExpr.text == "arena" || argExpr.text == "scratchArena"))
+                    if((argExpr.kind == ExprKind::MemberAccess || argExpr.kind == ExprKind::ThisMember) && KeywordSemantics::IsUnresolvedArenaMemberName(argExpr.text))
                         return true;
-                    if(argExpr.kind == ExprKind::Identifier && (argExpr.text == "arena" || argExpr.text == "m_arena" || argExpr.text == "m_inputArena" || argExpr.text == "scratchArena" || argExpr.text == "m_scratchArena" || argExpr.text == "assetArena" || argExpr.text == "outputArena" || argExpr.text == "resultArena"))
+                    if(argExpr.kind == ExprKind::Identifier && KeywordSemantics::IsUnresolvedArenaVarName(argExpr.text))
                         return true;
                     return false;
                 };
@@ -92,27 +92,14 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                         }
                     }
                     if(ctorCls && !hasUserCtor){
-                        if(!ctorCls->assetTypeName.empty()){
-                            if(stmt.arguments.size() >= 2u){
-                                callerPassedArena = true;
-                            }
-                            else if(stmt.arguments.size() == 1u && stmt.arguments[0]){
-                                const MStringView arg0Type = m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope);
-                                if(arg0Type != "Name" && !IsStringLikeType(arg0Type) && arg0Type != baseVarTypeName)
-                                    callerPassedArena = true;
-                            }
-                        }
-                        else if(stmt.arguments.size() >= 2u){
+                        const MStringView arg0Type = (stmt.arguments.size() == 1u && stmt.arguments[0])
+                            ? m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope)
+                            : MStringView{};
+                        if(stmt.arguments.size() >= 2u || (stmt.arguments.size() == 1u && stmt.arguments[0] && TypeChecker::DoesSynthesizedClassCtorPassArena(*ctorCls, baseVarTypeName, stmt.arguments.size(), arg0Type)))
                             callerPassedArena = true;
-                        }
-                        else if(stmt.arguments.size() == 1u && stmt.arguments[0]){
-                            const MStringView arg0Type = m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope);
-                            if(arg0Type != baseVarTypeName)
-                                callerPassedArena = true;
-                        }
                     }
                 }
-                else if(isArenaContainer && baseVarTypeName != "Path" && stmt.arguments.size() == 1u && stmt.arguments[0]){
+                else if(isArenaContainer && baseVarTypeName != BuiltinTypeSemantics::PathTypeName() && stmt.arguments.size() == 1u && stmt.arguments[0]){
                     const MStringView arg0Type = m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope);
                     if(isExplicitArenaArg(*stmt.arguments[0], arg0Type))
                         callerPassedArena = true;
@@ -121,13 +108,10 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             if(!callerPassedArena && (isArenaContainer || isNonRootClass || isArenaDefaultArray || isReboundValueInit)){
                 stmt.usesScratchArena = true;
                 stmt.arenaFirstInit = (!m_checker.m_symbols.hasTypeSymbol(baseVarTypeName) && IsArenaFirstCtorType(baseVarTypeName)) || isNonRootClass;
-                if(ownerClass && !ownerClass->assetTypeName.empty()){
+                if(ownerClass && !ownerClass->assetTypeName.empty())
                     ownerClass->needsClassArena = true;
-                }
-                else{
-                    method.usesScratchArena = true;
-                    m_checker.m_activeParallelBlockUsesScratch = true;
-                }
+                else
+                    m_checker.markScratchArenaUsed(method);
             }
         }
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(stmt.varType, stmt.expr);
@@ -137,16 +121,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                     LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(stmt.varType, arg);
             }
         }
-        if(!m_checker.m_symbols.hasTypeSymbol(baseVarTypeName) && RequiresTCharAdaptation(baseVarTypeName)){
-            if(stmt.expr)
-                m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *stmt.expr);
-            if(stmt.isCtorInit){
-                for(Expr* arg : stmt.arguments){
-                    if(arg)
-                        m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *arg);
-                }
-            }
-        }
+        m_checker.maybeAdaptInitToTChar(ownerClass, method, scope, baseVarTypeName, stmt.expr, stmt.isCtorInit ? Span<Expr* const>(stmt.arguments.data(), stmt.arguments.size()) : Span<Expr* const>{});
     }
 
     if(stmt.expr){
@@ -158,24 +133,16 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 m_checker.reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
                 ok = false;
             }
-            else if(stmt.expr->isStringByteRead){
-                stmt.expr->isStringByteRead = false;
-                stmt.expr->isStringByteConstRef = true;
+            else{
+                PromoteStringByteReadToConstRef(*stmt.expr);
             }
         }
         if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
             stmt.varType->isAuto = false;
             stmt.varType->name = stmt.expr->resolvedSimdType;
         }
-        if(stmt.varType && !stmt.varType->isAuto && varRefMode == ParamPassingMode::None){
-            if(const TypeRef* unwrappedVar = m_checker.m_symbols.unwrapTypeAlias(stmt.varType); unwrappedVar && !unwrappedVar->templateArgs.empty() && unwrappedVar->templateArgs[0].type){
-                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedVar->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-                    const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(unwrappedVar->templateArgs[0].type->name);
-                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && stmt.expr->resolvedSimdType == valBase)
-                        stmt.expr->wrapInSimdResult = true;
-                }
-            }
-        }
+        if(stmt.varType && !stmt.varType->isAuto && varRefMode == ParamPassingMode::None)
+            m_checker.markSimdResultWrapperAdaptation(stmt.varType, *stmt.expr);
     }
 
     if(!ConstructorArgumentChecker(m_checker).check(
@@ -189,15 +156,8 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     )){
         ok = false;
     }
-    if(stmt.isCtorInit && stmt.varType && varRefMode == ParamPassingMode::None && stmt.arguments.size() == 1u && stmt.arguments[0]){
-        if(const TypeRef* unwrappedVar = m_checker.m_symbols.unwrapTypeAlias(stmt.varType); unwrappedVar && !unwrappedVar->templateArgs.empty() && unwrappedVar->templateArgs[0].type){
-            if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedVar->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-                const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(unwrappedVar->templateArgs[0].type->name);
-                if(SymbolTable::IsSimdRegisterVectorType(valBase) && stmt.arguments[0]->resolvedSimdType == valBase)
-                    stmt.arguments[0]->wrapInSimdResult = true;
-            }
-        }
-    }
+    if(stmt.isCtorInit && stmt.varType && varRefMode == ParamPassingMode::None && stmt.arguments.size() == 1u && stmt.arguments[0])
+        m_checker.markSimdResultWrapperAdaptation(stmt.varType, *stmt.arguments[0]);
 
     ScopedVarInfo info;
     info.name = stmt.name;
@@ -208,7 +168,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         const MStringView effectiveAutoName = exprTypeRef
             ? m_checker.m_symbols.resolveBaseTypeName(exprTypeRef->name)
             : info.inferredTypeName;
-        if(varRefMode == ParamPassingMode::None && !effectiveAutoName.empty() && (m_checker.m_symbols.findInterface(effectiveAutoName) || m_checker.m_symbols.isAbstractBuiltinType(effectiveAutoName))){
+        if(varRefMode == ParamPassingMode::None && !effectiveAutoName.empty() && m_checker.m_symbols.isInterfaceOrAbstractType(effectiveAutoName)){
             m_checker.reportError(errors, stmt.span, "local variable of 'interface' type must specify 'in' or 'mut'; interfaces cannot be instantiated by value");
             ok = false;
         }
@@ -232,8 +192,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             info.type = stmt.inferredAutoType;
             if(TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*stmt.inferredAutoType)){
                 stmt.usesScratchArena = true;
-                method.usesScratchArena = true;
-                m_checker.m_activeParallelBlockUsesScratch = true;
+                m_checker.markScratchArenaUsed(method);
             }
         }
     }
@@ -261,7 +220,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     const Expr* stringViewInitExpr = stmt.expr
         ? stmt.expr
         : (stmt.isCtorInit && !stmt.arguments.empty() ? stmt.arguments[0] : nullptr);
-    if(effectiveVarBase == "StringView" && stringViewInitExpr){
+    if(IsStringBorrowViewType(effectiveVarBase) && stringViewInitExpr){
         if(BorrowLifetimeAnalyzer(m_checker).borrowsTemporaryStringOwner(ownerClass, &method, *stringViewInitExpr, scope)){
             m_checker.reportError(errors, stmt.span, "cannot bind 'StringView' variable to a temporary owning string");
             ok = false;

@@ -37,12 +37,14 @@ constexpr usize s_DocumentReaderChunkBytes = 4096u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Document::parse(MStringView source, IIncludeResolver* includeResolver){
+void Document::clearParsedState()noexcept{
     m_errors.clear();
     m_variables.clear();
     m_declarations.clear();
     m_structs.clear();
+}
 
+b8 Document::parseSourceInternal(const MStringView source, IIncludeResolver* includeResolver){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
     if(source.find('#') != MStringView::npos){
         Preprocessor preprocessor(m_arena, scratchArena, m_errors, includeResolver);
@@ -57,11 +59,13 @@ b8 Document::parse(MStringView source, IIncludeResolver* includeResolver){
     return parser.parseInto();
 }
 
+b8 Document::parse(MStringView source, IIncludeResolver* includeResolver){
+    clearParsedState();
+    return parseSourceInternal(source, includeResolver);
+}
+
 b8 Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
-    m_errors.clear();
-    m_variables.clear();
-    m_declarations.clear();
-    m_structs.clear();
+    clearParsedState();
 
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_DocumentReaderScratch, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
     BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
@@ -83,7 +87,7 @@ b8 Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
         buffer.append(chunk.data(), *bytesRead);
     }
 
-    return parse(MStringView(buffer.data(), buffer.size()), includeResolver);
+    return parseSourceInternal(MStringView(buffer.data(), buffer.size()), includeResolver);
 }
 
 const Value* Document::findVariable(MStringView name)const noexcept{
@@ -94,10 +98,7 @@ const Value* Document::findVariable(MStringView name)const noexcept{
 }
 
 Value* Document::findVariable(MStringView name)noexcept{
-    const auto it = m_variables.find(name);
-    if(it == m_variables.end())
-        return nullptr;
-    return &it.value();
+    return const_cast<Value*>(static_cast<const Document*>(this)->findVariable(name));
 }
 
 const Document::Declaration* Document::findDeclaration(MStringView name)const noexcept{

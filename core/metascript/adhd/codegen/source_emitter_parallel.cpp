@@ -88,6 +88,19 @@ b8 ParallelStatementEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& s
 void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     using namespace __hidden_adhd_source_emitter_parallel;
 
+    const auto emitWorkerStatements = [&](const Stmt* const declToPush){
+        const usize prevDecls = m_emitter.m_activeLocalVarDecls.size();
+        const TypeRef* prevRet = m_emitter.m_activeCallerArenaReturnType;
+        if(declToPush)
+            m_emitter.m_activeLocalVarDecls.push_back(declToPush);
+        m_emitter.m_activeCallerArenaReturnType = nullptr;
+        ++m_emitter.m_parallelWorkerDepth;
+        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
+        --m_emitter.m_parallelWorkerDepth;
+        m_emitter.m_activeCallerArenaReturnType = prevRet;
+        m_emitter.m_activeLocalVarDecls.resize(prevDecls);
+    };
+
     switch(stmt.kind){
     case StmtKind::ParallelForRange:{
         m_emitter.emitIndent(out, indent);
@@ -113,16 +126,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             m_emitter.emitExpr(out, *stmt.expr);
         out.append(")[__adhd_idx];\r\n");
 
-        const usize prevParRangeDecls = m_emitter.m_activeLocalVarDecls.size();
-        const TypeRef* prevParRangeRet = m_emitter.m_activeCallerArenaReturnType;
-        if(!stmt.name.empty())
-            m_emitter.m_activeLocalVarDecls.push_back(&stmt);
-        m_emitter.m_activeCallerArenaReturnType = nullptr;
-        ++m_emitter.m_parallelWorkerDepth;
-        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
-        --m_emitter.m_parallelWorkerDepth;
-        m_emitter.m_activeCallerArenaReturnType = prevParRangeRet;
-        m_emitter.m_activeLocalVarDecls.resize(prevParRangeDecls);
+        emitWorkerStatements(!stmt.name.empty() ? &stmt : nullptr);
 
         m_emitter.emitIndent(out, indent);
         out.append("}, ");
@@ -197,16 +201,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                 out.append(">(__adhd_idx);\r\n");
             }
         }
-        const usize prevParIdxDecls = m_emitter.m_activeLocalVarDecls.size();
-        const TypeRef* prevParIdxRet = m_emitter.m_activeCallerArenaReturnType;
-        if(stmt.initStmt && !stmt.initStmt->name.empty())
-            m_emitter.m_activeLocalVarDecls.push_back(&stmt);
-        m_emitter.m_activeCallerArenaReturnType = nullptr;
-        ++m_emitter.m_parallelWorkerDepth;
-        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
-        --m_emitter.m_parallelWorkerDepth;
-        m_emitter.m_activeCallerArenaReturnType = prevParIdxRet;
-        m_emitter.m_activeLocalVarDecls.resize(prevParIdxDecls);
+        emitWorkerStatements((stmt.initStmt && !stmt.initStmt->name.empty()) ? &stmt : nullptr);
         m_emitter.emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
@@ -249,16 +244,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             out.append("#pragma STDC FENV_ACCESS ON\r\n");
         if(stmt.usesScratchArena)
             m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
-        const usize prevParIdxDecls = m_emitter.m_activeLocalVarDecls.size();
-        const TypeRef* prevParBlkRet = m_emitter.m_activeCallerArenaReturnType;
-        if(stmt.initStmt && !stmt.initStmt->name.empty())
-            m_emitter.m_activeLocalVarDecls.push_back(&stmt);
-        m_emitter.m_activeCallerArenaReturnType = nullptr;
-        ++m_emitter.m_parallelWorkerDepth;
-        m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
-        --m_emitter.m_parallelWorkerDepth;
-        m_emitter.m_activeCallerArenaReturnType = prevParBlkRet;
-        m_emitter.m_activeLocalVarDecls.resize(prevParIdxDecls);
+        emitWorkerStatements((stmt.initStmt && !stmt.initStmt->name.empty()) ? &stmt : nullptr);
         m_emitter.emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
@@ -328,7 +314,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             const b8 parallelArenaFirst = !parallelArenaLast;
             const MStringView parallelArena = stmt.expr->injectClassArena
                 ? m_emitter.activeClassArenaExpr()
-                : (stmt.expr->injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
+                : (stmt.expr->injectScratchArena ? CodegenSymbols::s_ScratchArenaVar : MStringView{});
             m_emitter.emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall, stmt.expr->isUserCallableCall, stmt.expr->callTemplateArgs);
             out.push_back('(');
             if(!parallelArena.empty() && parallelArenaFirst){

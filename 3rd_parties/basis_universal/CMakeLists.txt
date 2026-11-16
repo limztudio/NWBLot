@@ -72,3 +72,8 @@ set_target_properties(nwb_vendor_basis_universal PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 nwb_apply_debug_symbols(nwb_vendor_basis_universal)
+nwb_skip_unity_build_sources(
+    "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_dds_export.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_astc_hdr_6x6_enc.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_astc_ldr_encode.cpp"
+)

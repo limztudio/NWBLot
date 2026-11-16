@@ -22,15 +22,7 @@ NWB_ADHD_BEGIN
 
 
 const TemplateParamDecl* TypeChecker::FindTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
-    if(method){
-        if(const TemplateParamDecl* tp = FindTemplateParamByName(method->templateParams, name); tp && !tp->constValueType)
-            return tp;
-    }
-    if(ownerClass){
-        if(const TemplateParamDecl* tp = FindTemplateParamByName(ownerClass->templateParams, name); tp && !tp->constValueType)
-            return tp;
-    }
-    return nullptr;
+    return FindEnclosingTemplateParam(ownerClass, method, name, false);
 }
 
 b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> params, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors){
@@ -71,12 +63,9 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
                 continue;
             const TypeRef* resolvedBound = m_symbols.unwrapTypeAlias(boundRef);
             const MStringView boundName = resolvedBound ? resolvedBound->name : boundRef->name;
-            for(usize prevB = 0u; prevB < bIdx; ++prevB){
-                if(param.interfaceBounds[prevB] && TypeComparator(m_symbols).areEquivalent(param.interfaceBounds[prevB], boundRef)){
-                    reportError(errors, param.span, "duplicate interface bound on template parameter");
-                    ok = false;
-                    break;
-                }
+            if(TypeComparator(m_symbols).hasEquivalentInPrefix(Span<const TypeRef* const>(param.interfaceBounds.data(), bIdx), boundRef)){
+                reportError(errors, param.span, "duplicate interface bound on template parameter");
+                ok = false;
             }
             if(m_symbols.findClass(boundName)){
                 reportError(errors, param.span, "template parameter bound must be an 'interface', not a concrete 'class'");
@@ -113,7 +102,8 @@ b8 TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& re
     }
 
     if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(cleanIface.name)){
-        if(!ifaceDecl->assetTypeName.empty() && m_symbols.resolveBaseTypeName(cleanReq.name) == "IAsset")
+        const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
+        if(!ifaceDecl->assetTypeName.empty() && assetContract && m_symbols.resolveBaseTypeName(cleanReq.name) == assetContract->implicitInterfaceAdhdName)
             return true;
         for(const TypeRef* rawBase : ifaceDecl->baseInterfaces){
             if(!rawBase)
@@ -132,9 +122,11 @@ b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* im
         return false;
 
     const MStringView reqBaseName = m_symbols.resolveBaseTypeName(unwrappedReq->name);
-    if((!cls.assetTypeName.empty() || !cls.subsystemTypeName.empty()) && reqBaseName == "IAsset")
+    const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
+    const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
+    if((!cls.assetTypeName.empty() || !cls.subsystemTypeName.empty()) && assetContract && reqBaseName == assetContract->implicitInterfaceAdhdName)
         return true;
-    if(!cls.systemTypeName.empty() && reqBaseName == "ISystem")
+    if(!cls.systemTypeName.empty() && sysContract && reqBaseName == sysContract->implicitInterfaceAdhdName)
         return true;
 
     const TypeRef* unwrappedImplCls = implClassRef ? m_symbols.unwrapTypeAlias(implClassRef) : nullptr;
@@ -377,16 +369,11 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
 
     const BuiltinGenericTypeInfo* outerGenericInfo = m_symbols.hasTypeSymbol(typeRef.name) ? nullptr : FindBuiltinGenericType(typeRef.name);
     const b8 allowFirstVoidArg = outerGenericInfo && outerGenericInfo->inlineLayoutKind == InlineLayoutKind::Expected;
-    const usize nsSep = typeRef.name.rfind("::");
-    const MStringView outerBaseName = (nsSep == MStringView::npos) ? typeRef.name : typeRef.name.substr(nsSep + 2u);
+    const usize nsSep = typeRef.name.rfind(ContractSemantics::s_CppScopeSeparator);
+    const MStringView outerBaseName = (nsSep == MStringView::npos) ? typeRef.name : typeRef.name.substr(nsSep + ContractSemantics::s_CppScopeSeparator.size());
     const b8 allowInterfaceArgs = (outerGenericInfo && outerGenericInfo->isAssetHandle)
         || IsAssetHandleType(typeRef.name)
-        || outerBaseName == "UniquePtr"
-        || outerBaseName == "NotNullUniquePtr"
-        || outerBaseName == "RefCountPtr"
-        || outerBaseName == "AssetRef"
-        || outerBaseName == "TypedAsset"
-        || outerBaseName == "AssetCodec";
+        || AllowsInterfaceTypeArg(outerBaseName);
     if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors, allowFirstVoidArg, allowInterfaceArgs))
         ok = false;
     if(!typeRef.templateArgs.empty()){

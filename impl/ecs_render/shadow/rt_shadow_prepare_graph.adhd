@@ -181,7 +181,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
 
     const b8 pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
-        auto resources = ResolvePreparedSoftwareBvhGraphResources(context.graph, preparedMeshSwBvhBuilds, scratchArena);
+        auto resources = ResolvePreparedSoftwareBvhGraphResources(scratchArena, context.graph, preparedMeshSwBvhBuilds);
         if(!resources){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
             return false;

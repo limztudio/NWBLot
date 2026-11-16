@@ -373,3 +373,6 @@ else()
 endif()
 
 nwb_disable_vendor_warnings(nwb_vendor_microhttpd)
+nwb_skip_unity_build_sources(
+    "${CMAKE_CURRENT_LIST_DIR}/microhttpd/sysfdsetsize.c"
+)

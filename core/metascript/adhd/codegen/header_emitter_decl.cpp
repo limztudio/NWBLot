@@ -6,6 +6,7 @@
 #include "constructor_argument_emitter.h"
 
 #include "reflection_emitter.h"
+#include <core/metascript/adhd/ast/operator_semantics.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +19,7 @@ NWB_ADHD_BEGIN
 
 
 void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
-    const MStringView innerEnumName = decl.isFlag ? MStringView("Flag") : MStringView("Enum");
+    const MStringView innerEnumName = ContractSemantics::EnumInnerName(decl.isFlag);
 
     out.append("namespace ");
     out.append(decl.name.data(), decl.name.size());
@@ -57,25 +58,27 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
 
     out.append("    };\r\n");
     if(decl.isFlag){
-#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, returnsBool, isBitwiseFlagOp, isPrefixUnary, isIncDec, binaryPrecedence, minMemberParams, maxMemberParams, prohibitsUnaryOverload) \
-        if constexpr(isBitwiseFlagOp && !isAssignment){ \
-            out.append("    [[nodiscard]] constexpr Flag operator" symbol "(const Flag a, const Flag b)noexcept{ return static_cast<Flag>(static_cast<::"); \
-            out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size()); \
-            out.append(">(a) " symbol " static_cast<::"); \
-            out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size()); \
-            out.append(">(b)); }\r\n"); \
-        }
-#include "../export_operators.h"
-#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+        OperatorSemantics::ForEachBitwiseFlagOperator([&](const MStringView sym){
+            out.append("    [[nodiscard]] constexpr Flag operator");
+            out.append(sym.data(), sym.size());
+            out.append("(const Flag a, const Flag b)noexcept{ return static_cast<Flag>(static_cast<::");
+            out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+            out.append(">(a) ");
+            out.append(sym.data(), sym.size());
+            out.append(" static_cast<::");
+            out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+            out.append(">(b)); }\r\n");
+        });
         out.append("    [[nodiscard]] constexpr Flag operator~(const Flag a)noexcept{ return static_cast<Flag>(~static_cast<::");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(a)); }\r\n");
-#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, returnsBool, isBitwiseFlagOp, isPrefixUnary, isIncDec, binaryPrecedence, minMemberParams, maxMemberParams, prohibitsUnaryOverload) \
-        if constexpr(isBitwiseFlagOp && !isAssignment){ \
-            out.append("    constexpr Flag& operator" symbol "=(Flag& a, const Flag b)noexcept{ a = (a " symbol " b); return a; }\r\n"); \
-        }
-#include "../export_operators.h"
-#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+        OperatorSemantics::ForEachBitwiseFlagOperator([&](const MStringView sym){
+            out.append("    constexpr Flag& operator");
+            out.append(sym.data(), sym.size());
+            out.append("=(Flag& a, const Flag b)noexcept{ a = (a ");
+            out.append(sym.data(), sym.size());
+            out.append(" b); return a; }\r\n");
+        });
     }
     usize reflectedEntryCount = 0u;
     for(const EnumEntry& entry : decl.entries){
@@ -170,6 +173,8 @@ void HeaderEmitter::emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)co
 
 void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const{
     const b8 isAssetInterface = !decl.assetTypeName.empty();
+    const ClassRoleContractInfo* assetContract = isAssetInterface ? ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset) : nullptr;
+    const MStringView assetBaseCpp = assetContract ? CppTypeEmitter::MapBuiltinCppType(assetContract->implicitInterfaceAdhdName) : MStringView{};
     m_typeEmitter.emitTemplateHeaderCpp(out, decl.templateParams);
     out.append("class ");
     out.append(decl.name.data(), decl.name.size());
@@ -184,19 +189,28 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
         }
     }
     else if(isAssetInterface){
-        out.append(" : public ::NWB::Core::Assets::IAsset");
+        out.append(" : public ");
+        out.append(assetBaseCpp.data(), assetBaseCpp.size());
     }
     out.append("{\r\npublic:\r\n");
     if(isAssetInterface){
-        out.append("    NWB_DEFINE_ASSET_TYPE(\"");
-        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
-        out.append("\")\r\n\r\n");
+        if(assetContract && !assetContract->defineMacroName.empty()){
+            out.append("    ");
+            out.append(assetContract->defineMacroName.data(), assetContract->defineMacroName.size());
+            out.append("(\"");
+            out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
+            out.append("\")\r\n\r\n");
+        }
         out.append("protected:\r\n");
         out.append("    explicit ");
         out.append(decl.name.data(), decl.name.size());
-        out.append("(const ::Name& assetType, const ::Name& virtualPath = ::s_NameNone)noexcept\r\n");
-        out.append("        : ::NWB::Core::Assets::IAsset(assetType, virtualPath)\r\n");
-        out.append("    {}\r\n");
+        out.append("(const ");
+        out.append(CodegenSymbols::s_NameCppType.data(), CodegenSymbols::s_NameCppType.size());
+        out.append("& assetType, const ");
+        out.append(CodegenSymbols::s_NameCppType.data(), CodegenSymbols::s_NameCppType.size());
+        out.append("& virtualPath = ::s_NameNone)noexcept\r\n        : ");
+        out.append(assetBaseCpp.data(), assetBaseCpp.size());
+        out.append("(assetType, virtualPath)\r\n    {}\r\n");
         out.append("    ");
         out.append(decl.name.data(), decl.name.size());
         out.append("(const ");
@@ -252,7 +266,7 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
         ConstructorArgumentEmitter(m_sourceEmitter).emit(out, baseConstType, c.arguments, {}, false, true);
         out.append(";\r\n");
     }
-    else if(c.expr && c.expr->kind == ExprKind::StringLiteral && c.varType && c.varType->name != "StringView" && c.varType->name != "Name"){
+    else if(c.expr && c.expr->kind == ExprKind::StringLiteral && c.varType && !IsStringBorrowViewType(c.varType->name) && !IsLiteralConstObjectType(c.varType->name)){
         out.push_back('(');
         m_sourceEmitter.emitExpr(out, *c.expr);
         out.append(");\r\n");

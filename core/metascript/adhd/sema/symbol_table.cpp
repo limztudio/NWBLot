@@ -3,6 +3,7 @@
 
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
+#include <core/metascript/adhd/ast/operator_semantics.h>
 
 #include "symbol_table.h"
 #include "type_substitution.h"
@@ -20,12 +21,46 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SymbolTable::IsArenaBackedContainer(const MStringView typeName)noexcept{
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
-        return objInfo->isArenaBacked;
-    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(typeName))
-        return info->isArenaBacked;
+namespace __hidden_adhd_symbol_table{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename DeclT>
+[[nodiscard]] DeclT* FindDeclByName(const Span<DeclT* const> decls, const MStringView name)noexcept{
+    for(DeclT* decl : decls){
+        if(decl && decl->name == name)
+            return decl;
+    }
+    return nullptr;
+}
+
+template<typename ObjPred, typename GenericPred>
+[[nodiscard]] b8 MatchObjectOrGenericFlag(const MStringView name, ObjPred&& objPred, GenericPred&& genericPred)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
+        return objPred(*objInfo);
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name))
+        return genericPred(*genericInfo);
     return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SymbolTable::IsArenaBackedContainer(const MStringView typeName)noexcept{
+    return __hidden_adhd_symbol_table::MatchObjectOrGenericFlag(
+        typeName,
+        [](const BuiltinObjectTypeInfo& obj)noexcept{ return obj.isArenaBacked; },
+        [](const BuiltinGenericTypeInfo& info)noexcept{ return info.isArenaBacked; }
+    );
 }
 
 b8 SymbolTable::IsSimdRegisterVectorType(const MStringView typeName)noexcept{
@@ -86,6 +121,14 @@ b8 SymbolTable::IsSimdType(const MStringView typeName)noexcept{
     return IsSimdVectorType(typeName, lanes) || IsSimdMatrixType(typeName);
 }
 
+b8 SymbolTable::IsSimdOrUnalignedStorageType(const MStringView typeName)noexcept{
+    return IsSimdStorageType(typeName) || IsUnalignedVectorType(typeName);
+}
+
+b8 SymbolTable::IsSimdStorageOrUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
+    return IsSimdStorageVectorType(typeName, outLanes) || IsUnalignedVectorType(typeName, outLanes);
+}
+
 b8 SymbolTable::IsStringSwitchType(const MStringView typeName)noexcept{
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->isStringSwitch;
@@ -100,45 +143,33 @@ const FieldDecl* SymbolTable::FindClassField(const ClassDecl& classDecl, const M
     return nullptr;
 }
 
+b8 SymbolTable::HasCustomAssignOperator(const ClassDecl& classDecl)noexcept{
+    for(const MethodDecl* m : classDecl.methods){
+        if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
+            return true;
+    }
+    return false;
+}
+
 b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     FOUNDATION_ASSERT(&unit == &m_unit);
     b8 ok = true;
 
-    for(EnumDecl* decl : unit.enums){
-        if(hasTypeSymbol(decl->name)){
-            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
-            ok = false;
-            continue;
+    const auto registerTypeSymbols = [&](const auto& decls, auto& target){
+        for(auto* decl : decls){
+            if(hasTypeSymbol(decl->name)){
+                ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
+                ok = false;
+                continue;
+            }
+            target.push_back(decl);
         }
-        m_enums.push_back(decl);
-    }
+    };
 
-    for(InterfaceDecl* decl : unit.interfaces){
-        if(hasTypeSymbol(decl->name)){
-            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
-            ok = false;
-            continue;
-        }
-        m_interfaces.push_back(decl);
-    }
-
-    for(ClassDecl* decl : unit.classes){
-        if(hasTypeSymbol(decl->name)){
-            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
-            ok = false;
-            continue;
-        }
-        m_classes.push_back(decl);
-    }
-
-    for(TypeAliasDecl* decl : unit.typeAliases){
-        if(hasTypeSymbol(decl->name)){
-            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
-            ok = false;
-            continue;
-        }
-        m_typeAliases.push_back(decl);
-    }
+    registerTypeSymbols(unit.enums, m_enums);
+    registerTypeSymbols(unit.interfaces, m_interfaces);
+    registerTypeSymbols(unit.classes, m_classes);
+    registerTypeSymbols(unit.typeAliases, m_typeAliases);
 
     for(MethodDecl* fn : unit.freeFunctions)
         m_freeFunctions.push_back(fn);
@@ -156,35 +187,19 @@ b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
 }
 
 EnumDecl* SymbolTable::findEnum(const MStringView name)const noexcept{
-    for(EnumDecl* decl : m_enums){
-        if(decl->name == name)
-            return decl;
-    }
-    return nullptr;
+    return __hidden_adhd_symbol_table::FindDeclByName(Span<EnumDecl* const>(m_enums), name);
 }
 
 InterfaceDecl* SymbolTable::findInterface(const MStringView name)const noexcept{
-    for(InterfaceDecl* decl : m_interfaces){
-        if(decl->name == name)
-            return decl;
-    }
-    return nullptr;
+    return __hidden_adhd_symbol_table::FindDeclByName(Span<InterfaceDecl* const>(m_interfaces), name);
 }
 
 ClassDecl* SymbolTable::findClass(const MStringView name)const noexcept{
-    for(ClassDecl* decl : m_classes){
-        if(decl->name == name)
-            return decl;
-    }
-    return nullptr;
+    return __hidden_adhd_symbol_table::FindDeclByName(Span<ClassDecl* const>(m_classes), name);
 }
 
 TypeAliasDecl* SymbolTable::findTypeAlias(const MStringView name)const noexcept{
-    for(TypeAliasDecl* decl : m_typeAliases){
-        if(decl->name == name)
-            return decl;
-    }
-    return nullptr;
+    return __hidden_adhd_symbol_table::FindDeclByName(Span<TypeAliasDecl* const>(m_typeAliases), name);
 }
 
 MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
@@ -224,11 +239,7 @@ const MethodDecl* SymbolTable::findUniqueFreeFunction(const MStringView name, b8
 }
 
 Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
-    for(Stmt* c : m_globalConstants){
-        if(c->name == name)
-            return c;
-    }
-    return nullptr;
+    return __hidden_adhd_symbol_table::FindDeclByName(Span<Stmt* const>(m_globalConstants), name);
 }
 
 const MethodDecl* SymbolTable::findClassMethod(
@@ -347,12 +358,8 @@ const TypeRef* SymbolTable::unwrapTypeAlias(const TypeRef* type)const noexcept{
         if(cur && outerRefMode == ParamPassingMode::None && cur->refMode != ParamPassingMode::None)
             outerRefMode = cur->refMode;
     }
-    if(cur && outerRefMode != ParamPassingMode::None && cur->refMode != outerRefMode){
-        TypeRef* withMode = AllocateAstNode<TypeRef>(m_arena);
-        *withMode = *cur;
-        withMode->refMode = outerRefMode;
-        return withMode;
-    }
+    if(cur && outerRefMode != ParamPassingMode::None && cur->refMode != outerRefMode)
+        return CloneTypeRefWithMode(m_arena, *cur, outerRefMode);
     return cur;
 }
 
@@ -402,10 +409,11 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
     if(!hasTypeSymbol(baseName)){
         if(FindBuiltinEnum(baseName) != nullptr)
             return true;
-        if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName))
-            return objInfo->isSelfDefaulted;
-        if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(baseName))
-            return info->isSelfDefaulted;
+        return __hidden_adhd_symbol_table::MatchObjectOrGenericFlag(
+            baseName,
+            [](const BuiltinObjectTypeInfo& obj)noexcept{ return obj.isSelfDefaulted; },
+            [](const BuiltinGenericTypeInfo& info)noexcept{ return info.isSelfDefaulted; }
+        );
     }
     return false;
 }
@@ -417,10 +425,11 @@ b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
     if(!hasTypeSymbol(typeName)){
         if(FindBuiltinEnum(typeName) != nullptr)
             return true;
-        if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
-            return objInfo->isSmallValue;
-        if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(typeName))
-            return info->isSmallValue;
+        return __hidden_adhd_symbol_table::MatchObjectOrGenericFlag(
+            typeName,
+            [](const BuiltinObjectTypeInfo& obj)noexcept{ return obj.isSmallValue; },
+            [](const BuiltinGenericTypeInfo& info)noexcept{ return info.isSmallValue; }
+        );
     }
     return false;
 }
@@ -439,6 +448,14 @@ MStringView SymbolTable::findTypeNamespace(const MStringView name)const noexcept
 
 b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
     return findEnum(name) != nullptr || findInterface(name) != nullptr || findClass(name) != nullptr || findTypeAlias(name) != nullptr;
+}
+
+b8 SymbolTable::isEnumType(const MStringView name)const noexcept{
+    return findEnum(name) != nullptr || (!hasTypeSymbol(name) && FindBuiltinEnum(name) != nullptr);
+}
+
+b8 SymbolTable::isInterfaceOrAbstractType(const MStringView name)const noexcept{
+    return findInterface(name) != nullptr || isAbstractBuiltinType(name);
 }
 
 b8 SymbolTable::isAbstractBuiltinType(const MStringView name)const noexcept{
@@ -474,6 +491,68 @@ b8 SymbolTable::hasPolymorphicInterface(const ClassDecl& classDecl)const noexcep
 
 b8 SymbolTable::hasPolymorphicBase(const ClassDecl& classDecl)const noexcept{
     return hasPolymorphicInterface(classDecl) || !classDecl.assetTypeName.empty() || !classDecl.systemTypeName.empty();
+}
+
+const BuiltinReceiverMethodInfo* SymbolTable::findInheritedBuiltinReceiverMethod(const ClassDecl* const cls, const InterfaceDecl* const iface, const MStringView methodName)const noexcept{
+    if(cls){
+        const ClassRoleContractInfo* roleContract = nullptr;
+        if(!cls->assetTypeName.empty() || !cls->subsystemTypeName.empty())
+            roleContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
+        else if(!cls->systemTypeName.empty())
+            roleContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
+        if(roleContract && !roleContract->implicitInterfaceAdhdName.empty()){
+            if(const BuiltinReceiverMethodInfo* info = FindBuiltinReceiverMethod(roleContract->implicitInterfaceAdhdName, methodName))
+                return info;
+        }
+        for(const TypeRef* ifaceRef : cls->implementedInterfaces){
+            if(!ifaceRef)
+                continue;
+            const MStringView ifaceName = resolveBaseTypeName(ifaceRef->name);
+            if(!findInterface(ifaceName)){
+                if(const BuiltinReceiverMethodInfo* info = FindBuiltinReceiverMethod(ifaceName, methodName))
+                    return info;
+            }
+        }
+        return nullptr;
+    }
+    if(iface && !iface->assetTypeName.empty()){
+        if(const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset); assetContract && !assetContract->implicitInterfaceAdhdName.empty())
+            return FindBuiltinReceiverMethod(assetContract->implicitInterfaceAdhdName, methodName);
+    }
+    return nullptr;
+}
+
+MStringView SymbolTable::resolveRoleScopeMemberType(const MStringView scopeName, const MStringView memberName, const b8 allowStaticFields)const noexcept{
+    const MStringView baseName = resolveBaseTypeName(scopeName);
+    const auto resolveForRole = [memberName, allowStaticFields](const ClassRoleKind::Enum role)noexcept -> MStringView{
+        if(ContractSemantics::IsClassRoleTypeNameMethod(role, memberName))
+            return BuiltinTypeSemantics::NameTypeName();
+        if(allowStaticFields){
+            if(ContractSemantics::IsClassRoleTypeNameStaticField(role, memberName))
+                return BuiltinTypeSemantics::NameTypeName();
+            if(ContractSemantics::IsClassRoleTypeTextStaticField(role, memberName))
+                return BuiltinTypeSemantics::StringViewTypeName();
+        }
+        return {};
+    };
+    if(const ClassDecl* scopedCls = findClass(baseName)){
+        if(!scopedCls->assetTypeName.empty()){
+            if(const MStringView t = resolveForRole(ClassRoleKind::Asset); !t.empty())
+                return t;
+        }
+        if(!scopedCls->systemTypeName.empty()){
+            if(const MStringView t = resolveForRole(ClassRoleKind::System); !t.empty())
+                return t;
+        }
+        if(!scopedCls->componentTypeName.empty()){
+            if(const MStringView t = resolveForRole(ClassRoleKind::Component); !t.empty())
+                return t;
+        }
+        return {};
+    }
+    if(const InterfaceDecl* scopedIface = findInterface(baseName); scopedIface && !scopedIface->assetTypeName.empty())
+        return resolveForRole(ClassRoleKind::Asset);
+    return {};
 }
 
 

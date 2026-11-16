@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -26,20 +25,6 @@ inline constexpr Array<MStringView, 4> s_LaneCallSuffixes = {
     cppLaneCallSuffix,
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
-};
-
-inline constexpr Array<MStringView, 4> s_SingleSplatIntrinsics = {
-    "::VectorSplatX(",
-    "::VectorSplatY(",
-    "::VectorSplatZ(",
-    "::VectorSplatW(",
-};
-
-inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
-    "::VectorDoubleSplatX(",
-    "::VectorDoubleSplatY(",
-    "::VectorDoubleSplatZ(",
-    "::VectorDoubleSplatW(",
 };
 
 
@@ -78,7 +63,7 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
     const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType);
     if(vecInfo && vecInfo->isIntReg)
         return vecInfo->xyzScalarType;
-    return "u64";
+    return BuiltinTypeSemantics::UInt64ScalarTypeName();
 }
 
 [[nodiscard]] MStringView SimdLaneCallSuffix(const u32 lane)noexcept{
@@ -88,52 +73,29 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
 [[nodiscard]] MStringView SimdSplatIntrinsic(const u32 lane, const b8 isDouble)noexcept{
     const u32 idx = lane < 4u ? lane : 3u;
     return isDouble
-        ? __hidden_adhd_simd_codegen_utils::s_DoubleSplatIntrinsics[idx]
-        : __hidden_adhd_simd_codegen_utils::s_SingleSplatIntrinsics[idx];
+        ? CodegenSymbols::s_DoubleSplatIntrinsics[idx]
+        : CodegenSymbols::s_SingleSplatIntrinsics[idx];
 }
 
 [[nodiscard]] MStringView SimdInPlaceLaneMaskConstant(const u8 laneMask, const b8 isDouble)noexcept{
-    switch(laneMask){
-    case 0x1u: return isDouble ? "::s_DoubleSIMDMaskX" : "::s_SIMDMaskX";
-    case 0x2u: return isDouble ? "::s_DoubleSIMDMaskY" : "::s_SIMDMaskY";
-    case 0x4u: return isDouble ? "::s_DoubleSIMDMaskZ" : "::s_SIMDMaskZ";
-    case 0x8u: return isDouble ? "::s_DoubleSIMDMaskW" : "::s_SIMDMaskW";
-    case 0x3u: return isDouble ? "::s_DoubleSIMDMaskXY" : "::s_SIMDMaskXY";
-    case 0x7u: return isDouble ? "::s_DoubleSIMDMask3" : "::s_SIMDMask3";
-    case 0xAu: return isDouble ? "::s_DoubleSIMDSelect0101" : "::s_SIMDSelect0101";
-    default: return {};
-    }
+    return CodegenSymbols::LookupMaskSymbol(CodegenSymbols::s_InPlaceLaneMasks, laneMask, isDouble);
 }
 
 [[nodiscard]] MStringView SimdInPlaceSignFlipMaskConstant(const u8 negMask, const b8 isDouble)noexcept{
-    if(negMask == 0x7u)
-        return isDouble ? "::s_DoubleSIMDNegate3" : "::s_SIMDNegate3";
-    if(isDouble)
-        return {};
-    switch(negMask){
-    case 0x2u: return "::s_SIMDFlipY";
-    case 0x4u: return "::s_SIMDFlipZ";
-    case 0x8u: return "::s_SIMDFlipW";
-    case 0xAu: return "::s_SIMDFlipYW";
-    default: return {};
-    }
+    return CodegenSymbols::LookupMaskSymbol(CodegenSymbols::s_SignFlipMasks, negMask, isDouble);
 }
 
 [[nodiscard]] MStringView SimdComponentMaskConstant(const u8 laneMask, const b8 isDouble)noexcept{
-    switch(laneMask){
-    case 0x3u: return isDouble ? "::VectorDoubleComponentMask::s_DoubleXY" : "::VectorComponentMask::s_XY";
-    case 0x7u: return isDouble ? "::VectorDoubleComponentMask::s_DoubleXYZ" : "::VectorComponentMask::s_XYZ";
-    case 0xFu: return isDouble ? "::VectorDoubleComponentMask::s_DoubleXYZW" : "::VectorComponentMask::s_XYZW";
-    default: return {};
-    }
+    return CodegenSymbols::LookupMaskSymbol(CodegenSymbols::s_ComponentMasks, laneMask, isDouble);
 }
 
 void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32 lane, const b8 isDouble, const MStringView laneType){
     const MStringView laneSuffix = SimdLaneCallSuffix(lane);
+    const MStringView getIntPrefix = isDouble ? CodegenSymbols::s_SimdGetIntDoublePrefix : CodegenSymbols::s_SimdGetIntSinglePrefix;
     out.append("static_cast<");
     out.append(laneType.data(), laneType.size());
     out.append(">(");
-    out.append(isDouble ? "::VectorDoubleGetInt" : "::VectorGetInt");
+    out.append(getIntPrefix.data(), getIntPrefix.size());
     out.append(laneSuffix.data(), laneSuffix.size());
     out.append(varName.data(), varName.size());
     out.append("))");
@@ -144,7 +106,7 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
         return vecInfo->regCppType;
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
         return matInfo->regCppType;
-    return "::SIMDVectorSingle";
+    return BuiltinTypeSemantics::SpecialTypeCppName(SpecialBuiltinTypeKind::VectorSingle);
 }
 
 [[nodiscard]] MStringView SimdLoadFunctionCpp(const MStringView simdType)noexcept{
@@ -152,7 +114,7 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
         return vecInfo->loadCppFunc;
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
         return matInfo->loadCppFunc;
-    return "::LoadFloat";
+    return CodegenSymbols::s_SimdLoadFloat;
 }
 
 [[nodiscard]] MStringView SimdStoreFunctionCpp(const MStringView simdType)noexcept{
@@ -160,7 +122,7 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
         return vecInfo->storeCppFunc;
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
         return matInfo->storeCppFunc;
-    return "::StoreFloat";
+    return CodegenSymbols::s_SimdStoreFloat;
 }
 
 [[nodiscard]] MStringView MapBuiltinMathFunction(const MStringView name)noexcept{
@@ -205,7 +167,8 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 }
 
 void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u32 effLanes, const MStringView suffix){
-    out.append(isDouble ? "::VectorDouble" : "::Vector");
+    const MStringView prefix = CodegenSymbols::SimdPrefix(isDouble);
+    out.append(prefix.data(), prefix.size());
     out.push_back(effLanes == 2u ? '2' : (effLanes == 3u ? '3' : '4'));
     out.append(suffix.data(), suffix.size());
     out.push_back('(');
@@ -259,5 +222,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

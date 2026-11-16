@@ -352,7 +352,9 @@ using SwBvhBuildContext = EcsGraphicsMeshOpticsDetail::BuildContext;
 using PreparedMeshSwBvhBuild = Impl::PreparedMeshSwBvhBuild;
 using PreparedMeshSwBvhBuildSpan = Span<const Impl::PreparedMeshSwBvhBuild>;
 using PreparedMeshSwBvhGraphResourceVectorResult = Expected<Impl::PreparedMeshSwBvhGraphResourceVector>;
-using Impl::ResolvePreparedSoftwareBvhGraphResources;
+[[nodiscard]] FOUNDATION_INLINE PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(const GpuTaskGraph& graph, const PreparedMeshSwBvhBuildSpan builds, ScratchArena& scratch){
+    return Impl::ResolvePreparedSoftwareBvhGraphResources(scratch, graph, builds);
+}
 using RaySceneGraphReadsContext = EcsGraphicsMeshOpticsDetail::RaySceneGraphReadsContext;
 using Impl::ImportRayTracingSceneGraphReads;
 using EcsGraphicsMeshOpticsDetail::MakeZeroFloat34U;
@@ -1031,14 +1033,6 @@ void VerifyOutputLayer_MissingContributorInvalidTokenAndZeroGenerationCannotPubl
     EXPECT_EQ(contributor.acceptanceCount, 1u);
     PublishRecordingOutputLayer(contributor, 0u, consumerToken);
     EXPECT_EQ(contributor.acceptanceCount, 1u);
-}
-
-PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(
-    in GpuTaskGraph graph,
-    in PreparedMeshSwBvhBuildSpan builds,
-    mut ScratchArena scratch
-){
-    return ResolvePreparedSoftwareBvhGraphResources(graph, builds, scratch);
 }
 
 void VerifyPreparedSoftwareBvhGraphResources_MissingImportedBuildBuffersCannotPublishResources(){

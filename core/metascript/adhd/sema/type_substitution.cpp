@@ -19,12 +19,8 @@ TypeRef* TypeSubstitution::SubstituteAliasType(const TypeRef& origType, const Sp
     const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
     for(usize p = 0u; p < count; ++p){
         if(!templateParams[p].constValueType && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type){
-            if(origType.refMode != ParamPassingMode::None && templateArgs[p].type->refMode == ParamPassingMode::None){
-                TypeRef* withMode = AllocateAstNode<TypeRef>(arena);
-                *withMode = *templateArgs[p].type;
-                withMode->refMode = origType.refMode;
-                return withMode;
-            }
+            if(origType.refMode != ParamPassingMode::None && templateArgs[p].type->refMode == ParamPassingMode::None)
+                return CloneTypeRefWithMode(arena, *templateArgs[p].type, origType.refMode);
             return templateArgs[p].type;
         }
     }

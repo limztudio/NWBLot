@@ -41,7 +41,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<EditNavigationResult> resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight)override{
+    [[nodiscard]] virtual Expected<EditNavigationResult> resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight)noexcept override{
         const auto page = ValidateTextAreaNavigationInputs(model.textMode(), model.composition().active, direction, m_fontSize, viewportHeight, preferred);
         if(
             !current()

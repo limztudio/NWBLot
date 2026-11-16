@@ -46,6 +46,8 @@ if(NWB_BUILD_PIPELINE)
     nwb_target_adhd_sources(nwb_assets_mesh_cook
         NAMESPACE "NWB::Impl"
         SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/meshlet_triangle_indices.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/meshlet_vertex_attributes.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_candidates.adhd"

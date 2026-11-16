@@ -138,16 +138,16 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }
-            const auto descriptor = RayTracingDetail::RegisterHeapBuffer(heap, *buffers[i], Core::GpuDescriptorClass::StorageBuffer, true);
+            const auto descriptor = RegisterHeapBuffer(heap, *buffers[i], Core::GpuDescriptorClass::StorageBuffer, true);
             if(!descriptor){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }
             descriptors[i] = *descriptor;
         }
-        RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_overflowArgsHeapHandle);
+        RetireDescriptor(heap, state.m_crossingsHeapHandle);
+        RetireDescriptor(heap, state.m_overflowListHeapHandle);
+        RetireDescriptor(heap, state.m_overflowArgsHeapHandle);
         state.m_crossingsBuffer = Move(buffers[s_HwTransparentCrossingsBufferIndex]);
         state.m_overflowListBuffer = Move(buffers[s_HwTransparentOverflowListBufferIndex]);
         state.m_overflowArgsBuffer = Move(buffers[s_HwTransparentOverflowArgsBufferIndex]);
@@ -165,9 +165,9 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
 void HardwareTransparentShadowResources::releaseHardwareTransparentShadowResources(){
     auto& state = m_state;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
-    RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, state.m_overflowArgsHeapHandle);
+    RetireDescriptor(heap, state.m_crossingsHeapHandle);
+    RetireDescriptor(heap, state.m_overflowListHeapHandle);
+    RetireDescriptor(heap, state.m_overflowArgsHeapHandle);
     state = HardwareTransparentShadowState{};
 }
 

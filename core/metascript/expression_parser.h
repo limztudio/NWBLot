@@ -54,6 +54,7 @@ private:
     Value parsePrimary();
 
     Value parseListLiteral(TokenType::Enum closeToken);
+    Value parseListContinuation(Value&& firstElem, TokenType::Enum closeToken);
     Value parseBraceExpression();
     Value parseMapLiteralContinuation(Value&& firstKey);
 

@@ -255,7 +255,7 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
         return true;
     }
     u32 simdLanes = 0u;
-    if((SymbolTable::IsSimdStorageVectorType(typeName, simdLanes) || SymbolTable::IsUnalignedVectorType(typeName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
+    if(SymbolTable::IsSimdStorageOrUnalignedVectorType(typeName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
         AppendUnsignedDecimal(out, simdLanes);
@@ -369,7 +369,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
             out.append(")) return false; } }\r\n");
         }
     }
-    else if(u32 simdLanes = 0u; (SymbolTable::IsSimdStorageVectorType(elemName, simdLanes) || SymbolTable::IsUnalignedVectorType(elemName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
+    else if(u32 simdLanes = 0u; SymbolTable::IsSimdStorageOrUnalignedVectorType(elemName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append("{ ");
         EmitNwbListSizeContinueGuard(out, elemAccessor, simdLanes);
@@ -489,7 +489,7 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         emitKeyGuardClose();
         out.append(" } }\r\n");
     }
-    else if(u32 simdLanes = 0u; (SymbolTable::IsSimdStorageVectorType(valName, simdLanes) || SymbolTable::IsUnalignedVectorType(valName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
+    else if(u32 simdLanes = 0u; SymbolTable::IsSimdStorageOrUnalignedVectorType(valName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
@@ -610,56 +610,55 @@ void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const ClassDec
 void NwbReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, const Span<const FieldDecl* const> fields)const{
     using namespace __hidden_adhd_reflection_emitter_nwb;
 
+    const AssetTypeAnalyzer assetTypes(m_symbols);
     out.append("    template<typename NwbValue, typename DependencyCallback>\r\n");
     out.append("    [[nodiscard]] static b8 extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{\r\n");
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || !IsFieldReflected(*field) || !field->type || !AssetTypeAnalyzer(m_symbols).isAssetDependencyType(field->type))
+        ReflectedAssetDependencyField dep;
+        if(!field || !assetTypes.classifyReflectedAssetDependencyField(*field, dep))
             continue;
-        b8 isOptional = false;
-        MStringView effectiveScalarOrClassType;
-        const TypeRef* effectiveTypeRef = TypeResolver(m_symbols).unwrapOptionalFieldType(field->type, isOptional, effectiveScalarOrClassType);
 
-        if(IsAssetHandleType(effectiveScalarOrClassType)){
+        switch(dep.kind){
+        case AssetDependencyFieldKind::AssetHandle:{
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
+            break;
         }
-        else if(m_symbols.findClass(effectiveScalarOrClassType)){
+        case AssetDependencyFieldKind::Class:{
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isMap() && !");
-            EmitCppTypeOrBaseName(out, effectiveTypeRef, effectiveScalarOrClassType, m_typeEmitter);
+            EmitCppTypeOrBaseName(out, dep.effectiveType, dep.effectiveTypeName, m_typeEmitter);
             out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
+            break;
         }
-        else if(IsReflectedLinearContainerType(effectiveScalarOrClassType) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){
-            const TypeRef* elemTypeRef = m_symbols.unwrapTypeAlias(effectiveTypeRef->templateArgs[0].type);
-            const MStringView elemName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
-            if(IsAssetHandleType(elemName) || m_symbols.findClass(elemName)){
-                EmitNwbFieldFindPrefix(out, field->name);
-                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ ");
-                EmitNwbContainerElementDependencyExtract(out, elemTypeRef, elemName, "__f->asList()[__i]", m_typeEmitter);
-                out.append(" } }\r\n");
-            }
+        case AssetDependencyFieldKind::LinearContainer:{
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ ");
+            EmitNwbContainerElementDependencyExtract(out, dep.elementType, dep.elementTypeName, "__f->asList()[__i]", m_typeEmitter);
+            out.append(" } }\r\n");
+            break;
         }
-        else if(IsReflectedMapContainerType(effectiveScalarOrClassType) && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type){
-            const TypeRef* valTypeRef = m_symbols.unwrapTypeAlias(effectiveTypeRef->templateArgs[1].type);
-            const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
-            if(IsAssetHandleType(valName) || m_symbols.findClass(valName)){
-                EmitNwbFieldFindPrefix(out, field->name);
-                out.append("__f->isMap()){ for([[maybe_unused]] const auto& [__k, __v] : __f->asMap()){ ");
-                if(effectiveTypeRef->templateArgs[0].type){
-                    const MStringView keyName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
-                    if(RequiresNwbNameAdmission(keyName))
-                        out.append("if(!::Name::FromText(AStringView(__k.data(), __k.size()))) continue; ");
-                    else if(m_symbols.findEnum(keyName)){
-                        out.append("if(!");
-                        EmitQualifiedTypeName(out, m_typeEmitter, keyName);
-                        out.append("::parseNamedEnum(__k)) continue; ");
-                    }
+        case AssetDependencyFieldKind::MapContainer:{
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isMap()){ for([[maybe_unused]] const auto& [__k, __v] : __f->asMap()){ ");
+            if(dep.effectiveType && !dep.effectiveType->templateArgs.empty() && dep.effectiveType->templateArgs[0].type){
+                const MStringView keyName = m_symbols.resolveBaseTypeName(dep.effectiveType->templateArgs[0].type->name);
+                if(RequiresNwbNameAdmission(keyName))
+                    out.append("if(!::Name::FromText(AStringView(__k.data(), __k.size()))) continue; ");
+                else if(m_symbols.findEnum(keyName)){
+                    out.append("if(!");
+                    EmitQualifiedTypeName(out, m_typeEmitter, keyName);
+                    out.append("::parseNamedEnum(__k)) continue; ");
                 }
-                EmitNwbContainerElementDependencyExtract(out, valTypeRef, valName, "__v", m_typeEmitter);
-                out.append(" } }\r\n");
             }
+            EmitNwbContainerElementDependencyExtract(out, dep.elementType, dep.elementTypeName, "__v", m_typeEmitter);
+            out.append(" } }\r\n");
+            break;
+        }
+        default:
+            break;
         }
     }
     out.append("        return true;\r\n");

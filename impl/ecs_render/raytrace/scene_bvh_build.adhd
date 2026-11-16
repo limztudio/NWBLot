@@ -15,8 +15,8 @@ u32 BuildSceneBvhNode(
     in u32 hi,
     in Span<SceneBvhPrimitiveCalculation> primitiveBounds,
     in Span<u32> instanceLeafCost,
-    mut MutableSceneBvhIndexSpan indices,
-    mut ScratchSceneBvhNodeCalculationVector nodes
+    mut Vector<u32> indices,
+    mut Vector<SceneBvhNodeCalculation> nodes
 ){
     const u32 nodeIndex = cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation());
@@ -54,10 +54,10 @@ u32 BuildSceneBvhNode(
 b8 BuildAndPackSceneBvhNodesInto(
     in Span<SceneSwBvhInstanceGpu> instances,
     in Span<SceneBvhPrimitiveCalculation> instanceBvhPrimitives,
-    mut ScratchSceneBvhIndexVector indices,
-    mut ScratchSceneBvhIndexVector instanceLeafCost,
-    mut ScratchSceneBvhNodeCalculationVector buildNodes,
-    mut ScratchSceneBvhNodeGpuVector outNodes
+    mut Vector<u32> indices,
+    mut Vector<u32> instanceLeafCost,
+    mut Vector<SceneBvhNodeCalculation> buildNodes,
+    mut Vector<NwbBvhNodeGpu> outNodes
 ){
     const u32 instanceCount = cast<u32>(instances.size());
     const usize requiredNodeCount = cast<usize>(instanceCount) * 2u - 1u;
@@ -74,8 +74,7 @@ b8 BuildAndPackSceneBvhNodesInto(
     for(u32 i = 0u; i < instanceCount; ++i)
         instanceLeafCost.push_back(instances[cast<usize>(i)].primitiveCount);
 
-    MutableSceneBvhIndexSpan indexSpan(indices.data(), indices.size());
-    BuildSceneBvhNode(0u, instanceCount, instanceBvhPrimitives, instanceLeafCost, indexSpan, buildNodes);
+    BuildSceneBvhNode(0u, instanceCount, instanceBvhPrimitives, instanceLeafCost, indices, buildNodes);
     assert(buildNodes.size() == requiredNodeCount);
 
     outNodes.clear();

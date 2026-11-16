@@ -6,6 +6,8 @@
 
 
 #include "const_eval.h"
+#include "../ast/keyword_semantics.h"
+#include "../ast/builtin_type_semantics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,6 +92,38 @@ namespace BuiltinFunctionArgRule{
         ruleName,
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
+    };
+};
+
+namespace SpecialFunctionKind{
+    enum Enum : u8{
+        None = 0u,
+        Lerp,
+        Rsqrt,
+        IsFinite,
+        Mul,
+        Transpose,
+    };
+};
+
+namespace SimdLaneZeroRuleKind{
+    enum Enum : u8{
+        None = 0u,
+        Preserve2Or3LanesFromArg0,
+        AtLeast3LanesFromTwoArgs,
+        UnitZeroClampFromArg0,
+    };
+};
+
+namespace SpecialMethodKind{
+    enum Enum : u8{
+        None = 0u,
+        Substr,
+        UnwrapValue,
+        Deref,
+        EcsEmplaceSystem,
+        EcsEmplaceComponent,
+        AssetLoadBinary,
     };
 };
 
@@ -315,6 +349,37 @@ struct BuiltinGlobalConstantInfo{
     MStringView requiredHeader;
 };
 
+struct BuiltinFormatArgWrapInfo{
+    u8 wrapKindId;
+    b8 wrapInDiagnosticFormat;
+    MStringView cppPrefix;
+    MStringView cppSuffix;
+};
+
+struct BuiltinContainerArgConstraintInfo{
+    BuiltinFunctionArgRule::Enum rule;
+    MStringView elementTypeName;
+    usize templateArgCount;
+    b8 isExactElementCheck;
+    b8 checksContiguousSequence;
+    MStringView countText;
+};
+
+struct BuiltinSpecialFunctionInfo{
+    MStringView adhdName;
+    SpecialFunctionKind::Enum kind;
+};
+
+struct BuiltinSimdLaneZeroRuleInfo{
+    MStringView adhdName;
+    SimdLaneZeroRuleKind::Enum ruleKind;
+};
+
+struct BuiltinSpecialMethodInfo{
+    MStringView methodName;
+    SpecialMethodKind::Enum kind;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -328,7 +393,7 @@ struct BuiltinGlobalConstantInfo{
 }
 
 [[nodiscard]] constexpr b8 IsEnumEntryReflected(const EnumEntry& entry)noexcept{
-    return entry.name != "kCount";
+    return KeywordSemantics::IsEnumSentryReflected(entry.name);
 }
 
 [[nodiscard]] const BuiltinObjectTypeInfo* FindBuiltinObjectType(MStringView name)noexcept;
@@ -373,6 +438,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsNonThreadSafeContainer(MStringView typeName)noexcept;
 [[nodiscard]] b8 IsFixedArrayContainerType(MStringView name)noexcept;
 [[nodiscard]] b8 IsOptionalContainerType(MStringView name)noexcept;
+[[nodiscard]] b8 IsOptionalOrExpectedGenericType(MStringView name)noexcept;
 [[nodiscard]] b8 IsAtomicGenericType(MStringView name)noexcept;
 [[nodiscard]] b8 IsAssetHandleType(MStringView name)noexcept;
 [[nodiscard]] b8 CheckSwizzlePattern(MStringView text, u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept;
@@ -384,9 +450,24 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsReflectedLinearContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsNonCopyableBaseInterfaceName(MStringView name)noexcept;
+[[nodiscard]] MStringView FindNonCopyableBaseInterfaceCppName(MStringView name)noexcept;
 [[nodiscard]] b8 IsMoveOnlyTypeName(MStringView name)noexcept;
 [[nodiscard]] b8 HasBuiltinSimdRegisterField(MStringView typeName)noexcept;
 [[nodiscard]] b8 IsOverAlignedBuiltinType(MStringView typeName)noexcept;
+[[nodiscard]] b8 IsStringBorrowViewType(MStringView name)noexcept;
+[[nodiscard]] b8 IsArenaObjectType(MStringView name)noexcept;
+[[nodiscard]] b8 AllowsInterfaceTypeArg(MStringView name)noexcept;
+[[nodiscard]] b8 IsSmartPointerDerefType(MStringView name)noexcept;
+[[nodiscard]] b8 IsSubsystemVectorContainerType(MStringView name)noexcept;
+[[nodiscard]] b8 IsLiteralConstObjectType(MStringView name)noexcept;
+[[nodiscard]] const BuiltinFormatArgWrapInfo* FindFormatArgWrapInfo(u8 wrapKindId)noexcept;
+[[nodiscard]] MStringView FindFloatSimdRegisterTypeName(b8 isDouble)noexcept;
+[[nodiscard]] MStringView FindIntSimdStorageVectorTypeName(b8 isDouble, b8 isSigned)noexcept;
+[[nodiscard]] const BuiltinContainerArgConstraintInfo* FindContainerArgConstraint(BuiltinFunctionArgRule::Enum rule)noexcept;
+[[nodiscard]] b8 IsNumericScalarArgRule(BuiltinFunctionArgRule::Enum rule)noexcept;
+[[nodiscard]] SpecialFunctionKind::Enum FindSpecialFunctionKind(MStringView name)noexcept;
+[[nodiscard]] SimdLaneZeroRuleKind::Enum FindSimdLaneZeroRule(MStringView name)noexcept;
+[[nodiscard]] SpecialMethodKind::Enum FindSpecialMethodSemantics(MStringView methodName)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

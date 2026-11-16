@@ -125,7 +125,7 @@ namespace __hidden_simd_lane_zero_analysis{
         if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(expr, *symbols))
             return matchesScalar(*splatScalar);
     }
-    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
+    const MStringView expectedSimd = FindFloatSimdRegisterTypeName(isDouble);
     Span<const Expr* const> ctorArgs;
     if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
         const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
@@ -155,7 +155,7 @@ namespace __hidden_simd_lane_zero_analysis{
 )noexcept{
     if(depth > 6u)
         return 4u;
-    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
+    const MStringView expectedSimd = FindFloatSimdRegisterTypeName(isDouble);
     if(expr.resolvedSimdType != expectedSimd && !(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier && (symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text) == expectedSimd))
         return 4u;
 
@@ -182,21 +182,36 @@ namespace __hidden_simd_lane_zero_analysis{
         if(baseCallee == expectedSimd)
             return InferCtorArgsZeroedAboveLane(expr.arguments, isDouble, symbols, localVarDecls, depth);
         if(expr.isBuiltinCall){
-            if(callee == "Normalize" && expr.arguments.size() == 1u && expr.arguments[0]){
-                const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], symbols);
-                if(effLanes >= 2u && effLanes <= 3u)
-                    return effLanes;
-                return 4u;
+            switch(FindSimdLaneZeroRule(callee)){
+            case SimdLaneZeroRuleKind::Preserve2Or3LanesFromArg0:{
+                if(expr.arguments.size() == 1u && expr.arguments[0]){
+                    const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], symbols);
+                    if(effLanes >= 2u && effLanes <= 3u)
+                        return effLanes;
+                    return 4u;
+                }
+                break;
             }
-            if(callee == "unfoldOctahedralAxis" && expr.arguments.size() == 1u && expr.arguments[0])
-                return 3u;
-            if(callee == "Cross" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                const u32 eff0 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], symbols);
-                const u32 eff1 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[1], symbols);
-                const u32 effLanes = eff0 > eff1 ? eff0 : eff1;
-                if(effLanes >= 3u)
-                    return 3u;
-                return 4u;
+            case SimdLaneZeroRuleKind::AtLeast3LanesFromTwoArgs:{
+                if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    const u32 eff0 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], symbols);
+                    const u32 eff1 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[1], symbols);
+                    const u32 effLanes = eff0 > eff1 ? eff0 : eff1;
+                    if(effLanes >= 3u)
+                        return 3u;
+                    return 4u;
+                }
+                break;
+            }
+            case SimdLaneZeroRuleKind::UnitZeroClampFromArg0:{
+                if(expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
+                    if(SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*expr.arguments[1], isDouble, symbols) && SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[2], isDouble, symbols))
+                        return InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
+                }
+                break;
+            }
+            case SimdLaneZeroRuleKind::None:
+                break;
             }
             if(IsSimdZeroPreservingCall(callee)){
                 if(expr.arguments.size() == 1u && expr.arguments[0])
@@ -206,10 +221,6 @@ namespace __hidden_simd_lane_zero_analysis{
                     const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.arguments[1], isDouble, symbols, localVarDecls, depth + 1u);
                     return z0 > z1 ? z0 : z1;
                 }
-            }
-            if(callee == "Clamp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
-                if(SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*expr.arguments[1], isDouble, symbols) && SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[2], isDouble, symbols))
-                    return InferSimdRegZeroedAboveLaneImpl(*expr.arguments[0], isDouble, symbols, localVarDecls, depth + 1u);
             }
         }
         return 4u;

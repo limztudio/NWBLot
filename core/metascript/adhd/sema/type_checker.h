@@ -54,9 +54,11 @@ class TypeChecker final{
     friend class ReturnStatementChecker;
 
 private:
-    [[nodiscard]] static const ScopedVarInfo* FindScopedVar(Span<const ScopedVarInfo> scope, MStringView name)noexcept;
+    [[nodiscard]] static const ScopedVarInfo* FindScopedVar(Span<const ScopedVarInfo> scope, MStringView name, usize* outIndex = nullptr)noexcept;
     [[nodiscard]] static const TemplateParamDecl* FindTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, MStringView name)noexcept;
     [[nodiscard]] static b8 StatementsContainReturnOrNative(Span<const Stmt* const> stmts)noexcept;
+    [[nodiscard]] static const Expr* UnwrapMemberOrIndexRoot(const Expr* expr)noexcept;
+    [[nodiscard]] static b8 DoesSynthesizedClassCtorPassArena(const ClassDecl& ctorCls, MStringView baseClassName, usize argCount, MStringView firstArgBaseType)noexcept;
 
 
 public:
@@ -100,6 +102,25 @@ private:
     void reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{ ReportAdhdDiagnostic(m_arena, errors, span, message); }
     void recordRequiredHeader(MStringView header)noexcept;
     void recordBuiltinTypeHeader(MStringView typeName)noexcept;
+    void recordBuiltinReturnTypeHeaders(MStringView returnTypeName, MStringView returnTypeArgName, MStringView returnNestedTypeArgName, MStringView returnErrorTypeName)noexcept;
+    void markScratchArenaUsed(MethodDecl& method)noexcept;
+    [[nodiscard]] b8 isUnshadowedTypeScopeAccess(Span<const ScopedVarInfo> scope, MStringView scopeName)const noexcept;
+    [[nodiscard]] b8 isOwnedStackLocalVar(const ScopedVarInfo& local)const noexcept;
+    [[nodiscard]] b8 isTaskLocalIdentifierExpr(const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    void markSimdResultWrapperAdaptation(const TypeRef* targetTypeRef, Expr& argExpr)const noexcept;
+    void markFormatArgWrap(const ClassDecl* ownerClass, const MethodDecl* method, Expr& arg, Span<const ScopedVarInfo> scope, b8 requireDiagnosticWrapFlag)const noexcept;
+    void maybeAdaptInitToTChar(const ClassDecl* ownerClass, const MethodDecl& method, Span<const ScopedVarInfo> scope, MStringView baseTypeName, Expr* initExpr, Span<Expr* const> ctorArgs)const noexcept;
+    void deduceGlobalConstantAutoType(Stmt& gc, MethodDecl& dummyCtx, Span<const ScopedVarInfo> emptyScope)const noexcept;
+    [[nodiscard]] b8 checkBuiltinVectorOrMatrixCtorCall(
+        const ClassDecl* ownerClass,
+        const MethodDecl& method,
+        MStringView baseCallee,
+        Span<Expr* const> arguments,
+        Span<const ScopedVarInfo> scope,
+        SourceSpan errorSpan,
+        MVector<ParseError>& errors,
+        b8 checkSingleValueMaxArity
+    )const;
 
     [[nodiscard]] b8 checkTemplateParamBounds(Span<const TemplateParamDecl> params, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors);
     [[nodiscard]] b8 interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;

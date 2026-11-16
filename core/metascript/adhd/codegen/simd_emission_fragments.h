@@ -17,12 +17,25 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SourceEmitter;
+struct Expr;
+
+
 class SimdEmissionFragments final{
 public:
     static void EmitSimdMatrixBinaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix);
     static void EmitSimdMatrixUnaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix, MStringView fnSuffix);
     static void EmitSimdIntTwosComplementNegatePrefix(MString& out, b8 isDouble);
     static void EmitSimdIntTwosComplementNegateSuffix(MString& out, b8 isDouble);
+    static void EmitSimdVecWithReplacedWLane(
+        const SourceEmitter& emitter,
+        MString& out,
+        MStringView simdType,
+        const Expr& baseVec,
+        MStringView explicitLoadFn,
+        u32 baseZeroedAbove,
+        const Expr& wArg
+    );
 };
 
 

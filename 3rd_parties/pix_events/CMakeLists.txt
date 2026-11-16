@@ -4,6 +4,7 @@
 # but RGD's core parser includes <PixEventDecoder.h> at compile time, so the lib must exist to link.
 cmake_minimum_required(VERSION 3.10)
 project(pix_events_decoder)
+include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
 
 if(WIN32)
     add_library(pix_events_decoder STATIC

@@ -255,21 +255,21 @@ void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl
 }
 
 void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<const FieldDecl* const> fields)const{
+    const AssetTypeAnalyzer assetTypes(m_symbols);
     out.append("    template<typename DependencyCallback>\r\n");
     out.append("    void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const noexcept{\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || !IsFieldReflected(*field) || !field->type || !AssetTypeAnalyzer(m_symbols).isAssetDependencyType(field->type))
+        ReflectedAssetDependencyField dep;
+        if(!field || !assetTypes.classifyReflectedAssetDependencyField(*field, dep))
             continue;
-        b8 isOptional = false;
-        MStringView tname;
-        const TypeRef* effectiveTypeRef = TypeResolver(m_symbols).unwrapOptionalFieldType(field->type, isOptional, tname);
-        const MStringView memberDotOrArrow = isOptional ? "->" : ".";
-        const MStringView containerDerefPrefix = isOptional ? "*this->" : "this->";
+        const MStringView memberDotOrArrow = dep.isOptional ? "->" : ".";
+        const MStringView containerDerefPrefix = dep.isOptional ? "*this->" : "this->";
 
-        if(IsAssetHandleType(tname)){
+        switch(dep.kind){
+        case AssetDependencyFieldKind::AssetHandle:{
             out.append("        if(this->");
             out.append(field->name.data(), field->name.size());
-            if(isOptional){
+            if(dep.isOptional){
                 out.append(".has_value() && this->");
                 out.append(field->name.data(), field->name.size());
             }
@@ -278,9 +278,10 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
             out.append(field->name.data(), field->name.size());
             out.append(memberDotOrArrow.data(), memberDotOrArrow.size());
             out.append("virtualPath);\r\n");
+            break;
         }
-        else if(m_symbols.findClass(tname)){
-            if(isOptional){
+        case AssetDependencyFieldKind::Class:{
+            if(dep.isOptional){
                 out.append("        if(this->");
                 out.append(field->name.data(), field->name.size());
                 out.append(".has_value()) this->");
@@ -291,16 +292,22 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
             out.append(field->name.data(), field->name.size());
             out.append(memberDotOrArrow.data(), memberDotOrArrow.size());
             out.append("forEachAssetDependency(callback);\r\n");
+            break;
         }
-        else if(IsReflectedLinearContainerType(tname) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){
-            const MStringView elemName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
-            if(IsAssetHandleType(elemName) || m_symbols.findClass(elemName))
-                __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(out, field->name, elemName, containerDerefPrefix, isOptional, false);
+        case AssetDependencyFieldKind::LinearContainer:
+        case AssetDependencyFieldKind::MapContainer:{
+            __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(
+                out,
+                field->name,
+                dep.elementTypeName,
+                containerDerefPrefix,
+                dep.isOptional,
+                dep.kind == AssetDependencyFieldKind::MapContainer
+            );
+            break;
         }
-        else if(IsReflectedMapContainerType(tname) && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type){
-            const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
-            if(IsAssetHandleType(valName) || m_symbols.findClass(valName))
-                __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(out, field->name, valName, containerDerefPrefix, isOptional, true);
+        default:
+            break;
         }
     }
     out.append("    }\r\n");

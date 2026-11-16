@@ -14,6 +14,54 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_callable_declaration_linker{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 TemplateParamListsMatch(
+    MetaArena& arena,
+    MVector<ParseError>& errors,
+    const TypeComparator& comparator,
+    const Span<const TemplateParamDecl> expectedParams,
+    const Span<const TemplateParamDecl> actualParams,
+    const SourceSpan errorSpan,
+    const MStringView nameOrConstMismatchMsg,
+    const MStringView constraintMismatchMsg,
+    const b8 reportNameSeparately,
+    const MStringView nameMismatchMsg
+){
+    const usize count = expectedParams.size() < actualParams.size() ? expectedParams.size() : actualParams.size();
+    for(usize tIdx = 0u; tIdx < count; ++tIdx){
+        const TemplateParamDecl& expectedTp = expectedParams[tIdx];
+        const TemplateParamDecl& actualTp = actualParams[tIdx];
+        if(reportNameSeparately && expectedTp.name != actualTp.name){
+            ReportAdhdDiagnostic(arena, errors, errorSpan, nameMismatchMsg);
+            return false;
+        }
+        if(!comparator.doTemplateParamHeaderMatch(expectedTp, actualTp, !reportNameSeparately)){
+            ReportAdhdDiagnostic(arena, errors, errorSpan, nameOrConstMismatchMsg);
+            return false;
+        }
+        if(!comparator.doTemplateParamBoundsMatch(expectedTp, actualTp)){
+            ReportAdhdDiagnostic(arena, errors, errorSpan, constraintMismatchMsg);
+            return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& errors)const{
     b8 ok = true;
 
@@ -38,33 +86,24 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
                 ownerTemplateNamesMatch = false;
                 break;
             }
-            if(tIdx < ool->ownerTemplateParamDecls.size()){
-                const TemplateParamDecl& clsTp = cls->templateParams[tIdx];
-                const TemplateParamDecl& oolOwnerTp = ool->ownerTemplateParamDecls[tIdx];
-                if(
-                    (clsTp.constValueType != nullptr) != (oolOwnerTp.constValueType != nullptr)
-                    || (clsTp.constValueType && oolOwnerTp.constValueType && !m_comparator.areEquivalent(clsTp.constValueType, oolOwnerTp.constValueType))
-                    || clsTp.interfaceBounds.size() != oolOwnerTp.interfaceBounds.size()
-                ){
-                    ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method owner class template parameter constraints do not match class declaration");
-                    ok = false;
-                    ownerTemplateNamesMatch = false;
-                    break;
-                }
-                for(usize bIdx = 0u; bIdx < clsTp.interfaceBounds.size(); ++bIdx){
-                    if(!m_comparator.areEquivalent(clsTp.interfaceBounds[bIdx], oolOwnerTp.interfaceBounds[bIdx])){
-                        ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method owner class template parameter constraints do not match class declaration");
-                        ok = false;
-                        ownerTemplateNamesMatch = false;
-                        break;
-                    }
-                }
-                if(!ownerTemplateNamesMatch)
-                    break;
-            }
         }
         if(!ownerTemplateNamesMatch)
             continue;
+        if(!__hidden_adhd_callable_declaration_linker::TemplateParamListsMatch(
+            m_arena,
+            errors,
+            m_comparator,
+            cls->templateParams,
+            ool->ownerTemplateParamDecls,
+            ool->span,
+            "out-of-line method owner class template parameter constraints do not match class declaration",
+            "out-of-line method owner class template parameter constraints do not match class declaration",
+            false,
+            {}
+        )){
+            ok = false;
+            continue;
+        }
 
         MethodDecl* matched = nullptr;
         MethodDecl* paramMatched = nullptr;
@@ -93,39 +132,21 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
             ok = false;
             continue;
         }
-        b8 methodTemplateParamsMatch = true;
-        for(usize tIdx = 0u; tIdx < matched->templateParams.size(); ++tIdx){
-            const TemplateParamDecl& declTp = matched->templateParams[tIdx];
-            const TemplateParamDecl& oolTp = ool->templateParams[tIdx];
-            if(declTp.name != oolTp.name){
-                ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method template parameter name does not match class declaration");
-                ok = false;
-                methodTemplateParamsMatch = false;
-                break;
-            }
-            if(
-                (declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr)
-                || (declTp.constValueType && oolTp.constValueType && !m_comparator.areEquivalent(declTp.constValueType, oolTp.constValueType))
-                || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size()
-            ){
-                ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
-                ok = false;
-                methodTemplateParamsMatch = false;
-                break;
-            }
-            for(usize bIdx = 0u; bIdx < declTp.interfaceBounds.size(); ++bIdx){
-                if(!m_comparator.areEquivalent(declTp.interfaceBounds[bIdx], oolTp.interfaceBounds[bIdx])){
-                    ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
-                    ok = false;
-                    methodTemplateParamsMatch = false;
-                    break;
-                }
-            }
-            if(!methodTemplateParamsMatch)
-                break;
-        }
-        if(!methodTemplateParamsMatch)
+        if(!__hidden_adhd_callable_declaration_linker::TemplateParamListsMatch(
+            m_arena,
+            errors,
+            m_comparator,
+            matched->templateParams,
+            ool->templateParams,
+            ool->span,
+            "out-of-line method template parameter constraints do not match class declaration",
+            "out-of-line method template parameter constraints do not match class declaration",
+            true,
+            "out-of-line method template parameter name does not match class declaration"
+        )){
+            ok = false;
             continue;
+        }
 
         if(matched->isConst != ool->isConst){
             ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method 'const' qualifier does not match class declaration");
@@ -191,34 +212,21 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
                 continue;
             if(!m_comparator.doParamListsMatch(prev->params, fn->params))
                 continue;
-            b8 fnTemplateParamsMatch = true;
-            for(usize tIdx = 0u; tIdx < prev->templateParams.size(); ++tIdx){
-                const TemplateParamDecl& prevTp = prev->templateParams[tIdx];
-                const TemplateParamDecl& curTp = fn->templateParams[tIdx];
-                if(
-                    prevTp.name != curTp.name
-                    || (prevTp.constValueType != nullptr) != (curTp.constValueType != nullptr)
-                    || (prevTp.constValueType && curTp.constValueType && !m_comparator.areEquivalent(prevTp.constValueType, curTp.constValueType))
-                    || prevTp.interfaceBounds.size() != curTp.interfaceBounds.size()
-                ){
-                    ReportAdhdDiagnostic(m_arena, errors, fn->span, "free function template parameter list does not match previous declaration");
-                    ok = false;
-                    fnTemplateParamsMatch = false;
-                    break;
-                }
-                for(usize bIdx = 0u; bIdx < prevTp.interfaceBounds.size(); ++bIdx){
-                    if(!m_comparator.areEquivalent(prevTp.interfaceBounds[bIdx], curTp.interfaceBounds[bIdx])){
-                        ReportAdhdDiagnostic(m_arena, errors, fn->span, "free function template parameter constraints do not match previous declaration");
-                        ok = false;
-                        fnTemplateParamsMatch = false;
-                        break;
-                    }
-                }
-                if(!fnTemplateParamsMatch)
-                    break;
-            }
-            if(!fnTemplateParamsMatch)
+            if(!__hidden_adhd_callable_declaration_linker::TemplateParamListsMatch(
+                m_arena,
+                errors,
+                m_comparator,
+                prev->templateParams,
+                fn->templateParams,
+                fn->span,
+                "free function template parameter list does not match previous declaration",
+                "free function template parameter constraints do not match previous declaration",
+                false,
+                {}
+            )){
+                ok = false;
                 continue;
+            }
             if(!m_comparator.areEquivalent(prev->returnType, fn->returnType)){
                 ReportAdhdDiagnostic(m_arena, errors, fn->span, "conflicting return type for free function declaration");
                 ok = false;

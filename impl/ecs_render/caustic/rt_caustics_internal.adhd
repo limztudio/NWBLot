@@ -35,11 +35,6 @@ class RendererShaderSystem;
 struct DeferredFrameTargets;
 struct RtCausticState;
 
-FOUNDATION_INLINE void AssertCausticEmissionTargetStorageDescriptor(const Core::GpuDescriptorHandle& handle)noexcept{
-    (void)handle;
-    FOUNDATION_ASSERT(handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
-}
-
 [[nodiscard]] b8 EnsureCausticEmissionTargetBufferStorage(
     Core::GraphicsRuntime& graphics,
     usize targetCount,
@@ -47,8 +42,6 @@ FOUNDATION_INLINE void AssertCausticEmissionTargetStorageDescriptor(const Core::
     Core::GpuDescriptorHandle& inoutHeapHandle,
     usize& inoutCapacity
 );
-
-void FreeCausticEmissionTargetDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& heapHandle);
 
 // Shared prepare plus five-wavelet plus upsample plus timing-close resolve declaration.
 using CausticsResolveStageUses = Span<const Core::GpuTaskResourceUse>;

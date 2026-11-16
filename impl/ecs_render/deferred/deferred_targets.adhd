@@ -531,7 +531,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     }
 
     if(
-        !RendererDescriptorRegisterDetail::AssignSampledTexture(
+        !AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage2DArray,
             history.shadowVisibility,
@@ -540,7 +540,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
             Core::TextureDimension::Texture2DArray,
             history.shadowVisibilityDescriptor
         )
-        || !RendererDescriptorRegisterDetail::AssignSampledTexture(
+        || !AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage,
             history.causticIrradiance,
@@ -549,7 +549,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
             Core::TextureDimension::Texture2D,
             history.causticIrradianceDescriptor
         )
-        || !RendererDescriptorRegisterDetail::AssignSampledTexture(
+        || !AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage,
             history.surfelIrradiance,
@@ -590,7 +590,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         return false;
     }
 
-    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, history.slotsBuffer);
+    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RegisterConstantBuffer(heap, history.slotsBuffer);
     history.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
     if(!slotsBufferDescriptor){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));

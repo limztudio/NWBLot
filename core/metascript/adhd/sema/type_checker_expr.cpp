@@ -115,20 +115,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = m_symbols.findClassMethod(*ownerClass, expr.text);
-        b8 isInheritedBuiltinMethod = ((!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty())
-            && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr)
-            || (!ownerClass->systemTypeName.empty() && FindBuiltinReceiverMethod("ISystem", expr.text) != nullptr);
-        if(!isInheritedBuiltinMethod){
-            for(const TypeRef* iface : ownerClass->implementedInterfaces){
-                if(!iface)
-                    continue;
-                const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
-                if(!m_symbols.findInterface(ifaceName) && FindBuiltinReceiverMethod(ifaceName, expr.text) != nullptr){
-                    isInheritedBuiltinMethod = true;
-                    break;
-                }
-            }
-        }
+        const b8 isInheritedBuiltinMethod = m_symbols.findInheritedBuiltinReceiverMethod(ownerClass, nullptr, expr.text) != nullptr;
         if(!field && !memberMethod && !isInheritedBuiltinMethod){
             reportError(errors, expr.span, "unknown member on 'this'");
             ok = false;
@@ -164,14 +151,14 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             ok = false;
         }
         if(!expr.scopeChain.empty()){
-            if(expr.text == "this"){
+            if(KeywordSemantics::IsThisKeyword(expr.text)){
                 if(!validateThisAccess(ownerClass, expr.span, scope, errors))
                     ok = false;
             }
             else if(expr.lhs && !checkExpr(ownerClass, scope, false, method, *expr.lhs, errors)){
                 ok = false;
             }
-            const b8 hadVarOrMemberLhs = (expr.text == "this") || (expr.lhs != nullptr);
+            const b8 hadVarOrMemberLhs = KeywordSemantics::IsThisKeyword(expr.text) || (expr.lhs != nullptr);
             const ClassDecl* accessedCls = nullptr;
             const FieldDecl* accessedField = nullptr;
             const MStringView resolvedEnumName = resolveScopeAccessEnumTypeName(ownerClass, &method, expr, scope, &accessedCls, &accessedField);
@@ -206,8 +193,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     }
                     else if(!enumDecl->cppExportName.empty()){
                         MStringView enumScope = enumDecl->cppExportName;
-                        if(!enumDecl->isDirectCppEnum && enumScope.size() > 6u && (enumScope.ends_with("::Enum") || enumScope.ends_with("::Flag")))
-                            enumScope.remove_suffix(6u);
+                        if(!enumDecl->isDirectCppEnum)
+                            enumScope = ContractSemantics::StripWrappedNwbEnumSuffix(enumScope);
                         expr.resolvedCppExportName = JoinScopedCppName(m_arena, enumScope, entryName);
                     }
                 }
@@ -237,8 +224,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             else if(
                 !hadVarOrMemberLhs
                 && expr.scopeChain.size() == 2u
-                && FindScopedVar(scope, expr.scopeChain[0]) == nullptr
-                && m_symbols.findGlobalConstant(expr.scopeChain[0]) == nullptr
+                && isUnshadowedTypeScopeAccess(scope, expr.scopeChain[0])
                 && !m_symbols.hasTypeSymbol(expr.scopeChain[0])
                 && FindBuiltinScopedConstant(expr.scopeChain[0], expr.scopeChain[1]) != nullptr
             ){
@@ -251,8 +237,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             else if(
                 !hadVarOrMemberLhs
                 && expr.scopeChain.size() == 2u
-                && FindScopedVar(scope, expr.scopeChain[0]) == nullptr
-                && m_symbols.findGlobalConstant(expr.scopeChain[0]) == nullptr
+                && isUnshadowedTypeScopeAccess(scope, expr.scopeChain[0])
                 && !m_symbols.hasTypeSymbol(expr.scopeChain[0])
                 && FindBuiltinScopedFunction(expr.scopeChain[0], expr.scopeChain[1]) != nullptr
             ){
@@ -261,27 +246,14 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 recordRequiredHeader(scopedFn->requiredHeader);
             }
             else if(
-                const ClassDecl* scopedCls = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u)
-                    ? m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))
-                    : nullptr;
-                scopedCls && (
-                    (!scopedCls->assetTypeName.empty() && (expr.scopeChain[1] == "AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeText"))
-                    || (!scopedCls->systemTypeName.empty() && (expr.scopeChain[1] == "SystemTypeName" || expr.scopeChain[1] == "s_SystemTypeName" || expr.scopeChain[1] == "s_SystemTypeText"))
-                    || (!scopedCls->componentTypeName.empty() && (expr.scopeChain[1] == "ComponentTypeName" || expr.scopeChain[1] == "s_ComponentTypeName" || expr.scopeChain[1] == "s_ComponentTypeText"))
-                )
+                !hadVarOrMemberLhs
+                && expr.scopeChain.size() == 2u
+                && !m_symbols.resolveRoleScopeMemberType(expr.scopeChain[0], expr.scopeChain[1], true).empty()
             ){
                 expr.resolvedCppNamespace = m_symbols.findTypeNamespace(expr.scopeChain[0]);
             }
             else if(
-                const InterfaceDecl* scopedIface = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u)
-                    ? m_symbols.findInterface(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))
-                    : nullptr;
-                scopedIface && !scopedIface->assetTypeName.empty() && (expr.scopeChain[1] == "AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeText")
-            ){
-                expr.resolvedCppNamespace = m_symbols.findTypeNamespace(expr.scopeChain[0]);
-            }
-            else if(
-                const ClassDecl* staticCls = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u && !FindScopedVar(scope, expr.scopeChain[0]) && !m_symbols.findGlobalConstant(expr.scopeChain[0]))
+                const ClassDecl* staticCls = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u && isUnshadowedTypeScopeAccess(scope, expr.scopeChain[0]))
                     ? m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))
                     : nullptr;
                 staticCls && (
@@ -309,8 +281,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 !m_hasTopLevelNativeBlocks
                 || hadVarOrMemberLhs
                 || expr.scopeChain.size() != 2u
-                || FindScopedVar(scope, expr.scopeChain[0]) != nullptr
-                || m_symbols.findGlobalConstant(expr.scopeChain[0]) != nullptr
+                || !isUnshadowedTypeScopeAccess(scope, expr.scopeChain[0])
                 || m_symbols.findClass(expr.scopeChain[0]) != nullptr
                 || m_symbols.findInterface(expr.scopeChain[0]) != nullptr
                 || BuiltinTypeSemantics::IsScalarType(expr.scopeChain[0])
@@ -329,7 +300,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         break;
     }
     case ExprKind::MemberAccess:{
-        if(expr.lhs && expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
+        if(expr.lhs && expr.lhs->kind == ExprKind::Identifier && isUnshadowedTypeScopeAccess(scope, expr.lhs->text)){
             const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
             if(BuiltinTypeSemantics::IsNumericScalarType(resolvedBaseType) && expr.lhs->callTemplateArgs.empty() && BuiltinTypeSemantics::TryMapScalarLimitMember(expr.text)){
                 if(isMutationTarget){
@@ -390,20 +361,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             else if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
                 const FieldDecl* field = SymbolTable::FindClassField(*targetCls, expr.text);
                 const MethodDecl* memberMethod = m_symbols.findClassMethod(*targetCls, expr.text);
-                b8 isInheritedBuiltinMethod = ((!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty())
-                    && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr)
-                    || (!targetCls->systemTypeName.empty() && FindBuiltinReceiverMethod("ISystem", expr.text) != nullptr);
-                if(!isInheritedBuiltinMethod){
-                    for(const TypeRef* iface : targetCls->implementedInterfaces){
-                        if(!iface)
-                            continue;
-                        const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
-                        if(!m_symbols.findInterface(ifaceName) && FindBuiltinReceiverMethod(ifaceName, expr.text) != nullptr){
-                            isInheritedBuiltinMethod = true;
-                            break;
-                        }
-                    }
-                }
+                const b8 isInheritedBuiltinMethod = m_symbols.findInheritedBuiltinReceiverMethod(targetCls, nullptr, expr.text) != nullptr;
                 if(!field && !memberMethod && !isInheritedBuiltinMethod){
                     reportError(errors, expr.span, "unknown member on class");
                     ok = false;
@@ -422,12 +380,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                         ok = false;
                     }
                     else if(isMutationTarget && m_parallelDepth > 0u && ft && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(ft->name))){
-                        b8 isTaskLocalOwner = false;
-                        if(expr.lhs->kind == ExprKind::Identifier){
-                            if(const ScopedVarInfo* lhsLocal = FindScopedVar(scope, expr.lhs->text))
-                                isTaskLocalOwner = (lhsLocal->declaredParallelDepth == m_parallelDepth);
-                        }
-                        if(!isTaskLocalOwner){
+                        if(!isTaskLocalIdentifierExpr(*expr.lhs, scope)){
                             reportError(errors, expr.span, "shared 'mut' access to non-thread-safe member container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
                             ok = false;
                         }
@@ -454,7 +407,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             ? inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &containerTypeRef)
             : MStringView{};
         const BuiltinGenericTypeInfo* genericInfo = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinGenericType(lhsBaseType);
-        const BuiltinReceiverMethodInfo* builtinOpIdx = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinReceiverMethod(lhsBaseType, "[]");
+        const BuiltinReceiverMethodInfo* builtinOpIdx = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinReceiverMethod(lhsBaseType, OperatorSemantics::s_SubscriptSymbol);
         if(builtinOpIdx)
             recordBuiltinTypeHeader(builtinOpIdx->returnTypeName);
         if(!(genericInfo && genericInfo->isReflectedMap && genericInfo->isNonThreadSafeContainer))
@@ -466,7 +419,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         else if(SymbolTable::IsSimdMatrixType(lhsBaseType))
             expr.isMatrixRowIndex = true;
-        else if(SymbolTable::IsSimdStorageVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
+        else if(SymbolTable::IsSimdStorageOrUnalignedVectorType(lhsBaseType, vecIdxLanes))
             expr.isVectorRawIndex = true;
         else if(SymbolTable::IsSimdRegisterVectorType(lhsBaseType) && expr.isMutArg){
             reportError(errors, expr.span, "cannot pass an indexed lane of 'VectorSingle' or 'VectorDouble' to a 'mut' parameter");
@@ -474,7 +427,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const ClassDecl* opDeclCls = nullptr;
-        const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, "[]", 1u, recvIsConst, &opDeclCls);
+        const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, OperatorSemantics::s_SubscriptSymbol, 1u, recvIsConst, &opDeclCls);
         if(!customOpIdx){
             if(opDeclCls || m_symbols.findInterface(lhsBaseType) || FindTemplateParam(ownerClass, &method, lhsBaseType)){
                 reportError(errors, expr.span, "indexing custom class, interface, or template parameter requires 'operator[]' to be defined");
@@ -552,18 +505,18 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             const ClassDecl* opDeclCls = nullptr;
             const MethodDecl* opMethod = resolveCustomOperator(ownerClass, &method, lhsTypeRef, lhsType, opSym, 0u, recvIsConst, &opDeclCls);
+            b8 isEnumOrFlag = false;
+            b8 isFlag = false;
             if(const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType)){
-                if(expr.op == TokenType::Tilde && !lhsEnum->isFlag){
-                    reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
-                    ok = false;
-                }
-                else if(OperatorSemantics::IsIncrementOrDecrementOperatorToken(expr.op)){
-                    reportError(errors, expr.span, "increment and decrement operators are not supported on 'enum' or 'flag' types");
-                    ok = false;
-                }
+                isEnumOrFlag = true;
+                isFlag = lhsEnum->isFlag;
             }
-            else if(const BuiltinEnumInfo* lhsBuiltinEnum = FindBuiltinEnum(lhsType)){
-                if(expr.op == TokenType::Tilde && !lhsBuiltinEnum->isFlag){
+            else if(const BuiltinEnumInfo* lhsBuiltinEnum = m_symbols.hasTypeSymbol(lhsType) ? nullptr : FindBuiltinEnum(lhsType)){
+                isEnumOrFlag = true;
+                isFlag = lhsBuiltinEnum->isFlag;
+            }
+            if(isEnumOrFlag){
+                if(expr.op == TokenType::Tilde && !isFlag){
                     reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
                     ok = false;
                 }
@@ -577,7 +530,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     reportError(errors, expr.span, "unary operator is not defined on operand type");
                     ok = false;
                 }
-                else if((expr.op == TokenType::Minus || expr.op == TokenType::Tilde) && (SymbolTable::IsSimdStorageType(lhsType) || SymbolTable::IsUnalignedVectorType(lhsType))){
+                else if((expr.op == TokenType::Minus || expr.op == TokenType::Tilde) && SymbolTable::IsSimdOrUnalignedStorageType(lhsType)){
                     reportError(errors, expr.span, "SIMD unary operators require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
                     ok = false;
                 }
@@ -651,8 +604,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     return BuiltinTypeSemantics::IsScalarType(baseName)
                         || SymbolTable::IsSimdType(baseName)
                         || SymbolTable::IsUnalignedVectorType(baseName)
-                        || m_symbols.findEnum(baseName) != nullptr
-                        || FindBuiltinEnum(baseName) != nullptr;
+                        || m_symbols.isEnumType(baseName);
                 };
                 if(m_symbols.resolveRefMode(expr.targetType) == ParamPassingMode::None && hasKnownFixedLayout(dstType) && hasKnownFixedLayout(srcType)){
                     TypeRef srcTypeRef(m_arena);
@@ -697,10 +649,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         if(BuiltinTypeSemantics::IsScalarType(lhsType) && BuiltinTypeSemantics::IsScalarType(rhsType)){
             if(OperatorSemantics::IsCompoundOrSimpleAssignment(expr.op))
                 expr.resolvedScalarType = lhsType;
-            else if(lhsType == "f64" || rhsType == "f64")
-                expr.resolvedScalarType = "f64";
-            else if(lhsType == "f32" || rhsType == "f32")
-                expr.resolvedScalarType = "f32";
+            else if(const MStringView promotedFloat = BuiltinTypeSemantics::PromoteFloatScalarTypes(lhsType, rhsType); !promotedFloat.empty())
+                expr.resolvedScalarType = promotedFloat;
             else
                 expr.resolvedScalarType = inferredType;
         }
@@ -711,22 +661,21 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         && !expr.arguments.empty() && expr.arguments[0] && !expr.arguments[0]->resolvedScalarType.empty()
         && FindBuiltinFunction(expr.lhs->text) && FindBuiltinFunction(expr.lhs->text)->returnRule == BuiltinFunctionReturnRule::PromoteSimd){
         expr.resolvedScalarType = expr.arguments[0]->resolvedScalarType;
-        if(expr.lhs->text == "Lerp"){
+        const SpecialFunctionKind::Enum specialFn = FindSpecialFunctionKind(expr.lhs->text);
+        if(specialFn == SpecialFunctionKind::Lerp){
             for(const Expr* argument : expr.arguments){
                 if(!argument || !BuiltinTypeSemantics::IsScalarType(argument->resolvedScalarType)){
                     expr.resolvedScalarType = {};
                     break;
                 }
-                if(argument->resolvedScalarType == "f64")
-                    expr.resolvedScalarType = "f64";
-                else if(argument->resolvedScalarType == "f32" && expr.resolvedScalarType != "f64")
-                    expr.resolvedScalarType = "f32";
+                if(const MStringView promotedFloat = BuiltinTypeSemantics::PromoteFloatScalarTypes(expr.resolvedScalarType, argument->resolvedScalarType); !promotedFloat.empty())
+                    expr.resolvedScalarType = promotedFloat;
             }
         }
-        else if(expr.lhs->text != "Rsqrt" && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+        else if(specialFn != SpecialFunctionKind::Rsqrt && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
             expr.resolvedScalarType = m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
     }
-    else if(BuiltinTypeSemantics::IsNumericScalarType(inferredType) || inferredType == "b8")
+    else if(BuiltinTypeSemantics::IsNumericScalarType(inferredType) || BuiltinTypeSemantics::IsBoolScalarType(inferredType))
         expr.resolvedScalarType = inferredType;
 
     return ok;
@@ -790,7 +739,7 @@ b8 TypeChecker::isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, cons
     case ExprKind::MemberAccess:{
         if(!expr.lhs)
             return false;
-        if(expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text))
+        if(expr.lhs->kind == ExprKind::Identifier && isUnshadowedTypeScopeAccess(scope, expr.lhs->text))
             return false;
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView baseType = inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &lhsTypeRef);
@@ -842,9 +791,9 @@ b8 TypeChecker::isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, cons
         if(!m_symbols.hasTypeSymbol(lhsBaseType) && IsStringLikeType(lhsBaseType) && !HasMutableStringElements(lhsBaseType))
             return false;
         const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
-        if(const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, "[]", 1u, recvIsConst))
+        if(const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, OperatorSemantics::s_SubscriptSymbol, 1u, recvIsConst))
             return customOpIdx->returnType && m_symbols.resolveRefMode(customOpIdx->returnType) == ParamPassingMode::Mut;
-        if(const BuiltinReceiverMethodInfo* builtinOpIdx = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinReceiverMethod(lhsBaseType, "[]"); builtinOpIdx && !builtinOpIdx->isMutating)
+        if(const BuiltinReceiverMethodInfo* builtinOpIdx = m_symbols.hasTypeSymbol(lhsBaseType) ? nullptr : FindBuiltinReceiverMethod(lhsBaseType, OperatorSemantics::s_SubscriptSymbol); builtinOpIdx && !builtinOpIdx->isMutating)
             return false;
         return !recvIsConst && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs, scope);
     }
@@ -860,7 +809,7 @@ b8 TypeChecker::isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, cons
                 const b8 mutLhs = !isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope) && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs->lhs, scope);
                 if(const BuiltinReceiverMethodInfo* recvInfo = FindBuiltinReceiverMethod(objType, expr.lhs->text); recvInfo && recvInfo->returnsReference)
                     return recvInfo->isMutating && mutLhs;
-                if(expr.lhs->text == "deref" && (objType == "UniquePtr" || objType == "NotNullUniquePtr" || objType == "RefCountPtr"))
+                if(FindSpecialMethodSemantics(expr.lhs->text) == SpecialMethodKind::Deref && IsSmartPointerDerefType(objType))
                     return !isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope) && !BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, &method, *expr.lhs->lhs, scope);
                 if(IsStringByteAccessorMethod(objType, expr.lhs->text) && HasMutableStringElements(objType))
                     return mutLhs;

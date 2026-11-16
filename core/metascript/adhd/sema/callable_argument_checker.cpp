@@ -109,10 +109,7 @@ b8 CallableArgumentChecker::check(
 ){
     b8 ok = true;
     const SourceSpan errSpan = !arguments.empty() && arguments[0] ? arguments[0]->span : method.span;
-    const b8 arityValid = targetCallable && (
-        targetCallable->params.size() == arguments.size()
-        || (targetCallable->hasDefaultArgs && arguments.size() >= targetCallable->minArgCount && arguments.size() <= targetCallable->params.size())
-    );
+    const b8 arityValid = targetCallable && targetCallable->acceptsArgCount(arguments.size());
     if(targetCallable && !arityValid){
         m_checker.reportError(errors, errSpan, "wrong number of arguments in call");
         ok = false;
@@ -233,26 +230,12 @@ b8 CallableArgumentChecker::check(
         }
         if(wrapContainerRefElement)
             arg->wrapInNotNull = true;
-        if(builtinFnInfo && builtinFnInfo->wrapsFormatArgs && i >= builtinFnInfo->minArity){
-            const MStringView fmtArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
-            if(!m_checker.m_symbols.hasTypeSymbol(fmtArgType)){
-                if(const BuiltinObjectTypeInfo* fmtObj = FindBuiltinObjectType(fmtArgType))
-                    arg->formatArgWrapKind = fmtObj->formatArgWrapKind;
-            }
-        }
-        if(expectedParamTypeRef){
-            const TypeRef* unwrappedParam = m_checker.m_symbols.unwrapTypeAlias(expectedParamTypeRef);
-            if(unwrappedParam && !unwrappedParam->templateArgs.empty() && unwrappedParam->templateArgs[0].type && !m_checker.m_symbols.hasTypeSymbol(unwrappedParam->name)){
-                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedParam->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-                    const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(unwrappedParam->templateArgs[0].type->name);
-                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && arg->resolvedSimdType == valBase)
-                        arg->wrapInSimdResult = true;
-                }
-            }
-        }
+        if(builtinFnInfo && builtinFnInfo->wrapsFormatArgs && i >= builtinFnInfo->minArity)
+            m_checker.markFormatArgWrap(ownerClass, &method, *arg, scope, false);
+        m_checker.markSimdResultWrapperAdaptation(expectedParamTypeRef, *arg);
         if(builtinFnInfo && (builtinFnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply || builtinFnInfo->rejectsSimdStorage)){
             const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
-            if(SymbolTable::IsSimdStorageType(actualArgType) || SymbolTable::IsUnalignedVectorType(actualArgType)){
+            if(SymbolTable::IsSimdOrUnalignedStorageType(actualArgType)){
                 m_checker.reportError(errors, arg->span, "SIMD math intrinsics require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
                 ok = false;
             }
@@ -265,38 +248,34 @@ b8 CallableArgumentChecker::check(
             b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && isKnownAdhdType && actualArgType != builtinArgRule->requiredExactType)
                 || (builtinArgRule->requiresStringLike && isKnownAdhdType && !(builtinArgRule->isMut ? IsOwningStringType(actualArgType) : IsStringLikeType(actualArgType)))
                 || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType))
-                || (builtinArgRule->rule == BuiltinFunctionArgRule::NumericScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsNumericScalarType(actualArgType));
-            if(!typeMismatch && (builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan || builtinArgRule->rule == BuiltinFunctionArgRule::ByteSpan || builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector)){
-                const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
-                const usize expectedArguments = builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector ? 2u : 1u;
-                const TypeRef* elementType = containerType && containerType->templateArgs.size() == expectedArguments && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
-                const MStringView requiredElement = builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan ? MStringView("usize") : MStringView("u8");
-                typeMismatch = !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != requiredElement;
-            }
-            const b8 checksByteSequence = builtinArgRule->rule == BuiltinFunctionArgRule::ReadableByteSequence || builtinArgRule->rule == BuiltinFunctionArgRule::MutableByteSequence;
-            const b8 checksU32Sequence = builtinArgRule->rule == BuiltinFunctionArgRule::MutableU32Sequence;
-            const b8 checksU64Sequence = builtinArgRule->rule == BuiltinFunctionArgRule::MutableU64Sequence;
-            if(!typeMismatch && isKnownAdhdType && (checksByteSequence || checksU32Sequence || checksU64Sequence)){
-                const b8 isContiguous = actualArgType == builtinArgRule->expectedParamType || DoesImplicitConversionPropagateFirstTypeArg(actualArgType, builtinArgRule->expectedParamType);
-                const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
-                const TypeRef* elementType = containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
-                const MStringView requiredElement = checksU32Sequence ? MStringView("u32") : (checksU64Sequence ? MStringView("u64") : MStringView("u8"));
-                typeMismatch = !isContiguous || !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != requiredElement;
-            }
-            if(!typeMismatch && isKnownAdhdType && builtinArgRule->rule == BuiltinFunctionArgRule::MutableU64Array64){
-                const TypeRef* arrayType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
-                const TypeRef* elementType = arrayType && arrayType->templateArgs.size() == 2u && arrayType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(arrayType->templateArgs[0].type) : nullptr;
-                const MStringView countText = arrayType && arrayType->templateArgs.size() == 2u ? arrayType->templateArgs[1].constantOrTypeName() : MStringView{};
-                const b8 dependentCount = HasConstValueTemplateParam(ownerClass, &method, countText);
-                typeMismatch = !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != "u64"
-                    || (!dependentCount && !AreConstantTemplateArgsEquivalent(countText, "64", m_checker.m_symbols));
+                || (IsNumericScalarArgRule(builtinArgRule->rule) && isKnownAdhdType && !BuiltinTypeSemantics::IsNumericScalarType(actualArgType));
+            if(const BuiltinContainerArgConstraintInfo* constraint = FindContainerArgConstraint(builtinArgRule->rule); !typeMismatch && constraint){
+                if(constraint->isExactElementCheck){
+                    const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                    const TypeRef* elementType = containerType && containerType->templateArgs.size() == constraint->templateArgCount && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
+                    typeMismatch = !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != constraint->elementTypeName;
+                }
+                else if(isKnownAdhdType && constraint->checksContiguousSequence){
+                    const b8 isContiguous = actualArgType == builtinArgRule->expectedParamType || DoesImplicitConversionPropagateFirstTypeArg(actualArgType, builtinArgRule->expectedParamType);
+                    const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                    const TypeRef* elementType = containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
+                    typeMismatch = !isContiguous || !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != constraint->elementTypeName;
+                }
+                else if(isKnownAdhdType && !constraint->countText.empty()){
+                    const TypeRef* arrayType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                    const TypeRef* elementType = arrayType && arrayType->templateArgs.size() == constraint->templateArgCount && arrayType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(arrayType->templateArgs[0].type) : nullptr;
+                    const MStringView countText = arrayType && arrayType->templateArgs.size() == constraint->templateArgCount ? arrayType->templateArgs[1].constantOrTypeName() : MStringView{};
+                    const b8 dependentCount = HasConstValueTemplateParam(ownerClass, &method, countText);
+                    typeMismatch = !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != constraint->elementTypeName
+                        || (!dependentCount && !AreConstantTemplateArgsEquivalent(countText, constraint->countText, m_checker.m_symbols));
+                }
             }
             if(typeMismatch){
                 m_checker.reportError(errors, arg->span, builtinArgRule->errorMessage);
                 ok = false;
             }
         }
-        else if(!targetCallable && calledMemberName == "substr"){
+        else if(!targetCallable && FindSpecialMethodSemantics(calledMemberName) == SpecialMethodKind::Substr){
             const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
             if(!actualArgType.empty() && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType)){
                 m_checker.reportError(errors, arg->span, "arguments to 'substr' must have integer types");

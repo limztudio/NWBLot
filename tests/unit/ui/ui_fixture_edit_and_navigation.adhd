@@ -98,7 +98,7 @@ public:
         return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
     }
     [[nodiscard]] b8 identityMapping(const StringView text){
-        auto boundaries = GraphemeSegmentation::Build(m_arena, text);
+        auto boundaries = BuildEditGraphemeBoundaries(m_arena, text);
         if(!boundaries)
             return false;
         m_boundaries = Move(*boundaries);

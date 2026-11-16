@@ -1,5 +1,6 @@
 include_guard(GLOBAL)
 
+include("${CMAKE_CURRENT_LIST_DIR}/UnityBuild.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/CodeGen.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/BasicInclude.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/SimdAVX2.cmake")
@@ -10,7 +11,7 @@ if(NOT TARGET nwb_impl_adhd_headers)
 endif()
 
 function(nwb_apply_internal_target_defaults target)
-    set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
+    nwb_apply_unity_build(${target})
     nwb_apply_codegen(${target})
     nwb_apply_basic_include(${target})
 

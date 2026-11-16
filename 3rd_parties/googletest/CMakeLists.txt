@@ -4,6 +4,7 @@
 # level is aligned with engine targets by the parent via nwb_match_engine_runtime.
 cmake_minimum_required(VERSION 3.13)
 project(googletest CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
 
 add_library(gtest STATIC "${CMAKE_CURRENT_LIST_DIR}/src/gtest-all.cc")
 add_library(nwb::gtest ALIAS gtest)

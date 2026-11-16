@@ -314,7 +314,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     const b8 canReuseTlas = CanReuseStaticSceneTlas(
         staticScene, m_rayTracingState.m_tlasStaticSceneHashValid, m_rayTracingState.m_tlasStaticSceneHash, tlasStaticSceneHash,
         static_cast<b8>(m_rayTracingState.m_tlas), m_rayTracingState.m_tlasMaxInstances, instances.size(),
-        RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)
+        IsDescriptorClass(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)
     );
     if(!staticScene || !canReuseTlas)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
@@ -336,15 +336,15 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         }
         Core::RayTracingAccelStructHandle tlas = Move(*tlasResult);
         // Retire the old heap block before replacing the TLAS generation.
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
+        RetireDescriptor(heap, m_rayTracingState.m_tlasHeapHandle);
         m_rayTracingState.m_tlas = Move(tlas);
         RayTracingBuildPolicy().initializeCreatedSceneTlas(capacity, m_rayTracingState.m_tlasBackingFresh, m_rayTracingState.m_tlasMaxInstances);
     }
 
     // Allocate a heap block only for a new TLAS generation.
-    if(!RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)){
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
-        if(!RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::AccelStruct, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()), m_rayTracingState.m_tlasHeapHandle)){
+    if(!IsDescriptorClass(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)){
+        RetireDescriptor(heap, m_rayTracingState.m_tlasHeapHandle);
+        if(!AssignDescriptor(heap, Core::GpuDescriptorClass::AccelStruct, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()), m_rayTracingState.m_tlasHeapHandle)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             return false;
         }
@@ -458,7 +458,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             !meshReady
             || !topologyReady
             || !meshResult->meshResources.swBvhNodeBuffer
-            || !RayTracingDetail::IsHeapHandle(meshResult->meshResources.swBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !IsDescriptorClass(meshResult->meshResources.swBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
             || !meshResult->meshResources.positionBuffer
             || !meshResult->meshResources.triangleIndexBuffer
             || !meshResult->meshResources.attributeBuffer

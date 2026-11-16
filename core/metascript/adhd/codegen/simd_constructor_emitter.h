@@ -30,6 +30,13 @@ public:
 
 
 private:
+    [[nodiscard]] b8 tryEmitCastConstructor(b8 isDouble)const;
+    [[nodiscard]] b8 tryEmitLaneOperation(b8 isDouble, b8 isInt)const;
+    [[nodiscard]] b8 tryEmitLaneConstructor(b8 isDouble, b8 isInt)const;
+    [[nodiscard]] b8 tryEmitScalarLane(b8 isDouble, b8 isInt)const;
+
+
+private:
     const SourceEmitter& m_emitter;
     MString& m_output;
     MStringView m_simdType;

@@ -1,3 +1,5 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../configuration/UnityBuild.cmake")
+
 function(nwb_declare_vendor_headers target alias include_directory)
     if(TARGET ${alias})
         return()

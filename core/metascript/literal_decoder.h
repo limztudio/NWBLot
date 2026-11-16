@@ -125,41 +125,29 @@ public:
         if(text.empty())
             return false;
 
-        if(text.size() > 2u && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')){
+        const auto tryParseShiftedRadix = [&](const u32 shift, auto isDigitFn, auto digitValueFn)noexcept -> b8{
             u64 val = 0u;
             b8 hasDigit = false;
             for(usize i = 2u; i < text.size(); ++i){
                 const MChar ch = text[i];
                 if(ch == '\'')
                     continue;
-                if(!IsHexDigit(ch) || val > (Limit<u64>::s_Max >> 4u))
+                if(!isDigitFn(ch) || val > (Limit<u64>::s_Max >> shift))
                     return false;
                 hasDigit = true;
-                val = (val << 4u) | static_cast<u64>(HexDigitValue(ch));
+                val = (val << shift) | static_cast<u64>(digitValueFn(ch));
             }
             if(!hasDigit)
                 return false;
             outValue = val;
             return true;
-        }
+        };
 
-        if(text.size() > 2u && text[0] == '0' && (text[1] == 'b' || text[1] == 'B')){
-            u64 val = 0u;
-            b8 hasDigit = false;
-            for(usize i = 2u; i < text.size(); ++i){
-                const MChar ch = text[i];
-                if(ch == '\'')
-                    continue;
-                if(!IsBinaryDigit(ch) || val > (Limit<u64>::s_Max >> 1u))
-                    return false;
-                hasDigit = true;
-                val = (val << 1u) | static_cast<u64>(ch - '0');
-            }
-            if(!hasDigit)
-                return false;
-            outValue = val;
-            return true;
-        }
+        if(text.size() > 2u && text[0] == '0' && (text[1] == 'x' || text[1] == 'X'))
+            return tryParseShiftedRadix(4u, [](const MChar ch)noexcept{ return IsHexDigit(ch); }, [](const MChar ch)noexcept{ return HexDigitValue(ch); });
+
+        if(text.size() > 2u && text[0] == '0' && (text[1] == 'b' || text[1] == 'B'))
+            return tryParseShiftedRadix(1u, [](const MChar ch)noexcept{ return IsBinaryDigit(ch); }, [](const MChar ch)noexcept{ return ch - '0'; });
 
         u64 val = 0u;
         b8 hasDigit = false;

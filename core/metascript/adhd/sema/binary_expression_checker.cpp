@@ -41,10 +41,7 @@ b8 BinaryExpressionChecker::applyInterfaceRefRebind(
             m_checker.reportError(errors, assignExpr.span, "cannot rebind 'in' reference to a literal or rvalue temporary");
             return false;
         }
-        if(assignExpr.rhs->isStringByteRead){
-            assignExpr.rhs->isStringByteRead = false;
-            assignExpr.rhs->isStringByteConstRef = true;
-        }
+        PromoteStringByteReadToConstRef(*assignExpr.rhs);
     }
     const MStringView baseTypeName = targetType ? m_checker.m_symbols.resolveBaseTypeName(targetType->name) : MStringView{};
     if(assignExpr.rhs && !baseTypeName.empty() && m_checker.m_symbols.findInterface(baseTypeName)){
@@ -251,7 +248,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         const MStringView lhsType = m_checker.inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
         const MStringView rhsType = m_checker.inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
         if(expr.op != TokenType::Equal && expr.op != TokenType::EqualEqual && expr.op != TokenType::BangEqual){
-            if(SymbolTable::IsSimdStorageType(lhsType) || SymbolTable::IsUnalignedVectorType(lhsType) || SymbolTable::IsSimdStorageType(rhsType) || SymbolTable::IsUnalignedVectorType(rhsType)){
+            if(SymbolTable::IsSimdOrUnalignedStorageType(lhsType) || SymbolTable::IsSimdOrUnalignedStorageType(rhsType)){
                 m_checker.reportError(errors, expr.span, "SIMD arithmetic and bitwise operators require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
                 ok = false;
             }
@@ -262,43 +259,25 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
                 ok = false;
             }
             if(const TypeRef* lhsTargetTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope)){
-                if(!lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
-                    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-                        const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(lhsTargetTypeRef->templateArgs[0].type->name);
-                        if(SymbolTable::IsSimdRegisterVectorType(valBase) && expr.rhs->resolvedSimdType == valBase)
-                            expr.rhs->wrapInSimdResult = true;
-                    }
-                }
+                m_checker.markSimdResultWrapperAdaptation(lhsTargetTypeRef, *expr.rhs);
                 if(!expr.isNotNullRebind && !expr.rhs->wrapInSimdResult && expr.lhs->resolvedSimdType.empty() && m_checker.m_symbols.resolveRefMode(lhsTargetTypeRef) == ParamPassingMode::None){
                     const TypeLayoutAnalyzer layoutAnalyzer(m_checker.m_symbols);
                     const TypeRef* unwrappedLhs = m_checker.m_symbols.unwrapTypeAlias(lhsTargetTypeRef);
                     const BuiltinGenericTypeInfo* lhsGenericInfo = unwrappedLhs ? FindBuiltinGenericType(unwrappedLhs->name) : nullptr;
                     if(lhsGenericInfo && lhsGenericInfo->inlineLayoutKind == InlineLayoutKind::Optional && !unwrappedLhs->templateArgs.empty() && unwrappedLhs->templateArgs[0].type && layoutAnalyzer.requiresMotherArena(*unwrappedLhs->templateArgs[0].type)){
-                        const Expr* rootLhs = expr.lhs;
-                        while(rootLhs && (rootLhs->kind == ExprKind::MemberAccess || rootLhs->kind == ExprKind::Index))
-                            rootLhs = rootLhs->lhs;
+                        const Expr* rootLhs = TypeChecker::UnwrapMemberOrIndexRoot(expr.lhs);
                         if(rootLhs && rootLhs->kind == ExprKind::ThisMember && ownerClass){
                             expr.useAdhdOptionalClassAssign = true;
                             ownerClass->needsClassArena = true;
                         }
                         else{
                             expr.useAdhdOptionalScratchAssign = true;
-                            method.usesScratchArena = true;
-                            m_checker.m_activeParallelBlockUsesScratch = true;
+                            m_checker.markScratchArenaUsed(method);
                         }
                     }
                     else if(layoutAnalyzer.requiresMotherArena(*lhsTargetTypeRef)){
                         const ClassDecl* lhsCls = unwrappedLhs ? m_checker.m_symbols.findClass(unwrappedLhs->name) : nullptr;
-                        b8 hasCustomAssign = false;
-                        if(lhsCls){
-                            for(const MethodDecl* m : lhsCls->methods){
-                                if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal){
-                                    hasCustomAssign = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if(!hasCustomAssign)
+                        if(!lhsCls || !SymbolTable::HasCustomAssignOperator(*lhsCls))
                             expr.useAdhdAssign = true;
                     }
                 }
@@ -308,10 +287,10 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         const EnumDecl* rhsEnum = m_checker.m_symbols.findEnum(rhsType);
         const BuiltinEnumInfo* lhsBuiltinEnum = (lhsEnum || m_checker.m_symbols.hasTypeSymbol(lhsType)) ? nullptr : FindBuiltinEnum(lhsType);
         const BuiltinEnumInfo* rhsBuiltinEnum = (rhsEnum || m_checker.m_symbols.hasTypeSymbol(rhsType)) ? nullptr : FindBuiltinEnum(rhsType);
+        const b8 differentEnums = (lhsEnum && rhsEnum && lhsEnum != rhsEnum)
+            || (lhsBuiltinEnum && rhsBuiltinEnum && lhsBuiltinEnum != rhsBuiltinEnum)
+            || (lhsEnum && rhsBuiltinEnum) || (lhsBuiltinEnum && rhsEnum);
         if(expr.op == TokenType::Equal && (lhsEnum || lhsBuiltinEnum)){
-            const b8 differentEnums = (lhsEnum && rhsEnum && lhsEnum != rhsEnum)
-                || (lhsBuiltinEnum && rhsBuiltinEnum && lhsBuiltinEnum != rhsBuiltinEnum)
-                || (lhsEnum && rhsBuiltinEnum) || (lhsBuiltinEnum && rhsEnum);
             const b8 rhsIsBuiltinScalar = !rhsEnum && !rhsBuiltinEnum && !m_checker.m_symbols.hasTypeSymbol(rhsType) && BuiltinTypeSemantics::IsScalarType(rhsType);
             if(differentEnums || rhsIsBuiltinScalar){
                 m_checker.reportError(errors, expr.span, "cannot assign a different enum or scalar type to an enum or flag");
@@ -325,7 +304,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
                 m_checker.reportError(errors, expr.span, "bitwise operators are only supported on 'flag' types, not 'enum' types");
                 ok = false;
             }
-            else if((lhsEnum && rhsEnum && lhsEnum != rhsEnum) || (lhsBuiltinEnum && rhsBuiltinEnum && lhsBuiltinEnum != rhsBuiltinEnum) || (lhsEnum && rhsBuiltinEnum) || (lhsBuiltinEnum && rhsEnum)){
+            else if(differentEnums){
                 m_checker.reportError(errors, expr.span, "cannot combine values of two different 'flag' types in a bitwise operation");
                 ok = false;
             }
@@ -336,7 +315,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         }
         if(!m_checker.m_symbols.hasTypeSymbol(lhsType) && RequiresTCharAdaptation(lhsType))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *expr.rhs);
-        if(expr.op == TokenType::Equal && lhsType == "StringView"){
+        if(expr.op == TokenType::Equal && IsStringBorrowViewType(lhsType)){
             if(BorrowLifetimeAnalyzer(m_checker).borrowsTemporaryStringOwner(ownerClass, &method, *expr.rhs, scope)){
                 m_checker.reportError(errors, expr.span, "cannot assign 'StringView' from a temporary owning string");
                 ok = false;
@@ -345,20 +324,11 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
                 MStringView borrowedOwnerName;
                 usize borrowedOwnerIdx = 0u;
                 if(BorrowLifetimeAnalyzer(m_checker).borrowsLocalStringOwner(ownerClass, &method, *expr.rhs, scope, &borrowedOwnerName, &borrowedOwnerIdx)){
-                    const Expr* rootLhs = expr.lhs;
-                    while(rootLhs && (rootLhs->kind == ExprKind::MemberAccess || rootLhs->kind == ExprKind::Index))
-                        rootLhs = rootLhs->lhs;
-                    const ScopedVarInfo* rootLocal = nullptr;
+                    const Expr* rootLhs = TypeChecker::UnwrapMemberOrIndexRoot(expr.lhs);
                     usize rootLocalIdx = 0u;
-                    if(rootLhs && rootLhs->kind == ExprKind::Identifier){
-                        for(usize i = scope.size(); i > 0u; --i){
-                            if(scope[i - 1u].name == rootLhs->text){
-                                rootLocal = &scope[i - 1u];
-                                rootLocalIdx = i - 1u;
-                                break;
-                            }
-                        }
-                    }
+                    const ScopedVarInfo* rootLocal = (rootLhs && rootLhs->kind == ExprKind::Identifier)
+                        ? TypeChecker::FindScopedVar(scope, rootLhs->text, &rootLocalIdx)
+                        : nullptr;
                     if(!rootLocal || rootLocal->isParam || rootLocal->mode != ParamPassingMode::None || m_checker.m_symbols.resolveRefMode(rootLocal->type) != ParamPassingMode::None){
                         m_checker.reportError(errors, expr.span, "cannot store 'StringView' borrowing a stack-local string into an escaping target");
                         ok = false;

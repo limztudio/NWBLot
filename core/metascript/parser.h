@@ -96,6 +96,11 @@ public:
 
 
 private:
+    void clearParsedState()noexcept;
+    [[nodiscard]] b8 parseSourceInternal(MStringView source, IIncludeResolver* includeResolver);
+
+
+private:
     MetaArena& m_arena;
     VariableMap m_variables;
     DeclarationList m_declarations;

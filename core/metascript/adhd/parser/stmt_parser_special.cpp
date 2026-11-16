@@ -22,19 +22,37 @@ Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const Span<const
     if(!applySchedulingAttributes(attributes, coreKind, priorityKind))
         return nullptr;
 
-    if(m_cursor.check(TokenType::LeftBrace)){
+    const auto finalizeParallelBlock = [&](const MStringView taskName, const b8 allowDependencies) -> Stmt*{
         Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
         stmt->kind = StmtKind::ParallelBlock;
+        stmt->name = taskName;
         stmt->span = span;
         stmt->parallelCore = coreKind;
         stmt->parallelPriority = priorityKind;
+
+        if(allowDependencies && m_cursor.match(TokenType::Colon)){
+            for(;;){
+                if(!m_cursor.check(TokenType::Identifier)){
+                    m_cursor.errorExpected("expected prerequisite task name after ':'");
+                    return nullptr;
+                }
+                stmt->parallelDependencies.push_back(m_cursor.current().text);
+                m_cursor.advance();
+                if(!m_cursor.match(TokenType::Comma))
+                    break;
+            }
+        }
+
         if(!parseBlockStatements(stmt->statements))
             return nullptr;
         return stmt;
-    }
+    };
+
+    if(m_cursor.check(TokenType::LeftBrace))
+        return finalizeParallelBlock({}, false);
 
     const ParserCursor::Checkpoint cp = m_cursor.save();
-    if(m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("this")){
+    if(m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier(KeywordSemantics::s_This)){
         const MStringView maybeTaskName = m_cursor.current().text;
         m_cursor.advance();
 
@@ -43,31 +61,8 @@ Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const Span<const
             return nullptr;
         }
 
-        if(m_cursor.check(TokenType::Colon) || m_cursor.check(TokenType::LeftBrace)){
-            Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-            stmt->kind = StmtKind::ParallelBlock;
-            stmt->name = maybeTaskName;
-            stmt->span = span;
-            stmt->parallelCore = coreKind;
-            stmt->parallelPriority = priorityKind;
-
-            if(m_cursor.match(TokenType::Colon)){
-                for(;;){
-                    if(!m_cursor.check(TokenType::Identifier)){
-                        m_cursor.errorExpected("expected prerequisite task name after ':'");
-                        return nullptr;
-                    }
-                    stmt->parallelDependencies.push_back(m_cursor.current().text);
-                    m_cursor.advance();
-                    if(!m_cursor.match(TokenType::Comma))
-                        break;
-                }
-            }
-
-            if(!parseBlockStatements(stmt->statements))
-                return nullptr;
-            return stmt;
-        }
+        if(m_cursor.check(TokenType::Colon) || m_cursor.check(TokenType::LeftBrace))
+            return finalizeParallelBlock(maybeTaskName, true);
     }
     m_cursor.restore(cp);
 

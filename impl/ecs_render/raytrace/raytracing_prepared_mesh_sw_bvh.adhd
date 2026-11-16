@@ -228,9 +228,9 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             state.m_bvhSortKeysBuffer
             && state.m_bvhSortPayloadBuffer
             && state.m_bvhVisitCounterBuffer
-            && RayTracingDetail::IsHeapHandle(state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-            && RayTracingDetail::IsHeapHandle(state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-            && RayTracingDetail::IsHeapHandle(state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && IsDescriptorClass(state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && IsDescriptorClass(state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && IsDescriptorClass(state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         ;
     };
     if(!sharedResourcesReady())
@@ -246,8 +246,8 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             || !mesh.triangleIndexBuffer
             || !HasValidMeshTriangleIndexCount(mesh.meshletPrimitiveIndexCount)
             || !bvh.meshSwBvhResourcesReady(mesh.swBvhNodeBuffer, mesh.swBvhParentBuffer, mesh.swBvhNodeHeapHandle, mesh.swBvhParentHeapHandle)
-            || !RayTracingDetail::IsHeapHandle(mesh.swBvhPositionHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-            || !RayTracingDetail::IsHeapHandle(mesh.swBvhTriangleIndexHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !IsDescriptorClass(mesh.swBvhPositionHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !IsDescriptorClass(mesh.swBvhTriangleIndexHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         ){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             clearPreparedMeshSwBvhBuilds();
@@ -450,36 +450,6 @@ b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scrat
         }
     }
     return allResourcesReady;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(const Core::GpuTaskGraph& graph, const Span<const PreparedMeshSwBvhBuild> builds, Core::Alloc::ScratchArena& scratchArena){
-    PreparedMeshSwBvhGraphResourceVector result(scratchArena);
-    if(builds.empty())
-        return result;
-    result.reserve(builds.size());
-    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    if(!declarations.valid())
-        return MakeUnexpected(Failure{});
-    for(const PreparedMeshSwBvhBuild& build : builds){
-        PreparedMeshSwBvhGraphResources resources{
-            .build = build,
-            .position = declarations.findImportedBuffer(build.positionBuffer),
-            .triangleIndex = declarations.findImportedBuffer(build.triangleIndexBuffer),
-            .node = declarations.findImportedBuffer(build.nodeBuffer),
-            .parent = declarations.findImportedBuffer(build.parentBuffer),
-            .sortKeys = declarations.findImportedBuffer(build.sortKeysBuffer),
-            .sortPayload = declarations.findImportedBuffer(build.sortPayloadBuffer),
-            .visitCounter = declarations.findImportedBuffer(build.visitCounterBuffer),
-        };
-        if(!resources.position.valid() || !resources.triangleIndex.valid() || !resources.node.valid() || !resources.parent.valid() || !resources.sortKeys.valid() || !resources.sortPayload.valid() || !resources.visitCounter.valid())
-            return MakeUnexpected(Failure{});
-        result.push_back(Move(resources));
-    }
-    return result;
 }
 
 

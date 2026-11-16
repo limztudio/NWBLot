@@ -9,6 +9,8 @@
 
 #include "reflection_emitter.h"
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
+#include <core/metascript/adhd/ast/operator_semantics.h>
+#include <core/metascript/adhd/sema/asset_type_analyzer.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
 
@@ -27,15 +29,6 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr b8 IsComparisonOp(const TokenType::Enum op)noexcept{
-    return op == TokenType::EqualEqual
-        || op == TokenType::BangEqual
-        || op == TokenType::Less
-        || op == TokenType::LessEqual
-        || op == TokenType::Greater
-        || op == TokenType::GreaterEqual;
-}
-
 [[nodiscard]] constexpr b8 IsNonFloatLiteralExpr(const Expr* const expr)noexcept{
     return expr && (expr->kind == ExprKind::IntegerLiteral || expr->kind == ExprKind::BoolLiteral || expr->kind == ExprKind::StringLiteral);
 }
@@ -47,11 +40,11 @@ namespace __hidden_adhd_source_emitter{
         return false;
     if(!expr->resolvedSimdType.empty() && !IsIntSimdType(expr->resolvedSimdType))
         return true;
-    if((expr->resolvedScalarType == "f32" || expr->resolvedScalarType == "f64") && (expr->kind == ExprKind::Binary || expr->kind == ExprKind::Unary || expr->kind == ExprKind::Call))
+    if(BuiltinTypeSemantics::IsFloatScalarType(expr->resolvedScalarType) && (expr->kind == ExprKind::Binary || expr->kind == ExprKind::Unary || expr->kind == ExprKind::Call))
         return true;
     if(const BuiltinUnalignedVectorInfo* info = FindBuiltinUnalignedVectorType(expr->resolvedUnalignedType); info && (info->isHalfFloat || BuiltinTypeSemantics::IsFloatScalarType(info->laneScalarType)))
         return true;
-    if(expr->kind == ExprKind::Binary && IsComparisonOp(expr->op)){
+    if(expr->kind == ExprKind::Binary && OperatorSemantics::IsRelationalOrEqualityOperatorToken(expr->op)){
         if((hasSimdScalarLocal && !IsNonFloatLiteralExpr(expr->lhs) && !IsNonFloatLiteralExpr(expr->rhs))
             || SimdExpressionAnalysis::ExprContainsSimdMath(expr->lhs, symbols)
             || SimdExpressionAnalysis::ExprContainsSimdMath(expr->rhs, symbols))
@@ -269,7 +262,7 @@ b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
     if(!HasOnlyGlobalConstants(unit) || !unit.requiredGlobalHeaders.empty())
         return false;
     for(const Stmt* constant : unit.globalConstants){
-        if(!constant || constant->isImported || constant->isExtern || !constant->varType || constant->varType->name != "Name" || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr || constant->expr->kind != ExprKind::StringLiteral)
+        if(!constant || constant->isImported || constant->isExtern || !constant->varType || !IsLiteralConstObjectType(constant->varType->name) || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr || constant->expr->kind != ExprKind::StringLiteral)
             return false;
     }
     return true;
@@ -284,13 +277,13 @@ b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
         for(usize index = 0u; index < precedingCount; ++index){
             const Stmt* previous = unit.globalConstants[index];
             if(previous && previous->name == value.text && previous->varType)
-                return previous->varType->name != "StringView" && previous->varType->name != "b8";
+                return !IsStringBorrowViewType(previous->varType->name) && !BuiltinTypeSemantics::IsBoolScalarType(previous->varType->name);
         }
         return false;
     }
     if(value.kind == ExprKind::Unary)
-        return allowNegative && !value.isPostfix && value.text == "-" && value.lhs && IsSimpleScalarExpression(*value.lhs, unit, precedingCount, allowNegative, allowFloating);
-    if(value.kind != ExprKind::Binary || value.isNotNullRebind || !value.lhs || !value.rhs || (value.text != "+" && value.text != "-" && value.text != "*"))
+        return allowNegative && !value.isPostfix && value.op == TokenType::Minus && value.lhs && IsSimpleScalarExpression(*value.lhs, unit, precedingCount, allowNegative, allowFloating);
+    if(value.kind != ExprKind::Binary || value.isNotNullRebind || !value.lhs || !value.rhs || (value.op != TokenType::Plus && value.op != TokenType::Minus && value.op != TokenType::Star))
         return false;
     return IsSimpleScalarExpression(*value.lhs, unit, precedingCount, allowNegative, allowFloating)
         && IsSimpleScalarExpression(*value.rhs, unit, precedingCount, allowNegative, allowFloating);
@@ -306,21 +299,21 @@ b8 IsScalarLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
             return false;
         const MStringView typeName = constant->varType->name;
         const Expr* value = constant->expr;
-        if(typeName == "StringView"){
+        if(IsStringBorrowViewType(typeName)){
             if(value->kind != ExprKind::StringLiteral || value->adaptToTChar)
                 return false;
             continue;
         }
-        if(typeName == "b8"){
+        if(BuiltinTypeSemantics::IsBoolScalarType(typeName)){
             if(value->kind != ExprKind::BoolLiteral)
                 return false;
             continue;
         }
-        const b8 isSignedInteger = typeName == "i8" || typeName == "i16" || typeName == "i32" || typeName == "i64" || typeName == "isize";
-        const b8 isUnsignedInteger = typeName == "u8" || typeName == "u16" || typeName == "u32" || typeName == "u64" || typeName == "usize";
-        const b8 isFloating = typeName == "f32" || typeName == "f64";
-        if(!isSignedInteger && !isUnsignedInteger && !isFloating)
+        const BuiltinScalarTypeInfo* scalarInfo = BuiltinTypeSemantics::FindBuiltinScalarType(typeName);
+        if(!scalarInfo || (!scalarInfo->isInteger && !scalarInfo->isFloat))
             return false;
+        const b8 isSignedInteger = scalarInfo->isInteger && scalarInfo->isSigned;
+        const b8 isFloating = scalarInfo->isFloat;
         if(!IsSimpleScalarExpression(*value, unit, index, isSignedInteger || isFloating, isFloating))
             return false;
     }
@@ -334,31 +327,22 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     out.reserve(s_AdhdEmitReserveBytes);
 
     ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
+    const AssetTypeAnalyzer assetTypes(m_symbols);
+    const AssetCodecContractInfo& codec = ContractSemantics::s_AssetCodec;
 
     const auto needsAutoCodecRegistrar = [&](const ClassDecl& classDecl)noexcept -> b8{
         if(classDecl.assetTypeName.empty())
             return false;
-        for(const TypeRef* ifaceRef : classDecl.implementedInterfaces){
-            if(!ifaceRef)
-                continue;
-            const InterfaceDecl* ifaceDecl = m_symbols.findInterface(m_symbols.resolveBaseTypeName(ifaceRef->name));
-            if(ifaceDecl && !ifaceDecl->assetTypeName.empty())
-                return false;
-        }
-        b8 hasLocalLoadBinaryDef = false;
-        for(const MethodDecl* method : classDecl.methods){
-            if(method && !method->isImported && method->hasBody && !method->isConstructor && !method->isDestructor && !method->isOperator && method->name == "loadBinary" && method->params.size() == 1u){
-                hasLocalLoadBinaryDef = true;
-                break;
-            }
-        }
-        if(!hasLocalLoadBinaryDef)
+        if(assetTypes.findImplementedAssetInterface(classDecl) != nullptr)
+            return false;
+        if(assetTypes.findAssetLoadBinaryMethod(classDecl, true) == nullptr)
             return false;
         if(unit.sourceNativeBlocks.empty())
             return true;
         MString codecName(m_arena);
         codecName.append(classDecl.name.data(), classDecl.name.size());
-        codecName.append(classDecl.name.ends_with("Asset") ? "Codec" : "AssetCodec");
+        const MStringView codecSuffix = ContractSemantics::ResolveAssetCodecSuffix(classDecl.name);
+        codecName.append(codecSuffix.data(), codecSuffix.size());
         for(const MStringView& rawBlock : unit.sourceNativeBlocks){
             if(rawBlock.find(codecName) != MStringView::npos)
                 return false;
@@ -375,15 +359,22 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
 
     out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
-    out.append("#include \"");
+    out.append(CodegenSymbols::s_IncludePrefix.data(), CodegenSymbols::s_IncludePrefix.size());
+    out.push_back('"');
     out.append(headerIncludePath.data(), headerIncludePath.size());
     out.append("\"\r\n");
     if(!IsNameLiteralOnlyUnit(unit) && !IsScalarLiteralOnlyUnit(unit)){
-        out.append("\r\n#include <global/assert.h>\r\n");
-        out.append("#include <core/common/log.h>\r\n");
-        out.append("#include <core/task/cpu/scheduler.h>\r\n");
-        if(hasAutoCodecRegistrar)
-            out.append("#include <core/assets/auto_registration.h>\r\n");
+        out.append("\r\n");
+        ContractSemantics::ForEachPreambleHeader(PreambleHeaderGroup::SourceDefault, [&](const MStringView hdr){
+            out.append(CodegenSymbols::s_IncludePrefix.data(), CodegenSymbols::s_IncludePrefix.size());
+            out.append(hdr.data(), hdr.size());
+            out.append("\r\n");
+        });
+        if(hasAutoCodecRegistrar && !codec.registrarHeader.empty()){
+            out.append(CodegenSymbols::s_IncludePrefix.data(), CodegenSymbols::s_IncludePrefix.size());
+            out.append(codec.registrarHeader.data(), codec.registrarHeader.size());
+            out.append("\r\n");
+        }
     }
     out.append("\r\n\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
@@ -400,10 +391,7 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
 
         if(classDecl->templateParams.empty()){
             for(const MethodDecl* method : classDecl->methods){
-                if(!method || method->isExtern)
-                    continue;
-                const b8 emittedInHeader = method->isInline || !method->templateParams.empty() || method->hasSynthesizedArenaParams;
-                if(method->isImported || !method->hasBody || emittedInHeader)
+                if(!method || method->isExtern || method->isImported || !method->hasBody || ShouldEmitCallableInHeader(classDecl, *method))
                     continue;
 
                 emitOutOfClassCallable(out, classDecl, *method, true, false, false);
@@ -413,16 +401,23 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
         if(!classDecl->isImported && classDecl->templateParams.empty() && classDecl->assetTypeName.empty() && (classDecl->isSerialize || classDecl->isReflect))
             reflectionEmitter.emitClassReflectionDefinitions(out, *classDecl);
         if(needsAutoCodecRegistrar(*classDecl)){
-            out.append("static ::NWB::Core::Assets::AssetCodecAutoRegistrar __adhd_asset_codec_registrar_");
+            const MStringView codecSuffix = ContractSemantics::ResolveAssetCodecSuffix(classDecl->name);
+            out.append("static ");
+            out.append(codec.registrarCppType.data(), codec.registrarCppType.size());
+            out.push_back(' ');
+            out.append(CodegenSymbols::s_AssetCodecRegPrefix.data(), CodegenSymbols::s_AssetCodecRegPrefix.size());
             out.append(classDecl->name.data(), classDecl->name.size());
-            out.append("(&::NWB::Core::Assets::CreateAssetCodec<");
+            out.append("(&");
+            out.append(codec.factoryCppTemplate.data(), codec.factoryCppTemplate.size());
+            out.push_back('<');
             out.append(classDecl->name.data(), classDecl->name.size());
-            out.append(classDecl->name.ends_with("Asset") ? "Codec>);\r\n\r\n" : "AssetCodec>);\r\n\r\n");
+            out.append(codecSuffix.data(), codecSuffix.size());
+            out.append(">);\r\n\r\n");
         }
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || fn->isImported || fn->isExtern || !fn->hasBody || fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)
+        if(!fn || fn->isImported || fn->isExtern || !fn->hasBody || ShouldEmitCallableInHeader(nullptr, *fn))
             continue;
 
         emitOutOfClassCallable(out, nullptr, *fn, true, false, false);
@@ -597,18 +592,28 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
     MVector<const Expr*>* skipped = AllocateAstNode<MVector<const Expr*>>(m_arena);
     b8 firstInit = true;
     if(m_activeOwnerClass && !m_activeOwnerClass->systemTypeName.empty()){
-        out.append(" : ::NWB::Core::ECS::ISystem(__adhd_mother_arena)");
-        firstInit = false;
+        if(const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System)){
+            out.append(" : ");
+            out.append(sysContract->cppBaseTypeOrTemplate.data(), sysContract->cppBaseTypeOrTemplate.size());
+            out.push_back('(');
+            out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
+            out.push_back(')');
+            firstInit = false;
+        }
     }
     if(m_activeOwnerClass){
         for(const TypeRef* iface : m_activeOwnerClass->implementedInterfaces){
-            if(!iface || m_symbols.resolveBaseTypeName(iface->name) != "IRenderPass")
+            if(!iface)
+                continue;
+            const InterfaceCtorForwardInfo* fwd = ContractSemantics::FindInterfaceCtorForward(m_symbols.resolveBaseTypeName(iface->name));
+            if(!fwd)
                 continue;
             for(const ParamDecl& param : ctor.params){
-                if(param.type && !param.name.empty() && m_symbols.resolveBaseTypeName(param.type->name) == "GraphicsRuntime"){
+                if(param.type && !param.name.empty() && m_symbols.resolveBaseTypeName(param.type->name) == fwd->paramAdhdTypeName){
                     out.append(firstInit ? " : " : ", ");
                     firstInit = false;
-                    out.append("::NWB::Core::IRenderPass(");
+                    out.append(fwd->cppBaseType.data(), fwd->cppBaseType.size());
+                    out.push_back('(');
                     out.append(param.name.data(), param.name.size());
                     out.push_back(')');
                     break;
@@ -619,14 +624,17 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
     }
     if(
         m_activeOwnerClass
-        && !m_activeOwnerClass->usesStaticClassArena()
-        && !m_activeOwnerClass->isSerialize
-        && m_activeOwnerClass->subsystemTypeName.empty()
+        && m_activeOwnerClass->canBorrowMotherArena()
         && m_activeOwnerNeedsArena
     ){
         out.append(firstInit ? " : " : ", ");
         firstInit = false;
-        out.append("__adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
+        out.append(CodegenSymbols::s_MemberArenaVar.data(), CodegenSymbols::s_MemberArenaVar.size());
+        out.push_back('(');
+        out.append(CodegenSymbols::s_MakeNotNullFunc.data(), CodegenSymbols::s_MakeNotNullFunc.size());
+        out.append("(&");
+        out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
+        out.append("))");
     }
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type || field->defaultExpr || field->hasCtorInit)

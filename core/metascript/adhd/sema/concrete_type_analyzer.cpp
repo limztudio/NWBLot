@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 
 
 b8 ConcreteTypeAnalyzer::isKnownConcreteTypeName(const MStringView name)const noexcept{
-    if(name == "void")
+    if(BuiltinTypeSemantics::IsVoidTypeName(name))
         return true;
     if(BuiltinTypeSemantics::IsScalarType(name) || SymbolTable::IsSimdType(name) || SymbolTable::IsUnalignedVectorType(name) || m_symbols.hasTypeSymbol(name))
         return true;

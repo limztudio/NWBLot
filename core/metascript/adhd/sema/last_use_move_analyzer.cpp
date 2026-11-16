@@ -4,6 +4,7 @@
 
 #include "last_use_move_analyzer.h"
 #include "type_checker.h"
+#include "type_layout_analyzer.h"
 
 #include <global/source_text.h>
 
@@ -17,7 +18,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_type_checker_infer{
+namespace __hidden_last_use_move_analyzer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,7 +214,7 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
 
         usize lastUseIndex = statements.size();
         for(usize s = statements.size(); s > 0u; --s){
-            if(__hidden_adhd_type_checker_infer::StmtReferencesIdentifier(statements[s - 1u], local.name)){
+            if(__hidden_last_use_move_analyzer::StmtReferencesIdentifier(statements[s - 1u], local.name)){
                 lastUseIndex = s - 1u;
                 break;
             }
@@ -239,7 +240,7 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
                 break;
         }
         for(usize s = 0u; !capturedOrAsyncOrAliased && s < statements.size(); ++s){
-            if(__hidden_adhd_type_checker_infer::StmtPreventsMoveAtLastUse(statements[s], local.name, m_symbols)){
+            if(__hidden_last_use_move_analyzer::StmtPreventsMoveAtLastUse(statements[s], local.name, m_symbols)){
                 capturedOrAsyncOrAliased = true;
                 break;
             }
@@ -260,7 +261,7 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
                 && candidate->lhs
                 && candidate->lhs->kind == ExprKind::MemberAccess
                 && !candidate->lhs->isPointerMemberAccess
-                && candidate->lhs->text == "value"
+                && FindSpecialMethodSemantics(candidate->lhs->text) == SpecialMethodKind::UnwrapValue
                 && candidate->lhs->lhs
                 && candidate->lhs->lhs->kind == ExprKind::Identifier
                 && candidate->lhs->lhs->text == local.name
@@ -275,21 +276,26 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
             && lastStmt->expr->kind == ExprKind::Binary
             && lastStmt->expr->op == TokenType::Equal
             && !lastStmt->expr->isNotNullRebind
-            && !__hidden_adhd_type_checker_infer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name)
+            && !__hidden_last_use_move_analyzer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name)
         ){
             tryMarkLastUseValueOrIdent(lastStmt->expr->rhs);
             continue;
         }
 
+        const b8 localUsesMotherArena = (local.type && TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*local.type))
+            || (!m_symbols.hasTypeSymbol(localBaseType) && SymbolTable::IsArenaBackedContainer(localBaseType));
+        if(localUsesMotherArena)
+            continue;
+
         const b8 isDirectCallStmt = (lastStmt->kind == StmtKind::ExprStmt && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
             || (lastStmt->kind == StmtKind::Return && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
             || (lastStmt->kind == StmtKind::VarDecl && lastStmt->name != local.name && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call);
-        if(!isDirectCallStmt || __hidden_adhd_type_checker_infer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name))
+        if(!isDirectCallStmt || __hidden_last_use_move_analyzer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name))
             continue;
 
         usize argRefCount = 0u;
         for(const Expr* arg : lastStmt->expr->arguments){
-            if(__hidden_adhd_type_checker_infer::ExprReferencesIdentifier(arg, local.name))
+            if(__hidden_last_use_move_analyzer::ExprReferencesIdentifier(arg, local.name))
                 ++argRefCount;
         }
         if(argRefCount == 1u){

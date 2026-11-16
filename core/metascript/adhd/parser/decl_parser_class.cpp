@@ -63,24 +63,8 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
             return nullptr;
     }
 
-    if(m_cursor.match(TokenType::Colon)){
-        for(;;){
-            if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
-                m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd");
-                return nullptr;
-            }
-            if(!m_cursor.check(TokenType::Identifier)){
-                m_cursor.errorExpected("expected implemented interface name after ':'");
-                return nullptr;
-            }
-            TypeRef* ifaceType = m_typeParser.parseType(false, false);
-            if(!ifaceType)
-                return nullptr;
-            decl->implementedInterfaces.push_back(ifaceType);
-            if(!m_cursor.match(TokenType::Comma))
-                break;
-        }
-    }
+    if(!parseColonTypeList(decl->implementedInterfaces, "expected implemented interface name after ':'", true))
+        return nullptr;
 
     if(isExtern && m_cursor.match(TokenType::Semicolon))
         return decl;
@@ -147,7 +131,7 @@ b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const Sourc
         return false;
     if(method.isOperator){
         MStringView opErr;
-        if(!ValidateMemberOperatorArity(method.name, method.params.size(), opErr)){
+        if(!OperatorSemantics::ValidateMemberOperatorArity(method.name, method.params.size(), opErr)){
             m_cursor.error(span.line, span.column, opErr);
             return false;
         }
@@ -221,11 +205,11 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     if(classDecl.isExtern){
         b8 seenExternKeyword = false;
         for(;;){
-            if(!isMemberStatic && m_cursor.matchIdentifier("static")){
+            if(!isMemberStatic && m_cursor.matchIdentifier(KeywordSemantics::s_Static)){
                 isMemberStatic = true;
                 continue;
             }
-            if(!seenExternKeyword && m_cursor.matchIdentifier("extern")){
+            if(!seenExternKeyword && m_cursor.matchIdentifier(KeywordSemantics::s_Extern)){
                 seenExternKeyword = true;
                 isMemberExtern = true;
                 continue;
@@ -263,9 +247,6 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
         MethodDecl* dtor = AllocateAstNode<MethodDecl>(m_cursor.arena());
         dtor->access = access;
-        dtor->ownerClassName = classDecl.name;
-        dtor->name = classDecl.name;
-        dtor->isDestructor = true;
         dtor->isImported = isMemberExtern;
         dtor->isExtern = isMemberExtern;
         dtor->requiredHeader = classDecl.requiredHeader;
@@ -273,11 +254,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
         if(!applyCallableAttributes(attributes, *dtor))
             return false;
-        if(dtor->isReflect){
-            m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
-            return false;
-        }
-        if(!parseDestructorEmptyParams("expected '(' for destructor"))
+        if(!initializeDestructorDecl(*dtor, classDecl.name, "expected '(' for destructor"))
             return false;
         if(!parseClassMemberCallableBody(*dtor, "expected '{' or ';' after destructor declaration"))
             return false;
@@ -292,9 +269,6 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         if(m_cursor.check(TokenType::LeftParen)){
             MethodDecl* ctor = AllocateAstNode<MethodDecl>(m_cursor.arena());
             ctor->access = access;
-            ctor->ownerClassName = classDecl.name;
-            ctor->name = classDecl.name;
-            ctor->isConstructor = true;
             ctor->isImported = isMemberExtern;
             ctor->isExtern = isMemberExtern;
             ctor->requiredHeader = classDecl.requiredHeader;
@@ -302,11 +276,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
             if(!applyCallableAttributes(attributes, *ctor))
                 return false;
-            if(ctor->isReflect){
-                m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
-                return false;
-            }
-            if(!parseConstructorParamsAndRejectInitList(*ctor))
+            if(!initializeConstructorDecl(*ctor, classDecl.name))
                 return false;
             if(!parseClassMemberCallableBody(*ctor, "expected '{' or ';' after constructor declaration"))
                 return false;
@@ -317,7 +287,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.restore(cp);
     }
 
-    if(m_cursor.checkIdentifier("operator")){
+    if(m_cursor.checkIdentifier(KeywordSemantics::s_Operator)){
         m_cursor.error("implicit type-conversion operators are prohibited in adhd; use 'cast<T>(x)' or an explicit named method");
         return false;
     }
@@ -326,7 +296,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     if(!memberType)
         return false;
 
-    if(m_cursor.matchIdentifier("operator")){
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Operator)){
         MStringView opName;
         if(!parseOperatorName(opName))
             return false;

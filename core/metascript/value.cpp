@@ -53,6 +53,58 @@ void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOv
     FOUNDATION_ASSERT_MSG(false, invalidOpMessage);
 }
 
+[[nodiscard]] b8 TryApplyNumericAdd(Value& target, const Value& lhs, const Value& rhs)noexcept{
+    if(!lhs.isNumeric() || !rhs.isNumeric())
+        return false;
+    ApplyNumericBinary(
+        target,
+        lhs,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return AddOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a + b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
+        {}
+    );
+    return true;
+}
+
+void ApplyNumericSubtract(Value& target, const Value& lhs, const Value& rhs, [[maybe_unused]] const TStringView invalidOpMessage)noexcept{
+    ApplyNumericBinary(
+        target,
+        lhs,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a - b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
+        invalidOpMessage
+    );
+}
+
+void ApplyNumericMultiply(Value& target, const Value& lhs, const Value& rhs, [[maybe_unused]] const TStringView invalidOpMessage)noexcept{
+    ApplyNumericBinary(
+        target,
+        lhs,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a * b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
+        invalidOpMessage
+    );
+}
+
+void ApplyNumericDivide(Value& target, const Value& lhs, const Value& rhs, [[maybe_unused]] const TStringView invalidOpMessage)noexcept{
+    ApplyNumericBinary(
+        target,
+        lhs,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a / b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
+        invalidOpMessage,
+        true
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,16 +183,11 @@ Value& Value::operator=(Value&& other){
 
 
 Value Value::operator+(const Value& rhs)const{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
-            return Value(m_arena);
-        }
-        return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
+    if(isNumeric() && rhs.isNumeric()){
+        Value out(m_arena);
+        (void)__hidden_metascript_value::TryApplyNumericAdd(out, *this, rhs);
+        return out;
     }
-
-    if(isNumeric() && rhs.isNumeric())
-        return Value(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         const auto lsv = asString();
@@ -183,61 +230,25 @@ Value Value::operator+(const Value& rhs)const{
 
 Value Value::operator-(const Value& rhs)const noexcept{
     Value out(m_arena);
-    __hidden_metascript_value::ApplyNumericBinary(
-        out,
-        *this,
-        rhs,
-        [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
-        [](const i64 a, const i64 b)noexcept{ return a - b; },
-        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
-        FOUNDATION_TEXT("invalid operand types for operator-")
-    );
+    __hidden_metascript_value::ApplyNumericSubtract(out, *this, rhs, FOUNDATION_TEXT("invalid operand types for operator-"));
     return out;
 }
 
 Value Value::operator*(const Value& rhs)const noexcept{
     Value out(m_arena);
-    __hidden_metascript_value::ApplyNumericBinary(
-        out,
-        *this,
-        rhs,
-        [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
-        [](const i64 a, const i64 b)noexcept{ return a * b; },
-        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
-        FOUNDATION_TEXT("invalid operand types for operator*")
-    );
+    __hidden_metascript_value::ApplyNumericMultiply(out, *this, rhs, FOUNDATION_TEXT("invalid operand types for operator*"));
     return out;
 }
 
 Value Value::operator/(const Value& rhs)const noexcept{
     Value out(m_arena);
-    __hidden_metascript_value::ApplyNumericBinary(
-        out,
-        *this,
-        rhs,
-        [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
-        [](const i64 a, const i64 b)noexcept{ return a / b; },
-        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
-        FOUNDATION_TEXT("invalid operand types for operator/"),
-        true
-    );
+    __hidden_metascript_value::ApplyNumericDivide(out, *this, rhs, FOUNDATION_TEXT("invalid operand types for operator/"));
     return out;
 }
 
 Value& Value::operator+=(const Value& rhs){
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            FOUNDATION_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
-            return *this;
-        }
-        m_data.m_integer += rhs.m_data.m_integer;
+    if(__hidden_metascript_value::TryApplyNumericAdd(*this, *this, rhs))
         return *this;
-    }
-
-    if(isNumeric() && rhs.isNumeric()){
-        setDouble(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
-        return *this;
-    }
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
@@ -282,42 +293,17 @@ Value& Value::operator+=(const Value& rhs){
 }
 
 Value& Value::operator-=(const Value& rhs)noexcept{
-    __hidden_metascript_value::ApplyNumericBinary(
-        *this,
-        *this,
-        rhs,
-        [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
-        [](const i64 a, const i64 b)noexcept{ return a - b; },
-        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
-        FOUNDATION_TEXT("invalid operand types for operator-=")
-    );
+    __hidden_metascript_value::ApplyNumericSubtract(*this, *this, rhs, FOUNDATION_TEXT("invalid operand types for operator-="));
     return *this;
 }
 
 Value& Value::operator*=(const Value& rhs)noexcept{
-    __hidden_metascript_value::ApplyNumericBinary(
-        *this,
-        *this,
-        rhs,
-        [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
-        [](const i64 a, const i64 b)noexcept{ return a * b; },
-        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
-        FOUNDATION_TEXT("invalid operand types for operator*=")
-    );
+    __hidden_metascript_value::ApplyNumericMultiply(*this, *this, rhs, FOUNDATION_TEXT("invalid operand types for operator*="));
     return *this;
 }
 
 Value& Value::operator/=(const Value& rhs)noexcept{
-    __hidden_metascript_value::ApplyNumericBinary(
-        *this,
-        *this,
-        rhs,
-        [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
-        [](const i64 a, const i64 b)noexcept{ return a / b; },
-        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
-        FOUNDATION_TEXT("invalid operand types for operator/="),
-        true
-    );
+    __hidden_metascript_value::ApplyNumericDivide(*this, *this, rhs, FOUNDATION_TEXT("invalid operand types for operator/="));
     return *this;
 }
 

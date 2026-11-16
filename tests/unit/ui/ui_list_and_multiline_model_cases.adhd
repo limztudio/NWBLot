@@ -1375,7 +1375,7 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
 }
 
 void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAllState(mut MultilineCommandTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(3u, 8u, 128u), EditTextMode::Multiline);
+    EditModel limited = EditModel(MakeUiEditLimits(3u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
     const EditCommandResult rejected = ApplyEditCommand(limited, MakeUiMultilineCommand(EditCommand::Newline));
@@ -1383,7 +1383,7 @@ void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAl
     EXPECT_FALSE(rejected.textChanged);
     EXPECT_FALSE(rejected.selectionChanged);
     before.expectUnchanged(limited);
-    EditModel single = EditModel(self.m_arena);
+    EditModel single = EditModel();
     ASSERT_TRUE(single.setText("abc"));
     const MultilineSnapshot singleBefore = MultilineSnapshot(self.m_arena, single);
     EXPECT_FALSE(ApplyEditCommand(single, MakeUiMultilineCommand(EditCommand::Newline)).textChanged);
@@ -1455,7 +1455,7 @@ void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWith
 }
 
 void VerifyMultilineCompositionTests_OverCapacityPreeditAndCommitPreserveEveryModelField(mut MultilineCompositionTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(6u, 8u, 128u), EditTextMode::Multiline);
+    EditModel limited = EditModel(MakeUiEditLimits(6u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.setSelection(1u, 2u));
     ASSERT_TRUE(limited.beginComposition());
@@ -1521,7 +1521,7 @@ void VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineRepl
 
 
 void VerifyMultilineModelTests_SingleLineRejectsHardBreaksAndNulWithoutChangingModel(mut MultilineModelTests self){
-    EditModel single = EditModel(self.m_arena);
+    EditModel single = EditModel();
     ASSERT_TRUE(single.setText("a\t\x01\x7F\302\205b"));
     const MultilineSnapshot before = MultilineSnapshot(self.m_arena, single);
     Array<StringView, 5u> rejectedList = Array<StringView, 5u>();
@@ -1613,7 +1613,7 @@ void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelect
 }
 
 void VerifyMultilineModelTests_CapacityFailureKeepsTheExactBorrowedModelState(mut MultilineModelTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(6u, 8u, 128u), EditTextMode::Multiline);
+    EditModel limited = EditModel(MakeUiEditLimits(6u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.replaceSelection("d"));
     ASSERT_TRUE(limited.setSelection(0u, 1u));
@@ -1730,7 +1730,7 @@ void VerifyMultilineModelTests_AcceptedNoopSelectionAndMovementAdvanceTheSelecti
     modes[0u] = EditTextMode::SingleLine;
     modes[1u] = EditTextMode::Multiline;
     for(in EditTextModeEnum mode : modes){
-        EditModel model = EditModel(self.m_arena, EditLimits(), mode);
+        EditModel model = EditModel(EditLimits(), mode);
         ASSERT_TRUE(model.setText("a\xCC\x81z"));
         const u64 revision = model.revision();
         const u64 external = model.externalRevision();
@@ -1760,7 +1760,7 @@ void VerifyMultilineModelTests_SelectionAwayAndBackCannotReviveAnOldLoanEpoch(mu
     modes[0u] = EditTextMode::SingleLine;
     modes[1u] = EditTextMode::Multiline;
     for(in EditTextModeEnum mode : modes){
-        EditModel model = EditModel(self.m_arena, EditLimits(), mode);
+        EditModel model = EditModel(EditLimits(), mode);
         ASSERT_TRUE(model.setText("ab"));
         const u64 revision = model.revision();
         const u64 external = model.externalRevision();

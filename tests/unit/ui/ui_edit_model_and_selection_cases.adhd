@@ -129,7 +129,7 @@ public:
     [[nodiscard]] AStringView conformanceText(const usize index)const noexcept{ return s_ConformanceCases[index].text; }
     [[nodiscard]] AStringView conformanceExpectedOffsets(const usize index)const noexcept{ return s_ConformanceCases[index].expectedOffsets; }
     [[nodiscard]] Expected<EditBoundaryVector> buildBoundaries(const AStringView text, const b8 singleLine = false){
-        return GraphemeSegmentation::Build(m_arena, text, singleLine);
+        return BuildEditGraphemeBoundaries(m_arena, text, singleLine);
     }
     [[nodiscard]] usize allocationCount()const noexcept{ return m_arena.memoryStats().allocationCount; }
 };
@@ -295,7 +295,7 @@ using ::NWB::Tests::UiCases::s_UiCaseTestsUiEditNavigation;
 [[nodiscard]] FOUNDATION_INLINE AStringView MakeUiEditSingleNullView()noexcept{ return AStringView("\0", 1u); }
 [[nodiscard]] FOUNDATION_INLINE AStringView MakeUiEditEmbeddedNullView()noexcept{ return AStringView("a\0b", 3u); }
 [[nodiscard]] FOUNDATION_INLINE b8 UiEditValidateGraphemes(const AStringView text, const b8 singleLine = false)noexcept{
-    return ::NWB::Impl::Ui::GraphemeSegmentation::Validate(text, singleLine);
+    return ::NWB::Impl::Ui::ValidateGraphemeText(text, singleLine);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiEditIsAsciiDigit(const u8 ch)noexcept{ return ::IsAsciiDigit(static_cast<char>(ch)); }
 FOUNDATION_INLINE void UiKeepEditArenaAlive(const GlobalArena&)noexcept{}
@@ -308,7 +308,7 @@ FOUNDATION_INLINE void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
 }
 [[nodiscard]] FOUNDATION_INLINE b8 VerifyUiSingleLineAliasedInputCopy(){
     ::NWB::Tests::TestArena<> arena;
-    ::AString<::NWB::Core::Alloc::GlobalArena> output("prefix a\r\nb", arena.arena);
+    ::AString<::ArenaBase> output("prefix a\r\nb", arena.arena);
     const ::AStringView source(output.data() + 7u, output.size() - 7u);
     auto normalized = ::NWB::Impl::Ui::NormalizeSingleLineText(arena.arena, source, 3u);
     if(!normalized)
@@ -641,7 +641,7 @@ void VerifyUiEditCompositionTests_CancellationPreservesCommittedTextSelectionRev
 }
 
 void VerifyUiEditCompositionTests_InvalidUpdateAndCommitKeepPreviousCompositionAndCommittedState(mut UiEditCompositionTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(4u, 8u, 128u));
+    EditModel limited = EditModel(MakeUiEditLimits(4u, 8u, 128u));
     ASSERT_TRUE(limited.setText("abcd"));
     ASSERT_TRUE(limited.setSelection(1u, 3u));
     const u64 revision = limited.revision();
@@ -848,7 +848,7 @@ void VerifyUiEditHistoryTests_SelectionNavigationAndValidNoopPreserveRedo(mut Ui
 }
 
 void VerifyUiEditHistoryTests_RecordBoundEvictsOldestCompleteRecords(mut UiEditHistoryTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(16u, 2u, 128u));
+    EditModel limited = EditModel(MakeUiEditLimits(16u, 2u, 128u));
     ASSERT_TRUE(limited.replaceSelection("a"));
     ASSERT_TRUE(limited.replaceSelection("b"));
     ASSERT_TRUE(limited.replaceSelection("c"));
@@ -863,7 +863,7 @@ void VerifyUiEditHistoryTests_RecordBoundEvictsOldestCompleteRecords(mut UiEditH
 }
 
 void VerifyUiEditHistoryTests_ByteBoundAdmitsCompleteNewestRecord(mut UiEditHistoryTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(16u, 8u, 6u));
+    EditModel limited = EditModel(MakeUiEditLimits(16u, 8u, 6u));
     ASSERT_TRUE(limited.replaceSelection("a"));
     ASSERT_TRUE(limited.replaceSelection("b"));
     ASSERT_TRUE(limited.replaceSelection("c"));
@@ -875,7 +875,7 @@ void VerifyUiEditHistoryTests_ByteBoundAdmitsCompleteNewestRecord(mut UiEditHist
 }
 
 void VerifyUiEditHistoryTests_OversizedHistoryRecordClearsEarlierUndoToPreventSkippingLatestEdit(mut UiEditHistoryTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(32u, 8u, 4u));
+    EditModel limited = EditModel(MakeUiEditLimits(32u, 8u, 4u));
     ASSERT_TRUE(limited.replaceSelection("a"));
     ASSERT_TRUE(limited.replaceSelection("b"));
     EXPECT_TRUE(limited.canUndo());
@@ -886,7 +886,7 @@ void VerifyUiEditHistoryTests_OversizedHistoryRecordClearsEarlierUndoToPreventSk
 }
 
 void VerifyUiEditHistoryTests_DisabledHistoryAndCopiedReplacementHaveBoundedOwnership(mut UiEditHistoryTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(32u, 0u, 0u));
+    EditModel limited = EditModel(MakeUiEditLimits(32u, 0u, 0u));
     String replacement = "owned";
     ASSERT_TRUE(limited.replaceSelection(replacement));
     replacement.assign("other");
@@ -896,7 +896,7 @@ void VerifyUiEditHistoryTests_DisabledHistoryAndCopiedReplacementHaveBoundedOwne
 }
 
 void VerifyUiEditHistoryTests_NormalizedMultilinePasteUndoRestoresPriorDocument(mut UiEditHistoryTests self){
-    EditModel multiline = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    EditModel multiline = EditModel(EditLimits(), EditTextMode::Multiline);
     ASSERT_TRUE(multiline.setText("abcdef\nx\nabcdef\n???"));
     ASSERT_TRUE(multiline.selectAll());
     ASSERT_TRUE(self.replaceSelectionWithNormalizedMultiline(multiline, "ab\r\ncdef\r\nxy"));
@@ -998,7 +998,7 @@ void VerifyUiEditModelTests_InvalidUtf8AndMultilineValuesPreserveAllCommittedSta
 }
 
 void VerifyUiEditModelTests_ByteLimitFailureIsAtomicAndEmptyLimitAcceptsOnlyEmptyText(mut UiEditModelTests self){
-    EditModel limited = EditModel(self.m_arena, MakeUiEditLimits(3u, 2u, 12u));
+    EditModel limited = EditModel(MakeUiEditLimits(3u, 2u, 12u));
     ASSERT_TRUE(limited.setText("ab"));
     const u64 revision = limited.revision();
     EXPECT_FALSE(limited.replaceSelection("cd"));
@@ -1007,7 +1007,7 @@ void VerifyUiEditModelTests_ByteLimitFailureIsAtomicAndEmptyLimitAcceptsOnlyEmpt
     EXPECT_EQ(limited.caret(), 2u);
     EXPECT_EQ(limited.revision(), revision);
     EXPECT_FALSE(limited.canUndo());
-    EditModel empty = EditModel(self.m_arena, MakeUiEditLimits(0u, 0u, 0u));
+    EditModel empty = EditModel(MakeUiEditLimits(0u, 0u, 0u));
     EXPECT_TRUE(empty.setText(""));
     EXPECT_TRUE(empty.replaceSelection(""));
     EXPECT_FALSE(empty.replaceSelection("a"));
@@ -1024,7 +1024,7 @@ void VerifyUiEditModelTests_WordRangeRejectsInteriorGraphemeAndKeepsHardLinesSep
     ASSERT_TRUE(range.has_value());
     EXPECT_EQ(range.value().begin, 0u);
     EXPECT_EQ(range.value().end, 4u);
-    EditModel multiline = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    EditModel multiline = EditModel(EditLimits(), EditTextMode::Multiline);
     ASSERT_TRUE(multiline.setText("ab\ncd"));
     range = multiline.wordRangeAt(2u);
     ASSERT_TRUE(range.has_value());
@@ -1219,7 +1219,7 @@ void VerifyUiEditSurroundingSelectionTests_OneSidedCountsAddressNormalizedSelect
             expectedBeforeAnchor = 4u;
             expectedBeforeCaret = 1u;
         }
-        EditModel before = EditModel(self.m_arena);
+        EditModel before = EditModel();
         ASSERT_TRUE(before.setText(s_UiEditSelectionSampleText));
         ASSERT_TRUE(before.setSelection(selStart, selEnd));
         ASSERT_TRUE(before.eraseAroundSelection(2u, 0u));
@@ -1228,7 +1228,7 @@ void VerifyUiEditSurroundingSelectionTests_OneSidedCountsAddressNormalizedSelect
         EXPECT_EQ(before.anchor(), expectedBeforeAnchor);
         EXPECT_EQ(before.caret(), expectedBeforeCaret);
 
-        EditModel after = EditModel(self.m_arena);
+        EditModel after = EditModel();
         ASSERT_TRUE(after.setText(s_UiEditSelectionSampleText));
         ASSERT_TRUE(after.setSelection(selStart, selEnd));
         ASSERT_TRUE(after.eraseAroundSelection(0u, 2u));
@@ -1284,7 +1284,7 @@ void VerifyUiEditSurroundingSelectionTests_SelectedCombiningAndZwjEmojiGraphemes
 }
 
 void VerifyUiEditSurroundingSelectionTests_MultilineSelectionKeepsItsLfBytesAndReverseDirection(mut UiEditSurroundingSelectionTests self){
-    EditModel model = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    EditModel model = EditModel(EditLimits(), EditTextMode::Multiline);
     ASSERT_TRUE(model.setText("ab\nC\nD\nef"));
     ASSERT_TRUE(model.setSelection(7u, 2u));
     ASSERT_TRUE(model.eraseAroundSelection(1u, 1u));
@@ -1372,10 +1372,10 @@ void VerifyUiEditSurroundingSelectionTests_CandidateSeamMergesRejectEitherEndpoi
     cases[0u] = MakeUiEditSeamMergeCase("\xF0\x9F\x87\xA6x\xF0\x9F\x87\xA7z", 5u, 9u, 1u, 0u, "\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7z", 4u);
     cases[1u] = MakeUiEditSeamMergeCase("z\xF0\x9F\x87\xA6x\xF0\x9F\x87\xA7q", 1u, 5u, 0u, 1u, "z\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7q", 5u);
     for(in UiEditSeamMergeCase value : cases){
-        EditModel model = EditModel(self.m_arena);
+        EditModel model = EditModel();
         ASSERT_TRUE(SeedUiEditSurroundingHistoryAndPreedit(value.text, value.anchor, value.caret, model));
         const MultilineSnapshot before = MultilineSnapshot(self.m_arena, model);
-        EditModel merged = EditModel(self.m_arena);
+        EditModel merged = EditModel();
         ASSERT_TRUE(merged.setText(value.merged));
         EXPECT_TRUE(IsUtf8ScalarBoundary(value.merged, value.lostBoundary));
         EXPECT_FALSE(merged.setSelection(value.lostBoundary, value.lostBoundary));

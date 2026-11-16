@@ -17,6 +17,35 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace SpecialBuiltinTypeKind{
+    enum Enum : u8{
+        Void,
+        Func,
+        Bool,
+        ByteScalar,
+        Int32,
+        UInt32,
+        Int64,
+        UInt64,
+        Usize,
+        Float32,
+        Float64,
+        StringView,
+        Name,
+        Path,
+        VectorSingle,
+        VectorDouble,
+        ArenaBase,
+    };
+};
+
+struct SpecialBuiltinTypeInfo{
+    SpecialBuiltinTypeKind::Enum kind;
+    MStringView adhdName;
+    MStringView cppName;
+    b8 isReservedPrimitive;
+};
+
 struct BuiltinScalarTypeInfo{
     MStringView adhdName;
     u32 byteSize;
@@ -30,12 +59,98 @@ struct BuiltinScalarTypeInfo{
 
 class BuiltinTypeSemantics final{
 public:
+    inline static constexpr auto s_SpecialBuiltinTypes = Array{
+    #define NWB_ADHD_EXPORT_SPECIAL_TYPE(kind, adhdName, cppName, isReservedPrimitive) \
+        SpecialBuiltinTypeInfo{ SpecialBuiltinTypeKind::kind, adhdName, cppName, isReservedPrimitive },
+    #include "../export_types.h"
+    #undef NWB_ADHD_EXPORT_SPECIAL_TYPE
+    };
+
     inline static constexpr auto s_BuiltinScalarTypes = Array{
     #define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, cppType, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
         BuiltinScalarTypeInfo{ adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat },
     #include "../export_types.h"
     #undef NWB_ADHD_EXPORT_SCALAR_TYPE
     };
+
+    [[nodiscard]] static constexpr const SpecialBuiltinTypeInfo* FindSpecialBuiltinType(const SpecialBuiltinTypeKind::Enum kind)noexcept{
+        for(const SpecialBuiltinTypeInfo& info : s_SpecialBuiltinTypes){
+            if(info.kind == kind)
+                return &info;
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] static constexpr MStringView SpecialTypeName(const SpecialBuiltinTypeKind::Enum kind)noexcept{
+        const SpecialBuiltinTypeInfo* info = FindSpecialBuiltinType(kind);
+        return info ? info->adhdName : MStringView{};
+    }
+
+    [[nodiscard]] static constexpr MStringView SpecialTypeCppName(const SpecialBuiltinTypeKind::Enum kind)noexcept{
+        const SpecialBuiltinTypeInfo* info = FindSpecialBuiltinType(kind);
+        return info ? info->cppName : MStringView{};
+    }
+
+    [[nodiscard]] static constexpr MStringView VoidTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Void); }
+    [[nodiscard]] static constexpr MStringView FuncTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Func); }
+    [[nodiscard]] static constexpr MStringView BoolScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Bool); }
+    [[nodiscard]] static constexpr MStringView ByteScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::ByteScalar); }
+    [[nodiscard]] static constexpr MStringView Int32ScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Int32); }
+    [[nodiscard]] static constexpr MStringView UInt32ScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::UInt32); }
+    [[nodiscard]] static constexpr MStringView Int64ScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Int64); }
+    [[nodiscard]] static constexpr MStringView UInt64ScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::UInt64); }
+    [[nodiscard]] static constexpr MStringView UsizeScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Usize); }
+    [[nodiscard]] static constexpr MStringView Float32ScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Float32); }
+    [[nodiscard]] static constexpr MStringView Float64ScalarTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Float64); }
+    [[nodiscard]] static constexpr MStringView StringViewTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::StringView); }
+    [[nodiscard]] static constexpr MStringView NameTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Name); }
+    [[nodiscard]] static constexpr MStringView PathTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Path); }
+    [[nodiscard]] static constexpr MStringView VectorSingleTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::VectorSingle); }
+    [[nodiscard]] static constexpr MStringView VectorDoubleTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::VectorDouble); }
+    [[nodiscard]] static constexpr MStringView ArenaBaseTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::ArenaBase); }
+    [[nodiscard]] static constexpr MStringView ArenaBaseCppName()noexcept{ return SpecialTypeCppName(SpecialBuiltinTypeKind::ArenaBase); }
+
+    [[nodiscard]] static constexpr b8 IsVoidTypeName(const MStringView name)noexcept{
+        return name == VoidTypeName();
+    }
+
+    [[nodiscard]] static constexpr b8 IsFuncTypeName(const MStringView name)noexcept{
+        return name == FuncTypeName();
+    }
+
+    [[nodiscard]] static constexpr MStringView PromoteFloatScalarTypes(const MStringView lhs, const MStringView rhs)noexcept{
+        const MStringView f64Name = Float64ScalarTypeName();
+        if(lhs == f64Name || rhs == f64Name)
+            return f64Name;
+        const MStringView f32Name = Float32ScalarTypeName();
+        if(lhs == f32Name || rhs == f32Name)
+            return f32Name;
+        return {};
+    }
+
+    [[nodiscard]] static constexpr MStringView FindIntegerScalarTypeName(const u32 byteSize, const b8 isSigned)noexcept{
+        for(const BuiltinScalarTypeInfo& info : s_BuiltinScalarTypes){
+            if(info.isInteger && info.isFixedWidthInt && info.byteSize == byteSize && info.isSigned == isSigned)
+                return info.adhdName;
+        }
+        return {};
+    }
+
+    [[nodiscard]] static constexpr MStringView FindPointerSizedIntScalarTypeName(const b8 isSigned)noexcept{
+        for(const BuiltinScalarTypeInfo& info : s_BuiltinScalarTypes){
+            if(info.isInteger && !info.isFixedWidthInt && info.isSigned == isSigned)
+                return info.adhdName;
+        }
+        return {};
+    }
+
+    [[nodiscard]] static constexpr MStringView FindFloatScalarTypeName(const u32 byteSize)noexcept{
+        for(const BuiltinScalarTypeInfo& info : s_BuiltinScalarTypes){
+            if(info.isFloat && info.byteSize == byteSize)
+                return info.adhdName;
+        }
+        return {};
+    }
 
     [[nodiscard]] static constexpr const BuiltinScalarTypeInfo* FindBuiltinScalarType(const MStringView name)noexcept{
         for(const BuiltinScalarTypeInfo& info : s_BuiltinScalarTypes){
@@ -97,40 +212,8 @@ public:
         return true;
     }
 
-    [[nodiscard]] static constexpr b8 IsReservedPrimitiveOrContainerTypeName(const MStringView name)noexcept{
-        if(name == "void" || name == "Func" || IsScalarType(name))
-            return true;
-    #define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-        if(name == adhdName) return true;
-    #define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, rowVectorType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-        if(name == adhdName) return true;
-    #define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, laneScalarType, isHalfFloat) \
-        if(name == adhdName) return true;
-    #define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor, requiredHeader) \
-        if(MStringView(requiredHeader).empty() && name == adhdName) return true;
-    #include "../export_types.h"
-    #undef NWB_ADHD_EXPORT_GENERIC_TYPE
-    #undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
-    #undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-    #undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-        return false;
-    }
-
-    [[nodiscard]] static constexpr b8 IsBuiltinTypeName(const MStringView name)noexcept{
-        if(IsReservedPrimitiveOrContainerTypeName(name))
-            return true;
-    #define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor, requiredHeader) \
-        if(name == adhdName) return true;
-    #define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaCtorMode, isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind, requiredHeader) \
-        if(name == adhdName) return true;
-    #define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader) \
-        if(name == adhdName) return true;
-    #include "../export_types.h"
-    #undef NWB_ADHD_EXPORT_BUILTIN_ENUM
-    #undef NWB_ADHD_EXPORT_OBJECT_TYPE
-    #undef NWB_ADHD_EXPORT_GENERIC_TYPE
-        return false;
-    }
+    [[nodiscard]] static b8 IsReservedPrimitiveOrContainerTypeName(MStringView name)noexcept;
+    [[nodiscard]] static b8 IsBuiltinTypeName(MStringView name)noexcept;
 };
 
 

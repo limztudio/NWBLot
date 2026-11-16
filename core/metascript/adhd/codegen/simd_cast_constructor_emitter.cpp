@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "simd_cast_constructor_emitter.h"
+#include "simd_constructor_emitter.h"
+
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,13 +16,11 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SimdCastConstructorEmitter::tryEmit()const{
+b8 SimdConstructorEmitter::tryEmitCastConstructor(const b8 isDouble)const{
     MString& out = m_output;
     const Span<const Expr* const> arguments = m_arguments;
-    const b8 isDouble = m_isDouble;
-    const b8 isInt = false;
-    if(!isInt && (arguments.size() == 3u || arguments.size() == 4u)){
-        const MStringView targetScalarType = isDouble ? "f64" : "f32";
+    if(arguments.size() == 3u || arguments.size() == 4u){
+        const MStringView targetScalarType = isDouble ? BuiltinTypeSemantics::Float64ScalarTypeName() : BuiltinTypeSemantics::Float32ScalarTypeName();
         const Expr* cV0 = nullptr;
         const Expr* cV1 = nullptr;
         MStringView cV0RegType;

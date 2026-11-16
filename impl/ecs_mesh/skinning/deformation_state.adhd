@@ -2,117 +2,97 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_skeleton/joint_types.adhd>
+#include <impl/ecs_mesh/skinning/submission_state.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_skeleton/joint_types.adhd.h>
-#include <impl/ecs_mesh/runtime/mesh.adhd.h>
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
-#include <impl/ecs_skeleton/components.adhd.h>
+type MeshSkinningResourceBuffers = Array<BufferHandle, s_MeshSkinningResourceBufferCount>;
 
+class MeshSkinningDeformationInputs{
+    public BufferHandle resourceSlotsBuffer;
+    public u32 editRevision;
+    public u32 skinningMode;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public MeshSkinningDeformationInputs(){
+        this.resourceSlotsBuffer = BufferHandle();
+        this.editRevision = 0u;
+        this.skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+    }
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MeshSkinningRuntimeInstance;
-using MeshSkinningResourceBuffers = Array<Core::BufferHandle, s_MeshSkinningResourceBufferCount>;
-
-// Retains exact buffer identities so resource replacement cannot reuse old descriptor bindings.
-[[nodiscard]] MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept;
-
-struct MeshSkinningDeformationInputs{
-    Core::BufferHandle resourceSlotsBuffer;
-    u32 editRevision = 0u;
-    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-};
+    public MeshSkinningDeformationInputs(in BufferHandle resourceSlotsBufferIn, in u32 editRevisionIn, in u32 skinningModeIn){
+        this.resourceSlotsBuffer = resourceSlotsBufferIn;
+        this.editRevision = editRevisionIn;
+        this.skinningMode = skinningModeIn;
+    }
+}
 
 // Accepted object-space output is reusable only for the same resolved GPU palette and resource generation.
-class MeshSkinningDeformationState final{
-public:
-    explicit MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena)noexcept
-        : m_acceptedJoints(arena)
-        , m_pendingJoints(arena)
-    {}
+class MeshSkinningDeformationState{
+    private Vector<SkeletonJointMatrix> m_acceptedJoints;
+    private Vector<SkeletonJointMatrix> m_pendingJoints;
+    private MeshSkinningDeformationInputs m_acceptedInputs;
+    private MeshSkinningDeformationInputs m_pendingInputs;
+    private u64 m_acceptedRevision = 0u;
+    private u64 m_candidateSerial = 0u;
+    private u64 m_pendingCandidate = 0u;
+    private b8 m_current = false;
 
-
-public:
-    void invalidateCurrent()noexcept{
-        m_current = false;
-        m_pendingCandidate = 0u;
+    public void invalidateCurrent(){
+        this.m_current = false;
+        this.m_pendingCandidate = 0u;
     }
-    void refreshCurrent(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints, const b8 inputDirty)noexcept{
-        invalidateCurrent();
-        m_current = CanReuseMeshSkinningDeformationState(
+
+    public void refreshCurrent(in MeshSkinningDeformationInputs inputs, in Span<SkeletonJointMatrix> joints, in b8 inputDirty){
+        this.invalidateCurrent();
+        this.m_current = CanReuseMeshSkinningDeformationState(
             inputDirty,
-            m_acceptedRevision,
-            inputs.resourceSlotsBuffer != nullptr && inputs.resourceSlotsBuffer == m_acceptedInputs.resourceSlotsBuffer,
+            this.m_acceptedRevision,
+            inputs.resourceSlotsBuffer.valid() && inputs.resourceSlotsBuffer == this.m_acceptedInputs.resourceSlotsBuffer,
             inputs.editRevision,
-            m_acceptedInputs.editRevision,
+            this.m_acceptedInputs.editRevision,
             inputs.skinningMode,
-            m_acceptedInputs.skinningMode,
-            joints.data() != nullptr,
+            this.m_acceptedInputs.skinningMode,
+            !joints.empty(),
             joints,
-            Span<const SkeletonJointMatrix>(m_acceptedJoints.data(), m_acceptedJoints.size())
+            this.m_acceptedJoints
         );
     }
-    [[nodiscard]] Expected<u64> stage(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints){
-        invalidateCurrent();
-        const auto candidate = TryStageMeshSkinningDeformationCandidate(
-            inputs.resourceSlotsBuffer != nullptr,
+
+    public Expected<u64> stage(in MeshSkinningDeformationInputs inputs, in Span<SkeletonJointMatrix> joints){
+        this.invalidateCurrent();
+        const Expected<u64> candidate = TryStageMeshSkinningDeformationCandidate(
+            inputs.resourceSlotsBuffer.valid(),
             joints,
-            joints.data() != nullptr,
-            m_acceptedRevision,
-            m_candidateSerial,
-            m_pendingJoints
+            !joints.empty(),
+            this.m_acceptedRevision,
+            this.m_candidateSerial,
+            this.m_pendingJoints
         );
-        if(!candidate)
-            return MakeUnexpected(Failure{});
-        m_pendingInputs = inputs;
-        m_pendingCandidate = *candidate;
-        return m_pendingCandidate;
+        if(!candidate.has_value())
+            return MakeUnexpected(Failure());
+        this.m_pendingInputs = inputs;
+        this.m_pendingCandidate = candidate.value();
+        return this.m_pendingCandidate;
     }
-    [[nodiscard]] b8 accept(const u64 candidate)noexcept{
-        if(!TryAcceptMeshSkinningDeformationCandidate(candidate, m_pendingCandidate, m_acceptedRevision, m_current))
+
+    public b8 accept(in u64 candidate){
+        if(!TryAcceptMeshSkinningDeformationCandidate(candidate, this.m_pendingCandidate, this.m_acceptedRevision, this.m_current))
             return false;
-        m_acceptedJoints.swap(m_pendingJoints);
-        m_acceptedInputs = m_pendingInputs;
+        this.m_acceptedJoints.swap(this.m_pendingJoints);
+        this.m_acceptedInputs = this.m_pendingInputs;
         return true;
     }
+
     // Zero also covers a changed pose awaiting this frame's graph submission.
-    [[nodiscard]] u64 contentRevision()const noexcept{ return m_current ? m_acceptedRevision : 0u; }
-
-
-private:
-    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_acceptedJoints;
-    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_pendingJoints;
-    MeshSkinningDeformationInputs m_acceptedInputs;
-    MeshSkinningDeformationInputs m_pendingInputs;
-    u64 m_acceptedRevision = 0u;
-    u64 m_candidateSerial = 0u;
-    u64 m_pendingCandidate = 0u;
-    b8 m_current = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public u64 contentRevision()const{
+        if(this.m_current)
+            return this.m_acceptedRevision;
+        return 0u;
+    }
 }
 
 

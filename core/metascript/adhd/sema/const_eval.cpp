@@ -55,7 +55,7 @@ constexpr i64 s_I64ShiftOperandMax = 64;
     if(!globalConst || !globalConst->varType)
         return false;
     const MStringView baseName = symbols.resolveBaseTypeName(globalConst->varType->name);
-    return BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr || FindBuiltinEnum(baseName) != nullptr;
+    return BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseName) || symbols.isEnumType(baseName);
 }
 
 
@@ -121,7 +121,8 @@ inline thread_local const ActiveEnumEvalContext* s_ActiveEnumCtx = nullptr;
 
 b8 IsValidScopedEnumTemplateArg(MStringView text, const SymbolTable& symbols, const EnumDecl** outEnum, MStringView* outEntryName)noexcept{
     text = TrimView(text);
-    const usize firstSep = text.find("::");
+    constexpr MStringView s_ScopeSep = ContractSemantics::s_CppScopeSeparator;
+    const usize firstSep = text.find(s_ScopeSep);
     if(firstSep == MStringView::npos || firstSep == 0u)
         return false;
     const MStringView enumName = TrimView(text.substr(0u, firstSep));
@@ -129,8 +130,8 @@ b8 IsValidScopedEnumTemplateArg(MStringView text, const SymbolTable& symbols, co
     if(!ed)
         return false;
 
-    const MStringView entryName = TrimView(text.substr(firstSep + 2u));
-    if(entryName.empty() || entryName.find("::") != MStringView::npos)
+    const MStringView entryName = TrimView(text.substr(firstSep + s_ScopeSep.size()));
+    if(entryName.empty() || entryName.find(s_ScopeSep) != MStringView::npos)
         return false;
 
     for(const EnumEntry& entry : ed->entries){
@@ -412,15 +413,7 @@ b8 AreConstantTemplateArgsEquivalent(const MStringView a, const MStringView b, c
 }
 
 b8 HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
-    if(method){
-        if(const TemplateParamDecl* tp = FindTemplateParamByName(method->templateParams, name); tp && tp->constValueType)
-            return true;
-    }
-    if(ownerClass){
-        if(const TemplateParamDecl* tp = FindTemplateParamByName(ownerClass->templateParams, name); tp && tp->constValueType)
-            return true;
-    }
-    return false;
+    return FindEnclosingTemplateParam(ownerClass, method, name, true) != nullptr;
 }
 
 b8 NormalizeConstantTemplateArg(TypeArg& arg, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SymbolTable& symbols)noexcept{

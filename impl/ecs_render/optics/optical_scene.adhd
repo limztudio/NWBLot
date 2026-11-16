@@ -376,7 +376,7 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
             return false;
         Core::BufferHandle replacement = Move(*replacementResult);
         const Core::DescriptorWriteItem write = output ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get()) : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get());
-        const Expected<Core::GpuDescriptorHandle> slotResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, write);
+        const Expected<Core::GpuDescriptorHandle> slotResult = RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, write);
         if(!slotResult)
             return false;
         const Core::GpuDescriptorHandle slot = *slotResult;

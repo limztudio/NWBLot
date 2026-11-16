@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "simd_scalar_lane_emitter.h"
+#include "simd_constructor_emitter.h"
 #include "simd_optimization_analysis.h"
 
 
@@ -15,12 +15,10 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SimdScalarLaneEmitter::tryEmit()const{
+b8 SimdConstructorEmitter::tryEmitScalarLane(const b8 isDouble, const b8 isInt)const{
     MString& out = m_output;
     const MStringView simdType = m_simdType;
     const Span<const Expr* const> arguments = m_arguments;
-    const b8 isDouble = m_isDouble;
-    const b8 isInt = m_isInt;
     if(arguments.size() == 3u || arguments.size() == 4u){
         const Expr* repeatedScalar = nullptr;
         u8 nonZeroMask = 0u;

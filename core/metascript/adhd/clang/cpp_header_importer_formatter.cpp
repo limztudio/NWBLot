@@ -23,10 +23,9 @@ namespace CppHeaderImportDetail{
 void AppendExternAttributes(MString& out, const MStringView requiredHeader, const MStringView cppExportName, const MStringView indent){
     MStringView headerInner;
     if(!requiredHeader.empty()){
-        MStringView inner = requiredHeader;
-        if(inner.size() >= 2u && inner.front() == '<' && inner.back() == '>')
-            inner = inner.substr(1u, inner.size() - 2u);
-        if(!inner.empty() && inner.find('"') == MStringView::npos)
+        b8 hadQuotes = false;
+        const MStringView inner = StripHeaderDelimiters(requiredHeader, nullptr, &hadQuotes);
+        if(!hadQuotes && !inner.empty() && inner.find('"') == MStringView::npos)
             headerInner = inner;
     }
     if(headerInner.empty() && cppExportName.empty())
@@ -36,7 +35,8 @@ void AppendExternAttributes(MString& out, const MStringView requiredHeader, cons
     out.push_back('[');
     b8 hasAttr = false;
     if(!headerInner.empty()){
-        out.append("cpp_header(\"");
+        out.append(KeywordSemantics::s_ExternAttrCppHeader.data(), KeywordSemantics::s_ExternAttrCppHeader.size());
+        out.append("(\"");
         out.append(headerInner.data(), headerInner.size());
         out.append("\")");
         hasAttr = true;
@@ -44,7 +44,8 @@ void AppendExternAttributes(MString& out, const MStringView requiredHeader, cons
     if(!cppExportName.empty()){
         if(hasAttr)
             out.append(", ");
-        out.append("cpp_name(\"");
+        out.append(KeywordSemantics::s_ExternAttrCppName.data(), KeywordSemantics::s_ExternAttrCppName.size());
+        out.append("(\"");
         out.append(cppExportName.data(), cppExportName.size());
         out.append("\")");
     }
@@ -52,11 +53,12 @@ void AppendExternAttributes(MString& out, const MStringView requiredHeader, cons
 }
 
 void AppendTypeRefExternText(MString& out, const TypeRef& type, const b8 includeRefMode){
-    if(includeRefMode){
-        if(type.refMode == ParamPassingMode::In)
-            out.append("in ");
-        else if(type.refMode == ParamPassingMode::Mut)
-            out.append("mut ");
+    if(includeRefMode && type.refMode != ParamPassingMode::None){
+        const MStringView refKeyword = KeywordSemantics::ParamPassingModeKeyword(type.refMode);
+        if(!refKeyword.empty()){
+            out.append(refKeyword.data(), refKeyword.size());
+            out.push_back(' ');
+        }
     }
 
     out.append(type.name.data(), type.name.size());
@@ -79,20 +81,26 @@ void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStrin
     AppendExternAttributes(out, includeHeader ? m.requiredHeader : MStringView(), m.cppExportName, indent);
     out.append(indent.data(), indent.size());
     if(m.isConstructor){
-        out.append("extern ");
+        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+        out.push_back(' ');
         out.append(m.name.data(), m.name.size());
     }
     else{
-        if(m.isStatic)
-            out.append("static ");
-        out.append("extern ");
+        if(m.isStatic){
+            out.append(KeywordSemantics::s_Static.data(), KeywordSemantics::s_Static.size());
+            out.push_back(' ');
+        }
+        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+        out.push_back(' ');
         if(m.returnType)
             AppendTypeRefExternText(out, *m.returnType, true);
-        else
-            out.append("void");
+        else{
+            const MStringView voidName = BuiltinTypeSemantics::VoidTypeName();
+            out.append(voidName.data(), voidName.size());
+        }
         out.push_back(' ');
         if(m.isOperator){
-            out.append("operator");
+            out.append(KeywordSemantics::s_Operator.data(), KeywordSemantics::s_Operator.size());
             out.append(m.name.data(), m.name.size());
         }
         else{
@@ -116,11 +124,12 @@ void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStrin
         const ParamDecl& p = m.params[i];
         if(!p.type)
             continue;
-        if(p.type->refMode == ParamPassingMode::None){
-            if(p.mode == ParamPassingMode::In)
-                out.append("in ");
-            else if(p.mode == ParamPassingMode::Mut)
-                out.append("mut ");
+        if(p.type->refMode == ParamPassingMode::None && p.mode != ParamPassingMode::None){
+            const MStringView modeKeyword = KeywordSemantics::ParamPassingModeKeyword(p.mode);
+            if(!modeKeyword.empty()){
+                out.append(modeKeyword.data(), modeKeyword.size());
+                out.push_back(' ');
+            }
         }
         AppendTypeRefExternText(out, *p.type, true);
         out.push_back(' ');
@@ -130,7 +139,7 @@ void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStrin
     }
     out.push_back(')');
     if(m.isConst)
-        out.append("const");
+        out.append(KeywordSemantics::s_Const.data(), KeywordSemantics::s_Const.size());
     out.append(";\r\n");
 }
 
@@ -146,13 +155,17 @@ void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStrin
 
 MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaArena& arena){
     MString out(arena);
-    out.append("// Generated by adhd_compiler (--emit-cpp-externs)\r\n\r\n");
+    out.append(CppHeaderImportDetail::CppImporterSemantics::s_EmitExternsBanner.data(), CppHeaderImportDetail::CppImporterSemantics::s_EmitExternsBanner.size());
 
     for(const EnumDecl* e : unit.enums){
         if(!e || !e->isExtern)
             continue;
         CppHeaderImportDetail::AppendExternAttributes(out, e->requiredHeader, e->cppExportName, "");
-        out.append(e->isFlag ? "extern flag " : "extern enum ");
+        const MStringView enumKeyword = KeywordSemantics::EnumDeclKeyword(e->isFlag);
+        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+        out.push_back(' ');
+        out.append(enumKeyword.data(), enumKeyword.size());
+        out.push_back(' ');
         out.append(e->name.data(), e->name.size());
         if(!e->sizeTypeName.empty()){
             out.append(" : ");
@@ -183,7 +196,10 @@ MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaAre
         if(!a || !a->isExtern || !a->aliasedType || a->name.empty() || !a->templateParams.empty())
             continue;
         CppHeaderImportDetail::AppendExternAttributes(out, a->requiredHeader, a->cppExportName, "");
-        out.append("extern type ");
+        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+        out.push_back(' ');
+        out.append(KeywordSemantics::s_Type.data(), KeywordSemantics::s_Type.size());
+        out.push_back(' ');
         out.append(a->name.data(), a->name.size());
         out.append(" = ");
         CppHeaderImportDetail::AppendTypeRefExternText(out, *a->aliasedType, false);
@@ -194,7 +210,10 @@ MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaAre
         if(!g || !g->isExtern || !g->varType || g->name.empty())
             continue;
         CppHeaderImportDetail::AppendExternAttributes(out, g->requiredHeader, g->cppExportName, "");
-        out.append("extern const ");
+        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+        out.push_back(' ');
+        out.append(KeywordSemantics::s_Const.data(), KeywordSemantics::s_Const.size());
+        out.push_back(' ');
         CppHeaderImportDetail::AppendTypeRefExternText(out, *g->varType, false);
         out.push_back(' ');
         out.append(g->name.data(), g->name.size());
@@ -205,17 +224,22 @@ MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaAre
         if(!c || !c->isExtern)
             continue;
         CppHeaderImportDetail::AppendExternAttributes(out, c->requiredHeader, c->cppExportName, "");
-        out.append("extern class ");
+        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+        out.push_back(' ');
+        out.append(KeywordSemantics::s_Class.data(), KeywordSemantics::s_Class.size());
+        out.push_back(' ');
         out.append(c->name.data(), c->name.size());
         b8 emittedBase = false;
+        const MStringView noCopyName = CppHeaderImportDetail::CppImporterSemantics::s_NoCopyBaseClass;
         if(!c->isCopyConstructible){
-            out.append(" : NoCopy");
+            out.append(" : ");
+            out.append(noCopyName.data(), noCopyName.size());
             emittedBase = true;
         }
         for(const TypeRef* iface : c->implementedInterfaces){
             if(!iface || iface->name.empty())
                 continue;
-            if(!c->isCopyConstructible && iface->name == "NoCopy")
+            if(!c->isCopyConstructible && iface->name == noCopyName)
                 continue;
             out.append(emittedBase ? ", " : " : ");
             CppHeaderImportDetail::AppendTypeRefExternText(out, *iface, false);
@@ -226,8 +250,10 @@ MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaAre
             if(!f || f->access != AccessSpecifier::Public || !f->type)
                 continue;
             out.append("    ");
-            if(f->isStatic)
-                out.append("static ");
+            if(f->isStatic){
+                out.append(KeywordSemantics::s_Static.data(), KeywordSemantics::s_Static.size());
+                out.push_back(' ');
+            }
             CppHeaderImportDetail::AppendTypeRefExternText(out, *f->type, true);
             out.push_back(' ');
             out.append(f->name.data(), f->name.size());

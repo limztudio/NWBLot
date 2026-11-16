@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include "contract_semantics.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,8 +102,47 @@ template<typename T>
 }
 
 inline void CopyArenaChars(MChar* dst, const MStringView text)noexcept{
-    for(usize i = 0u; i < text.size(); ++i)
-        dst[i] = text[i];
+    if(!text.empty())
+        FOUNDATION_MEMCPY(dst, text.size(), text.data(), text.size());
+}
+
+[[nodiscard]] constexpr b8 ContainsStringView(const Span<const MStringView> items, const MStringView target)noexcept{
+    for(const MStringView item : items){
+        if(item == target)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] inline MStringView StripHeaderDelimiters(const MStringView rawText, b8* const outHadAngles = nullptr, b8* const outHadQuotes = nullptr)noexcept{
+    if(outHadAngles)
+        *outHadAngles = false;
+    if(outHadQuotes)
+        *outHadQuotes = false;
+    const MStringView text = TrimView(rawText);
+    if(text.size() >= 2u){
+        if(text.front() == '<' && text.back() == '>'){
+            if(outHadAngles)
+                *outHadAngles = true;
+            return text.substr(1u, text.size() - 2u);
+        }
+        if(text.front() == '"' && text.back() == '"'){
+            if(outHadQuotes)
+                *outHadQuotes = true;
+            return text.substr(1u, text.size() - 2u);
+        }
+    }
+    return text;
+}
+
+[[nodiscard]] inline MStringView InternAngleBracketHeader(MetaArena& arena, const MStringView innerPath){
+    const usize totalLen = innerPath.size() + 2u;
+    auto* buf = static_cast<MChar*>(arena.allocate(alignof(MChar), totalLen + 1u));
+    buf[0] = '<';
+    CopyArenaChars(buf + 1u, innerPath);
+    buf[totalLen - 1u] = '>';
+    buf[totalLen] = '\0';
+    return MStringView(buf, totalLen);
 }
 
 [[nodiscard]] inline MStringView InternArenaString(MetaArena& arena, const MStringView text){
@@ -118,23 +159,25 @@ inline void CopyArenaChars(MChar* dst, const MStringView text)noexcept{
         return InternArenaString(arena, member);
     if(member.empty())
         return InternArenaString(arena, scope);
-    const usize totalLen = scope.size() + 2u + member.size();
+    constexpr MStringView s_Sep = ContractSemantics::s_CppScopeSeparator;
+    const usize totalLen = scope.size() + s_Sep.size() + member.size();
     auto* buf = static_cast<MChar*>(arena.allocate(alignof(MChar), totalLen + 1u));
     CopyArenaChars(buf, scope);
-    buf[scope.size()] = ':';
-    buf[scope.size() + 1u] = ':';
-    CopyArenaChars(buf + scope.size() + 2u, member);
+    CopyArenaChars(buf + scope.size(), s_Sep);
+    CopyArenaChars(buf + scope.size() + s_Sep.size(), member);
     buf[totalLen] = '\0';
     return MStringView(buf, totalLen);
 }
 
 [[nodiscard]] constexpr b8 HasAdhdExtension(const MStringView path)noexcept{
-    return path.size() > 5u && path.substr(path.size() - 5u) == ".adhd";
+    constexpr MStringView s_Ext = ContractSemantics::s_AdhdExtension;
+    return path.size() > s_Ext.size() && path.ends_with(s_Ext);
 }
 
 [[nodiscard]] constexpr MStringView StripAdhdExtension(const MStringView path)noexcept{
+    constexpr MStringView s_Ext = ContractSemantics::s_AdhdExtension;
     if(HasAdhdExtension(path))
-        return path.substr(0u, path.size() - 5u);
+        return path.substr(0u, path.size() - s_Ext.size());
     return path;
 }
 

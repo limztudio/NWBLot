@@ -3,6 +3,7 @@
 #######################################################################################################################
 
 project(system_info)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../configuration/UnityBuild.cmake")
 
 add_library(${PROJECT_NAME} STATIC
         definitions.h

@@ -4,13 +4,6 @@
 
 #include "cpp_header_importer_internal.h"
 
-#include "../ast/builtin_type_semantics.h"
-#include "../ast/keyword_semantics.h"
-
-#include <global/array.h>
-
-#include <cstdio>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,94 +20,11 @@ namespace CppHeaderImportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_cpp_header_importer_type_mapper{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct ScalarTypeMapEntry{
-    AStringView cppName;
-    AStringView adhdName;
-};
-
-inline constexpr ScalarTypeMapEntry s_DirectTypeMap[] = {
-    { "void", "void" },
-    { "bool", "b8" },
-    { "b8", "b8" },
-    { "i8", "i8" },
-    { "u8", "u8" },
-    { "i16", "i16" },
-    { "u16", "u16" },
-    { "i32", "i32" },
-    { "u32", "u32" },
-    { "i64", "i64" },
-    { "u64", "u64" },
-    { "isize", "isize" },
-    { "usize", "usize" },
-    { "f32", "f32" },
-    { "f64", "f64" },
-    { "int8_t", "i8" },
-    { "uint8_t", "u8" },
-    { "int16_t", "i16" },
-    { "uint16_t", "u16" },
-    { "int32_t", "i32" },
-    { "uint32_t", "u32" },
-    { "int64_t", "i64" },
-    { "uint64_t", "u64" },
-    { "size_t", "usize" },
-    { "ptrdiff_t", "isize" },
-    { "intptr_t", "isize" },
-    { "uintptr_t", "usize" },
-    { "AStringView", "AStringView" },
-    { "WStringView", "WStringView" },
-    { "TStringView", "TStringView" },
-    { "StringView", "StringView" },
-    { "AString", "AString" },
-    { "WString", "WString" },
-    { "TString", "TString" },
-    { "ErrorCode", "ErrorCode" },
-    { "Name", "Name" },
-    { "Path", "Path" }
-};
-
-struct GenericContainerMapEntry{
-    AStringView cppName;
-    AStringView adhdName;
-    u32 maxArgs;
-};
-
-inline constexpr GenericContainerMapEntry s_GenericContainerMap[] = {
-    { "Vector", "Vector", 1u },
-    { "ParallelVector", "ParallelVector", 1u },
-    { "ForwardList", "ForwardList", 1u },
-    { "List", "List", 1u },
-    { "Deque", "Deque", 1u },
-    { "Set", "Set", 1u },
-    { "HashSet", "HashSet", 1u },
-    { "ParallelHashSet", "ParallelHashSet", 1u },
-    { "Map", "Map", 2u },
-    { "HashMap", "HashMap", 2u },
-    { "ParallelHashMap", "ParallelHashMap", 2u },
-    { "Queue", "Queue", 1u },
-    { "ParallelQueue", "ParallelQueue", 1u },
-    { "ParallelBlockQueue", "ParallelBlockQueue", 2u },
-    { "Array", "Array", 2u },
-    { "FixedVector", "FixedVector", 2u },
-    { "Span", "Span", 1u },
-    { "Optional", "Optional", 1u },
-    { "Atomic", "Atomic", 1u },
-    { "Expected", "Expected", 2u },
-    { "CompressedPair", "CompressedPair", 2u },
-    { "FixedIndexMap", "FixedIndexMap", 1u },
-    { "RefCountPtr", "RefCountPtr", 1u },
-    { "UniquePtr", "UniquePtr", 1u },
-    { "NotNullUniquePtr", "NotNullUniquePtr", 1u },
-    { "AssetRef", "AssetRef", 1u },
-    { "ComponentPool", "ComponentPool", 1u },
-    { "TypedAsset", "TypedAsset", 1u },
-    { "AssetCodec", "AssetCodec", 1u }
-};
 
 [[nodiscard]] MStringView StripConstAndRefPrefix(MStringView text)noexcept{
     for(;;){
@@ -123,32 +33,22 @@ inline constexpr GenericContainerMapEntry s_GenericContainerMap[] = {
         while(!text.empty() && text.back() == ' ')
             text.remove_suffix(1u);
 
-        if(text.starts_with("const ")){
-            text.remove_prefix(6u);
-            continue;
+        b8 stripped = false;
+        for(const MStringView prefix : CppImporterSemantics::s_StripPrefixes){
+            if(text.starts_with(prefix)){
+                text.remove_prefix(prefix.size());
+                stripped = true;
+                break;
+            }
         }
-        if(text.starts_with("volatile ")){
-            text.remove_prefix(9u);
+        if(stripped)
             continue;
-        }
-        if(text.starts_with("class ")){
-            text.remove_prefix(6u);
-            continue;
-        }
-        if(text.starts_with("struct ")){
-            text.remove_prefix(7u);
-            continue;
-        }
-        if(text.starts_with("enum ")){
-            text.remove_prefix(5u);
-            continue;
-        }
         break;
     }
     while(!text.empty() && (text.back() == '&' || text.back() == '*' || text.back() == ' '))
         text.remove_suffix(1u);
-    if(text.ends_with(" const")){
-        text.remove_suffix(6u);
+    if(text.ends_with(CppImporterSemantics::s_TrailingConstSuffix)){
+        text.remove_suffix(CppImporterSemantics::s_TrailingConstSuffix.size());
         while(!text.empty() && text.back() == ' ')
             text.remove_suffix(1u);
     }
@@ -158,8 +58,8 @@ inline constexpr GenericContainerMapEntry s_GenericContainerMap[] = {
 [[nodiscard]] MStringView ExtractUnqualifiedLeaf(const MStringView text)noexcept{
     const usize anglePos = text.find('<');
     const MStringView base = (anglePos == MStringView::npos) ? text : text.substr(0u, anglePos);
-    const usize scopePos = base.rfind("::");
-    return (scopePos == MStringView::npos) ? base : base.substr(scopePos + 2u);
+    const usize scopePos = base.rfind(ContractSemantics::s_CppScopeSeparator);
+    return (scopePos == MStringView::npos) ? base : base.substr(scopePos + ContractSemantics::s_CppScopeSeparator.size());
 }
 
 [[nodiscard]] MStringView ExtractNthTemplateArgText(const MStringView spelling, const usize targetIndex)noexcept{
@@ -177,17 +77,8 @@ inline constexpr GenericContainerMapEntry s_GenericContainerMap[] = {
             ++angleDepth;
         }
         else if(ch == '>'){
-            if(angleDepth == 0u){
-                if(argIndex == targetIndex){
-                    MStringView slice = spelling.substr(argStart, i - argStart);
-                    while(!slice.empty() && (slice.front() == ' ' || slice.front() == '\t'))
-                        slice.remove_prefix(1u);
-                    while(!slice.empty() && (slice.back() == ' ' || slice.back() == '\t'))
-                        slice.remove_suffix(1u);
-                    return slice;
-                }
-                return {};
-            }
+            if(angleDepth == 0u)
+                return (argIndex == targetIndex) ? TrimView(spelling.substr(argStart, i - argStart)) : MStringView();
             --angleDepth;
         }
         else if(ch == '('){
@@ -197,14 +88,8 @@ inline constexpr GenericContainerMapEntry s_GenericContainerMap[] = {
             --parenDepth;
         }
         else if(ch == ',' && angleDepth == 0u && parenDepth == 0u){
-            if(argIndex == targetIndex){
-                MStringView slice = spelling.substr(argStart, i - argStart);
-                while(!slice.empty() && (slice.front() == ' ' || slice.front() == '\t'))
-                    slice.remove_prefix(1u);
-                while(!slice.empty() && (slice.back() == ' ' || slice.back() == '\t'))
-                    slice.remove_suffix(1u);
-                return slice;
-            }
+            if(argIndex == targetIndex)
+                return TrimView(spelling.substr(argStart, i - argStart));
             ++argIndex;
             argStart = i + 1u;
         }
@@ -214,67 +99,51 @@ inline constexpr GenericContainerMapEntry s_GenericContainerMap[] = {
 
 [[nodiscard]] MStringView ExtractPositiveConstantCapacityText(MetaArena& arena, const MStringView spelling){
     MStringView arg = ExtractNthTemplateArgText(spelling, 1u);
-    while(!arg.empty() && (arg.back() == 'u' || arg.back() == 'U' || arg.back() == 'l' || arg.back() == 'L'))
+    while(!arg.empty() && LiteralDecoder::IsIntegerLiteralSuffixChar(arg.back()))
         arg.remove_suffix(1u);
     if(arg.empty())
-        return "1";
+        return CppImporterSemantics::s_DefaultCapacityText;
     b8 nonZero = false;
     for(const MChar ch : arg){
-        if(ch < '0' || ch > '9')
-            return "1";
+        if(!IsAsciiDigit(ch))
+            return CppImporterSemantics::s_DefaultCapacityText;
         if(ch != '0')
             nonZero = true;
     }
-    return nonZero ? InternArenaString(arena, arg) : MStringView("1");
+    return nonZero ? InternArenaString(arena, arg) : CppImporterSemantics::s_DefaultCapacityText;
 }
 
-[[nodiscard]] b8 IsScalarSpelling(const MStringView s)noexcept{
-    return BuiltinTypeSemantics::IsScalarType(s) || s == "b8";
-}
-
-[[nodiscard]] MStringView MapDirectTypeName(const MStringView name)noexcept{
-    for(const ScalarTypeMapEntry& entry : s_DirectTypeMap){
-        if(entry.cppName == name)
-            return MStringView(entry.adhdName.data(), entry.adhdName.size());
-    }
-    return {};
-}
-
-[[nodiscard]] const GenericContainerMapEntry* FindGenericContainer(const MStringView name)noexcept{
-    for(const GenericContainerMapEntry& entry : s_GenericContainerMap){
-        if(entry.cppName == name)
-            return &entry;
-    }
-    if(name.ends_with("Vector") && name.size() > 6u){
-        // Custom arena vector aliases like GraphicsVector<T> map cleanly to Vector<T>.
-        return &s_GenericContainerMap[0];
-    }
+[[nodiscard]] const BuiltinGenericTypeInfo* FindGenericContainer(const MStringView name)noexcept{
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return info;
+    if(const MStringView aliasedName = CppImporterSemantics::ResolveContainerSuffixAlias(name); !aliasedName.empty())
+        return FindBuiltinGenericType(aliasedName);
     return nullptr;
 }
 
 [[nodiscard]] MStringView MapBuiltinScalarKind(const CXTypeKind kind)noexcept{
     switch(kind){
-    case CXType_Void: return "void";
-    case CXType_Bool: return "b8";
+    case CXType_Void: return BuiltinTypeSemantics::VoidTypeName();
+    case CXType_Bool: return BuiltinTypeSemantics::BoolScalarTypeName();
     case CXType_Char_S:
-    case CXType_SChar: return "i8";
+    case CXType_SChar: return BuiltinTypeSemantics::FindIntegerScalarTypeName(1u, true);
     case CXType_Char_U:
-    case CXType_UChar: return "u8";
-    case CXType_Short: return "i16";
-    case CXType_UShort: return "u16";
-    case CXType_Int: return "i32";
-    case CXType_UInt: return "u32";
+    case CXType_UChar: return BuiltinTypeSemantics::FindIntegerScalarTypeName(1u, false);
+    case CXType_Short: return BuiltinTypeSemantics::FindIntegerScalarTypeName(2u, true);
+    case CXType_UShort: return BuiltinTypeSemantics::FindIntegerScalarTypeName(2u, false);
+    case CXType_Int: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, true);
+    case CXType_UInt: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, false);
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
-    case CXType_Long: return "i32";
-    case CXType_ULong: return "u32";
+    case CXType_Long: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, true);
+    case CXType_ULong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, false);
 #else
-    case CXType_Long: return "isize";
-    case CXType_ULong: return "usize";
+    case CXType_Long: return BuiltinTypeSemantics::FindPointerSizedIntScalarTypeName(true);
+    case CXType_ULong: return BuiltinTypeSemantics::FindPointerSizedIntScalarTypeName(false);
 #endif
-    case CXType_LongLong: return "i64";
-    case CXType_ULongLong: return "u64";
-    case CXType_Float: return "f32";
-    case CXType_Double: return "f64";
+    case CXType_LongLong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(8u, true);
+    case CXType_ULongLong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(8u, false);
+    case CXType_Float: return BuiltinTypeSemantics::FindFloatScalarTypeName(4u);
+    case CXType_Double: return BuiltinTypeSemantics::FindFloatScalarTypeName(8u);
     default: return {};
     }
 }
@@ -317,20 +186,6 @@ MString NormalizeSlashes(MetaArena& arena, const MStringView raw){
     return out;
 }
 
-MStringView TrimOuterQuotesAndAngles(MStringView text)noexcept{
-    while(!text.empty() && (text.front() == ' ' || text.front() == '\t'))
-        text.remove_prefix(1u);
-    while(!text.empty() && (text.back() == ' ' || text.back() == '\t'))
-        text.remove_suffix(1u);
-    if(text.size() >= 2u){
-        const MChar first = text.front();
-        const MChar last = text.back();
-        if((first == '<' && last == '>') || (first == '"' && last == '"'))
-            return text.substr(1u, text.size() - 2u);
-    }
-    return text;
-}
-
 b8 StartsWithCaseInsensitivePrefix(const MStringView fullPath, const MStringView prefix)noexcept{
     if(fullPath.size() < prefix.size())
         return false;
@@ -349,43 +204,16 @@ b8 StartsWithCaseInsensitivePrefix(const MStringView fullPath, const MStringView
 #endif
 }
 
-b8 IsInternalIdentifier(const MStringView name)noexcept{
-    if(name.empty())
-        return true;
-    if(name.starts_with("__") || name.starts_with("detail") || name.starts_with("Detail"))
-        return true;
-    if(name.ends_with("Detail"))
-        return true;
-    return name == "std";
-}
-
-b8 IsValidAdhdTypeIdentifier(const MStringView name)noexcept{
-    if(name.empty())
-        return false;
-    const MChar first = name.front();
-    if(!((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_'))
-        return false;
-    for(usize i = 1u; i < name.size(); ++i){
-        const MChar ch = name[i];
-        const b8 ok = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
-        if(!ok)
-            return false;
-    }
-    return true;
-}
-
 Expr* AllocateSignedIntegerLiteral(MetaArena& arena, const long long val){
-    Array<char, 32> valBuf = {};
-    const unsigned long long absVal = (val < 0)
-        ? (0ull - static_cast<unsigned long long>(val))
-        : static_cast<unsigned long long>(val);
-    const int len = std::snprintf(valBuf.data(), valBuf.size(), "%llu", absVal);
-    if(len <= 0 || static_cast<usize>(len) >= valBuf.size())
-        return nullptr;
+    const u64 absVal = (val < 0)
+        ? (0ull - static_cast<u64>(val))
+        : static_cast<u64>(val);
+    Array<char, s_UsizeDecimalDigitCount> valBuf = {};
+    const AStringView digits = FormatDecimal(static_cast<usize>(absVal), valBuf);
 
     Expr* lit = AllocateAstNode<Expr>(arena);
     lit->kind = ExprKind::IntegerLiteral;
-    lit->text = InternArenaString(arena, MStringView(valBuf.data(), static_cast<usize>(len)));
+    lit->text = InternArenaString(arena, digits);
     if(val >= 0)
         return lit;
 
@@ -421,28 +249,16 @@ void RewriteTemplateTypeRefName(TypeRef* const ref, const MStringView oldName, c
 
 
 MStringView ImporterContext::mapOperatorToken(MStringView spelling)noexcept{
-    if(!spelling.starts_with("operator"))
+    if(!spelling.starts_with(KeywordSemantics::s_Operator))
         return {};
-    spelling.remove_prefix(8u);
+    spelling.remove_prefix(KeywordSemantics::s_Operator.size());
     while(!spelling.empty() && spelling.front() == ' ')
         spelling.remove_prefix(1u);
 
-    if(spelling == "[]")
-        return "[]";
-    if(spelling == "=" || spelling == "->" || spelling == "()" || spelling == "," || spelling == "new" || spelling == "delete")
+    if(CppImporterSemantics::IsDisallowedOperatorSymbol(spelling))
         return {};
 
-    static constexpr AStringView s_SupportedOps[] = {
-        "+", "-", "*", "/", "%",
-        "==", "!=", "<", "<=", ">", ">=",
-        "&", "|", "^", "~", "!", "<<", ">>",
-        "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="
-    };
-    for(const AStringView op : s_SupportedOps){
-        if(spelling == MStringView(op.data(), op.size()))
-            return MStringView(op.data(), op.size());
-    }
-    return {};
+    return OperatorSemantics::InternOverloadableOperatorSymbol(spelling);
 }
 
 b8 ImporterContext::hasDefaultInitializerToken(CXCursor parmCursor)const{
@@ -469,8 +285,8 @@ TypeRef* ImporterContext::mapGenericContainerType(
     b8& outWasGenericContainer
 ){
     outWasGenericContainer = false;
-    const GenericContainerMapEntry* genericEntry = FindGenericContainer(sugaredLeaf);
-    if(!genericEntry)
+    const BuiltinGenericTypeInfo* genericInfo = __hidden_cpp_header_importer_type_mapper::FindGenericContainer(sugaredLeaf);
+    if(!genericInfo)
         return nullptr;
 
     outWasGenericContainer = true;
@@ -488,9 +304,9 @@ TypeRef* ImporterContext::mapGenericContainerType(
         const int canonicalNum = ::clang_Type_getNumTemplateArguments(canonical);
         if(canonicalNum > 0){
             const MString canonSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(canonical));
-            const MStringView canonStripped = StripConstAndRefPrefix(MStringView(canonSpelling.data(), canonSpelling.size()));
-            const MStringView canonLeaf = ExtractUnqualifiedLeaf(canonStripped);
-            if(FindGenericContainer(canonLeaf) != nullptr || rawSpelling.find('<') != MStringView::npos){
+            const MStringView canonStripped = __hidden_cpp_header_importer_type_mapper::StripConstAndRefPrefix(MStringView(canonSpelling.data(), canonSpelling.size()));
+            const MStringView canonLeaf = __hidden_cpp_header_importer_type_mapper::ExtractUnqualifiedLeaf(canonStripped);
+            if(__hidden_cpp_header_importer_type_mapper::FindGenericContainer(canonLeaf) != nullptr || rawSpelling.find('<') != MStringView::npos){
                 specType = canonical;
                 numTArgs = canonicalNum;
             }
@@ -499,16 +315,13 @@ TypeRef* ImporterContext::mapGenericContainerType(
     if(numTArgs <= 0)
         return nullptr;
 
-    const MStringView adhdName(genericEntry->adhdName.data(), genericEntry->adhdName.size());
-    const b8 isBoundedOrBlockQueue = (adhdName == "Array"
-        || adhdName == "FixedVector"
-        || adhdName == "ParallelBlockQueue");
+    const MStringView adhdName = genericInfo->adhdName;
 
     TypeRef* ref = AllocateAstNode<TypeRef>(m_arena);
     ref->name = adhdName;
     ref->refMode = refMode;
 
-    if(isBoundedOrBlockQueue){
+    if(genericInfo->paramKind == GenericParamKind::TypeAndCount){
         const CXType arg0 = ::clang_Type_getTemplateArgumentAsType(specType, 0u);
         if(arg0.kind == CXType_Invalid)
             return nullptr;
@@ -520,18 +333,19 @@ TypeRef* ImporterContext::mapGenericContainerType(
         ref->templateArgs.push_back(t0);
 
         TypeArg t1;
-        t1.constantText = (adhdName == "ParallelBlockQueue")
-            ? MStringView("1")
-            : ExtractPositiveConstantCapacityText(m_arena, rawSpelling);
+        t1.constantText = genericInfo->emitsFirstTypeArgOnlyInCpp
+            ? CppImporterSemantics::s_DefaultCapacityText
+            : __hidden_cpp_header_importer_type_mapper::ExtractPositiveConstantCapacityText(m_arena, rawSpelling);
         ref->templateArgs.push_back(t1);
         return ref;
     }
 
-    const u32 requiredMinArgs = (adhdName == "Expected") ? 1u : genericEntry->maxArgs;
+    const u32 maxArgs = (genericInfo->paramKind == GenericParamKind::TwoType || genericInfo->paramKind == GenericParamKind::OneOrTwoType) ? 2u : 1u;
+    const u32 requiredMinArgs = (genericInfo->paramKind == GenericParamKind::OneOrTwoType) ? 1u : maxArgs;
     if(static_cast<u32>(numTArgs) < requiredMinArgs)
         return nullptr;
 
-    const u32 count = static_cast<u32>(numTArgs) < genericEntry->maxArgs ? static_cast<u32>(numTArgs) : genericEntry->maxArgs;
+    const u32 count = static_cast<u32>(numTArgs) < maxArgs ? static_cast<u32>(numTArgs) : maxArgs;
     for(u32 i = 0u; i < count; ++i){
         const CXType argType = ::clang_Type_getTemplateArgumentAsType(specType, i);
         if(argType.kind == CXType_Invalid)
@@ -555,7 +369,7 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
         return nullptr;
 
     const MString initialSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(type));
-    if(MStringView(initialSpelling.data(), initialSpelling.size()).find("...") != MStringView::npos)
+    if(MStringView(initialSpelling.data(), initialSpelling.size()).find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos)
         return nullptr;
 
     ParamPassingMode::Enum refMode = ParamPassingMode::None;
@@ -572,23 +386,26 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
     }
 
     const CXType canonical = ::clang_getCanonicalType(type);
-    if(IsUnsupportedCppTypeKind(type.kind) || IsUnsupportedCppTypeKind(canonical.kind))
+    if(__hidden_cpp_header_importer_type_mapper::IsUnsupportedCppTypeKind(type.kind) || __hidden_cpp_header_importer_type_mapper::IsUnsupportedCppTypeKind(canonical.kind))
         return nullptr;
 
     const MString sugaredSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(type));
     const MStringView sugaredView(sugaredSpelling.data(), sugaredSpelling.size());
-    const MStringView strippedSugared = StripConstAndRefPrefix(sugaredView);
-    const MStringView sugaredLeaf = ExtractUnqualifiedLeaf(strippedSugared);
+    const MStringView strippedSugared = __hidden_cpp_header_importer_type_mapper::StripConstAndRefPrefix(sugaredView);
+    const MStringView sugaredLeaf = __hidden_cpp_header_importer_type_mapper::ExtractUnqualifiedLeaf(strippedSugared);
 
-    // Preserve sugared NWB typedefs before canonicalization collapses fixed-width types.
-    if(const MStringView direct = MapDirectTypeName(sugaredLeaf); !direct.empty()){
-        if(direct == "void" && refMode != ParamPassingMode::None)
+    const auto allocateNonGenericLeafType = [&](const MStringView name, const b8 dropInRefMode) -> TypeRef*{
+        if(BuiltinTypeSemantics::IsVoidTypeName(name) && refMode != ParamPassingMode::None)
             return nullptr;
         TypeRef* ref = AllocateAstNode<TypeRef>(m_arena);
-        ref->name = direct;
-        ref->refMode = (IsScalarSpelling(direct) && refMode == ParamPassingMode::In) ? ParamPassingMode::None : refMode;
+        ref->name = name;
+        ref->refMode = (dropInRefMode && refMode == ParamPassingMode::In) ? ParamPassingMode::None : refMode;
         return ref;
-    }
+    };
+
+    // Preserve sugared NWB typedefs before canonicalization collapses fixed-width types.
+    if(const MStringView direct = CppImporterSemantics::MapDirectTypeName(sugaredLeaf); !direct.empty())
+        return allocateNonGenericLeafType(direct, BuiltinTypeSemantics::IsScalarType(direct));
 
     b8 wasGenericContainer = false;
     if(TypeRef* genericRef = mapGenericContainerType(type, canonical, sugaredView, sugaredLeaf, refMode, depth, wasGenericContainer))
@@ -596,14 +413,8 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
     if(wasGenericContainer)
         return nullptr;
 
-    if(const MStringView builtin = MapBuiltinScalarKind(canonical.kind); !builtin.empty()){
-        if(builtin == "void" && refMode != ParamPassingMode::None)
-            return nullptr;
-        TypeRef* ref = AllocateAstNode<TypeRef>(m_arena);
-        ref->name = builtin;
-        ref->refMode = (refMode == ParamPassingMode::In) ? ParamPassingMode::None : refMode;
-        return ref;
-    }
+    if(const MStringView builtin = __hidden_cpp_header_importer_type_mapper::MapBuiltinScalarKind(canonical.kind); !builtin.empty())
+        return allocateNonGenericLeafType(builtin, true);
 
     CXCursor declCursor = ::clang_getTypeDeclaration(type);
     if(::clang_Cursor_isNull(declCursor) || ::clang_getCursorKind(declCursor) == CXCursor_NoDeclFound)
@@ -627,12 +438,10 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
     }
 
     if(sugaredView.find('<') == MStringView::npos
-        && IsValidAdhdTypeIdentifier(sugaredLeaf)
-        && !IsInternalIdentifier(sugaredLeaf)
-        && !FindGenericContainer(sugaredLeaf)
-        && sugaredLeaf != "auto"
-        && sugaredLeaf != "decltype"
-        && sugaredLeaf != "nullptr_t"
+        && IsAsciiIdentifier(sugaredLeaf)
+        && !CppImporterSemantics::IsInternalIdentifierName(sugaredLeaf)
+        && !__hidden_cpp_header_importer_type_mapper::FindGenericContainer(sugaredLeaf)
+        && !CppImporterSemantics::IsUnmappedCppKeyword(sugaredLeaf)
         && KeywordSemantics::FindProhibitedTypeKeywordError(sugaredLeaf).empty()
     ){
         TypeRef* ref = AllocateAstNode<TypeRef>(m_arena);

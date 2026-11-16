@@ -230,7 +230,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             const TypeRef* subjTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
             const b8 isUserSubjType = m_symbols.hasTypeSymbol(subjectType);
-            const b8 isNonSwitchableBuiltin = !isUserSubjType && (BuiltinTypeSemantics::IsFloatScalarType(subjectType) || subjectType == "void" || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType) || FindBuiltinGenericType(subjectType) != nullptr);
+            const b8 isNonSwitchableBuiltin = !isUserSubjType && (BuiltinTypeSemantics::IsFloatScalarType(subjectType) || BuiltinTypeSemantics::IsVoidTypeName(subjectType) || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType) || FindBuiltinGenericType(subjectType) != nullptr);
             if(!subjectType.empty() && (isNonSwitchableBuiltin || (subjTypeRef && subjTypeRef->isFuncType))){
                 reportError(errors, stmt.span, "invalid 'switch' subject type; floating-point, SIMD, container, callable, and 'void' types cannot be switched on");
                 ok = false;
@@ -240,7 +240,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             }
             else{
                 const ClassDecl* switchCls = nullptr;
-                const MethodDecl* eqOp = resolveCustomOperator(ownerClass, &method, subjTypeRef, subjectType, "==", 1u, true, &switchCls);
+                const MethodDecl* eqOp = resolveCustomOperator(ownerClass, &method, subjTypeRef, subjectType, OperatorSemantics::MapTokenTypeToOperatorSymbol(TokenType::EqualEqual), 1u, true, &switchCls);
                 if(switchCls){
                     if(!eqOp){
                         reportError(errors, stmt.span, "switch on custom class requires 'operator==' to be defined on the class");
@@ -492,13 +492,8 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             if(isAfterCond)
                 markStringToPathAdaptation(ownerClass, &method, scope, *arg);
             const b8 isFormatValue = stmt.diagnosticKind == DiagnosticKind::Assert ? i >= 2u : i >= 1u;
-            if(isFormatValue){
-                const MStringView fmtArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
-                if(!m_symbols.hasTypeSymbol(fmtArgType)){
-                    if(const BuiltinObjectTypeInfo* fmtObj = FindBuiltinObjectType(fmtArgType); fmtObj && fmtObj->formatArgWrapKind == 2u)
-                        arg->formatArgWrapKind = 2u;
-                }
-            }
+            if(isFormatValue)
+                markFormatArgWrap(ownerClass, &method, *arg, scope, true);
         }
         break;
     }

@@ -2,90 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_ADHD_EXPORT_SCALAR_TYPE
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, cppType, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat)
-#define NWB_ADHD_EXPORT_SCALAR_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_SCALAR_LIMIT
-#define NWB_ADHD_EXPORT_SCALAR_LIMIT(memberName, cppLimitSuffix, isMin)
-#define NWB_ADHD_EXPORT_SCALAR_LIMIT_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc)
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, rowVectorType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc)
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
-#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, laneScalarType, isHalfFloat)
-#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_OBJECT_TYPE
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaCtorMode, isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind, requiredHeader)
-#define NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_BUILTIN_ENUM
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader)
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY(adhdEnumName, entryName)
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_GENERIC_TYPE
-#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor, requiredHeader)
-#define NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
-#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName)
-#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_MOVE_ONLY_TYPE
-#define NWB_ADHD_EXPORT_MOVE_ONLY_TYPE(typeName)
-#define NWB_ADHD_EXPORT_MOVE_ONLY_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_BINARY_HASH_TYPE
-#define NWB_ADHD_EXPORT_BINARY_HASH_TYPE(adhdName, memberSuffix)
-#define NWB_ADHD_EXPORT_BINARY_HASH_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_NWB_VALUE_TYPE
-#define NWB_ADHD_EXPORT_NWB_VALUE_TYPE(adhdName, nwbCheckMethod, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix, requiresNameAdmission)
-#define NWB_ADHD_EXPORT_NWB_VALUE_TYPE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_IMPLICIT_CONVERSION
-#define NWB_ADHD_EXPORT_IMPLICIT_CONVERSION(fromTypeName, toTypeName, propagatesFirstTypeArg)
-#define NWB_ADHD_EXPORT_IMPLICIT_CONVERSION_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
-#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT(xyzwChar, rgbaChar, laneIndex, cppLaneCallSuffix)
-#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_LITERAL_TOKEN
-#define NWB_ADHD_EXPORT_LITERAL_TOKEN(tokenType, exprKind, adhdTypeName)
-#define NWB_ADHD_EXPORT_LITERAL_TOKEN_AUTO_UNDEF
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_EXPORT_OBJECT_TYPE("EntityID",                 "::NWB::Core::ECS::EntityID", 4u,    4u, false, true,  true,  false, true,  false, false, false, true,  false, false, false, false, true,  true,  false, false, 0u, "")
 NWB_ADHD_EXPORT_OBJECT_TYPE("AcquiredBackBuffer", "::NWB::Core::AcquiredBackBuffer", 40u, 8u, false, true, false, false, false, false, true, false, false, false, false, false, 0u, true, true, false, false, 0u, "<core/graphics/rhi/presentation.h>")
 NWB_ADHD_EXPORT_OBJECT_TYPE("AcquiredPresentationFrame", "::NWB::Core::AcquiredPresentationFrame", 56u, 8u, false, true, false, false, false, false, true, false, false, false, false, false, 0u, true, true, false, false, 0u, "<core/graphics/rhi/presentation.h>")
@@ -1888,96 +1804,22 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("ComponentPool", "::NWB::Core::ECS::ComponentPool",
 NWB_ADHD_EXPORT_GENERIC_TYPE("TypedAsset", "::NWB::Core::Assets::TypedAsset", SingleType, None, 0u, 8u, false, false, false, false, false, false, false, false, false, false, None, false, false, false, false, false, "<core/assets/module.h>")
 NWB_ADHD_EXPORT_GENERIC_TYPE("AssetCodec", "::NWB::Core::Assets::AssetCodec", SingleType, None, 8u, 8u, false, true, false, false, false, false, false, false, false, false, None, false, false, false, false, false, "<core/assets/module.h>")
 
-NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("Core::Assets::IAsset")
+NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("Core::Assets::IAsset", "Core::Assets::IAsset")
+
+NWB_ADHD_EXPORT_ARENA_TYPE("AssetArena")
+NWB_ADHD_EXPORT_ARENA_TYPE("CookArena")
+NWB_ADHD_EXPORT_ARENA_TYPE("GlobalArena")
+NWB_ADHD_EXPORT_ARENA_TYPE("PersistentArena")
+NWB_ADHD_EXPORT_ARENA_TYPE("ScratchArena")
+
+NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("AssetRef",   true, false)
+NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("TypedAsset", true, false)
+NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("AssetCodec", true, false)
 
 NWB_ADHD_EXPORT_BINARY_HASH_TYPE("AssetRef", ".virtualPath")
 
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("EntityID",      ".isInteger()", ".asInteger()", "::NWB::Core::ECS::EntityID(static_cast<u32>(", "))",                       "__f->isInteger()) this->",                                                             " = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n", "__f->isInteger()) this->",                                                             " = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n", false)
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("AssetRef",      ".isString()",  ".asString()",  "{::Name::FromText(",                           ").value_or(::Name{})}",    "__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->",   ".virtualPath = *__name; }\r\n",                                          "__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->",   " = {*__name}; }\r\n",                               true)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#ifdef NWB_ADHD_EXPORT_LITERAL_TOKEN_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_LITERAL_TOKEN_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_LITERAL_TOKEN
-#endif
-
-#ifdef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
-#endif
-
-#ifdef NWB_ADHD_EXPORT_IMPLICIT_CONVERSION_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_IMPLICIT_CONVERSION_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_IMPLICIT_CONVERSION
-#endif
-
-#ifdef NWB_ADHD_EXPORT_NWB_VALUE_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_NWB_VALUE_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_NWB_VALUE_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_BINARY_HASH_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BINARY_HASH_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BINARY_HASH_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_MOVE_ONLY_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_MOVE_ONLY_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_MOVE_ONLY_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_GENERIC_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
-#endif
-
-#ifdef NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM
-#endif
-
-#ifdef NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_OBJECT_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_SCALAR_LIMIT_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SCALAR_LIMIT_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SCALAR_LIMIT
-#endif
-
-#ifdef NWB_ADHD_EXPORT_SCALAR_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

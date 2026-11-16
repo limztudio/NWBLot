@@ -10,6 +10,7 @@
 #include "sema/type_checker.h"
 
 #include <core/metascript/arena_names.h>
+#include <core/metascript/preprocessor_semantics.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,17 +30,11 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
         const MStringView defView(defText.data(), defText.size());
         if(defView.empty())
             continue;
-        usize eqPos = defView.size();
-        for(usize i = 0u; i < defView.size(); ++i){
-            if(defView[i] == '='){
-                eqPos = i;
-                break;
-            }
-        }
-        if(eqPos < defView.size())
+        const usize eqPos = defView.find('=');
+        if(eqPos != MStringView::npos)
             preprocessor.defineObjectMacro(defView.substr(0u, eqPos), defView.substr(eqPos + 1u));
         else
-            preprocessor.defineObjectMacro(defView, "1");
+            preprocessor.defineObjectMacro(defView, PreprocessorSemantics::s_DefaultDefinedMacroBody);
     }
     if(!preprocessor.process(options.source, outResult.preprocessedSource))
         return false;
@@ -61,6 +56,11 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
     if(!declParser.parseTranslationUnit(outResult.unit))
         return false;
 
+    for(const MString& extraHdr : options.extraPreambleHeaders){
+        if(!extraHdr.empty())
+            outResult.unit.extraPreambleHeaders.push_back(InternArenaString(arena, MStringView(extraHdr.data(), extraHdr.size())));
+    }
+
     MVector<ImportedCppHeader> allCppHeaders(arena);
     for(const ImportedCppHeader& hdr : outResult.unit.importedCppHeaders)
         allCppHeaders.push_back(hdr);
@@ -70,7 +70,9 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
         ImportedCppHeader entry;
         entry.headerPath = MStringView(cliHdr.data(), cliHdr.size());
         entry.span = SourceSpan{ 1u, 1u };
-        entry.isSystemHeader = !(entry.headerPath.size() >= 2u && entry.headerPath.front() == '"' && entry.headerPath.back() == '"');
+        b8 isQuoted = false;
+        (void)StripHeaderDelimiters(entry.headerPath, nullptr, &isQuoted);
+        entry.isSystemHeader = !isQuoted;
         allCppHeaders.push_back(entry);
     }
 
@@ -110,7 +112,7 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
 
 MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, MetaArena& arena){
     MString ns(arena);
-    ns.append("NWB");
+    ns.append(ContractSemantics::s_DefaultRootNamespace.data(), ContractSemantics::s_DefaultRootNamespace.size());
 
     if(
         virtualFilePath.empty()
@@ -128,6 +130,7 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
     if(lastSlash == virtualFilePath.size() || lastSlash == 0u)
         return ns;
 
+    constexpr MStringView s_Sep = ContractSemantics::s_CppScopeSeparator;
     const MStringView dirPart = virtualFilePath.substr(0u, lastSlash);
     usize segStart = 0u;
     for(usize i = 0u; i <= dirPart.size(); ++i){
@@ -136,9 +139,9 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
                 const MStringView seg = dirPart.substr(segStart, i - segStart);
                 if(seg != "." && seg != ".."){
                     const usize previousSize = ns.size();
-                    ns.append("::");
+                    ns.append(s_Sep.data(), s_Sep.size());
                     AppendPascalCaseIdentifierSegment(seg, ns);
-                    if(ns.size() == previousSize + 2u)
+                    if(ns.size() == previousSize + s_Sep.size())
                         ns.erase(previousSize);
                 }
             }
@@ -153,7 +156,7 @@ MString Compiler::DeriveOutputFilename(const MStringView virtualFilePath, const 
     const MStringView base = ExtractAdhdFileStem(virtualFilePath);
     MString out(arena);
     if(base.empty())
-        out.append("module");
+        out.append(ContractSemantics::s_FallbackModuleStem.data(), ContractSemantics::s_FallbackModuleStem.size());
     else
         out.append(base.data(), base.size());
     out.append(suffix.data(), suffix.size());

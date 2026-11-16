@@ -6,6 +6,8 @@
 
 
 #include "ast_types.h"
+#include "builtin_type_semantics.h"
+#include "keyword_semantics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +90,7 @@ namespace ExprKind{
 
 [[nodiscard]] constexpr MStringView LookupFixedLiteralExprTypeName(const ExprKind::Enum kind)noexcept{
     if(kind == ExprKind::BoolLiteral)
-        return "b8";
+        return BuiltinTypeSemantics::BoolScalarTypeName();
 #define NWB_ADHD_EXPORT_LITERAL_TOKEN(litTokenType, exprKind, adhdTypeName) \
     if(kind == exprKind) return adhdTypeName;
 #include "../export_types.h"
@@ -191,7 +193,14 @@ public:
 };
 
 [[nodiscard]] constexpr b8 IsParallelWaitCallExpr(const Expr* expr)noexcept{
-    return expr && expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->text == "wait";
+    return expr && expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier && KeywordSemantics::IsParallelWaitKeyword(expr->lhs->text);
+}
+
+constexpr void PromoteStringByteReadToConstRef(Expr& expr)noexcept{
+    if(expr.isStringByteRead){
+        expr.isStringByteRead = false;
+        expr.isStringByteConstRef = true;
+    }
 }
 
 

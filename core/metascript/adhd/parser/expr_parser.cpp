@@ -39,6 +39,17 @@ namespace __hidden_adhd_expr_parser{
     return node;
 }
 
+[[nodiscard]] Expr* MakeUnaryExpr(MetaArena& arena, const Token& opTok, Expr* operand, const b8 isPostfix){
+    Expr* node = AllocateAstNode<Expr>(arena);
+    node->kind = ExprKind::Unary;
+    node->op = opTok.type;
+    node->text = opTok.text;
+    node->lhs = operand;
+    node->isPostfix = isPostfix;
+    node->span = SourceSpan{opTok.line, opTok.column};
+    return node;
+}
+
 [[nodiscard]] Expr* MakeTokenExpr(MetaArena& arena, const ExprKind::Enum kind, const Token& tok, const SourceSpan span){
     Expr* node = AllocateAstNode<Expr>(arena);
     node->kind = kind;
@@ -48,19 +59,14 @@ namespace __hidden_adhd_expr_parser{
 }
 
 [[nodiscard]] constexpr b8 IsUnambiguousCastOperandStartToken(const TokenType::Enum type)noexcept{
-    switch(type){
-    case TokenType::Identifier:
-    case TokenType::IntegerLiteral:
-    case TokenType::FloatLiteral:
-    case TokenType::DoubleLiteral:
-    case TokenType::StringLiteral:
-    case TokenType::LeftParen:
-    case TokenType::Bang:
-    case TokenType::Tilde:
+    if(type == TokenType::Identifier || type == TokenType::LeftParen)
         return true;
-    default:
-        return false;
-    }
+    ExprKind::Enum litKind = ExprKind::IntegerLiteral;
+    if(TryMapLiteralTokenToExprKind(type, litKind))
+        return true;
+    return OperatorSemantics::IsPrefixUnaryOperatorToken(type)
+        && !OperatorSemantics::IsIncrementOrDecrementOperatorToken(type)
+        && OperatorSemantics::BinaryOperatorPrecedence(type) == 0u;
 }
 
 
@@ -108,9 +114,12 @@ Expr* ExprParser::parseAssignment(){
         return nullptr;
     }
 
-    if(m_cursor.checkIdentifier("as")){
-        m_cursor.error("Rust-style 'as' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
-        return nullptr;
+    if(m_cursor.check(TokenType::Identifier)){
+        const MStringView postfixErr = KeywordSemantics::FindProhibitedPostfixKeywordError(m_cursor.current().text);
+        if(!postfixErr.empty()){
+            m_cursor.error(postfixErr);
+            return nullptr;
+        }
     }
 
     if(OperatorSemantics::IsCompoundOrSimpleAssignment(m_cursor.current().type)){
@@ -155,13 +164,7 @@ Expr* ExprParser::parseUnary(){
         Expr* operand = parseUnary();
         if(!operand)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Unary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = operand;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        return node;
+        return __hidden_adhd_expr_parser::MakeUnaryExpr(m_cursor.arena(), opTok, operand, false);
     }
 
     return parsePostfix();
@@ -219,18 +222,24 @@ Expr* ExprParser::parsePostfix(){
             continue;
         }
 
+        const auto tryParseCallNode = [&](MVector<TypeArg>&& callTargs) -> b8{
+            Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
+            callNode->kind = ExprKind::Call;
+            callNode->lhs = expr;
+            callNode->callTemplateArgs = Move(callTargs);
+            callNode->span = expr->span;
+            if(!parseArgumentList(callNode->arguments))
+                return false;
+            expr = callNode;
+            return true;
+        };
+
         if(m_cursor.check(TokenType::Less)){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             MVector<TypeArg> targs(m_cursor.arena());
             if(m_typeParser.parseTypeArgList(targs) && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::LeftParen)){
-                Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
-                callNode->kind = ExprKind::Call;
-                callNode->lhs = expr;
-                callNode->callTemplateArgs = Move(targs);
-                callNode->span = expr->span;
-                if(!parseArgumentList(callNode->arguments))
+                if(!tryParseCallNode(Move(targs)))
                     return nullptr;
-                expr = callNode;
                 continue;
             }
             m_cursor.restore(cp);
@@ -238,27 +247,15 @@ Expr* ExprParser::parsePostfix(){
         }
 
         if(m_cursor.check(TokenType::LeftParen)){
-            Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
-            callNode->kind = ExprKind::Call;
-            callNode->lhs = expr;
-            callNode->span = expr->span;
-            if(!parseArgumentList(callNode->arguments))
+            if(!tryParseCallNode(MVector<TypeArg>(m_cursor.arena())))
                 return nullptr;
-            expr = callNode;
             continue;
         }
 
         if(OperatorSemantics::IsIncrementOrDecrementOperatorToken(m_cursor.current().type)){
             const Token opTok = m_cursor.current();
             m_cursor.advance();
-            Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-            node->kind = ExprKind::Unary;
-            node->op = opTok.type;
-            node->text = opTok.text;
-            node->lhs = expr;
-            node->isPostfix = true;
-            node->span = SourceSpan{opTok.line, opTok.column};
-            expr = node;
+            expr = __hidden_adhd_expr_parser::MakeUnaryExpr(m_cursor.arena(), opTok, expr, true);
             continue;
         }
 
@@ -331,7 +328,7 @@ Expr* ExprParser::parsePrimary(){
             return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::BoolLiteral, tok, span);
         }
 
-        if(tok.text == "this"){
+        if(KeywordSemantics::IsThisKeyword(tok.text)){
             m_cursor.advance();
             if(!m_cursor.match(TokenType::Dot)){
                 Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
@@ -346,7 +343,7 @@ Expr* ExprParser::parsePrimary(){
             const Token memberTok = m_cursor.current();
             m_cursor.advance();
             if(m_cursor.check(TokenType::ColonColon))
-                return parseScopeAccessChain(nullptr, "this", memberTok.text, span);
+                return parseScopeAccessChain(nullptr, KeywordSemantics::s_This, memberTok.text, span);
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
             node->kind = ExprKind::ThisMember;
             node->text = memberTok.text;
@@ -380,7 +377,7 @@ Expr* ExprParser::parsePrimary(){
             return node;
         }
 
-        if(tok.text == "lambda"){
+        if(tok.text == KeywordSemantics::s_Lambda){
             m_cursor.advance();
             return parseLambda(span);
         }

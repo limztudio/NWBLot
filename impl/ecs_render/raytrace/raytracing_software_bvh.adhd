@@ -125,9 +125,9 @@ void SoftwareBvhBuilder::releaseSwBvhScratchHeapHandles(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, m_state.m_bvhSortKeysHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_state.m_bvhSortPayloadHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_state.m_bvhVisitCounterHeapHandle);
+        RetireDescriptor(heap, m_state.m_bvhSortKeysHeapHandle);
+        RetireDescriptor(heap, m_state.m_bvhSortPayloadHeapHandle);
+        RetireDescriptor(heap, m_state.m_bvhVisitCounterHeapHandle);
         return;
     }
     m_state.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -176,7 +176,7 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
         return false;
 
     const auto sortHandlesReady = [this]()noexcept{
-        return RayTracingDetail::IsHeapHandle(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && RayTracingDetail::IsHeapHandle(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
+        return IsDescriptorClass(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
     };
 
     if(m_state.m_bvhSortKeysBuffer && m_state.m_bvhSortPayloadBuffer && m_state.m_bvhSortCapacity >= paddedCount){
@@ -188,13 +188,13 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
         Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::Invalid();
         const auto acquireDescriptors = [&]() -> Expected<void>{
             if(!m_state.m_bvhSortKeysHeapHandle.valid()){
-                const auto acquiredKeysResult = RayTracingDetail::RegisterHeapBuffer(heap, *m_state.m_bvhSortKeysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+                const auto acquiredKeysResult = RegisterHeapBuffer(heap, *m_state.m_bvhSortKeysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!acquiredKeysResult)
                     return MakeUnexpected(Failure{});
                 acquiredKeys = *acquiredKeysResult;
             }
             if(!m_state.m_bvhSortPayloadHeapHandle.valid()){
-                const auto acquiredPayloadResult = RayTracingDetail::RegisterHeapBuffer(heap, *m_state.m_bvhSortPayloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+                const auto acquiredPayloadResult = RegisterHeapBuffer(heap, *m_state.m_bvhSortPayloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!acquiredPayloadResult)
                     return MakeUnexpected(Failure{});
                 acquiredPayload = *acquiredPayloadResult;
@@ -202,8 +202,8 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
             return {};
         };
         if(!acquireDescriptors()){
-            RayTracingDetail::RetireHeapHandle(heap, acquiredKeys);
-            RayTracingDetail::RetireHeapHandle(heap, acquiredPayload);
+            RetireDescriptor(heap, acquiredKeys);
+            RetireDescriptor(heap, acquiredPayload);
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap"));
             return false;
         }
@@ -239,25 +239,25 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
     Core::GpuDescriptorHandle keysHeapHandle;
     Core::GpuDescriptorHandle payloadHeapHandle;
     const auto acquireDescriptors = [&]() -> Expected<void>{
-        const auto keysHeapHandleResult = RayTracingDetail::RegisterHeapBuffer(heap, *keysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+        const auto keysHeapHandleResult = RegisterHeapBuffer(heap, *keysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
         if(!keysHeapHandleResult)
             return MakeUnexpected(Failure{});
         keysHeapHandle = *keysHeapHandleResult;
-        const auto payloadHeapHandleResult = RayTracingDetail::RegisterHeapBuffer(heap, *payloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+        const auto payloadHeapHandleResult = RegisterHeapBuffer(heap, *payloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
         if(!payloadHeapHandleResult)
             return MakeUnexpected(Failure{});
         payloadHeapHandle = *payloadHeapHandleResult;
         return {};
     };
     if(!acquireDescriptors()){
-        RayTracingDetail::RetireHeapHandle(heap, keysHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, payloadHeapHandle);
+        RetireDescriptor(heap, keysHeapHandle);
+        RetireDescriptor(heap, payloadHeapHandle);
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register BVH sort scratch in the descriptor heap"));
         return false;
     }
 
-    RayTracingDetail::RetireHeapHandle(heap, m_state.m_bvhSortKeysHeapHandle);
-    RayTracingDetail::RetireHeapHandle(heap, m_state.m_bvhSortPayloadHeapHandle);
+    RetireDescriptor(heap, m_state.m_bvhSortKeysHeapHandle);
+    RetireDescriptor(heap, m_state.m_bvhSortPayloadHeapHandle);
     m_state.m_bvhSortKeysBuffer = Move(keysBuffer);
     m_state.m_bvhSortPayloadBuffer = Move(payloadBuffer);
     m_state.m_bvhSortKeysHeapHandle = keysHeapHandle;
@@ -270,8 +270,8 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(Core::CommandList& commandList, u32 elemen
     FOUNDATION_ASSERT(m_state.m_bvhSortPipeline);
     FOUNDATION_ASSERT(m_state.m_bvhSortKeysBuffer);
     FOUNDATION_ASSERT(m_state.m_bvhSortPayloadBuffer);
-    FOUNDATION_ASSERT(RayTracingDetail::IsHeapHandle(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
-    FOUNDATION_ASSERT(RayTracingDetail::IsHeapHandle(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
+    FOUNDATION_ASSERT(IsDescriptorClass(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
+    FOUNDATION_ASSERT(IsDescriptorClass(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
 
     FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> sortSteps;
     const u32 groupCount = BuildBvhBitonicSortSteps(elementCount, paddedCount, m_state.m_bvhSortKeysHeapHandle.slot(), m_state.m_bvhSortPayloadHeapHandle.slot(), sortSteps);
@@ -349,11 +349,11 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(usize primitiveCount){
         return false;
 
     if(m_state.m_bvhVisitCounterBuffer && m_state.m_bvhBuildCapacity >= primitiveCount){
-        if(RayTracingDetail::IsHeapHandle(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
+        if(IsDescriptorClass(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
             return true;
 
         if(!m_state.m_bvhVisitCounterHeapHandle.valid()){
-            const auto acquired = RayTracingDetail::RegisterHeapBuffer(heap, *m_state.m_bvhVisitCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+            const auto acquired = RegisterHeapBuffer(heap, *m_state.m_bvhVisitCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
             if(acquired){
                 m_state.m_bvhVisitCounterHeapHandle = *acquired;
                 return true;
@@ -376,13 +376,13 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(usize primitiveCount){
     }
     Core::BufferHandle counterBuffer = Move(*counterBufferResult);
 
-    const auto counterHeapHandle = RayTracingDetail::RegisterHeapBuffer(heap, *counterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+    const auto counterHeapHandle = RegisterHeapBuffer(heap, *counterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
     if(!counterHeapHandle){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
         return false;
     }
 
-    RayTracingDetail::RetireHeapHandle(heap, m_state.m_bvhVisitCounterHeapHandle);
+    RetireDescriptor(heap, m_state.m_bvhVisitCounterHeapHandle);
     m_state.m_bvhVisitCounterBuffer = Move(counterBuffer);
     m_state.m_bvhVisitCounterHeapHandle = *counterHeapHandle;
     m_state.m_bvhBuildCapacity = capacity;
@@ -444,20 +444,20 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
         return false;
 
     if(nodeBuffer && parentBuffer){
-        if(RayTracingDetail::IsHeapHandle(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && RayTracingDetail::IsHeapHandle(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
+        if(IsDescriptorClass(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
             return true;
 
         Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::Invalid();
         Core::GpuDescriptorHandle acquiredParent = Core::GpuDescriptorHandle::Invalid();
         const auto acquireDescriptors = [&]() -> Expected<void>{
             if(!nodeHeapHandle.valid()){
-                const auto acquiredNodeResult = RayTracingDetail::RegisterHeapBuffer(heap, *nodeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+                const auto acquiredNodeResult = RegisterHeapBuffer(heap, *nodeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!acquiredNodeResult)
                     return MakeUnexpected(Failure{});
                 acquiredNode = *acquiredNodeResult;
             }
             if(!parentHeapHandle.valid()){
-                const auto acquiredParentResult = RayTracingDetail::RegisterHeapBuffer(heap, *parentBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+                const auto acquiredParentResult = RegisterHeapBuffer(heap, *parentBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!acquiredParentResult)
                     return MakeUnexpected(Failure{});
                 acquiredParent = *acquiredParentResult;
@@ -465,8 +465,8 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
             return {};
         };
         if(!acquireDescriptors()){
-            RayTracingDetail::RetireHeapHandle(heap, acquiredNode);
-            RayTracingDetail::RetireHeapHandle(heap, acquiredParent);
+            RetireDescriptor(heap, acquiredNode);
+            RetireDescriptor(heap, acquiredParent);
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap"));
             return false;
         }
@@ -474,7 +474,7 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
             nodeHeapHandle = acquiredNode;
         if(acquiredParent.valid())
             parentHeapHandle = acquiredParent;
-        return RayTracingDetail::IsHeapHandle(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && RayTracingDetail::IsHeapHandle(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
+        return IsDescriptorClass(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
     }
     if(nodeBuffer || parentBuffer){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: per-mesh BVH storage is partially allocated"));
@@ -507,19 +507,19 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
     Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
     const auto acquireDescriptors = [&]() -> Expected<void>{
-        const auto newNodeHeapHandleResult = RayTracingDetail::RegisterHeapBuffer(heap, *newNodeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+        const auto newNodeHeapHandleResult = RegisterHeapBuffer(heap, *newNodeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
         if(!newNodeHeapHandleResult)
             return MakeUnexpected(Failure{});
         newNodeHeapHandle = *newNodeHeapHandleResult;
-        const auto newParentHeapHandleResult = RayTracingDetail::RegisterHeapBuffer(heap, *newParentBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
+        const auto newParentHeapHandleResult = RegisterHeapBuffer(heap, *newParentBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
         if(!newParentHeapHandleResult)
             return MakeUnexpected(Failure{});
         newParentHeapHandle = *newParentHeapHandleResult;
         return {};
     };
     if(!acquireDescriptors()){
-        RayTracingDetail::RetireHeapHandle(heap, newNodeHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, newParentHeapHandle);
+        RetireDescriptor(heap, newNodeHeapHandle);
+        RetireDescriptor(heap, newParentHeapHandle);
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap"));
         return false;
     }
@@ -553,18 +553,18 @@ b8 SoftwareBvhBuilder::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuf
     return
         nodeBuffer
         && parentBuffer
-        && RayTracingDetail::IsHeapHandle(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && RayTracingDetail::IsHeapHandle(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && m_state.m_bvhSortPipeline
         && m_state.m_bvhSortKeysBuffer
         && m_state.m_bvhSortPayloadBuffer
-        && RayTracingDetail::IsHeapHandle(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && RayTracingDetail::IsHeapHandle(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && m_state.m_bvhMortonPipeline
         && m_state.m_bvhTopologyPipeline
         && m_state.m_bvhFitPipeline
         && m_state.m_bvhVisitCounterBuffer
-        && RayTracingDetail::IsHeapHandle(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ;
 }
 

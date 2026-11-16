@@ -20,10 +20,6 @@ NWB_ADHD_BEGIN
 
 
 class DeclParser final{
-private:
-    [[nodiscard]] static b8 ValidateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
-
-
 public:
     explicit DeclParser(ParserCursor& cursor, const MStringView activeSource = {}, const Preprocessor* preprocessor = nullptr)noexcept
         : m_cursor(cursor)
@@ -56,6 +52,21 @@ private:
     [[nodiscard]] b8 parseDestructorEmptyParams(MStringView missingLeftParenMessage);
     [[nodiscard]] b8 parseConstructorParamsAndRejectInitList(MethodDecl& method);
     [[nodiscard]] b8 parseMethodParamsAndValidateArity(MethodDecl& method, SourceSpan span);
+    [[nodiscard]] b8 parseColonTypeList(MVector<TypeRef*>& outTypes, MStringView expectedTypeMsg, b8 rejectAccessSpecifiers);
+    [[nodiscard]] b8 parseMethodOrOperatorName(MStringView& outName, b8& outIsOperator, MStringView expectedNameMsg);
+    [[nodiscard]] b8 initializeDestructorDecl(
+        MethodDecl& method,
+        MStringView ownerName,
+        MStringView missingLeftParenMsg,
+        MVector<MStringView>* ownerTemplateParams = nullptr,
+        MVector<TemplateParamDecl>* ownerTemplateParamDecls = nullptr
+    );
+    [[nodiscard]] b8 initializeConstructorDecl(
+        MethodDecl& method,
+        MStringView ownerName,
+        MVector<MStringView>* ownerTemplateParams = nullptr,
+        MVector<TemplateParamDecl>* ownerTemplateParamDecls = nullptr
+    );
     [[nodiscard]] b8 parseClassMethodOrOperatorTail(
         ClassDecl& classDecl,
         AccessSpecifier::Enum access,

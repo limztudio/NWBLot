@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_skeleton/asset.adhd>
 #include <impl/assets_skeleton/cook_matrix.adhd>
 
 
@@ -20,8 +21,6 @@ native{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/assets_skeleton/asset.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
@@ -103,6 +102,132 @@ b8 ValidateSkeletonJointEntryMap(in b8 isMap, in Path nwbFilePath, in usize join
     return false;
 }
 
+Expected<Array<f32, 4>> ParseSkeletonJointMatrixRow(
+    in Path nwbFilePath,
+    in MetascriptValue rowValue,
+    in StringView metaKind,
+    in StringView label,
+    in usize rowIndex
+){
+    if(!rowValue.isList()){
+        ValidateSkeletonJointMatrixColumnList(false, 0u, nwbFilePath, metaKind, label, rowIndex);
+        return MakeUnexpected(Failure());
+    }
+
+    const Span<MetascriptValue> columns = rowValue.listView();
+    if(!ValidateSkeletonJointMatrixColumnList(true, columns.size(), nwbFilePath, metaKind, label, rowIndex))
+        return MakeUnexpected(Failure());
+
+    Array<f32, 4> row = Array<f32, 4>();
+    for(usize columnIndex = 0u; columnIndex < cast<usize>(s_SkeletonJointMatrixColumnCount); ++columnIndex){
+        const MetascriptValue column = columns[columnIndex];
+        if(!column.isNumeric()){
+            LogSkeletonJointMatrixElementFailure(false, nwbFilePath, metaKind, label, rowIndex, columnIndex);
+            return MakeUnexpected(Failure());
+        }
+        const Expected<f32> elem = TryFiniteF32FromF64(column.toDouble());
+        if(!elem.has_value()){
+            LogSkeletonJointMatrixElementFailure(true, nwbFilePath, metaKind, label, rowIndex, columnIndex);
+            return MakeUnexpected(Failure());
+        }
+        row[columnIndex] = elem.value();
+    }
+    return row;
+}
+
+Expected<SkeletonJointMatrix> ParseSkeletonJointMatrix(
+    in Path nwbFilePath,
+    in MetascriptValue value,
+    in StringView metaKind,
+    in StringView label
+){
+    if(!value.isList()){
+        ValidateSkeletonJointMatrixRowList(false, 0u, nwbFilePath, metaKind, label);
+        return MakeUnexpected(Failure());
+    }
+
+    const Span<MetascriptValue> rows = value.listView();
+    if(!ValidateSkeletonJointMatrixRowList(true, rows.size(), nwbFilePath, metaKind, label))
+        return MakeUnexpected(Failure());
+
+    const Expected<Array<f32, 4>> row0 = ParseSkeletonJointMatrixRow(nwbFilePath, rows[0u], metaKind, label, 0u);
+    if(!row0.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<Array<f32, 4>> row1 = ParseSkeletonJointMatrixRow(nwbFilePath, rows[1u], metaKind, label, 1u);
+    if(!row1.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<Array<f32, 4>> row2 = ParseSkeletonJointMatrixRow(nwbFilePath, rows[2u], metaKind, label, 2u);
+    if(!row2.has_value())
+        return MakeUnexpected(Failure());
+
+    return BuildSkeletonJointMatrixFromRows(row0.value(), row1.value(), row2.value());
+}
+
+Expected<SkeletonCookJoint> ParseSkeletonCookJoint(in Path nwbFilePath, in MetascriptValue jointValue){
+    SkeletonCookJoint joint;
+
+    if(!ValidateMetadataAssetFields(nwbFilePath, jointValue, s_SkeletonJointDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedSkeletonJointMetadataField(fieldName);
+    }))
+        return MakeUnexpected(Failure());
+
+    const Expected<Name> nameResult = ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_SkeletonNameField, true);
+    if(!nameResult.has_value())
+        return MakeUnexpected(Failure());
+    joint.name = nameResult.value();
+
+    const Expected<Name> parentResult = ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_SkeletonParentField, false);
+    if(!parentResult.has_value())
+        return MakeUnexpected(Failure());
+    joint.parent = parentResult.value();
+
+    b8 poseOk = true;
+    SkeletonJointMatrix localBindPose = joint.localBindPose;
+    jointValue.visitField(
+        s_SkeletonLocalBindPoseField,
+        lambda[in nwbFilePath, mut poseOk, mut localBindPose](in MetascriptValue fieldVal) -> void{
+            const Expected<SkeletonJointMatrix> matrixResult = ParseSkeletonJointMatrix(nwbFilePath, fieldVal, s_SkeletonMetaKind, s_SkeletonLocalBindPoseField);
+            if(!matrixResult.has_value()){
+                poseOk = false;
+                return;
+            }
+            localBindPose = matrixResult.value();
+        }
+    );
+    if(!poseOk)
+        return MakeUnexpected(Failure());
+    joint.localBindPose = localBindPose;
+    return joint;
+}
+
+Expected<Vector<SkeletonCookJoint>> ParseSkeletonCookJoints(in Path nwbFilePath, in MetascriptValue asset){
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedSkeletonMetadataField(fieldName);
+    }))
+        return MakeUnexpected(Failure());
+
+    const Expected<Span<MetascriptValue>> joints = ReadMetadataListField(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, s_SkeletonJointsField);
+    if(!joints.has_value())
+        return MakeUnexpected(Failure());
+
+    const Span<MetascriptValue> jointList = joints.value();
+    Vector<SkeletonCookJoint> result;
+    result.reserve(jointList.size());
+    for(usize jointIndex = 0u; jointIndex < jointList.size(); ++jointIndex){
+        const MetascriptValue jointValue = jointList[jointIndex];
+        if(!ValidateSkeletonJointEntryMap(jointValue.isMap(), nwbFilePath, jointIndex))
+            return MakeUnexpected(Failure());
+
+        const Expected<SkeletonCookJoint> jointResult = ParseSkeletonCookJoint(nwbFilePath, jointValue);
+        if(!jointResult.has_value())
+            return MakeUnexpected(Failure());
+        result.push_back(jointResult.value());
+    }
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -123,6 +248,7 @@ native{
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
 
+#include <global/algorithm.h>
 #include <global/binary.h>
 
 
@@ -135,79 +261,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_skeleton_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Metascript;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<SkeletonCookJoint> ParseSkeletonJoint(const Path& nwbFilePath, const Value& jointValue){
-    SkeletonCookJoint joint{};
-
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, jointValue, s_SkeletonJointDiagnosticPrefix, &IsAllowedSkeletonJointMetadataField))
-        return MakeUnexpected(Failure{});
-    auto nameResult = Core::Assets::ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_SkeletonNameField, true);
-    if(!nameResult)
-        return MakeUnexpected(Failure{});
-    joint.name = *nameResult;
-    auto parentResult = Core::Assets::ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_SkeletonParentField, false);
-    if(!parentResult)
-        return MakeUnexpected(Failure{});
-    joint.parent = *parentResult;
-
-    const Value* localBindPose = jointValue.findField(s_SkeletonLocalBindPoseField);
-    if(!localBindPose)
-        return joint;
-
-    auto matrixResult = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, *localBindPose, s_SkeletonMetaKind, s_SkeletonLocalBindPoseField);
-    if(!matrixResult)
-        return MakeUnexpected(Failure{});
-    joint.localBindPose = *matrixResult;
-    return joint;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView metaKind, const AStringView label){
-    const usize rowCount = value.isList() ? value.asList().size() : 0u;
-    if(!ValidateSkeletonJointMatrixRowList(value.isList(), rowCount, nwbFilePath, metaKind, label))
-        return MakeUnexpected(Failure{});
-
-    Array<Array<f32, s_SkeletonJointMatrixColumnCount>, s_SkeletonJointMatrixRowCount> matrixRows{};
-    const auto& rows = value.asList();
-    for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
-        const Core::Metascript::Value& row = rows[rowIndex];
-        const usize columnCount = row.isList() ? row.asList().size() : 0u;
-        if(!ValidateSkeletonJointMatrixColumnList(row.isList(), columnCount, nwbFilePath, metaKind, label, rowIndex))
-            return MakeUnexpected(Failure{});
-
-        const auto& columns = row.asList();
-        for(usize columnIndex = 0u; columnIndex < s_SkeletonJointMatrixColumnCount; ++columnIndex){
-            const Core::Metascript::Value& column = columns[columnIndex];
-            auto columnIndexResult = Core::Assets::TryDecodeMetadataFiniteF32(column);
-            if(!columnIndexResult){
-                LogSkeletonJointMatrixElementFailure(column.isNumeric(), nwbFilePath, metaKind, label, rowIndex, columnIndex);
-                return MakeUnexpected(Failure{});
-            }
-            matrixRows[rowIndex][columnIndex] = *columnIndexResult;
-        }
-    }
-
-    return BuildSkeletonJointMatrixFromRows(matrixRows[0u], matrixRows[1u], matrixRows[2u]);
+    return ParseSkeletonJointMatrix(nwbFilePath, value, metaKind, label);
 }
 
 
@@ -228,34 +283,15 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
 }
 
 Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_skeleton_cook;
-
     SkeletonCookEntry entry(arena);
-
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
 
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkeletonMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, &IsAllowedSkeletonMetadataField))
+
+    const auto parsedJoints = ParseSkeletonCookJoints(scratchArena, nwbFilePath, asset);
+    if(!parsedJoints)
         return MakeUnexpected(Failure{});
-
-    const auto joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, s_SkeletonJointsField);
-    if(!joints)
-        return MakeUnexpected(joints.error());
-
-    const auto& jointList = (*joints)->asList();
-    entry.joints.reserve(jointList.size());
-    for(usize jointIndex = 0u; jointIndex < jointList.size(); ++jointIndex){
-        const Value& jointValue = jointList[jointIndex];
-        if(!ValidateSkeletonJointEntryMap(jointValue.isMap(), nwbFilePath, jointIndex))
-            return MakeUnexpected(Failure{});
-
-        auto jointResult = ParseSkeletonJoint(nwbFilePath, jointValue);
-        if(!jointResult)
-            return MakeUnexpected(Failure{});
-        entry.joints.push_back(*jointResult);
-    }
+    AssignVector(entry.joints, *parsedJoints);
 
     if(!BuildSkeletonAsset(entry, arena, scratchArena))
         return MakeUnexpected(Failure{});

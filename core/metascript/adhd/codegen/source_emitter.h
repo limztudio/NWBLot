@@ -71,10 +71,7 @@ public:
 
 private:
     friend class SimdConstructorEmitter;
-    friend class SimdCastConstructorEmitter;
-    friend class SimdLaneConstructorEmitter;
-    friend class SimdScalarLaneEmitter;
-    friend class SimdLaneOperationEmitter;
+    friend class SimdEmissionFragments;
     friend class SimdBinaryEmitter;
     friend class SimdCallEmitter;
     friend class SimdStorageEmitter;

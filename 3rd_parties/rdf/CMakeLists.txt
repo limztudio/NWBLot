@@ -5,6 +5,7 @@
 # shared lib). RDF_BUILD_STATIC=1 keeps RDF_EXPORT empty so the C API links straight out of the static archive.
 cmake_minimum_required(VERSION 3.13)
 project(rdf LANGUAGES CXX C)
+include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
 
 add_library(amdrdf STATIC
     "${CMAKE_CURRENT_LIST_DIR}/src/amdrdf.cpp"

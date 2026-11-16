@@ -40,7 +40,7 @@ public:
     {}
     virtual ~RecordingNavigationResolver()noexcept override = default;
 
-    [[nodiscard]] virtual Expected<Ui::EditNavigationResult> resolve(const Ui::EditModel& model, Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, f32 viewportHeight)override;
+    [[nodiscard]] virtual Expected<Ui::EditNavigationResult> resolve(const Ui::EditModel& model, Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, f32 viewportHeight)noexcept override;
     [[nodiscard]] Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Ui::TextLayoutBuilder& layoutBuilder()noexcept{ return m_layoutBuilder; }
     void invokeHookIfPresent(){
@@ -72,7 +72,7 @@ public:
     explicit AcceptingNavigationActions(Alloc::GlobalArena& arena)noexcept : records(arena), m_arena(arena){}
     virtual ~AcceptingNavigationActions()noexcept override = default;
 
-    [[nodiscard]] virtual b8 apply(Ui::EditModel& model, Ui::EditAction::Enum action, b8 readOnly)override;
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& model, Ui::EditAction::Enum action, b8 readOnly)noexcept override;
     [[nodiscard]] usize count(Ui::EditAction::Enum action)const noexcept;
     [[nodiscard]] Alloc::GlobalArena& arena()noexcept{ return m_arena; }
 
@@ -127,11 +127,11 @@ usize CountEcsUiNavigationActions(const AcceptingNavigationActions& self, const 
 b8 PrepareEcsUiNavigationModel(UiEditNavigationHostTests& self, UiEditModel& model, UiEditNavigationState& navigation, const UiEditBoxOptions& options, const UiRect& bounds, const UiPoint& previousScroll)noexcept;
 b8 CommitEcsUiNavigationText(UiEditNavigationHostTests& self, AStringView text)noexcept;
 
-FOUNDATION_INLINE Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight){
+FOUNDATION_INLINE Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight)noexcept{
     return ResolveEcsUiEditViewNavigation(*this, model, direction, navigation, viewportHeight);
 }
 
-FOUNDATION_INLINE b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8){
+FOUNDATION_INLINE b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8)noexcept{
     return ApplyEcsUiAcceptingNavigationAction(*this, model, action);
 }
 

@@ -16,21 +16,6 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeLayoutAnalyzer::containsArenaBackedContainer(const TypeRef& type, const u32 depth)const noexcept{
-    if(depth >= 8u || type.refMode != ParamPassingMode::None)
-        return false;
-    const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
-    if(!unwrapped || unwrapped->refMode != ParamPassingMode::None)
-        return false;
-    if(!m_symbols.hasTypeSymbol(unwrapped->name) && SymbolTable::IsArenaBackedContainer(unwrapped->name))
-        return true;
-    for(const TypeArg& targ : unwrapped->templateArgs){
-        if(targ.type && containsArenaBackedContainer(*targ.type, depth + 1u))
-            return true;
-    }
-    return false;
-}
-
 b8 TypeLayoutAnalyzer::isNonRootMotherArenaType(const TypeRef& type, const u32 depth)const noexcept{
     if(depth >= 8u || m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
         return false;
@@ -38,7 +23,7 @@ b8 TypeLayoutAnalyzer::isNonRootMotherArenaType(const TypeRef& type, const u32 d
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return false;
     const ClassDecl* cls = m_symbols.findClass(unwrapped->name);
-    if(!cls || cls->usesStaticClassArena() || cls->isSerialize || !cls->subsystemTypeName.empty())
+    if(!cls || !cls->canBorrowMotherArena())
         return false;
     if(cls->needsClassArena || !cls->systemTypeName.empty())
         return true;
@@ -223,10 +208,8 @@ b8 TypeLayoutAnalyzer::isClassAssignableImpl(const ClassDecl& decl, const Span<c
         return false;
     if(decl.isExtern)
         return requireCopy ? decl.isCopyAssignable : decl.isMoveAssignable;
-    for(const MethodDecl* m : decl.methods){
-        if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
-            return false;
-    }
+    if(SymbolTable::HasCustomAssignOperator(decl))
+        return false;
     for(const FieldDecl* field : fields){
         if(field && !field->isStatic && field->type && !isTypeAssignable(*field->type, requireCopy, depth + 1u))
             return false;

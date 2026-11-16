@@ -259,9 +259,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 continue;
             if(classDecl->isImported){
                 for(const MethodDecl* method : classDecl->methods){
-                    if(!method || method->isImported || method->isExtern || !method->hasBody)
-                        continue;
-                    if(classDecl->templateParams.empty() && method->templateParams.empty() && !method->isInline && !method->hasSynthesizedArenaParams)
+                    if(!method || method->isImported || method->isExtern || !ShouldEmitCallableInHeader(classDecl, *method))
                         continue;
                     m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
                 }
@@ -283,7 +281,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     for(const MethodDecl* fn : unit.freeFunctions){
         if(!fn || fn->isImported || fn->isExtern)
             continue;
-        const b8 emitInlineBody = (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams) && fn->hasBody;
+        const b8 emitInlineBody = ShouldEmitCallableInHeader(nullptr, *fn);
         if(emitFreeFnPrototypesEarly && !emitInlineBody)
             continue;
         m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, emitInlineBody, true, !emitFreeFnPrototypesEarly);

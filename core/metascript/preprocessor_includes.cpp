@@ -4,6 +4,7 @@
 
 #include "preprocessor_includes.h"
 #include "preprocessor.h"
+#include "preprocessor_semantics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,9 +76,7 @@ b8 PreprocessorIncludes::process(Preprocessor& owner, const MStringView rest, co
     }
 
     const MStringView includePath = rest.substr(1u, closePos - 1u);
-    const b8 hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-    const b8 hasNwbExt = m_allowNwbInclude && includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
-    if(!hasAdhdExt && !hasNwbExt){
+    if(!PreprocessorSemantics::IsAllowedIncludePath(includePath, m_allowNwbInclude)){
         m_errors.push_back(ParseError{line, 1u, MString("outside 'native { ... }', '#include' may only include '.adhd' or '.nwb' files; place C++ '#include' directives inside a 'native' block", m_arena)});
         return false;
     }

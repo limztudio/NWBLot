@@ -219,7 +219,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
                 if(clonedField && clonedField->type)
                     markFieldArenaUsage(*clonedField->type, *clonedField, *inst->templateDecl, inst->needsClassArena);
             }
-            const b8 hasMotherArenaPointer = !inst->templateDecl->isSerialize && !inst->templateDecl->usesStaticClassArena() && inst->templateDecl->subsystemTypeName.empty() && inst->needsClassArena;
+            const b8 hasMotherArenaPointer = inst->templateDecl->canBorrowMotherArena() && inst->needsClassArena;
             finalizeClassFieldLayouts(inst->templateDecl->isSerialize, m_symbols.hasPolymorphicBase(*inst->templateDecl), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
             if(inst->totalSize != prevSize || inst->totalAlign != prevAlign || inst->needsClassArena != prevArena)
                 changed = true;
@@ -421,7 +421,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         classDecl.orderedFields.push_back(field);
     }
 
-    const b8 hasMotherArenaPointer = !classDecl.isSerialize && !classDecl.usesStaticClassArena() && classDecl.subsystemTypeName.empty() && classDecl.needsClassArena;
+    const b8 hasMotherArenaPointer = classDecl.canBorrowMotherArena() && classDecl.needsClassArena;
     finalizeClassFieldLayouts(classDecl.isSerialize, m_symbols.hasPolymorphicBase(classDecl), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }

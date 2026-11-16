@@ -337,7 +337,7 @@ b8 MeshSkinningFramePlanBuilder::declare(const Core::ECS::EntityID entity, Skinn
         return false;
     }
     const MeshSkinningRuntimeResources& resources = foundResources.value();
-    const MeshSkinningDeformationInputs deformationInputs{ .resourceSlotsBuffer = resources.bindlessResourceSlotsBuffer, .editRevision = instance->editRevision, .skinningMode = payload.resolvedSkinningMode, };
+    const MeshSkinningDeformationInputs deformationInputs(resources.bindlessResourceSlotsBuffer, instance->editRevision, payload.resolvedSkinningMode);
     instance->deformationState.refreshCurrent(deformationInputs, payload.jointMatrices, skinningInputDirty || meshletBoundsDirty);
     const SkinningFramePlanFlags planFlags = BuildSkinningFramePlanFlags(hasActiveSkin, instance->deformationState.contentRevision(), instance->attributeBuffer != nullptr);
     if(!planFlags.updatesMeshletBounds)

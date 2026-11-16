@@ -10,6 +10,7 @@
 #include "simd_constructor_emitter.h"
 
 #include <core/metascript/adhd/ast/operator_semantics.h>
+#include <core/metascript/adhd/sema/asset_type_analyzer.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
 
@@ -39,27 +40,28 @@ void EmitAccessSpecifier(MString& out, const AccessSpecifier::Enum access, const
     out.append(maybeUnusedPrivate ? "private:\r\n    [[maybe_unused]] " : "private:\r\n    ");
 }
 
-[[nodiscard]] const TypeRef* FindAssetInterfaceBase(const ClassDecl& decl, const SymbolTable& symbols)noexcept{
-    if(decl.assetTypeName.empty())
-        return nullptr;
-    for(const TypeRef* ifaceRef : decl.implementedInterfaces){
-        if(!ifaceRef)
-            continue;
-        const InterfaceDecl* ifaceDecl = symbols.findInterface(symbols.resolveBaseTypeName(ifaceRef->name));
-        if(ifaceDecl && !ifaceDecl->assetTypeName.empty())
-            return ifaceRef;
-    }
-    return nullptr;
-}
-
 void EmitTypedAssetBaseType(MString& out, const ClassDecl& decl, const SymbolTable& symbols, const CppTypeEmitter& typeEmitter){
-    out.append("::NWB::Core::Assets::TypedAsset<");
+    const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
+    if(assetContract){
+        out.append(assetContract->cppBaseTypeOrTemplate.data(), assetContract->cppBaseTypeOrTemplate.size());
+        out.push_back('<');
+    }
     out.append(decl.name.data(), decl.name.size());
-    if(const TypeRef* assetIface = FindAssetInterfaceBase(decl, symbols)){
+    if(const TypeRef* assetIface = AssetTypeAnalyzer(symbols).findImplementedAssetInterface(decl)){
         out.append(", ");
         typeEmitter.emitTypeCpp(out, *assetIface);
     }
     out.push_back('>');
+}
+
+void EmitClassRoleDefineMacro(MString& out, const ClassRoleKind::Enum role, const MStringView typeName, const b8 trailingBlankLine){
+    if(const ClassRoleContractInfo* contract = ContractSemantics::FindClassRoleContract(role); contract && !contract->defineMacroName.empty()){
+        out.append("    ");
+        out.append(contract->defineMacroName.data(), contract->defineMacroName.size());
+        out.append("(\"");
+        out.append(typeName.data(), typeName.size());
+        out.append(trailingBlankLine ? "\")\r\n\r\n" : "\")\r\n");
+    }
 }
 
 
@@ -92,7 +94,8 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     const b8 isAssetClass = !decl.assetTypeName.empty();
     const b8 isSystemClass = !decl.systemTypeName.empty();
     const b8 isComponentClass = !decl.componentTypeName.empty();
-    const TypeRef* const assetInterfaceBase = __hidden_adhd_header_emitter_class::FindAssetInterfaceBase(decl, m_symbols);
+    const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
+    const TypeRef* const assetInterfaceBase = AssetTypeAnalyzer(m_symbols).findImplementedAssetInterface(decl);
     if(isAssetClass || isSystemClass || !decl.implementedInterfaces.empty()){
         out.append(" : ");
         b8 firstBase = true;
@@ -101,16 +104,17 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
             __hidden_adhd_header_emitter_class::EmitTypedAssetBaseType(out, decl, m_symbols, m_typeEmitter);
             firstBase = false;
         }
-        if(isSystemClass){
+        if(isSystemClass && sysContract){
             if(!firstBase)
                 out.append(", ");
-            out.append("public ::NWB::Core::ECS::ISystem");
+            out.append("public ");
+            out.append(sysContract->cppBaseTypeOrTemplate.data(), sysContract->cppBaseTypeOrTemplate.size());
             firstBase = false;
         }
         for(usize i = 0u; i < decl.implementedInterfaces.size(); ++i){
             if(decl.implementedInterfaces[i] == assetInterfaceBase)
                 continue;
-            if(isSystemClass && decl.implementedInterfaces[i] && m_symbols.resolveBaseTypeName(decl.implementedInterfaces[i]->name) == "ISystem")
+            if(isSystemClass && sysContract && decl.implementedInterfaces[i] && m_symbols.resolveBaseTypeName(decl.implementedInterfaces[i]->name) == sysContract->implicitInterfaceAdhdName)
                 continue;
             if(!firstBase)
                 out.append(", ");
@@ -151,22 +155,22 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
             }
             emitAlias(*field->type);
         }
-        out.append("    NWB_DEFINE_ASSET_TYPE(\"");
-        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
-        out.append("\")\r\n\r\n");
+        __hidden_adhd_header_emitter_class::EmitClassRoleDefineMacro(out, ClassRoleKind::Asset, decl.assetTypeName, true);
     }
     if(isSystemClass){
         out.append("public:\r\n");
-        out.append("    NWB_DEFINE_SYSTEM_TYPE(\"");
-        out.append(decl.systemTypeName.data(), decl.systemTypeName.size());
-        out.append("\")\r\n");
-        out.append("    [[nodiscard]] virtual const ::Name& systemType()const noexcept override{ return s_SystemTypeName; }\r\n\r\n");
+        if(sysContract && !sysContract->defineMacroName.empty()){
+            __hidden_adhd_header_emitter_class::EmitClassRoleDefineMacro(out, ClassRoleKind::System, decl.systemTypeName, false);
+            out.append("    [[nodiscard]] virtual const ");
+            out.append(CodegenSymbols::s_NameCppType.data(), CodegenSymbols::s_NameCppType.size());
+            out.append("& systemType()const noexcept override{ return ");
+            out.append(sysContract->typeNameStaticField.data(), sysContract->typeNameStaticField.size());
+            out.append("; }\r\n\r\n");
+        }
     }
     if(isComponentClass){
         out.append("public:\r\n");
-        out.append("    NWB_DEFINE_COMPONENT_TYPE(\"");
-        out.append(decl.componentTypeName.data(), decl.componentTypeName.size());
-        out.append("\")\r\n\r\n");
+        __hidden_adhd_header_emitter_class::EmitClassRoleDefineMacro(out, ClassRoleKind::Component, decl.componentTypeName, true);
     }
 
     const ClassDecl* prevOwnerClass = m_sourceEmitter.activeOwnerClass();
@@ -196,17 +200,15 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append("#pragma pack(pop)\r\n");
 
     if(isAssetClass && !assetInterfaceBase){
-        b8 hasLoadBinary = false;
-        for(const MethodDecl* method : decl.methods){
-            if(method && !method->isConstructor && !method->isDestructor && !method->isOperator && method->name == "loadBinary" && method->params.size() == 1u){
-                hasLoadBinary = true;
-                break;
-            }
-        }
-        if(hasLoadBinary){
-            out.append("\r\nNWB_DEFINE_ASSET_CODEC(");
+        if(AssetTypeAnalyzer(m_symbols).findAssetLoadBinaryMethod(decl, false) != nullptr){
+            const AssetCodecContractInfo& codec = ContractSemantics::s_AssetCodec;
+            const MStringView codecSuffix = ContractSemantics::ResolveAssetCodecSuffix(decl.name);
+            out.append("\r\n");
+            out.append(codec.defineCodecMacro.data(), codec.defineCodecMacro.size());
+            out.push_back('(');
             out.append(decl.name.data(), decl.name.size());
-            out.append(decl.name.ends_with("Asset") ? "Codec, " : "AssetCodec, ");
+            out.append(codecSuffix.data(), codecSuffix.size());
+            out.append(", ");
             out.append(decl.name.data(), decl.name.size());
             out.append(");\r\n");
         }
@@ -246,9 +248,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     out.append("{\r\n");
     if(!decl.componentTypeName.empty()){
         out.append("public:\r\n");
-        out.append("    NWB_DEFINE_COMPONENT_TYPE(\"");
-        out.append(decl.componentTypeName.data(), decl.componentTypeName.size());
-        out.append("\")\r\n\r\n");
+        __hidden_adhd_header_emitter_class::EmitClassRoleDefineMacro(out, ClassRoleKind::Component, decl.componentTypeName, true);
     }
 
     const usize aliasCount = decl.templateParams.size() < inst.templateArgs.size() ? decl.templateParams.size() : inst.templateArgs.size();
@@ -308,49 +308,90 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 }
 
 void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields, const b8 forceInlineBody, const b8 classNeedsArena)const{
-    const b8 hasMotherArenaMember = !decl.usesStaticClassArena() && !decl.isSerialize && decl.subsystemTypeName.empty() && classNeedsArena;
+    const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+    b8 hasNoCopyBase = false;
+    for(const TypeRef* implIface : decl.implementedInterfaces){
+        if(implIface && layoutAnalyzer.interfaceInheritsNoCopy(*implIface)){
+            hasNoCopyBase = true;
+            break;
+        }
+    }
+
+    b8 hasUserConstructor = false;
+    b8 hasUserArenaCopyCtor = false;
+    b8 hasUserAssignOp = false;
+    for(const MethodDecl* m : decl.methods){
+        if(!m)
+            continue;
+        if(m->isConstructor){
+            hasUserConstructor = true;
+            if(m->params.size() == 1u && m->params[0].type && m->params[0].mode == ParamPassingMode::In && m_symbols.resolveBaseTypeName(m->params[0].type->name) == decl.name)
+                hasUserArenaCopyCtor = true;
+        }
+        if(m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
+            hasUserAssignOp = true;
+    }
+
+    const auto emitDeletedSpecialMembers = [&](const b8 emitCopy, const b8 emitMove, const b8 isAssign){
+        const MStringView opPrefix = isAssign ? "& operator=(" : "(";
+        if(emitCopy){
+            out.append("    ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(opPrefix.data(), opPrefix.size());
+            out.append("const ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("&) = delete;\r\n");
+        }
+        if(emitMove){
+            out.append("    ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(opPrefix.data(), opPrefix.size());
+            out.append(decl.name.data(), decl.name.size());
+            out.append("&&) = delete;\r\n");
+        }
+    };
+
+    const b8 hasMotherArenaMember = decl.canBorrowMotherArena() && classNeedsArena;
     if(decl.usesStaticClassArena()){
         out.append("private:\r\n");
         out.append("    inline static ::NWB::Core::Alloc::GlobalArena s_ClassArena{::Name(\"");
         out.append(decl.name.data(), decl.name.size());
         out.append("\")};\r\n\r\n");
     }
-    else if(hasMotherArenaMember){
+
+    if(hasMotherArenaMember){
         out.append("public:\r\n");
         out.append("    using uses_leading_arena_t = ::ArenaBase;\r\n\r\n");
         out.append("private:\r\n");
         out.append("    ::NotNull<::ArenaBase*> __adhd_arena;\r\n\r\n");
 
-        b8 hasUserConstructor = false;
-        b8 hasUserArenaCopyCtor = false;
-        b8 hasUserAssignOp = false;
-        for(const MethodDecl* m : decl.methods){
-            if(!m)
-                continue;
-            if(m->isConstructor){
-                hasUserConstructor = true;
-                if(m->params.size() == 1u && m->params[0].type && m->params[0].mode == ParamPassingMode::In && m_symbols.resolveBaseTypeName(m->params[0].type->name) == decl.name)
-                    hasUserArenaCopyCtor = true;
-            }
-            if(m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
-                hasUserAssignOp = true;
-        }
-
-        const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
         const b8 canCopy = layoutAnalyzer.isClassCopyConstructible(decl, orderedFields);
         const b8 canMove = layoutAnalyzer.isClassMoveConstructible(decl, orderedFields);
         const b8 canCopyAssign = canCopy && layoutAnalyzer.isClassCopyAssignable(decl, orderedFields);
         const b8 canMoveAssign = canMove && layoutAnalyzer.isClassMoveAssignable(decl, orderedFields);
 
-        if(!hasUserConstructor || canCopy || canMove || ((canCopyAssign || canMoveAssign) && !hasUserAssignOp)){
+        if(!hasUserConstructor || canCopy || canMove || hasNoCopyBase || ((canCopyAssign || canMoveAssign) && !hasUserAssignOp)){
             out.append("public:\r\n");
             if(!hasUserConstructor){
                 out.append("    explicit ");
                 out.append(decl.name.data(), decl.name.size());
-                if(!decl.systemTypeName.empty())
-                    out.append("(::ArenaBase& __adhd_mother_arena)noexcept : ::NWB::Core::ECS::ISystem(__adhd_mother_arena), __adhd_arena(::MakeNotNull(&__adhd_mother_arena)){}\r\n");
-                else
-                    out.append("(::ArenaBase& __adhd_mother_arena)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena)){}\r\n");
+                out.append("(::ArenaBase& ");
+                out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
+                out.append(")noexcept : ");
+                if(!decl.systemTypeName.empty()){
+                    if(const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System)){
+                        out.append(sysContract->cppBaseTypeOrTemplate.data(), sysContract->cppBaseTypeOrTemplate.size());
+                        out.push_back('(');
+                        out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
+                        out.append("), ");
+                    }
+                }
+                out.append(CodegenSymbols::s_MemberArenaVar.data(), CodegenSymbols::s_MemberArenaVar.size());
+                out.push_back('(');
+                out.append(CodegenSymbols::s_MakeNotNullFunc.data(), CodegenSymbols::s_MakeNotNullFunc.size());
+                out.append("(&");
+                out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
+                out.append(")){}\r\n");
                 if(!decl.assetTypeName.empty()){
                     out.append("    ");
                     out.append(decl.name.data(), decl.name.size());
@@ -372,6 +413,9 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                     out.append("(");
                     out.append(decl.name.data(), decl.name.size());
                     out.append("&&)noexcept = default;\r\n");
+                }
+                else{
+                    emitDeletedSpecialMembers(false, true, false);
                 }
 
                 const auto emitRebindCtor = [&](const b8 isMove){
@@ -418,6 +462,9 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 if(canMove)
                     emitRebindCtor(true);
             }
+            else if(hasNoCopyBase){
+                emitDeletedSpecialMembers(true, true, false);
+            }
             if((canCopyAssign || canMoveAssign) && !hasUserAssignOp){
                 const auto emitAssignOp = [&](const b8 isMove){
                     out.append("    ");
@@ -429,8 +476,13 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                     out.append(isMove ? "&& __adhd_rhs)noexcept{\r\n" : "& __adhd_rhs)noexcept{\r\n");
                     if(!orderedFields.empty() || !decl.assetTypeName.empty()){
                         out.append("        if(this != &__adhd_rhs){\r\n");
-                        if(!decl.assetTypeName.empty())
-                            out.append("            static_cast<::NWB::Core::Assets::IAsset&>(*this) = __adhd_rhs;\r\n");
+                        if(!decl.assetTypeName.empty()){
+                            const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
+                            const MStringView assetBaseCpp = assetContract ? CppTypeEmitter::MapBuiltinCppType(assetContract->implicitInterfaceAdhdName) : MStringView{};
+                            out.append("            static_cast<");
+                            out.append(assetBaseCpp.data(), assetBaseCpp.size());
+                            out.append("&>(*this) = __adhd_rhs;\r\n");
+                        }
                         for(const FieldDecl* field : orderedFields){
                             if(!field || !field->type)
                                 continue;
@@ -470,31 +522,23 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                     }
                     out.append("        return *this;\r\n    }\r\n");
                 };
-                if(canCopyAssign){
+                if(canCopyAssign)
                     emitAssignOp(false);
-                }
-                else{
-                    out.append("    ");
-                    out.append(decl.name.data(), decl.name.size());
-                    out.append("& operator=(const ");
-                    out.append(decl.name.data(), decl.name.size());
-                    out.append("&) = delete;\r\n");
-                }
+                else
+                    emitDeletedSpecialMembers(true, false, true);
                 if(canMoveAssign)
                     emitAssignOp(true);
+                else
+                    emitDeletedSpecialMembers(false, true, true);
+            }
+            else if(hasNoCopyBase && !hasUserAssignOp){
+                emitDeletedSpecialMembers(true, true, true);
             }
             if(!decl.methods.empty())
                 out.append("\r\n");
         }
     }
     else if(!decl.assetTypeName.empty()){
-        b8 hasUserConstructor = false;
-        for(const MethodDecl* m : decl.methods){
-            if(m && m->isConstructor){
-                hasUserConstructor = true;
-                break;
-            }
-        }
         if(!hasUserConstructor){
             out.append("public:\r\n");
             out.append("    ");
@@ -516,6 +560,19 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
             if(!decl.methods.empty())
                 out.append("\r\n");
         }
+    }
+    else if(hasNoCopyBase){
+        out.append("public:\r\n");
+        if(!hasUserConstructor && decl.systemTypeName.empty()){
+            out.append("    ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("() = default;\r\n");
+        }
+        emitDeletedSpecialMembers(true, true, false);
+        if(!hasUserAssignOp)
+            emitDeletedSpecialMembers(true, true, true);
+        if(!decl.methods.empty())
+            out.append("\r\n");
     }
 
     for(const MethodDecl* method : decl.methods){
@@ -616,8 +673,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const ClassDecl& decl, cons
                 NeedsBraceDefaultFieldInit(baseFieldType)
                 || SymbolTable::IsSimdType(baseFieldType)
                 || SymbolTable::IsUnalignedVectorType(baseFieldType)
-                || m_symbols.findEnum(baseFieldType) != nullptr
-                || FindBuiltinEnum(baseFieldType) != nullptr
+                || m_symbols.isEnumType(baseFieldType)
                 || (m_symbols.findClass(baseFieldType) != nullptr && m_symbols.isSelfDefaultedType(baseFieldType))
             )
                 out.append("{}");

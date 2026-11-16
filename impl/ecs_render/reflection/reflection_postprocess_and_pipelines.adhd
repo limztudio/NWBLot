@@ -164,7 +164,7 @@ Expected<ReflectionFeedbackBinding> RendererReflectionFeedback::prepareBank(cons
         return MakeUnexpected(Failure{});
     }
     Core::BufferHandle buffer = Move(*bufferResult);
-    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()));
+    const Expected<Core::GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()));
     if(!descriptor){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Reflection feedback: failed to register storage buffer"));
         return MakeUnexpected(Failure{});
@@ -248,7 +248,7 @@ void RendererReflectionPostprocess::releaseTargets(){
         m_control->reset(0u);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     for(Core::GpuDescriptorHandle& descriptor : m_descriptors)
-        RendererDescriptorRegisterDetail::RetireDescriptor(heap, descriptor);
+        RetireDescriptor(heap, descriptor);
     m_history = {};
     m_spatial = {};
     m_width = 0u;
@@ -287,8 +287,8 @@ b8 RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image,
         return false;
     Core::TextureHandle texture = Move(*textureResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> sampled = RendererDescriptorRegisterDetail::RegisterSampledTexture(heap, Core::GpuDescriptorClass::SampledImage, texture);
-    const Expected<Core::GpuDescriptorHandle> storage = RendererDescriptorRegisterDetail::RegisterStorageTexture(heap, texture);
+    const Expected<Core::GpuDescriptorHandle> sampled = RegisterSampledTexture(heap, Core::GpuDescriptorClass::SampledImage, texture);
+    const Expected<Core::GpuDescriptorHandle> storage = RegisterStorageTexture(heap, texture);
     if(!sampled || !storage){
         if(sampled)
             heap.free(*sampled);

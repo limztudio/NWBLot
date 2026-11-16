@@ -248,7 +248,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 
     // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
-        const auto triangleIndices = BuildMeshletTriangleIndices(mesh, scratchArena);
+        const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, mesh);
         if(!triangleIndices){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -278,7 +278,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 
     // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
     {
-        const auto triangleAttributes = BuildMeshletTriangleAttributes(mesh, scratchArena);
+        const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, mesh);
         if(!triangleAttributes){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});

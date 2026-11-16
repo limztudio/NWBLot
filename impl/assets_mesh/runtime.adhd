@@ -136,19 +136,10 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/asset.adhd.h>
 #include <impl/assets_mesh/skin_asset.adhd.h>
-#include <impl/assets_mesh/binary_payload_io.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_visit.adhd.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.adhd.h>
+#include <impl/assets_mesh/payload_types.adhd.h>
 
-#include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
-#include <impl/assets_mesh/payload_validation.adhd.h>
-
-#include <core/common/log.h>
 #include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -178,34 +169,8 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
-    const Span<const MeshletDesc> meshlets,
-    const Span<const MeshletLocalVertexRef> localVertexRefs,
-    const Span<const u8> positionRefDeltas,
-    const Span<const u8> primitiveIndices,
-    const usize positionCount,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndices.size(), scratchArena);
-    if(!DecodeMeshletTriangleIndicesInto(meshlets, localVertexRefs, positionRefDeltas, primitiveIndices, positionCount, outIndices))
-        return MakeUnexpected(Failure{});
-    return outIndices;
-}
-
-Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
-    const Span<const MeshletDesc> meshlets,
-    const Span<const MeshletLocalVertexRef> localVertexRefs,
-    const Span<const u8> attributeRefDeltas,
-    const Span<const u8> primitiveIndices,
-    const Span<const Half4U> normalStream,
-    const Span<const Float2U> uv0Stream,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndices.size(), scratchArena);
-    if(!DecodeMeshletTriangleAttributesInto(meshlets, localVertexRefs, attributeRefDeltas, primitiveIndices, normalStream, uv0Stream, outAttributes))
-        return MakeUnexpected(Failure{});
-    return outAttributes;
-}
+static_assert(sizeof(AttribGpu) == sizeof(Half4U) + sizeof(Float2U), "AttribGpu layout drifted");
+static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 bytes for the shadow trace attribute buffer");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,3 +186,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

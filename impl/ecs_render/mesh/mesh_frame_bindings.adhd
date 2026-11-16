@@ -2,58 +2,119 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
+class MeshFrameBindings : NoCopy{
+    private MeshFrameBindingSnapshot m_snapshot;
 
+    public b8 prepare(mut GraphicsRuntime graphics, in MaterialPassBufferSnapshot materialBuffers, in BufferHandle meshViewBuffer){
+        if(this.m_snapshot.matches(materialBuffers, meshViewBuffer))
+            return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        if(!materialBuffers.valid() || !meshViewBuffer.valid()){
+            error("RendererSystem: frame heap registration requires instance, typed-material, and view buffers");
+            return false;
+        }
 
+        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+        if(!heap.isInitialized()){
+            error("RendererSystem: frame heap registration requires the initialized global descriptor heap");
+            return false;
+        }
+        const Expected<GpuDescriptorHandle> instanceHandleResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        if(!instanceHandleResult.has_value())
+            return false;
+        const GpuDescriptorHandle instanceHandle = instanceHandleResult.value();
+        GpuDescriptorRetirementGuard retireInstance(heap, instanceHandle);
+        const Expected<GpuDescriptorHandle> materialTypedHandleResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        if(!materialTypedHandleResult.has_value())
+            return false;
+        const GpuDescriptorHandle materialTypedHandle = materialTypedHandleResult.value();
+        GpuDescriptorRetirementGuard retireMaterialTyped(heap, materialTypedHandle);
+        const Expected<GpuDescriptorHandle> viewHandleResult = heap.allocate(GpuDescriptorClass::UniformBuffer);
+        if(!viewHandleResult.has_value())
+            return false;
+        const GpuDescriptorHandle viewHandle = viewHandleResult.value();
+        GpuDescriptorRetirementGuard retireView(heap, viewHandle);
 
-NWB_CORE_BEGIN
+        BufferHandle instanceBuffer = materialBuffers.instanceBuffer;
+        BufferHandle materialTypedBuffer = materialBuffers.materialTypedBuffer;
+        BufferHandle localViewBuffer = meshViewBuffer;
+        const b8 registered =
+            heap.write(instanceHandle, DescriptorWriteItemStructuredBufferSrv(0u, instanceBuffer.deref()))
+            && heap.write(materialTypedHandle, DescriptorWriteItemStructuredBufferSrv(0u, materialTypedBuffer.deref()))
+            && heap.write(viewHandle, DescriptorWriteItemConstantBuffer(0u, localViewBuffer.deref()))
+        ;
+        if(!registered)
+            return false;
 
-class GraphicsRuntime;
+        MeshFrameBindingSnapshot replacement(
+            materialBuffers.instanceBuffer,
+            materialBuffers.materialTypedBuffer,
+            MeshViewBufferSnapshot(meshViewBuffer, viewHandle),
+            instanceHandle,
+            materialTypedHandle,
+            materialBuffers.instanceBufferCapacity,
+            materialBuffers.materialTypedBufferCapacity
+        );
+        const MeshFrameBindingSnapshot retired = this.m_snapshot;
+        this.m_snapshot = replacement;
+        retireInstance.release();
+        retireMaterialTyped.release();
+        retireView.release();
 
-NWB_CORE_END
+        // Keep retired buffers alive until descriptors enter deferred-reuse quarantine.
+        this.retireSnapshotDescriptors(heap, retired);
 
+        assert(this.m_snapshot.matches(materialBuffers, meshViewBuffer));
+        return true;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public MeshFrameBindingSnapshot snapshot(in BufferHandle meshViewBuffer)const{
+        return MeshFrameBindingSnapshot(
+            this.m_snapshot.instanceBuffer,
+            this.m_snapshot.materialTypedBuffer,
+            this.viewSnapshot(meshViewBuffer),
+            this.m_snapshot.instanceHeapHandle,
+            this.m_snapshot.materialTypedHeapHandle,
+            this.m_snapshot.instanceBufferCapacity,
+            this.m_snapshot.materialTypedBufferCapacity
+        );
+    }
 
+    public MeshViewBufferSnapshot viewSnapshot(in BufferHandle meshViewBuffer)const{
+        MeshViewBufferSnapshot snapshot;
+        snapshot.buffer = meshViewBuffer;
+        if(this.m_snapshot.meshView.buffer == meshViewBuffer)
+            snapshot.heapHandle = this.m_snapshot.meshView.heapHandle;
+        return snapshot;
+    }
 
-NWB_IMPL_BEGIN
+    public void release(mut GraphicsRuntime graphics){
+        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+        this.retireSnapshotDescriptors(heap, this.m_snapshot);
+        this.reset();
+    }
 
+    public void reset(){
+        this.m_snapshot = MeshFrameBindingSnapshot();
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshFrameBindings final : NoCopy{
-public:
-    [[nodiscard]] b8 prepare(Core::GraphicsRuntime& graphics, const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer);
-    [[nodiscard]] MeshFrameBindingSnapshot snapshot(const Core::BufferHandle& meshViewBuffer)const noexcept;
-    [[nodiscard]] MeshViewBufferSnapshot viewSnapshot(const Core::BufferHandle& meshViewBuffer)const noexcept;
-    void release(Core::GraphicsRuntime& graphics);
-    void reset()noexcept{ m_snapshot = {}; }
-
-
-private:
-    MeshFrameBindingSnapshot m_snapshot;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private void retireSnapshotDescriptors(mut GpuDescriptorHeap heap, in MeshFrameBindingSnapshot snapshot){
+        if(!heap.isInitialized())
+            return;
+        if(snapshot.instanceHeapHandle.valid())
+            heap.free(snapshot.instanceHeapHandle);
+        if(snapshot.materialTypedHeapHandle.valid())
+            heap.free(snapshot.materialTypedHeapHandle);
+        if(snapshot.meshView.heapHandle.valid())
+            heap.free(snapshot.meshView.heapHandle);
+    }
 }
 
 

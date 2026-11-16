@@ -121,6 +121,7 @@ private:
     [[nodiscard]] Token readNumber()noexcept;
     [[nodiscard]] Token readString()noexcept;
     [[nodiscard]] Token readCharLiteral()noexcept;
+    [[nodiscard]] b8 consumeUnicodeEscape(MChar esc, u32 startLine, u32 startColumn, MStringView invalidHexMsg, MStringView invalidCodePointMsg, Token& outErrorToken)noexcept;
     [[nodiscard]] Token makeToken(TokenType::Enum type, usize length)noexcept;
     [[nodiscard]] Token makeErrorToken(MStringView message)noexcept{ return makeErrorToken(message, m_line, m_column); }
     [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column)noexcept;

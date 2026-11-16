@@ -61,6 +61,42 @@ namespace __hidden_simd_constant_analysis{
 }
 
 
+[[nodiscard]] b8 IsSimdUnitOrNegUnitFloatVectorExpr(
+    const Expr& expr,
+    const b8 isDouble,
+    const b8 expectNegative,
+    const SymbolTable* const symbols
+)noexcept{
+    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
+        return expectNegative ? SimdConstantAnalysis::IsNegativeUnitFloatLiteral(expr, symbols) : SimdConstantAnalysis::IsUnitFloatLiteral(expr, symbols);
+    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs)
+        return IsSimdUnitOrNegUnitFloatVectorExpr(*expr.lhs, isDouble, !expectNegative, symbols);
+    if(symbols){
+        if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(expr, *symbols))
+            return expectNegative ? SimdConstantAnalysis::IsNegativeUnitFloatLiteral(*splatScalar, symbols) : SimdConstantAnalysis::IsUnitFloatLiteral(*splatScalar, symbols);
+    }
+    const MStringView expectedSimd = FindFloatSimdRegisterTypeName(isDouble);
+    if(expr.resolvedSimdType != expectedSimd)
+        return false;
+    const MStringView expectedConst = expectNegative
+        ? (isDouble ? CodegenSymbols::s_SimdNegOneDouble : CodegenSymbols::s_SimdNegOneSingle)
+        : (isDouble ? CodegenSymbols::s_SimdOneDouble : CodegenSymbols::s_SimdOneSingle);
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
+        if(baseCallee == expectedSimd)
+            return SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(expr.arguments, isDouble, symbols) == expectedConst;
+    }
+    if(symbols && expr.kind == ExprKind::Identifier){
+        if(const Stmt* globalConst = symbols->findGlobalConstant(expr.text)){
+            const Span<const Expr* const> constArgs = SimdConstantAnalysis::ExtractGlobalConstCtorArgs(*globalConst);
+            if(!constArgs.empty())
+                return SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols) == expectedConst;
+        }
+    }
+    return false;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -137,7 +173,7 @@ namespace __hidden_simd_constant_analysis{
 [[nodiscard]] b8 SimdConstantAnalysis::IsUnitFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
     const Expr& unwrapped = SimdConstantAnalysis::UnwrapConstScalarExpr(expr, symbols);
     return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
-        && (unwrapped.text == "1.0f" || unwrapped.text == "1.0" || unwrapped.text == "1.f" || unwrapped.text == "1.0F" || unwrapped.text == "1.F");
+        && CodegenSymbols::ContainsLiteralText(CodegenSymbols::s_UnitFloatLiterals, unwrapped.text);
 }
 
 [[nodiscard]] b8 SimdConstantAnalysis::IsNegativeUnitFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
@@ -145,13 +181,13 @@ namespace __hidden_simd_constant_analysis{
     if(unwrapped.kind == ExprKind::Unary && !unwrapped.isPostfix && unwrapped.op == TokenType::Minus && unwrapped.lhs)
         return SimdConstantAnalysis::IsUnitFloatLiteral(*unwrapped.lhs, symbols);
     return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
-        && (unwrapped.text == "-1.0f" || unwrapped.text == "-1.0" || unwrapped.text == "-1.f" || unwrapped.text == "-1.0F" || unwrapped.text == "-1.F");
+        && CodegenSymbols::ContainsLiteralText(CodegenSymbols::s_NegativeUnitFloatLiterals, unwrapped.text);
 }
 
 [[nodiscard]] b8 SimdConstantAnalysis::IsHalfFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
     const Expr& unwrapped = SimdConstantAnalysis::UnwrapConstScalarExpr(expr, symbols);
     return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
-        && (unwrapped.text == "0.5f" || unwrapped.text == "0.5" || unwrapped.text == ".5f" || unwrapped.text == ".5" || unwrapped.text == "0.5F" || unwrapped.text == ".5F");
+        && CodegenSymbols::ContainsLiteralText(CodegenSymbols::s_HalfFloatLiterals, unwrapped.text);
 }
 
 [[nodiscard]] MStringView SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(const Span<const Expr* const> arguments, const b8 isDouble, const SymbolTable* const symbols)noexcept{
@@ -159,11 +195,11 @@ namespace __hidden_simd_constant_analysis{
         const Expr& a0 = *arguments[0];
         if(a0.resolvedSimdType.empty() && a0.resolvedUnalignedType.empty()){
             if(SimdConstantAnalysis::IsUnitFloatLiteral(a0, symbols))
-                return isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
+                return isDouble ? CodegenSymbols::s_SimdOneDouble : CodegenSymbols::s_SimdOneSingle;
             if(SimdConstantAnalysis::IsNegativeUnitFloatLiteral(a0, symbols))
-                return isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne";
+                return isDouble ? CodegenSymbols::s_SimdNegOneDouble : CodegenSymbols::s_SimdNegOneSingle;
             if(SimdConstantAnalysis::IsHalfFloatLiteral(a0, symbols))
-                return isDouble ? "::s_DoubleSIMDOneHalf" : "::s_SIMDOneHalf";
+                return isDouble ? CodegenSymbols::s_SimdHalfDouble : CodegenSymbols::s_SimdHalfSingle;
             return {};
         }
         if(symbols && a0.kind == ExprKind::Identifier){
@@ -244,7 +280,7 @@ namespace __hidden_simd_constant_analysis{
         if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(expr, *symbols))
             return SimdExpressionAnalysis::IsZeroScalarLiteral(*splatScalar, symbols);
     }
-    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
+    const MStringView expectedSimd = FindFloatSimdRegisterTypeName(isDouble);
     if(expr.resolvedSimdType != expectedSimd)
         return false;
     if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
@@ -275,59 +311,11 @@ namespace __hidden_simd_constant_analysis{
 }
 
 [[nodiscard]] b8 SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
-    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
-        return SimdConstantAnalysis::IsUnitFloatLiteral(expr, symbols);
-    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs)
-        return SimdConstantAnalysis::IsSimdNegativeUnitFloatVectorExpr(*expr.lhs, isDouble, symbols);
-    if(symbols){
-        if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(expr, *symbols))
-            return SimdConstantAnalysis::IsUnitFloatLiteral(*splatScalar, symbols);
-    }
-    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
-    if(expr.resolvedSimdType != expectedSimd)
-        return false;
-    const MStringView expectedOneConst = isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
-    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
-        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
-        if(baseCallee == expectedSimd)
-            return SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(expr.arguments, isDouble, symbols) == expectedOneConst;
-    }
-    if(symbols && expr.kind == ExprKind::Identifier){
-        if(const Stmt* globalConst = symbols->findGlobalConstant(expr.text)){
-            const Span<const Expr* const> constArgs = SimdConstantAnalysis::ExtractGlobalConstCtorArgs(*globalConst);
-            if(!constArgs.empty())
-                return SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols) == expectedOneConst;
-        }
-    }
-    return false;
+    return __hidden_simd_constant_analysis::IsSimdUnitOrNegUnitFloatVectorExpr(expr, isDouble, false, symbols);
 }
 
 [[nodiscard]] b8 SimdConstantAnalysis::IsSimdNegativeUnitFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
-    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
-        return SimdConstantAnalysis::IsNegativeUnitFloatLiteral(expr, symbols);
-    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs)
-        return SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.lhs, isDouble, symbols);
-    if(symbols){
-        if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(expr, *symbols))
-            return SimdConstantAnalysis::IsNegativeUnitFloatLiteral(*splatScalar, symbols);
-    }
-    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
-    if(expr.resolvedSimdType != expectedSimd)
-        return false;
-    const MStringView expectedNegOneConst = isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne";
-    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
-        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
-        if(baseCallee == expectedSimd)
-            return SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(expr.arguments, isDouble, symbols) == expectedNegOneConst;
-    }
-    if(symbols && expr.kind == ExprKind::Identifier){
-        if(const Stmt* globalConst = symbols->findGlobalConstant(expr.text)){
-            const Span<const Expr* const> constArgs = SimdConstantAnalysis::ExtractGlobalConstCtorArgs(*globalConst);
-            if(!constArgs.empty())
-                return SimdConstantAnalysis::TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols) == expectedNegOneConst;
-        }
-    }
-    return false;
+    return __hidden_simd_constant_analysis::IsSimdUnitOrNegUnitFloatVectorExpr(expr, isDouble, true, symbols);
 }
 
 [[nodiscard]] b8 SimdConstantAnalysis::IsIdentityMatrixCtorArgs(const Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept{

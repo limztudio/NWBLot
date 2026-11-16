@@ -308,7 +308,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     Core::BufferHandle edgeListBuffer = Move(*edgeListBufferResult);
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *edgeListBuffer.get(), m_rayTracingState.m_swShadowEdgeListHeapHandle)){
+    if(!heap.isInitialized() || !ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *edgeListBuffer.get(), m_rayTracingState.m_swShadowEdgeListHeapHandle)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;

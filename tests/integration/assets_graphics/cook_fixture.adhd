@@ -1433,7 +1433,7 @@ using MeshletAttributeStreamRef = NWB::Impl::MeshletAttributeStreamRef;
 using MeshletPositionRefVector = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>;
 using MeshletAttributeRefVector = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>;
 using MeshletDescVector = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>;
-using ScratchU32Vector = ::Vector<u32, NWB::Core::Alloc::ScratchArena>;
+using ScratchU32Vector = ::Vector<u32, ::ArenaBase>;
 using ShaderCook = NWB::Impl::ShaderCook;
 using ShaderCookShaderEntry = NWB::Impl::ShaderCook::ShaderEntry;
 using ShaderCookIncludeEntry = NWB::Impl::ShaderCook::IncludeEntry;
@@ -2897,7 +2897,7 @@ b8 LoadMeshAssetBinary(mut MeshAsset mesh, in AssetBytes binary){
 }
 
 Expected<ScratchU32Vector> BuildTestMeshletTriangleIndices(in MeshAsset mesh, mut ScratchArena scratchArena){
-    return BuildMeshletTriangleIndices(mesh, scratchArena);
+    return BuildMeshletTriangleIndices(scratchArena, mesh);
 }
 
 Expected<ShaderCookShaderEntry> ParseTestShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut ScratchArena scratchArena, mut ShaderCook shaderCook){

@@ -2,97 +2,61 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd.h>
-
-#include <global/atomic_identity.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Hosts own scroll state; its offset and identity contain no retained application or OS references.
-class ScrollState final : NoCopy{
-private:
-    [[nodiscard]] static u64 NextIdentity()noexcept{
-        static Atomic<u64> s_NextIdentity{ 1u };
-        return NextNonWrappingIdentity(s_NextIdentity);
+class ScrollState : NoCopy{
+    private u64 m_instanceGeneration;
+    private f64 m_offset = 0.0;
+
+    public ScrollState(){
+        this.m_instanceGeneration = AllocateServiceIdentity();
     }
 
-
-public:
-    ScrollState()noexcept
-        : m_instanceGeneration(NextIdentity())
-    {}
-    ScrollState(ScrollState&&) = delete;
-
-
-public:
-    ScrollState& operator=(ScrollState&&) = delete;
-
-
-public:
-    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
-
-    [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
-    [[nodiscard]] b8 setOffset(const f64 offset)noexcept{
-        const auto next = TrySetScrollOffset(offset);
-        if(!next)
-            return false;
-        m_offset = *next;
-        return true;
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
     }
-    [[nodiscard]] b8 ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{
-        const auto next = TryEnsureScrollVisible(m_offset, start, end, viewportHeight);
-        if(!next)
-            return false;
-        m_offset = *next;
-        return true;
+
+    public f64 offset()const{
+        return this.m_offset;
     }
-    [[nodiscard]] b8 scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{
-        const auto next = TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight);
-        if(!next)
+
+    public b8 setOffset(in f64 offset){
+        const Expected<f64> next = TrySetScrollOffset(offset);
+        if(!next.has_value())
             return false;
-        m_offset = *next;
-        return true;
-    }
-    [[nodiscard]] b8 clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
-        const auto next = TryClampScrollOffset(m_offset, contentHeight, viewportHeight);
-        if(!next)
-            return false;
-        m_offset = *next;
+        this.m_offset = next.value();
         return true;
     }
 
+    public b8 ensureVisible(in f64 start, in f64 end, in f64 viewportHeight){
+        const Expected<f64> next = TryEnsureScrollVisible(this.m_offset, start, end, viewportHeight);
+        if(!next.has_value())
+            return false;
+        this.m_offset = next.value();
+        return true;
+    }
 
-private:
-    const u64 m_instanceGeneration;
-    f64 m_offset = 0.0;
-};
+    public b8 scrollBy(in f64 delta, in f64 contentHeight, in f64 viewportHeight){
+        const Expected<f64> next = TryScrollByOffset(this.m_offset, delta, contentHeight, viewportHeight);
+        if(!next.has_value())
+            return false;
+        this.m_offset = next.value();
+        return true;
+    }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 clamp(in f64 contentHeight, in f64 viewportHeight){
+        const Expected<f64> next = TryClampScrollOffset(this.m_offset, contentHeight, viewportHeight);
+        if(!next.has_value())
+            return false;
+        this.m_offset = next.value();
+        return true;
+    }
 }
 
 

@@ -2,105 +2,38 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/asset.adhd>
+#include <impl/assets_model/asset.adhd>
+#include <impl/assets_skeleton/asset.adhd>
+#include <impl/ecs_mesh/components.adhd>
 #include <impl/ecs_model/types.adhd>
+#include <impl/ecs_scene/view.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_ModelSystemAssetLoadContext = "ModelSystem";
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/ref.h>
-#include <core/ecs/system.h>
-
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AssetManager;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Entity;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Material;
-class Model;
-class ModelSkeletonObject;
-class ModelStaticMeshObject;
-class ModelSkinnedMeshObject;
-
-using ModelObjectRendererCallback = Function<void(Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::World& world, Core::ECS::Entity& entity)>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+type ModelObjectRendererApplyFn = Func<void(in EntityID, in AssetRef<Material>, mut World, mut Entity)>;
+type ModelObjectRendererCallback = Optional<ModelObjectRendererApplyFn>;
 
 class ModelObjectRendererHooks{
     public ModelObjectRendererCallback apply;
-    public Span<ComponentAccess> accesses;
+    public FixedVector<ComponentAccess, 4u> accesses;
 
     public ModelObjectRendererHooks(){
         this.apply = ModelObjectRendererCallback();
+        this.accesses = FixedVector<ComponentAccess, 4u>();
     }
 
     public ModelObjectRendererHooks(in ModelObjectRendererCallback inApply, in Span<ComponentAccess> inAccesses){
         this.apply = inApply;
-        this.accesses = inAccesses;
+        this.accesses = FixedVector<ComponentAccess, 4u>();
+        assert(inAccesses.size() <= 4u);
+        for(in ComponentAccess access : inAccesses)
+            this.accesses.push_back(access);
     }
 }
 
@@ -123,6 +56,27 @@ MatrixSingle ComputeModelJointAttachmentWorldMatrix(
     in MatrixSingle localMatrix
 ){
     return Mul(Mul(parentMatrix, jointMatrix), localMatrix);
+}
+
+void ResolveModelAttachmentJointQueries(
+    in Span<usize> parentOrder,
+    in World world,
+    mut Vector<SkeletonJointMatrix> jointPalette,
+    mut Vector<ModelAttachmentJointQuery> queries
+){
+    const usize queryCount = queries.size();
+    usize groupBegin = 0u;
+    while(groupBegin < queryCount){
+        const EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
+        const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, queries, groupBegin);
+
+        if(world.hasComponent<SkeletonPoseComponent>(parentEntity)){
+            in SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(parentEntity);
+            if(TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, jointPalette).has_value())
+                ResolveModelAttachmentJointQueryGroup(parentOrder, jointPalette, groupBegin, groupEnd, queries);
+        }
+        groupBegin = groupEnd;
+    }
 }
 
 [arena, system("model")]
@@ -166,15 +120,133 @@ class ModelSystem{
 
     public void syncModelRuntimes();
 
-    private void registerDefaultAccesses();
+    private void registerDefaultAccesses(){
+        this.readAccess<ModelComponent>();
+        this.writeAccess<ModelRuntimeComponent>();
+        this.writeAccess<ModelObjectComponent>();
+        this.writeAccess<ModelSkeletonComponent>();
+        this.writeAccess<ModelStaticMeshAttachmentComponent>();
+        this.writeAccess<MeshComponent>();
+        this.writeAccess<SkinnedMeshBindingComponent>();
+        this.writeAccess<TransformComponent>();
+        this.writeAccess<SkeletonPoseComponent>();
+    }
+
     private void clearInactiveModelRuntimes(mut ScratchArena scratchArena);
     private void ensureModelRuntime(in EntityID entity, in ModelComponent component, mut ScratchArena scratchArena);
     private void clearModelRuntime(in EntityID entity, mut ScratchArena scratchArena);
-    private b8 expandModel(in EntityID owner, in Model model, mut ModelRuntimeComponent runtime);
-    private b8 spawnSkeletonObject(in EntityID owner, in ModelSkeletonObject object);
-    private b8 spawnStaticMeshObject(in EntityID owner, in ModelStaticMeshObject object);
-    private b8 spawnSkinnedMeshObject(in EntityID owner, in ModelSkinnedMeshObject object);
-    private Entity createSpawnedObjectEntity(in EntityID owner, in Name objectName, in MatrixSingle localMatrix, in ModelObjectKind kind);
+
+    private b8 expandModel(in EntityID owner, in Model model, mut ModelRuntimeComponent runtime){
+        runtime.model = model.virtualPath();
+        runtime.objectCount = 0u;
+
+        b8 complete = true;
+        for(in ModelSkeletonObject object : model.skeletonObjects()){
+            if(this.spawnSkeletonObject(owner, object))
+                ++runtime.objectCount;
+            else
+                complete = false;
+        }
+        for(in ModelStaticMeshObject object : model.staticMeshObjects()){
+            if(this.spawnStaticMeshObject(owner, object))
+                ++runtime.objectCount;
+            else
+                complete = false;
+        }
+        for(in ModelSkinnedMeshObject object : model.skinnedMeshObjects()){
+            if(this.spawnSkinnedMeshObject(owner, object))
+                ++runtime.objectCount;
+            else
+                complete = false;
+        }
+
+        return complete;
+    }
+
+    private b8 spawnSkeletonObject(in EntityID owner, in ModelSkeletonObject object){
+        const Name skeletonName = object.skeleton.name();
+        assert(skeletonName != s_NameNone);
+        Expected<UniquePtr<Skeleton>> skeletonAsset = LoadTypedAssetSync<Skeleton>(this.m_assetManager, skeletonName, s_ModelSystemAssetLoadContext);
+        if(!skeletonAsset.has_value() || !skeletonAsset.value().valid())
+            return false;
+        in Skeleton skeleton = skeletonAsset.value().deref();
+
+        Entity entity = this.createSpawnedObjectEntity(owner, object.name, MatrixSingle(object.transform), ModelObjectKind::Skeleton);
+
+        mut SkeletonPoseComponent pose = entity.addComponent<SkeletonPoseComponent>();
+        InitializeSkeletonPoseFromJoints(skeleton.joints(), pose);
+
+        mut ModelSkeletonComponent skeletonComponent = entity.addComponent<ModelSkeletonComponent>();
+        skeletonComponent.skeleton = object.skeleton;
+
+        return true;
+    }
+
+    private b8 spawnStaticMeshObject(in EntityID owner, in ModelStaticMeshObject object){
+        Entity entity = this.createSpawnedObjectEntity(owner, object.name, MatrixSingle(object.transform), ModelObjectKind::StaticMesh);
+        if(this.m_applyRenderer.has_value()){
+            const ModelObjectRendererApplyFn applyFn = this.m_applyRenderer.value();
+            applyFn(owner, object.material, this.m_world, entity);
+        }
+
+        mut MeshComponent mesh = entity.addComponent<MeshComponent>();
+        mesh.mesh = object.mesh;
+
+        mut ModelStaticMeshAttachmentComponent attachment = entity.addComponent<ModelStaticMeshAttachmentComponent>();
+        attachment.localTransform = object.transform;
+
+        assert(object.parentObject != s_NameNone || object.parentJoint == s_NameNone);
+        if(object.parentObject != s_NameNone){
+            attachment.parentEntity = this.findSpawnedObject(owner, object.parentObject);
+            const b8 parentValid = attachment.parentEntity.valid();
+            const b8 parentIsSkeleton = parentValid && this.m_world.hasComponent<ModelSkeletonComponent>(attachment.parentEntity);
+            if(!ValidateModelStaticMeshParentEntity(object.name, object.parentObject, parentValid, parentIsSkeleton))
+                return false;
+
+            if(object.parentJoint != s_NameNone){
+                const Name skeletonName = this.m_world.getComponent<ModelSkeletonComponent>(attachment.parentEntity).skeleton.name();
+                if(skeletonName == s_NameNone)
+                    return false;
+                Expected<UniquePtr<Skeleton>> skeletonAsset = LoadTypedAssetSync<Skeleton>(this.m_assetManager, skeletonName, s_ModelSystemAssetLoadContext);
+                if(!skeletonAsset.has_value() || !skeletonAsset.value().valid())
+                    return false;
+                in Skeleton skeleton = skeletonAsset.value().deref();
+
+                attachment.parentJointIndex = skeleton.findJointIndex(object.parentJoint);
+                if(!ValidateModelStaticMeshParentJoint(object.name, object.parentObject, object.parentJoint, attachment.parentJointIndex))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private b8 spawnSkinnedMeshObject(in EntityID owner, in ModelSkinnedMeshObject object){
+        const EntityID skeletonEntity = this.findSpawnedObject(owner, object.skeletonObject);
+        if(!ValidateModelSkinnedMeshSkeletonEntity(object.name, skeletonEntity.valid()))
+            return false;
+
+        Entity entity = this.createSpawnedObjectEntity(owner, object.name, MatrixSingle(object.transform), ModelObjectKind::SkinnedMesh);
+        if(this.m_applyRenderer.has_value()){
+            const ModelObjectRendererApplyFn applyFn = this.m_applyRenderer.value();
+            applyFn(owner, object.material, this.m_world, entity);
+        }
+
+        mut SkinnedMeshBindingComponent binding = entity.addComponent<SkinnedMeshBindingComponent>();
+        binding.skin = object.skin;
+        binding.skeletonEntity = skeletonEntity;
+        return true;
+    }
+
+    private Entity createSpawnedObjectEntity(in EntityID owner, in Name objectName, in MatrixSingle localMatrix, in ModelObjectKind kind){
+        Entity entity = this.m_world.createEntity();
+        mut ModelObjectComponent modelObject = entity.addComponent<ModelObjectComponent>();
+        modelObject = MakeModelObjectComponent(owner, this.m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
+        mut TransformComponent transform = entity.addComponent<TransformComponent>();
+        TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(LoadEntityTransformMatrix(this.m_world, owner), localMatrix), transform);
+        return entity;
+    }
+
     private EntityID findSpawnedObject(in EntityID owner, in Name objectName)const;
     private Expected<void, CpuTaskAdmissionError> updateModelObjectTransforms();
     private void updateStaticMeshAttachments();
@@ -191,12 +263,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_model/asset.adhd.h>
-#include <impl/assets_skeleton/asset.adhd.h>
-#include <impl/ecs_mesh/components.adhd.h>
-#include <impl/ecs_scene/view.adhd.h>
-#include <impl/ecs_skeleton/components.adhd.h>
-
 #include <core/assets/manager.h>
 #include <core/ecs/entity.h>
 
@@ -211,51 +277,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace __hidden_model_system{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("ModelSystem");
-
-static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, ::ArenaBase>& jointPalette, Vector<ModelAttachmentJointQuery, ::ArenaBase>& queries){
-    const usize queryCount = queries.size();
-    const Span<const ModelAttachmentJointQuery> constQueries(queries.data(), queryCount);
-    usize groupBegin = 0u;
-    while(groupBegin < queryCount){
-        const Core::ECS::EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
-        const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, constQueries, groupBegin);
-
-        const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
-        if(pose && TryBuildStoredJointPaletteVectorFromSkeletonPose(*pose, jointPalette))
-            ResolveModelAttachmentJointQueryGroup(parentOrder, Span<const SkeletonJointMatrix>(jointPalette.data(), jointPalette.size()), groupBegin, groupEnd, queries);
-        groupBegin = groupEnd;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ModelSystem::registerDefaultAccesses()noexcept{
-    readAccess<ModelComponent>();
-    writeAccess<ModelRuntimeComponent>();
-    writeAccess<ModelObjectComponent>();
-    writeAccess<ModelSkeletonComponent>();
-    writeAccess<ModelStaticMeshAttachmentComponent>();
-    writeAccess<MeshComponent>();
-    writeAccess<SkinnedMeshBindingComponent>();
-    writeAccess<Scene::TransformComponent>();
-    writeAccess<SkeletonPoseComponent>();
-}
 
 void ModelSystem::syncModelRuntimes()noexcept{
     Core::Alloc::ScratchArena scratchArena(s_ModelSyncRuntimeArena);
@@ -323,7 +344,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
     clearModelRuntime(entity, scratchArena);
 
     const Name modelName = component.model.name();
-    auto loadedModel = m_assetManager->loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext);
+    auto loadedModel = m_assetManager->loadTypedSync<Model>(modelName, FOUNDATION_TEXT("ModelSystem"));
     if(!loadedModel){
         ResetModelRuntimeState(runtime);
         return;
@@ -354,113 +375,6 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
 
     if(auto* runtime = m_world->tryGetComponent<ModelRuntimeComponent>(entity))
         ResetModelRuntimeState(*runtime);
-}
-
-b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime)noexcept{
-    runtime.model = model.virtualPath();
-    runtime.objectCount = 0u;
-
-    b8 complete = true;
-    for(const ModelSkeletonObject& object : model.skeletonObjects()){
-        if(spawnSkeletonObject(owner, object))
-            ++runtime.objectCount;
-        else
-            complete = false;
-    }
-    for(const ModelStaticMeshObject& object : model.staticMeshObjects()){
-        if(spawnStaticMeshObject(owner, object))
-            ++runtime.objectCount;
-        else
-            complete = false;
-    }
-    for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects()){
-        if(spawnSkinnedMeshObject(owner, object))
-            ++runtime.objectCount;
-        else
-            complete = false;
-    }
-
-    return complete;
-}
-
-b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object)noexcept{
-    const Name skeletonName = object.skeleton.name();
-    FOUNDATION_ASSERT(skeletonName);
-    auto skeletonAsset = m_assetManager->loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
-    if(!skeletonAsset)
-        return false;
-    const Skeleton& skeleton = **skeletonAsset;
-
-    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, LoadFloat(object.transform), ModelObjectKind::Skeleton);
-
-    auto& pose = entity.addComponent<SkeletonPoseComponent>();
-    InitializeSkeletonPoseFromJoints(skeleton.joints(), pose);
-
-    auto& skeletonComponent = entity.addComponent<ModelSkeletonComponent>();
-    skeletonComponent.skeleton = object.skeleton;
-
-    return true;
-}
-
-b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object)noexcept{
-    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, LoadFloat(object.transform), ModelObjectKind::StaticMesh);
-    if(m_applyRenderer)
-        m_applyRenderer(owner, object.material, *m_world, entity);
-
-    auto& mesh = entity.addComponent<MeshComponent>();
-    mesh.mesh = object.mesh;
-
-    auto& attachment = entity.addComponent<ModelStaticMeshAttachmentComponent>();
-    attachment.localTransform = object.transform;
-
-    FOUNDATION_ASSERT(object.parentObject || !object.parentJoint);
-    if(object.parentObject){
-        attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
-        const ModelSkeletonComponent* skeletonComponent = attachment.parentEntity.valid()
-            ? m_world->tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity)
-            : nullptr;
-        if(!ValidateModelStaticMeshParentEntity(object.name, object.parentObject, attachment.parentEntity.valid(), skeletonComponent != nullptr))
-            return false;
-
-        if(object.parentJoint){
-            const Name skeletonName = skeletonComponent->skeleton.name();
-            if(!skeletonName)
-                return false;
-            auto skeletonAsset = m_assetManager->loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
-            if(!skeletonAsset)
-                return false;
-            const Skeleton& skeleton = **skeletonAsset;
-
-            attachment.parentJointIndex = skeleton.findJointIndex(object.parentJoint);
-            if(!ValidateModelStaticMeshParentJoint(object.name, object.parentObject, object.parentJoint, attachment.parentJointIndex))
-                return false;
-        }
-    }
-
-    return true;
-}
-
-b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object)noexcept{
-    const Core::ECS::EntityID skeletonEntity = findSpawnedObject(owner, object.skeletonObject);
-    if(!ValidateModelSkinnedMeshSkeletonEntity(object.name, skeletonEntity.valid()))
-        return false;
-
-    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, LoadFloat(object.transform), ModelObjectKind::SkinnedMesh);
-    if(m_applyRenderer)
-        m_applyRenderer(owner, object.material, *m_world, entity);
-
-    auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
-    binding.skin = object.skin;
-    binding.skeletonEntity = skeletonEntity;
-    return true;
-}
-
-Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::EntityID owner, const Name objectName, const SIMDMatrix& localMatrix, const ModelObjectKind::Enum kind)noexcept{
-    Core::ECS::Entity entity = m_world->createEntity();
-    entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world->entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
-    auto& transform = entity.addComponent<Scene::TransformComponent>();
-    (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(*m_world, owner), localMatrix), transform);
-    return entity;
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{
@@ -511,11 +425,11 @@ void ModelSystem::updateStaticMeshAttachments()noexcept{
         });
         const Span<const ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
         if(sharedParent)
-            __hidden_model_system::ResolveAttachmentJointQueries({}, *m_world, m_scratchJoints, jointQueries);
+            ResolveModelAttachmentJointQueries({}, *m_world, m_scratchJoints, jointQueries);
         else{
             Vector<usize, ::ArenaBase>& parentOrder = m_attachmentParentOrder;
             BuildSortedModelAttachmentParentOrder(queries, parentOrder);
-            __hidden_model_system::ResolveAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), *m_world, m_scratchJoints, jointQueries);
+            ResolveModelAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), *m_world, m_scratchJoints, jointQueries);
         }
     }
 
@@ -568,3 +482,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

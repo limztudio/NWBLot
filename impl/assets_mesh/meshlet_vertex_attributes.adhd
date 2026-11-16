@@ -2,58 +2,38 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/assets_mesh/meshlet_ref_decoding.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/asset.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Per-corner trace attributes parallel to the triangle index buffer; preserves smooth vs hard edges (no position-indexed normal collapse).
-static_assert(sizeof(AttribGpu) == sizeof(Half4U) + sizeof(Float2U), "AttribGpu layout drifted");
-static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 bytes for the shadow trace attribute buffer");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Flat per-corner attribute buffer from meshlet streams (mirrors BuildMeshletTriangleIndices decode chain).
-// PrimitiveIndex * 3 + corner fetch; raw streams cover cooked + skinned instances.
-[[nodiscard]] Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
-    Span<const MeshletDesc> meshlets,
-    Span<const MeshletLocalVertexRef> localVertexRefs,
-    Span<const u8> attributeRefDeltas,
-    Span<const u8> primitiveIndices,
-    Span<const Half4U> normalStream,
-    Span<const Float2U> uv0Stream,
-    Core::Alloc::ScratchArena& scratchArena
-);
-[[nodiscard]] FOUNDATION_INLINE Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
-    return BuildMeshletTriangleAttributes(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream(), scratchArena);
+// Flat per-corner attribute buffer from meshlet streams.
+Expected<Vector<AttribGpu>> BuildMeshletTriangleAttributes(
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<u8> attributeRefDeltas,
+    in Span<u8> primitiveIndices,
+    in Span<f16x4u> normalStream,
+    in Span<f32x2u> uv0Stream
+){
+    Vector<AttribGpu> outAttributes;
+    outAttributes.resize(primitiveIndices.size());
+    if(!DecodeMeshletTriangleAttributesInto(meshlets, localVertexRefs, attributeRefDeltas, primitiveIndices, normalStream, uv0Stream, outAttributes))
+        return MakeUnexpected(Failure());
+    return outAttributes;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<Vector<AttribGpu>> BuildMeshletTriangleAttributes(in Mesh payload){
+    return BuildMeshletTriangleAttributes(
+        payload.meshlets(),
+        payload.meshletLocalVertexRefs(),
+        payload.meshletAttributeRefDeltas(),
+        payload.meshletPrimitiveIndices(),
+        payload.normalStream(),
+        payload.uv0Stream()
+    );
 }
 
 

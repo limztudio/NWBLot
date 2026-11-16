@@ -147,6 +147,10 @@ public:
         , params(arena)
         , body(arena)
     {}
+
+    [[nodiscard]] constexpr b8 acceptsArgCount(const usize count)const noexcept{
+        return params.size() == count || (hasDefaultArgs && count >= minArgCount && count <= params.size());
+    }
 };
 
 
@@ -226,7 +230,35 @@ public:
             && systemTypeName.empty()
             && subsystemTypeName.empty();
     }
+
+    [[nodiscard]] constexpr b8 canBorrowMotherArena()const noexcept{
+        return !isSerialize && !usesStaticClassArena() && subsystemTypeName.empty();
+    }
 };
+
+[[nodiscard]] constexpr const TemplateParamDecl* FindEnclosingTemplateParam(const ClassDecl* const ownerClass, const MethodDecl* const method, const MStringView name, const b8 wantConstValue)noexcept{
+    if(method){
+        if(const TemplateParamDecl* tp = FindTemplateParamByName(Span<const TemplateParamDecl>(method->templateParams.data(), method->templateParams.size()), name)){
+            if((tp->constValueType != nullptr) == wantConstValue)
+                return tp;
+        }
+    }
+    if(ownerClass){
+        if(const TemplateParamDecl* tp = FindTemplateParamByName(Span<const TemplateParamDecl>(ownerClass->templateParams.data(), ownerClass->templateParams.size()), name)){
+            if((tp->constValueType != nullptr) == wantConstValue)
+                return tp;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] constexpr b8 ShouldEmitCallableInHeader(const ClassDecl* const ownerClass, const MethodDecl& callable)noexcept{
+    return callable.hasBody
+        && ((ownerClass && !ownerClass->templateParams.empty())
+            || !callable.templateParams.empty()
+            || callable.isInline
+            || callable.hasSynthesizedArenaParams);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -269,6 +301,7 @@ struct TranslationUnit{
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
     MVector<MStringView> requiredGlobalHeaders;
+    MVector<MStringView> extraPreambleHeaders;
     MVector<MString> includedAdhdFiles;
     MVector<MString> resolvedIncludedFiles;
     MVector<Stmt*> globalConstants;
@@ -289,6 +322,7 @@ public:
         , topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
         , requiredGlobalHeaders(arena)
+        , extraPreambleHeaders(arena)
         , includedAdhdFiles(arena)
         , resolvedIncludedFiles(arena)
         , globalConstants(arena)

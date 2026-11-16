@@ -63,6 +63,7 @@ struct CompileOptions{
     Span<const MString> cppIncludeDirectories;
     Span<const MString> cppDefines;
     Span<const MString> cppCompilerArgs;
+    Span<const MString> extraPreambleHeaders;
     MString* outEmittedCppExterns = nullptr;
     b8 enableAutoProjectCppIncludes = true;
 };
@@ -82,8 +83,8 @@ struct CompileOptions{
 
 [[nodiscard]] MString DeriveOutputFilename(MStringView virtualFilePath, MStringView suffix, MetaArena& arena);
 [[nodiscard]] MString DeriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);
-[[nodiscard]] inline MString DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.h", arena); }
-[[nodiscard]] inline MString DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena); }
+[[nodiscard]] inline MString DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ContractSemantics::s_GeneratedHeaderSuffix, arena); }
+[[nodiscard]] inline MString DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ContractSemantics::s_GeneratedSourceSuffix, arena); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

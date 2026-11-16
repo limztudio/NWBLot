@@ -77,9 +77,9 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
         }
     }
 
-    if(allowAuto && m_cursor.matchIdentifier("auto")){
+    if(allowAuto && m_cursor.matchIdentifier(KeywordSemantics::s_Auto)){
         TypeRef* type = AllocateAstNode<TypeRef>(m_cursor.arena());
-        type->name = "auto";
+        type->name = KeywordSemantics::s_Auto;
         type->refMode = refMode;
         type->isAuto = true;
         type->span = startSpan;
@@ -97,7 +97,7 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
     type->span = startSpan;
     m_cursor.advance();
 
-    if(type->name == "Func"){
+    if(BuiltinTypeSemantics::IsFuncTypeName(type->name)){
         type->isFuncType = true;
         if(!m_cursor.expect(TokenType::Less, "expected '<' after 'Func'"))
             return nullptr;
@@ -185,7 +185,7 @@ b8 TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
         TemplateParamDecl param(m_cursor.arena());
         param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
 
-        if(m_cursor.matchIdentifier("const")){
+        if(m_cursor.matchIdentifier(KeywordSemantics::s_Const)){
             param.constValueType = parseType(false, false);
             if(!param.constValueType)
                 return false;

@@ -497,7 +497,7 @@ void RendererRayTracingSystem::invalidateResources(){
 void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
+        RetireDescriptor(heap, m_rayTracingState.m_tlasHeapHandle);
         return;
     }
     m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();

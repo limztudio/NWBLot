@@ -24,6 +24,34 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_source_emitter_expr{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 EmitStringByteAccessPrefix(MString& out, const Expr& expr){
+    if(expr.isStringByteMutRef)
+        out.append("reinterpret_cast<::u8&>(");
+    else if(expr.isStringByteConstRef)
+        out.append("reinterpret_cast<const ::u8&>(");
+    else if(expr.isStringByteRead)
+        out.append("static_cast<::u8>(");
+    else
+        return false;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
     return SimdLogicEmitter(*this).tryEmit(out, expr, omitOuterBinaryParens);
 }
@@ -37,20 +65,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     if(expr.formatArgWrapKind != 0u){
         Expr unwrapped = expr;
         unwrapped.formatArgWrapKind = 0u;
-        if(expr.formatArgWrapKind == 1u){
-            out.append("::AStringView(");
+        if(const BuiltinFormatArgWrapInfo* wrapInfo = FindFormatArgWrapInfo(expr.formatArgWrapKind)){
+            out.append(wrapInfo->cppPrefix.data(), wrapInfo->cppPrefix.size());
             emitExpr(out, unwrapped);
-            out.push_back(')');
-        }
-        else if(expr.formatArgWrapKind == 2u){
-            out.append("::PathToString<char>(");
-            emitExpr(out, unwrapped);
-            out.push_back(')');
-        }
-        else if(expr.formatArgWrapKind == 3u){
-            out.push_back('(');
-            emitExpr(out, unwrapped);
-            out.append(").resolvedText()");
+            out.append(wrapInfo->cppSuffix.data(), wrapInfo->cppSuffix.size());
         }
         else{
             emitExpr(out, unwrapped);
@@ -59,7 +77,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
 
     if(expr.wrapInSimdResult){
-        out.append(IsDoubleSimdType(expr.resolvedSimdType) ? "::SIMDVectorDoubleResult{ " : "::SIMDVectorSingleResult{ ");
+        const MStringView resultPrefix = IsDoubleSimdType(expr.resolvedSimdType) ? CodegenSymbols::s_SimdResultDouble : CodegenSymbols::s_SimdResultSingle;
+        out.append(resultPrefix.data(), resultPrefix.size());
         Expr unwrapped = expr;
         unwrapped.wrapInSimdResult = false;
         emitExpr(out, unwrapped);
@@ -229,12 +248,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
             break;
         }
-        if(expr.isStringByteMutRef)
-            out.append("reinterpret_cast<::u8&>(");
-        else if(expr.isStringByteConstRef)
-            out.append("reinterpret_cast<const ::u8&>(");
-        else if(expr.isStringByteRead)
-            out.append("static_cast<::u8>(");
+        const b8 closeStringByteAccess = __hidden_adhd_source_emitter_expr::EmitStringByteAccessPrefix(out, expr);
         if(expr.derefNotNull)
             out.append("(*(");
         if(expr.useAdhdMapIndex){
@@ -261,7 +275,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         }
         if(expr.derefNotNull)
             out.append("))");
-        if(expr.isStringByteMutRef || expr.isStringByteConstRef || expr.isStringByteRead)
+        if(closeStringByteAccess)
             out.push_back(')');
         break;
     }
@@ -294,7 +308,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 if(expr.arguments.empty() && layoutAnalyzer.requiresMotherArena(*subType)){
                     const MStringView targetArena = (m_inFieldInitializer || expr.injectClassArena)
                         ? activeClassArenaExpr()
-                        : MStringView("__adhd_scratch");
+                        : CodegenSymbols::s_ScratchArenaVar;
                     out.append("::AdhdDefaultConstructInArena<");
                     m_typeEmitter.emitTypeCpp(out, *subType);
                     out.append(">(");
@@ -305,11 +319,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 const MStringView subBase = m_symbols.resolveBaseTypeName(subType->name);
                 if(SymbolTable::IsArenaBackedContainer(subBase) || layoutAnalyzer.isNonRootMotherArenaType(*subType)){
                     baseCallee = subBase;
-                    substitutedArena = m_inFieldInitializer ? activeClassArenaExpr() : MStringView("__adhd_scratch");
+                    substitutedArena = m_inFieldInitializer ? activeClassArenaExpr() : CodegenSymbols::s_ScratchArenaVar;
                 }
             }
         }
-        if((SymbolTable::IsSimdStorageType(baseCallee) || SymbolTable::IsUnalignedVectorType(baseCallee)) && !expr.arguments.empty()){
+        if(SymbolTable::IsSimdOrUnalignedStorageType(baseCallee) && !expr.arguments.empty()){
             MString storeCallStr(m_arena);
             if(SimdStorageEmitter(*this).tryEmit(storeCallStr, baseCallee, expr.arguments, "__adhd_tmp")){
                 TypeRef tmpType(m_arena);
@@ -322,24 +336,19 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 break;
             }
         }
-        if(expr.isStringByteMutRef)
-            out.append("reinterpret_cast<::u8&>(");
-        else if(expr.isStringByteConstRef)
-            out.append("reinterpret_cast<const ::u8&>(");
-        else if(expr.isStringByteRead)
-            out.append("static_cast<::u8>(");
+        const b8 closeStringByteAccess = __hidden_adhd_source_emitter_expr::EmitStringByteAccessPrefix(out, expr);
         if(expr.derefNotNull)
             out.append("(*");
         emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall, expr.isUserCallableCall, expr.callTemplateArgs);
         const MStringView injectedArena = expr.injectClassArena
             ? activeClassArenaExpr()
-            : (expr.injectScratchArena ? MStringView("__adhd_scratch") : substitutedArena);
+            : (expr.injectScratchArena ? CodegenSymbols::s_ScratchArenaVar : substitutedArena);
         ConstructorArgumentEmitter(*this).emit(out, baseCallee, expr.arguments, injectedArena, false, false);
         if(expr.unwrapSimdResultValue)
             out.append(".value");
         if(expr.derefNotNull)
             out.push_back(')');
-        if(expr.isStringByteMutRef || expr.isStringByteConstRef || expr.isStringByteRead)
+        if(closeStringByteAccess)
             out.push_back(')');
         break;
     }
@@ -403,7 +412,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(!omitOuterBinaryParens)
                 out.push_back('(');
             out.append(locked ? "::AdhdAssignOptionalLocked(__adhd_parallel_arena_mutex, " : "::AdhdAssignOptional(");
-            const MStringView targetArena = (expr.useAdhdOptionalClassAssign || subOptionalClassAssign) ? activeClassArenaExpr() : MStringView("__adhd_scratch");
+            const MStringView targetArena = (expr.useAdhdOptionalClassAssign || subOptionalClassAssign) ? activeClassArenaExpr() : CodegenSymbols::s_ScratchArenaVar;
             out.append(targetArena.data(), targetArena.size());
             out.append(", ");
             if(expr.lhs)
@@ -504,18 +513,22 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 const MStringView vecSimd = vecBase->resolvedSimdType;
                 const b8 isDouble = IsDoubleSimdType(vecSimd);
                 const MStringView targetScalar = m_symbols.resolveBaseTypeName(expr.targetType->name);
-                const b8 isUnsignedIntTarget = isDouble ? (targetScalar == "u64") : (targetScalar == "u32");
-                const b8 isSignedIntTarget = isDouble ? (targetScalar == "i64") : (targetScalar == "i32");
-                const b8 isFloatTarget = isDouble ? (targetScalar == "f64") : (targetScalar == "f32");
+                const b8 isUnsignedIntTarget = isDouble ? (targetScalar == BuiltinTypeSemantics::UInt64ScalarTypeName()) : (targetScalar == BuiltinTypeSemantics::UInt32ScalarTypeName());
+                const b8 isSignedIntTarget = isDouble ? (targetScalar == BuiltinTypeSemantics::Int64ScalarTypeName()) : (targetScalar == BuiltinTypeSemantics::Int32ScalarTypeName());
+                const b8 isFloatTarget = isDouble ? (targetScalar == BuiltinTypeSemantics::Float64ScalarTypeName()) : (targetScalar == BuiltinTypeSemantics::Float32ScalarTypeName());
                 if(isUnsignedIntTarget || isSignedIntTarget || isFloatTarget){
-                    if(isSignedIntTarget)
-                        out.append(isDouble ? "static_cast<i64>(" : "static_cast<i32>(");
-                    if(isFloatTarget)
-                        out.append(isDouble ? "::VectorDoubleGet" : "::VectorGet");
-                    else
-                        out.append(isDouble ? "::VectorDoubleGetInt" : "::VectorGetInt");
+                    if(isSignedIntTarget){
+                        const MStringView signedType = isDouble ? BuiltinTypeSemantics::Int64ScalarTypeName() : BuiltinTypeSemantics::Int32ScalarTypeName();
+                        out.append("static_cast<");
+                        out.append(signedType.data(), signedType.size());
+                        out.append(">(");
+                    }
+                    const MStringView getPrefix = isFloatTarget
+                        ? (isDouble ? CodegenSymbols::s_SimdGetDoublePrefix : CodegenSymbols::s_SimdGetSinglePrefix)
+                        : (isDouble ? CodegenSymbols::s_SimdGetIntDoublePrefix : CodegenSymbols::s_SimdGetIntSinglePrefix);
+                    out.append(getPrefix.data(), getPrefix.size());
                     if(dynamicIdx){
-                        out.append("ByIndex(");
+                        out.append(CodegenSymbols::s_SimdGetByIndexSuffix.data(), CodegenSymbols::s_SimdGetByIndexSuffix.size());
                         emitSimdRegExpr(out, *vecBase, vecSimd);
                         out.append(", static_cast<usize>(");
                         emitExpr(out, *dynamicIdx);
@@ -552,8 +565,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(!firstEmittedCap)
                 out.append(", ");
             firstEmittedCap = false;
-            if(cap.name == "this"){
-                out.append("this");
+            if(KeywordSemantics::IsThisKeyword(cap.name)){
+                out.append(KeywordSemantics::s_This.data(), KeywordSemantics::s_This.size());
             }
             else if(cap.mode == ParamPassingMode::Mut){
                 out.push_back('&');

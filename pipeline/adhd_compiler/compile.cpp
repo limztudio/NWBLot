@@ -9,6 +9,7 @@
 
 #include <global/filesystem.h>
 #include <global/filesystem/path_identity.h>
+#include <global/hash_utils.h>
 #include <global/text_utils.h>
 
 
@@ -122,12 +123,7 @@ struct NamespacePathHash{
 
     [[nodiscard]] usize operator()(const Core::Metascript::MStringView view)const noexcept{
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
-        usize h = static_cast<usize>(14695981039346656037ull);
-        for(const Core::Metascript::MChar ch : view){
-            h ^= static_cast<usize>(static_cast<u8>(Canonicalize(ch)));
-            h *= static_cast<usize>(1099511628211ull);
-        }
-        return h;
+        return static_cast<usize>(UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, view));
 #else
         return TransparentStringHash<Core::Metascript::MString>{}(view);
 #endif
@@ -338,7 +334,7 @@ private:
 b8 CompileAdhd(const AdhdCompileOptions& options){
     using namespace Core::Metascript;
 
-    MetaArena& arena = options.inputs.get_allocator().arena();
+    MetaArena& arena = options.arena;
     if(!options.emitCppExternsPath.empty() && options.inputs.size() > 1u){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: --emit-cpp-externs requires a single input file"));
         return false;
@@ -346,13 +342,19 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
 
     const Path<MetaArena> outDir(arena, options.outputDirectory);
     MVector<Path<MetaArena>> inputPaths(arena);
+    MVector<Path<MetaArena>> headerOutPaths(arena);
+    MVector<Path<MetaArena>> sourceOutPaths(arena);
     MVector<Path<MetaArena>> outputPaths(arena);
     inputPaths.reserve(options.inputs.size());
+    headerOutPaths.reserve(options.inputs.size());
+    sourceOutPaths.reserve(options.inputs.size());
     outputPaths.reserve(options.inputs.size() * 2u + (options.emitCppExternsPath.empty() ? 0u : 1u) + (options.depfilePath.empty() ? 0u : 1u));
     for(const MString& input : options.inputs){
+        Path<MetaArena> headerOutPath = outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena));
+        Path<MetaArena> sourceOutPath = outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveSourceFilename(input, arena));
         auto absoluteInput = ResolveComparisonPath(Path<MetaArena>(arena, input));
-        auto absoluteHeader = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena)));
-        auto absoluteSource = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveSourceFilename(input, arena)));
+        auto absoluteHeader = ResolveComparisonPath(headerOutPath);
+        auto absoluteSource = ResolveComparisonPath(sourceOutPath);
         if(!absoluteInput){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve input path '{}': {}"), ConvertString(input), ConvertString(absoluteInput.error().message()));
             return false;
@@ -366,6 +368,8 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
             return false;
         }
         inputPaths.push_back(Move(*absoluteInput));
+        headerOutPaths.push_back(Move(headerOutPath));
+        sourceOutPaths.push_back(Move(sourceOutPath));
         outputPaths.push_back(Move(*absoluteHeader));
         outputPaths.push_back(Move(*absoluteSource));
     }
@@ -391,40 +395,35 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
                 return false;
         }
     }
+
+    const auto registerOptionalOutput = [&](const MStringView rawPath, const tchar* kindLabel, Path<MetaArena>* outResolvedPath) -> b8{
+        if(rawPath.empty())
+            return true;
+        auto resolved = ResolveComparisonPath(Path<MetaArena>(arena, rawPath));
+        if(!resolved){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve {} path '{}': {}"), kindLabel, ConvertString(rawPath), ConvertString(resolved.error().message()));
+            return false;
+        }
+        for(const auto& input : inputPaths){
+            if(conflictingPaths(*resolved, input))
+                return false;
+        }
+        for(const auto& output : outputPaths){
+            if(conflictingPaths(*resolved, output))
+                return false;
+        }
+        if(outResolvedPath)
+            *outResolvedPath = *resolved;
+        outputPaths.push_back(Move(*resolved));
+        return true;
+    };
+
     Path<MetaArena> emitCppExternsOutPath(arena);
-    if(!options.emitCppExternsPath.empty()){
-        auto externsPath = ResolveComparisonPath(Path<MetaArena>(arena, options.emitCppExternsPath));
-        if(!externsPath){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve externs output path '{}': {}"), ConvertString(options.emitCppExternsPath), ConvertString(externsPath.error().message()));
-            return false;
-        }
-        for(const auto& input : inputPaths){
-            if(conflictingPaths(*externsPath, input))
-                return false;
-        }
-        for(const auto& output : outputPaths){
-            if(conflictingPaths(*externsPath, output))
-                return false;
-        }
-        emitCppExternsOutPath = *externsPath;
-        outputPaths.push_back(Move(*externsPath));
-    }
-    if(!options.depfilePath.empty()){
-        auto depfile = ResolveComparisonPath(Path<MetaArena>(arena, options.depfilePath));
-        if(!depfile){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve depfile path '{}': {}"), ConvertString(options.depfilePath), ConvertString(depfile.error().message()));
-            return false;
-        }
-        for(const auto& input : inputPaths){
-            if(conflictingPaths(*depfile, input))
-                return false;
-        }
-        for(const auto& output : outputPaths){
-            if(conflictingPaths(*depfile, output))
-                return false;
-        }
-        outputPaths.push_back(Move(*depfile));
-    }
+    Path<MetaArena> depfileOutPath(arena);
+    if(!registerOptionalOutput(options.emitCppExternsPath, FOUNDATION_TEXT("externs output"), &emitCppExternsOutPath))
+        return false;
+    if(!registerOptionalOutput(options.depfilePath, FOUNDATION_TEXT("depfile"), &depfileOutPath))
+        return false;
 
     const MStringView customNs = options.customNamespace;
     MString combinedDepContent(arena);
@@ -484,11 +483,8 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
             return false;
         }
 
-        const MString headerRel = Adhd::Compiler::DeriveHeaderFilename(inputView, arena);
-        const MString sourceRel = Adhd::Compiler::DeriveSourceFilename(inputView, arena);
-
-        const Path<MetaArena> headerOutPath = outDir / Path<MetaArena>(arena, headerRel);
-        const Path<MetaArena> sourceOutPath = outDir / Path<MetaArena>(arena, sourceRel);
+        const Path<MetaArena>& headerOutPath = headerOutPaths[inputIndex];
+        const Path<MetaArena>& sourceOutPath = sourceOutPaths[inputIndex];
 
         for(const MString& includePath : result.unit.resolvedIncludedFiles){
             const auto include = ResolveComparisonPath(Path<MetaArena>(arena, includePath));
@@ -543,20 +539,20 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create output directory '{}'"), ConvertString(options.outputDirectory));
         return false;
     }
-    if(!options.emitCppExternsPath.empty()){
-        const Path<MetaArena> externsParent = emitCppExternsOutPath.parentPath();
-        if(!externsParent.empty() && !EnsureDirectories(externsParent)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create output directory for '{}'"), ConvertString(options.emitCppExternsPath));
+    const auto ensureOptionalParentDir = [](const Path<MetaArena>& targetPath, const MStringView rawPath, const tchar* kindLabel) -> b8{
+        if(rawPath.empty())
+            return true;
+        const Path<MetaArena> parent = targetPath.parentPath();
+        if(!parent.empty() && !EnsureDirectories(parent)){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create {} directory for '{}'"), kindLabel, ConvertString(rawPath));
             return false;
         }
-    }
-    if(!options.depfilePath.empty()){
-        const Path<MetaArena> depfileParent = outputPaths.back().parentPath();
-        if(!depfileParent.empty() && !EnsureDirectories(depfileParent)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create depfile directory for '{}'"), ConvertString(options.depfilePath));
-            return false;
-        }
-    }
+        return true;
+    };
+    if(!ensureOptionalParentDir(emitCppExternsOutPath, options.emitCppExternsPath, FOUNDATION_TEXT("output")))
+        return false;
+    if(!ensureOptionalParentDir(depfileOutPath, options.depfilePath, FOUNDATION_TEXT("depfile")))
+        return false;
 
     const usize totalOutputs = outputPaths.size();
     MVector<MStringView> outputContents(arena);

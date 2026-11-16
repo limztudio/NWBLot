@@ -116,15 +116,16 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             emitSimdCallRegArgsAndClose(expr.arguments);
             return true;
         }
-        if(callee == "Lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
+        const SpecialFunctionKind::Enum specialFn = FindSpecialFunctionKind(callee);
+        if(specialFn == SpecialFunctionKind::Lerp && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
             const Expr* scalarT = expr.arguments[2]->resolvedSimdType.empty()
                 ? expr.arguments[2]
                 : SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(*expr.arguments[2], m_emitter.m_symbols);
             const b8 vectorT = !scalarT || SimdOptimizationAnalysis::CanEmitScalarAsSimdVectorWithoutReplicate(*scalarT, simdType, m_emitter.m_symbols);
-            if(vectorT)
-                out.append(isDouble ? "::VectorDoubleLerpV(" : "::VectorLerpV(");
-            else
-                out.append(isDouble ? "::VectorDoubleLerp(" : "::VectorLerp(");
+            const MStringView lerpFn = vectorT
+                ? (isDouble ? CodegenSymbols::s_SimdLerpVDouble : CodegenSymbols::s_SimdLerpVSingle)
+                : (isDouble ? CodegenSymbols::s_SimdLerpDouble : CodegenSymbols::s_SimdLerpSingle);
+            out.append(lerpFn.data(), lerpFn.size());
             m_emitter.emitSimdRegExpr(out, *expr.arguments[0], simdType);
             out.append(", ");
             m_emitter.emitSimdRegExpr(out, *expr.arguments[1], simdType);
@@ -153,13 +154,14 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             emitSimdCallRegArgsAndClose(expr.arguments);
             return true;
         }
-        if(callee == "Mul" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+        if(specialFn == SpecialFunctionKind::Mul && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
             const MStringView lhsSimd = expr.arguments[0]->resolvedSimdType;
             const MStringView rhsSimd = expr.arguments[1]->resolvedSimdType;
             const b8 lhsIsMat = SymbolTable::IsSimdMatrixType(lhsSimd);
             const b8 rhsIsMat = SymbolTable::IsSimdMatrixType(rhsSimd);
             if(lhsIsMat && rhsIsMat){
-                out.append(isDouble ? "::MatrixDoubleMultiply(" : "::MatrixMultiply(");
+                const MStringView matMulFn = isDouble ? CodegenSymbols::s_MatrixMulDouble : CodegenSymbols::s_MatrixMulSingle;
+                out.append(matMulFn.data(), matMulFn.size());
                 m_emitter.emitSimdRegExpr(out, *expr.arguments[0], lhsSimd);
                 out.append(", ");
                 m_emitter.emitSimdRegExpr(out, *expr.arguments[1], rhsSimd);
@@ -173,20 +175,20 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
                 effLanes = static_cast<u32>(vecExpr.text.size());
             else
                 (void)SymbolTable::IsSimdVectorType(vecExpr.resolvedSimdType, effLanes);
-            AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "Transform");
+            AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, CodegenSymbols::s_SimdTransformSuffix);
             m_emitter.emitSimdRegExpr(out, vecExpr, vecExpr.resolvedSimdType);
             out.append(", ");
             m_emitter.emitSimdRegExpr(out, matExpr, matExpr.resolvedSimdType);
             out.push_back(')');
             return true;
         }
-        if(callee == "Transpose" && !expr.arguments.empty() && expr.arguments[0]){
+        if(specialFn == SpecialFunctionKind::Transpose && !expr.arguments.empty() && expr.arguments[0]){
             const Expr& arg0 = *expr.arguments[0];
             const Expr* matA = nullptr;
             const Expr* matB = nullptr;
             if(
                 arg0.kind == ExprKind::Call && arg0.lhs && arg0.lhs->kind == ExprKind::Identifier
-                && arg0.isBuiltinCall && arg0.lhs->text == "Mul" && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
+                && arg0.isBuiltinCall && FindSpecialFunctionKind(arg0.lhs->text) == SpecialFunctionKind::Mul && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
                 && SymbolTable::IsSimdMatrixType(arg0.arguments[0]->resolvedSimdType)
                 && SymbolTable::IsSimdMatrixType(arg0.arguments[1]->resolvedSimdType)
             ){
@@ -202,14 +204,16 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
                 matB = arg0.rhs;
             }
             if(matA && matB){
-                out.append(isDouble ? "::MatrixDoubleMultiplyTranspose(" : "::MatrixMultiplyTranspose(");
+                const MStringView matMulTransFn = isDouble ? CodegenSymbols::s_MatrixMulTransDouble : CodegenSymbols::s_MatrixMulTransSingle;
+                out.append(matMulTransFn.data(), matMulTransFn.size());
                 m_emitter.emitSimdRegExpr(out, *matA, matA->resolvedSimdType);
                 out.append(", ");
                 m_emitter.emitSimdRegExpr(out, *matB, matB->resolvedSimdType);
                 out.push_back(')');
                 return true;
             }
-            out.append(isDouble ? "::MatrixDoubleTranspose(" : "::MatrixTranspose(");
+            const MStringView matTransFn = isDouble ? CodegenSymbols::s_MatrixTransDouble : CodegenSymbols::s_MatrixTransSingle;
+            out.append(matTransFn.data(), matTransFn.size());
             m_emitter.emitSimdRegExpr(out, arg0, simdType);
             out.push_back(')');
             return true;

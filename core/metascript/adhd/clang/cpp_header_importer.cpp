@@ -8,8 +8,8 @@
 #include <global/environment.h>
 #include <global/filesystem/executable_paths.h>
 #include <global/filesystem/operations.h>
-
-#include <cstdio>
+#include <global/numeric_text.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,22 +27,22 @@ using namespace CppHeaderImportDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_cpp_header_importer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] MStringView ExtractClangMajorVersion(const MStringView versionText)noexcept{
-    const MStringView marker = "version ";
+    const MStringView marker = CppImporterSemantics::s_ClangVersionMarker;
     usize start = versionText.find(marker);
     start = (start == MStringView::npos) ? 0u : (start + marker.size());
 
-    while(start < versionText.size() && (versionText[start] < '0' || versionText[start] > '9'))
+    while(start < versionText.size() && !IsAsciiDigit(versionText[start]))
         ++start;
 
     usize end = start;
-    while(end < versionText.size() && versionText[end] >= '0' && versionText[end] <= '9')
+    while(end < versionText.size() && IsAsciiDigit(versionText[end]))
         ++end;
 
     return versionText.substr(start, end - start);
@@ -75,14 +75,14 @@ namespace{
         if(libDir.empty())
             return false;
 
-        if(TryResourceDirCandidate(arena, libDir / "clang" / major, result))
+        if(TryResourceDirCandidate(arena, libDir / CppImporterSemantics::s_ClangSubdir / major, result))
             return true;
 
         const ::Path<MetaArena> prefixDir = libDir.parentPath();
         if(!prefixDir.empty()){
-            if(TryResourceDirCandidate(arena, prefixDir / "lib" / "clang" / major, result))
+            if(TryResourceDirCandidate(arena, prefixDir / CppImporterSemantics::s_LibSubdir / CppImporterSemantics::s_ClangSubdir / major, result))
                 return true;
-            if(TryResourceDirCandidate(arena, prefixDir / "lib64" / "clang" / major, result))
+            if(TryResourceDirCandidate(arena, prefixDir / CppImporterSemantics::s_Lib64Subdir / CppImporterSemantics::s_ClangSubdir / major, result))
                 return true;
         }
         return false;
@@ -92,7 +92,7 @@ namespace{
     {
         const TString<MetaArena> nativeDefaultRes = ConvertString(arena, AStringView(NWB_LIBCLANG_DEFAULT_RESOURCE_DIR));
         const ::Path<MetaArena> candidate(arena, TStringView(nativeDefaultRes.data(), nativeDefaultRes.size()));
-        const auto includeDirExists = IsDirectory(candidate / "include");
+        const auto includeDirExists = IsDirectory(candidate / CppImporterSemantics::s_IncludeSubdir);
         if(includeDirExists && *includeDirExists && TryResourceDirCandidate(arena, candidate, result))
             return result;
     }
@@ -110,7 +110,7 @@ namespace{
             return result;
     }
 
-    if(const auto envResource = ReadEnvironmentVariable(arena, "NWB_LIBCLANG_RESOURCE_DIR")){
+    if(const auto envResource = ReadEnvironmentVariable(arena, CppImporterSemantics::s_ClangResourceEnvVar)){
         if(*envResource && !(*envResource)->empty()){
             const TString<MetaArena> nativeRes = ConvertString(arena, AStringView((*envResource)->data(), (*envResource)->size()));
             const ::Path<MetaArena> candidate(arena, TStringView(nativeRes.data(), nativeRes.size()));
@@ -151,48 +151,39 @@ void BuildClangArguments(
 
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
 #if defined(FOUNDATION_ARCH_ARM64) || defined(_M_ARM64) || defined(__aarch64__)
-    pushArg("--target=aarch64-pc-windows-msvc");
+    pushArg(CppImporterSemantics::s_TargetArm64WindowsMsvc);
 #elif defined(FOUNDATION_ARCH_X86_64) || defined(_M_X64) || defined(__x86_64__)
-    pushArg("--target=x86_64-pc-windows-msvc");
+    pushArg(CppImporterSemantics::s_TargetX64WindowsMsvc);
 #endif
-    pushArg("-DNOMINMAX");
-    pushArg("-DWIN32_LEAN_AND_MEAN");
-    pushArg("-DUNICODE");
-    pushArg("-D_UNICODE");
+    for(const MStringView arg : CppImporterSemantics::s_ClangWindowsArgs)
+        pushArg(arg);
 #endif
 
-    pushArg("-x");
-    pushArg("c++");
-    pushArg("-std=c++2c");
-    pushArg("-fno-rtti");
-    pushArg("-DNWB_GRAPHICS_BACKEND_VULKAN=1");
-    pushArg("-DNWB_GRAPHICS_BACKEND_METAL=0");
-    pushArg("-DCINDEX_NO_EXPORTS");
-    pushArg("-Wno-everything");
+    for(const MStringView arg : CppImporterSemantics::s_ClangDefaultArgs)
+        pushArg(arg);
 
-    b8 hasFoundationConfigDef = false;
-    b8 hasNwbConfigDef = false;
-    for(const MString& def : options.defines){
-        if(def.starts_with("FOUNDATION_DEBUG") || def.starts_with("FOUNDATION_OPTIMIZE") || def.starts_with("FOUNDATION_FINAL"))
-            hasFoundationConfigDef = true;
-        if(def.starts_with("NWB_DEBUG") || def.starts_with("NWB_OPTIMIZE") || def.starts_with("NWB_FINAL"))
-            hasNwbConfigDef = true;
+    for(const CppClangConfigGroupEntry& group : CppImporterSemantics::s_ClangConfigGroups){
+        b8 hasDef = false;
+        for(const MString& def : options.defines){
+            if(def.starts_with(group.optPrefix) || def.starts_with(group.dbgPrefix) || def.starts_with(group.finalPrefix)){
+                hasDef = true;
+                break;
+            }
+        }
+        if(!hasDef)
+            pushArg(group.defaultFlag);
     }
-    if(!hasFoundationConfigDef)
-        pushArg("-DFOUNDATION_OPTIMIZE");
-    if(!hasNwbConfigDef)
-        pushArg("-DNWB_OPTIMIZE");
 
     const MString resourceDir = FindClangResourceDirectory(arena);
     if(!resourceDir.empty()){
-        pushArg("-resource-dir");
+        pushArg(CppImporterSemantics::s_ResourceDirFlag);
         pushArg(MStringView(resourceDir.data(), resourceDir.size()));
     }
 
     for(const MString& def : options.defines){
         if(def.empty())
             continue;
-        MString flag("-D", arena);
+        MString flag(CppImporterSemantics::s_DefineFlagPrefix.data(), CppImporterSemantics::s_DefineFlagPrefix.size(), arena);
         flag.append(def.data(), def.size());
         argStorage.push_back(Move(flag));
     }
@@ -209,7 +200,8 @@ void BuildClangArguments(
             return;
 
         AddExistingUnique(normalizedIncludeRoots, norm);
-        MString flag(isSystem ? "-isystem" : "-I", arena);
+        const MStringView flagPrefix = isSystem ? CppImporterSemantics::s_SystemIncludeFlagPrefix : CppImporterSemantics::s_IncludeFlagPrefix;
+        MString flag(flagPrefix.data(), flagPrefix.size(), arena);
         flag.append(norm.data(), norm.size());
         argStorage.push_back(Move(flag));
     };
@@ -222,20 +214,8 @@ void BuildClangArguments(
         const MStringView projectRoot = NWB_PROJECT_SOURCE_DIR;
         addIncludeDirFlag(projectRoot, false);
 
-        static constexpr AStringView s_ThirdPartyIncludeSubdirs[] = {
-            "3rd_parties/tsl",
-            "3rd_parties/oneTBB/include",
-            "3rd_parties/volk",
-            "3rd_parties/vulkan_headers",
-            "3rd_parties/VulkanMemoryAllocator/include",
-            "3rd_parties/aftermath/include",
-            "3rd_parties/libclang/include"
-        };
-        for(const AStringView rel : s_ThirdPartyIncludeSubdirs){
-            MString full(projectRoot.data(), projectRoot.size(), arena);
-            if(!full.empty() && full.back() != '/' && full.back() != '\\')
-                full.push_back('/');
-            full.append(rel.data(), rel.size());
+        for(const MStringView rel : CppImporterSemantics::s_ThirdPartyIncludeSubdirs){
+            const MString full = JoinWithSingleSlash(arena, projectRoot, rel);
             addIncludeDirFlag(MStringView(full.data(), full.size()), true);
         }
 #endif
@@ -346,11 +326,7 @@ MStringView ImporterContext::resolveRequiredHeader(CXCursor cursor){
         }
     }
 
-    MString angleWrapped(m_arena);
-    angleWrapped.push_back('<');
-    angleWrapped.append(bestRelative.data(), bestRelative.size());
-    angleWrapped.push_back('>');
-    const MStringView interned = InternMString(m_arena, angleWrapped);
+    const MStringView interned = InternAngleBracketHeader(m_arena, bestRelative);
     m_headerCache.emplace(normalized, interned);
     return interned;
 }
@@ -399,57 +375,28 @@ b8 ImporterContext::evaluateIntegralConstant(CXCursor cursor, MStringView& outTe
 
     if(kind == CXEval_Int){
         if(::clang_EvalResult_isUnsignedInt(eval)){
-            const unsigned long long val = ::clang_EvalResult_getAsUnsigned(eval);
-            const int len = std::snprintf(buf.data(), buf.size(), "%lluu", val);
-            if(len > 0 && static_cast<usize>(len) < buf.size()){
-                outText = InternArenaString(m_arena, MStringView(buf.data(), static_cast<usize>(len)));
-                ok = true;
-            }
+            const u64 val = static_cast<u64>(::clang_EvalResult_getAsUnsigned(eval));
+            const AStringView digits = TextDetail::FormatDecimalBuffer<u64>(val, buf.data());
+            buf[digits.size()] = 'u';
+            outText = InternArenaString(m_arena, MStringView(buf.data(), digits.size() + 1u));
+            ok = true;
         }
         else{
-            const long long val = ::clang_EvalResult_getAsLongLong(eval);
-            const int len = std::snprintf(buf.data(), buf.size(), "%lld", val);
-            if(len > 0 && static_cast<usize>(len) < buf.size()){
-                outText = InternArenaString(m_arena, MStringView(buf.data(), static_cast<usize>(len)));
+            if(const auto formatted = FormatI64(static_cast<i64>(::clang_EvalResult_getAsLongLong(eval)), Span<char>(buf.data(), buf.size()))){
+                outText = InternArenaString(m_arena, *formatted);
                 ok = true;
             }
         }
     }
     else if(kind == CXEval_Float){
-        const double val = ::clang_EvalResult_getAsDouble(eval);
-        const int len = std::snprintf(buf.data(), buf.size(), "%g", val);
-        if(len > 0 && static_cast<usize>(len) < buf.size()){
-            outText = InternArenaString(m_arena, MStringView(buf.data(), static_cast<usize>(len)));
+        if(const auto formatted = FormatF64(::clang_EvalResult_getAsDouble(eval), Span<char>(buf.data(), buf.size()))){
+            outText = InternArenaString(m_arena, *formatted);
             ok = true;
         }
     }
 
     ::clang_EvalResult_dispose(eval);
     return ok;
-}
-
-ClassDecl* ImporterContext::findExistingClassForMerge(const MStringView adhdName, const MStringView cppExportName)const noexcept{
-    if(!cppExportName.empty()){
-        if(const auto it = m_classByExportName.find(cppExportName); it != m_classByExportName.end())
-            return it->second;
-    }
-    if(!adhdName.empty()){
-        if(const auto it = m_classByName.find(adhdName); it != m_classByName.end())
-            return it->second;
-    }
-    return nullptr;
-}
-
-EnumDecl* ImporterContext::findExistingEnumForMerge(const MStringView adhdName, const MStringView cppExportName)const noexcept{
-    if(!cppExportName.empty()){
-        if(const auto it = m_enumByExportName.find(cppExportName); it != m_enumByExportName.end())
-            return it->second;
-    }
-    if(!adhdName.empty()){
-        if(const auto it = m_enumByName.find(adhdName); it != m_enumByName.end())
-            return it->second;
-    }
-    return nullptr;
 }
 
 void ImporterContext::extractEnum(CXCursor enumCursor){
@@ -464,7 +411,7 @@ void ImporterContext::extractEnum(CXCursor enumCursor){
     if(!FormatNormalizedAdhdDeclName(m_arena, enumCursor, adhdName, cppNs, cppExportName, isDirect, isFlag))
         return;
 
-    EnumDecl* decl = findExistingEnumForMerge(adhdName, cppExportName);
+    EnumDecl* decl = findExistingDeclForMerge(m_enumByExportName, m_enumByName, adhdName, cppExportName);
     const b8 isNew = (decl == nullptr);
     if(isNew){
         decl = AllocateAstNode<EnumDecl>(m_arena);
@@ -502,7 +449,7 @@ void ImporterContext::extractEnum(CXCursor enumCursor){
         const MString entryNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(child));
         if(entryNameStr.empty())
             continue;
-        const MStringView entryName = InternMString(m_arena, entryNameStr);
+        const MStringView entryName = InternArenaString(m_arena, entryNameStr);
 
         b8 duplicate = false;
         for(const EnumEntry& e : decl->entries){
@@ -531,12 +478,12 @@ void ImporterContext::extractTypeAlias(CXCursor aliasCursor){
     if(!FormatNormalizedAdhdDeclName(m_arena, aliasCursor, adhdName, cppNs, cppExportName, dummyDirect, dummyFlag))
         return;
 
-    if(m_aliasByName.find(adhdName) != m_aliasByName.end() || findExistingClassForMerge(adhdName, {}) != nullptr)
+    if(m_aliasByName.find(adhdName) != m_aliasByName.end() || findExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, {}) != nullptr)
         return;
 
     const CXType underlying = ::clang_getTypedefDeclUnderlyingType(aliasCursor);
     TypeRef* mapped = mapType(underlying, false);
-    if(!mapped || mapped->name.empty() || mapped->name == "void" || mapped->name == adhdName || mapped->refMode != ParamPassingMode::None)
+    if(!mapped || mapped->name.empty() || BuiltinTypeSemantics::IsVoidTypeName(mapped->name) || mapped->name == adhdName || mapped->refMode != ParamPassingMode::None)
         return;
 
     TypeAliasDecl* decl = AllocateAstNode<TypeAliasDecl>(m_arena);
@@ -570,15 +517,10 @@ void ImporterContext::extractGlobalConstant(CXCursor varCursor){
         return;
 
     TypeRef* mapped = mapType(vtype, false);
-    if(!mapped || mapped->refMode != ParamPassingMode::None || mapped->name == "void")
+    if(!mapped || mapped->refMode != ParamPassingMode::None || BuiltinTypeSemantics::IsVoidTypeName(mapped->name))
         return;
 
-    const b8 isStringViewConstant =
-        mapped->name == "AStringView"
-        || mapped->name == "WStringView"
-        || mapped->name == "TStringView"
-        || mapped->name == "StringView"
-        ;
+    const b8 isStringViewConstant = CppImporterSemantics::IsStringViewConstantTypeName(mapped->name);
     MStringView evalText;
     const b8 hasEval = !isStringViewConstant && evaluateIntegralConstant(varCursor, evalText);
     if(!hasEval && !isStringViewConstant)
@@ -603,15 +545,15 @@ void ImporterContext::extractGlobalConstant(CXCursor varCursor){
 MString ImporterContext::buildFreeFunctionSigKey(const MethodDecl& decl)const{
     MString sigKey(decl.name.data(), decl.name.size(), m_arena);
     sigKey.push_back('<');
-    char tplBuf[16] = {};
-    const int tplLen = std::snprintf(tplBuf, sizeof(tplBuf), "%zu", decl.templateParams.size());
-    if(tplLen > 0)
-        sigKey.append(tplBuf, static_cast<usize>(tplLen));
+    AppendUnsignedDecimal(sigKey, decl.templateParams.size());
     sigKey.push_back('>');
     sigKey.push_back('(');
     for(const ParamDecl& p : decl.params){
-        if(p.mode == ParamPassingMode::Mut || (p.type && p.type->refMode == ParamPassingMode::Mut))
-            sigKey.append("mut ");
+        if(p.mode == ParamPassingMode::Mut || (p.type && p.type->refMode == ParamPassingMode::Mut)){
+            const MStringView mutKw = KeywordSemantics::ParamPassingModeKeyword(ParamPassingMode::Mut);
+            sigKey.append(mutKw.data(), mutKw.size());
+            sigKey.push_back(' ');
+        }
         if(p.type)
             AppendTypeRefExternText(sigKey, *p.type, false);
         sigKey.push_back(',');
@@ -661,7 +603,7 @@ void ImporterContext::visitScopeCursor(CXCursor parentCursor){
         if(kind == CXCursor_Namespace){
             const MString nsStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(c));
             const MStringView nsView(nsStr.data(), nsStr.size());
-            if(IsInternalIdentifier(nsView))
+            if(CppImporterSemantics::IsInternalIdentifierName(nsView))
                 continue;
             visitScopeCursor(c);
             continue;
@@ -716,7 +658,7 @@ b8 CppHeaderImporter::ImportHeaders(
 
     MString syntheticSource(arena);
     for(const ImportedCppHeader& hdr : options.headers){
-        const MStringView inner = TrimOuterQuotesAndAngles(hdr.headerPath);
+        const MStringView inner = StripHeaderDelimiters(hdr.headerPath);
         if(inner.empty())
             continue;
         syntheticSource.append("#include ");
@@ -729,23 +671,20 @@ b8 CppHeaderImporter::ImportHeaders(
     if(syntheticSource.empty())
         return true;
 
-    MString virtualTuPath("__nwb_adhd_cpp_import__.cpp", arena);
+    const MStringView virtualTuName = CppImporterSemantics::s_VirtualTuFilename;
+    MString virtualTuPath(virtualTuName.data(), virtualTuName.size(), arena);
 #if defined(NWB_PROJECT_SOURCE_DIR)
     {
         const MStringView projectRoot = NWB_PROJECT_SOURCE_DIR;
-        if(!projectRoot.empty()){
-            virtualTuPath.assign(projectRoot.data(), projectRoot.size());
-            if(virtualTuPath.back() != '/' && virtualTuPath.back() != '\\')
-                virtualTuPath.push_back('/');
-            virtualTuPath.append("__nwb_adhd_cpp_import__.cpp");
-        }
+        if(!projectRoot.empty())
+            virtualTuPath = JoinWithSingleSlash(arena, projectRoot, virtualTuName);
     }
 #endif
 
     MVector<MString> argStorage(arena);
     MVector<MString> normalizedRoots(arena);
     MVector<const char*> argPtrs(arena);
-    BuildClangArguments(arena, options, argStorage, normalizedRoots, argPtrs);
+    __hidden_cpp_header_importer::BuildClangArguments(arena, options, argStorage, normalizedRoots, argPtrs);
 
     CXUnsavedFile unsavedFile{};
     unsavedFile.Filename = virtualTuPath.c_str();
@@ -782,7 +721,7 @@ b8 CppHeaderImporter::ImportHeaders(
         const CXDiagnostic diag = ::clang_getDiagnostic(tu, i);
         const CXDiagnosticSeverity sev = ::clang_getDiagnosticSeverity(diag);
         if(sev >= CXDiagnostic_Error){
-            AppendFormattedDiagnostic(arena, diag, options.headers[0].span, outErrors);
+            __hidden_cpp_header_importer::AppendFormattedDiagnostic(arena, diag, options.headers[0].span, outErrors);
             hasFatalErrors = true;
         }
         ::clang_disposeDiagnostic(diag);
@@ -800,9 +739,9 @@ b8 CppHeaderImporter::ImportHeaders(
         const MString fileName = ConsumeClangString(*ctx->arena, ::clang_getFileName(includedFile));
         const MString normalized = NormalizeSlashes(*ctx->arena, MStringView(fileName.data(), fileName.size()));
         const MStringView normView(normalized.data(), normalized.size());
-        if(normView.empty() || normView.ends_with("__nwb_adhd_cpp_import__.cpp"))
+        if(normView.empty() || normView.ends_with(CppImporterSemantics::s_VirtualTuFilename))
             return;
-        AddExistingUnique(ctx->unit->resolvedIncludedFiles, normalized);
+        __hidden_cpp_header_importer::AddExistingUnique(ctx->unit->resolvedIncludedFiles, normalized);
     }, &incCollector);
 
     if(hasFatalErrors){

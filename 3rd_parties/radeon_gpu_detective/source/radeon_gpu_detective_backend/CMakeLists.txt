@@ -5,6 +5,7 @@
 # are dlopen'd at runtime, so the disassembly degrades gracefully if those runtime libs / the ISA XML are absent.
 cmake_minimum_required(VERSION 3.10)
 project(rgd_backend)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
 
 set(_RGD_3P "${CMAKE_SOURCE_DIR}/3rd_parties")
 

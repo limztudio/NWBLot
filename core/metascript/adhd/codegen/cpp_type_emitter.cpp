@@ -4,6 +4,7 @@
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
+#include <global/numeric_text.h>
 
 #include "cpp_type_emitter.h"
 
@@ -46,7 +47,7 @@ MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcep
     if(BuiltinTypeSemantics::IsScalarType(typeName))
         return typeName;
     if(IsNonCopyableBaseInterfaceName(typeName))
-        return typeName == "NoCopy" ? "::NoCopy" : typeName;
+        return FindNonCopyableBaseInterfaceCppName(typeName);
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->cppExportName;
     if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(typeName))
@@ -65,9 +66,9 @@ MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcep
 void CppTypeEmitter::appendQualifiedName(MString& out, const MStringView declNamespace, const MStringView symbolName)const{
     const MStringView ns = resolveCrossNamespace(declNamespace);
     if(!ns.empty()){
-        out.append("::");
+        out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
         out.append(ns.data(), ns.size());
-        out.append("::");
+        out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
     }
     out.append(symbolName.data(), symbolName.size());
 }
@@ -111,8 +112,8 @@ void CppTypeEmitter::emitConstantTextCpp(MString& out, const MStringView text)co
                 if(i + 1u < text.size() && text[i] == ':' && text[i + 1u] == ':'){
                     if(const EnumDecl* enumDecl = m_symbols.findEnum(token); enumDecl && !enumDecl->cppExportName.empty()){
                         MStringView scopeName = enumDecl->cppExportName;
-                        if(!enumDecl->isDirectCppEnum && scopeName.size() > 6u && (scopeName.ends_with("::Enum") || scopeName.ends_with("::Flag")))
-                            scopeName.remove_suffix(6u);
+                        if(!enumDecl->isDirectCppEnum)
+                            scopeName = ContractSemantics::StripWrappedNwbEnumSuffix(scopeName);
                         out.append(scopeName.data(), scopeName.size());
                         continue;
                     }
@@ -236,11 +237,11 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         return;
     }
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && objInfo->isArenaBacked){
-        emitTypeWithCustomArenaCpp(out, type, "::ArenaBase");
+        emitTypeWithCustomArenaCpp(out, type, BuiltinTypeSemantics::ArenaBaseCppName());
         return;
     }
     if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && genericInfo->isArenaBacked){
-        emitTypeWithCustomArenaCpp(out, type, "::ArenaBase");
+        emitTypeWithCustomArenaCpp(out, type, BuiltinTypeSemantics::ArenaBaseCppName());
         return;
     }
     if(const MStringView mappedBuiltin = MapBuiltinCppType(name); !mappedBuiltin.empty()){
@@ -372,6 +373,18 @@ void CppTypeEmitter::emitParamListCpp(MString& out, const Span<const ParamDecl> 
     out.push_back(')');
 }
 
+void CppTypeEmitter::appendTemplateParamDeclCpp(MString& out, const TemplateParamDecl& param)const{
+    if(param.constValueType){
+        emitTypeCpp(out, *param.constValueType);
+        out.push_back(' ');
+        out.append(param.name.data(), param.name.size());
+    }
+    else{
+        out.append("typename ");
+        out.append(param.name.data(), param.name.size());
+    }
+}
+
 void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const Span<const TemplateParamDecl> params)const{
     if(params.empty())
         return;
@@ -380,16 +393,7 @@ void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const Span<const Templa
     for(usize i = 0u; i < params.size(); ++i){
         if(i > 0u)
             out.append(", ");
-        const TemplateParamDecl& p = params[i];
-        if(p.constValueType){
-            emitTypeCpp(out, *p.constValueType);
-            out.push_back(' ');
-            out.append(p.name.data(), p.name.size());
-        }
-        else{
-            out.append("typename ");
-            out.append(p.name.data(), p.name.size());
-        }
+        appendTemplateParamDeclCpp(out, params[i]);
     }
     out.append(">\r\n");
 }
@@ -412,16 +416,7 @@ void CppTypeEmitter::emitCallableTemplateHeaderCpp(MString& out, const MethodDec
         if(!first)
             out.append(", ");
         first = false;
-        const TemplateParamDecl& p = callable.templateParams[i];
-        if(p.constValueType){
-            emitTypeCpp(out, *p.constValueType);
-            out.push_back(' ');
-            out.append(p.name.data(), p.name.size());
-        }
-        else{
-            out.append("typename ");
-            out.append(p.name.data(), p.name.size());
-        }
+        appendTemplateParamDeclCpp(out, callable.templateParams[i]);
     }
     for(usize k = 0u; k < synthCount; ++k){
         if(!first)
@@ -443,9 +438,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
     const b8 isOverrideDestructor = method.isDestructor && ownerClass && m_symbols.hasPolymorphicBase(*ownerClass);
     const b8 prependMotherArena = method.isConstructor
         && ownerClass
-        && !ownerClass->usesStaticClassArena()
-        && !ownerClass->isSerialize
-        && ownerClass->subsystemTypeName.empty()
+        && ownerClass->canBorrowMotherArena()
         && ownerNeedsMotherArena;
     const b8 prependCallerArena = !method.isConstructor && !method.isDestructor && method.injectsCallerArena;
 
@@ -503,21 +496,11 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
         const ParamDecl& p = method.params[i];
         if(p.type){
             if(method.hasSynthesizedArenaParams && __hidden_adhd_cpp_type_emitter::IsSynthesizedArenaParamCandidate(p, m_symbols)){
-                char arenaNameBuf[32];
-                usize pos = 0u;
                 constexpr MStringView prefix = "__AdhdArena";
-                for(char ch : prefix)
-                    arenaNameBuf[pos++] = ch;
-                char digits[16];
-                usize digitCount = 0u;
-                usize v = synthIdx++;
-                do{
-                    digits[digitCount++] = static_cast<char>('0' + (v % 10u));
-                    v /= 10u;
-                }while(v > 0u);
-                while(digitCount > 0u)
-                    arenaNameBuf[pos++] = digits[--digitCount];
-                const MStringView arenaNameView(arenaNameBuf, pos);
+                char arenaNameBuf[32];
+                FOUNDATION_MEMCPY(arenaNameBuf, sizeof(arenaNameBuf), prefix.data(), prefix.size());
+                const MStringView digitsView = TextDetail::FormatDecimalBuffer(static_cast<u64>(synthIdx++), arenaNameBuf + prefix.size());
+                const MStringView arenaNameView(arenaNameBuf, prefix.size() + digitsView.size());
                 if(p.mode == ParamPassingMode::Mut){
                     emitTypeWithCustomArenaCpp(out, *p.type, arenaNameView);
                     out.push_back('&');

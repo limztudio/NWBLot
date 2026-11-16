@@ -108,7 +108,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     endif()
 
     nwb_declare_static_library(nwb_smoke_runtime_helpers)
-    set_target_properties(nwb_smoke_runtime_helpers PROPERTIES UNITY_BUILD OFF)
     nwb_target_adhd_sources(nwb_smoke_runtime_helpers NAMESPACE "NWB::Tests::Smoke" SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/bitmap_capture_writer.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.adhd"

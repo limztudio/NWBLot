@@ -74,7 +74,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             || (!m_activeTemplateParams.empty() && effectiveVarType && TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*effectiveVarType));
         const MStringView varInjectedArena = (m_activeOwnerClass && !m_activeOwnerClass->assetTypeName.empty() && m_activeOwnerNeedsArena)
             ? MStringView("*this->__adhd_arena")
-            : MStringView("__adhd_scratch");
+            : CodegenSymbols::s_ScratchArenaVar;
         emitIndent(out, indent);
         if(stmt.isConst)
             out.append("const ");
@@ -399,7 +399,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append(");\r\n");
         }
         const MStringView trimmedNative = TrimView(stmt.nativeCode);
-        const b8 wrapPragmaCompound = hasPrefixStatements && trimmedNative.starts_with("#pragma");
+        const b8 wrapPragmaCompound = hasPrefixStatements && trimmedNative.starts_with(CodegenSymbols::s_PragmaDirectivePrefix);
         const u32 derefIndent = hasShadowBindings ? (indent + 2u) : (indent + 1u);
         const u32 bodyIndent = wrapPragmaCompound ? (derefIndent + 1u) : derefIndent;
         if(hasShadowBindings){
@@ -414,7 +414,8 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                     else
                         out.append("[[maybe_unused]] auto& ");
                     out.append(binding.aliasName.data(), binding.aliasName.size());
-                    out.append(" = *__adhd_native_ptr_");
+                    out.append(" = *");
+                    out.append(CodegenSymbols::s_NativeShadowPtrPrefix.data(), CodegenSymbols::s_NativeShadowPtrPrefix.size());
                     AppendUnsignedDecimal(out, static_cast<u32>(i));
                     out.append(";\r\n");
                 }

@@ -62,7 +62,7 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
 
     u32 ctorVecLanes = 0u;
     const b8 isStorageOrUnalignedVecCtor = !baseTypeName.empty()
-        && (SymbolTable::IsSimdStorageVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes));
+        && SymbolTable::IsSimdStorageOrUnalignedVectorType(baseTypeName, ctorVecLanes);
     if(isStorageOrUnalignedVecCtor){
         b8 allZeroVecArgs = true;
         for(const Expr* arg : arguments){

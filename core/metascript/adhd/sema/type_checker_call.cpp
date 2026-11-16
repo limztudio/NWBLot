@@ -54,14 +54,33 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         }
         else{
             expr.injectScratchArena = true;
-            method.usesScratchArena = true;
-            m_activeParallelBlockUsesScratch = true;
+            markScratchArenaUsed(method);
+        }
+    };
+    const auto isBuiltinFnArityInvalid = [callArgCount](const BuiltinFunctionInfo& fnInfo)noexcept{
+        return fnInfo.isVariadic
+            ? (callArgCount < fnInfo.minArity)
+            : (callArgCount < fnInfo.minArity || callArgCount > fnInfo.arity);
+    };
+    const auto applyBuiltinFunctionCall = [&](const BuiltinFunctionInfo& fnInfo, const MStringView memberName, const b8 badArity){
+        expr.isBuiltinCall = true;
+        calledMemberName = memberName;
+        recordBuiltinReturnTypeHeaders(fnInfo.returnTypeName, fnInfo.returnTypeArgName, fnInfo.returnNestedTypeArgName, fnInfo.returnErrorTypeName);
+        if(fnInfo.prependsScratchArena)
+            injectActiveArena();
+        if(badArity){
+            reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
+            ok = false;
+        }
+        if(fnInfo.requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
+            reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
+            ok = false;
         }
     };
     if(expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(expr.lhs->text == "wait"){
+            if(KeywordSemantics::IsParallelWaitKeyword(expr.lhs->text)){
                 reportError(errors, expr.span, "'wait' can only be used as a standalone join statement");
                 ok = false;
             }
@@ -84,7 +103,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 reportError(errors, expr.span, "cannot instantiate an abstract class");
                 ok = false;
             }
-            else if(m_symbols.findInterface(baseCallee) || m_symbols.isAbstractBuiltinType(baseCallee)){
+            else if(m_symbols.isInterfaceOrAbstractType(baseCallee)){
                 recordBuiltinTypeHeader(baseCallee);
                 reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
                 ok = false;
@@ -115,15 +134,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef)){
                     b8 callerPassedArena = false;
                     if(!targetCallable){
-                        if(!ctorCls->assetTypeName.empty()){
-                            if(callArgCount >= 2u)
-                                callerPassedArena = true;
-                            else if(callArgCount == 1u && !argTypeHints.empty() && argTypeHints[0] != "Name" && !IsStringLikeType(argTypeHints[0]) && argTypeHints[0] != baseCallee)
-                                callerPassedArena = true;
-                        }
-                        else if(callArgCount >= 2u || (callArgCount == 1u && !argTypeHints.empty() && argTypeHints[0] != baseCallee)){
+                        if(DoesSynthesizedClassCtorPassArena(*ctorCls, baseCallee, callArgCount, argTypeHints.empty() ? MStringView{} : argTypeHints[0]))
                             callerPassedArena = true;
-                        }
                     }
                     if(!callerPassedArena)
                         injectActiveArena();
@@ -131,61 +143,16 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             }
             else if(!m_symbols.hasTypeSymbol(baseCallee) && FindBuiltinFunction(expr.lhs->text) != nullptr){
                 const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text);
-                expr.isBuiltinCall = true;
-                calledMemberName = expr.lhs->text;
                 recordRequiredHeader(fnInfo->requiredHeader);
-                recordBuiltinTypeHeader(fnInfo->returnTypeName);
-                recordBuiltinTypeHeader(fnInfo->returnTypeArgName);
-                recordBuiltinTypeHeader(fnInfo->returnNestedTypeArgName);
-                recordBuiltinTypeHeader(fnInfo->returnErrorTypeName);
-                if(fnInfo->prependsScratchArena)
-                    injectActiveArena();
-                const b8 badArity = fnInfo->isVariadic
-                    ? (callArgCount < fnInfo->minArity)
-                    : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
-                if(badArity){
-                    reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
-                    ok = false;
-                }
-                const b8 requiresExplicitTypeArg = fnInfo->requiresExplicitTypeArg;
-                if(requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
-                    reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
-                    ok = false;
-                }
+                applyBuiltinFunctionCall(*fnInfo, expr.lhs->text, isBuiltinFnArityInvalid(*fnInfo));
             }
             else{
                 recordBuiltinTypeHeader(baseCallee);
                 if(!m_symbols.hasTypeSymbol(baseCallee) && SymbolTable::IsArenaBackedContainer(baseCallee))
                     injectActiveArena();
-                if(!m_symbols.hasTypeSymbol(baseCallee) && !IsValidBuiltinVectorOrMatrixCtorArity(baseCallee, callArgCount)){
-                    reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");
+                if(!checkBuiltinVectorOrMatrixCtorCall(ownerClass, method, baseCallee, expr.arguments, scope, expr.span, errors, false))
                     ok = false;
-                }
-                else if(!m_symbols.hasTypeSymbol(baseCallee) && callArgCount == 2u && expr.arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseCallee)){
-                    const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee);
-                    const BuiltinUnalignedVectorInfo* unalignedInfo = simdVecInfo ? nullptr : FindBuiltinUnalignedVectorType(baseCallee);
-                    const b8 requiresSimdRegArg0 = (simdVecInfo && simdVecInfo->lanes == 4u && simdVecInfo->altCtorArity != 2u)
-                        || (unalignedInfo && unalignedInfo->lanes == 4u && unalignedInfo->altCtorArity != 2u);
-                    if(requiresSimdRegArg0 && !SymbolTable::IsSimdRegisterVectorType(inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope))){
-                        reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");
-                        ok = false;
-                    }
-                }
-                if(!m_symbols.hasTypeSymbol(baseCallee)){
-                    if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee); simdVecInfo && simdVecInfo->isMixed && callArgCount == 1u && expr.arguments[0]){
-                        const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope);
-                        if(arg0Type != baseCallee){
-                            reportError(errors, expr.span, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
-                            ok = false;
-                        }
-                    }
-                }
-                if(!m_symbols.hasTypeSymbol(baseCallee) && RequiresTCharAdaptation(baseCallee)){
-                    for(Expr* arg : expr.arguments){
-                        if(arg)
-                            markStringToPathAdaptation(ownerClass, &method, scope, *arg);
-                    }
-                }
+                maybeAdaptInitToTChar(ownerClass, method, scope, baseCallee, nullptr, expr.arguments);
             }
             calleeSignatureKnown = (targetCallable != nullptr)
                 || (invokedFuncType && invokedFuncType->isFuncType)
@@ -198,29 +165,10 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             targetOwnerCls = ownerClass;
             targetCallable = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints);
             if(!targetCallable){
-                const BuiltinReceiverMethodInfo* inheritedRecvInfo = nullptr;
-                if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty())
-                    inheritedRecvInfo = FindBuiltinReceiverMethod("IAsset", expr.lhs->text);
-                else if(!ownerClass->systemTypeName.empty())
-                    inheritedRecvInfo = FindBuiltinReceiverMethod("ISystem", expr.lhs->text);
-                if(!inheritedRecvInfo){
-                    for(const TypeRef* iface : ownerClass->implementedInterfaces){
-                        if(!iface)
-                            continue;
-                        const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
-                        if(!m_symbols.findInterface(ifaceName)){
-                            inheritedRecvInfo = FindBuiltinReceiverMethod(ifaceName, expr.lhs->text);
-                            if(inheritedRecvInfo)
-                                break;
-                        }
-                    }
-                }
+                const BuiltinReceiverMethodInfo* inheritedRecvInfo = m_symbols.findInheritedBuiltinReceiverMethod(ownerClass, nullptr, expr.lhs->text);
                 if(inheritedRecvInfo){
                     calleeSignatureKnown = true;
-                    recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeName);
-                    recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeArgName);
-                    recordBuiltinTypeHeader(inheritedRecvInfo->returnNestedTypeArgName);
-                    recordBuiltinTypeHeader(inheritedRecvInfo->returnErrorTypeName);
+                    recordBuiltinReturnTypeHeaders(inheritedRecvInfo->returnTypeName, inheritedRecvInfo->returnTypeArgName, inheritedRecvInfo->returnNestedTypeArgName, inheritedRecvInfo->returnErrorTypeName);
                     if(isConstThis && inheritedRecvInfo->isMutating){
                         reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
                         ok = false;
@@ -249,45 +197,26 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             builtinReceiverIsConst = recvIsConst;
             const ClassDecl* targetCls = m_symbols.findClass(objType);
             const InterfaceDecl* targetIface = m_symbols.findInterface(objType);
-            const b8 isAssetClassObj = (targetCls && (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty()))
-                || (targetIface && !targetIface->assetTypeName.empty());
-            const b8 isSystemClassObj = targetCls && !targetCls->systemTypeName.empty();
             const b8 isUserObjType = m_symbols.hasTypeSymbol(objType) || FindTemplateParam(ownerClass, &method, objType) != nullptr;
             const BuiltinReceiverMethodInfo* builtinRecvInfo = !isUserObjType
                 ? FindBuiltinReceiverMethod(objType, mName)
-                : (isAssetClassObj
-                    ? FindBuiltinReceiverMethod("IAsset", mName)
-                    : (isSystemClassObj ? FindBuiltinReceiverMethod("ISystem", mName) : nullptr));
+                : m_symbols.findInheritedBuiltinReceiverMethod(targetCls, targetIface, mName);
             if(!isUserObjType && builtinRecvInfo)
                 builtinReceiverSignature = FindBuiltinReceiverSignature(objType, mName);
-            if(!builtinRecvInfo && targetCls){
-                for(const TypeRef* iface : targetCls->implementedInterfaces){
-                    if(!iface)
-                        continue;
-                    const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
-                    if(!m_symbols.findInterface(ifaceName)){
-                        builtinRecvInfo = FindBuiltinReceiverMethod(ifaceName, mName);
-                        if(builtinRecvInfo)
-                            break;
-                    }
-                }
-            }
             const BuiltinMemberMethodInfo* builtinMemberInfo = isUserObjType ? nullptr : FindBuiltinMemberMethod(mName);
             const b8 isMutatingContainerOp = builtinRecvInfo ? builtinRecvInfo->isMutating : (builtinMemberInfo && builtinMemberInfo->isMutating);
             if(builtinRecvInfo){
                 targetBuiltinRecvInfo = builtinRecvInfo;
-                recordBuiltinTypeHeader(builtinRecvInfo->returnTypeName);
-                recordBuiltinTypeHeader(builtinRecvInfo->returnTypeArgName);
-                recordBuiltinTypeHeader(builtinRecvInfo->returnNestedTypeArgName);
-                recordBuiltinTypeHeader(builtinRecvInfo->returnErrorTypeName);
+                recordBuiltinReturnTypeHeaders(builtinRecvInfo->returnTypeName, builtinRecvInfo->returnTypeArgName, builtinRecvInfo->returnNestedTypeArgName, builtinRecvInfo->returnErrorTypeName);
             }
             else if(!isUserObjType && builtinMemberInfo){
                 targetBuiltinMemberInfo = builtinMemberInfo;
                 targetBuiltinRecvObjType = objType;
             }
+            const SpecialMethodKind::Enum specialMethod = FindSpecialMethodSemantics(mName);
             if(
                 !targetCls
-                && (mName == "addSystem" || (mName == "addComponent" && callArgCount > 0u))
+                && (specialMethod == SpecialMethodKind::EcsEmplaceSystem || (specialMethod == SpecialMethodKind::EcsEmplaceComponent && callArgCount > 0u))
                 && !expr.callTemplateArgs.empty()
                 && expr.callTemplateArgs[0].type
             ){
@@ -304,9 +233,9 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(targetCallable){
                     recordRequiredHeader(targetCallable->requiredHeader);
                     if(!targetCallable->cppExportName.empty()){
-                        const usize lastSep = targetCallable->cppExportName.rfind("::");
+                        const usize lastSep = targetCallable->cppExportName.rfind(ContractSemantics::s_CppScopeSeparator);
                         expr.lhs->resolvedCppExportName = (lastSep != MStringView::npos)
-                            ? targetCallable->cppExportName.substr(lastSep + 2u)
+                            ? targetCallable->cppExportName.substr(lastSep + ContractSemantics::s_CppScopeSeparator.size())
                             : targetCallable->cppExportName;
                     }
                     if(ownerClass != targetCls && targetCallable->access != AccessSpecifier::Public){
@@ -364,12 +293,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 && m_parallelDepth > 0u
                 && (isMutatingContainerOp || (!builtinRecvInfo && !targetBuiltinMemberInfo && !(invokedFuncType && invokedFuncType->isFuncType) && !recvIsConst))
             ){
-                b8 isTaskLocalContainer = false;
-                if(expr.lhs->lhs->kind == ExprKind::Identifier){
-                    if(const ScopedVarInfo* recvLocal = FindScopedVar(scope, expr.lhs->lhs->text))
-                        isTaskLocalContainer = (recvLocal->declaredParallelDepth == m_parallelDepth);
-                }
-                if(!isTaskLocalContainer){
+                if(!isTaskLocalIdentifierExpr(*expr.lhs->lhs, scope)){
                     reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
                     ok = false;
                 }
@@ -385,7 +309,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 calleeSignatureKnown = true;
 
             const b8 isStringFamily = !isUserObjType && IsStringLikeType(objType);
-            if(isStringFamily && mName == "substr"){
+            if(isStringFamily && specialMethod == SpecialMethodKind::Substr){
                 if(callArgCount > 2u){
                     reportError(errors, expr.span, "'substr' accepts at most 2 arguments");
                     ok = false;
@@ -397,8 +321,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     ok = false;
                 }
             }
-            else if(!isUserObjType && mName == "value" && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
-                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(objType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+            else if(!isUserObjType && specialMethod == SpecialMethodKind::UnwrapValue && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
+                if(IsOptionalOrExpectedGenericType(objType)){
                     if(SymbolTable::IsSimdRegisterVectorType(m_symbols.resolveBaseTypeName(recvTypeRef->templateArgs[0].type->name)))
                         expr.unwrapSimdResultValue = true;
                 }
@@ -446,8 +370,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             && !expr.lhs->lhs
             && expr.lhs->text.empty()
             && expr.lhs->scopeChain.size() == 2u
-            && !FindScopedVar(scope, expr.lhs->scopeChain[0])
-            && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
+            && isUnshadowedTypeScopeAccess(scope, expr.lhs->scopeChain[0])
             && m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0])) != nullptr
         ){
             const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]));
@@ -462,7 +385,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 recordRequiredHeader(targetCallable->requiredHeader);
                 expr.lhs->resolvedCppNamespace = !targetCallable->cppNamespace.empty() ? targetCallable->cppNamespace : scopedCls->cppNamespace;
                 if(!targetCallable->cppExportName.empty()){
-                    if(targetCallable->cppExportName.find("::") != MStringView::npos || scopedCls->cppExportName.empty())
+                    if(targetCallable->cppExportName.find(ContractSemantics::s_CppScopeSeparator) != MStringView::npos || scopedCls->cppExportName.empty())
                         expr.lhs->resolvedCppExportName = targetCallable->cppExportName;
                     else
                         expr.lhs->resolvedCppExportName = JoinScopedCppName(m_arena, scopedCls->cppExportName, targetCallable->cppExportName);
@@ -488,36 +411,16 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         else if(
             expr.lhs->kind == ExprKind::ScopeAccess
             && expr.lhs->scopeChain.size() == 2u
-            && !FindScopedVar(scope, expr.lhs->scopeChain[0])
-            && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
+            && isUnshadowedTypeScopeAccess(scope, expr.lhs->scopeChain[0])
             && !m_symbols.hasTypeSymbol(expr.lhs->scopeChain[0])
             && FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]) != nullptr
         ){
             const BuiltinFunctionInfo* fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]);
             recordBuiltinTypeHeader(expr.lhs->scopeChain[0]);
             recordRequiredHeader(fnInfo->requiredHeader);
-            const b8 badArity = fnInfo->isVariadic
-                ? (callArgCount < fnInfo->minArity)
-                : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
-            if(!badArity || !m_hasTopLevelNativeBlocks){
-                expr.isBuiltinCall = true;
-                calledMemberName = fnInfo->adhdName;
-                recordBuiltinTypeHeader(fnInfo->returnTypeName);
-                recordBuiltinTypeHeader(fnInfo->returnTypeArgName);
-                recordBuiltinTypeHeader(fnInfo->returnNestedTypeArgName);
-                recordBuiltinTypeHeader(fnInfo->returnErrorTypeName);
-                if(fnInfo->prependsScratchArena)
-                    injectActiveArena();
-                if(badArity){
-                    reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
-                    ok = false;
-                }
-                const b8 requiresExplicitTypeArg = fnInfo->requiresExplicitTypeArg;
-                if(requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
-                    reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
-                    ok = false;
-                }
-            }
+            const b8 badArity = isBuiltinFnArityInvalid(*fnInfo);
+            if(!badArity || !m_hasTopLevelNativeBlocks)
+                applyBuiltinFunctionCall(*fnInfo, fnInfo->adhdName, badArity);
             calleeSignatureKnown = expr.isBuiltinCall;
         }
         else{
@@ -581,8 +484,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         }
         else if(
             targetBuiltinMemberInfo
-            && targetBuiltinMemberInfo->methodName == "deref"
-            && (targetBuiltinRecvObjType == "UniquePtr" || targetBuiltinRecvObjType == "NotNullUniquePtr" || targetBuiltinRecvObjType == "RefCountPtr")
+            && FindSpecialMethodSemantics(targetBuiltinMemberInfo->methodName) == SpecialMethodKind::Deref
+            && IsSmartPointerDerefType(targetBuiltinRecvObjType)
             && expr.lhs
             && expr.lhs->lhs
             && BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, &method, *expr.lhs->lhs, scope)
@@ -649,7 +552,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
 
     if(!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.arguments.size() == 1u && expr.arguments[0]){
         const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
-        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(baseCallee); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+        if(IsOptionalOrExpectedGenericType(baseCallee)){
             if(SymbolTable::IsSimdRegisterVectorType(expr.arguments[0]->resolvedSimdType))
                 expr.arguments[0]->wrapInSimdResult = true;
         }

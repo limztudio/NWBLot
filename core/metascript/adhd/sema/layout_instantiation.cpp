@@ -369,7 +369,7 @@ void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& t
         inst->orderedFields.push_back(clonedField);
     }
 
-    const b8 hasMotherArenaPointer = !templateDecl.isSerialize && !templateDecl.usesStaticClassArena() && templateDecl.subsystemTypeName.empty() && inst->needsClassArena;
+    const b8 hasMotherArenaPointer = templateDecl.canBorrowMotherArena() && inst->needsClassArena;
     m_optimizer.finalizeClassFieldLayouts(templateDecl.isSerialize, m_symbols.hasPolymorphicBase(templateDecl), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
     unit.templateInstantiations.push_back(inst);
 

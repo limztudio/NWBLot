@@ -38,38 +38,8 @@ b8 ConstructorArgumentChecker::check(ClassDecl* ownerClass, const TypeRef* targe
         }
     }
     else if(resolvedTargetType && !baseTargetName.empty()){
-        if(!IsValidBuiltinVectorOrMatrixCtorArity(baseTargetName, arguments.size())){
-            m_checker.reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
+        if(!m_checker.checkBuiltinVectorOrMatrixCtorCall(ownerClass, method, baseTargetName, arguments, scope, errorSpan, errors, true))
             ok = false;
-        }
-        else if(arguments.size() == 2u && arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseTargetName)){
-            const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseTargetName);
-            const BuiltinUnalignedVectorInfo* unalignedInfo = simdVecInfo ? nullptr : FindBuiltinUnalignedVectorType(baseTargetName);
-            const b8 requiresSimdRegArg0 = (simdVecInfo && simdVecInfo->lanes == 4u && simdVecInfo->altCtorArity != 2u) || (unalignedInfo && unalignedInfo->lanes == 4u && unalignedInfo->altCtorArity != 2u);
-            if(requiresSimdRegArg0 && !SymbolTable::IsSimdRegisterVectorType(m_checker.inferExprTypeName(ownerClass, &method, *arguments[0], scope))){
-                m_checker.reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
-                ok = false;
-            }
-        }
-        else if(
-            arguments.size() > 1u
-            && (
-                BuiltinTypeSemantics::IsScalarType(baseTargetName)
-                || m_checker.m_symbols.findEnum(baseTargetName) != nullptr
-                || FindBuiltinEnum(baseTargetName) != nullptr
-                || IsSingleValueCtorBuiltinType(baseTargetName)
-            )
-        ){
-            m_checker.reportError(errors, errorSpan, "scalar, enum, or single-value constructor accepts at most 1 argument");
-            ok = false;
-        }
-        if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseTargetName); simdVecInfo && simdVecInfo->isMixed && arguments.size() == 1u && arguments[0]){
-            const MStringView arg0Type = m_checker.inferExprTypeName(ownerClass, &method, *arguments[0], scope);
-            if(arg0Type != baseTargetName){
-                m_checker.reportError(errors, errorSpan, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
-                ok = false;
-            }
-        }
     }
     if(!CallableArgumentChecker(m_checker).check(
         ownerClass,

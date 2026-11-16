@@ -33,6 +33,8 @@ native{
 #include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
 
+#include <core/input/input_event.h>
+
 #include <gtest/gtest.h>
 
 

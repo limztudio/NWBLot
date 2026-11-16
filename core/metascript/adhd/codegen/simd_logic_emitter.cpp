@@ -5,6 +5,8 @@
 #include "simd_logic_emitter.h"
 #include "simd_expression_analysis.h"
 
+#include <core/metascript/adhd/ast/operator_semantics.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,7 +17,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_expr{
+namespace __hidden_adhd_simd_logic_emitter{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +33,7 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
 }
 
 [[nodiscard]] b8 IsFloatSimdRegisterVectorType(const MStringView simdType)noexcept{
-    return simdType == "VectorSingle" || simdType == "VectorDouble";
+    return simdType == FindFloatSimdRegisterTypeName(false) || simdType == FindFloatSimdRegisterTypeName(true);
 }
 
 [[nodiscard]] b8 TryMatchIsFiniteLaneTerm(const Expr* term, const b8 expectNegated, const Expr*& outBase, u32& outLane)noexcept{
@@ -48,7 +50,7 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
         || !callExpr->isBuiltinCall
         || !callExpr->lhs
         || callExpr->lhs->kind != ExprKind::Identifier
-        || callExpr->lhs->text != "IsFinite"
+        || FindSpecialFunctionKind(callExpr->lhs->text) != SpecialFunctionKind::IsFinite
         || callExpr->arguments.size() != 1u
         || !callExpr->arguments[0]
     ){
@@ -57,15 +59,6 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
     if(!SimdExpressionAnalysis::TryMatchSingleLaneAccess(callExpr->arguments[0], outBase, outLane) || !outBase)
         return false;
     return IsFloatSimdRegisterVectorType(outBase->resolvedSimdType) && SimdExpressionAnalysis::IsPureSimdAddressExpr(*outBase);
-}
-
-[[nodiscard]] constexpr b8 IsSimdComparisonOp(const TokenType::Enum op)noexcept{
-    return op == TokenType::EqualEqual
-        || op == TokenType::BangEqual
-        || op == TokenType::Less
-        || op == TokenType::LessEqual
-        || op == TokenType::Greater
-        || op == TokenType::GreaterEqual;
 }
 
 [[nodiscard]] constexpr TokenType::Enum FlipComparisonOp(const TokenType::Enum op)noexcept{
@@ -86,7 +79,7 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
     const Expr*& outRhsScalar,
     u32& outLane
 )noexcept{
-    if(!term || term->kind != ExprKind::Binary || !IsSimdComparisonOp(term->op) || !term->lhs || !term->rhs)
+    if(!term || term->kind != ExprKind::Binary || !OperatorSemantics::IsRelationalOrEqualityOperatorToken(term->op) || !term->lhs || !term->rhs)
         return false;
 
     const Expr* lhsBase = nullptr;
@@ -142,7 +135,7 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
 
 
 b8 SimdLogicEmitter::tryEmit(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
-    using namespace __hidden_adhd_expr;
+    using namespace __hidden_adhd_simd_logic_emitter;
 
     if(expr.kind != ExprKind::Binary || (expr.op != TokenType::AmpersandAmpersand && expr.op != TokenType::PipePipe))
         return false;

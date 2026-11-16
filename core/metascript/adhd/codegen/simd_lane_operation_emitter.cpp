@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "simd_lane_operation_emitter.h"
+#include "simd_constructor_emitter.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,12 +14,10 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SimdLaneOperationEmitter::tryEmit()const{
+b8 SimdConstructorEmitter::tryEmitLaneOperation(const b8 isDouble, const b8 isInt)const{
     MString& out = m_output;
     const MStringView simdType = m_simdType;
     const Span<const Expr* const> arguments = m_arguments;
-    const b8 isDouble = m_isDouble;
-    const b8 isInt = m_isInt;
     const auto classifyActiveLaneColumn = [&](const Array<const Expr*, 4>& column, const u32 activeLanes, const Expr*& outSource)noexcept -> b8{
         outSource = nullptr;
         for(u32 lane = 0u; lane < activeLanes; ++lane){
@@ -110,7 +108,8 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
         }
     };
     const auto emitOperation = [&](const TokenType::Enum op, const MStringView mask){
-        out.append(isDouble ? "::VectorDouble" : "::Vector");
+        const MStringView simdPrefix = CodegenSymbols::SimdPrefix(isDouble);
+        out.append(simdPrefix.data(), simdPrefix.size());
         out.append(op == TokenType::Plus ? "Add(" : (op == TokenType::Minus ? "Subtract(" : (op == TokenType::Star ? "Multiply(" : "Divide(")));
         emitMaskedOperand("__a", mask, false);
         out.append(", ");

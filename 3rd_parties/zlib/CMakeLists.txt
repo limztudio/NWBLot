@@ -39,6 +39,16 @@ if(WIN32)
     )
     nwb_disable_vendor_warnings(nwb_vendor_zlib)
     nwb_apply_debug_symbols(nwb_vendor_zlib)
+    nwb_skip_unity_build_sources(
+        "${CMAKE_CURRENT_LIST_DIR}/gzlib.c"
+        "${CMAKE_CURRENT_LIST_DIR}/gzread.c"
+        "${CMAKE_CURRENT_LIST_DIR}/gzwrite.c"
+        "${CMAKE_CURRENT_LIST_DIR}/inflate.c"
+        "${CMAKE_CURRENT_LIST_DIR}/infback.c"
+        "${CMAKE_CURRENT_LIST_DIR}/inftrees.c"
+        "${CMAKE_CURRENT_LIST_DIR}/inffast.c"
+        "${CMAKE_CURRENT_LIST_DIR}/zutil.c"
+    )
 else()
     find_package(ZLIB REQUIRED)
     add_library(nwb_zlib INTERFACE)

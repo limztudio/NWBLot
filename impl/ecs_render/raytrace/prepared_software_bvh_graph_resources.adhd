@@ -2,54 +2,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/prepared_builds.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+class PreparedMeshSwBvhGraphResources{
+    public PreparedMeshSwBvhBuild build;
+    public GpuGraphResourceId position;
+    public GpuGraphResourceId triangleIndex;
+    public GpuGraphResourceId node;
+    public GpuGraphResourceId parent;
+    public GpuGraphResourceId sortKeys;
+    public GpuGraphResourceId sortPayload;
+    public GpuGraphResourceId visitCounter;
+}
 
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct PreparedMeshSwBvhGraphResources{
-    PreparedMeshSwBvhBuild build;
-    Core::GpuGraphResourceId position;
-    Core::GpuGraphResourceId triangleIndex;
-    Core::GpuGraphResourceId node;
-    Core::GpuGraphResourceId parent;
-    Core::GpuGraphResourceId sortKeys;
-    Core::GpuGraphResourceId sortPayload;
-    Core::GpuGraphResourceId visitCounter;
-};
-
-using PreparedMeshSwBvhGraphResourceVector = Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena>;
+type PreparedMeshSwBvhGraphResourceVector = Vector<PreparedMeshSwBvhGraphResources>;
 
 
 // A missing graph identity rejects the complete returned resource list.
-[[nodiscard]] Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(const Core::GpuTaskGraph& graph, Span<const PreparedMeshSwBvhBuild> builds, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(in GpuTaskGraph graph, in Span<PreparedMeshSwBvhBuild> builds){
+    PreparedMeshSwBvhGraphResourceVector result;
+    if(builds.empty())
+        return result;
+    result.reserve(builds.size());
+    const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
+    if(!declarations.valid())
+        return MakeUnexpected(Failure());
+    for(in PreparedMeshSwBvhBuild build : builds){
+        PreparedMeshSwBvhGraphResources resources;
+        resources.build = build;
+        resources.position = declarations.findImportedBuffer(build.positionBuffer);
+        resources.triangleIndex = declarations.findImportedBuffer(build.triangleIndexBuffer);
+        resources.node = declarations.findImportedBuffer(build.nodeBuffer);
+        resources.parent = declarations.findImportedBuffer(build.parentBuffer);
+        resources.sortKeys = declarations.findImportedBuffer(build.sortKeysBuffer);
+        resources.sortPayload = declarations.findImportedBuffer(build.sortPayloadBuffer);
+        resources.visitCounter = declarations.findImportedBuffer(build.visitCounterBuffer);
+        if(!resources.position.valid() || !resources.triangleIndex.valid() || !resources.node.valid() || !resources.parent.valid() || !resources.sortKeys.valid() || !resources.sortPayload.valid() || !resources.visitCounter.valid())
+            return MakeUnexpected(Failure());
+        result.push_back(resources);
+    }
+    return result;
 }
 
 

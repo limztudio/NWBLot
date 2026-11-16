@@ -544,7 +544,7 @@ b8 EnsureCausticEmissionTargetBufferStorage(
     }
 
     const auto acquireHeapHandle = [&](Core::Buffer& buffer) -> Expected<Core::GpuDescriptorHandle>{
-        const auto handle = RayTracingDetail::RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
+        const auto handle = RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
         if(!handle){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register caustic emission targets in the descriptor heap"));
             return MakeUnexpected(Failure{});
@@ -594,16 +594,6 @@ b8 EnsureCausticEmissionTargetBufferStorage(
     retireUnpublished.release();
     NWB_LOGGER_INFO(FOUNDATION_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)"), static_cast<u64>(capacity));
     return true;
-}
-
-void FreeCausticEmissionTargetDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& heapHandle){
-    if(!heapHandle.valid())
-        return;
-
-    auto& device = graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized())
-        heap.free(heapHandle);
 }
 
 
@@ -663,7 +653,7 @@ b8 CausticActivityResources::prepareCausticResolveActivity(const u32 halfWidth, 
             releaseCausticResolveActivity();
             return false;
         }
-        if(!RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()), activity.descriptors[index])){
+        if(!AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()), activity.descriptors[index])){
             releaseCausticResolveActivity();
             return false;
         }

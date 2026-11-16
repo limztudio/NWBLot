@@ -81,7 +81,8 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
         }
         if(!isInt && !isMatrix){
             if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs && SimdOptimizationAnalysis::CanEmitScalarAsSimdVectorWithoutReplicate(*expr.lhs, expectedSimdType, m_symbols)){
-                out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");
+                const MStringView negateFn = isDouble ? CodegenSymbols::s_SimdNegateDouble : CodegenSymbols::s_SimdNegateSingle;
+                out.append(negateFn.data(), negateFn.size());
                 emitSimdRegExpr(out, *expr.lhs, expectedSimdType);
                 out.push_back(')');
                 return;

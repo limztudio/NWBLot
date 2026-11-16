@@ -34,6 +34,7 @@ public:
 
 private:
     [[nodiscard]] b8 rejectStatementAttributes(Span<const ParsedAttribute> attributes, SourceSpan span, MStringView message);
+    [[nodiscard]] Expr* expectParenthesizedExpr(MStringView missingLeftParenMsg, MStringView missingRightParenMsg);
     [[nodiscard]] Stmt* parseSimpleKeywordStatement(StmtKind::Enum kind, SourceSpan span, Span<const ParsedAttribute> attributes, MStringView rejectAttrMsg, MStringView missingSemiMsg);
     [[nodiscard]] b8 parseScopedBodyStatements(MVector<Stmt*>& outStatements);
     [[nodiscard]] Stmt* parseIfStatement(SourceSpan span);

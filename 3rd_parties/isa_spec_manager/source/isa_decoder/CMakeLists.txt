@@ -1,5 +1,6 @@
 # Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
 cmake_minimum_required(VERSION 3.10)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
 
 # Setting project directories.
 set (SRC_DIR ../../source)
@@ -77,6 +78,9 @@ if (_NWB_USE_TINYXML2_TARGET)
     target_link_libraries(isa_decoder PRIVATE nwb::tinyxml2)
 endif()
 nwb_disable_vendor_warnings(isa_decoder)
+nwb_skip_unity_build_sources(
+    "${CMAKE_CURRENT_LIST_DIR}/v1_1_1/isa_decoder_v1_1_1.cpp"
+)
 
 # install public headers
 install(DIRECTORY ${INC_DIR}/amdisa DESTINATION include COMPONENT dev)

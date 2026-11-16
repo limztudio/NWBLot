@@ -180,7 +180,7 @@ Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const Diagnost
     return stmt;
 }
 
-Stmt* StmtParser::parseVarDeclWithType(TypeRef& varType, const SourceSpan span, const b8 isConst){
+Stmt* StmtParser::parseVarDeclWithType(TypeRef& varType, const SourceSpan span, const b8 isConst, const b8 isExtern){
     const MStringView varName = m_cursor.current().text;
     m_cursor.advance();
 
@@ -210,9 +210,9 @@ Stmt* StmtParser::parseVarDeclWithType(TypeRef& varType, const SourceSpan span, 
         if(!m_exprParser.parseArgumentList(stmt->arguments))
             return nullptr;
     }
-    else if(!isConst && m_cursor.check(TokenType::Semicolon)){
+    else if((!isConst || isExtern) && m_cursor.check(TokenType::Semicolon)){
         if(varType.isAuto){
-            m_cursor.error(span.line, span.column, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
+            m_cursor.error(span.line, span.column, isExtern ? "'auto' is not permitted on uninitialized 'extern const' declaration" : "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
             return nullptr;
         }
     }

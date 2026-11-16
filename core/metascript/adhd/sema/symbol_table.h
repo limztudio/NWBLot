@@ -66,7 +66,8 @@ public:
         b8 preferConst = false,
         b8 requirePublic = false,
         Span<const MStringView> argTypeNames = {},
-        Span<const u8> argIsMut = {}
+        Span<const u8> argIsMut = {},
+        b8 staticOnly = false
     )const noexcept;
     [[nodiscard]] const MethodDecl* findClassOperator(
         const ClassDecl& classDecl,

@@ -109,7 +109,11 @@ b8 CallableArgumentChecker::check(
 ){
     b8 ok = true;
     const SourceSpan errSpan = !arguments.empty() && arguments[0] ? arguments[0]->span : method.span;
-    if(targetCallable && targetCallable->params.size() != arguments.size()){
+    const b8 arityValid = targetCallable && (
+        targetCallable->params.size() == arguments.size()
+        || (targetCallable->hasDefaultArgs && arguments.size() >= targetCallable->minArgCount && arguments.size() <= targetCallable->params.size())
+    );
+    if(targetCallable && !arityValid){
         m_checker.reportError(errors, errSpan, "wrong number of arguments in call");
         ok = false;
     }

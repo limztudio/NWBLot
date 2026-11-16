@@ -255,6 +255,7 @@ namespace __hidden_adhd_source_emitter{
         && unit.sourceNativeBlocks.empty()
         && unit.includedAdhdFiles.empty()
         && unit.resolvedIncludedFiles.empty()
+        && unit.importedCppHeaders.empty()
         && unit.typeAliases.empty()
         && unit.enums.empty()
         && unit.interfaces.empty()
@@ -268,7 +269,7 @@ b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
     if(!HasOnlyGlobalConstants(unit) || !unit.requiredGlobalHeaders.empty())
         return false;
     for(const Stmt* constant : unit.globalConstants){
-        if(!constant || constant->isImported || !constant->varType || constant->varType->name != "Name" || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr || constant->expr->kind != ExprKind::StringLiteral)
+        if(!constant || constant->isImported || constant->isExtern || !constant->varType || constant->varType->name != "Name" || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr || constant->expr->kind != ExprKind::StringLiteral)
             return false;
     }
     return true;
@@ -300,7 +301,7 @@ b8 IsScalarLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
         return false;
     for(usize index = 0u; index < unit.globalConstants.size(); ++index){
         const Stmt* constant = unit.globalConstants[index];
-        if(!constant || constant->isImported || !constant->varType || constant->varType->isFuncType || constant->varType->isAuto
+        if(!constant || constant->isImported || constant->isExtern || !constant->varType || constant->varType->isFuncType || constant->varType->isAuto
             || constant->varType->refMode != ParamPassingMode::None || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr)
             return false;
         const MStringView typeName = constant->varType->name;
@@ -394,12 +395,12 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     }
 
     for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl)
+        if(!classDecl || classDecl->isExtern)
             continue;
 
         if(classDecl->templateParams.empty()){
             for(const MethodDecl* method : classDecl->methods){
-                if(!method)
+                if(!method || method->isExtern)
                     continue;
                 const b8 emittedInHeader = method->isInline || !method->templateParams.empty() || method->hasSynthesizedArenaParams;
                 if(method->isImported || !method->hasBody || emittedInHeader)
@@ -421,7 +422,7 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || fn->isImported || !fn->hasBody || fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)
+        if(!fn || fn->isImported || fn->isExtern || !fn->hasBody || fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)
             continue;
 
         emitOutOfClassCallable(out, nullptr, *fn, true, false, false);

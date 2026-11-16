@@ -49,6 +49,7 @@ add_subdirectory(ufbx)
 add_subdirectory(curl)
 add_subdirectory(libmicrohttpd)
 add_subdirectory(oneTBB)
+add_subdirectory(libclang)
 add_subdirectory(googletest)                       # unit-test framework (gtest) for the engine test suites
 nwb_match_engine_runtime(gtest)
 add_subdirectory(wmi)

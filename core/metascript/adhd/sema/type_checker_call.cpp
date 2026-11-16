@@ -71,10 +71,18 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(localCallable && localCallable->type)
                     invokedFuncType = m_symbols.unwrapTypeAlias(localCallable->type);
             }
-            if(targetCallable)
+            if(targetCallable){
                 expr.lhs->resolvedCppNamespace = targetCallable->cppNamespace;
+                expr.lhs->resolvedCppExportName = targetCallable->cppExportName;
+                recordRequiredHeader(targetCallable->requiredHeader);
+            }
             if(targetCallable || localCallable){
                 expr.isUserCallableCall = true;
+            }
+            else if(const ClassDecl* abstractCls = m_symbols.findClass(baseCallee); abstractCls && abstractCls->isAbstract){
+                recordRequiredHeader(abstractCls->requiredHeader);
+                reportError(errors, expr.span, "cannot instantiate an abstract class");
+                ok = false;
             }
             else if(m_symbols.findInterface(baseCallee) || m_symbols.isAbstractBuiltinType(baseCallee)){
                 recordBuiltinTypeHeader(baseCallee);
@@ -82,11 +90,18 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 ok = false;
             }
             else if(const ClassDecl* ctorCls = m_symbols.findClass(baseCallee)){
+                recordRequiredHeader(ctorCls->requiredHeader);
                 targetOwnerCls = ctorCls;
                 targetCallable = m_symbols.findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls, argTypeHints, argIsMutHints);
-                if(targetCallable && ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
-                    reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
-                    ok = false;
+                expr.lhs->resolvedCppNamespace = (targetCallable && !targetCallable->cppNamespace.empty()) ? targetCallable->cppNamespace : ctorCls->cppNamespace;
+                if(!ctorCls->cppExportName.empty())
+                    expr.lhs->resolvedCppExportName = ctorCls->cppExportName;
+                if(targetCallable){
+                    recordRequiredHeader(targetCallable->requiredHeader);
+                    if(ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
+                        reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
+                        ok = false;
+                    }
                 }
                 if(!ctorCls->templateParams.empty() && !expr.callTemplateArgs.empty()){
                     TypeRef* tempClsRef = AllocateAstNode<TypeRef>(m_arena);
@@ -284,8 +299,16 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             }
             if(targetCls){
                 targetOwnerCls = targetCls;
+                recordRequiredHeader(targetCls->requiredHeader);
                 targetCallable = m_symbols.findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls, argTypeHints, argIsMutHints);
                 if(targetCallable){
+                    recordRequiredHeader(targetCallable->requiredHeader);
+                    if(!targetCallable->cppExportName.empty()){
+                        const usize lastSep = targetCallable->cppExportName.rfind("::");
+                        expr.lhs->resolvedCppExportName = (lastSep != MStringView::npos)
+                            ? targetCallable->cppExportName.substr(lastSep + 2u)
+                            : targetCallable->cppExportName;
+                    }
                     if(ownerClass != targetCls && targetCallable->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
                         ok = false;
@@ -305,7 +328,10 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 }
             }
             else if(recvTypeRef && targetIface){
+                recordRequiredHeader(targetIface->requiredHeader);
                 targetCallable = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints);
+                if(targetCallable)
+                    recordRequiredHeader(targetCallable->requiredHeader);
                 if(!targetCallable && !builtinRecvInfo){
                     reportError(errors, expr.span, "unknown method on interface");
                     ok = false;
@@ -417,6 +443,50 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         }
         else if(
             expr.lhs->kind == ExprKind::ScopeAccess
+            && !expr.lhs->lhs
+            && expr.lhs->text.empty()
+            && expr.lhs->scopeChain.size() == 2u
+            && !FindScopedVar(scope, expr.lhs->scopeChain[0])
+            && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
+            && m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0])) != nullptr
+        ){
+            const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]));
+            targetOwnerCls = scopedCls;
+            targetCallable = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, ownerClass != scopedCls, argTypeHints, argIsMutHints, true);
+            recordRequiredHeader(scopedCls->requiredHeader);
+            if(targetCallable){
+                if(ownerClass != scopedCls && targetCallable->access != AccessSpecifier::Public){
+                    reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
+                    ok = false;
+                }
+                recordRequiredHeader(targetCallable->requiredHeader);
+                expr.lhs->resolvedCppNamespace = !targetCallable->cppNamespace.empty() ? targetCallable->cppNamespace : scopedCls->cppNamespace;
+                if(!targetCallable->cppExportName.empty()){
+                    if(targetCallable->cppExportName.find("::") != MStringView::npos || scopedCls->cppExportName.empty())
+                        expr.lhs->resolvedCppExportName = targetCallable->cppExportName;
+                    else
+                        expr.lhs->resolvedCppExportName = JoinScopedCppName(m_arena, scopedCls->cppExportName, targetCallable->cppExportName);
+                }
+                else if(!scopedCls->cppExportName.empty()){
+                    expr.lhs->resolvedCppExportName = JoinScopedCppName(m_arena, scopedCls->cppExportName, targetCallable->name);
+                }
+                calleeSignatureKnown = true;
+            }
+            else if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.lhs->scopeChain[1]); staticField && staticField->isStatic){
+                if(ownerClass != scopedCls && staticField->access != AccessSpecifier::Public){
+                    reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
+                    ok = false;
+                }
+                invokedFuncType = m_symbols.unwrapTypeAlias(staticField->type);
+                calleeSignatureKnown = (invokedFuncType && invokedFuncType->isFuncType);
+                if(staticField->type && (!invokedFuncType || !invokedFuncType->isFuncType) && !FindTemplateParam(ownerClass, &method, staticField->type->name)){
+                    reportError(errors, expr.span, "class static member is not a callable function");
+                    ok = false;
+                }
+            }
+        }
+        else if(
+            expr.lhs->kind == ExprKind::ScopeAccess
             && expr.lhs->scopeChain.size() == 2u
             && !FindScopedVar(scope, expr.lhs->scopeChain[0])
             && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
@@ -474,6 +544,12 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         callReturnType = invokedFuncType->funcReturnType;
     else if(localCallable && localCallable->lambdaExpr)
         callReturnType = localCallable->lambdaExpr->lambdaReturnType;
+
+    if(callReturnType){
+        recordBuiltinTypeHeader(callReturnType->name);
+        if(const TypeRef* unwrappedRet = m_symbols.unwrapTypeAlias(callReturnType))
+            recordBuiltinTypeHeader(unwrappedRet->name);
+    }
 
     if(targetCallable && !targetCallable->isConstructor && targetCallable->injectsCallerArena){
         injectActiveArena();

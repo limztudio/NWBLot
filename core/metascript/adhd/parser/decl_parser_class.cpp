@@ -16,7 +16,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
+ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern){
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected class name");
         return nullptr;
@@ -25,12 +25,16 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     ClassDecl* decl = AllocateAstNode<ClassDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
     decl->span = span;
+    decl->isImported = isExtern;
+    decl->isExtern = isExtern;
     m_cursor.advance();
 
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
+        if(!tryParseExternAttribute(attr, decl->cppExportName, decl->requiredHeader, isExtern, matchedAttr))
+            return nullptr;
 #define NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE(attrName, declField) \
-        if(attr.name == attrName && attr.arguments.empty()){ \
+        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()){ \
             decl->declField = true; \
             matchedAttr = true; \
         }
@@ -78,6 +82,9 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
         }
     }
 
+    if(isExtern && m_cursor.match(TokenType::Semicolon))
+        return decl;
+
     if(!m_cursor.expect(TokenType::LeftBrace, "expected '{' to start class body"))
         return nullptr;
 
@@ -109,6 +116,10 @@ void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
 
 b8 DeclParser::parseClassMemberCallableBody(MethodDecl& method, const MStringView missingTerminatorMessage){
     if(m_cursor.check(TokenType::LeftBrace)){
+        if(method.isExtern){
+            m_cursor.error(method.span.line, method.span.column, "'extern' methods cannot define a body");
+            return false;
+        }
         method.hasBody = true;
         return m_stmtParser.parseBlockStatements(method.body);
     }
@@ -121,8 +132,8 @@ b8 DeclParser::parseDestructorEmptyParams(const MStringView missingLeftParenMess
     return m_cursor.expect(TokenType::RightParen, "destructor cannot take parameters");
 }
 
-b8 DeclParser::parseConstructorParamsAndRejectInitList(MVector<ParamDecl>& outParams){
-    if(!m_typeParser.parseParamList(outParams))
+b8 DeclParser::parseConstructorParamsAndRejectInitList(MethodDecl& method){
+    if(!m_typeParser.parseParamList(method.params, method.isExtern, method.isExtern, &method.minArgCount, &method.hasDefaultArgs))
         return false;
     if(m_cursor.check(TokenType::Colon)){
         m_cursor.error("C++ constructor initializer lists (': member(...)') are prohibited in adhd; initialize 'this.member' inside the constructor body");
@@ -132,7 +143,7 @@ b8 DeclParser::parseConstructorParamsAndRejectInitList(MVector<ParamDecl>& outPa
 }
 
 b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const SourceSpan span){
-    if(!m_typeParser.parseParamList(method.params))
+    if(!m_typeParser.parseParamList(method.params, method.isExtern, method.isExtern, &method.minArgCount, &method.hasDefaultArgs))
         return false;
     if(method.isOperator){
         MStringView opErr;
@@ -147,6 +158,8 @@ b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const Sourc
 b8 DeclParser::parseClassMethodOrOperatorTail(
     ClassDecl& classDecl,
     const AccessSpecifier::Enum access,
+    const b8 isStatic,
+    const b8 isExtern,
     TypeRef* returnType,
     const MStringView name,
     const b8 isOperator,
@@ -160,8 +173,13 @@ b8 DeclParser::parseClassMethodOrOperatorTail(
     method->ownerClassName = classDecl.name;
     method->templateParams = Move(templateParams);
     method->returnType = returnType;
+    method->returnsReference = (returnType && returnType->refMode != ParamPassingMode::None);
     method->name = name;
     method->isOperator = isOperator;
+    method->isStatic = isStatic;
+    method->isImported = isExtern;
+    method->isExtern = isExtern;
+    method->requiredHeader = classDecl.requiredHeader;
     method->span = span;
 
     if(!applyCallableAttributes(attributes, *method))
@@ -197,6 +215,25 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("C++-style 'public:' section labels are prohibited in adhd; write the access specifier on each member");
         return false;
     }
+
+    b8 isMemberStatic = false;
+    b8 isMemberExtern = classDecl.isExtern;
+    if(classDecl.isExtern){
+        b8 seenExternKeyword = false;
+        for(;;){
+            if(!isMemberStatic && m_cursor.matchIdentifier("static")){
+                isMemberStatic = true;
+                continue;
+            }
+            if(!seenExternKeyword && m_cursor.matchIdentifier("extern")){
+                seenExternKeyword = true;
+                isMemberExtern = true;
+                continue;
+            }
+            break;
+        }
+    }
+
     if(m_cursor.check(TokenType::Identifier)){
         const MStringView prohibitedErr = KeywordSemantics::FindProhibitedMemberKeywordError(m_cursor.current().text, false);
         if(!prohibitedErr.empty()){
@@ -209,11 +246,15 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         return false;
     }
     if(access == AccessSpecifier::None){
-        m_cursor.error("every class member in adhd must explicitly specify 'public', 'private', or 'protected'");
-        return false;
+        if(classDecl.isExtern)
+            access = AccessSpecifier::Public;
+        else{
+            m_cursor.error("every class member in adhd must explicitly specify 'public', 'private', or 'protected'");
+            return false;
+        }
     }
 
-    if(m_cursor.match(TokenType::Tilde)){
+    if(!isMemberStatic && m_cursor.match(TokenType::Tilde)){
         if(!m_cursor.checkIdentifier(classDecl.name)){
             m_cursor.errorExpected("expected class name after '~' for destructor");
             return false;
@@ -225,6 +266,9 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         dtor->ownerClassName = classDecl.name;
         dtor->name = classDecl.name;
         dtor->isDestructor = true;
+        dtor->isImported = isMemberExtern;
+        dtor->isExtern = isMemberExtern;
+        dtor->requiredHeader = classDecl.requiredHeader;
         dtor->span = span;
 
         if(!applyCallableAttributes(attributes, *dtor))
@@ -242,7 +286,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         return true;
     }
 
-    if(m_cursor.checkIdentifier(classDecl.name)){
+    if(!isMemberStatic && m_cursor.checkIdentifier(classDecl.name)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         m_cursor.advance();
         if(m_cursor.check(TokenType::LeftParen)){
@@ -251,6 +295,9 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             ctor->ownerClassName = classDecl.name;
             ctor->name = classDecl.name;
             ctor->isConstructor = true;
+            ctor->isImported = isMemberExtern;
+            ctor->isExtern = isMemberExtern;
+            ctor->requiredHeader = classDecl.requiredHeader;
             ctor->span = span;
 
             if(!applyCallableAttributes(attributes, *ctor))
@@ -259,7 +306,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
                 m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
                 return false;
             }
-            if(!parseConstructorParamsAndRejectInitList(ctor->params))
+            if(!parseConstructorParamsAndRejectInitList(*ctor))
                 return false;
             if(!parseClassMemberCallableBody(*ctor, "expected '{' or ';' after constructor declaration"))
                 return false;
@@ -275,7 +322,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         return false;
     }
 
-    TypeRef* memberType = m_typeParser.parseType(true, false);
+    TypeRef* memberType = m_typeParser.parseType(true, isMemberExtern);
     if(!memberType)
         return false;
 
@@ -285,7 +332,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             return false;
 
         MVector<TemplateParamDecl> emptyTemplateParams(m_cursor.arena());
-        return parseClassMethodOrOperatorTail(classDecl, access, memberType, opName, true, Move(emptyTemplateParams), attributes, span, "expected '{' or ';' after operator declaration");
+        return parseClassMethodOrOperatorTail(classDecl, access, isMemberStatic, isMemberExtern, memberType, opName, true, Move(emptyTemplateParams), attributes, span, "expected '{' or ';' after operator declaration");
     }
 
     if(!m_cursor.check(TokenType::Identifier)){
@@ -324,7 +371,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
                 isMethodSig = true;
             }
             else{
-                TypeRef* maybeParamType = m_typeParser.parseType(false, false);
+                TypeRef* maybeParamType = m_typeParser.parseType(false, isMemberExtern);
                 if(maybeParamType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier))
                     isMethodSig = true;
                 else if(!maybeParamType && (m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))){
@@ -339,7 +386,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.restore(cp);
 
         if(isMethodSig)
-            return parseClassMethodOrOperatorTail(classDecl, access, memberType, memberName, false, Move(methodTemplateParams), attributes, span, "expected '{' or ';' after method declaration");
+            return parseClassMethodOrOperatorTail(classDecl, access, isMemberStatic, isMemberExtern, memberType, memberName, false, Move(methodTemplateParams), attributes, span, "expected '{' or ';' after method declaration");
     }
 
     FieldDecl* field = AllocateAstNode<FieldDecl>(m_cursor.arena());
@@ -348,6 +395,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     field->name = memberName;
     field->span = span;
     field->originalIndex = classDecl.fields.size();
+    field->isStatic = isMemberStatic;
 
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;

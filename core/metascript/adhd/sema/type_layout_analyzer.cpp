@@ -112,8 +112,16 @@ b8 TypeLayoutAnalyzer::isTypeConstructible(const TypeRef& type, const b8 require
         return true;
     const MStringView name = unwrapped->name;
     if(const ClassDecl* cls = m_symbols.findClass(name)){
-        if(!cls->subsystemTypeName.empty() || !cls->systemTypeName.empty())
+        if(!cls->subsystemTypeName.empty() || !cls->systemTypeName.empty() || cls->isAbstract)
             return false;
+        if(cls->isExtern){
+            for(const TypeRef* implIface : cls->implementedInterfaces){
+                if(implIface && interfaceInheritsNoCopy(*implIface))
+                    return false;
+            }
+            if(!(requireCopy ? cls->isCopyConstructible : cls->isMoveConstructible))
+                return false;
+        }
         if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
             for(const TypeRef* implIface : cls->implementedInterfaces){
                 if(implIface && interfaceInheritsNoCopy(*implIface))
@@ -191,18 +199,20 @@ b8 TypeLayoutAnalyzer::isTypeAssignable(const TypeRef& type, const b8 requireCop
 }
 
 b8 TypeLayoutAnalyzer::isClassConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 requireCopy, const u32 depth)const noexcept{
-    if(depth >= 8u || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty())
+    if(depth >= 8u || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
         return false;
     for(const TypeRef* implIface : decl.implementedInterfaces){
         if(implIface && interfaceInheritsNoCopy(*implIface))
             return false;
     }
+    if(decl.isExtern)
+        return requireCopy ? decl.isCopyConstructible : decl.isMoveConstructible;
     for(const MethodDecl* m : decl.methods){
         if(m && m->isDestructor)
             return false;
     }
     for(const FieldDecl* field : fields){
-        if(field && field->type && !isTypeConstructible(*field->type, requireCopy, depth + 1u))
+        if(field && !field->isStatic && field->type && !isTypeConstructible(*field->type, requireCopy, depth + 1u))
             return false;
     }
     return true;
@@ -211,12 +221,14 @@ b8 TypeLayoutAnalyzer::isClassConstructible(const ClassDecl& decl, const Span<co
 b8 TypeLayoutAnalyzer::isClassAssignableImpl(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 requireCopy, const u32 depth)const noexcept{
     if(!isClassConstructible(decl, fields, requireCopy, depth))
         return false;
+    if(decl.isExtern)
+        return requireCopy ? decl.isCopyAssignable : decl.isMoveAssignable;
     for(const MethodDecl* m : decl.methods){
         if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
             return false;
     }
     for(const FieldDecl* field : fields){
-        if(field && field->type && !isTypeAssignable(*field->type, requireCopy, depth + 1u))
+        if(field && !field->isStatic && field->type && !isTypeAssignable(*field->type, requireCopy, depth + 1u))
             return false;
     }
     return true;

@@ -79,6 +79,11 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
         m_app.add_option(s_PipelineDepfileOption.data(), m_depfilePath, "Output Makefile-style dependency file");
         m_app.add_option(s_PipelineNamespaceOption.data(), m_customNamespace, "Generated C++ enclosing namespace");
         m_app.add_option(s_PipelineNamespaceMapOption.data(), m_namespaceMapPath, "Optional tab-delimited map of source paths to C++ namespaces");
+        m_app.add_option(s_PipelineCppHeaderOption.data(), m_cppHeaders, "Pre-imported C++ header paths");
+        m_app.add_option(s_PipelineCppIncludeDirOption.data(), m_cppIncludeDirectories, "C++ header include search directories");
+        m_app.add_option(s_PipelineCppDefineOption.data(), m_cppDefines, "C++ preprocessor macro definitions for imported headers");
+        m_app.add_option(s_PipelineCppArgOption.data(), m_cppCompilerArgs, "Additional Clang compiler arguments for imported headers");
+        m_app.add_option(s_PipelineEmitCppExternsOption.data(), m_emitCppExternsPath, "Output file path for generated C++ extern ADHD declarations");
     }
 }
 
@@ -95,11 +100,16 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         !__hidden_pipeline_command_line::AssignInputs(m_inputs, options.inputs)
         || !__hidden_pipeline_command_line::AssignInputs(m_assetRoots, options.assetRoots)
         || !__hidden_pipeline_command_line::AssignInputs(m_includeDirectories, options.includeDirectories)
+        || !__hidden_pipeline_command_line::AssignInputs(m_cppHeaders, options.cppHeaders)
+        || !__hidden_pipeline_command_line::AssignInputs(m_cppIncludeDirectories, options.cppIncludeDirectories)
+        || !__hidden_pipeline_command_line::AssignInputs(m_cppDefines, options.cppDefines)
+        || !__hidden_pipeline_command_line::AssignInputs(m_cppCompilerArgs, options.cppCompilerArgs)
         || !__hidden_pipeline_command_line::AssignText(m_repoRoot, options.repoRoot)
         || !__hidden_pipeline_command_line::AssignText(m_outputPath, options.outputPath)
         || !__hidden_pipeline_command_line::AssignText(m_depfilePath, options.depfilePath)
         || !__hidden_pipeline_command_line::AssignText(m_customNamespace, options.customNamespace)
         || !__hidden_pipeline_command_line::AssignText(m_namespaceMapPath, options.namespaceMapPath)
+        || !__hidden_pipeline_command_line::AssignText(m_emitCppExternsPath, options.emitCppExternsPath)
     )
         return MakeUnexpected(Failure{});
     if(options.outputPath.empty()){

@@ -9,6 +9,194 @@ import tempfile
 import time
 
 
+def ninja_escape(path: pathlib.Path) -> str:
+    return path.as_posix().replace("$", "$$").replace(" ", "$ ").replace(":", "$:")
+
+
+def run_cpp_import_cli_tests(compiler: pathlib.Path, root: pathlib.Path, ninja: str | None) -> None:
+    cpp_root = root / "cpp_import_cli"
+    cpp_inc = cpp_root / "inc"
+    sdk_dir = cpp_inc / "sdk"
+    cpp_src = cpp_root / "src"
+    cpp_out = cpp_root / "out"
+    sdk_dir.mkdir(parents=True)
+    cpp_src.mkdir(parents=True)
+
+    detail_header = sdk_dir / "widget_detail.h"
+    detail_header.write_text(
+        "#pragma once\n"
+        "namespace CliDemo{\n"
+        "enum class Mode : unsigned int{\n"
+        "    Off = 0u,\n"
+        "    On = 1u\n"
+        "};\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    widget_header = sdk_dir / "widget.h"
+    widget_header.write_text(
+        "#pragma once\n"
+        '#include "widget_detail.h"\n'
+        "#if defined(NWB_CLI_ENABLE_WIDGET) && defined(NWB_CLI_EXTRA_FLAG) && (NWB_CLI_SCALE == 3)\n"
+        "namespace CliDemo{\n"
+        "class Widget{\n"
+        "public:\n"
+        "    unsigned int count() const;\n"
+        "    Mode mode() const;\n"
+        "};\n"
+        "inline unsigned int ComputeValue(const unsigned int x){ return x * NWB_CLI_SCALE; }\n"
+        "}\n"
+        "#endif\n",
+        encoding="utf-8",
+    )
+
+    consumer = cpp_src / "consumer.adhd"
+    consumer.write_text(
+        "u32 ExerciseCliImport(in Widget widget){\n"
+        "    const Mode m = widget.mode();\n"
+        "    const u32 c = widget.count();\n"
+        "    if(m == Mode::On)\n"
+        "        return ComputeValue(c);\n"
+        "    return 0u;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    cpp_depfile = cpp_root / "consumer.d"
+    emitted_externs = cpp_root / "emitted.extern.adhd"
+
+    command = [
+        str(compiler),
+        "--input",
+        str(consumer),
+        "--output",
+        str(cpp_out),
+        "--depfile",
+        str(cpp_depfile),
+        "--cpp-header",
+        "sdk/widget.h",
+        "--cpp-include-dir",
+        str(cpp_inc),
+        "--cpp-define",
+        "NWB_CLI_ENABLE_WIDGET=1",
+        "--cpp-arg",
+        "-DNWB_CLI_EXTRA_FLAG",
+        "--cpp-arg",
+        "-DNWB_CLI_SCALE=3",
+        "--emit-cpp-externs",
+        str(emitted_externs),
+    ]
+    result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+    if result.returncode != 0:
+        raise AssertionError(f"--cpp-header compilation failed: {result.stdout}\n{result.stderr}")
+
+    gen_header = (cpp_out / "consumer.adhd.h").read_text(encoding="utf-8")
+    gen_source = (cpp_out / "consumer.adhd.cpp").read_text(encoding="utf-8")
+    if "#include <sdk/widget.h>" not in gen_header or "::CliDemo::Widget" not in gen_header:
+        raise AssertionError(f"generated header missing imported C++ includes/types:\n{gen_header}")
+    if "::CliDemo::Mode::On" not in gen_source or "::CliDemo::ComputeValue" not in gen_source:
+        raise AssertionError(f"generated source missing imported C++ symbols:\n{gen_source}")
+
+    externs_text = emitted_externs.read_text(encoding="utf-8")
+    if 'cpp_header("sdk/widget.h")' not in externs_text or 'extern "' in externs_text:
+        raise AssertionError(f"unexpected emitted externs content:\n{externs_text}")
+    if "ComputeValue" not in externs_text or "Widget" not in externs_text:
+        raise AssertionError(f"emitted externs missing imported declarations:\n{externs_text}")
+
+    dep_text = cpp_depfile.read_text(encoding="utf-8").replace("\\", "/").replace("/:/", ":/")
+    if widget_header.as_posix().lower() not in dep_text.lower() or detail_header.as_posix().lower() not in dep_text.lower():
+        raise AssertionError(f"depfile missing imported C++ headers:\n{dep_text}")
+
+    if ninja:
+        generated = (cpp_out / "consumer.adhd.h", cpp_out / "consumer.adhd.cpp")
+        for path in generated:
+            path.unlink()
+        touch = "; ".join(f"open(r'{path.as_posix()}', 'a').close()" for path in generated)
+        command_text = f'"{sys.executable}" -c "{touch}"'.replace("$", "$$")
+        manifest = cpp_root / "build_cpp_dep.ninja"
+        manifest.write_text(
+            f"rule generate\n  command = {command_text}\n  depfile = {ninja_escape(cpp_depfile)}\n  deps = gcc\n"
+            f"build {' '.join(ninja_escape(path) for path in generated)}: generate\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run([ninja, "-f", str(manifest)], cwd=cpp_root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+        if result.returncode != 0:
+            raise AssertionError(f"Ninja failed on C++ depfile manifest: {result.stdout}\n{result.stderr}")
+        result = subprocess.run([ninja, "-f", str(manifest), "-t", "deps", str(generated[0])], cwd=cpp_root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+        deps_out = result.stdout.replace("\\", "/").lower() if os.name == "nt" else result.stdout
+        expected = (consumer, widget_header, detail_header)
+        if result.returncode != 0 or any((p.as_posix().lower() if os.name == "nt" else p.as_posix()) not in deps_out for p in expected):
+            raise AssertionError(f"Ninja -t deps missing imported C++ header deps:\n{result.stdout}\n{result.stderr}")
+        timestamp = generated[0].stat().st_mtime_ns + 2_000_000_000
+        os.utime(detail_header, ns=(timestamp, timestamp))
+        result = subprocess.run([ninja, "-f", str(manifest)], cwd=cpp_root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+        if result.returncode != 0 or "[1/1]" not in result.stdout:
+            raise AssertionError(f"Ninja did not rebuild after transitive C++ header changed: {result.stdout}\n{result.stderr}")
+
+    standalone = cpp_src / "standalone.adhd"
+    standalone.write_text(
+        '#include "emitted.extern.adhd"\n'
+        "u32 UseEmitted(in Widget w){\n"
+        "    if(w.mode() == Mode::Off)\n"
+        "        return 0u;\n"
+        "    return ComputeValue(w.count());\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    standalone_out = cpp_root / "standalone_out"
+    result = subprocess.run(
+        [str(compiler), "--input", str(standalone), "--output", str(standalone_out), "--include-dir", str(cpp_root)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(f"standalone compile with emitted externs failed: {result.stdout}\n{result.stderr}")
+    standalone_hdr = (standalone_out / "standalone.adhd.h").read_text(encoding="utf-8")
+    standalone_cpp = (standalone_out / "standalone.adhd.cpp").read_text(encoding="utf-8")
+    if "#include <sdk/widget.h>" not in standalone_hdr or "::CliDemo::ComputeValue" not in (standalone_hdr + standalone_cpp):
+        raise AssertionError("standalone compile did not emit C++ include/call from emitted externs")
+
+    err_other = cpp_src / "other.adhd"
+    err_other.write_text("", encoding="utf-8")
+    err_out = cpp_root / "err_out"
+    err_out.mkdir()
+    sentinel_hdr = err_out / "consumer.adhd.h"
+    sentinel_cpp = err_out / "consumer.adhd.cpp"
+    sentinel_ext = cpp_root / "sentinel.extern.adhd"
+    sentinel_hdr.write_text("hdr sentinel", encoding="utf-8")
+    sentinel_cpp.write_text("cpp sentinel", encoding="utf-8")
+    sentinel_ext.write_text("ext sentinel", encoding="utf-8")
+
+    multi_emit = subprocess.run(
+        [str(compiler), "--input", str(consumer), "--input", str(err_other), "--output", str(err_out), "--emit-cpp-externs", str(sentinel_ext)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    if multi_emit.returncode == 0 or "single input file" not in multi_emit.stdout + multi_emit.stderr:
+        raise AssertionError(f"--emit-cpp-externs with multiple inputs did not fail cleanly: {multi_emit.stdout}\n{multi_emit.stderr}")
+    if sentinel_hdr.read_text(encoding="utf-8") != "hdr sentinel" or sentinel_cpp.read_text(encoding="utf-8") != "cpp sentinel" or sentinel_ext.read_text(encoding="utf-8") != "ext sentinel":
+        raise AssertionError("--emit-cpp-externs error mutated sentinel files")
+
+    missing_hdr = subprocess.run(
+        [str(compiler), "--input", str(err_other), "--output", str(err_out), "--cpp-header", "nonexistent/missing.h"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    if missing_hdr.returncode == 0 or sentinel_hdr.read_text(encoding="utf-8") != "hdr sentinel" or sentinel_cpp.read_text(encoding="utf-8") != "cpp sentinel":
+        raise AssertionError(f"missing --cpp-header did not fail without touching sentinels: {missing_hdr.stdout}\n{missing_hdr.stderr}")
+
+
 def main() -> None:
     compiler = pathlib.Path(sys.argv[1]).resolve()
     with tempfile.TemporaryDirectory(prefix="nwb_adhd_include_") as name:
@@ -163,8 +351,6 @@ def main() -> None:
             dep_include = special / "shared #$.adhd"
             dep_input.write_text('#include "shared #$.adhd"\n', encoding="utf-8")
             dep_include.write_text("", encoding="utf-8")
-            def ninja_escape(path: pathlib.Path) -> str:
-                return path.as_posix().replace("$", "$$").replace(" ", "$ ").replace(":", "$:")
 
             def make_escape(path: pathlib.Path) -> str:
                 text = path.as_posix()
@@ -291,6 +477,8 @@ def main() -> None:
                         raise AssertionError("unsafe terminal depfile path changed existing outputs")
         else:
             print("SKIP: Ninja depfile consumption check (Ninja not available)")
+
+        run_cpp_import_cli_tests(compiler, root, ninja)
 
 
 if __name__ == "__main__":

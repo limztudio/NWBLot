@@ -13,6 +13,7 @@
 #include "borrow_lifetime_analyzer.h"
 #include "lambda_capture_analyzer.h"
 #include "last_use_move_analyzer.h"
+#include "type_layout_analyzer.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,6 +84,28 @@ b8 TypeChecker::checkStatementList(ClassDecl* ownerClass, MethodDecl& method, MV
     }
 
     LastUseMoveAnalyzer(m_symbols).analyze(statements, scope, savedScopeSize);
+    const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+    for(const Stmt* stmt : statements){
+        if(!stmt || stmt->kind != StmtKind::VarDecl || !stmt->expr)
+            continue;
+        const ParamPassingMode::Enum declRefMode = stmt->varType ? stmt->varType->refMode : ParamPassingMode::None;
+        if(declRefMode != ParamPassingMode::None)
+            continue;
+        const TypeRef* effectiveType = (stmt->varType && stmt->varType->isAuto && stmt->inferredAutoType)
+            ? stmt->inferredAutoType
+            : stmt->varType;
+        if(!effectiveType || effectiveType->refMode != ParamPassingMode::None)
+            continue;
+        if(isRvalueTemporaryExpr(ownerClass, &method, *stmt->expr, scope))
+            continue;
+        const b8 requireCopy = !stmt->expr->moveAtLastUse;
+        if(!layoutAnalyzer.isTypeConstructible(*effectiveType, requireCopy)){
+            reportError(errors, stmt->span, requireCopy
+                ? "cannot copy a non-copyable type"
+                : "cannot move or copy a non-constructible type");
+            ok = false;
+        }
+    }
     while(scope.size() > savedScopeSize)
         scope.pop_back();
 

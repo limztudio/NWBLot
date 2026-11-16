@@ -130,6 +130,7 @@ struct Expr{
     MStringView resolvedUnalignedType;
     MStringView resolvedScalarType;
     MStringView resolvedCppNamespace;
+    MStringView resolvedCppExportName;
     Expr* lhs = nullptr;
     Expr* rhs = nullptr;
     TypeRef* targetType = nullptr;

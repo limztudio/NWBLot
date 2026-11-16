@@ -99,6 +99,35 @@ template<typename T>
     return ::new(mem) T(arena);
 }
 
+inline void CopyArenaChars(MChar* dst, const MStringView text)noexcept{
+    for(usize i = 0u; i < text.size(); ++i)
+        dst[i] = text[i];
+}
+
+[[nodiscard]] inline MStringView InternArenaString(MetaArena& arena, const MStringView text){
+    if(text.empty())
+        return {};
+    auto* buf = static_cast<MChar*>(arena.allocate(alignof(MChar), text.size() + 1u));
+    CopyArenaChars(buf, text);
+    buf[text.size()] = '\0';
+    return MStringView(buf, text.size());
+}
+
+[[nodiscard]] inline MStringView JoinScopedCppName(MetaArena& arena, const MStringView scope, const MStringView member){
+    if(scope.empty())
+        return InternArenaString(arena, member);
+    if(member.empty())
+        return InternArenaString(arena, scope);
+    const usize totalLen = scope.size() + 2u + member.size();
+    auto* buf = static_cast<MChar*>(arena.allocate(alignof(MChar), totalLen + 1u));
+    CopyArenaChars(buf, scope);
+    buf[scope.size()] = ':';
+    buf[scope.size() + 1u] = ':';
+    CopyArenaChars(buf + scope.size() + 2u, member);
+    buf[totalLen] = '\0';
+    return MStringView(buf, totalLen);
+}
+
 [[nodiscard]] constexpr b8 HasAdhdExtension(const MStringView path)noexcept{
     return path.size() > 5u && path.substr(path.size() - 5u) == ".adhd";
 }

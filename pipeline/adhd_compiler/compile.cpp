@@ -339,11 +339,16 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     using namespace Core::Metascript;
 
     MetaArena& arena = options.inputs.get_allocator().arena();
+    if(!options.emitCppExternsPath.empty() && options.inputs.size() > 1u){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: --emit-cpp-externs requires a single input file"));
+        return false;
+    }
+
     const Path<MetaArena> outDir(arena, options.outputDirectory);
     MVector<Path<MetaArena>> inputPaths(arena);
     MVector<Path<MetaArena>> outputPaths(arena);
     inputPaths.reserve(options.inputs.size());
-    outputPaths.reserve(options.inputs.size() * 2u + (options.depfilePath.empty() ? 0u : 1u));
+    outputPaths.reserve(options.inputs.size() * 2u + (options.emitCppExternsPath.empty() ? 0u : 1u) + (options.depfilePath.empty() ? 0u : 1u));
     for(const MString& input : options.inputs){
         auto absoluteInput = ResolveComparisonPath(Path<MetaArena>(arena, input));
         auto absoluteHeader = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena)));
@@ -386,6 +391,24 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
                 return false;
         }
     }
+    Path<MetaArena> emitCppExternsOutPath(arena);
+    if(!options.emitCppExternsPath.empty()){
+        auto externsPath = ResolveComparisonPath(Path<MetaArena>(arena, options.emitCppExternsPath));
+        if(!externsPath){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve externs output path '{}': {}"), ConvertString(options.emitCppExternsPath), ConvertString(externsPath.error().message()));
+            return false;
+        }
+        for(const auto& input : inputPaths){
+            if(conflictingPaths(*externsPath, input))
+                return false;
+        }
+        for(const auto& output : outputPaths){
+            if(conflictingPaths(*externsPath, output))
+                return false;
+        }
+        emitCppExternsOutPath = *externsPath;
+        outputPaths.push_back(Move(*externsPath));
+    }
     if(!options.depfilePath.empty()){
         auto depfile = ResolveComparisonPath(Path<MetaArena>(arena, options.depfilePath));
         if(!depfile){
@@ -405,6 +428,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
 
     const MStringView customNs = options.customNamespace;
     MString combinedDepContent(arena);
+    MString emittedCppExterns(arena);
     MVector<MString> generatedHeaders(arena);
     MVector<MString> generatedSources(arena);
     generatedHeaders.reserve(options.inputs.size());
@@ -433,8 +457,28 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         __hidden_compile::FilesystemIncludeResolver resolver(parentDir, options.includeDirectories, activeNamespaceMap, arena);
         const MString virtualPath = __hidden_compile::DeriveVirtualCompilePath(inputPath, inputPaths[inputIndex], inputView, options.includeDirectories, arena);
 
+        MVector<MString> cppIncludeDirs(arena);
+        cppIncludeDirs.reserve(options.cppIncludeDirectories.size() + 1u);
+        for(const MString& dir : options.cppIncludeDirectories)
+            cppIncludeDirs.push_back(dir);
+        MString inputParentText = PathToGenericString<MChar>(arena, parentDir);
+        if(!inputParentText.empty())
+            cppIncludeDirs.push_back(Move(inputParentText));
+
+        Adhd::Compiler::CompileOptions compileOpts;
+        compileOpts.source = sourceContent;
+        compileOpts.virtualFilePath = virtualPath;
+        compileOpts.includeResolver = &resolver;
+        compileOpts.customNamespace = customNs;
+        compileOpts.cppHeaders = options.cppHeaders;
+        compileOpts.cppIncludeDirectories = cppIncludeDirs;
+        compileOpts.cppDefines = options.cppDefines;
+        compileOpts.cppCompilerArgs = options.cppCompilerArgs;
+        if(!options.emitCppExternsPath.empty())
+            compileOpts.outEmittedCppExterns = &emittedCppExterns;
+
         Adhd::CompileResult result(arena);
-        if(!Adhd::Compiler::Compile(sourceContent, virtualPath, &resolver, customNs, {}, arena, result)){
+        if(!Adhd::Compiler::Compile(compileOpts, arena, result)){
             for(const ParseError& err : result.errors)
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}:{}:{}: error: {}"), ConvertString(inputView), err.line, err.column, ConvertString(err.message));
             return false;
@@ -499,6 +543,13 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create output directory '{}'"), ConvertString(options.outputDirectory));
         return false;
     }
+    if(!options.emitCppExternsPath.empty()){
+        const Path<MetaArena> externsParent = emitCppExternsOutPath.parentPath();
+        if(!externsParent.empty() && !EnsureDirectories(externsParent)){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to create output directory for '{}'"), ConvertString(options.emitCppExternsPath));
+            return false;
+        }
+    }
     if(!options.depfilePath.empty()){
         const Path<MetaArena> depfileParent = outputPaths.back().parentPath();
         if(!depfileParent.empty() && !EnsureDirectories(depfileParent)){
@@ -514,10 +565,12 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         outputContents.push_back(generatedHeaders[i]);
         outputContents.push_back(generatedSources[i]);
     }
+    if(!options.emitCppExternsPath.empty())
+        outputContents.push_back(emittedCppExterns);
     if(!options.depfilePath.empty())
         outputContents.push_back(combinedDepContent);
 
-    AdhdOutputTransaction transaction(arena, outputPaths, outputContents, options.inputs, options.depfilePath);
+    AdhdOutputTransaction transaction(arena, outputPaths, outputContents, options.inputs, options.depfilePath, options.emitCppExternsPath);
     return transaction.publish();
 }
 

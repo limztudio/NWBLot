@@ -103,6 +103,8 @@ struct Stmt{
     MVector<NativeBinding> nativeBindings;
     MStringView nativeCode;
     MStringView cppNamespace;
+    MStringView cppExportName;
+    MStringView requiredHeader;
 
     ParallelCoreKind::Enum parallelCore = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum parallelPriority = ParallelPriorityKind::Normal;
@@ -116,6 +118,7 @@ struct Stmt{
     b8 arenaFirstInit = false;
     b8 wrapReturnNotNull = false;
     b8 isImported = false;
+    b8 isExtern = false;
 
 
 public:

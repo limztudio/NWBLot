@@ -34,5 +34,16 @@ target_sources(nwb_metascript PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/adhd/*/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/adhd/*/*.ixx"
 )
-target_link_libraries(nwb_metascript PUBLIC nwb_alloc nwb::tbb)
+target_link_libraries(nwb_metascript
+    PUBLIC
+        nwb_alloc
+        nwb::tbb
+    PRIVATE
+        nwb::libclang
+)
+target_compile_definitions(nwb_metascript
+    PRIVATE
+        NWB_PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+)
+nwb_apply_libclang_runtime(nwb_metascript)
 

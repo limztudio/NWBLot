@@ -238,9 +238,10 @@ const MethodDecl* SymbolTable::findClassMethod(
     const b8 preferConst,
     const b8 requirePublic,
     const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
+    const Span<const u8> argIsMut,
+    const b8 staticOnly
 )const noexcept{
-    return CallableOverloadSelector::FindScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
+    return CallableOverloadSelector::FindScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut, staticOnly);
 }
 
 const MethodDecl* SymbolTable::findClassOperator(
@@ -381,11 +382,14 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
     }
     const MStringView baseName = resolveBaseTypeName(typeName);
     if(const ClassDecl* cls = findClass(baseName)){
+        if(cls->isExtern && cls->isAbstract)
+            return false;
         b8 hasAnyCtor = false;
         for(const MethodDecl* m : cls->methods){
             if(m && m->isConstructor){
                 hasAnyCtor = true;
-                if(m->params.empty() && (callerClass == cls || m->access == AccessSpecifier::Public))
+                const b8 allowsZeroArgs = m->params.empty() || (m->hasDefaultArgs && m->minArgCount == 0u);
+                if(allowsZeroArgs && (callerClass == cls || m->access == AccessSpecifier::Public))
                     return true;
             }
         }
@@ -439,6 +443,8 @@ b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
 
 b8 SymbolTable::isAbstractBuiltinType(const MStringView name)const noexcept{
     const MStringView baseName = resolveBaseTypeName(name);
+    if(const ClassDecl* cls = findClass(baseName); cls && cls->isAbstract)
+        return true;
     if(hasTypeSymbol(baseName))
         return false;
     if(IsNonCopyableBaseInterfaceName(baseName))

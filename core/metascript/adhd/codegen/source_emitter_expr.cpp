@@ -126,6 +126,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         else{
             if(const BuiltinGlobalConstantInfo* globalConst = expr.isBuiltinConstant ? FindBuiltinGlobalConstant(expr.text) : nullptr)
                 out.append(globalConst->cppExportName.data(), globalConst->cppExportName.size());
+            else if(!expr.resolvedCppExportName.empty())
+                out.append(expr.resolvedCppExportName.data(), expr.resolvedCppExportName.size());
             else
                 m_typeEmitter.appendQualifiedName(out, expr.resolvedCppNamespace, expr.text);
         }
@@ -183,7 +185,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("->");
         else
             out.push_back('.');
-        out.append(expr.text.data(), expr.text.size());
+        const MStringView memberText = !expr.resolvedCppExportName.empty() ? expr.resolvedCppExportName : expr.text;
+        out.append(memberText.data(), memberText.size());
         if(expr.derefNotNull)
             out.append("))");
         break;
@@ -202,6 +205,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.append(expr.scopeChain[1].data(), expr.scopeChain[1].size());
                 break;
             }
+        }
+        if(!expr.resolvedCppExportName.empty()){
+            out.append(expr.resolvedCppExportName.data(), expr.resolvedCppExportName.size());
+            break;
         }
         for(usize i = 0u; i < expr.scopeChain.size(); ++i){
             if(i > 0u)
@@ -600,7 +607,10 @@ void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 i
         return;
     if(lhs->kind == ExprKind::Identifier){
         if(isUserCallableCall){
-            m_typeEmitter.appendQualifiedName(out, lhs->resolvedCppNamespace, lhs->text);
+            if(!lhs->resolvedCppExportName.empty())
+                out.append(lhs->resolvedCppExportName.data(), lhs->resolvedCppExportName.size());
+            else
+                m_typeEmitter.appendQualifiedName(out, lhs->resolvedCppNamespace, lhs->text);
             if(!callTemplateArgs.empty())
                 m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
             return;

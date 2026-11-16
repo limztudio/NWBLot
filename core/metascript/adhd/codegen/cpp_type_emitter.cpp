@@ -109,13 +109,23 @@ void CppTypeEmitter::emitConstantTextCpp(MString& out, const MStringView text)co
             const b8 isQualifiedRight = (start >= 2u && text[start - 1u] == ':' && text[start - 2u] == ':') || (start >= 1u && text[start - 1u] == '.');
             if(!isQualifiedRight){
                 if(i + 1u < text.size() && text[i] == ':' && text[i + 1u] == ':'){
+                    if(const EnumDecl* enumDecl = m_symbols.findEnum(token); enumDecl && !enumDecl->cppExportName.empty()){
+                        MStringView scopeName = enumDecl->cppExportName;
+                        if(!enumDecl->isDirectCppEnum && scopeName.size() > 6u && (scopeName.ends_with("::Enum") || scopeName.ends_with("::Flag")))
+                            scopeName.remove_suffix(6u);
+                        out.append(scopeName.data(), scopeName.size());
+                        continue;
+                    }
                     if(const MStringView ns = m_symbols.findTypeNamespace(token); !ns.empty()){
                         appendQualifiedName(out, ns, token);
                         continue;
                     }
                 }
                 else if(const Stmt* gc = m_symbols.findGlobalConstant(token)){
-                    appendQualifiedName(out, gc->cppNamespace, token);
+                    if(!gc->cppExportName.empty())
+                        out.append(gc->cppExportName.data(), gc->cppExportName.size());
+                    else
+                        appendQualifiedName(out, gc->cppNamespace, token);
                     continue;
                 }
             }
@@ -179,12 +189,26 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
 
     const MStringView name = type.name;
     if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
+        if(!enumDecl->cppExportName.empty()){
+            out.append(enumDecl->cppExportName.data(), enumDecl->cppExportName.size());
+            return;
+        }
         appendQualifiedName(out, enumDecl->cppNamespace, name);
         out.append(enumDecl->isFlag ? "::Flag" : "::Enum");
         return;
     }
     if(m_symbols.hasTypeSymbol(name)){
-        appendQualifiedName(out, m_symbols.findTypeNamespace(name), name);
+        MStringView cppExport;
+        if(const ClassDecl* cls = m_symbols.findClass(name))
+            cppExport = cls->cppExportName;
+        else if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(name))
+            cppExport = aliasDecl->cppExportName;
+        else if(const InterfaceDecl* iface = m_symbols.findInterface(name))
+            cppExport = iface->cppExportName;
+        if(!cppExport.empty())
+            out.append(cppExport.data(), cppExport.size());
+        else
+            appendQualifiedName(out, m_symbols.findTypeNamespace(name), name);
         if(!type.templateArgs.empty())
             emitTypeArgListCpp(out, type.templateArgs);
         return;

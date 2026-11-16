@@ -35,8 +35,12 @@ struct EnumDecl{
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
     MStringView cppNamespace;
+    MStringView cppExportName;
+    MStringView requiredHeader;
     b8 isFlag = false;
     b8 isImported = false;
+    b8 isExtern = false;
+    b8 isDirectCppEnum = false;
 
 
 public:
@@ -55,7 +59,10 @@ struct TypeAliasDecl{
     TypeRef* aliasedType = nullptr;
     SourceSpan span;
     MStringView cppNamespace;
+    MStringView cppExportName;
+    MStringView requiredHeader;
     b8 isImported = false;
+    b8 isExtern = false;
 
 
 public:
@@ -84,6 +91,7 @@ struct FieldDecl{
     b8 arenaFirstDefaultInit = false;
     b8 isTransient = false;
     b8 isReflect = false;
+    b8 isStatic = false;
 
 
 public:
@@ -121,7 +129,14 @@ struct MethodDecl{
     b8 injectsCallerArena = false;
     b8 hasSynthesizedArenaParams = false;
     MStringView cppNamespace;
+    MStringView cppExportName;
+    MStringView requiredHeader;
+    usize minArgCount = 0u;
+    b8 hasDefaultArgs = false;
+    b8 isStatic = false;
+    b8 returnsReference = false;
     b8 isImported = false;
+    b8 isExtern = false;
 
 
 public:
@@ -146,7 +161,10 @@ struct InterfaceDecl{
     MStringView assetTypeName;
     SourceSpan span;
     MStringView cppNamespace;
+    MStringView cppExportName;
+    MStringView requiredHeader;
     b8 isImported = false;
+    b8 isExtern = false;
 
 
 public:
@@ -180,7 +198,17 @@ struct ClassDecl{
     b8 isArenaOwner = false;
     b8 needsClassArena = false;
     MStringView cppNamespace;
+    MStringView cppExportName;
+    MStringView requiredHeader;
     b8 isImported = false;
+    b8 isExtern = false;
+    b8 isAbstract = false;
+    b8 isCopyConstructible = true;
+    b8 isMoveConstructible = true;
+    b8 isCopyAssignable = true;
+    b8 isMoveAssignable = true;
+    b8 hasExplicitDestructor = false;
+    b8 hasExplicitLayout = false;
 
 
 public:
@@ -225,6 +253,16 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ImportedCppHeader{
+    MStringView headerPath;
+    SourceSpan span;
+    b8 isSystemHeader = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TranslationUnit{
     // Substituted type views borrow these stable strings for the unit's lifetime.
     List<MString, MetaArena> substitutedConstantTexts;
@@ -241,6 +279,7 @@ struct TranslationUnit{
     MVector<ClassTemplateInstantiation*> templateInstantiations;
     MVector<MethodDecl*> freeFunctions;
     MVector<MethodDecl*> outOfLineMethods;
+    MVector<ImportedCppHeader> importedCppHeaders;
     b8 hasImportedNativeBlocks = false;
 
 
@@ -260,6 +299,7 @@ public:
         , templateInstantiations(arena)
         , freeFunctions(arena)
         , outOfLineMethods(arena)
+        , importedCppHeaders(arena)
     {}
 };
 

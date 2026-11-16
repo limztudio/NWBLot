@@ -73,6 +73,56 @@ MStringView DeclParser::currentTokenImportedNamespace()const noexcept{
     return m_preprocessor->resolveIncludedNamespaceAtOffset(offset);
 }
 
+b8 DeclParser::tryParseExternAttribute(const ParsedAttribute& attr, MStringView& outCppExportName, MStringView& outRequiredHeader, const b8 isExtern, b8& outMatched){
+    outMatched = false;
+    const b8 isCppName = (attr.name == "cpp_name");
+    const b8 isCppHeader = (attr.name == "cpp_header");
+    if(!isCppName && !isCppHeader)
+        return true;
+
+    if(!isExtern){
+        m_cursor.error(attr.line, attr.column, "'[cpp_name(...)]' and '[cpp_header(...)]' are only permitted on 'extern' declarations");
+        return false;
+    }
+    if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral || attr.arguments[0].text.empty()){
+        m_cursor.error(attr.line, attr.column, isCppName
+            ? "'[cpp_name(\"...\")]' requires a single non-empty string literal argument"
+            : "'[cpp_header(\"...\")]' requires a single non-empty string literal argument");
+        return false;
+    }
+
+    if(isCppName){
+        if(!outCppExportName.empty()){
+            m_cursor.error(attr.line, attr.column, "duplicate '[cpp_name]' attribute");
+            return false;
+        }
+        outCppExportName = attr.arguments[0].text;
+    }
+    else{
+        if(!outRequiredHeader.empty()){
+            m_cursor.error(attr.line, attr.column, "duplicate '[cpp_header]' attribute");
+            return false;
+        }
+        const MStringView rawHdr = attr.arguments[0].text;
+        const b8 alreadyDelimited = rawHdr.size() >= 2u
+            && ((rawHdr.front() == '<' && rawHdr.back() == '>') || (rawHdr.front() == '"' && rawHdr.back() == '"'));
+        if(alreadyDelimited){
+            outRequiredHeader = rawHdr;
+        }
+        else{
+            const usize wrappedLen = rawHdr.size() + 2u;
+            MChar* buf = static_cast<MChar*>(m_cursor.arena().allocate(alignof(MChar), wrappedLen));
+            buf[0] = '<';
+            CopyMemory(buf + 1u, rawHdr.data(), rawHdr.size());
+            buf[wrappedLen - 1u] = '>';
+            outRequiredHeader = MStringView(buf, wrappedLen);
+        }
+    }
+
+    outMatched = true;
+    return true;
+}
+
 b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     const b8 isImported = isCurrentTokenImported();
     const MStringView importedNamespace = isImported ? currentTokenImportedNamespace() : MStringView{};
@@ -82,6 +132,36 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return false;
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
+    const b8 isExtern = m_cursor.matchIdentifier("extern");
+
+    if(isExtern && m_cursor.check(TokenType::StringLiteral)){
+        if(!attributes.empty()){
+            m_cursor.error(span.line, span.column, "attributes are not permitted on 'extern \"<header>\"' import directives");
+            return false;
+        }
+        const MStringView rawHeader = m_cursor.current().text;
+        m_cursor.advance();
+        if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'extern \"...\"' header import"))
+            return false;
+
+        MStringView inner = rawHeader;
+        if(inner.size() >= 2u && inner.front() == '"' && inner.back() == '"')
+            inner = inner.substr(1u, inner.size() - 2u);
+        const b8 hasAngles = inner.size() >= 2u && inner.front() == '<' && inner.back() == '>';
+        if(hasAngles)
+            inner = inner.substr(1u, inner.size() - 2u);
+        if(inner.empty()){
+            m_cursor.error(span.line, span.column, "C++ header path in 'extern \"...\"' cannot be empty");
+            return false;
+        }
+
+        ImportedCppHeader hdr;
+        hdr.headerPath = rawHeader;
+        hdr.span = span;
+        hdr.isSystemHeader = hasAngles;
+        outUnit.importedCppHeaders.push_back(hdr);
+        return true;
+    }
 
     if(m_cursor.check(TokenType::Identifier)){
         const MStringView prohibitedErr = KeywordSemantics::FindProhibitedTopLevelKeywordError(m_cursor.current().text);
@@ -92,6 +172,10 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("native")){
+        if(isExtern){
+            m_cursor.error(span.line, span.column, "'extern' cannot be applied to 'native' blocks");
+            return false;
+        }
         b8 hasExplicitTarget = false;
         b8 explicitIsSource = false;
         for(const ParsedAttribute& attr : attributes){
@@ -131,25 +215,38 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("const")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on file-level 'const' declarations");
-            return false;
+        MStringView extCppExportName;
+        MStringView extRequiredHeader;
+        for(const ParsedAttribute& attr : attributes){
+            b8 matchedExtern = false;
+            if(!tryParseExternAttribute(attr, extCppExportName, extRequiredHeader, isExtern, matchedExtern))
+                return false;
+            if(!matchedExtern){
+                m_cursor.error(span.line, span.column, isExtern
+                    ? "unsupported attribute on 'extern const' declaration; only '[cpp_name(\"...\")]' and '[cpp_header(\"...\")]' are permitted"
+                    : "attributes are not permitted on file-level 'const' declarations");
+                return false;
+            }
         }
-        Stmt* stmt = m_stmtParser.parseConstDeclaration(span);
+        Stmt* stmt = m_stmtParser.parseConstDeclaration(span, isExtern);
         if(!stmt)
             return false;
         stmt->cppNamespace = importedNamespace;
-        stmt->isImported = isImported;
+        stmt->cppExportName = extCppExportName;
+        stmt->requiredHeader = extRequiredHeader;
+        stmt->isImported = isImported || isExtern;
+        stmt->isExtern = isExtern;
         outUnit.globalConstants.push_back(stmt);
         return true;
     }
 
     if(m_cursor.matchIdentifier("type")){
-        TypeAliasDecl* aliasDecl = parseTypeAlias(span, attributes);
+        TypeAliasDecl* aliasDecl = parseTypeAlias(span, attributes, isExtern);
         if(!aliasDecl)
             return false;
         aliasDecl->cppNamespace = importedNamespace;
-        aliasDecl->isImported = isImported;
+        aliasDecl->isImported = isImported || isExtern;
+        aliasDecl->isExtern = isExtern;
         outUnit.typeAliases.push_back(aliasDecl);
         return true;
     }
@@ -157,44 +254,51 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     b8 isFlagDecl = false;
     if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::TryParseEnumDeclKeyword(m_cursor.current().text, &isFlagDecl)){
         m_cursor.advance();
-        EnumDecl* enumDecl = parseEnumDecl(span, attributes, isFlagDecl);
+        EnumDecl* enumDecl = parseEnumDecl(span, attributes, isFlagDecl, isExtern);
         if(!enumDecl)
             return false;
         enumDecl->cppNamespace = importedNamespace;
-        enumDecl->isImported = isImported;
+        enumDecl->isImported = isImported || isExtern;
+        enumDecl->isExtern = isExtern;
         outUnit.enums.push_back(enumDecl);
         return true;
     }
 
     if(m_cursor.matchIdentifier("interface")){
-        InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, attributes);
+        InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, attributes, isExtern);
         if(!ifaceDecl)
             return false;
         ifaceDecl->cppNamespace = importedNamespace;
-        ifaceDecl->isImported = isImported;
+        ifaceDecl->isImported = isImported || isExtern;
+        ifaceDecl->isExtern = isExtern;
         outUnit.interfaces.push_back(ifaceDecl);
         return true;
     }
 
     if(m_cursor.matchIdentifier("class")){
-        ClassDecl* classDecl = parseClassDecl(span, attributes);
+        ClassDecl* classDecl = parseClassDecl(span, attributes, isExtern);
         if(!classDecl)
             return false;
         classDecl->cppNamespace = importedNamespace;
-        classDecl->isImported = isImported;
+        classDecl->isImported = isImported || isExtern;
+        classDecl->isExtern = isExtern;
         for(MethodDecl* m : classDecl->methods){
             m->cppNamespace = importedNamespace;
-            m->isImported = isImported;
+            m->isImported = isImported || isExtern;
+            m->isExtern = isExtern;
+            if(m->requiredHeader.empty())
+                m->requiredHeader = classDecl->requiredHeader;
         }
         outUnit.classes.push_back(classDecl);
         return true;
     }
 
-    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes);
+    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes, isExtern);
     if(!callable)
         return false;
     callable->cppNamespace = importedNamespace;
-    callable->isImported = isImported;
+    callable->isImported = isImported || isExtern;
+    callable->isExtern = isExtern;
 
     if(callable->ownerClassName.empty())
         outUnit.freeFunctions.push_back(callable);
@@ -204,10 +308,19 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     return true;
 }
 
-TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<const ParsedAttribute> attributes){
-    if(!attributes.empty()){
-        m_cursor.error(span.line, span.column, "attributes are not permitted on 'type' alias declarations");
-        return nullptr;
+TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern){
+    MStringView extCppExportName;
+    MStringView extRequiredHeader;
+    for(const ParsedAttribute& attr : attributes){
+        b8 matchedExtern = false;
+        if(!tryParseExternAttribute(attr, extCppExportName, extRequiredHeader, isExtern, matchedExtern))
+            return nullptr;
+        if(!matchedExtern){
+            m_cursor.error(span.line, span.column, isExtern
+                ? "unsupported attribute on 'extern type' declaration; only '[cpp_name(\"...\")]' and '[cpp_header(\"...\")]' are permitted"
+                : "attributes are not permitted on 'type' alias declarations");
+            return nullptr;
+        }
     }
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected alias name after 'type'");
@@ -217,12 +330,19 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<cons
     TypeAliasDecl* decl = AllocateAstNode<TypeAliasDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
     decl->span = span;
+    decl->cppExportName = extCppExportName;
+    decl->requiredHeader = extRequiredHeader;
+    decl->isImported = isExtern;
+    decl->isExtern = isExtern;
     m_cursor.advance();
 
     if(m_cursor.check(TokenType::Less)){
         if(!m_typeParser.parseTemplateParamList(decl->templateParams))
             return nullptr;
     }
+
+    if(isExtern && m_cursor.match(TokenType::Semicolon))
+        return decl;
 
     if(!m_cursor.expect(TokenType::Equal, "expected '=' in 'type' alias declaration"))
         return nullptr;
@@ -237,11 +357,15 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<cons
     return decl;
 }
 
-EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isFlag){
+EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isFlag, const b8 isExtern){
+    MStringView extCppExportName;
+    MStringView extRequiredHeader;
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
+        if(!tryParseExternAttribute(attr, extCppExportName, extRequiredHeader, isExtern, matchedAttr))
+            return nullptr;
 #define NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE(attrName) \
-        if(attr.name == attrName && attr.arguments.empty()) \
+        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()) \
             matchedAttr = true;
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE
@@ -250,36 +374,67 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
             return nullptr;
         }
     }
-    if(!m_cursor.match(TokenType::Less)){
+
+    MStringView sizeTypeName;
+    usize underlyingSize = 4u;
+    usize underlyingAlign = 4u;
+    MStringView enumName;
+
+    if(m_cursor.match(TokenType::Less)){
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.errorExpected(isFlag ? "expected integer size type inside 'flag<...>'" : "expected integer size type inside 'enum<...>'");
+            return nullptr;
+        }
+
+        sizeTypeName = m_cursor.current().text;
+        if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
+            m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
+            return nullptr;
+        }
+        m_cursor.advance();
+
+        if(!m_cursor.expect(TokenType::Greater, "expected '>' after underlying size type"))
+            return nullptr;
+
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.errorExpected(isFlag ? "expected flag name" : "expected enum name");
+            return nullptr;
+        }
+        enumName = m_cursor.current().text;
+        m_cursor.advance();
+    }
+    else if(isExtern){
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.errorExpected(isFlag ? "expected flag name" : "expected enum name");
+            return nullptr;
+        }
+        enumName = m_cursor.current().text;
+        m_cursor.advance();
+
+        if(m_cursor.match(TokenType::Colon)){
+            if(!m_cursor.check(TokenType::Identifier)){
+                m_cursor.errorExpected("expected integer underlying type after ':'");
+                return nullptr;
+            }
+            sizeTypeName = m_cursor.current().text;
+            if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
+                m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
+                return nullptr;
+            }
+            m_cursor.advance();
+        }
+        else{
+            sizeTypeName = "u32";
+            underlyingSize = 4u;
+            underlyingAlign = 4u;
+        }
+    }
+    else{
         m_cursor.error(isFlag
             ? "'flag' must explicitly specify an integer size type: 'flag<u8|u16|u32|u64|i8|i16|i32|i64> Name'"
             : "'enum' must explicitly specify an integer size type: 'enum<u8|u16|u32|u64|i8|i16|i32|i64> Name'");
         return nullptr;
     }
-
-    if(!m_cursor.check(TokenType::Identifier)){
-        m_cursor.errorExpected(isFlag ? "expected integer size type inside 'flag<...>'" : "expected integer size type inside 'enum<...>'");
-        return nullptr;
-    }
-
-    const MStringView sizeTypeName = m_cursor.current().text;
-    usize underlyingSize = 1u;
-    usize underlyingAlign = 1u;
-    if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
-        m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
-        return nullptr;
-    }
-    m_cursor.advance();
-
-    if(!m_cursor.expect(TokenType::Greater, "expected '>' after underlying size type"))
-        return nullptr;
-
-    if(!m_cursor.check(TokenType::Identifier)){
-        m_cursor.errorExpected(isFlag ? "expected flag name" : "expected enum name");
-        return nullptr;
-    }
-    const MStringView enumName = m_cursor.current().text;
-    m_cursor.advance();
 
     EnumDecl* decl = AllocateAstNode<EnumDecl>(m_cursor.arena());
     decl->name = enumName;
@@ -288,6 +443,14 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
     decl->underlyingAlign = underlyingAlign;
     decl->span = span;
     decl->isFlag = isFlag;
+    decl->cppExportName = extCppExportName;
+    decl->requiredHeader = extRequiredHeader;
+    decl->isImported = isExtern;
+    decl->isExtern = isExtern;
+    if(isExtern && !extCppExportName.empty()){
+        const b8 hasWrappedSuffix = extCppExportName.ends_with("::Enum") || extCppExportName.ends_with("::Flag");
+        decl->isDirectCppEnum = !hasWrappedSuffix;
+    }
 
     if(!m_cursor.expect(TokenType::LeftBrace, isFlag ? "expected '{' to start flag body" : "expected '{' to start enum body"))
         return nullptr;
@@ -329,13 +492,17 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
     return decl;
 }
 
-InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
+InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern){
     InterfaceDecl* decl = AllocateAstNode<InterfaceDecl>(m_cursor.arena());
     decl->span = span;
+    decl->isImported = isExtern;
+    decl->isExtern = isExtern;
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
+        if(!tryParseExternAttribute(attr, decl->cppExportName, decl->requiredHeader, isExtern, matchedAttr))
+            return nullptr;
 #define NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE(attrName) \
-        if(attr.name == attrName && attr.arguments.empty()) \
+        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()) \
             matchedAttr = true;
 #define NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE(attrName, declField) \
         if(!matchedAttr && attr.name == attrName && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){ \
@@ -411,6 +578,9 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         method->access = AccessSpecifier::Public;
         method->returnType = retType;
         method->span = methodSpan;
+        method->isImported = isExtern;
+        method->isExtern = isExtern;
+        method->requiredHeader = decl->requiredHeader;
         if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;
 

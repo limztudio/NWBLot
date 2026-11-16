@@ -4,6 +4,7 @@
 
 #include "compiler.h"
 
+#include "clang/cpp_header_importer.h"
 #include "codegen/header_emitter.h"
 #include "parser/decl_parser.h"
 #include "sema/type_checker.h"
@@ -20,11 +21,11 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult){
+b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileResult& outResult){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
-    Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver, false);
-    for(const MString& defText : macroDefinitions){
+    Preprocessor preprocessor(arena, scratchArena, outResult.errors, options.includeResolver, false);
+    for(const MString& defText : options.macroDefinitions){
         const MStringView defView(defText.data(), defText.size());
         if(defView.empty())
             continue;
@@ -40,7 +41,7 @@ b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath
         else
             preprocessor.defineObjectMacro(defView, "1");
     }
-    if(!preprocessor.process(source, outResult.preprocessedSource))
+    if(!preprocessor.process(options.source, outResult.preprocessedSource))
         return false;
 
     for(const MString& inc : preprocessor.includedFiles()){
@@ -60,13 +61,41 @@ b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath
     if(!declParser.parseTranslationUnit(outResult.unit))
         return false;
 
+    MVector<ImportedCppHeader> allCppHeaders(arena);
+    for(const ImportedCppHeader& hdr : outResult.unit.importedCppHeaders)
+        allCppHeaders.push_back(hdr);
+    for(const MString& cliHdr : options.cppHeaders){
+        if(cliHdr.empty())
+            continue;
+        ImportedCppHeader entry;
+        entry.headerPath = MStringView(cliHdr.data(), cliHdr.size());
+        entry.span = SourceSpan{ 1u, 1u };
+        entry.isSystemHeader = !(entry.headerPath.size() >= 2u && entry.headerPath.front() == '"' && entry.headerPath.back() == '"');
+        allCppHeaders.push_back(entry);
+    }
+
+    if(!allCppHeaders.empty()){
+        CppHeaderImportOptions importOptions;
+        importOptions.headers = Span<const ImportedCppHeader>(allCppHeaders.data(), allCppHeaders.size());
+        importOptions.includeDirectories = options.cppIncludeDirectories;
+        importOptions.defines = options.cppDefines;
+        importOptions.compilerArgs = options.cppCompilerArgs;
+        importOptions.enableAutoProjectIncludes = options.enableAutoProjectCppIncludes;
+
+        if(!CppHeaderImporter::ImportHeaders(importOptions, arena, outResult.unit, outResult.errors))
+            return false;
+    }
+
+    if(options.outEmittedCppExterns)
+        *options.outEmittedCppExterns = CppHeaderImporter::FormatExternAdhd(outResult.unit, arena);
+
     TypeChecker typeChecker(arena, outResult.symbols);
     if(!typeChecker.checkTranslationUnit(outResult.unit, outResult.errors))
         return false;
 
-    const MString derivedNamespace = customNamespace.empty() ? DeriveNamespaceFromPath(virtualFilePath, arena) : MString(arena);
-    const MStringView namespacePath = customNamespace.empty() ? MStringView(derivedNamespace.data(), derivedNamespace.size()) : customNamespace;
-    const MString headerFilename = DeriveHeaderFilename(virtualFilePath, arena);
+    const MString derivedNamespace = options.customNamespace.empty() ? DeriveNamespaceFromPath(options.virtualFilePath, arena) : MString(arena);
+    const MStringView namespacePath = options.customNamespace.empty() ? MStringView(derivedNamespace.data(), derivedNamespace.size()) : options.customNamespace;
+    const MString headerFilename = DeriveHeaderFilename(options.virtualFilePath, arena);
 
     HeaderEmitter headerEmitter(arena, outResult.symbols);
     SourceEmitter sourceEmitter(arena, outResult.symbols);

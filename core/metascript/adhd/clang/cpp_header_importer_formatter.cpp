@@ -1,0 +1,259 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "cpp_header_importer_internal.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace CppHeaderImportDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendExternAttributes(MString& out, const MStringView requiredHeader, const MStringView cppExportName, const MStringView indent){
+    MStringView headerInner;
+    if(!requiredHeader.empty()){
+        MStringView inner = requiredHeader;
+        if(inner.size() >= 2u && inner.front() == '<' && inner.back() == '>')
+            inner = inner.substr(1u, inner.size() - 2u);
+        if(!inner.empty() && inner.find('"') == MStringView::npos)
+            headerInner = inner;
+    }
+    if(headerInner.empty() && cppExportName.empty())
+        return;
+
+    out.append(indent.data(), indent.size());
+    out.push_back('[');
+    b8 hasAttr = false;
+    if(!headerInner.empty()){
+        out.append("cpp_header(\"");
+        out.append(headerInner.data(), headerInner.size());
+        out.append("\")");
+        hasAttr = true;
+    }
+    if(!cppExportName.empty()){
+        if(hasAttr)
+            out.append(", ");
+        out.append("cpp_name(\"");
+        out.append(cppExportName.data(), cppExportName.size());
+        out.append("\")");
+    }
+    out.append("]\r\n");
+}
+
+void AppendTypeRefExternText(MString& out, const TypeRef& type, const b8 includeRefMode){
+    if(includeRefMode){
+        if(type.refMode == ParamPassingMode::In)
+            out.append("in ");
+        else if(type.refMode == ParamPassingMode::Mut)
+            out.append("mut ");
+    }
+
+    out.append(type.name.data(), type.name.size());
+    if(!type.templateArgs.empty()){
+        out.push_back('<');
+        for(usize i = 0u; i < type.templateArgs.size(); ++i){
+            if(i > 0u)
+                out.append(", ");
+            const TypeArg& targ = type.templateArgs[i];
+            if(targ.type)
+                AppendTypeRefExternText(out, *targ.type, true);
+            else
+                out.append(targ.constantText.data(), targ.constantText.size());
+        }
+        out.push_back('>');
+    }
+}
+
+void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStringView indent, const b8 includeHeader){
+    AppendExternAttributes(out, includeHeader ? m.requiredHeader : MStringView(), m.cppExportName, indent);
+    out.append(indent.data(), indent.size());
+    if(m.isConstructor){
+        out.append("extern ");
+        out.append(m.name.data(), m.name.size());
+    }
+    else{
+        if(m.isStatic)
+            out.append("static ");
+        out.append("extern ");
+        if(m.returnType)
+            AppendTypeRefExternText(out, *m.returnType, true);
+        else
+            out.append("void");
+        out.push_back(' ');
+        if(m.isOperator){
+            out.append("operator");
+            out.append(m.name.data(), m.name.size());
+        }
+        else{
+            out.append(m.name.data(), m.name.size());
+        }
+        if(!m.templateParams.empty()){
+            out.push_back('<');
+            for(usize i = 0u; i < m.templateParams.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                out.append(m.templateParams[i].name.data(), m.templateParams[i].name.size());
+            }
+            out.push_back('>');
+        }
+    }
+
+    out.push_back('(');
+    for(usize i = 0u; i < m.params.size(); ++i){
+        if(i > 0u)
+            out.append(", ");
+        const ParamDecl& p = m.params[i];
+        if(!p.type)
+            continue;
+        if(p.type->refMode == ParamPassingMode::None){
+            if(p.mode == ParamPassingMode::In)
+                out.append("in ");
+            else if(p.mode == ParamPassingMode::Mut)
+                out.append("mut ");
+        }
+        AppendTypeRefExternText(out, *p.type, true);
+        out.push_back(' ');
+        out.append(p.name.data(), p.name.size());
+        if(m.hasDefaultArgs && i >= m.minArgCount)
+            out.append(" = {}");
+    }
+    out.push_back(')');
+    if(m.isConst)
+        out.append("const");
+    out.append(";\r\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaArena& arena){
+    MString out(arena);
+    out.append("// Generated by adhd_compiler (--emit-cpp-externs)\r\n\r\n");
+
+    for(const EnumDecl* e : unit.enums){
+        if(!e || !e->isExtern)
+            continue;
+        CppHeaderImportDetail::AppendExternAttributes(out, e->requiredHeader, e->cppExportName, "");
+        out.append(e->isFlag ? "extern flag " : "extern enum ");
+        out.append(e->name.data(), e->name.size());
+        if(!e->sizeTypeName.empty()){
+            out.append(" : ");
+            out.append(e->sizeTypeName.data(), e->sizeTypeName.size());
+        }
+        out.append("{\r\n");
+        for(usize i = 0u; i < e->entries.size(); ++i){
+            out.append("    ");
+            out.append(e->entries[i].name.data(), e->entries[i].name.size());
+            if(const Expr* val = e->entries[i].valueExpr){
+                out.append(" = ");
+                if(val->kind == ExprKind::Unary && val->op == TokenType::Minus && val->rhs){
+                    out.push_back('-');
+                    out.append(val->rhs->text.data(), val->rhs->text.size());
+                }
+                else{
+                    out.append(val->text.data(), val->text.size());
+                }
+            }
+            if(i + 1u < e->entries.size())
+                out.push_back(',');
+            out.append("\r\n");
+        }
+        out.append("};\r\n\r\n");
+    }
+
+    for(const TypeAliasDecl* a : unit.typeAliases){
+        if(!a || !a->isExtern || !a->aliasedType || a->name.empty() || !a->templateParams.empty())
+            continue;
+        CppHeaderImportDetail::AppendExternAttributes(out, a->requiredHeader, a->cppExportName, "");
+        out.append("extern type ");
+        out.append(a->name.data(), a->name.size());
+        out.append(" = ");
+        CppHeaderImportDetail::AppendTypeRefExternText(out, *a->aliasedType, false);
+        out.append(";\r\n\r\n");
+    }
+
+    for(const Stmt* g : unit.globalConstants){
+        if(!g || !g->isExtern || !g->varType || g->name.empty())
+            continue;
+        CppHeaderImportDetail::AppendExternAttributes(out, g->requiredHeader, g->cppExportName, "");
+        out.append("extern const ");
+        CppHeaderImportDetail::AppendTypeRefExternText(out, *g->varType, false);
+        out.push_back(' ');
+        out.append(g->name.data(), g->name.size());
+        out.append(";\r\n\r\n");
+    }
+
+    for(const ClassDecl* c : unit.classes){
+        if(!c || !c->isExtern)
+            continue;
+        CppHeaderImportDetail::AppendExternAttributes(out, c->requiredHeader, c->cppExportName, "");
+        out.append("extern class ");
+        out.append(c->name.data(), c->name.size());
+        b8 emittedBase = false;
+        if(!c->isCopyConstructible){
+            out.append(" : NoCopy");
+            emittedBase = true;
+        }
+        for(const TypeRef* iface : c->implementedInterfaces){
+            if(!iface || iface->name.empty())
+                continue;
+            if(!c->isCopyConstructible && iface->name == "NoCopy")
+                continue;
+            out.append(emittedBase ? ", " : " : ");
+            CppHeaderImportDetail::AppendTypeRefExternText(out, *iface, false);
+            emittedBase = true;
+        }
+        out.append("{\r\n");
+        for(const FieldDecl* f : c->fields){
+            if(!f || f->access != AccessSpecifier::Public || !f->type)
+                continue;
+            out.append("    ");
+            if(f->isStatic)
+                out.append("static ");
+            CppHeaderImportDetail::AppendTypeRefExternText(out, *f->type, true);
+            out.push_back(' ');
+            out.append(f->name.data(), f->name.size());
+            out.append(";\r\n");
+        }
+        for(const MethodDecl* m : c->methods){
+            if(m)
+                CppHeaderImportDetail::AppendMethodExternSignature(out, *m, "    ", false);
+        }
+        out.append("};\r\n\r\n");
+    }
+
+    for(const MethodDecl* f : unit.freeFunctions){
+        if(f && f->isExtern)
+            CppHeaderImportDetail::AppendMethodExternSignature(out, *f, "", true);
+    }
+
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

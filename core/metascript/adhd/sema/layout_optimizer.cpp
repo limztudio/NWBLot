@@ -385,6 +385,9 @@ void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& f
 }
 
 b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){
+    if(classDecl.isExtern)
+        return true;
+
     if(classDecl.isSerialize && m_symbols.hasPolymorphicInterface(classDecl)){
         ReportAdhdDiagnostic(m_arena, errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");
         return false;
@@ -397,7 +400,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
     classDecl.orderedFields.reserve(classDecl.fields.size());
 
     for(FieldDecl* field : classDecl.fields){
-        if(!field->type)
+        if(!field->type || field->isStatic)
             continue;
 
         if(__hidden_adhd_layout_optimizer::TypeReferencesClassByValue(*field->type, classDecl.name, m_symbols)){

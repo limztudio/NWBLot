@@ -304,9 +304,12 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     return expectClosingAngle();
 }
 
-b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto){
+b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto, const b8 isExtern, usize* outMinArgCount, b8* outHasDefaultArgs){
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for parameter list"))
         return false;
+
+    usize minArgCount = 0u;
+    b8 hasDefaultArgs = false;
 
     if(!m_cursor.check(TokenType::RightParen)){
         for(;;){
@@ -314,8 +317,12 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto)
             param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
             param.mode = MatchParamPassingMode(m_cursor);
             if(param.mode == ParamPassingMode::None){
-                m_cursor.error("every parameter in adhd must explicitly specify 'in' or 'mut'");
-                return false;
+                if(isExtern)
+                    param.mode = ParamPassingMode::In;
+                else{
+                    m_cursor.error("every parameter in adhd must explicitly specify 'in' or 'mut'");
+                    return false;
+                }
             }
 
             param.type = parseType(false, allowAuto);
@@ -333,9 +340,46 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto)
                 m_cursor.error(s_ProhibitedCStyleArrayError);
                 return false;
             }
-            if(m_cursor.check(TokenType::Equal)){
-                m_cursor.error("default parameter arguments are prohibited in adhd");
-                return false;
+            if(m_cursor.match(TokenType::Equal)){
+                if(!isExtern){
+                    m_cursor.error("default parameter arguments are prohibited in adhd");
+                    return false;
+                }
+                hasDefaultArgs = true;
+                u32 parenDepth = 0u;
+                u32 bracketDepth = 0u;
+                u32 braceDepth = 0u;
+                b8 consumedAny = false;
+                while(!m_cursor.check(TokenType::EndOfFile)){
+                    if(parenDepth == 0u && bracketDepth == 0u && braceDepth == 0u
+                        && (m_cursor.check(TokenType::Comma) || m_cursor.check(TokenType::RightParen)))
+                        break;
+                    if(m_cursor.check(TokenType::LeftParen))
+                        ++parenDepth;
+                    else if(m_cursor.check(TokenType::RightParen) && parenDepth > 0u)
+                        --parenDepth;
+                    else if(m_cursor.check(TokenType::LeftBracket))
+                        ++bracketDepth;
+                    else if(m_cursor.check(TokenType::RightBracket) && bracketDepth > 0u)
+                        --bracketDepth;
+                    else if(m_cursor.check(TokenType::LeftBrace))
+                        ++braceDepth;
+                    else if(m_cursor.check(TokenType::RightBrace) && braceDepth > 0u)
+                        --braceDepth;
+                    m_cursor.advance();
+                    consumedAny = true;
+                }
+                if(!consumedAny || parenDepth != 0u || bracketDepth != 0u || braceDepth != 0u){
+                    m_cursor.errorExpected("expected default argument expression after '='");
+                    return false;
+                }
+            }
+            else{
+                if(hasDefaultArgs){
+                    m_cursor.error("non-default parameter cannot follow a parameter with a default argument");
+                    return false;
+                }
+                ++minArgCount;
             }
 
             outParams.push_back(param);
@@ -346,6 +390,11 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto)
                 return false;
         }
     }
+
+    if(outMinArgCount)
+        *outMinArgCount = minArgCount;
+    if(outHasDefaultArgs)
+        *outHasDefaultArgs = hasDefaultArgs;
 
     return m_cursor.expect(TokenType::RightParen, "expected ')' after parameter list");
 }

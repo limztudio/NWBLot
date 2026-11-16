@@ -181,8 +181,8 @@ Stmt* StmtParser::parseStatement(){
     return stmt;
 }
 
-Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
-    TypeRef* varType = m_typeParser.parseType(false, true);
+Stmt* StmtParser::parseConstDeclaration(const SourceSpan span, const b8 isExtern){
+    TypeRef* varType = m_typeParser.parseType(false, !isExtern);
     if(!varType)
         return nullptr;
 
@@ -190,7 +190,7 @@ Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
         m_cursor.errorExpected("expected constant name after type");
         return nullptr;
     }
-    return parseVarDeclWithType(*varType, span, true);
+    return parseVarDeclWithType(*varType, span, true, isExtern);
 }
 
 b8 StmtParser::rejectStatementAttributes(const Span<const ParsedAttribute> attributes, const SourceSpan span, const MStringView message){

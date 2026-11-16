@@ -187,16 +187,18 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
         MethodDecl* m = iface.methods[i];
         if(!m)
             continue;
-        if(!m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
-            reportError(errors, m->span, "member function name must start with a lowercase letter");
-            ok = false;
-        }
-        for(usize j = 0u; j < i; ++j){
-            const MethodDecl* prev = iface.methods[j];
-            if(prev && prev->isOperator == m->isOperator && prev->name == m->name && prev->isConst == m->isConst && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)){
-                reportError(errors, m->span, "duplicate interface method declaration with identical signature");
+        if(!iface.isExtern && !m->isExtern){
+            if(!m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
+                reportError(errors, m->span, "member function name must start with a lowercase letter");
                 ok = false;
-                break;
+            }
+            for(usize j = 0u; j < i; ++j){
+                const MethodDecl* prev = iface.methods[j];
+                if(prev && prev->isOperator == m->isOperator && prev->name == m->name && prev->isConst == m->isConst && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)){
+                    reportError(errors, m->span, "duplicate interface method declaration with identical signature");
+                    ok = false;
+                    break;
+                }
             }
         }
         if(!checkCallableSignature(nullptr, *m, errors))
@@ -209,7 +211,7 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
     b8 ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
     if(method.returnType && !checkReturnTypeRef(*method.returnType, enclosingClass, &method, method.span, errors))
         ok = false;
-    if(method.isOperator){
+    if(method.isOperator && !method.isExtern){
         if(!method.templateParams.empty()){
             reportError(errors, method.span, "operator overload cannot declare template parameters");
             ok = false;
@@ -231,13 +233,15 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
         if(p.type){
             if(!checkTypeRef(*p.type, enclosingClass, &method, errors))
                 ok = false;
-            const MStringView paramBase = m_symbols.resolveBaseTypeName(p.type->name);
-            if(!p.type->isFuncType && !m_symbols.hasTypeSymbol(paramBase) && SymbolTable::IsSimdStorageType(paramBase) && IsOverAlignedBuiltinType(paramBase)){
-                reportError(errors, p.span, "SIMD memory-layout type cannot be used as a parameter; use 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble' instead");
-                ok = false;
+            if(!method.isExtern){
+                const MStringView paramBase = m_symbols.resolveBaseTypeName(p.type->name);
+                if(!p.type->isFuncType && !m_symbols.hasTypeSymbol(paramBase) && SymbolTable::IsSimdStorageType(paramBase) && IsOverAlignedBuiltinType(paramBase)){
+                    reportError(errors, p.span, "SIMD memory-layout type cannot be used as a parameter; use 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble' instead");
+                    ok = false;
+                }
             }
         }
-        if(!method.hasBody && !p.name.empty()){
+        if(!method.hasBody && !method.isExtern && !p.name.empty()){
             for(usize prevP = 0u; prevP < pIdx; ++prevP){
                 if(method.params[prevP].name == p.name){
                     reportError(errors, p.span, "duplicate parameter name");
@@ -358,15 +362,17 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
         if(m_symbols.findClass(ifaceName)){
-            reportError(errors, classDecl.span, "concrete class inheritance is prohibited in adhd; classes are implicitly final and may only implement interfaces");
-            ok = false;
+            if(!classDecl.isExtern){
+                reportError(errors, classDecl.span, "concrete class inheritance is prohibited in adhd; classes are implicitly final and may only implement interfaces");
+                ok = false;
+            }
             continue;
         }
         if(!m_symbols.findInterface(ifaceName)){
             const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceName);
             const b8 isBuiltinInterface = IsNonCopyableBaseInterfaceName(ifaceName) || (builtinObj && builtinObj->isPolymorphicBase);
             if(
-                (!isBuiltinInterface && !m_hasTopLevelNativeBlocks)
+                (!classDecl.isExtern && !isBuiltinInterface && !m_hasTopLevelNativeBlocks)
                 || m_symbols.findEnum(ifaceName)
                 || FindBuiltinEnum(ifaceName)
                 || BuiltinTypeSemantics::IsScalarType(ifaceName)
@@ -385,6 +391,8 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         if(!checkTypeRef(*ifaceType, &classDecl, nullptr, errors))
             ok = false;
+        if(classDecl.isExtern)
+            continue;
         MVector<MethodDecl*> requiredInterfaceMethods(m_arena);
         m_symbols.collectAllInterfaceMethods(*ifaceType, requiredInterfaceMethods);
         const TypeRef* resolvedIfaceType = m_symbols.unwrapTypeAlias(ifaceType);
@@ -522,14 +530,16 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         if(field->type){
             if(!checkTypeRef(*field->type, &classDecl, nullptr, errors))
                 ok = false;
-            const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
-            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && (m_symbols.findInterface(baseFieldType) || m_symbols.isAbstractBuiltinType(baseFieldType))){
-                reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
-                ok = false;
-            }
-            if(TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*field->type)){
-                reportError(errors, field->span, "class member cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
-                ok = false;
+            if(!classDecl.isExtern && !classDecl.isImported){
+                const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
+                if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && (m_symbols.findInterface(baseFieldType) || m_symbols.isAbstractBuiltinType(baseFieldType))){
+                    reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
+                    ok = false;
+                }
+                if(TypeLayoutAnalyzer(m_symbols).containsSimdRegisterType(*field->type)){
+                    reportError(errors, field->span, "class member cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
+                    ok = false;
+                }
             }
         }
         const TypeRef* unwrappedFieldType = field->type ? m_symbols.unwrapTypeAlias(field->type) : nullptr;
@@ -566,7 +576,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             m_inClassArenaContext = savedClassArenaCtx;
         }
 
-        if(!hasFieldInlineOrAutoDefault(classDecl, *field) && !hasConstructor){
+        if(!classDecl.isExtern && !classDecl.isImported && !field->isStatic && !hasFieldInlineOrAutoDefault(classDecl, *field) && !hasConstructor){
             reportError(errors, field->span, "class member has no inline default value and class defines no constructor to initialize it");
             ok = false;
         }
@@ -576,37 +586,39 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         MethodDecl* m = classDecl.methods[i];
         if(!m)
             continue;
-        if(!m->isConstructor && !m->isDestructor && !m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
-            reportError(errors, m->span, "member function name must start with a lowercase letter");
-            ok = false;
-        }
-        for(usize j = 0u; j < i; ++j){
-            const MethodDecl* prev = classDecl.methods[j];
-            if(
-                prev
-                && prev->isConstructor == m->isConstructor
-                && prev->isDestructor == m->isDestructor
-                && prev->isOperator == m->isOperator
-                && prev->name == m->name
-                && prev->isConst == m->isConst
-                && prev->templateParams.size() == m->templateParams.size()
-                && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)
-            ){
-                reportError(errors, m->span, "duplicate class method declaration with identical signature");
+        if(!classDecl.isExtern && !m->isExtern){
+            if(!m->isConstructor && !m->isDestructor && !m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
+                reportError(errors, m->span, "member function name must start with a lowercase letter");
                 ok = false;
-                break;
+            }
+            for(usize j = 0u; j < i; ++j){
+                const MethodDecl* prev = classDecl.methods[j];
+                if(
+                    prev
+                    && prev->isConstructor == m->isConstructor
+                    && prev->isDestructor == m->isDestructor
+                    && prev->isOperator == m->isOperator
+                    && prev->name == m->name
+                    && prev->isConst == m->isConst
+                    && prev->templateParams.size() == m->templateParams.size()
+                    && TypeComparator(m_symbols).doParamListsMatch(prev->params, m->params)
+                ){
+                    reportError(errors, m->span, "duplicate class method declaration with identical signature");
+                    ok = false;
+                    break;
+                }
             }
         }
         if(!checkCallableSignature(&classDecl, *m, errors))
             ok = false;
         if(!m->hasBody){
-            if(!classDecl.isImported && classDecl.assetTypeName.empty() && classDecl.systemTypeName.empty()){
+            if(!classDecl.isImported && !classDecl.isExtern && !m->isExtern && classDecl.assetTypeName.empty() && classDecl.systemTypeName.empty()){
                 reportError(errors, m->span, "declared class method has no implementation body");
                 ok = false;
             }
             continue;
         }
-        if(m->isImported)
+        if(m->isImported || m->isExtern || classDecl.isExtern)
             continue;
         const b8 prevRecordHeaders = m_recordGlobalHeaders;
         m_recordGlobalHeaders = true;

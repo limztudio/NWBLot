@@ -19,11 +19,12 @@ NWB_ADHD_COMPILER_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AdhdOutputTransaction::AdhdOutputTransaction(Core::Metascript::MetaArena& arena, const Span<const Path<Core::Metascript::MetaArena>> outputPaths, const Span<const Core::Metascript::MStringView> outputContents, const Span<const Core::Metascript::MString> inputs, const Core::Metascript::MStringView depfilePath)
+AdhdOutputTransaction::AdhdOutputTransaction(Core::Metascript::MetaArena& arena, const Span<const Path<Core::Metascript::MetaArena>> outputPaths, const Span<const Core::Metascript::MStringView> outputContents, const Span<const Core::Metascript::MString> inputs, const Core::Metascript::MStringView depfilePath, const Core::Metascript::MStringView emitCppExternsPath)
     : m_outputPaths(outputPaths)
     , m_outputContents(outputContents)
     , m_inputs(inputs)
     , m_depfilePath(depfilePath)
+    , m_emitCppExternsPath(emitCppExternsPath)
     , m_hadExisting(arena)
     , m_hasStaged(arena)
     , m_hasBackup(arena)
@@ -135,6 +136,8 @@ b8 AdhdOutputTransaction::publish(){
 void AdhdOutputTransaction::logOutputWriteFailure(const usize outputIndex)const{
     if(!m_depfilePath.empty() && outputIndex + 1u == m_outputPaths.size())
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write depfile '{}'"), ConvertString(m_depfilePath));
+    else if(!m_emitCppExternsPath.empty() && outputIndex == m_inputs.size() * 2u)
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write emitted C++ externs '{}'"), ConvertString(m_emitCppExternsPath));
     else
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write generated output for '{}'"), ConvertString(m_inputs[outputIndex / 2u]));
 }

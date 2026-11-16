@@ -45,8 +45,13 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const Stmt* globalConstDecl = (!local && !HasConstValueTemplateParam(ownerClass, &method, expr.text))
             ? m_symbols.findGlobalConstant(expr.text)
             : nullptr;
-        if(globalConstDecl)
+        if(globalConstDecl){
             expr.resolvedCppNamespace = globalConstDecl->cppNamespace;
+            expr.resolvedCppExportName = globalConstDecl->cppExportName;
+            recordRequiredHeader(globalConstDecl->requiredHeader);
+            if(globalConstDecl->varType)
+                recordBuiltinTypeHeader(globalConstDecl->varType->name);
+        }
         const BuiltinGlobalConstantInfo* builtinConst = (!local && !globalConstDecl && !HasConstValueTemplateParam(ownerClass, &method, expr.text))
             ? FindBuiltinGlobalConstant(expr.text)
             : nullptr;
@@ -181,6 +186,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
 
             if(const EnumDecl* enumDecl = m_symbols.findEnum(expr.scopeChain[0])){
                 expr.resolvedCppNamespace = enumDecl->cppNamespace;
+                recordRequiredHeader(enumDecl->requiredHeader);
                 if(expr.scopeChain.size() != 2u){
                     reportError(errors, expr.span, "invalid enum/flag scope access; expected 'TypeName::Entry'");
                     ok = false;
@@ -197,6 +203,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     if(!matchedEntry){
                         reportError(errors, expr.span, "unknown enumerator in enum/flag scope access");
                         ok = false;
+                    }
+                    else if(!enumDecl->cppExportName.empty()){
+                        MStringView enumScope = enumDecl->cppExportName;
+                        if(!enumDecl->isDirectCppEnum && enumScope.size() > 6u && (enumScope.ends_with("::Enum") || enumScope.ends_with("::Flag")))
+                            enumScope.remove_suffix(6u);
+                        expr.resolvedCppExportName = JoinScopedCppName(m_arena, enumScope, entryName);
                     }
                 }
             }
@@ -267,6 +279,31 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 scopedIface && !scopedIface->assetTypeName.empty() && (expr.scopeChain[1] == "AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeText")
             ){
                 expr.resolvedCppNamespace = m_symbols.findTypeNamespace(expr.scopeChain[0]);
+            }
+            else if(
+                const ClassDecl* staticCls = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u && !FindScopedVar(scope, expr.scopeChain[0]) && !m_symbols.findGlobalConstant(expr.scopeChain[0]))
+                    ? m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))
+                    : nullptr;
+                staticCls && (
+                    [&]()noexcept{
+                        if(const FieldDecl* sf = SymbolTable::FindClassField(*staticCls, expr.scopeChain[1]); sf && sf->isStatic)
+                            return true;
+                        return m_symbols.findClassMethod(*staticCls, expr.scopeChain[1], nullptr, false, false, {}, {}, true) != nullptr;
+                    }()
+                )
+            ){
+                recordRequiredHeader(staticCls->requiredHeader);
+                expr.resolvedCppNamespace = staticCls->cppNamespace;
+                if(const FieldDecl* staticField = SymbolTable::FindClassField(*staticCls, expr.scopeChain[1]); staticField && staticField->isStatic){
+                    if(ownerClass != staticCls && staticField->access != AccessSpecifier::Public){
+                        reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
+                        ok = false;
+                    }
+                    if(staticField->type)
+                        recordBuiltinTypeHeader(staticField->type->name);
+                    if(!staticCls->cppExportName.empty())
+                        expr.resolvedCppExportName = JoinScopedCppName(m_arena, staticCls->cppExportName, staticField->name);
+                }
             }
             else if(
                 !m_hasTopLevelNativeBlocks

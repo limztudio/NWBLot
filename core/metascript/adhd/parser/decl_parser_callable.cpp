@@ -51,14 +51,16 @@ b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplate
     return true;
 }
 
-MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, const Span<const ParsedAttribute> attributes){
+MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern){
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
+    decl->isImported = isExtern;
+    decl->isExtern = isExtern;
 
     if(!applyCallableAttributes(attributes, *decl))
         return nullptr;
 
-    if(m_cursor.check(TokenType::Identifier)){
+    if(!isExtern && m_cursor.check(TokenType::Identifier)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         const MStringView maybeClass = m_cursor.current().text;
         m_cursor.advance();
@@ -97,7 +99,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
                 decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
                 decl->name = maybeClass;
                 decl->isConstructor = true;
-                if(!parseConstructorParamsAndRejectInitList(decl->params))
+                if(!parseConstructorParamsAndRejectInitList(*decl))
                     return nullptr;
                 decl->hasBody = true;
                 if(!m_stmtParser.parseBlockStatements(decl->body))
@@ -109,9 +111,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         m_typeParser.resetPendingRightAngles();
     }
 
-    decl->returnType = m_typeParser.parseType(true, false);
+    decl->returnType = m_typeParser.parseType(true, isExtern);
     if(!decl->returnType)
         return nullptr;
+    decl->returnsReference = (decl->returnType->refMode != ParamPassingMode::None);
 
     if(m_cursor.checkIdentifier("operator")){
         m_cursor.error("free operator overloads are prohibited in adhd; overload operators as instance member methods on a class");
@@ -182,12 +185,18 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
     }
 
     if(m_cursor.check(TokenType::LeftBrace)){
+        if(decl->isExtern){
+            m_cursor.error(span.line, span.column, "'extern' function declarations cannot define a body");
+            return nullptr;
+        }
         decl->hasBody = true;
         if(!m_stmtParser.parseBlockStatements(decl->body))
             return nullptr;
     }
     else if(!decl->ownerClassName.empty()){
-        m_cursor.error(span.line, span.column, "out-of-line method definition must have a '{ ... }' body");
+        m_cursor.error(span.line, span.column, isExtern
+            ? "out-of-line method declarations cannot be marked 'extern'"
+            : "out-of-line method definition must have a '{ ... }' body");
         return nullptr;
     }
     else if(!m_cursor.expect(TokenType::Semicolon, "expected '{' or ';' after function declaration"))
@@ -199,8 +208,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
 b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attributes, MethodDecl& decl){
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
+        if(!tryParseExternAttribute(attr, decl.cppExportName, decl.requiredHeader, decl.isExtern, matchedAttr))
+            return false;
 #define NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE(attrName, declField) \
-        if(attr.name == attrName && attr.arguments.empty()){ \
+        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()){ \
             decl.declField = true; \
             matchedAttr = true; \
         }

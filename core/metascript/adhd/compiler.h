@@ -53,7 +53,30 @@ namespace Compiler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 Compile(MStringView source, MStringView virtualFilePath, IIncludeResolver* includeResolver, MStringView customNamespace, Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult);
+struct CompileOptions{
+    MStringView source;
+    MStringView virtualFilePath;
+    IIncludeResolver* includeResolver = nullptr;
+    MStringView customNamespace;
+    Span<const MString> macroDefinitions;
+    Span<const MString> cppHeaders;
+    Span<const MString> cppIncludeDirectories;
+    Span<const MString> cppDefines;
+    Span<const MString> cppCompilerArgs;
+    MString* outEmittedCppExterns = nullptr;
+    b8 enableAutoProjectCppIncludes = true;
+};
+
+[[nodiscard]] b8 Compile(const CompileOptions& options, MetaArena& arena, CompileResult& outResult);
+[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult){
+    CompileOptions options;
+    options.source = source;
+    options.virtualFilePath = virtualFilePath;
+    options.includeResolver = includeResolver;
+    options.customNamespace = customNamespace;
+    options.macroDefinitions = macroDefinitions;
+    return Compile(options, arena, outResult);
+}
 [[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, MetaArena& arena, CompileResult& outResult){ return Compile(source, virtualFilePath, includeResolver, {}, {}, arena, outResult); }
 [[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult){ return Compile(source, virtualFilePath, nullptr, {}, {}, arena, outResult); }
 

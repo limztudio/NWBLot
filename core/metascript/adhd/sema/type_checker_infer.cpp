@@ -359,6 +359,19 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
         if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text))
             return m_symbols.unwrapTypeAlias(field->type);
     }
+    else if(
+        expr.kind == ExprKind::ScopeAccess
+        && !expr.lhs
+        && expr.text.empty()
+        && expr.scopeChain.size() == 2u
+        && !FindScopedVar(scope, expr.scopeChain[0])
+        && !m_symbols.findGlobalConstant(expr.scopeChain[0])
+    ){
+        if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))){
+            if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.scopeChain[1]); staticField && staticField->isStatic && staticField->type)
+                return m_symbols.unwrapTypeAlias(staticField->type);
+        }
+    }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
@@ -660,32 +673,56 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             && expr.lhs->scopeChain.size() == 2u
             && !FindScopedVar(scope, expr.lhs->scopeChain[0])
             && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
-            && !m_symbols.hasTypeSymbol(expr.lhs->scopeChain[0])
         ){
-            if(const BuiltinFunctionInfo* fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1])){
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
-                    return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
-                if((fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType || fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType) && !fnInfo->returnTypeName.empty())
-                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, fnInfo->returnTypeName, fnInfo->returnTypeArgName, fnInfo->returnNestedTypeArgName, fnInfo->returnErrorTypeName);
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0){
-                    TypeArg resolvedTArg{};
-                    if(!expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type){
-                        resolvedTArg = expr.callTemplateArgs[0];
-                    }
-                    else if(!fnInfo->requiresExplicitTypeArg && !expr.arguments.empty() && expr.arguments[0]){
-                        const TypeRef* arg0Ref = nullptr;
-                        const MStringView arg0Base = inferExprBaseType(ownerClass, method, *expr.arguments[0], scope, &arg0Ref);
-                        if(arg0Ref){
-                            resolvedTArg.type = const_cast<TypeRef*>(arg0Ref);
+            if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]))){
+                if(const MethodDecl* m = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, ownerClass != scopedCls, argTypeHints, argIsMutHints, true)){
+                    if(!m->returnType)
+                        return nullptr;
+                    const TypeRef* rt = m->returnType;
+                    if(!m->templateParams.empty()){
+                        if(!expr.callTemplateArgs.empty()){
+                            rt = m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs);
                         }
-                        else if(!arg0Base.empty()){
-                            TypeRef* deducedType = AllocateAstNode<TypeRef>(m_arena);
-                            deducedType->name = arg0Base;
-                            resolvedTArg.type = deducedType;
+                        else{
+                            MVector<TypeArg> deducedArgs(m_arena);
+                            CallableTemplateDeduction(*this).deduce(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
+                            if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
+                                rt = m_symbols.substituteTypeParams(*m->returnType, m->templateParams, deducedArgs);
                         }
                     }
-                    if(const TypeRef* synth = __hidden_adhd_type_infer::SynthesizeCallTemplateArg0ReturnType(m_arena, m_symbols, *fnInfo, resolvedTArg))
-                        return synth;
+                    return m_symbols.unwrapTypeAlias(rt);
+                }
+                if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.lhs->scopeChain[1]); staticField && staticField->isStatic && staticField->type){
+                    if(const TypeRef* uft = m_symbols.unwrapTypeAlias(staticField->type); uft && uft->isFuncType && uft->funcReturnType)
+                        return m_symbols.unwrapTypeAlias(uft->funcReturnType);
+                }
+            }
+            if(!m_symbols.hasTypeSymbol(expr.lhs->scopeChain[0])){
+                if(const BuiltinFunctionInfo* fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1])){
+                    if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+                        return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
+                    if((fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType || fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0OrFixedType) && !fnInfo->returnTypeName.empty())
+                        return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, fnInfo->returnTypeName, fnInfo->returnTypeArgName, fnInfo->returnNestedTypeArgName, fnInfo->returnErrorTypeName);
+                    if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0){
+                        TypeArg resolvedTArg{};
+                        if(!expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type){
+                            resolvedTArg = expr.callTemplateArgs[0];
+                        }
+                        else if(!fnInfo->requiresExplicitTypeArg && !expr.arguments.empty() && expr.arguments[0]){
+                            const TypeRef* arg0Ref = nullptr;
+                            const MStringView arg0Base = inferExprBaseType(ownerClass, method, *expr.arguments[0], scope, &arg0Ref);
+                            if(arg0Ref){
+                                resolvedTArg.type = const_cast<TypeRef*>(arg0Ref);
+                            }
+                            else if(!arg0Base.empty()){
+                                TypeRef* deducedType = AllocateAstNode<TypeRef>(m_arena);
+                                deducedType->name = arg0Base;
+                                resolvedTArg.type = deducedType;
+                            }
+                        }
+                        if(const TypeRef* synth = __hidden_adhd_type_infer::SynthesizeCallTemplateArg0ReturnType(m_arena, m_symbols, *fnInfo, resolvedTArg))
+                            return synth;
+                    }
                 }
             }
         }

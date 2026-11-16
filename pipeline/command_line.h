@@ -50,17 +50,27 @@ inline constexpr AStringView s_PipelineIncludeDirOption = "-I,--include-dir";
 inline constexpr AStringView s_PipelineDepfileOption = "--depfile";
 inline constexpr AStringView s_PipelineNamespaceOption = "--namespace";
 inline constexpr AStringView s_PipelineNamespaceMapOption = "--namespace-map";
+inline constexpr AStringView s_PipelineCppHeaderOption = "--cpp-header";
+inline constexpr AStringView s_PipelineCppIncludeDirOption = "--cpp-include-dir";
+inline constexpr AStringView s_PipelineCppDefineOption = "--cpp-define";
+inline constexpr AStringView s_PipelineCppArgOption = "--cpp-arg";
+inline constexpr AStringView s_PipelineEmitCppExternsOption = "--emit-cpp-externs";
 inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     Core::Assets::AssetVector<Core::Assets::AssetString> assetRoots;
     Core::Assets::AssetVector<Core::Assets::AssetString> includeDirectories;
+    Core::Assets::AssetVector<Core::Assets::AssetString> cppHeaders;
+    Core::Assets::AssetVector<Core::Assets::AssetString> cppIncludeDirectories;
+    Core::Assets::AssetVector<Core::Assets::AssetString> cppDefines;
+    Core::Assets::AssetVector<Core::Assets::AssetString> cppCompilerArgs;
     Core::Assets::AssetString repoRoot;
     Core::Assets::AssetString outputPath;
     Core::Assets::AssetString depfilePath;
     Core::Assets::AssetString customNamespace;
     Core::Assets::AssetString namespaceMapPath;
+    Core::Assets::AssetString emitCppExternsPath;
     ACompactString configuration;
     // Unset when --asset-type is omitted; the asset builder owns the default domain.
     Optional<ACompactString> assetType;
@@ -71,11 +81,16 @@ public:
         : inputs(arena)
         , assetRoots(arena)
         , includeDirectories(arena)
+        , cppHeaders(arena)
+        , cppIncludeDirectories(arena)
+        , cppDefines(arena)
+        , cppCompilerArgs(arena)
         , repoRoot(arena)
         , outputPath(arena)
         , depfilePath(arena)
         , customNamespace(arena)
         , namespaceMapPath(arena)
+        , emitCppExternsPath(arena)
     {}
 };
 
@@ -105,12 +120,17 @@ private:
     InteropVector<AInteropString> m_inputs;
     InteropVector<AInteropString> m_assetRoots;
     InteropVector<AInteropString> m_includeDirectories;
+    InteropVector<AInteropString> m_cppHeaders;
+    InteropVector<AInteropString> m_cppIncludeDirectories;
+    InteropVector<AInteropString> m_cppDefines;
+    InteropVector<AInteropString> m_cppCompilerArgs;
     AInteropString m_inputList;
     AInteropString m_repoRoot;
     AInteropString m_outputPath;
     AInteropString m_depfilePath;
     AInteropString m_customNamespace;
     AInteropString m_namespaceMapPath;
+    AInteropString m_emitCppExternsPath;
     AInteropString m_configuration;
     AInteropString m_assetType;
     PipelineTool::Enum m_tool;

@@ -15,6 +15,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/clang/cpp_header_importer.h>
 #include <core/metascript/adhd/compiler.h>
 #include <core/metascript/preprocessor_macro_expander.h>
 
@@ -53,6 +54,9 @@ public:
     u32 resolveCallCount = 0u;
 };
 
+void RunCoreCppHeaderImportVerification();
+void RunExternHeaderAndDeclEdgeCases();
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,6 +90,14 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
     CompileResult& outResult
 ){
     return Compile(source, virtualFilePath, &resolver, arena, outResult);
+}
+
+FOUNDATION_INLINE void InvokeCoreCppHeaderImportVerification(){
+    AdhdCompilerTestsDetail::RunCoreCppHeaderImportVerification();
+}
+
+FOUNDATION_INLINE void InvokeExternHeaderAndDeclEdgeCases(){
+    AdhdCompilerTestsDetail::RunExternHeaderAndDeclEdgeCases();
 }
 
 [[nodiscard]] FOUNDATION_INLINE AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
@@ -1824,6 +1836,14 @@ void VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafet
     ));
 }
 
+void VerifyAdhdCompiler_ImportsCoreCppHeadersWithLibclang(){
+    InvokeCoreCppHeaderImportVerification();
+}
+
+void VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases(){
+    InvokeExternHeaderAndDeclEdgeCases();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1901,6 +1921,385 @@ Core::Metascript::MStringView MockIncludeResolver::resolveIncludeNamespace(const
     return {};
 }
 
+void RunExternHeaderAndDeclEdgeCases(){
+    using AdhdCompileOptions = Core::Metascript::Adhd::Compiler::CompileOptions;
+    using Core::Metascript::Adhd::CompileResult;
+
+    AdhdTestArena arena;
+
+    static constexpr const char kFullExternCompileSource[] = R"adhd(
+extern "<core/alloc/scratch.h>";
+extern "<core/metascript/parser.h>";
+extern "<core/graphics/rhi/gpu_descriptor_heap.h>";
+extern "<core/graphics/backend_selection/backend.h>";
+extern "<core/task/gpu/task_graph.h>";
+extern "<core/graphics/runtime/runtime.h>";
+
+class LocalIncludeResolver : MetascriptIIncludeResolver{
+    public b8 resolve(in StringView includePath, mut Arena arena, mut String outSource){
+        return false;
+    }
+}
+
+b8 InspectCoreExternApis(
+    in StringView src,
+    mut Document doc,
+    mut MetascriptDocument aliasDoc,
+    mut GraphicsRuntime runtime,
+    mut GpuTaskGraph graph
+){
+    ScratchArena scratch = ScratchArena(Name("edge_test"));
+    const usize initialBytes = ScratchArena::s_DefaultInitialChunkBytes;
+    const b8 okDefault = doc.parse(src);
+    const b8 okAlias = aliasDoc.parse(src);
+    b8 visitedVar = false;
+    doc.visitVariable("flag", lambda[mut visitedVar](in MetascriptValue val) -> void{
+        visitedVar = val.isNumeric();
+    });
+
+    const u64 frameIdx = runtime.getFrameIndex();
+    mut Device device = runtime.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    const b8 heapReady = heap.isInitialized();
+    Expected<GpuDescriptorHandle> allocated = heap.allocate(GpuDescriptorClass::Sampler);
+    graph.reset();
+
+    return (initialBytes > 0u) && okDefault && okAlias && visitedVar && (frameIdx >= 0u) && heapReady && allocated.hasValue();
+}
+)adhd";
+
+    CompileResult fullRes(arena.arena);
+    Core::Metascript::MString emittedExterns(arena.arena);
+    AdhdCompileOptions fullOpts;
+    fullOpts.source = kFullExternCompileSource;
+    fullOpts.virtualFilePath = "impl/edge_cases/full_extern.adhd";
+    fullOpts.outEmittedCppExterns = &emittedExterns;
+    const b8 fullOk = Core::Metascript::Adhd::Compiler::Compile(fullOpts, arena.arena, fullRes);
+    EXPECT_TRUE(fullOk) << FirstErrorMessage(fullRes);
+    if(fullOk){
+        const AStringView hdr = GeneratedHeaderView(fullRes);
+        const AStringView cpp = GeneratedSourceView(fullRes);
+        EXPECT_NE(hdr.find("#include <core/alloc/scratch.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/metascript/parser.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/graphics/rhi/gpu_descriptor_heap.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/graphics/backend_selection/"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/task/gpu/task_graph.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/graphics/runtime/runtime.h>"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::Alloc::ScratchArena::s_DefaultInitialChunkBytes"), AStringView::npos);
+        EXPECT_NE(cpp.find("doc.parse(src)"), AStringView::npos);
+        EXPECT_NE(cpp.find("aliasDoc.parse(src)"), AStringView::npos);
+        EXPECT_NE(cpp.find("runtime.getFrameIndex()"), AStringView::npos);
+        EXPECT_NE(cpp.find("runtime.getDevice()"), AStringView::npos);
+        EXPECT_NE(cpp.find("device->getDescriptorHeap()"), AStringView::npos);
+        EXPECT_NE(cpp.find("heap->allocate(::NWB::Core::GpuDescriptorClass::Sampler)"), AStringView::npos);
+        EXPECT_NE(cpp.find("graph.reset()"), AStringView::npos);
+
+        const AStringView emittedView(emittedExterns.data(), emittedExterns.size());
+        EXPECT_EQ(emittedView.find("findVariable"), AStringView::npos);
+        EXPECT_EQ(emittedView.find("(auto "), AStringView::npos);
+        EXPECT_EQ(emittedView.find(", auto "), AStringView::npos);
+        EXPECT_EQ(emittedView.find("void*"), AStringView::npos);
+        EXPECT_EQ(emittedView.find("char*"), AStringView::npos);
+        EXPECT_EQ(emittedView.find("NotNull<"), AStringView::npos);
+    }
+
+    EXPECT_FALSE(emittedExterns.empty());
+    if(!emittedExterns.empty()){
+        static constexpr const char kRoundTripConsumer[] = R"adhd(
+[cpp_name("::MyNs::DirectMode"), cpp_header("<my_ns/types.h>")]
+extern enum DirectMode{
+    Fast = 0,
+    Accurate = 1
+};
+
+[cpp_name("::MyNs::AccessBits"), cpp_header("<my_ns/types.h>")]
+extern flag AccessBits{
+    None = 0,
+    Read = 1,
+    Write = 2
+};
+
+[cpp_name("::MyNs::Counter"), cpp_header("<my_ns/types.h>")]
+extern class Counter : NoCopy{
+    static u32 s_Count;
+    static u32 Next();
+    u32 addWithDefault(in u32 delta = {});
+};
+
+[cpp_name("::MyNs::ComputeScale"), cpp_header("<my_ns/types.h>")]
+extern f32 ComputeScale(in DirectMode mode = {});
+
+[cpp_name("::MyNs::kMaxItems"), cpp_header("<my_ns/types.h>")]
+extern const u32 kMaxItems;
+
+b8 ExerciseEmittedAndManualExterns(
+    in StringView src,
+    mut Document doc,
+    mut MetascriptDocument aliasDoc,
+    mut Counter counter
+){
+    const usize chunk = ScratchArena::s_DefaultInitialChunkBytes;
+    const u32 count = Counter::s_Count;
+    const u32 nextVal = Counter::Next();
+    const u32 updated = counter.addWithDefault();
+    const f32 scale = ComputeScale();
+    const DirectMode mode = DirectMode::Accurate;
+    const AccessBits bits = AccessBits::Read | AccessBits::Write;
+    return doc.parse(src)
+        && aliasDoc.parse(src)
+        && (chunk > 0u)
+        && (count <= kMaxItems)
+        && (nextVal > 0u)
+        && (updated > 0u)
+        && (scale > 0.0f)
+        && (mode != DirectMode::Fast)
+        && (bits != AccessBits::None);
+}
+)adhd";
+        Core::Metascript::MString roundTripSrc(arena.arena);
+        roundTripSrc.append(emittedExterns.data(), emittedExterns.size());
+        roundTripSrc.push_back('\n');
+        roundTripSrc.append(kRoundTripConsumer);
+
+        CompileResult roundTripRes(arena.arena);
+        const b8 roundTripOk = Core::Metascript::Adhd::Compiler::Compile(
+            Core::Metascript::MStringView(roundTripSrc.data(), roundTripSrc.size()),
+            "impl/edge_cases/round_trip.adhd",
+            nullptr,
+            {},
+            {},
+            arena.arena,
+            roundTripRes
+        );
+        EXPECT_TRUE(roundTripOk) << FirstErrorMessage(roundTripRes);
+        if(roundTripOk){
+            const AStringView hdr = GeneratedHeaderView(roundTripRes);
+            const AStringView cpp = GeneratedSourceView(roundTripRes);
+            EXPECT_NE(hdr.find("#include <my_ns/types.h>"), AStringView::npos);
+            EXPECT_NE(cpp.find("::MyNs::DirectMode mode"), AStringView::npos);
+            EXPECT_EQ(hdr.find("::MyNs::DirectMode::Enum"), AStringView::npos);
+            EXPECT_EQ(cpp.find("::MyNs::DirectMode::Enum"), AStringView::npos);
+            EXPECT_NE(cpp.find("::MyNs::Counter::s_Count"), AStringView::npos);
+            EXPECT_NE(cpp.find("::MyNs::Counter::Next()"), AStringView::npos);
+            EXPECT_NE(cpp.find("::MyNs::ComputeScale()"), AStringView::npos);
+            EXPECT_NE(cpp.find("::MyNs::kMaxItems"), AStringView::npos);
+            EXPECT_NE(cpp.find("::MyNs::DirectMode::Accurate"), AStringView::npos);
+        }
+    }
+
+    auto expectFails = [&arena](const char* src, const char* path, const char* expectedSubstr){
+        CompileResult badRes(arena.arena);
+        const b8 ok = Core::Metascript::Adhd::Compiler::Compile(src, path, nullptr, {}, {}, arena.arena, badRes);
+        EXPECT_FALSE(ok) << "Expected compile failure for: " << path;
+        if(!ok && expectedSubstr && expectedSubstr[0] != '\0')
+            EXPECT_NE(FirstErrorMessage(badRes).find(expectedSubstr), AStringView::npos) << FirstErrorMessage(badRes);
+    };
+
+    expectFails(R"adhd(
+[cpp_name("::MyNs::ISurface")]
+extern interface ISurface{
+    void ping();
+};
+void Bad(){
+    ISurface s = ISurface();
+}
+)adhd", "impl/edge_cases/bad_abstract_iface.adhd", "");
+
+    expectFails(R"adhd(
+extern "<core/task/gpu/task_graph.h>";
+void BadCopy(in GpuTaskGraph src){
+    GpuTaskGraph copy = src;
+}
+)adhd", "impl/edge_cases/bad_nocopy_clang.adhd", "cannot copy a non-copyable type");
+
+    expectFails(R"adhd(
+[cpp_name("::MyNs::NonCopyable")]
+extern class NonCopyable : NoCopy{
+    NonCopyable();
+};
+void BadManualNoCopy(in NonCopyable src){
+    NonCopyable copy = src;
+}
+)adhd", "impl/edge_cases/bad_nocopy_manual.adhd", "cannot copy a non-copyable type");
+
+    expectFails(R"adhd(
+extern "<core/metascript/parser.h>";
+b8 BadPtrParamNotExposed(mut Document doc, in StringView src, mut MetascriptIIncludeResolver resolver){
+    return doc.parse(src, resolver);
+}
+)adhd", "impl/edge_cases/bad_ptr_param_not_exposed.adhd", "");
+
+    expectFails(R"adhd(
+extern "<core/metascript/parser.h>";
+void BadPtrReturnNotExposed(in Document doc){
+    doc.findVariable("flag");
+}
+)adhd", "impl/edge_cases/bad_ptr_return_not_exposed.adhd", "");
+
+    expectFails(R"adhd(
+extern "<core/metascript/parser.h>";
+b8 BadMissingArg(mut Document doc){
+    return doc.parse();
+}
+)adhd", "impl/edge_cases/bad_missing_arg.adhd", "");
+}
+
+void RunCoreCppHeaderImportVerification(){
+    AdhdTestArena arena;
+
+    Core::Metascript::MVector<Core::Metascript::Adhd::ImportedCppHeader> headers(arena.arena);
+    static constexpr Core::Metascript::MStringView s_Headers[] = {
+        "core/alloc/scratch.h",
+        "core/metascript/parser.h",
+        "core/graphics/rhi/gpu_descriptor_heap.h",
+        "core/graphics/backend_selection/backend.h",
+        "core/task/gpu/task_graph.h",
+        "core/graphics/runtime/runtime.h"
+    };
+    for(const Core::Metascript::MStringView hdrPath : s_Headers){
+        Core::Metascript::Adhd::ImportedCppHeader entry;
+        entry.headerPath = hdrPath;
+        entry.isSystemHeader = true;
+        entry.span = Core::Metascript::Adhd::SourceSpan{ 1u, 1u };
+        headers.push_back(entry);
+    }
+
+    Core::Metascript::Adhd::CppHeaderImportOptions importOpts;
+    importOpts.headers = Span<const Core::Metascript::Adhd::ImportedCppHeader>(headers.data(), headers.size());
+
+    Core::Metascript::Adhd::TranslationUnit unit(arena.arena);
+    Core::Metascript::MVector<Core::Metascript::ParseError> errors(arena.arena);
+    const b8 imported = Core::Metascript::Adhd::CppHeaderImporter::ImportHeaders(importOpts, arena.arena, unit, errors);
+    if(!errors.empty()){
+        for(const auto& err : errors)
+            ADD_FAILURE() << "libclang import error: " << std::string_view(err.message.data(), err.message.size());
+    }
+    ASSERT_TRUE(imported);
+    EXPECT_TRUE(errors.empty());
+    EXPECT_FALSE(unit.resolvedIncludedFiles.empty());
+
+    auto findClass = [&](const Core::Metascript::MStringView name) -> const Core::Metascript::Adhd::ClassDecl*{
+        for(const auto* cls : unit.classes){
+            if(cls && cls->name == name)
+                return cls;
+        }
+        return nullptr;
+    };
+    auto findEnum = [&](const Core::Metascript::MStringView name) -> const Core::Metascript::Adhd::EnumDecl*{
+        for(const auto* e : unit.enums){
+            if(e && e->name == name)
+                return e;
+        }
+        return nullptr;
+    };
+    auto findAlias = [&](const Core::Metascript::MStringView name) -> const Core::Metascript::Adhd::TypeAliasDecl*{
+        for(const auto* a : unit.typeAliases){
+            if(a && a->name == name)
+                return a;
+        }
+        return nullptr;
+    };
+
+    const auto* scratch = findClass("ScratchArena");
+    ASSERT_NE(scratch, nullptr);
+    EXPECT_TRUE(scratch->isExtern);
+    EXPECT_EQ(scratch->cppExportName, "::NWB::Core::Alloc::ScratchArena");
+    EXPECT_EQ(scratch->totalSize, 304u);
+    EXPECT_EQ(scratch->totalAlign, 8u);
+
+    const auto* document = findClass("Document");
+    ASSERT_NE(document, nullptr);
+    EXPECT_TRUE(document->isExtern);
+    EXPECT_EQ(document->cppExportName, "::NWB::Core::Metascript::Document");
+    EXPECT_EQ(document->totalSize, 264u);
+    EXPECT_EQ(document->totalAlign, 8u);
+    const auto* docAlias = findAlias("MetascriptDocument");
+    ASSERT_NE(docAlias, nullptr);
+    b8 foundVisitVariable = false;
+    for(const auto* m : document->methods){
+        if(m && m->name == "visitVariable" && !m->templateParams.empty())
+            foundVisitVariable = true;
+    }
+    EXPECT_TRUE(foundVisitVariable);
+
+    const auto* descClass = findEnum("GpuDescriptorClass");
+    ASSERT_NE(descClass, nullptr);
+    EXPECT_TRUE(descClass->isExtern);
+    EXPECT_FALSE(descClass->isDirectCppEnum);
+    EXPECT_EQ(descClass->cppExportName, "::NWB::Core::GpuDescriptorClass::Enum");
+
+    const auto* descHeap = findClass("GpuDescriptorHeap");
+    ASSERT_NE(descHeap, nullptr);
+    EXPECT_TRUE(descHeap->isExtern);
+    EXPECT_FALSE(descHeap->isAbstract);
+    EXPECT_FALSE(descHeap->isCopyConstructible);
+    EXPECT_EQ(descHeap->totalSize, 1008u);
+    EXPECT_EQ(descHeap->totalAlign, 8u);
+    EXPECT_NE(findClass("GpuDescriptorHeapPendingRecordingLease"), nullptr);
+
+    const auto* taskGraph = findClass("GpuTaskGraph");
+    ASSERT_NE(taskGraph, nullptr);
+    EXPECT_TRUE(taskGraph->isExtern);
+    EXPECT_FALSE(taskGraph->isCopyConstructible);
+    EXPECT_EQ(taskGraph->totalSize, 1744u);
+    EXPECT_EQ(taskGraph->totalAlign, 8u);
+    EXPECT_NE(findClass("GpuTaskGraphPayloadLifetimeScope"), nullptr);
+    b8 foundAddTask = false;
+    b8 foundDefaultArgMethod = false;
+    for(const auto* m : taskGraph->methods){
+        if(!m)
+            continue;
+        if(m->name == "addTask" && !m->templateParams.empty())
+            foundAddTask = true;
+        if(m->hasDefaultArgs && m->minArgCount < m->params.size())
+            foundDefaultArgMethod = true;
+    }
+    EXPECT_TRUE(foundAddTask);
+    EXPECT_TRUE(foundDefaultArgMethod);
+
+    const auto* runtime = findClass("GraphicsRuntime");
+    ASSERT_NE(runtime, nullptr);
+    EXPECT_TRUE(runtime->isExtern);
+    EXPECT_EQ(runtime->totalSize, 1520u);
+    EXPECT_EQ(runtime->totalAlign, 8u);
+    usize runtimeCtorCount = 0u;
+    for(const auto* m : runtime->methods){
+        if(m && m->isConstructor)
+            ++runtimeCtorCount;
+    }
+    EXPECT_EQ(runtimeCtorCount, 1u);
+
+    b8 foundParseSingleArg = false;
+    b8 foundFindVariable = false;
+    for(const auto* m : document->methods){
+        if(!m)
+            continue;
+        if(m->name == "parse"){
+            EXPECT_EQ(m->params.size(), 1u);
+            foundParseSingleArg = true;
+        }
+        if(m->name == "findVariable")
+            foundFindVariable = true;
+    }
+    EXPECT_TRUE(foundParseSingleArg);
+    EXPECT_FALSE(foundFindVariable);
+
+    const Core::Metascript::MString formattedExtern = Core::Metascript::Adhd::CppHeaderImporter::FormatExternAdhd(unit, arena.arena);
+    EXPECT_FALSE(formattedExtern.empty());
+    EXPECT_NE(Core::Metascript::MStringView(formattedExtern.data(), formattedExtern.size()).find("[cpp_header(\"core/"), Core::Metascript::MStringView::npos);
+
+    Core::Metascript::Adhd::ImportedCppHeader badHeader;
+    badHeader.headerPath = "nonexistent_core_header_12345.h";
+    badHeader.isSystemHeader = true;
+    badHeader.span = Core::Metascript::Adhd::SourceSpan{ 1u, 1u };
+    Core::Metascript::Adhd::CppHeaderImportOptions badOpts;
+    badOpts.headers = Span<const Core::Metascript::Adhd::ImportedCppHeader>(&badHeader, 1u);
+    Core::Metascript::Adhd::TranslationUnit badUnit(arena.arena);
+    Core::Metascript::MVector<Core::Metascript::ParseError> badErrors(arena.arena);
+    EXPECT_FALSE(Core::Metascript::Adhd::CppHeaderImporter::ImportHeaders(badOpts, arena.arena, badUnit, badErrors));
+    EXPECT_FALSE(badErrors.empty());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1958,6 +2357,8 @@ NWB_ADHD_GTEST(AdhdCompiler, ResolvesHandleDerefRhiAndAssetExports, VerifyAdhdCo
 NWB_ADHD_GTEST(AdhdCompiler, QualifiesCrossNamespaceImportsRespectingShadowing, VerifyAdhdCompiler_QualifiesCrossNamespaceImportsRespectingShadowing)
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors, VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors)
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety, VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety)
+NWB_ADHD_GTEST(AdhdCompiler, ImportsCoreCppHeadersWithLibclang, VerifyAdhdCompiler_ImportsCoreCppHeadersWithLibclang)
+NWB_ADHD_GTEST(AdhdCompiler, CompilesExternHeaderAndDeclEdgeCases, VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,6 +4,8 @@
 
 #include "header_preamble_emitter.h"
 
+#include "source_emitter.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,14 +85,14 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
     b8 hasHeaderTaskScope = false;
     b8 hasHeaderDiagnostic = false;
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
-        if(ifaceDecl && !ifaceDecl->isImported && !ifaceDecl->assetTypeName.empty())
+        if(ifaceDecl && !ifaceDecl->isImported && !ifaceDecl->isExtern && !ifaceDecl->assetTypeName.empty())
             hasAssetDecl = true;
     }
     for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl)
+        if(!classDecl || classDecl->isExtern)
             continue;
         for(const MethodDecl* method : classDecl->methods){
-            if(!method || method->isImported || !method->hasBody)
+            if(!method || method->isImported || method->isExtern || !method->hasBody)
                 continue;
             if(!classDecl->templateParams.empty() || !method->templateParams.empty() || method->isInline || method->hasSynthesizedArenaParams){
                 if(method->usesTaskScope)
@@ -119,7 +121,7 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
     if(hasComponentDecl)
         out.append("#include <core/ecs/component.h>\r\n");
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(fn && !fn->isImported && fn->hasBody && (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)){
+        if(fn && !fn->isImported && !fn->isExtern && fn->hasBody && (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)){
             if(fn->usesTaskScope)
                 hasHeaderTaskScope = true;
             if(!hasHeaderDiagnostic && stmtsUseDiagnostic(stmtsUseDiagnostic, fn->body))

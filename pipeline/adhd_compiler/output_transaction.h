@@ -24,7 +24,7 @@ NWB_ADHD_COMPILER_BEGIN
 
 class AdhdOutputTransaction final : NoCopy{
 public:
-    AdhdOutputTransaction(Core::Metascript::MetaArena& arena, Span<const Path<Core::Metascript::MetaArena>> outputPaths, Span<const Core::Metascript::MStringView> outputContents, Span<const Core::Metascript::MString> inputs, Core::Metascript::MStringView depfilePath);
+    AdhdOutputTransaction(Core::Metascript::MetaArena& arena, Span<const Path<Core::Metascript::MetaArena>> outputPaths, Span<const Core::Metascript::MStringView> outputContents, Span<const Core::Metascript::MString> inputs, Core::Metascript::MStringView depfilePath, Core::Metascript::MStringView emitCppExternsPath = {});
 
 
 public:
@@ -41,6 +41,7 @@ private:
     Span<const Core::Metascript::MStringView> m_outputContents;
     Span<const Core::Metascript::MString> m_inputs;
     Core::Metascript::MStringView m_depfilePath;
+    Core::Metascript::MStringView m_emitCppExternsPath;
     Core::Metascript::MVector<b8> m_hadExisting;
     Core::Metascript::MVector<b8> m_hasStaged;
     Core::Metascript::MVector<b8> m_hasBackup;

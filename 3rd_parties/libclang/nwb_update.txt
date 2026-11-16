@@ -1,0 +1,5 @@
+package: libclang
+version: 23.1.5 (CINDEX_VERSION_MAJOR 0, CINDEX_VERSION_MINOR 64)
+updated_utc: 2026-11-16T07:28:00Z
+source: https://github.com/llvm/llvm-project/tree/llvmorg-23.1.5/clang/include/clang-c
+notes: Vendored Clang C API headers (clang-c/*.h) from LLVM/Clang 23.1.5. Follows 3rd_parties/ conventions: exposes nwb::libclang_headers and link-time target nwb::libclang (preferring bundled static/import libraries under lib/<os>/<arch>/ with fallback to host LLVM libclang).

@@ -28,7 +28,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     HeaderPreambleEmitter::Emit(out, unit, namespacePath);
 
     for(const EnumDecl* enumDecl : unit.enums){
-        if(enumDecl && !enumDecl->isImported)
+        if(enumDecl && !enumDecl->isImported && !enumDecl->isExtern)
             emitEnumDecl(out, *enumDecl);
     }
 
@@ -53,31 +53,31 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-        if(aliasDecl && !aliasDecl->isImported && aliasDecl->aliasedType)
+        if(aliasDecl && !aliasDecl->isImported && !aliasDecl->isExtern && aliasDecl->aliasedType)
             collectTypeForwardDecls(*aliasDecl->aliasedType, aliasDecl->templateParams, {}, false);
     }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
-        if(!ifaceDecl || ifaceDecl->isImported)
+        if(!ifaceDecl || ifaceDecl->isImported || ifaceDecl->isExtern)
             continue;
         for(const MethodDecl* m : ifaceDecl->methods){
-            if(m)
+            if(m && !m->isExtern)
                 collectCallableForwardDeclClasses(*m, ifaceDecl->templateParams, {});
         }
     }
     for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl || classDecl->isImported)
+        if(!classDecl || classDecl->isImported || classDecl->isExtern)
             continue;
         for(const FieldDecl* f : classDecl->fields){
-            if(f && f->type)
+            if(f && !f->isStatic && f->type)
                 collectTypeForwardDecls(*f->type, classDecl->templateParams, {}, false);
         }
         for(const MethodDecl* m : classDecl->methods){
-            if(m)
+            if(m && !m->isExtern)
                 collectCallableForwardDeclClasses(*m, classDecl->templateParams, m->templateParams);
         }
     }
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(fn && !fn->isImported)
+        if(fn && !fn->isImported && !fn->isExtern)
             collectCallableForwardDeclClasses(*fn, fn->templateParams, {});
     }
 
@@ -89,7 +89,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         out.append(";\r\n");
     }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
-        if(!ifaceDecl || ifaceDecl->isImported)
+        if(!ifaceDecl || ifaceDecl->isImported || ifaceDecl->isExtern)
             continue;
         emittedForwardDecl = true;
         m_typeEmitter.emitTemplateHeaderCpp(out, ifaceDecl->templateParams);
@@ -98,7 +98,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         out.append(";\r\n");
     }
     for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl || classDecl->isImported)
+        if(!classDecl || classDecl->isImported || classDecl->isExtern)
             continue;
         emittedForwardDecl = true;
         m_typeEmitter.emitTemplateHeaderCpp(out, classDecl->templateParams);
@@ -113,7 +113,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!c.varType)
             return false;
         for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-            if(aliasDecl && !aliasDecl->isImported && declarationDependencies.typeRefReferencesSymbol(*c.varType, aliasDecl->name))
+            if(aliasDecl && !aliasDecl->isImported && !aliasDecl->isExtern && declarationDependencies.typeRefReferencesSymbol(*c.varType, aliasDecl->name))
                 return true;
         }
         return false;
@@ -123,7 +123,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!c.varType)
             return false;
         for(const ClassDecl* classDecl : unit.classes){
-            if(classDecl && !classDecl->isImported && declarationDependencies.typeRefReferencesSymbolByValue(*c.varType, classDecl->name))
+            if(classDecl && !classDecl->isImported && !classDecl->isExtern && declarationDependencies.typeRefReferencesSymbolByValue(*c.varType, classDecl->name))
                 return true;
         }
         return false;
@@ -132,7 +132,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     const auto emitMatchingGlobalConsts = [&](const auto& pred){
         b8 emittedAny = false;
         for(const Stmt* c : unit.globalConstants){
-            if(!c || c->isImported || !c->varType || !pred(*c))
+            if(!c || c->isImported || c->isExtern || !c->varType || !pred(*c))
                 continue;
             emittedAny = true;
             emitGlobalConstDecl(out, *c);
@@ -147,7 +147,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
 
     MVector<const TypeAliasDecl*> localAliases(m_arena);
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-        if(aliasDecl && !aliasDecl->isImported)
+        if(aliasDecl && !aliasDecl->isImported && !aliasDecl->isExtern)
             localAliases.push_back(aliasDecl);
     }
     if(!localAliases.empty()){
@@ -165,7 +165,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
 
     MVector<const InterfaceDecl*> localInterfaces(m_arena);
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
-        if(ifaceDecl && !ifaceDecl->isImported)
+        if(ifaceDecl && !ifaceDecl->isImported && !ifaceDecl->isExtern)
             localInterfaces.push_back(ifaceDecl);
     }
     if(!localInterfaces.empty()){
@@ -180,7 +180,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     const b8 emitFreeFnPrototypesEarly = !unit.classes.empty() || unit.freeFunctions.size() > 1u;
     if(emitFreeFnPrototypesEarly){
         for(const MethodDecl* fn : unit.freeFunctions){
-            if(fn && !fn->isImported)
+            if(fn && !fn->isImported && !fn->isExtern)
                 m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, false, false, true);
         }
     }
@@ -198,7 +198,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         MVector<const ClassDecl*> readyClasses(m_arena);
         readyClasses.reserve(sortedClasses.size());
         for(const ClassDecl* classDecl : sortedClasses){
-            if(classDecl && classDecl->isImported)
+            if(classDecl && (classDecl->isImported || classDecl->isExtern))
                 readyClasses.push_back(classDecl);
         }
 
@@ -244,7 +244,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
 
         emitReadyInstantiations();
         for(const ClassDecl* classDecl : sortedClasses){
-            if(!classDecl || classDecl->isImported)
+            if(!classDecl || classDecl->isImported || classDecl->isExtern)
                 continue;
             emitClassDecl(out, *classDecl);
             readyClasses.push_back(classDecl);
@@ -255,11 +255,11 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx]);
         }
         for(const ClassDecl* classDecl : sortedClasses){
-            if(!classDecl)
+            if(!classDecl || classDecl->isExtern)
                 continue;
             if(classDecl->isImported){
                 for(const MethodDecl* method : classDecl->methods){
-                    if(!method || method->isImported || !method->hasBody)
+                    if(!method || method->isImported || method->isExtern || !method->hasBody)
                         continue;
                     if(classDecl->templateParams.empty() && method->templateParams.empty() && !method->isInline && !method->hasSynthesizedArenaParams)
                         continue;
@@ -268,7 +268,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             }
             else if(classDecl->templateParams.empty()){
                 for(const MethodDecl* method : classDecl->methods){
-                    if(!method || method->isImported || !method->hasBody || !method->hasSynthesizedArenaParams)
+                    if(!method || method->isImported || method->isExtern || !method->hasBody || !method->hasSynthesizedArenaParams)
                         continue;
                     m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
                 }
@@ -281,7 +281,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     });
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || fn->isImported)
+        if(!fn || fn->isImported || fn->isExtern)
             continue;
         const b8 emitInlineBody = (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams) && fn->hasBody;
         if(emitFreeFnPrototypesEarly && !emitInlineBody)

@@ -192,7 +192,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
 
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
             const EnumEntry& entry = enumDecl->entries[i];
-            if(entry.name == "Count"){
+            if(!enumDecl->isImported && !enumDecl->isExtern && entry.name == "Count"){
                 reportError(errors, entry.span, enumDecl->isFlag
                     ? "use 'kCount' instead of 'Count' for flag count sentries"
                     : "use 'kCount' instead of 'Count' for enum count sentries");
@@ -205,7 +205,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                     break;
                 }
             }
-            if(!enumDecl->isImported){
+            if(!enumDecl->isImported && !enumDecl->isExtern){
                 if(enumDecl->isFlag && !entry.valueExpr){
                     if(autoFlagBitIndex >= static_cast<u32>(enumDecl->underlyingSize) * 8u){
                         reportError(errors, entry.span, "auto-assigned 'flag' bit position exceeds underlying flag bit width");
@@ -246,7 +246,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(TypeAliasDecl* aliasDecl : unit.typeAliases){
-        m_recordGlobalHeaders = !aliasDecl->isImported;
+        m_recordGlobalHeaders = !aliasDecl->isImported && !aliasDecl->isExtern;
         if(!checkTemplateParamBounds(aliasDecl->templateParams, nullptr, nullptr, errors))
             ok = false;
         if(aliasDecl->aliasedType){
@@ -267,10 +267,10 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         for(usize pass = 0u; pass < maxArenaPasses; ++pass){
             b8 changed = false;
             for(ClassDecl* cls : unit.classes){
-                if(!cls || cls->isSerialize || !cls->subsystemTypeName.empty() || cls->needsClassArena)
+                if(!cls || cls->isExtern || cls->isSerialize || !cls->subsystemTypeName.empty() || cls->needsClassArena)
                     continue;
                 for(const FieldDecl* field : cls->fields){
-                    if(field && field->type && preLayoutAnalyzer.requiresMotherArena(*field->type)){
+                    if(field && !field->isStatic && field->type && preLayoutAnalyzer.requiresMotherArena(*field->type)){
                         cls->needsClassArena = true;
                         changed = true;
                         break;
@@ -281,25 +281,25 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 break;
         }
         for(InterfaceDecl* iface : unit.interfaces){
-            if(!iface)
+            if(!iface || iface->isExtern)
                 continue;
             for(MethodDecl* m : iface->methods){
-                if(m)
+                if(m && !m->isExtern)
                     m->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*m, m_symbols);
             }
         }
         for(ClassDecl* cls : unit.classes){
-            if(!cls)
+            if(!cls || cls->isExtern)
                 continue;
             for(MethodDecl* m : cls->methods){
-                if(!m)
+                if(!m || m->isExtern)
                     continue;
                 m->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*m, m_symbols);
                 m->hasSynthesizedArenaParams = __hidden_adhd_type_checker::ComputeCallableHasSynthesizedArenaParams(*m, m_symbols);
             }
         }
         for(MethodDecl* fn : unit.freeFunctions){
-            if(!fn)
+            if(!fn || fn->isExtern)
                 continue;
             fn->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*fn, m_symbols);
             fn->hasSynthesizedArenaParams = __hidden_adhd_type_checker::ComputeCallableHasSynthesizedArenaParams(*fn, m_symbols);
@@ -311,6 +311,12 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             continue;
         MethodDecl dummyGlobalCtx(m_arena);
         MVector<ScopedVarInfo> emptyScope(m_arena);
+        if(gc->isExtern){
+            m_recordGlobalHeaders = false;
+            if(gc->varType && !checkTypeRef(*gc->varType, nullptr, nullptr, errors))
+                ok = false;
+            continue;
+        }
         if(gc->isImported){
             if(gc->expr && gc->varType && gc->varType->isAuto){
                 if(const TypeRef* inferredRef = inferExprTypeRef(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope); inferredRef && !inferredRef->isAuto){
@@ -394,38 +400,40 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(InterfaceDecl* iface : unit.interfaces){
-        m_recordGlobalHeaders = !iface->isImported;
+        m_recordGlobalHeaders = !iface->isImported && !iface->isExtern;
         if(!checkInterfaceDecl(*iface, errors))
             ok = false;
     }
 
     for(ClassDecl* classDecl : unit.classes){
-        m_recordGlobalHeaders = !classDecl->isImported;
+        m_recordGlobalHeaders = !classDecl->isImported && !classDecl->isExtern;
         if(!checkClassDecl(*classDecl, errors))
             ok = false;
-        for(MethodDecl* m : classDecl->methods){
-            if(m)
-                m->isInline = (!classDecl->assetTypeName.empty() && m->hasBody && !m->isOutOfLine) || __hidden_adhd_type_checker::ShouldAutoInlineCallable(*m);
+        if(!classDecl->isImported && !classDecl->isExtern){
+            for(MethodDecl* m : classDecl->methods){
+                if(m && !m->isExtern)
+                    m->isInline = (!classDecl->assetTypeName.empty() && m->hasBody && !m->isOutOfLine) || __hidden_adhd_type_checker::ShouldAutoInlineCallable(*m);
+            }
         }
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
-        m_recordGlobalHeaders = !fn->isImported;
-        if(!fn->isOperator && !fn->name.empty() && !IsAsciiUpper(fn->name[0])){
+        m_recordGlobalHeaders = !fn->isImported && !fn->isExtern;
+        if(!fn->isExtern && !fn->isOperator && !fn->name.empty() && !IsAsciiUpper(fn->name[0])){
             reportError(errors, fn->span, "global function name must start with an uppercase letter");
             ok = false;
         }
         if(!checkCallableSignature(nullptr, *fn, errors))
             ok = false;
         if(!fn->hasBody){
-            if(!fn->isImported){
+            if(!fn->isImported && !fn->isExtern){
                 reportError(errors, fn->span, "declared function has no implementation body");
                 ok = false;
             }
             continue;
         }
-        if(fn->isImported){
-            fn->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
+        if(fn->isImported || fn->isExtern){
+            fn->isInline = !fn->isExtern && __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
             continue;
         }
         if(!m_parallelValidator.validateMethod(*fn, errors))
@@ -456,7 +464,17 @@ void TypeChecker::recordRequiredHeader(const MStringView header)noexcept{
 void TypeChecker::recordBuiltinTypeHeader(const MStringView typeName)noexcept{
     if(!m_recordGlobalHeaders || !m_activeUnit || typeName.empty())
         return;
+    if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(typeName))
+        recordRequiredHeader(aliasDecl->requiredHeader);
     const MStringView base = m_symbols.resolveBaseTypeName(typeName);
+    if(const TypeAliasDecl* baseAliasDecl = (base != typeName) ? m_symbols.findTypeAlias(base) : nullptr)
+        recordRequiredHeader(baseAliasDecl->requiredHeader);
+    if(const EnumDecl* enumDecl = m_symbols.findEnum(base))
+        recordRequiredHeader(enumDecl->requiredHeader);
+    else if(const ClassDecl* cls = m_symbols.findClass(base))
+        recordRequiredHeader(cls->requiredHeader);
+    else if(const InterfaceDecl* iface = m_symbols.findInterface(base))
+        recordRequiredHeader(iface->requiredHeader);
     if(base.empty() || m_symbols.hasTypeSymbol(base))
         return;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(base))

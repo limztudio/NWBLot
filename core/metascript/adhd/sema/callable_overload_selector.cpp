@@ -15,9 +15,13 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] i32 CallableOverloadSelector::ScoreCandidateParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
-    i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? s_OverloadExactArityScore : 0;
-    score += ScoreCallableParams(symbols, params, argTypeNames, argIsMut);
+[[nodiscard]] i32 CallableOverloadSelector::ScoreCandidateParams(const SymbolTable& symbols, const MethodDecl& candidate, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
+    i32 score = 0;
+    if(!preferredArgCount || candidate.params.size() == *preferredArgCount)
+        score = s_OverloadExactArityScore;
+    else if(candidate.hasDefaultArgs && *preferredArgCount >= candidate.minArgCount && *preferredArgCount <= candidate.params.size())
+        score = s_OverloadCompatibleArityScore;
+    score += ScoreCallableParams(symbols, candidate.params, argTypeNames, argIsMut);
     return score;
 }
 
@@ -35,11 +39,18 @@ NWB_ADHD_BEGIN
             inOutBestMatch = &candidate;
             return true;
         }
+        if(candidate.hasDefaultArgs && *preferredArgCount >= candidate.minArgCount && *preferredArgCount <= candidate.params.size()){
+            if(inOutBestScore < s_OverloadCompatibleArityScore){
+                inOutBestScore = s_OverloadCompatibleArityScore;
+                inOutBestMatch = &candidate;
+            }
+            return false;
+        }
         if(!inOutBestMatch)
             inOutBestMatch = &candidate;
         return false;
     }
-    const i32 score = ScoreCandidateParams(symbols, candidate.params, preferredArgCount, argTypeNames, argIsMut);
+    const i32 score = ScoreCandidateParams(symbols, candidate, preferredArgCount, argTypeNames, argIsMut);
     if(score > inOutBestScore){
         inOutBestScore = score;
         inOutBestMatch = &candidate;
@@ -56,14 +67,17 @@ NWB_ADHD_BEGIN
     const b8 preferConst,
     const b8 requirePublic,
     const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
+    const Span<const u8> argIsMut,
+    const b8 staticOnly
 )noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
         if(!m || m->isConstructor || m->isDestructor || m->isOperator != isOperator || m->name != name)
             continue;
-        i32 score = ScoreCandidateParams(symbols, m->params, preferredArgCount, argTypeNames, argIsMut);
+        if(staticOnly && !m->isStatic)
+            continue;
+        i32 score = ScoreCandidateParams(symbols, *m, preferredArgCount, argTypeNames, argIsMut);
         if(!requirePublic || m->access == AccessSpecifier::Public)
             score += s_OverloadPublicBonusScore;
         if(m->isConst == preferConst)
@@ -80,9 +94,14 @@ const MethodDecl* CallableOverloadSelector::FindClassConstructor(const SymbolTab
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
-        if(!m || !m->isConstructor || m->params.size() != argCount)
+        if(!m || !m->isConstructor)
             continue;
-        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? s_OverloadPublicBonusScore : s_OverloadConstMatchScore;
+        const b8 exactArity = (m->params.size() == argCount);
+        const b8 compatArity = !exactArity && m->hasDefaultArgs && argCount >= m->minArgCount && argCount <= m->params.size();
+        if(!exactArity && !compatArity)
+            continue;
+        i32 score = exactArity ? s_OverloadExactArityScore : s_OverloadCompatibleArityScore;
+        score += (!requirePublic || m->access == AccessSpecifier::Public) ? s_OverloadPublicBonusScore : s_OverloadConstMatchScore;
         score += ScoreCallableParams(symbols, m->params, argTypeNames, argIsMut);
         if(score > bestScore){
             bestScore = score;

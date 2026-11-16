@@ -2,36 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_skeleton/components.adhd>
 #include "skinned_caustic_transition.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-#include <impl/assets_skeleton/asset.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <global/simd/frame.h>
-#include <global/simd/matrix_decompose.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr f32 s_SkinnedCausticAffineEpsilon = Impl::s_SkeletonAffineEpsilon;
-inline constexpr f32 s_SkinnedCausticDeterminantEpsilon = Impl::s_SkeletonJointDeterminantEpsilon;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +40,7 @@ MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f3
     const VectorSingle rotationAngles = VectorSingle(0.4f, 1.0f, 0.25f, 0.0f) * angle;
     const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
     const MatrixSingle animated = Mul(bindJoint, rotation);
-    if(!MatrixIsInvertibleAffine(animated, s_SkinnedCausticAffineEpsilon, s_SkinnedCausticDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(animated, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return bindJoint;
     return animated;
 }

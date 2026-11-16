@@ -68,12 +68,12 @@ NWB_IMPL_BEGIN
 
 b8 RefractionTargetBuilder::createImages(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets, const Core::Format::Enum accumColorFormat, const Core::Format::Enum accumExtinctionFormat, const Core::Color& transparentBlack){
     auto& device = m_graphics.getDevice();
-    auto foregroundAccumColorResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumColorFormat, "engine/avboit/foreground_color", transparentBlack, true);
-    auto foregroundAccumExtinctionResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat, "engine/avboit/foreground_extinction", transparentBlack, true);
-    auto refractionNormalIorResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_normal_ior", transparentBlack, true);
-    auto refractionTintCoverageResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_tint_coverage", transparentBlack, true);
-    auto refractionInstanceResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RG32_FLOAT, "engine/avboit/refraction_instance", transparentBlack, true);
-    auto refractionSpecularRoughnessResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
+    auto foregroundAccumColorResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumColorFormat, "engine/avboit/foreground_color", transparentBlack, true);
+    auto foregroundAccumExtinctionResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat, "engine/avboit/foreground_extinction", transparentBlack, true);
+    auto refractionNormalIorResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_normal_ior", transparentBlack, true);
+    auto refractionTintCoverageResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_tint_coverage", transparentBlack, true);
+    auto refractionInstanceResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RG32_FLOAT, "engine/avboit/refraction_instance", transparentBlack, true);
+    auto refractionSpecularRoughnessResult = CreateAvboitRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
     Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
     refractionDepthDesc.setName(s_RefractionDepthTargetName).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     auto refractionDepthResult = m_graphics.createTexture(refractionDepthDesc);

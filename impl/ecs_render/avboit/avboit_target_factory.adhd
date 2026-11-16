@@ -2,72 +2,71 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <core/graphics/api.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AvboitTargetFactory final{
-public:
-    [[nodiscard]] static Expected<Core::TextureHandle> CreateRenderTarget(Core::GraphicsRuntime& graphics, u32 width, u32 height, Core::Format::Enum format, NameText<char> debugName, const Core::Color& clearValue, b8 shareWithAsyncCompute = false);
-    [[nodiscard]] static Expected<Core::TextureHandle> CreateTransmittanceVolume(Core::GraphicsRuntime& graphics, u32 width, u32 height, u32 depth, Core::Format::Enum format);
-    [[nodiscard]] static Expected<Core::BufferHandle> CreateU32Buffer(Core::GraphicsRuntime& graphics, u64 byteSize, NameText<char> debugName);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_AvboitTransmittanceVolumeTargetName = "engine/avboit/transmittance_volume";
+const u32 s_AvboitU32WordByteSize = 4u;
 
 u64 ComputeAvboitU32WordBytes(in u64 wordCount){
-    return wordCount * 4u;
+    return wordCount * cast<u64>(s_AvboitU32WordByteSize);
+}
+
+Expected<TextureHandle> CreateAvboitRenderTarget(
+    mut GraphicsRuntime graphics,
+    in u32 width,
+    in u32 height,
+    in Format format,
+    in Name debugName,
+    in Color clearValue,
+    in b8 shareWithAsyncCompute
+){
+    TextureDesc desc = TextureDesc();
+    desc.setWidth(width).setHeight(height).setFormat(format).setIsRenderTarget(true).setName(debugName).setClearValue(clearValue).setInitialState(ResourceStates::Common).setKeepInitialState(true);
+    if(shareWithAsyncCompute)
+        desc.setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute);
+    return graphics.createTexture(desc);
+}
+
+Expected<TextureHandle> CreateAvboitRenderTarget(
+    mut GraphicsRuntime graphics,
+    in u32 width,
+    in u32 height,
+    in Format format,
+    in Name debugName,
+    in Color clearValue
+){
+    return CreateAvboitRenderTarget(graphics, width, height, format, debugName, clearValue, false);
+}
+
+Expected<TextureHandle> CreateAvboitTransmittanceVolume(mut GraphicsRuntime graphics, in u32 width, in u32 height, in u32 depth, in Format format){
+    TextureDesc desc = TextureDesc();
+    desc
+        .setWidth(width)
+        .setHeight(height)
+        .setDepth(depth)
+        .setFormat(format)
+        .setDimension(TextureDimension::Texture3D)
+        .setIsUAV(true)
+        // Cross-lane submissions own the execution/memory dependencies.
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName(s_AvboitTransmittanceVolumeTargetName)
+        .setClearValue(Color(1.0f, 1.0f, 1.0f, 1.0f))
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    return graphics.createTexture(desc);
+}
+
+Expected<BufferHandle> CreateAvboitU32Buffer(mut GraphicsRuntime graphics, in u64 byteSize, in Name debugName){
+    BufferDesc desc = BufferDesc();
+    desc
+        .setByteSize(byteSize)
+        .setStructStride(s_AvboitU32WordByteSize)
+        .setCanHaveUAVs(true)
+        // Shared by raster passes and interleaved compute kernels.
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(debugName)
+        .enableAutomaticStateTracking(ResourceStates::Common)
+    ;
+    return graphics.createBuffer(desc);
 }
 
 

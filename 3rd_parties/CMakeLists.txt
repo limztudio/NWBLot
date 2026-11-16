@@ -49,6 +49,9 @@ add_subdirectory(ufbx)
 add_subdirectory(curl)
 add_subdirectory(libmicrohttpd)
 add_subdirectory(oneTBB)
+add_subdirectory(siphash)
+add_subdirectory(llvm_libc)
+add_subdirectory(llvm)
 add_subdirectory(libclang)
 add_subdirectory(googletest)                       # unit-test framework (gtest) for the engine test suites
 nwb_match_engine_runtime(gtest)
@@ -66,6 +69,8 @@ foreach(_nwb_engine_static_vendor_target
     nwb_vendor_freetype
     nwb_vendor_harfbuzz
     nwb_vendor_wmi
+    nwb_vendor_llvm
+    nwb_vendor_libclang
 )
     nwb_match_engine_runtime(${_nwb_engine_static_vendor_target})
 endforeach()

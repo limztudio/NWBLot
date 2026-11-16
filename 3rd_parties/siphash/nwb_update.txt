@@ -1,0 +1,5 @@
+package: siphash
+version: 23.1.5 (commit 392dfff97d29b59d77e5cac6d4b6ef2585fe7117)
+updated_utc: 2026-11-16T01:26:00Z
+source: https://github.com/llvm/llvm-project/tree/llvmorg-23.1.5/third-party/siphash
+notes: Header-only SipHash lifted out of llvm-project/third-party/siphash for nwb::llvm per 3rd_parties flattening policy.

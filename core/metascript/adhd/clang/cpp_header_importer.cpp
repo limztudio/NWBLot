@@ -88,6 +88,16 @@ namespace{
         return false;
     };
 
+#if defined(NWB_LIBCLANG_DEFAULT_RESOURCE_DIR)
+    {
+        const TString<MetaArena> nativeDefaultRes = ConvertString(arena, AStringView(NWB_LIBCLANG_DEFAULT_RESOURCE_DIR));
+        const ::Path<MetaArena> candidate(arena, TStringView(nativeDefaultRes.data(), nativeDefaultRes.size()));
+        const auto includeDirExists = IsDirectory(candidate / "include");
+        if(includeDirExists && *includeDirExists && TryResourceDirCandidate(arena, candidate, result))
+            return result;
+    }
+#endif
+
 #if defined(NWB_LIBCLANG_DEFAULT_RUNTIME_PATH)
     if(probeBasePath(NWB_LIBCLANG_DEFAULT_RUNTIME_PATH))
         return result;
@@ -346,6 +356,39 @@ MStringView ImporterContext::resolveRequiredHeader(CXCursor cursor){
 }
 
 b8 ImporterContext::evaluateIntegralConstant(CXCursor cursor, MStringView& outText){
+    const CXType canonical = ::clang_getCanonicalType(::clang_getCursorType(cursor));
+    switch(canonical.kind){
+    case CXType_Bool:
+    case CXType_Char_U:
+    case CXType_UChar:
+    case CXType_Char16:
+    case CXType_Char32:
+    case CXType_UShort:
+    case CXType_UInt:
+    case CXType_ULong:
+    case CXType_ULongLong:
+    case CXType_UInt128:
+    case CXType_Char_S:
+    case CXType_SChar:
+    case CXType_WChar:
+    case CXType_Short:
+    case CXType_Int:
+    case CXType_Long:
+    case CXType_LongLong:
+    case CXType_Int128:
+    case CXType_Float:
+    case CXType_Double:
+    case CXType_LongDouble:
+    case CXType_Float128:
+    case CXType_Half:
+    case CXType_BFloat16:
+    case CXType_Float16:
+    case CXType_Enum:
+        break;
+    default:
+        return false;
+    }
+
     CXEvalResult eval = ::clang_Cursor_Evaluate(cursor);
     if(!eval)
         return false;
@@ -530,9 +573,15 @@ void ImporterContext::extractGlobalConstant(CXCursor varCursor){
     if(!mapped || mapped->refMode != ParamPassingMode::None || mapped->name == "void")
         return;
 
+    const b8 isStringViewConstant =
+        mapped->name == "AStringView"
+        || mapped->name == "WStringView"
+        || mapped->name == "TStringView"
+        || mapped->name == "StringView"
+        ;
     MStringView evalText;
-    const b8 hasEval = evaluateIntegralConstant(varCursor, evalText);
-    if(!hasEval && mapped->name != "AStringView" && mapped->name != "WStringView" && mapped->name != "TStringView" && mapped->name != "StringView")
+    const b8 hasEval = !isStringViewConstant && evaluateIntegralConstant(varCursor, evalText);
+    if(!hasEval && !isStringViewConstant)
         return;
 
     Stmt* stmt = AllocateAstNode<Stmt>(m_arena);

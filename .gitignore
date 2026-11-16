@@ -10,7 +10,7 @@
 *.sln.docstates
 .idea/
 .cozter/
-/.agents/
+.agents/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

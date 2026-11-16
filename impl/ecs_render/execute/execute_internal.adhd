@@ -59,25 +59,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class OpaqueEmulationMergeValidator final : NoCopy{
-public:
-    explicit OpaqueEmulationMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Surfel-GI plus caustics merge validation owns packet-merge checks for GI tasks.
 struct SurfelCausticsMergeValidationResult{
     const Core::GpuPhysicalQueueInfo* hardwareCausticsQueue = nullptr;
@@ -105,31 +86,57 @@ struct SurfelCausticsMergeValidationResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SurfelCausticsMergeValidator final : NoCopy{
-public:
-    explicit SurfelCausticsMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, b8 captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/execute/types.adhd>
+
+[cpp_name("::NWB::Impl::RendererFramePipeline")]
+extern class RendererFramePipeline;
+[cpp_name("::NWB::Impl::SurfelCausticsMergeValidationResult")]
+extern class SurfelCausticsMergeValidationResult;
+
+[modular]
+class OpaqueEmulationMergeValidator : NoCopy{
+    private in RendererFramePipeline m_pipeline;
+
+    public OpaqueEmulationMergeValidator(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
+
+    public void validate(
+        in GpuCompiledGraphReadView compiledPlan,
+        in Span<GpuTaskId> timingTasks,
+        in b8 timingBindingsValid,
+        in b8 hasOpaqueCsgFrameWork,
+        mut OpaqueEmulationMergeValidationResult outResult
+    )const;
+}
+
+[modular]
+class SurfelCausticsMergeValidator : NoCopy{
+    private in RendererFramePipeline m_pipeline;
+
+    public SurfelCausticsMergeValidator(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
+
+    public void validate(
+        in GpuCompiledGraphReadView compiledPlan,
+        in GpuTaskId causticsTask,
+        in GpuTaskId terminalPresentationTask,
+        in b8 captureLaggedLightingHistory,
+        mut SurfelCausticsMergeValidationResult outResult
+    )const;
 }
 
 

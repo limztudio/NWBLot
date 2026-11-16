@@ -339,7 +339,7 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(const SoftwareS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PreparedSceneBvhUpload::StorageReady(const RendererRayTracingState& state, const usize nodeCount, const usize instanceCount)noexcept{
+b8 IsPreparedSceneBvhStorageReady(const RendererRayTracingState& state, const usize nodeCount, const usize instanceCount)noexcept{
     return state.m_sceneBvhNodeBuffer
         && state.m_sceneInstanceBuffer
         && state.m_sceneBvhNodeCapacity >= nodeCount
@@ -348,11 +348,11 @@ b8 PreparedSceneBvhUpload::StorageReady(const RendererRayTracingState& state, co
         && IsDescriptorClass(state.m_sceneInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
 }
 
-b8 PreparedSceneBvhUpload::capture(const RendererRayTracingState& state, const b8 staticScene, const u64 staticSceneHash, const Span<const NwbBvhNodeGpu> nodes, const Span<const SceneSwBvhInstanceGpu> instances){
+b8 PreparedSceneBvhUpload::capture(const RendererRayTracingState& state, const b8 staticScene, const u64 staticSceneHash, const Span<const NwbBvhNodeGpu> nodes, const Span<const SceneSwBvhInstanceGpu> instances)noexcept{
     clear();
     const usize nodeCount = nodes.size();
     const usize instanceCount = instances.size();
-    const b8 validStorage = StorageReady(state, nodeCount, instanceCount);
+    const b8 validStorage = IsPreparedSceneBvhStorageReady(state, nodeCount, instanceCount);
     if(nodeCount == 0u || instanceCount == 0u || !validStorage)
         return false;
 
@@ -378,7 +378,7 @@ b8 PreparedSceneBvhUpload::captureCacheReuse(const RendererRayTracingState& stat
         return false;
 
     const usize requiredNodeCount = ComputeBinaryBvhNodeCount(static_cast<usize>(instanceCount));
-    const b8 validStorage = StorageReady(state, requiredNodeCount, instanceCount);
+    const b8 validStorage = IsPreparedSceneBvhStorageReady(state, requiredNodeCount, instanceCount);
     if(!state.m_sceneSwBvhStaticSceneHashValid || state.m_sceneSwBvhStaticSceneHash != staticSceneHash || state.m_sceneBvhInstanceCount != instanceCount || !validStorage)
         return false;
 
@@ -397,31 +397,14 @@ b8 PreparedSceneBvhUpload::captureCacheReuse(const RendererRayTracingState& stat
     return true;
 }
 
-void PreparedSceneBvhUpload::clear()noexcept{
-    m_nodeBytes.clear();
-    m_instanceBytes.clear();
-    m_nodeBuffer = nullptr;
-    m_instanceBuffer = nullptr;
-    m_nodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_instanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_nodeCount = 0u;
-    m_instanceCount = 0u;
-    m_nodeCapacity = 0u;
-    m_instanceCapacity = 0u;
-    m_staticSceneHash = 0u;
-    m_static = false;
-    m_ready = false;
-    m_uploadRequired = false;
-}
-
-Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const{
+Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const noexcept{
     PreparedSceneBvhUploads result;
     if(!m_ready)
         return result;
 
     if(!SceneBvhUploadPolicy().validateRetainState(
         storageMatches(state),
-        StorageReady(state, m_nodeCount, m_instanceCount),
+        IsPreparedSceneBvhStorageReady(state, m_nodeCount, m_instanceCount),
         m_uploadRequired,
         m_static,
         state.m_sceneSwBvhStaticSceneHashValid,
@@ -467,15 +450,15 @@ b8 PreparedSceneBvhUpload::snapshotAccepted(const RendererRayTracingState& state
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PreparedSceneSwBvhTraversal::capture(const Span<const PreparedSceneSwBvhMesh> meshes, const u32 instanceCount){
+b8 PreparedSceneSwBvhTraversal::capture(const Span<const PreparedSceneSwBvhMesh> meshes, const u32 instanceCount)noexcept{
     clear();
     const SoftwareSceneBvhValidationPolicy validationPolicy;
     const usize meshCount = meshes.size();
     if(
         !validationPolicy.validateTraversalCaptureCounts(meshCount, instanceCount)
-        || !m_owner.m_preparedSceneBvh.covers(instanceCount)
-        || !m_owner.m_preparedShadowMaterialContext.softwareSnapshotCovers(instanceCount)
-        || !m_owner.preparedTraversalStorageMatchesCurrent()
+        || !m_owner->m_preparedSceneBvh.covers(instanceCount)
+        || !m_owner->m_preparedShadowMaterialContext.softwareSnapshotCovers(instanceCount)
+        || !m_owner->preparedTraversalStorageMatchesCurrent()
     )
         return false;
 
@@ -499,22 +482,22 @@ b8 PreparedSceneSwBvhTraversal::capture(const Span<const PreparedSceneSwBvhMesh>
         m_preparedSceneSwBvhMeshes.push_back(mesh);
     }
     m_preparedSceneSwBvhInstanceCount = instanceCount;
-    m_preparedSceneSwBvhRendererMutationVersion = m_owner.m_world.componentMutationVersion<RendererComponent>();
-    m_preparedSceneSwBvhTransformMutationVersion = m_owner.m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>();
-    m_preparedSceneSwBvhMaterialMutationVersion = m_owner.m_world.componentMutationVersion<MaterialInstanceComponent>();
+    m_preparedSceneSwBvhRendererMutationVersion = m_owner->m_world.componentMutationVersion<RendererComponent>();
+    m_preparedSceneSwBvhTransformMutationVersion = m_owner->m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>();
+    m_preparedSceneSwBvhMaterialMutationVersion = m_owner->m_world.componentMutationVersion<MaterialInstanceComponent>();
     m_preparedSceneSwBvhReady = true;
     return true;
 }
 
-b8 PreparedSceneSwBvhTraversal::record(){
-    auto& state = m_owner.m_rayTracingState;
+b8 PreparedSceneSwBvhTraversal::record()noexcept{
+    auto& state = m_owner->m_rayTracingState;
     const SoftwareSceneBvhValidationPolicy validationPolicy;
-    const b8 sceneSnapshotValid = m_owner.m_preparedSceneBvh.snapshotAccepted(state);
-    const b8 materialSnapshotValid = m_owner.m_preparedShadowMaterialContext.softwareSnapshotAccepted(state);
+    const b8 sceneSnapshotValid = m_owner->m_preparedSceneBvh.snapshotAccepted(state);
+    const b8 materialSnapshotValid = m_owner->m_preparedShadowMaterialContext.softwareSnapshotAccepted(state);
     const auto rejectPreparedTraversal = [&]()noexcept{
-        if(!m_owner.m_preparedSceneBvh.uploadRequired())
+        if(!m_owner->m_preparedSceneBvh.uploadRequired())
             state.m_sceneSwBvhStaticSceneHashValid = false;
-        if(!m_owner.m_preparedShadowMaterialContext.uploadRequired())
+        if(!m_owner->m_preparedShadowMaterialContext.uploadRequired())
             state.m_swShadowMaterialContextHashValid = false;
         return false;
     };
@@ -522,11 +505,11 @@ b8 PreparedSceneSwBvhTraversal::record(){
         !m_preparedSceneSwBvhReady
         || m_preparedSceneSwBvhMeshes.empty()
         || m_preparedSceneSwBvhInstanceCount == 0u
-        || !m_owner.m_preparedSceneBvh.covers(m_preparedSceneSwBvhInstanceCount)
-        || !m_owner.m_preparedShadowMaterialContext.softwareSnapshotCovers(m_preparedSceneSwBvhInstanceCount)
+        || !m_owner->m_preparedSceneBvh.covers(m_preparedSceneSwBvhInstanceCount)
+        || !m_owner->m_preparedShadowMaterialContext.softwareSnapshotCovers(m_preparedSceneSwBvhInstanceCount)
         || !sceneSnapshotValid
         || !materialSnapshotValid
-        || !m_owner.preparedTraversalStorageMatchesCurrent()
+        || !m_owner->preparedTraversalStorageMatchesCurrent()
         || !IsDescriptorClass(state.m_sceneBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !IsDescriptorClass(state.m_sceneInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !IsDescriptorClass(state.m_shadowInstanceMaterialHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -537,17 +520,17 @@ b8 PreparedSceneSwBvhTraversal::record(){
         return rejectPreparedTraversal();
     }
     if(
-        m_owner.m_world.componentMutationVersion<RendererComponent>() != m_preparedSceneSwBvhRendererMutationVersion
-        || m_owner.m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedSceneSwBvhTransformMutationVersion
-        || m_owner.m_world.componentMutationVersion<MaterialInstanceComponent>() != m_preparedSceneSwBvhMaterialMutationVersion
+        m_owner->m_world.componentMutationVersion<RendererComponent>() != m_preparedSceneSwBvhRendererMutationVersion
+        || m_owner->m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedSceneSwBvhTransformMutationVersion
+        || m_owner->m_world.componentMutationVersion<MaterialInstanceComponent>() != m_preparedSceneSwBvhMaterialMutationVersion
     ){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene inputs changed after graph preflight"));
         return rejectPreparedTraversal();
     }
 
     const auto matchesMesh = [this](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared)noexcept{
-        const auto attributeCache = m_owner.m_rayTracingState.m_swMeshHeapHandleCache.find(NotNull<const Core::Buffer*>(prepared.attributeBuffer.get()));
-        const b8 topologyReady = mesh.swBvhTopologyBuilt || m_owner.preparedMeshSwBvhBuildProducesTopology(mesh);
+        const auto attributeCache = m_owner->m_rayTracingState.m_swMeshHeapHandleCache.find(NotNull<const Core::Buffer*>(prepared.attributeBuffer.get()));
+        const b8 topologyReady = mesh.swBvhTopologyBuilt || m_owner->preparedMeshSwBvhBuildProducesTopology(mesh);
         return
             mesh.meshName == prepared.meshName
             && mesh.runtimeMesh == prepared.runtimeMesh
@@ -560,7 +543,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
             && mesh.swBvhNodeHeapHandle == prepared.nodeHeapHandle
             && mesh.swBvhPositionHeapHandle == prepared.positionHeapHandle
             && mesh.swBvhTriangleIndexHeapHandle == prepared.triangleIndexHeapHandle
-            && attributeCache != m_owner.m_rayTracingState.m_swMeshHeapHandleCache.end()
+            && attributeCache != m_owner->m_rayTracingState.m_swMeshHeapHandleCache.end()
             && attributeCache.value().handle == prepared.attributeHeapHandle
             && topologyReady
             && mesh.meshletPrimitiveIndexCount == prepared.primitiveCount * s_RayTracingTriangleIndexCount
@@ -576,7 +559,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
     };
 
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
-        auto meshResult = m_owner.m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName);
+        auto meshResult = m_owner->m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName);
         if(!meshResult || !matchesMesh((*meshResult), prepared)){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), ConvertString(prepared.meshName.resolvedText()));
             return rejectPreparedTraversal();
@@ -617,15 +600,6 @@ b8 PreparedSceneSwBvhTraversal::record(){
         }
     }
     return true;
-}
-
-void PreparedSceneSwBvhTraversal::clear()noexcept{
-    m_preparedSceneSwBvhMeshes.clear();
-    m_preparedSceneSwBvhInstanceCount = 0u;
-    m_preparedSceneSwBvhRendererMutationVersion = 0u;
-    m_preparedSceneSwBvhTransformMutationVersion = 0u;
-    m_preparedSceneSwBvhMaterialMutationVersion = 0u;
-    m_preparedSceneSwBvhReady = false;
 }
 
 

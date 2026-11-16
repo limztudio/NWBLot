@@ -33,8 +33,8 @@ class RendererRayTracingSystem;
 class RendererShaderSystem;
 class DeferredFrameTargets;
 class DeferredLightingGraphResources;
-struct RayTracingDeferredGraphResourceSnapshot;
-struct RayTracingSurfelPersistentResourceSnapshot;
+class RayTracingDeferredGraphResourceSnapshot;
+class RayTracingSurfelPersistentResourceSnapshot;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,27 +57,6 @@ struct SurfelGiLifecycleInputs{
     Core::GpuTaskExternalStateSource computeStateSource;
     Core::GpuTaskExternalStateSource counterStateSource;
     b8 hasWork = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SurfelGiLifecycleBuilder final : NoCopy{
-public:
-    SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<SurfelGiLifecycleResult> declare(const SurfelGiLifecycleInputs& inputs);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
 };
 
 
@@ -136,159 +115,171 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SurfelGiResourceBuilder final : NoCopy{
-public:
-    SurfelGiResourceBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] b8 prepare(const SurfelGiResourceInputs& inputs, SurfelGiResourcePlan& result);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SurfelGiCounterReadbackBuilder final : NoCopy{
-public:
-    SurfelGiCounterReadbackBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    void declare(const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources, Core::GpuTaskId surfelTask, Core::GpuTaskId timingEndTask, Core::GpuTaskId& outTask);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Declares the surfel GI phase tasks; every payload borrows the ray-tracing system and the frame targets until the packet accepts.
-class SurfelGiTaskBuilder final : NoCopy{
-public:
-    SurfelGiTaskBuilder(RendererRayTracingSystem& system, Core::GpuTaskGraph& graph)noexcept
-        : m_system(system)
-        , m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<Core::GpuTaskId> declareAgeFreeTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareHashBuildTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSpawnTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareTraceBuildArgsTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareTraceTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareResolveTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    // Records the phases the split route left over; only the resolve-owning route brackets the shared async range.
-    [[nodiscard]] Expected<Core::GpuTaskId> declareTerminalTask(
-        const Core::GpuTaskDesc& desc,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming
-    );
-
-
-private:
-    RendererRayTracingSystem& m_system;
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SurfelGiPipelineSet final : NoCopy{
-public:
-    SurfelGiPipelineSet(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSurfelGiState& state)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_rayTracingState(state)
-    {}
-
-
-public:
-    [[nodiscard]] b8 ensureSurfelSpawnPipeline();
-    [[nodiscard]] b8 ensureSurfelAgeFreePipeline();
-    [[nodiscard]] b8 ensureSurfelHashBuildPipeline();
-    [[nodiscard]] b8 ensureSurfelTracePipeline();
-    // Hardware surfel trace uses inline RayQuery over the TLAS.
-    [[nodiscard]] b8 ensureSurfelTraceHwPipeline();
-    // Resolve keeps the writable surfel pool off deferred lighting.
-    [[nodiscard]] b8 ensureSurfelResolvePipeline();
-    [[nodiscard]] b8 ensureSurfelUpsamplePipeline();
-    [[nodiscard]] b8 ensureSurfelTraceBuildArgsPipeline();
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    RtSurfelGiState& m_rayTracingState;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
+extern class RendererRayTracingSystem : NoCopy;
+[cpp_name("::NWB::Impl::RendererShaderSystem")]
+extern class RendererShaderSystem : NoCopy;
+[cpp_name("::NWB::Impl::DeferredFrameTargets")]
+extern class DeferredFrameTargets : NoCopy;
+[cpp_name("::NWB::Impl::DeferredLightingGraphResources")]
+extern class DeferredLightingGraphResources : NoCopy;
+[cpp_name("::NWB::Impl::RayTracingSurfelPersistentResourceSnapshot")]
+extern class RayTracingSurfelPersistentResourceSnapshot;
+[cpp_name("::NWB::Impl::RtSurfelGiState")]
+extern class RtSurfelGiState;
+[cpp_name("::NWB::Impl::SurfelGiLifecycleInputs")]
+extern class SurfelGiLifecycleInputs;
+[cpp_name("::NWB::Impl::SurfelGiLifecycleResult")]
+extern class SurfelGiLifecycleResult;
+[cpp_name("::NWB::Impl::SurfelGiResourceInputs")]
+extern class SurfelGiResourceInputs;
+[cpp_name("::NWB::Impl::SurfelGiResourcePlan")]
+extern class SurfelGiResourcePlan;
+
+[modular]
+class SurfelGiLifecycleBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+
+    public SurfelGiLifecycleBuilder(mut GpuTaskGraph graph, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_raytracingSystem = raytracingSystem;
+    }
+
+    public Expected<SurfelGiLifecycleResult> declare(in SurfelGiLifecycleInputs inputs);
+}
+
+[modular]
+class SurfelGiResourceBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+
+    public SurfelGiResourceBuilder(mut GpuTaskGraph graph, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_raytracingSystem = raytracingSystem;
+    }
+
+    public b8 prepare(in SurfelGiResourceInputs inputs, mut SurfelGiResourcePlan result);
+}
+
+[modular]
+class SurfelGiCounterReadbackBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+
+    public SurfelGiCounterReadbackBuilder(mut GpuTaskGraph graph, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_raytracingSystem = raytracingSystem;
+    }
+
+    public void declare(in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources, in GpuTaskId surfelTask, in GpuTaskId timingEndTask, mut GpuTaskId outTask);
+}
+
+// Declares the surfel GI phase tasks; every payload borrows the ray-tracing system and the frame targets until the packet accepts.
+[modular]
+class SurfelGiTaskBuilder : NoCopy{
+    private mut RendererRayTracingSystem m_system;
+    private mut GpuTaskGraph m_graph;
+
+    public SurfelGiTaskBuilder(mut RendererRayTracingSystem system, mut GpuTaskGraph graph){
+        this.m_system = system;
+        this.m_graph = graph;
+    }
+
+    public Expected<GpuTaskId> declareAgeFreeTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    public Expected<GpuTaskId> declareHashBuildTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    public Expected<GpuTaskId> declareSpawnTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    public Expected<GpuTaskId> declareTraceBuildArgsTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    public Expected<GpuTaskId> declareTraceTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    public Expected<GpuTaskId> declareResolveTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    // Records the phases the split route left over; only the resolve-owning route brackets the shared async range.
+    public Expected<GpuTaskId> declareTerminalTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket
+    );
+    public Expected<GpuTaskId> declareTerminalTask(
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+}
+
+[modular]
+class SurfelGiPipelineSet : NoCopy{
+    private mut GlobalArena m_arena;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererShaderSystem m_shaderSystem;
+    private mut RtSurfelGiState m_rayTracingState;
+
+    public SurfelGiPipelineSet(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RtSurfelGiState state){
+        this.m_arena = arena;
+        this.m_graphics = graphics;
+        this.m_shaderSystem = shaderSystem;
+        this.m_rayTracingState = state;
+    }
+
+    public b8 ensureSurfelSpawnPipeline();
+    public b8 ensureSurfelAgeFreePipeline();
+    public b8 ensureSurfelHashBuildPipeline();
+    public b8 ensureSurfelTracePipeline();
+    // Hardware surfel trace uses inline RayQuery over the TLAS.
+    public b8 ensureSurfelTraceHwPipeline();
+    // Resolve keeps the writable surfel pool off deferred lighting.
+    public b8 ensureSurfelResolvePipeline();
+    public b8 ensureSurfelUpsamplePipeline();
+    public b8 ensureSurfelTraceBuildArgsPipeline();
 }
 
 

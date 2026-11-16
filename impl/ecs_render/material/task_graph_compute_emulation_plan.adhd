@@ -2,63 +2,98 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
+class RegularSharedComputeEmulationGraphPlan{
+    public Array<MaterialPassDrawItem, s_SharedComputeEmulationMaximumDrawCount> drawItems;
+    public Array<GeneratedGeometryEquivalenceKey, s_SharedComputeEmulationMaximumDrawCount> equivalenceKeys;
+    public BufferHandle outputBuffer;
+    public usize drawCount = 0u;
+    public u32 outputHeapSlot = 0u;
+    public b8 captured = false;
 
+    public void reset(){
+        for(usize i = 0u; i < LengthOf(this.drawItems); ++i)
+            this.drawItems[i] = MaterialPassDrawItem();
+        for(usize i = 0u; i < LengthOf(this.equivalenceKeys); ++i)
+            this.equivalenceKeys[i] = GeneratedGeometryEquivalenceKey();
+        this.outputBuffer.reset();
+        this.outputHeapSlot = 0u;
+        this.drawCount = 0u;
+        this.captured = false;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public b8 capture(in MaterialPassDrawItemsView sourceDrawItems, in usize allowedMaxDrawCount){
+        this.reset();
+        if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || !IsValidSharedComputeEmulationDrawWindow(sourceDrawItems.computeDrawItems.size(), s_SharedComputeEmulationMinimumDrawCount, allowedMaxDrawCount))
+            return false;
 
+        this.drawCount = sourceDrawItems.computeDrawItems.size();
+        for(usize drawIndex = 0u; drawIndex < this.drawCount; ++drawIndex){
+            const MaterialPassDrawItem drawItem = sourceDrawItems.computeDrawItems[drawIndex];
+            if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
+                return false;
 
-NWB_IMPL_BEGIN
+            const MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+            if(!mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid())
+                return false;
 
+            if(drawIndex == 0u){
+                this.outputBuffer = mesh.emulationVertexBuffer;
+                this.outputHeapSlot = mesh.emulationVertexHeapHandle.slot();
+            }
+            else if(mesh.emulationVertexBuffer != this.outputBuffer || mesh.emulationVertexHeapHandle.slot() != this.outputHeapSlot)
+                return false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            this.drawItems[drawIndex] = drawItem;
+            this.equivalenceKeys[drawIndex] = MakeGeneratedGeometryEquivalenceKey(
+                drawItem.meshKey,
+                drawItem.pipelineKey.material,
+                drawItem.pipelineKey.pass,
+                drawItem.instanceIndex,
+                drawItem.materialConstantByteOffset,
+                drawItem.shadingModelId,
+                mesh.emulationVertexHeapHandle.valid(),
+                mesh.emulationVertexHeapHandle.slot(),
+                mesh.emulationIndexByteOffset,
+                drawItem.pipelineResources.indexedGeometryOutput
+            );
+        }
+        this.captured = this.outputBuffer.valid();
+        return this.captured;
+    }
 
+    public b8 matches(in usize drawIndex)const{
+        if(!this.captured || drawIndex >= this.drawCount || !this.outputBuffer.valid())
+            return false;
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RegularSharedComputeEmulationGraphPlan{
-    Array<MaterialPassDrawItem, s_SharedComputeEmulationMaximumDrawCount> drawItems{};
-    Array<GeneratedGeometryEquivalenceKey, s_SharedComputeEmulationMaximumDrawCount> equivalenceKeys{};
-    Core::BufferHandle outputBuffer;
-    usize drawCount = 0u;
-    u32 outputHeapSlot = 0u;
-    b8 captured = false;
-
-
-public:
-    void reset()noexcept;
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, usize allowedMaxDrawCount)noexcept;
-    [[nodiscard]] b8 matches(usize drawIndex)const noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        const MaterialPassDrawItem drawItem = this.drawItems[drawIndex];
+        const MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+        return
+            mesh.emulationVertexBuffer.valid()
+            && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexBuffer == this.outputBuffer
+            && mesh.emulationVertexHeapHandle.slot() == this.outputHeapSlot
+            && this.equivalenceKeys[drawIndex].matches(
+                drawItem.meshKey,
+                drawItem.pipelineKey.material,
+                drawItem.pipelineKey.pass,
+                drawItem.pipelineKey.csgMode,
+                drawItem.instanceIndex,
+                drawItem.materialConstantByteOffset,
+                drawItem.shadingModelId,
+                mesh.emulationVertexHeapHandle.valid(),
+                mesh.emulationVertexHeapHandle.slot(),
+                mesh.emulationIndexByteOffset,
+                drawItem.pipelineResources.indexedGeometryOutput
+            )
+        ;
+    }
 }
 
 

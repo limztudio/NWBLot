@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/light_space_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -44,33 +50,6 @@ NWB_IMPL_BEGIN
 
 class RendererShaderSystem;
 struct LightSpaceShadowState;
-class LightSpacePlan;
-
-
-class LightSpaceResourceSet final : NoCopy{
-public:
-    LightSpaceResourceSet(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, LightSpaceShadowState& state, const b8& hardwareSupported)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_state(state)
-        , m_hardwareSupported(hardwareSupported)
-    {}
-
-
-public:
-    [[nodiscard]] b8 ensureLightSpaceShadowPipelines();
-    [[nodiscard]] b8 ensureLightSpaceShadowStorage(const LightSpacePlan& plan);
-    void releaseLightSpaceShadowResources();
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    LightSpaceShadowState& m_state;
-    const b8& m_hardwareSupported;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,6 +61,37 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererShaderSystem")]
+extern class RendererShaderSystem;
+[cpp_name("::NWB::Impl::LightSpaceShadowState")]
+extern class LightSpaceShadowState;
+
+
+[modular]
+class LightSpaceResourceSet : NoCopy{
+    private mut GlobalArena m_arena;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererShaderSystem m_shaderSystem;
+    private mut LightSpaceShadowState m_state;
+    private b8 m_hardwareSupported;
+
+    public LightSpaceResourceSet(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut LightSpaceShadowState state, in b8 hardwareSupported){
+        this.m_arena = arena;
+        this.m_graphics = graphics;
+        this.m_shaderSystem = shaderSystem;
+        this.m_state = state;
+        this.m_hardwareSupported = hardwareSupported;
+    }
+
+    public b8 ensureLightSpaceShadowPipelines();
+    public b8 ensureLightSpaceShadowStorage(in LightSpacePlan plan);
+    public void releaseLightSpaceShadowResources();
 }
 
 

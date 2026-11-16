@@ -10,92 +10,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
-#include <impl/ecs_render/kernel/timing_policy.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiler.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(static_cast<u32>(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
-
-
 // Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
-class RendererTaskTimingFeedbackState final : NoCopy{
-public:
-    explicit RendererTaskTimingFeedbackState(Core::Alloc::GlobalArena& arena)noexcept
-        : m_pendingSamples(arena)
-    {}
+class RendererTaskTimingFeedbackState : NoCopy{
+    private Vector<RendererTaskTimingPendingSample> m_pendingSamples;
 
-
-public:
-    [[nodiscard]] FOUNDATION_INLINE b8 trackSample(
-        const Core::GpuTimingSampleAttribution attribution,
-        const Name& scopeName,
-        const Core::GpuTaskTimingKey& key,
-        const Core::GpuPhysicalQueueId& expectedQueue,
-        const u64 sourceFrameIndex,
-        const b8 recordsNonCommittingTimingSample
+    public b8 trackSample(
+        in GpuTimingSampleAttribution attribution,
+        in Name scopeName,
+        in GpuTaskTimingKey key,
+        in GpuPhysicalQueueId expectedQueue,
+        in u64 sourceFrameIndex,
+        in b8 recordsNonCommittingTimingSample
     ){
-        return TrackRendererTaskTimingSample(attribution, scopeName, key, expectedQueue, sourceFrameIndex, recordsNonCommittingTimingSample, m_pendingSamples);
+        return TrackRendererTaskTimingSample(attribution, scopeName, key, expectedQueue, sourceFrameIndex, recordsNonCommittingTimingSample, this.m_pendingSamples);
     }
 
-    FOUNDATION_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
-        AcceptRendererTaskTimingSubmission(attribution, token, feedbackActive, true, m_pendingSamples);
+    public void acceptSubmission(in GpuTimingSampleAttribution attribution, in QueueSubmissionToken token, in b8 feedbackActive){
+        AcceptRendererTaskTimingSubmission(attribution, token, feedbackActive, true, this.m_pendingSamples);
     }
 
-    FOUNDATION_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
-        DiscardRendererTaskTimingRecording(attribution, m_pendingSamples);
+    public void discardRecording(in GpuTimingSampleAttribution attribution){
+        DiscardRendererTaskTimingRecording(attribution, this.m_pendingSamples);
     }
 
-    FOUNDATION_INLINE void completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
-        CompleteRendererTaskTimingSample(sample, feedbackActive, m_pendingSamples);
+    public void completeSample(in GpuTimingSample sample, in b8 feedbackActive){
+        CompleteRendererTaskTimingSample(sample, feedbackActive, this.m_pendingSamples);
     }
 
-    [[nodiscard]] FOUNDATION_INLINE RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, const u16 deviceGeneration){
-        return DrainRendererTaskTimingPendingSamples(history, deviceGeneration, m_pendingSamples);
+    public RendererTaskTimingFeedbackDrainResult drain(mut GpuTaskTimingHistoryStore history, in u16 deviceGeneration){
+        return DrainRendererTaskTimingPendingSamples(history, deviceGeneration, this.m_pendingSamples);
     }
 
-    FOUNDATION_INLINE void reset()noexcept{ m_pendingSamples.clear(); }
-
-
-private:
-    Vector<RendererTaskTimingPendingSample, Core::Alloc::GlobalArena> m_pendingSamples;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void reset(){
+        this.m_pendingSamples.clear();
+    }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(in RendererTimingPolicy requestedPolicy, in b8 rendererActive, mut RendererTimingPolicy currentPolicy){

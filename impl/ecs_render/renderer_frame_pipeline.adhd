@@ -81,7 +81,7 @@ NWB_IMPL_BEGIN
 class ObjectGeometryCacheGraph;
 class DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
-struct RayTracingSceneGraphReads;
+class RayTracingSceneGraphReads;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

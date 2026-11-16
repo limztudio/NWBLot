@@ -38,8 +38,10 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 class RayTraceMaterialResources;
 
+class MeshRayTracingResourceSnapshot;
+
 namespace ECSRenderDetail{
-    struct MeshRayTracingResourceSnapshot;
+    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
 };
 
 
@@ -117,26 +119,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshHeapHandleGather final{
-public:
-    MeshHeapHandleGather(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache)noexcept
-        : m_heap(heap)
-        , m_cache(cache)
-    {}
-
-    void begin()noexcept;
-    [[nodiscard]] Expected<Core::GpuDescriptorHandle> acquire(const Core::BufferHandle& bufferHandle);
-    void sweep();
-
-private:
-    Core::GpuDescriptorHeap& m_heap;
-    RtMeshHeapHandleCache& m_cache;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class PreparedMeshBlasBuilder final{
 public:
     [[nodiscard]] static Expected<PreparedMeshBlasBuild> Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept;
@@ -154,6 +136,29 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RtMeshHeapHandleCache"), cpp_header("<impl/ecs_render/shadow/rt_shadow_state.adhd.h>")]
+extern class RtMeshHeapHandleCache;
+
+
+[modular]
+class MeshHeapHandleGather{
+    private mut GpuDescriptorHeap m_heap;
+    private mut RtMeshHeapHandleCache m_cache;
+
+    public MeshHeapHandleGather(mut GpuDescriptorHeap heap, mut RtMeshHeapHandleCache cache){
+        this.m_heap = heap;
+        this.m_cache = cache;
+    }
+
+    public void begin();
+    public Expected<GpuDescriptorHandle> acquire(in BufferHandle bufferHandle);
+    public void sweep();
 }
 
 

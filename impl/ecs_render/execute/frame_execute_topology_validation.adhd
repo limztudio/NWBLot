@@ -441,7 +441,7 @@ void GraphicsPrefixTimingResolver::resolve(const Core::GpuCompiledGraph::ReadVie
 
 
 void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = m_pipeline;
+    const RendererFramePipeline& pipeline = *m_pipeline;
     outResult = OpaqueEmulationMergeValidationResult{};
     const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
         return compiledPlan.findTask(task).valid();
@@ -559,7 +559,7 @@ void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadV
 
 
 void SurfelCausticsMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, b8 captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = m_pipeline;
+    const RendererFramePipeline& pipeline = *m_pipeline;
     outResult = SurfelCausticsMergeValidationResult{};
     outResult.hardwareCausticsQueue = compiledPlan.queueInfoForTask(pipeline.m_causticsGraph.m_deferredHardwareCausticsTask);
     outResult.surfelGiQueue = compiledPlan.queueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiTask);

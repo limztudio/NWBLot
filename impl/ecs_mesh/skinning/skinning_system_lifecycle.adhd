@@ -53,11 +53,13 @@ native{
 
 
 #include <impl/ecs_mesh/skinning/system.adhd.h>
+#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd.h>
 #include <impl/ecs_mesh/skinning/skinning_internal.adhd.h>
 #include <impl/ecs_mesh/skinning/runtime_instance.adhd.h>
 #include <impl/ecs_mesh/skinning/runtime_cache.adhd.h>
 #include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/ecs_mesh/skinning/timing_names.adhd.h>
+#include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/ecs_mesh/components.adhd.h>
 #include <impl/ecs_mesh/runtime/mesh_requests.adhd.h>
 #include <impl/ecs_mesh/runtime/types.adhd.h>
@@ -82,6 +84,31 @@ native{
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION, "Skeleton skinning mode values must match the shader ABI");
+static_assert(s_RuntimeRequiredStorageDescriptorCount == static_cast<usize>(RuntimeStorageDescriptorSlot::SkinInfluences), "Runtime required storage descriptor count must match slot enum");
+static_assert(s_RuntimeStorageDescriptorCount == static_cast<usize>(RuntimeStorageDescriptorSlot::kCount), "Runtime storage descriptor count must match slot enum");
+static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
+static_assert(sizeof(MeshSkinningGraphDispatchPlan) == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");
+
+static_assert(sizeof(MeshSkinningPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning push constants layout must match the shader ABI");
+static_assert(offsetof(MeshSkinningPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "MeshSkinning meshlet-count push offset drifted");
+static_assert(offsetof(MeshSkinningPushConstants, skinCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKIN_COUNT, "MeshSkinning skin-count push offset drifted");
+static_assert(offsetof(MeshSkinningPushConstants, jointCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_JOINT_COUNT, "MeshSkinning joint-count push offset drifted");
+static_assert(offsetof(MeshSkinningPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "MeshSkinning skinning-mode push offset drifted");
+static_assert(offsetof(MeshSkinningPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bindless-resource slot push offset drifted");
+
+static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
+static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
+static_assert(offsetof(MeshletBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bounds bindless-resource slot push offset drifted");
+
+static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
+static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
+static_assert(offsetof(MeshletBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,22 +233,6 @@ template<typename PushConstantsT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshSkinningRuntimeResources::hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
-    const auto storageHandle = [this](const RuntimeStorageDescriptorSlot::Enum slot)noexcept{
-        const Core::GpuDescriptorHandle handle = bindlessHeapHandles.storageBuffers[static_cast<usize>(slot)];
-        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    };
-    const auto uniformHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
-        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
-    };
-    if(!bindlessResourceSlotsBuffer || !uniformHandle(bindlessHeapHandles.resourceSlots))
-        return false;
-    for(usize index = 0u; index < s_RuntimeRequiredStorageDescriptorCount; ++index)
-        if(!storageHandle(static_cast<RuntimeStorageDescriptorSlot::Enum>(index)))
-            return false;
-    return (!hasActiveSkin || (storageHandle(RuntimeStorageDescriptorSlot::SkinInfluences) && storageHandle(RuntimeStorageDescriptorSlot::JointPalette))) && (!hasAttributeBuffer || storageHandle(RuntimeStorageDescriptorSlot::AttributeBuffer));
-}
-
 MeshSkinningSystem::MeshSkinningSystem(
     ::ArenaBase& __adhd_mother_arena,
     Core::ECS::World& world,
@@ -303,33 +314,6 @@ void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world)noexce
     m_runtimeSetupReady = ready;
 }
 
-b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount)noexcept{
-    if(width == 0 || height == 0)
-        return true;
-    if(!ensureActiveSceneSubsystems())
-        return false;
-    if(!isSkinningFeatureEnabled())
-        return true;
-
-    auto& device = m_graphics->getDevice();
-
-    const b8 timingReady =
-        m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_LocalBounds.identity, device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals.identity, device, s_PerRuntimeMeshTimingQueries)
-    ;
-    if(!timingReady)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
-
-    // Pipeline creation lives in resource validation, never in the per-frame prepare path below; prepare only consumes the handles created here.
-    if(!ensureSkinningPipeline() || !ensureBoundsPipeline() || !ensureLocalBoundsPipeline() || !ensureRepackPipeline()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create skinning pipelines during resource validation"));
-        return false;
-    }
-    return true;
-}
-
 b8 MeshSkinningSystem::prepareResources([[maybe_unused]] Core::Framebuffer* framebuffer)noexcept{
     Core::Alloc::ScratchArena scratchArena(s_PrepareRuntimeArena);
     // Frames may lack native submissions; filter retired buffers so handles pin nothing.
@@ -339,14 +323,6 @@ b8 MeshSkinningSystem::prepareResources([[maybe_unused]] Core::Framebuffer* fram
     }
 
     return m_runtimeSetupReady;
-}
-
-void MeshSkinningSystem::render([[maybe_unused]] Core::Framebuffer* framebuffer)noexcept{
-    if(!isSkinningFeatureEnabled())
-        return;
-
-    if(!submitFrameSkinningGraph())
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
 }
 
 void MeshSkinningSystem::invalidateResources()noexcept{
@@ -378,10 +354,6 @@ Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS
         runtimeMesh = binding->runtimeMesh;
     const MeshSkinningRuntimeInstance* const instance = runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(runtimeMesh) : nullptr;
     return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, s_RuntimeSkinningMeshletFrustumCullingEnabled, s_RuntimeSkinningMeshletConeCullingEnabled);
-}
-
-b8 MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{
-    return m_world->tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
 }
 
 void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)noexcept{
@@ -481,36 +453,6 @@ b8 MeshSkinningSystem::ensureRepackPipeline()noexcept{
         m_repackComputeShader,
         m_repackComputePipeline
     );
-}
-
-b8 MeshSkinningSystem::skinningPipelineReady()const noexcept{
-    return m_skinningBindingLayout && m_skinningComputePipeline;
-}
-
-b8 MeshSkinningSystem::boundsPipelinesReady()const noexcept{
-    return m_boundsBindingLayout && m_boundsComputePipeline && m_localBoundsComputePipeline;
-}
-
-b8 MeshSkinningSystem::repackPipelineReady()const noexcept{
-    return m_repackBindingLayout && m_repackComputePipeline;
-}
-
-b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena)noexcept{
-    instance.deformationState.invalidateCurrent();
-    if(instance.meshlets.empty())
-        return true;
-    if(!AreMeshSkinningRuntimePipelinesReady(skinningPipelineReady(), boundsPipelinesReady(), instance.attributeBuffer != nullptr, repackPipelineReady()))
-        return false;
-
-    const auto resourcesChanged = ensureRuntimeResources(instance, scratchArena);
-    if(!resourcesChanged)
-        return false;
-    if(*resourcesChanged){
-        RuntimeMeshDirtyFlag::Flag dirtyFlags = static_cast<RuntimeMeshDirtyFlag::Flag>(instance.dirtyFlags);
-        MarkRebuiltRuntimeMeshDirtyFlags(dirtyFlags);
-        instance.dirtyFlags = dirtyFlags;
-    }
-    return true;
 }
 
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const noexcept{

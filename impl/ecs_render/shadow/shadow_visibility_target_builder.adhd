@@ -23,16 +23,6 @@ NWB_IMPL_BEGIN
 class RendererRayTracingState;
 class DeferredFrameTargets;
 
-class ShadowVisibilityTargetBuilder final{
-public:
-    ShadowVisibilityTargetBuilder(Core::GraphicsRuntime& graphics, RendererRayTracingState& rayTracingState)noexcept : m_graphics(graphics), m_rayTracingState(rayTracingState){}
-    [[nodiscard]] b8 build(DeferredFrameTargets& targets);
-
-private:
-    Core::GraphicsRuntime& m_graphics;
-    RendererRayTracingState& m_rayTracingState;
-};
-
 
 NWB_IMPL_END
 
@@ -40,6 +30,29 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingState")]
+extern class RendererRayTracingState;
+[cpp_name("::NWB::Impl::DeferredFrameTargets")]
+extern class DeferredFrameTargets;
+
+
+[modular]
+class ShadowVisibilityTargetBuilder : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererRayTracingState m_rayTracingState;
+
+    public ShadowVisibilityTargetBuilder(mut GraphicsRuntime graphics, mut RendererRayTracingState rayTracingState){
+        this.m_graphics = graphics;
+        this.m_rayTracingState = rayTracingState;
+    }
+
+    public b8 build(mut DeferredFrameTargets targets);
 }
 
 

@@ -204,7 +204,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
 
     FrameGraphTraceGeometryImporter traceGeometryImporter(m_deferredLightingTaskGraph, m_raytracingSystem, m_meshSystem);
-    const auto traceGeometryResult = traceGeometryImporter.declare(scratchArena, rayTracingShadowResources);
+    const auto traceGeometryResult = traceGeometryImporter.declare(scratchArena, scratchArena, rayTracingShadowResources);
     if(!traceGeometryResult)
         return;
     const FrameGraphTraceGeometryResult& traceGeometry = *traceGeometryResult;

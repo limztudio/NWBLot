@@ -675,7 +675,7 @@ void VerifyOpticalRuntimeBounds_MissingRuntimeBoundsPoisonsUnionWithoutDroppingI
     RayTracingOpticalSceneGather gather = RayTracingOpticalSceneGather(context.scratch, 8u);
     const RendererComponent renderer = RendererComponent();
     const GpuDescriptorHandle descriptor = GpuDescriptorHandle::Make(GpuDescriptorClass::StorageBuffer, 5u);
-    gather.appendRuntime(EntityID(1u, 0u), renderer, BufferHandle(), descriptor, f32x3x4());
+    gather.appendRuntime(EntityID(1u, 0u), renderer, BufferHandle(), descriptor, MatrixSingle());
     EXPECT_EQ(gather.instances.size(), 1u);
     EXPECT_EQ(gather.header.transparentCount, 1u);
     EXPECT_TRUE(gather.runtimeBounds.empty());

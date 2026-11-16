@@ -85,6 +85,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(s_CausticResolvePassCount == NWB_CAUSTIC_RESOLVE_PASS_COUNT);
+static_assert(s_CausticResolveGroupThreadCount == NWB_CAUSTIC_RESOLVE_GROUP_SIZE);
+static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount == s_CausticResolveGroupLaneCount);
+
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     m_rayTracingState.m_causticEmissionTargets.releaseDescriptor(m_graphics);
 }
@@ -600,42 +604,18 @@ b8 EnsureCausticEmissionTargetBufferStorage(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CausticResolveActivitySnapshot::valid()const noexcept{
-    if(halfWidth == 0u || halfHeight == 0u)
-        return false;
-    for(u32 index = 0u; index < LengthOf(buffers); ++index){
-        if(!buffers[index] || !descriptors[index].valid() || descriptors[index].descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
-            return false;
-    }
-    return true;
-}
-
-b8 CausticResolveActivitySnapshot::matches(const CausticResolveActivitySnapshot& other)const noexcept{
-    if(halfWidth != other.halfWidth || halfHeight != other.halfHeight)
-        return false;
-    for(u32 index = 0u; index < LengthOf(buffers); ++index){
-        if(buffers[index] != other.buffers[index] || descriptors[index] != other.descriptors[index])
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CausticActivityResources::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight){
-    const auto& current = m_activity;
+b8 CausticActivityResources::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight)noexcept{
+    const auto& current = *m_activity;
     if(current.valid() && current.halfWidth == halfWidth && current.halfHeight == halfHeight)
         return true;
     releaseCausticResolveActivity();
     const Expected<CausticResolveActivityLayout> layout = TryResolveCausticActivityLayout(halfWidth, halfHeight);
     if(!layout)
         return false;
-    auto& heap = m_graphics.getDevice().getDescriptorHeap();
+    auto& heap = m_graphics->getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    auto& activity = m_activity;
+    auto& activity = *m_activity;
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
         desc.setByteSize(layout->bufferByteSize)
@@ -643,8 +623,8 @@ b8 CausticActivityResources::prepareCausticResolveActivity(const u32 halfWidth, 
             .setCanHaveUAVs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
-            .setDebugName(s_CausticResolveActivityBufferNames[index]);
-        auto buffersResult = m_graphics.createBuffer(desc);
+            .setDebugName(CausticResolveActivityBufferName(index));
+        auto buffersResult = m_graphics->createBuffer(desc);
         if(buffersResult)
             activity.buffers[index] = Move(*buffersResult);
         else
@@ -663,16 +643,16 @@ b8 CausticActivityResources::prepareCausticResolveActivity(const u32 halfWidth, 
     return true;
 }
 
-void CausticActivityResources::releaseCausticResolveActivity(){
-    auto& activity = m_activity;
-    auto& heap = m_graphics.getDevice().getDescriptorHeap();
+void CausticActivityResources::releaseCausticResolveActivity()noexcept{
+    auto& activity = *m_activity;
+    auto& heap = m_graphics->getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         for(const Core::GpuDescriptorHandle descriptor : activity.descriptors){
             if(descriptor.valid())
                 heap.free(descriptor);
         }
     }
-    activity = {};
+    activity = CausticResolveActivitySnapshot{};
 }
 
 

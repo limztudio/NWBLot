@@ -50,37 +50,6 @@ public:
     }
 };
 
-// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
-// Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept{
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Medium;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    scheduling.allowMergeAcrossConsumerFrontier = true;
-    return scheduling;
-}
-
-// Shared phase descriptors retain one ordered recording group while the compiler selects its compatible physical queue.
-FOUNDATION_INLINE void MakeSharedComputeEmulationPhaseTaskDesc(
-    const Name identity,
-    const AStringView markerLabel,
-    const Core::GpuTaskId& dependency,
-    const Span<const Core::GpuTaskResourceUse> resourceUses,
-    const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
-    Core::GpuTaskDesc& desc
-)noexcept{
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel(markerLabel)
-        .setScheduling(SharedComputeEmulationChainScheduling())
-        .setDependencies({ &dependency, 1u })
-        .setResourceUses(resourceUses)
-        .setResourceSetUses({ resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size() })
-    ;
-}
-
 #define NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES(phaseIdPrefix, phaseLabelPrefix) \
     const Array<Name, 10u> sharedPhaseIdentities = { \
         Name(phaseIdPrefix ".shared_compute_emulation_generate_a"), \
@@ -123,6 +92,43 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
+// Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
+GpuTaskSchedulingHint SharedComputeEmulationChainScheduling(){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    return scheduling;
+}
+
+// Shared phase descriptors retain one ordered recording group while the compiler selects its compatible physical queue.
+void MakeSharedComputeEmulationPhaseTaskDesc(
+    in Name identity,
+    in StringView markerLabel,
+    in GpuTaskId dependency,
+    in Span<GpuTaskResourceUse> resourceUses,
+    in Span<GpuTaskResourceSetUse> resourceSetUses,
+    mut GpuTaskDesc desc
+){
+    Array<GpuTaskId, 1u> dependencies = Array<GpuTaskId, 1u>();
+    dependencies[0] = dependency;
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(markerLabel)
+        .setScheduling(SharedComputeEmulationChainScheduling())
+        .setDependencies(dependencies)
+        .setResourceUses(resourceUses)
+        .setResourceSetUses(resourceSetUses)
+    ;
 }
 
 

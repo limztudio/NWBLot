@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/meshlet_triangle_indices.adhd>
+#include <impl/assets_mesh/meshlet_vertex_attributes.adhd>
+#include <impl/ecs_mesh/skinning/runtime_instance.adhd>
+#include <impl/ecs_mesh/skinning/system.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -9,13 +18,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <impl/ecs_mesh/skinning/runtime_instance.adhd.h>
-#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd.h>
 #include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 
-#include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.adhd.h>
 #include <impl/assets_skeleton/joint_types.adhd.h>
 #include <impl/ecs_mesh/components.adhd.h>
 #include <impl/ecs_mesh/runtime/types.adhd.h>
@@ -33,33 +37,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshSkinningTraceGeometry final{
-public:
-    [[nodiscard]] static Expected<Vector<u32, ::ArenaBase>> BuildIndices(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
-        const usize indexCount = instance.meshletPrimitiveIndices.size();
-        auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size());
-        if(!triangleIndices){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
-            return MakeUnexpected(Failure{});
-        }
-        if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices->size(), indexCount, instance.handle.value))
-            return MakeUnexpected(Failure{});
-        return Move(*triangleIndices);
-    }
-    [[nodiscard]] static Expected<Vector<AttribGpu, ::ArenaBase>> BuildAttributes(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
-        auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0);
-        if(!triangleAttributes){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
-            return MakeUnexpected(Failure{});
-        }
-        return Move(*triangleAttributes);
-    }
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,22 +180,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MeshSkinningGraphDetail{
-    [[nodiscard]] Core::GpuTaskSchedulingHint MakeSerialMergeScheduling(Core::GpuTaskCostHint::Enum cost)noexcept;
-
-    [[nodiscard]] FOUNDATION_INLINE Core::GpuTaskSchedulingHint JointPaletteUploadScheduling()noexcept{
-        return MakeSerialMergeScheduling(Core::GpuTaskCostHint::Tiny);
-    }
-
-    [[nodiscard]] FOUNDATION_INLINE Core::GpuTaskSchedulingHint SkinningDispatchScheduling()noexcept{
-        return MakeSerialMergeScheduling(Core::GpuTaskCostHint::Small);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Deformation and post-dispatch share the same plan loop; only the per-plan recorder differs.
 using SkinningPlanRecorder = b8 (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, const Core::GpuTaskRecordContext&, Core::CommandList&);
 
@@ -319,82 +280,296 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshSkinningFrameResourceImports final : NoCopy{
-public:
-    MeshSkinningFrameResourceImports(MeshSkinningSystem& system, Core::GpuTaskGraph& graph)noexcept : m_system(system), m_graph(graph){}
-
-
-public:
-    [[nodiscard]] b8 import(const MeshSkinningRuntimeInstance& instance, const MeshSkinningRuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
-
-
-private:
-    [[nodiscard]] Expected<Core::GpuGraphResourceId> importBuffer(const Core::BufferHandle& buffer, AStringView label);
-    [[nodiscard]] Expected<Core::GpuGraphPipelineId> importComputePipeline(const Core::ComputePipelineHandle& pipeline, Name identity, AStringView label);
-
-
-private:
-    MeshSkinningSystem& m_system;
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Per-mesh declarations of one skinning frame: the immutable dispatch plan plus its selector upload, rest-to-skinned copy, and joint-palette upload.
-// Every declared transfer chains on one serial dependency that the frame's deformation task then follows.
-class MeshSkinningFramePlanBuilder final : NoCopy{
-public:
-    MeshSkinningFramePlanBuilder(MeshSkinningSystem& system, Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena, Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& plans)noexcept
-        : m_system(system)
-        , m_graph(graph)
-        , m_scratchArena(scratchArena)
-        , m_plans(plans)
-    {}
-
-
-public:
-    // False only for a frame-fatal declaration failure; meshes without a ready pose or dirty bounds are skipped.
-    [[nodiscard]] b8 declare(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding);
-    [[nodiscard]] const Core::GpuTaskId& terminalTask()const noexcept{ return m_terminalTask; }
-
-
-private:
-    [[nodiscard]] b8 declareUploadTask(
-        const MeshSkinningRuntimeInstance& instance,
-        AStringView identitySuffix,
-        AStringView markerLabel,
-        BinaryByteView data,
-        usize dataAlignment,
-        Core::GpuGraphResourceId destination,
-        Core::ResourceStates::Mask finalState,
-        TStringView retainErrorLabel,
-        TStringView declareErrorLabel
-    );
-    [[nodiscard]] b8 declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const MeshSkinningRuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
-    [[nodiscard]] b8 declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan);
-    [[nodiscard]] b8 declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan);
-
-
-private:
-    MeshSkinningSystem& m_system;
-    Core::GpuTaskGraph& m_graph;
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& m_plans;
-    Core::GpuTaskId m_terminalTask;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Vector<u32>> TryBuildMeshSkinningTraceIndices(in MeshSkinningRuntimeInstance instance){
+    const usize indexCount = instance.meshletPrimitiveIndices.size();
+    const Expected<Vector<u32>> triangleIndices = BuildMeshletTriangleIndices(
+        instance.meshlets,
+        instance.meshletLocalVertexRefs,
+        instance.meshletPositionRefDeltas,
+        instance.meshletPrimitiveIndices,
+        instance.restPositions.size()
+    );
+    if(!triangleIndices.has_value()){
+        error("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'", instance.handle.value);
+        return MakeUnexpected(Failure());
+    }
+    if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices.value().size(), indexCount, instance.handle.value))
+        return MakeUnexpected(Failure());
+    return triangleIndices.value();
+}
+
+Expected<Vector<AttribGpu>> TryBuildMeshSkinningTraceAttributes(in MeshSkinningRuntimeInstance instance){
+    const Expected<Vector<AttribGpu>> triangleAttributes = BuildMeshletTriangleAttributes(
+        instance.meshlets,
+        instance.meshletLocalVertexRefs,
+        instance.meshletAttributeRefDeltas,
+        instance.meshletPrimitiveIndices,
+        instance.restNormals,
+        instance.uv0
+    );
+    if(!triangleAttributes.has_value()){
+        error("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'", instance.handle.value);
+        return MakeUnexpected(Failure());
+    }
+    return triangleAttributes.value();
+}
+
+GpuTaskSchedulingHint MakeSkinningSerialMergeScheduling(in GpuTaskCostHint cost){
+    GpuTaskSchedulingHint scheduling = GpuTaskSchedulingHint();
+    scheduling.cost = cost;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    // The external renderer consumes one accepted skinning state on this serial timeline.
+    scheduling.mergeWithPrevious = true;
+    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
+    return scheduling;
+}
+
+GpuTaskSchedulingHint MakeJointPaletteUploadScheduling(){
+    return MakeSkinningSerialMergeScheduling(GpuTaskCostHint::Tiny);
+}
+
+GpuTaskSchedulingHint MakeSkinningDispatchScheduling(){
+    return MakeSkinningSerialMergeScheduling(GpuTaskCostHint::Small);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshSkinningFrameResourceImports : NoCopy{
+    private mut MeshSkinningSystem m_system;
+    private mut GpuTaskGraph m_graph;
+
+    public MeshSkinningFrameResourceImports(mut MeshSkinningSystem system, mut GpuTaskGraph graph){
+        this.m_system = system;
+        this.m_graph = graph;
+    }
+
+    public b8 import(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut MeshSkinningGraphDispatchPlan plan){
+        const b8 hasActiveSkin = plan.hasActiveSkin;
+        const b8 copiesRestStreams = plan.copiedRestStreams;
+        const b8 updatesMeshletBounds = plan.updatesMeshletBounds;
+
+        const Expected<GpuGraphResourceId> bindlessResourceSlotsResourceResult = this.importBuffer(plan.bindlessResourceSlotsBuffer, s_BindlessSlotsLabel);
+        Expected<GpuGraphResourceId> restPositionResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> restNormalResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> restTangentResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> skinnedPositionResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> skinnedNormalResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> skinnedTangentResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletDescResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletPositionRefDeltaResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletLocalVertexRefResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletPrimitiveIndexResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletBoundsResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletLocalBoundsResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> localBoundsResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> meshletAttributeRefDeltaResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> attributeSkinResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> skinResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> jointPaletteResourceResult = MakeUnexpected(Failure());
+        Expected<GpuGraphResourceId> attributeResourceResult = MakeUnexpected(Failure());
+
+        if(hasActiveSkin || copiesRestStreams){
+            restPositionResourceResult = this.importBuffer(instance.restPositionBuffer, s_RestPositionsLabel);
+            restNormalResourceResult = this.importBuffer(instance.restNormalBuffer, s_RestNormalsLabel);
+            restTangentResourceResult = this.importBuffer(instance.restTangentBuffer, s_RestTangentsLabel);
+            skinnedPositionResourceResult = this.importBuffer(instance.skinnedPositionBuffer, s_SkinnedPositionsLabel);
+            skinnedNormalResourceResult = this.importBuffer(instance.skinnedNormalBuffer, s_SkinnedNormalsLabel);
+            skinnedTangentResourceResult = this.importBuffer(instance.skinnedTangentBuffer, s_SkinnedTangentsLabel);
+        }
+        if(updatesMeshletBounds){
+            this.importBufferIfNeeded(skinnedPositionResourceResult, instance.skinnedPositionBuffer, s_SkinnedPositionsLabel);
+            meshletDescResourceResult = this.importBuffer(instance.meshletDescBuffer, s_MeshletDescriptorsLabel);
+            meshletPositionRefDeltaResourceResult = this.importBuffer(instance.meshletPositionRefDeltaBuffer, s_MeshletPositionDeltasLabel);
+            meshletLocalVertexRefResourceResult = this.importBuffer(instance.meshletLocalVertexRefBuffer, s_MeshletLocalVertexRefsLabel);
+            meshletPrimitiveIndexResourceResult = this.importBuffer(instance.meshletPrimitiveIndexBuffer, s_MeshletPrimitiveIndicesLabel);
+            meshletBoundsResourceResult = this.importBuffer(instance.meshletBoundsBuffer, s_MeshletBoundsLabel);
+            meshletLocalBoundsResourceResult = this.importBuffer(instance.meshletLocalBoundsBuffer, s_MeshletLocalBoundsLabel);
+            localBoundsResourceResult = this.importBuffer(instance.localBoundsBuffer, s_LocalBoundsLabel);
+        }
+        if(hasActiveSkin){
+            meshletAttributeRefDeltaResourceResult = this.importBuffer(instance.meshletAttributeRefDeltaBuffer, s_MeshletAttributeDeltasLabel);
+            attributeSkinResourceResult = this.importBuffer(instance.attributeSkinBuffer, s_AttributeSkinsLabel);
+            skinResourceResult = this.importBuffer(resources.skinBuffer, s_SkinningInfluencesLabel);
+            jointPaletteResourceResult = this.importBuffer(resources.jointPaletteBuffer, s_SkinningJointPaletteLabel);
+        }
+        if(plan.repacksNormals){
+            this.importBufferIfNeeded(skinnedNormalResourceResult, instance.skinnedNormalBuffer, s_SkinnedNormalsLabel);
+            this.importBufferIfNeeded(meshletDescResourceResult, instance.meshletDescBuffer, s_MeshletDescriptorsLabel);
+            this.importBufferIfNeeded(meshletPrimitiveIndexResourceResult, instance.meshletPrimitiveIndexBuffer, s_MeshletPrimitiveIndicesLabel);
+            this.importBufferIfNeeded(meshletAttributeRefDeltaResourceResult, instance.meshletAttributeRefDeltaBuffer, s_MeshletAttributeDeltasLabel);
+            this.importBufferIfNeeded(meshletLocalVertexRefResourceResult, instance.meshletLocalVertexRefBuffer, s_MeshletLocalVertexRefsLabel);
+            attributeResourceResult = this.importBuffer(instance.attributeBuffer, s_RayTraceAttributesLabel);
+        }
+
+        const Expected<GpuGraphPipelineId> boundsPipelineResult = this.importComputePipeline(this.m_system.m_boundsComputePipeline, s_GraphBoundsPipelineName, s_BoundsPipelineLabel);
+        const Expected<GpuGraphPipelineId> localBoundsPipelineResult = this.importComputePipeline(this.m_system.m_localBoundsComputePipeline, s_GraphLocalBoundsPipelineName, s_LocalBoundsPipelineLabel);
+        Expected<GpuGraphPipelineId> skinningPipelineResult = MakeUnexpected(Failure());
+        if(hasActiveSkin)
+            skinningPipelineResult = this.importComputePipeline(this.m_system.m_skinningComputePipeline, s_GraphSkinningPipelineName, s_SkinningPipelineLabel);
+        Expected<GpuGraphPipelineId> repackPipelineResult = MakeUnexpected(Failure());
+        if(plan.repacksNormals)
+            repackPipelineResult = this.importComputePipeline(this.m_system.m_repackComputePipeline, s_GraphRepackPipelineName, s_RepackPipelineLabel);
+
+        if(!ValidateMeshSkinningGraphResourceImports(
+            bindlessResourceSlotsResourceResult.has_value(),
+            skinnedPositionResourceResult.has_value(),
+            meshletDescResourceResult.has_value(),
+            meshletPositionRefDeltaResourceResult.has_value(),
+            meshletLocalVertexRefResourceResult.has_value(),
+            meshletPrimitiveIndexResourceResult.has_value(),
+            meshletBoundsResourceResult.has_value(),
+            boundsPipelineResult.has_value(),
+            meshletLocalBoundsResourceResult.has_value(),
+            localBoundsResourceResult.has_value(),
+            localBoundsPipelineResult.has_value(),
+            hasActiveSkin,
+            copiesRestStreams,
+            plan.repacksNormals,
+            restPositionResourceResult.has_value(),
+            restNormalResourceResult.has_value(),
+            restTangentResourceResult.has_value(),
+            skinnedNormalResourceResult.has_value(),
+            skinnedTangentResourceResult.has_value(),
+            meshletAttributeRefDeltaResourceResult.has_value(),
+            attributeSkinResourceResult.has_value(),
+            skinResourceResult.has_value(),
+            jointPaletteResourceResult.has_value(),
+            skinningPipelineResult.has_value(),
+            attributeResourceResult.has_value(),
+            repackPipelineResult.has_value()
+        )){
+            error("MeshSkinningSystem: runtime mesh '{}' has no graph-importable dispatch resource", instance.handle.value);
+            return false;
+        }
+
+        this.assignResource(bindlessResourceSlotsResourceResult, plan.bindlessResourceSlotsResource);
+        this.assignResource(restPositionResourceResult, plan.restPositionResource);
+        this.assignResource(restNormalResourceResult, plan.restNormalResource);
+        this.assignResource(restTangentResourceResult, plan.restTangentResource);
+        this.assignResource(skinnedPositionResourceResult, plan.skinnedPositionResource);
+        this.assignResource(skinnedNormalResourceResult, plan.skinnedNormalResource);
+        this.assignResource(skinnedTangentResourceResult, plan.skinnedTangentResource);
+        this.assignResource(meshletDescResourceResult, plan.meshletDescResource);
+        this.assignResource(meshletPositionRefDeltaResourceResult, plan.meshletPositionRefDeltaResource);
+        this.assignResource(meshletLocalVertexRefResourceResult, plan.meshletLocalVertexRefResource);
+        this.assignResource(meshletPrimitiveIndexResourceResult, plan.meshletPrimitiveIndexResource);
+        this.assignResource(meshletBoundsResourceResult, plan.meshletBoundsResource);
+        this.assignResource(meshletLocalBoundsResourceResult, plan.meshletLocalBoundsResource);
+        this.assignResource(localBoundsResourceResult, plan.localBoundsResource);
+        this.assignResource(meshletAttributeRefDeltaResourceResult, plan.meshletAttributeRefDeltaResource);
+        this.assignResource(attributeSkinResourceResult, plan.attributeSkinResource);
+        this.assignResource(skinResourceResult, plan.skinResource);
+        this.assignResource(jointPaletteResourceResult, plan.jointPaletteResource);
+        this.assignResource(attributeResourceResult, plan.attributeResource);
+        this.assignPipeline(boundsPipelineResult, plan.boundsPipeline);
+        this.assignPipeline(localBoundsPipelineResult, plan.localBoundsPipeline);
+        this.assignPipeline(skinningPipelineResult, plan.skinningPipeline);
+        this.assignPipeline(repackPipelineResult, plan.repackPipeline);
+        return true;
+    }
+
+    private void importBufferIfNeeded(mut Expected<GpuGraphResourceId> slot, in BufferHandle buffer, in StringView label){
+        if(!slot.has_value())
+            slot = this.importBuffer(buffer, label);
+    }
+
+    private void assignResource(in Expected<GpuGraphResourceId> result, mut GpuGraphResourceId outResource){
+        if(result.has_value())
+            outResource = result.value();
+    }
+
+    private void assignPipeline(in Expected<GpuGraphPipelineId> result, mut GpuGraphPipelineId outPipeline){
+        if(result.has_value())
+            outPipeline = result.value();
+    }
+
+    private Expected<GpuGraphResourceId> importBuffer(in BufferHandle buffer, in StringView label){
+        if(!buffer.valid())
+            return MakeUnexpected(Failure());
+        in BufferDesc description = buffer.deref().getCreationDescription();
+        if(description.debugName == s_NameNone)
+            return MakeUnexpected(Failure());
+        GpuGraphResourceDesc desc = GpuGraphResourceDesc();
+        desc
+            .setIdentity(description.debugName)
+            .setMarkerLabel(label)
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(description.initialState)
+            .setQueueSharing(description.queueSharing)
+        ;
+        return this.m_graph.importBuffer(buffer, desc);
+    }
+
+    private Expected<GpuGraphPipelineId> importComputePipeline(in ComputePipelineHandle pipeline, in Name identity, in StringView label){
+        GpuGraphPipelineDesc desc = GpuGraphPipelineDesc();
+        desc.setIdentity(identity).setMarkerLabel(label).setType(GpuGraphPipelineType::Compute);
+        return this.m_graph.importComputePipeline(pipeline, desc);
+    }
+}
+
+[cpp_name("::NWB::Impl::MeshSkinningGraphDispatchPlanVector")]
+extern class MeshSkinningGraphDispatchPlanVector;
+
+// Per-mesh declarations of one skinning frame: the immutable dispatch plan plus its selector upload, rest-to-skinned copy, and joint-palette upload.
+// Every declared transfer chains on one serial dependency that the frame's deformation task then follows.
+[modular]
+class MeshSkinningFramePlanBuilder : NoCopy{
+    private mut MeshSkinningSystem m_system;
+    private mut GpuTaskGraph m_graph;
+    private mut ScratchArena m_scratchArena;
+    private mut MeshSkinningGraphDispatchPlanVector m_plans;
+    private GpuTaskId m_terminalTask;
+
+    public MeshSkinningFramePlanBuilder(
+        mut MeshSkinningSystem system,
+        mut GpuTaskGraph graph,
+        mut ScratchArena scratchArena,
+        mut MeshSkinningGraphDispatchPlanVector plans
+    ){
+        this.m_system = system;
+        this.m_graph = graph;
+        this.m_scratchArena = scratchArena;
+        this.m_plans = plans;
+    }
+
+    // False only for a frame-fatal declaration failure; meshes without a ready pose or dirty bounds are skipped.
+    public b8 declare(in EntityID entity, mut SkinnedMeshBindingComponent binding);
+
+    public GpuTaskId terminalTask()const{
+        return this.m_terminalTask;
+    }
+
+    private b8 declareUploadTask(
+        in MeshSkinningRuntimeInstance instance,
+        in StringView identitySuffix,
+        in StringView markerLabel,
+        in Span<u8> data,
+        in usize dataAlignment,
+        in GpuGraphResourceId destination,
+        in ResourceStates finalState,
+        in StringView retainErrorLabel,
+        in StringView declareErrorLabel
+    );
+    private b8 declareBindlessSlotsUpload(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut MeshSkinningGraphDispatchPlan plan);
+    private b8 declareRestToSkinnedCopy(in MeshSkinningRuntimeInstance instance, in MeshSkinningGraphDispatchPlan plan);
+    private b8 declareJointPaletteUpload(in MeshSkinningRuntimeInstance instance, in Span<SkeletonJointMatrix> jointPaletteUpload, in MeshSkinningGraphDispatchPlan plan);
 }
 
 

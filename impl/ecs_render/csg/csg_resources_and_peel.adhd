@@ -511,7 +511,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
 
     MeshFrameHeapSlots frameHeapSlots;
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
-    ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, 0u, 0u, viewportState, frameHeapSlots, 0u);
+    SetShaderDrivenPushConstants(commandList, 0u, 0u, 0u, viewportState, frameHeapSlots, 0u);
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
@@ -540,7 +540,7 @@ void RendererCsgSystem::renderRefractionIntervalCaps(Core::CommandList& commandL
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
     for(const u32 receiverIndex : receiverIndices){
-        ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, receiverIndex, 0u, viewportState, frameHeapSlots, 0u);
+        SetShaderDrivenPushConstants(commandList, 0u, receiverIndex, 0u, viewportState, frameHeapSlots, 0u);
         commandList.draw(drawArgs);
     }
 }

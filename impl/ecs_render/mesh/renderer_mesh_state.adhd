@@ -2,59 +2,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+#include <impl/ecs_render/mesh/mesh_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/mesh/mesh_frame_bindings.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-
-#include <global/containers.h>
+[cpp_name("::NWB::Impl::MeshResources"), cpp_header("<impl/ecs_render/mesh/renderer_mesh_types.adhd.h>")]
+extern class MeshResources : NoCopy;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+class RendererMeshState : NoCopy{
+    public HashMap<Name, MeshResources> m_meshes;
+    public BufferHandle m_meshViewBuffer;
+    public MeshFrameBindings m_frameBindings;
+    public Array<u8, s_MeshViewGpuDataBytes> m_meshViewGpuData;
+    public b8 m_meshViewGpuDataValid = false;
 
+    public RendererMeshState(){}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshState final : NoCopy{
-public:
-    explicit RendererMeshState(Core::Alloc::GlobalArena& arena)
-        : m_meshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    {}
-
-
-public:
-    void invalidateResources()noexcept;
-
-
-public:
-    HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_meshes;
-    Core::BufferHandle m_meshViewBuffer;
-    MeshFrameBindings m_frameBindings;
-    Array<u8, sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT> m_meshViewGpuData = {};
-    b8 m_meshViewGpuDataValid = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void invalidateResources(){
+        this.m_meshes.clear();
+        this.m_meshViewBuffer.reset();
+        this.m_frameBindings.reset();
+        this.m_meshViewGpuDataValid = false;
+    }
 }
 
 

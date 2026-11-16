@@ -37,10 +37,6 @@ b8 ReleaseSkinningSourceReference(mut u32 inOutReferenceCount){
     return inOutReferenceCount == 0u;
 }
 
-u64 ComputeMeshletLocalBoundsByteSize(in usize meshletCount, in u64 boundsRecordByteSize){
-    return cast<u64>(meshletCount) * boundsRecordByteSize;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -481,7 +477,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
 
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
-        const auto triangleIndices = MeshSkinningTraceGeometry::BuildIndices(instance, scratchArena);
+        const auto triangleIndices = TryBuildMeshSkinningTraceIndices(scratchArena, instance);
         if(!triangleIndices)
             return false;
 
@@ -490,7 +486,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
 
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
-        const auto triangleAttributes = MeshSkinningTraceGeometry::BuildAttributes(instance, scratchArena);
+        const auto triangleAttributes = TryBuildMeshSkinningTraceAttributes(scratchArena, instance);
         if(!triangleAttributes)
             return false;
 
@@ -542,39 +538,7 @@ void MeshSkinningRuntimeCache::eraseUnusedSource(const Name& sourceName)noexcept
         m_sources.erase(foundSource);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance){
-    instance.deformationState.invalidateCurrent();
-    if(!ValidateMeshSkinningLocalBoundsMeshletCount(instance.meshlets.size(), NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE))
-        return false;
-    const auto partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_MeshletLocalBoundsSuffix);
-    const auto outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_LocalBoundsSuffix);
-    if(!partialName || !outputName){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
-        return false;
-    }
-    Core::BufferDesc desc;
-    desc.setByteSize(ComputeMeshletLocalBoundsByteSize(instance.meshlets.size(), NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE)).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(partialName);
-    auto partialsResult = graphics.createBuffer(desc);
-    if(!partialsResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
-        return false;
-    }
-    Core::BufferHandle partials = Move(*partialsResult);
-    desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(outputName);
-    auto outputResult = graphics.createBuffer(desc);
-    if(!outputResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
-        return false;
-    }
-    Core::BufferHandle output = Move(*outputResult);
-    instance.meshletLocalBoundsBuffer = Move(partials);
-    instance.localBoundsBuffer = Move(output);
-    return true;
-}
+static_assert(s_RuntimeMeshBoundsByteSize == NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE, "Runtime mesh bounds byte size must match shader ABI");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

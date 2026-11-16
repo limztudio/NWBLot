@@ -501,7 +501,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const 
         GpuVersion<GpuGlyphVersion> reused = existing;
         m_imageCache.glyphs().erase(m_imageCache.glyphs().begin() + static_cast<isize>(index));
         m_imageCache.glyphs().push_back(reused);
-        if(!GpuSampledTextures::PrepareDescriptor(reused->m_graphics, reused->m_texture, Core::Format::R8_UNORM, reused->m_sampledImage))
+        if(!PrepareGpuSampledTextureDescriptor(reused->m_graphics, reused->m_texture, Core::Format::R8_UNORM, reused->m_sampledImage))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -514,17 +514,16 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const 
     GpuVersion<GpuGlyphVersion> version = Move(*versionResult);
     const GlyphPageBinding& binding = page->binding();
     // Upload only a fresh immutable image. Accepted readiness stays with this version across presentation retries.
-    if(!GpuSampledTextures::CreateAndUploadPage(
+    if(!GpuSampledTextures().createAndUploadPage(
         m_graphics,
-        GpuPageTextureUploadDesc{
-            .name = s_GpuGlyphPageTextureName,
-            .data = page->pixels().data(),
-            .dataSize = page->pixels().size(),
-            .rowPitch = binding.width,
-            .width = binding.width,
-            .height = binding.height,
-            .format = Core::Format::R8_UNORM,
-        },
+        GpuPageTextureUploadDesc(
+            s_GpuGlyphPageTextureName,
+            Span<const u8>(page->pixels().data(), page->pixels().size()),
+            binding.width,
+            binding.width,
+            binding.height,
+            Core::Format::R8_UNORM
+        ),
         version->m_texture,
         version->m_readinessToken
     ))
@@ -536,7 +535,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const 
         m_imageCache.evict();
     m_imageCache.glyphs().push_back(version);
     // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
-    if(!GpuSampledTextures::PrepareDescriptor(version->m_graphics, version->m_texture, Core::Format::R8_UNORM, version->m_sampledImage))
+    if(!PrepareGpuSampledTextureDescriptor(version->m_graphics, version->m_texture, Core::Format::R8_UNORM, version->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(version);
 }
@@ -562,17 +561,17 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareGlyphPages(Core::Gp
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
         const auto& page = frame->m_glyphPages[index];
-        const auto texture = GpuSampledTextures::ImportTexture(
-            GpuSampledTextureImportDesc{
-                .readyPrefix = s_GpuGlyphPageReadyPrefix,
-                .readyMarkerLabel = s_GpuGlyphPageReadyMarkerLabel,
-                .completionLabel = FOUNDATION_TEXT("glyph page"),
-                .readinessToken = page->m_readinessToken,
-                .texturePrefix = s_GpuGlyphPagePrefix,
-                .textureMarkerLabel = s_GpuGlyphPageMarkerLabel,
-                .texture = page->m_texture,
-                .index = index,
-            },
+        const auto texture = ImportGpuSampledTexture(
+            GpuSampledTextureImportDesc(
+                s_GpuGlyphPageReadyPrefix,
+                s_GpuGlyphPageReadyMarkerLabel,
+                "glyph page",
+                page->m_readinessToken,
+                s_GpuGlyphPagePrefix,
+                s_GpuGlyphPageMarkerLabel,
+                page->m_texture,
+                index
+            ),
             graph,
             uses
         );
@@ -610,7 +609,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
         GpuVersion<GpuSdfAtlasVersion> reused = existing;
         m_imageCache.sdfs().erase(m_imageCache.sdfs().begin() + static_cast<isize>(index));
         m_imageCache.sdfs().push_back(reused);
-        if(!GpuSampledTextures::PrepareDescriptor(reused->m_graphics, reused->m_texture, reused->m_texture->getDescription().format, reused->m_sampledImage))
+        if(!PrepareGpuSampledTextureDescriptor(reused->m_graphics, reused->m_texture, reused->m_texture->getDescription().format, reused->m_sampledImage))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -637,17 +636,16 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }
-    if(!GpuSampledTextures::CreateAndUploadPage(
+    if(!GpuSampledTextures().createAndUploadPage(
         m_graphics,
-        GpuPageTextureUploadDesc{
-            .name = s_GpuSdfPageTextureName,
-            .data = uploadData.get(),
-            .dataSize = uploadBytes,
-            .rowPitch = static_cast<usize>(binding.width) * uploadChannels,
-            .width = binding.width,
-            .height = binding.height,
-            .format = format,
-        },
+        GpuPageTextureUploadDesc(
+            s_GpuSdfPageTextureName,
+            Span<const u8>(uploadData.get(), uploadBytes),
+            static_cast<usize>(binding.width) * uploadChannels,
+            binding.width,
+            binding.height,
+            format
+        ),
         version->m_texture,
         version->m_readinessToken
     ))
@@ -658,7 +656,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
         m_imageCache.evict();
     m_imageCache.sdfs().push_back(version);
     // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
-    if(!GpuSampledTextures::PrepareDescriptor(version->m_graphics, version->m_texture, version->m_texture->getDescription().format, version->m_sampledImage))
+    if(!PrepareGpuSampledTextureDescriptor(version->m_graphics, version->m_texture, version->m_texture->getDescription().format, version->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(version);
 }
@@ -684,17 +682,17 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareSdfPages(Core::GpuT
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
-        const auto texture = GpuSampledTextures::ImportTexture(
-            GpuSampledTextureImportDesc{
-                .readyPrefix = s_GpuSdfPageReadyPrefix,
-                .readyMarkerLabel = s_GpuSdfPageReadyMarkerLabel,
-                .completionLabel = FOUNDATION_TEXT("SDF page"),
-                .readinessToken = page->m_readinessToken,
-                .texturePrefix = s_GpuSdfPagePrefix,
-                .textureMarkerLabel = s_GpuSdfPageMarkerLabel,
-                .texture = page->m_texture,
-                .index = index,
-            },
+        const auto texture = ImportGpuSampledTexture(
+            GpuSampledTextureImportDesc(
+                s_GpuSdfPageReadyPrefix,
+                s_GpuSdfPageReadyMarkerLabel,
+                "SDF page",
+                page->m_readinessToken,
+                s_GpuSdfPagePrefix,
+                s_GpuSdfPageMarkerLabel,
+                page->m_texture,
+                index
+            ),
             graph,
             uses
         );
@@ -779,17 +777,17 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core:
         const auto& source = frame->m_snapshot.textureImages()[index];
         if(!image || !source || !image->m_source || !SameTextureImageKey(*image->m_source, *source) || !__hidden_ui_gpu_resources::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        const auto texture = GpuSampledTextures::ImportTexture(
-            GpuSampledTextureImportDesc{
-                .readyPrefix = s_GpuTextureImageReadyPrefix,
-                .readyMarkerLabel = s_GpuTextureImageReadyMarkerLabel,
-                .completionLabel = FOUNDATION_TEXT("texture"),
-                .readinessToken = image->m_texture.readinessToken,
-                .texturePrefix = s_GpuTextureImagePrefix,
-                .textureMarkerLabel = s_GpuTextureImageMarkerLabel,
-                .texture = image->m_texture.texture,
-                .index = index,
-            },
+        const auto texture = ImportGpuSampledTexture(
+            GpuSampledTextureImportDesc(
+                s_GpuTextureImageReadyPrefix,
+                s_GpuTextureImageReadyMarkerLabel,
+                "texture",
+                image->m_texture.readinessToken,
+                s_GpuTextureImagePrefix,
+                s_GpuTextureImageMarkerLabel,
+                image->m_texture.texture,
+                index
+            ),
             graph,
             uses
         );

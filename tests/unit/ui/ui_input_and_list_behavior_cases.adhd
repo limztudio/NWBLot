@@ -217,13 +217,11 @@ public:
     }
 
     [[nodiscard]] usize boxAddress(const u32 index)const noexcept{
-        return reinterpret_cast<usize>(m_tree.box(index));
+        return index < m_tree.boxes().size() ? reinterpret_cast<usize>(&m_tree.boxes()[index]) : 0u;
     }
 
     [[nodiscard]] Optional<LayoutBox> boxCopy(const u32 index)const noexcept{
-        if(const LayoutBox* found = m_tree.box(index))
-            return *found;
-        return {};
+        return m_tree.box(index);
     }
 
 
@@ -321,7 +319,7 @@ FOUNDATION_INLINE void ExpectUiLayoutRect(const Rect& actual, const Rect& expect
 }
 
 [[nodiscard]] FOUNDATION_INLINE usize UiLayoutTreeBoxAddress(const LayoutTree& tree, const u32 index)noexcept{
-    return reinterpret_cast<usize>(tree.box(index));
+    return index < tree.boxes().size() ? reinterpret_cast<usize>(&tree.boxes()[index]) : 0u;
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiListBehaviorReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){

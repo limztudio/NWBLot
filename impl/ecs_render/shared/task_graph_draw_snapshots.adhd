@@ -30,6 +30,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+
 struct MaterialPassCsgGraphSnapshotBase{
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;

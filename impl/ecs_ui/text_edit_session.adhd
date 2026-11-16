@@ -35,9 +35,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The host validates token, sequence and owner before lending a model to a copied event.
-// Surrounding deletion additionally requires the exact native publication that the event addressed.
-[[nodiscard]] UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::TextInputEvent& event, u64 expectedSurroundingRevision, b8 matchesPublishedModel);
+using Ui::EditLimits;
+using Ui::EditModel;
+namespace EditTextMode = Ui::EditTextMode;
+namespace EditTextStatus = Ui::EditTextStatus;
+using Ui::NormalizeMultilineTextInto;
+
 
 // Owned OS events are applied only during a host call that lends the matching model.
 // No model pointer is retained.
@@ -134,6 +137,97 @@ b8 IsStaleUiTextEditSurroundingRevision(
     return expectedSurroundingRevision == 0u || eventSurroundingRevision != expectedSurroundingRevision || !matchesPublishedModel;
 }
 
+// The host validates token, sequence and owner before lending a model to a copied event.
+// Surrounding deletion additionally requires the exact native publication that the event addressed.
+UiTextEditStatus ApplyUiTextEditEvent(
+    mut EditModel model,
+    in TextInputEvent event,
+    in u64 expectedSurroundingRevision,
+    in b8 matchesPublishedModel
+){
+    switch(event.kind){
+    case TextInputEventKind::Commit: {
+        if(ValidateTextInputUtf8(event.text, s_TextInputMaxEventTextBytes) != TextInputAdmission::Accepted)
+            return UiTextEditStatus::InvalidEvent;
+        if(event.text.empty())
+            return UiTextEditStatus::Applied;
+        if(model.textMode() == EditTextMode::Multiline){
+            const EditCompositionView composition = model.composition();
+            const usize retainedBytes = ComputeUiTextEditRetainedBytes(
+                composition,
+                model.text().size(),
+                model.selectionStart(),
+                model.selectionEnd()
+            );
+            String normalized;
+            const Expected<usize, EditTextStatus> status = NormalizeMultilineTextInto(
+                StringView(event.text),
+                model.limits().maxBytes - retainedBytes,
+                normalized
+            );
+            if(!status.has_value())
+                return UiTextEditStatus::ModelRejected;
+            if(composition.active)
+                return ToUiTextEditAppliedStatus(model.commitComposition(StringView(normalized)));
+            return ToUiTextEditAppliedStatus(model.replaceSelection(StringView(normalized)));
+        }
+        if(model.composition().active)
+            return ToUiTextEditAppliedStatus(model.commitComposition(event.text));
+        return ToUiTextEditAppliedStatus(model.replaceSelection(event.text));
+    }
+    case TextInputEventKind::Preedit: {
+        if(
+            ValidateTextInputUtf8(event.text, s_TextInputMaxEventTextBytes) != TextInputAdmission::Accepted
+            || !IsUtf8ScalarBoundary(event.text, event.anchorByte)
+            || !IsUtf8ScalarBoundary(event.text, event.caretByte)
+        )
+            return UiTextEditStatus::InvalidEvent;
+        if(event.text.empty()){
+            model.cancelComposition();
+            return UiTextEditStatus::Applied;
+        }
+        const b8 wasActive = model.composition().active;
+        if(!wasActive && !model.beginComposition())
+            return UiTextEditStatus::ModelRejected;
+        if(model.updateComposition(event.text, event.anchorByte, event.caretByte))
+            return UiTextEditStatus::Applied;
+        if(!wasActive)
+            model.cancelComposition();
+        return UiTextEditStatus::ModelRejected;
+    }
+    case TextInputEventKind::DeleteSurrounding: {
+        if(IsStaleUiTextEditSurroundingRevision(expectedSurroundingRevision, event.surroundingRevision, matchesPublishedModel))
+            return UiTextEditStatus::StaleSurrounding;
+        if(cast<u8>(event.deletionBasis) >= cast<u8>(TextInputDeletionBasis::Count))
+            return UiTextEditStatus::InvalidEvent;
+        if(event.deletionBasis == TextInputDeletionBasis::Selection){
+            if(
+                !ValidateUiTextEditSurroundingDeleteRange(
+                    event.deleteBeforeBytes,
+                    event.deleteAfterBytes,
+                    model.selectionStart(),
+                    model.selectionEnd(),
+                    model.text().size()
+                )
+            )
+                return UiTextEditStatus::InvalidEvent;
+            return ToUiTextEditAppliedStatus(model.eraseAroundSelection(event.deleteBeforeBytes, event.deleteAfterBytes));
+        }
+        if(model.hasSelection() && (event.deleteBeforeBytes != 0u || event.deleteAfterBytes != 0u))
+            return UiTextEditStatus::ModelRejected;
+        const usize caret = model.caret();
+        if(!ValidateUiTextEditSurroundingDeleteRange(event.deleteBeforeBytes, event.deleteAfterBytes, caret, caret, model.text().size()))
+            return UiTextEditStatus::InvalidEvent;
+        return ToUiTextEditAppliedStatus(model.eraseSurrounding(event.deleteBeforeBytes, event.deleteAfterBytes));
+    }
+    case TextInputEventKind::Cancelled:
+        model.cancelComposition();
+        return UiTextEditStatus::Cancelled;
+    default:
+        return UiTextEditStatus::InvalidEvent;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -150,64 +244,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::TextInputEvent& event, const u64 expectedSurroundingRevision, const b8 matchesPublishedModel){
-    switch(event.kind){
-    case Core::TextInputEventKind::Commit: {
-        if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted)
-            return UiTextEditStatus::InvalidEvent;
-        if(event.text.empty())
-            return UiTextEditStatus::Applied;
-        if(model.textMode() == Ui::EditTextMode::Multiline){
-            const auto composition = model.composition();
-            const usize retainedBytes = ComputeUiTextEditRetainedBytes(composition, model.text().size(), model.selectionStart(), model.selectionEnd());
-            const auto normalized = Ui::NormalizeMultilineText(event.text.get_allocator().arena(), event.text, model.limits().maxBytes - retainedBytes);
-            if(!normalized)
-                return UiTextEditStatus::ModelRejected;
-            return ToUiTextEditAppliedStatus(composition.active ? model.commitComposition(*normalized) : model.replaceSelection(*normalized));
-        }
-        return ToUiTextEditAppliedStatus(model.composition().active ? model.commitComposition(event.text) : model.replaceSelection(event.text));
-    }
-    case Core::TextInputEventKind::Preedit: {
-        if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted || !IsUtf8ScalarBoundary(event.text, event.anchorByte) || !IsUtf8ScalarBoundary(event.text, event.caretByte))
-            return UiTextEditStatus::InvalidEvent;
-        if(event.text.empty()){
-            model.cancelComposition();
-            return UiTextEditStatus::Applied;
-        }
-        const b8 wasActive = model.composition().active;
-        if(!wasActive && !model.beginComposition())
-            return UiTextEditStatus::ModelRejected;
-        if(model.updateComposition(event.text, event.anchorByte, event.caretByte))
-            return UiTextEditStatus::Applied;
-        if(!wasActive)
-            model.cancelComposition();
-        return UiTextEditStatus::ModelRejected;
-    }
-    case Core::TextInputEventKind::DeleteSurrounding: {
-        if(IsStaleUiTextEditSurroundingRevision(expectedSurroundingRevision, event.surroundingRevision, matchesPublishedModel))
-            return UiTextEditStatus::StaleSurrounding;
-        if(event.deletionBasis >= Core::TextInputDeletionBasis::Count)
-            return UiTextEditStatus::InvalidEvent;
-        if(event.deletionBasis == Core::TextInputDeletionBasis::Selection){
-            if(!ValidateUiTextEditSurroundingDeleteRange(event.deleteBeforeBytes, event.deleteAfterBytes, model.selectionStart(), model.selectionEnd(), model.text().size()))
-                return UiTextEditStatus::InvalidEvent;
-            return ToUiTextEditAppliedStatus(model.eraseAroundSelection(event.deleteBeforeBytes, event.deleteAfterBytes));
-        }
-        if(model.hasSelection() && (event.deleteBeforeBytes != 0u || event.deleteAfterBytes != 0u))
-            return UiTextEditStatus::ModelRejected;
-        const usize caret = model.caret();
-        if(!ValidateUiTextEditSurroundingDeleteRange(event.deleteBeforeBytes, event.deleteAfterBytes, caret, caret, model.text().size()))
-            return UiTextEditStatus::InvalidEvent;
-        return ToUiTextEditAppliedStatus(model.eraseSurrounding(event.deleteBeforeBytes, event.deleteAfterBytes));
-    }
-    case Core::TextInputEventKind::Cancelled:
-        model.cancelComposition();
-        return UiTextEditStatus::Cancelled;
-    default:
-        return UiTextEditStatus::InvalidEvent;
-    }
-}
 
 UiTextEditSession::UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept
     : m_service(service)

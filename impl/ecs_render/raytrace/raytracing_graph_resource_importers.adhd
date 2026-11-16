@@ -76,15 +76,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
-    FrameGraphSoftwareBvhBuildStateResult result(scratchArena);
+Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(::ArenaBase& __adhd_caller_arena, const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept{
+    FrameGraphSoftwareBvhBuildStateResult result(__adhd_caller_arena);
     using namespace RendererTaskGraphDetail;
     const TraceGeometryImportPolicy importPolicy;
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = inputs.rayTracingShadowResources;
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ scratchArena };
+    Vector<Core::GpuGraphResourceId, ::ArenaBase> softwareBvhBuildStateResources{ __adhd_caller_arena };
     Vector<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ scratchArena };
     if(inputs.softwareTraceResourcesPrepared){
-        const auto meshSoftwareBvhParentBuildStates = m_meshSystem.collectSoftwareBvhParentBuildStates(scratchArena);
+        const auto meshSoftwareBvhParentBuildStates = m_meshSystem->collectSoftwareBvhParentBuildStates(scratchArena);
         if(!meshSoftwareBvhParentBuildStates)
             return MakeUnexpected(Failure{});
         // Sort keys, sort payload, and visit counter follow the parent build states.
@@ -98,7 +98,7 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
                 if(existing.get() == buffer.get())
                     return true;
             }
-            const auto resourceResult = ImportExternalBuffer(m_graph, buffer, identity, label);
+            const auto resourceResult = ImportExternalBuffer(*m_graph, buffer, identity, label);
             if(!resourceResult)
                 return false;
             const Core::GpuGraphResourceId resource = *resourceResult;
@@ -132,26 +132,26 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(Core::Alloc::ScratchArena& scratchArena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources){
+Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(::ArenaBase& __adhd_caller_arena, Core::Alloc::ScratchArena& scratchArena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources)noexcept{
     using namespace RendererTaskGraphDetail;
     const TraceGeometryImportPolicy importPolicy;
 
     // Preflight froze the mesh tables; import each buffer once and fan out IDs.
-    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(scratchArena)){
+    if(!m_raytracingSystem->freezePreparedShadowTraceGeometryBuffers(scratchArena)){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
         return MakeUnexpected(Failure{});
     }
-    const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    const Span<const Core::TextureHandle> preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
+    const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem->preparedShadowTraceGeometryBuffers();
+    const Span<const Core::TextureHandle> preparedTraceMaterialSampledTextures = m_raytracingSystem->preparedShadowTraceMaterialSampledTextures();
 
-    FrameGraphTraceGeometryResult result(scratchArena);
+    FrameGraphTraceGeometryResult result(__adhd_caller_arena);
     result.traceGeometry.reserve(preparedTraceGeometry.size());
     result.hardwareTraceGeometry.reserve(preparedTraceGeometry.size());
     result.softwareTraceGeometry.reserve(preparedTraceGeometry.size());
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
         desc.setInitialState(preparedBuffer.initialState);
-        const auto resourceResult = m_graph.importBuffer(preparedBuffer.buffer, desc);
+        const auto resourceResult = m_graph->importBuffer(preparedBuffer.buffer, desc);
         if(!resourceResult){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
             return MakeUnexpected(Failure{});
@@ -164,7 +164,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
             result.softwareTraceGeometry.push_back(resource);
     }
     // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
-    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(preparedTraceMaterialSampledTextures, "Prepared Trace Material Sampled Texture", m_graph, scratchArena);
+    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(preparedTraceMaterialSampledTextures, "Prepared Trace Material Sampled Texture", *m_graph, scratchArena);
     if(!traceMaterialSampledTextureResources){
         switch(traceMaterialSampledTextureResources.error()){
         case SampledTextureImportFailure::GraphUnavailable:
@@ -181,7 +181,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     result.shadowTraceGeometrySet = importSet(result.traceGeometry, Name(s_RenderNameRenderPostGbufferTraceGeometry), "Post-G-Buffer Trace Geometry");
     result.softwareTraceGeometrySet = importSet(result.softwareTraceGeometry, Name(s_RenderNameRenderSoftwareTraceGeometry), "Software Trace Geometry");
     if(!traceMaterialSampledTextureResources->empty()){
-        const auto traceMaterialSampledTextureSetResult = m_graph.importResourceSet(
+        const auto traceMaterialSampledTextureSetResult = m_graph->importResourceSet(
             Core::GpuGraphResourceSetDesc{}.setIdentity(Name(s_RenderNameRenderTraceMaterialSampledTextures)).setMarkerLabel("Trace Material Sampled Textures").setMembers(*traceMaterialSampledTextureResources)
         );
         if(!traceMaterialSampledTextureSetResult){
@@ -193,8 +193,9 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     result.hardwareTraceGeometrySet = importSet(result.hardwareTraceGeometry, Name(s_RenderNameRenderHardwareTraceGeometry), "Hardware Trace Geometry");
 
     result.softwareTraceResourcesPrepared = !result.softwareTraceGeometry.empty();
-    FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_graph, m_meshSystem);
+    FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(*m_graph, *m_meshSystem);
     auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
+        __adhd_caller_arena,
         FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = rayTracingShadowResources, .softwareTraceResourcesPrepared = result.softwareTraceResourcesPrepared, },
         scratchArena
     );
@@ -207,11 +208,11 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
 }
 
 // Empty member lists and failed imports leave the set invalid.
-Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Span<const Core::GpuGraphResourceId> members, const Name& identity, const AStringView markerLabel){
+Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Span<const Core::GpuGraphResourceId> members, const Name identity, const AStringView markerLabel)noexcept{
     if(members.empty())
         return {};
 
-    const auto setResult = m_graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(markerLabel).setMembers(members));
+    const auto setResult = m_graph->importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(markerLabel).setMembers(members));
     if(!setResult)
         return {};
     return *setResult;
@@ -220,22 +221,6 @@ Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Spa
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 RayTracingSceneGraphResources::valid()const noexcept{
-    return hardwareAvailable && sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer && opticalScene.valid();
-}
-
-b8 RayTracingSceneGraphReads::valid()const noexcept{
-    for(const auto& use : uses){
-        if(!use.resource.valid())
-            return false;
-    }
-    for(const auto& use : csgUses){
-        if(!use.resource.valid())
-            return false;
-    }
-    return true;
-}
 
 Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
     const RayTracingSceneGraphResources& resources,
@@ -353,11 +338,12 @@ b8 AppendRayTracingSceneShadowBuffers(
     return true;
 }
 
-b8 AppendCurrentCsgRayGeometry(
+template<typename ArenaT>
+b8 AppendCurrentCsgRayGeometryImpl(
     const Core::BufferHandle& context,
     const Span<const Core::BufferHandle> bounds,
     Core::GpuTaskGraph& graph,
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
+    Vector<Core::GpuTaskResourceUse, ArenaT>& resourceUses
 ){
     if(!context)
         return true;
@@ -391,13 +377,22 @@ b8 AppendCurrentCsgRayGeometry(
     return true;
 }
 
-TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId traceGeometrySet, const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet)noexcept{
-    TraceResourceSetUses result;
-    if(traceGeometrySet.valid())
-        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    if(traceMaterialSampledTextureSet.valid())
-        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    return result;
+b8 AppendCurrentCsgRayGeometry(
+    const Core::BufferHandle& context,
+    const Span<const Core::BufferHandle> bounds,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
+){
+    return AppendCurrentCsgRayGeometryImpl(context, bounds, graph, resourceUses);
+}
+
+b8 AppendCurrentCsgRayGeometry(
+    const Core::BufferHandle& context,
+    const Span<const Core::BufferHandle> bounds,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, ::ArenaBase>& resourceUses
+){
+    return AppendCurrentCsgRayGeometryImpl(context, bounds, graph, resourceUses);
 }
 
 

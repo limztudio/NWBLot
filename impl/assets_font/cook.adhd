@@ -186,7 +186,7 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
     auto source = ReadPreparedFontSource(fontPath, s_FontCookIncludePreparedPixels, arena);
     if(!source || !ValidateFontSource(source->fontBytes, source->faceIndex))
         return MakeUnexpected(Failure{});
-    entry.fontBytes = Move(source->fontBytes);
+    entry.fontBytes.assign(source->fontBytes.begin(), source->fontBytes.end());
     entry.virtualPath = virtualPath;
     entry.faceIndex = source->faceIndex;
     return entry;

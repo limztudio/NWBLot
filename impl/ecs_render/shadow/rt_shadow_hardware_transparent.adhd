@@ -68,16 +68,16 @@ static_assert(offsetof(HardwareTransparentShadowPushConstants, receiverFactor) =
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets){
-    auto& state = m_state;
+b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets)noexcept{
+    auto& state = *m_state;
     state.m_ready = false;
     if(state.m_pipelineFailed)
         return false;
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout())
         return false;
-    if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
+    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
         state.m_pipelineFailed = true;
         return false;
@@ -91,7 +91,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
         if(state.m_pipelines[i])
             continue;
         const auto shaderMember = shaderMembers[i];
-        if(!m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([shaderMember](const ShadowSubsystem& s){ return s.*shaderMember; }), Core::ShaderArchive::s_DefaultVariant, s_HardwareTransparentShadowDebugName, state.m_shaders[i])){
+        if(!m_shaderSystem->loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([shaderMember](const ShadowSubsystem& s){ return s.*shaderMember; }), Core::ShaderArchive::s_DefaultVariant, s_HardwareTransparentShadowDebugName, state.m_shaders[i])){
             state.m_pipelineFailed = true;
             return false;
         }
@@ -130,7 +130,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
                 .setDebugName(names[i])
                 .enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess)
             ;
-            auto buffersResult = m_graphics.createBuffer(desc);
+            auto buffersResult = m_graphics->createBuffer(desc);
             if(buffersResult)
                 buffers[i] = Move(*buffersResult);
             else
@@ -163,9 +163,9 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     return true;
 }
 
-void HardwareTransparentShadowResources::releaseHardwareTransparentShadowResources(){
-    auto& state = m_state;
-    auto& heap = m_graphics.getDevice().getDescriptorHeap();
+void HardwareTransparentShadowResources::releaseHardwareTransparentShadowResources()noexcept{
+    auto& state = *m_state;
+    auto& heap = m_graphics->getDevice().getDescriptorHeap();
     RetireDescriptor(heap, state.m_crossingsHeapHandle);
     RetireDescriptor(heap, state.m_overflowListHeapHandle);
     RetireDescriptor(heap, state.m_overflowArgsHeapHandle);

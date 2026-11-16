@@ -16,7 +16,7 @@ void VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorro
     summary.triggerMessage = "fault";
     String details = "package=one\n[tombstone_callstack]\nframe-one\n[metadata]\nkey=value\n";
 
-    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, details);
+    const String report = BuildOrderedCrashReport(testArena.arena, summary, details);
     EXPECT_EQ(StringView(report), "fault\n\ncallstack:\nframe-one\n\ndetails:\npackage=one\n[metadata]\nkey=value\n");
 }
 
@@ -25,7 +25,7 @@ void VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombston
     CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
     String details = "[callstack]\n\n[tombstone_callstack]\nfallback\n";
 
-    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, details);
+    const String report = BuildOrderedCrashReport(testArena.arena, summary, details);
     EXPECT_EQ(StringView(report), "callstack:\n<unavailable>\n\ndetails:\n[tombstone_callstack]\nfallback\n");
 }
 
@@ -33,15 +33,15 @@ void VerifyCrashReportComposerTests_TrimsAcrossRemovedSection(){
     LoggerTestArena testArena = LoggerTestArena();
     CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
     String before = " \n[callstack]\nframe\n[metadata]\n value \n";
-    const String first = CrashReportComposer::BuildOrderedCrashReport(summary, before);
+    const String first = BuildOrderedCrashReport(testArena.arena, summary, before);
     EXPECT_EQ(StringView(first), "callstack:\nframe\n\ndetails:\n[metadata]\n value\n");
 
     String after = " left \n[callstack]\nframe\n";
-    const String second = CrashReportComposer::BuildOrderedCrashReport(summary, after);
+    const String second = BuildOrderedCrashReport(testArena.arena, summary, after);
     EXPECT_EQ(StringView(second), "callstack:\nframe\n\ndetails:\nleft\n");
 
     String whitespace = " \t\n";
-    const String third = CrashReportComposer::BuildOrderedCrashReport(summary, whitespace);
+    const String third = BuildOrderedCrashReport(testArena.arena, summary, whitespace);
     EXPECT_EQ(StringView(third), "callstack:\n<unavailable>\n\ndetails:\n");
 }
 

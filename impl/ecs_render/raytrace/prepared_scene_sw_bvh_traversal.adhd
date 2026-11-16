@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/prepared_builds.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/prepared_builds.adhd.h>
+[header]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,32 +24,6 @@ NWB_IMPL_BEGIN
 class RendererRayTracingSystem;
 
 
-class PreparedSceneSwBvhTraversal final : NoCopy{
-public:
-    PreparedSceneSwBvhTraversal(RendererRayTracingSystem& owner, Core::Alloc::GlobalArena& arena)noexcept
-        : m_owner(owner)
-        , m_preparedSceneSwBvhMeshes(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 capture(Span<const PreparedSceneSwBvhMesh> meshes, u32 instanceCount);
-    [[nodiscard]] b8 record();
-    void clear()noexcept;
-    [[nodiscard]] b8 ready()const noexcept{ return m_preparedSceneSwBvhReady; }
-
-
-private:
-    RendererRayTracingSystem& m_owner;
-    Vector<PreparedSceneSwBvhMesh, Core::Alloc::GlobalArena> m_preparedSceneSwBvhMeshes;
-    u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
-    u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
-    u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
-    u32 m_preparedSceneSwBvhInstanceCount = 0u;
-    b8 m_preparedSceneSwBvhReady = false;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -59,6 +33,41 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
+extern class RendererRayTracingSystem;
+
+
+[modular]
+class PreparedSceneSwBvhTraversal : NoCopy{
+    private mut RendererRayTracingSystem m_owner;
+    private Vector<PreparedSceneSwBvhMesh> m_preparedSceneSwBvhMeshes;
+    private u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
+    private u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
+    private u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
+    private u32 m_preparedSceneSwBvhInstanceCount = 0u;
+    private b8 m_preparedSceneSwBvhReady = false;
+
+    public PreparedSceneSwBvhTraversal(mut RendererRayTracingSystem owner){
+        this.m_owner = owner;
+    }
+
+    public b8 capture(in Span<PreparedSceneSwBvhMesh> meshes, in u32 instanceCount);
+    public b8 record();
+    public void clear(){
+        this.m_preparedSceneSwBvhMeshes.clear();
+        this.m_preparedSceneSwBvhInstanceCount = 0u;
+        this.m_preparedSceneSwBvhRendererMutationVersion = 0u;
+        this.m_preparedSceneSwBvhTransformMutationVersion = 0u;
+        this.m_preparedSceneSwBvhMaterialMutationVersion = 0u;
+        this.m_preparedSceneSwBvhReady = false;
+    }
+    public b8 ready()const{ return this.m_preparedSceneSwBvhReady; }
 }
 
 

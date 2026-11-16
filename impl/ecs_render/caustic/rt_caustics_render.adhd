@@ -106,6 +106,25 @@ namespace RayTracingCausticsTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// A ping-pong resolve target with sampled and storage slots.
+struct CausticResolvePassResources{
+    Core::Texture* texture = nullptr;
+    u32 sampledSlot = 0u;
+    u32 storageSlot = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] FOUNDATION_INLINE CausticResolvePassResources MakeCausticHistoryResolvePassResources(DeferredFrameTargets& targets)noexcept{
+    return { targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
+}
+
+[[nodiscard]] FOUNDATION_INLINE CausticResolvePassResources MakeCausticHalfResolvePassResources(DeferredFrameTargets& targets)noexcept{
+    return { targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
+}
+
 void EnableCausticResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets){
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);

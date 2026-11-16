@@ -16,25 +16,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-struct GpuDescriptorHandle;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_BEGIN
 
 
@@ -43,33 +24,6 @@ NWB_IMPL_BEGIN
 
 struct RtSceneBvhState;
 struct RtShadowState;
-
-
-class RayTraceMaterialResources final : NoCopy{
-public:
-    RayTraceMaterialResources(Core::GraphicsRuntime& graphics, RtSceneBvhState& scene, RtShadowState& shadow)noexcept
-        : m_graphics(graphics)
-        , m_scene(scene)
-        , m_shadow(shadow)
-    {}
-
-
-public:
-    void releaseRayTraceMaterialContextHeapHandles();
-    [[nodiscard]] b8 ensureRayTraceMaterialContextSlotsBuffer();
-    [[nodiscard]] b8 ensureRayTraceMaterialContextSlotsHeapHandle();
-    [[nodiscard]] b8 ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
-    [[nodiscard]] b8 replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
-    [[nodiscard]] b8 ensureShadowInstanceMaterialBuffer(usize instanceCount);
-    [[nodiscard]] b8 ensureShadowInstanceContextBuffer(usize instanceCount);
-    [[nodiscard]] b8 ensureShadowMaterialTypedBuffer(usize byteCount);
-
-
-private:
-    Core::GraphicsRuntime& m_graphics;
-    RtSceneBvhState& m_scene;
-    RtShadowState& m_shadow;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +35,38 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RtSceneBvhState")]
+extern class RtSceneBvhState;
+[cpp_name("::NWB::Impl::RtShadowState")]
+extern class RtShadowState;
+
+
+[modular]
+class RayTraceMaterialResources : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private mut RtSceneBvhState m_scene;
+    private mut RtShadowState m_shadow;
+
+    public RayTraceMaterialResources(mut GraphicsRuntime graphics, mut RtSceneBvhState scene, mut RtShadowState shadow){
+        this.m_graphics = graphics;
+        this.m_scene = scene;
+        this.m_shadow = shadow;
+    }
+
+    public void releaseRayTraceMaterialContextHeapHandles();
+    public b8 ensureRayTraceMaterialContextSlotsBuffer();
+    public b8 ensureRayTraceMaterialContextSlotsHeapHandle();
+    public b8 ensureRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle);
+    public b8 replaceRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle);
+    public b8 ensureShadowInstanceMaterialBuffer(in usize instanceCount);
+    public b8 ensureShadowInstanceContextBuffer(in usize instanceCount);
+    public b8 ensureShadowMaterialTypedBuffer(in usize byteCount);
 }
 
 

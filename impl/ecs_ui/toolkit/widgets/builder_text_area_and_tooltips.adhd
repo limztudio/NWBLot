@@ -541,7 +541,7 @@ b8 TooltipCoordinator::paintTooltips(){
         if(!frame.state || frame.state->revision() != frame.revision || frame.anchorIndex >= m_builder.m_scope->m_items.size())
             return false;
         const Item& anchor = m_builder.m_scope->m_items[frame.anchorIndex];
-        const LayoutBox* box = m_builder.m_scope->m_layout.box(anchor.node);
+        const Optional<LayoutBox> box = m_builder.m_scope->m_layout.box(anchor.node);
         if(!box || anchor.state.id != frame.anchor.id || anchor.state.declarationGeneration != frame.anchor.declarationGeneration)
             return false;
         if(!frame.state->visible())

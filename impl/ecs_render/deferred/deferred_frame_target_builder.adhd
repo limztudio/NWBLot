@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/csg/csg_system.adhd>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/deferred/deferred_system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,9 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererAvboitSystem;
-class RendererCsgSystem;
-class RendererDeferredSystem;
 class RendererRayTracingState;
 class RendererRayTracingSystem;
 
@@ -43,12 +43,6 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::RendererAvboitSystem")]
-extern class RendererAvboitSystem;
-[cpp_name("::NWB::Impl::RendererCsgSystem")]
-extern class RendererCsgSystem;
-[cpp_name("::NWB::Impl::RendererDeferredSystem")]
-extern class RendererDeferredSystem;
 [cpp_name("::NWB::Impl::RendererRayTracingState")]
 extern class RendererRayTracingState;
 [cpp_name("::NWB::Impl::RendererRayTracingSystem")]

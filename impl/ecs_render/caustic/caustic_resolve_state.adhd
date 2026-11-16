@@ -2,133 +2,70 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/caustic/push_constants.adhd>
+#include <impl/ecs_render/caustic/pipeline_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/ecs_render/caustic/settings.adhd.h>
-#include <impl/ecs_render/caustic/pipeline_types.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-
-#include <core/graphics/rhi/device.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/rhi/pipeline.h>
+const usize s_CausticResolvePassCount = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline const Array<Name, s_CausticResolveActivityBufferCount> s_CausticResolveActivityBufferNames = {
-    s_CausticResolveActivityBufferAName,
-    s_CausticResolveActivityBufferBName,
-};
-
-static_assert(s_CausticResolveGroupThreadCount == NWB_CAUSTIC_RESOLVE_GROUP_SIZE);
-static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount == s_CausticResolveGroupLaneCount);
-
-struct CausticResolveActivitySnapshot{
-    Array<Core::BufferHandle, s_CausticResolveActivityBufferCount> buffers{};
-    Array<Core::GpuDescriptorHandle, s_CausticResolveActivityBufferCount> descriptors = {
-        Core::GpuDescriptorHandle::Invalid(),
-        Core::GpuDescriptorHandle::Invalid(),
-    };
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept;
-    [[nodiscard]] b8 matches(const CausticResolveActivitySnapshot& other)const noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct CausticResolveState{
-    Core::BindingLayoutHandle m_bindingLayout;
-    CausticResolveActivitySnapshot m_activity;
-    CausticResolveStageState m_prepare;
-    CausticResolveStageState m_wavelet;
-    CausticResolveStageState m_waveletStepOne;
-    CausticResolveStageState m_waveletStepTwo;
-    CausticResolveStageState m_waveletDirect;
-    CausticResolveStageState m_upsample;
-    b8 m_failed = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RayTracingCausticsTaskDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// A ping-pong resolve target with sampled and storage slots.
-struct CausticResolvePassResources{
-    Core::Texture* texture = nullptr;
-    u32 sampledSlot = 0u;
-    u32 storageSlot = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void EnableCausticResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets);
-
-[[nodiscard]] FOUNDATION_INLINE CausticResolvePassResources MakeCausticHistoryResolvePassResources(DeferredFrameTargets& targets)noexcept{
-    return { targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
+Name CausticResolveActivityBufferName(in u32 index){
+    if(index == 0u)
+        return s_CausticResolveActivityBufferAName;
+    return s_CausticResolveActivityBufferBName;
 }
 
-[[nodiscard]] FOUNDATION_INLINE CausticResolvePassResources MakeCausticHalfResolvePassResources(DeferredFrameTargets& targets)noexcept{
-    return { targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CausticResolveActivitySnapshot{
+    public Array<BufferHandle, s_CausticResolveActivityBufferCount> buffers;
+    public Array<GpuDescriptorHandle, s_CausticResolveActivityBufferCount> descriptors;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+
+    public CausticResolveActivitySnapshot(){}
+
+    public b8 valid()const{
+        if(this.halfWidth == 0u || this.halfHeight == 0u)
+            return false;
+        for(u32 index = 0u; index < s_CausticResolveActivityBufferCount; ++index){
+            if(!this.buffers[index].valid() || !this.descriptors[index].valid() || this.descriptors[index].descriptorClass() != GpuDescriptorClass::StorageBuffer)
+                return false;
+        }
+        return true;
+    }
+
+    public b8 matches(in CausticResolveActivitySnapshot other)const{
+        if(this.halfWidth != other.halfWidth || this.halfHeight != other.halfHeight)
+            return false;
+        for(u32 index = 0u; index < s_CausticResolveActivityBufferCount; ++index){
+            if(this.buffers[index] != other.buffers[index] || this.descriptors[index] != other.descriptors[index])
+                return false;
+        }
+        return true;
+    }
 }
 
-void DispatchCausticResolvePass(
-    Core::CommandList& commandList,
-    Core::GpuDescriptorHeap& heap,
-    Core::ComputePipeline& pipeline,
-    DeferredFrameTargets& targets,
-    const CausticResolvePassResources& input,
-    const CausticResolvePassResources& output,
-    f32 effectiveIntensity,
-    u32 stepWidth,
-    CausticResolveStage::Enum stage,
-    u32 groupsX,
-    u32 groupsY,
-    const CausticResolveActivitySnapshot& activity = {}
-);
+class CausticResolveState{
+    public BindingLayoutHandle m_bindingLayout;
+    public CausticResolveActivitySnapshot m_activity;
+    public CausticResolveStageState m_prepare;
+    public CausticResolveStageState m_wavelet;
+    public CausticResolveStageState m_waveletStepOne;
+    public CausticResolveStageState m_waveletStepTwo;
+    public CausticResolveStageState m_waveletDirect;
+    public CausticResolveStageState m_upsample;
+    public b8 m_failed = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public CausticResolveState(){}
 }
 
 

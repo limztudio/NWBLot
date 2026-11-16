@@ -23,7 +23,7 @@ template<typename PathArenaT>
     auto source = Impl::ReadPreparedFontSource(fontPath, false, arena);
     if(!source)
         return MakeUnexpected(source.error());
-    return Move(source->fontBytes);
+    return Core::Assets::AssetBytes(source->fontBytes.begin(), source->fontBytes.end(), arena);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, const StringView directory, const StringView filename){

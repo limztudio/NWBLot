@@ -349,7 +349,7 @@ b8 ContextMenuCoordinator::paintMenus(){
 
 b8 ContextMenuCoordinator::paintContextMenuPopup(ContextMenuFrame& frame){
     const Item& anchor = m_builder.m_scope->m_items[frame.anchorIndex];
-    const LayoutBox* anchorBox = m_builder.m_scope->m_layout.box(anchor.node);
+    const Optional<LayoutBox> anchorBox = m_builder.m_scope->m_layout.box(anchor.node);
     const UiSkinRegion* background = m_builder.region(frame.popupStyle.background, frame.popupStyle.fallback);
     if(!anchorBox || !background || !m_builder.contextMenuMatches(frame))
         return false;

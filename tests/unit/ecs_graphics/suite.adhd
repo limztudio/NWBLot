@@ -148,15 +148,15 @@ struct CoincidentSelectionContext{
 
 public:
     void select(const Span<const CoincidentOpticalVolumeCandidate> candidates){
-        selection.select(candidates, scratch);
+        selection.select(candidates);
     }
 
     void selectEmpty(){
-        selection.select(Span<const CoincidentOpticalVolumeCandidate>{}, scratch);
+        selection.select(Span<const CoincidentOpticalVolumeCandidate>{});
     }
 
     void selectSingle(const CoincidentOpticalVolumeCandidate& candidate){
-        selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidate, 1u), scratch);
+        selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidate, 1u));
     }
 };
 

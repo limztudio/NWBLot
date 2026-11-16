@@ -272,7 +272,7 @@ Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
     return resource;
 }
 
-Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan, const AStringView label){
+Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const RegularSharedComputeEmulationGraphPlan& plan, const AStringView label){
     if(!plan.captured || !plan.outputBuffer)
         return MakeUnexpected(Failure{});
     return FindOrImportBuffer(graph, plan.outputBuffer, label);

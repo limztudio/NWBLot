@@ -8,6 +8,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class PreparedFontImageGroup{
+    public Sha256Digest sha256 = Sha256Digest();
+    public Vector<u8> pixels;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = 0u;
+};
+
+class PreparedFontSource{
+    public Vector<u8> fontBytes;
+    public Vector<PreparedFontImageGroup> groups;
+    public u32 faceIndex = 0u;
+    public Sha256Digest fontSha256 = Sha256Digest();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NativeFontFailure MakeNativeFontFailure(in StringView operation, in i32 nativeError){
     NativeFontFailure failure;
     failure.operation = operation;

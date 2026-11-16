@@ -10,6 +10,19 @@
 
 
 // Deferred owns these buffers, while the root module freezes their generation for graph imports and ray-tracing payloads.
+b8 ValidDeferredCsgTargetLayerCounts(
+    in u32 peelLayerCount,
+    in u32 receiverEventLayerCount,
+    in u32 receiverSpanLayerCount,
+    in u32 removedIntervalLayerCount
+){
+    return peelLayerCount > 0u && receiverEventLayerCount > 0u && receiverSpanLayerCount > 0u && removedIntervalLayerCount > 0u;
+}
+
+b8 ValidLaggedLightingHistoryState(in b8 hasTextures, in b8 hasSlotsBuffer, in b8 descriptorsValid, in u64 generation){
+    return hasTextures && hasSlotsBuffer && descriptorsValid && generation != 0u;
+}
+
 class DeferredLightingGraphResources{
     public BufferHandle sceneShadingBuffer;
     public BufferHandle lightBuffer;
@@ -28,7 +41,6 @@ class DeferredLightingGraphResources{
 }
 
 // Deferred target generation owns these heap registrations and retires them before target release.
-[modular]
 class DeferredBindlessFrameResources{
     public BufferHandle slotsBuffer;
     public DeferredBindlessResourceSlots slots;
@@ -117,11 +129,85 @@ class DeferredBindlessFrameResources{
     public GpuDescriptorHandle csgRemovedIntervalCount = GpuDescriptorHandleInvalid();
     public b8 slotsUploaded = false;
 
-    public b8 valid()const;
+    public b8 valid()const{
+        return
+            this.slotsBuffer.valid()
+            && this.slotsBufferDescriptor.valid()
+            && this.gbufferBaseColor.valid()
+            && this.gbufferNormal.valid()
+            && this.gbufferWorldPosition.valid()
+            && this.gbufferSpecularRoughness.valid()
+            && this.gbufferDepth.valid()
+            && this.shadowVisibility.valid()
+            && this.shadowVisibilityStorage.valid()
+            && this.causticIrradiance.valid()
+            && this.causticIrradianceStorage.valid()
+            && this.surfelIrradiance.valid()
+            && this.surfelIrradianceStorage.valid()
+            && this.surfelIrradianceHalf.valid()
+            && this.surfelIrradianceHalfStorage.valid()
+            && this.sampler.valid()
+            && this.opaqueColor.valid()
+            && this.opaqueColorStorage.valid()
+            && this.compositeColor.valid()
+            && this.compositeColorStorage.valid()
+            && this.avboitAccumColor.valid()
+            && this.avboitAccumExtinction.valid()
+            && this.avboitTransmittance.valid()
+            && this.avboitLinearSampler.valid()
+            && this.sceneShading.valid()
+            && this.lightList.valid()
+            && this.causticAccumulator.valid()
+            && this.causticAccumulatorStorage.valid()
+            && this.causticHistory.valid()
+            && this.causticHistoryStorage.valid()
+            && this.causticResolveHalf.valid()
+            && this.causticResolveHalfStorage.valid()
+            && this.causticResolveGeometry.valid()
+            && this.causticResolveGeometryStorage.valid()
+            && this.shadowCoarseTransmittanceStorage.valid()
+            && this.shadowSoftGeometry.valid()
+            && this.shadowSoftGeometryStorage.valid()
+            && this.shadowSoftGeometryPrev.valid()
+            && this.shadowSoftGeometryPrevStorage.valid()
+            && this.shadowSoftHalfA.valid()
+            && this.shadowSoftHalfAStorage.valid()
+            && this.shadowSoftHalfB.valid()
+            && this.shadowSoftHalfBStorage.valid()
+            && this.shadowHistA.valid()
+            && this.shadowHistAStorage.valid()
+            && this.shadowHistB.valid()
+            && this.shadowHistBStorage.valid()
+            && this.shadowMomentsA.valid()
+            && this.shadowMomentsAStorage.valid()
+            && this.shadowMomentsB.valid()
+            && this.shadowMomentsBStorage.valid()
+            && this.transparentSoftHalf.valid()
+            && this.transparentSoftHalfStorage.valid()
+            && this.transparentHistA.valid()
+            && this.transparentHistAStorage.valid()
+            && this.transparentHistB.valid()
+            && this.transparentHistBStorage.valid()
+            && this.transparentMomentsA.valid()
+            && this.transparentMomentsAStorage.valid()
+            && this.transparentMomentsB.valid()
+            && this.transparentMomentsBStorage.valid()
+            && this.csgCapBackNormal.valid()
+            && this.csgIntervalDepth.valid()
+            && this.csgIntervalId.valid()
+            && this.csgReceiverEventData.valid()
+            && this.csgReceiverEventCount.valid()
+            && this.csgReceiverSpanData.valid()
+            && this.csgReceiverSpanCount.valid()
+            && this.csgRemovedIntervalDepth.valid()
+            && this.csgRemovedIntervalCapNormal.valid()
+            && this.csgRemovedIntervalData.valid()
+            && this.csgRemovedIntervalCount.valid()
+        ;
+    }
 }
 
 // Optional immutable one-frame-lagged lighting history.
-[modular]
 class DeferredLaggedLightingHistoryResources{
     public TextureHandle shadowVisibility;
     public TextureHandle causticIrradiance;
@@ -136,7 +222,11 @@ class DeferredLaggedLightingHistoryResources{
     public u64 generation = 0u;
     public b8 slotsUploaded = false;
 
-    public b8 valid()const;
+    public b8 valid()const{
+        const b8 hasTextures = this.shadowVisibility.valid() && this.causticIrradiance.valid() && this.surfelIrradiance.valid();
+        const b8 descriptorsValid = this.slotsBufferDescriptor.valid() && this.shadowVisibilityDescriptor.valid() && this.causticIrradianceDescriptor.valid() && this.surfelIrradianceDescriptor.valid();
+        return ValidLaggedLightingHistoryState(hasTextures, this.slotsBuffer.valid(), descriptorsValid, this.generation);
+    }
 }
 
 [modular]
@@ -231,7 +321,34 @@ class DeferredFrameTargets{
     public DeferredLaggedLightingHistoryResources laggedLightingHistory;
     public AvboitFrameTargets avboit;
 
-    public b8 csgIntervalTargetsValid()const;
+    public b8 csgIntervalTargetsValid()const{
+        return
+            this.csgCapNormalFormat != Format::UNKNOWN
+            && this.csgIntervalDepthFormat != Format::UNKNOWN
+            && this.csgIntervalIdFormat != Format::UNKNOWN
+            && this.csgReceiverEventDataFormat != Format::UNKNOWN
+            && this.csgReceiverEventCountFormat != Format::UNKNOWN
+            && this.csgReceiverSpanDataFormat != Format::UNKNOWN
+            && this.csgReceiverSpanCountFormat != Format::UNKNOWN
+            && this.csgRemovedIntervalDepthFormat != Format::UNKNOWN
+            && this.csgRemovedIntervalCapNormalFormat != Format::UNKNOWN
+            && this.csgRemovedIntervalDataFormat != Format::UNKNOWN
+            && this.csgRemovedIntervalCountFormat != Format::UNKNOWN
+            && ValidDeferredCsgTargetLayerCounts(this.csgPeelLayerCount, this.csgReceiverEventLayerCount, this.csgReceiverSpanLayerCount, this.csgRemovedIntervalLayerCount)
+            && this.csgCapBackNormal.valid()
+            && this.csgIntervalDepth.valid()
+            && this.csgIntervalId.valid()
+            && this.csgReceiverEventData.valid()
+            && this.csgReceiverEventCount.valid()
+            && this.csgReceiverSpanData.valid()
+            && this.csgReceiverSpanCount.valid()
+            && this.csgRemovedIntervalDepth.valid()
+            && this.csgRemovedIntervalCapNormal.valid()
+            && this.csgRemovedIntervalData.valid()
+            && this.csgRemovedIntervalCount.valid()
+        ;
+    }
+
     public b8 valid()const;
 }
 

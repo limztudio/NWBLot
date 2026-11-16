@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -67,16 +75,6 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] FOUNDATION_INLINE MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MeshFrameBindingSnapshot& frameBindings, const u32 generatedVertex = 0u)noexcept{
-    FOUNDATION_ASSERT(frameBindings.bindingValid());
-    return MakeMeshFrameHeapSlots(
-        frameBindings.instanceHeapHandle.slot(),
-        frameBindings.materialTypedHeapHandle.slot(),
-        frameBindings.meshView.heapHandle.slot(),
-        generatedVertex
-    );
-}
-
 [[nodiscard]] FOUNDATION_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
@@ -100,58 +98,8 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
     );
 }
 
-FOUNDATION_INLINE void SetShaderDrivenPushConstants(
-    Core::CommandList& commandList,
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
-    const Core::ViewportState& viewportState,
-    const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags
-){
-    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        viewportState,
-        frameHeapSlots,
-        dispatchFlags
-    );
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-}
 
-FOUNDATION_INLINE void SetTransparentDrawPushConstants(
-    Core::CommandList& commandList,
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
-    const Core::ViewportState& viewportState,
-    const AvboitFrameTargets& targets,
-    const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags,
-    const b8 hdr10OutputActive,
-    const u32 csgContextHeapSlot = 0u,
-    const b8 refractionCapture = false
-){
-    const TransparentDrawPushConstants pushConstants = ResolveTransparentDrawPushConstants(
-        BuildShaderDrivenPushConstants(
-            meshletCount,
-            instanceIndex,
-            materialConstantByteOffset,
-            viewportState,
-            frameHeapSlots,
-            dispatchFlags
-        ),
-        BuildRendererAvboitPushConstants(targets, hdr10OutputActive),
-        csgContextHeapSlot,
-        refractionCapture
-    );
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-}
-
-FOUNDATION_INLINE void SetEmulatedVertexAttribute(const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name, Core::VertexAttributeDesc& attribute){
-    attribute.setFormat(format).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(Name(name));
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -172,10 +120,9 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ECSRenderDetail::ResolveMeshFrameHeapSlots"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
-extern MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings, in u32 generatedVertex);
-[cpp_name("::NWB::Impl::ECSRenderDetail::ResolveMeshFrameHeapSlots"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
-extern MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings);
+[cpp_name("NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX"), cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>")]
+extern const u32 s_EmulatedVertexBufferIndex;
+
 [cpp_name("::NWB::Impl::ECSRenderDetail::BuildShaderDrivenPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
 extern ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     in u32 meshletCount,
@@ -185,8 +132,22 @@ extern ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     in MeshFrameHeapSlots frameHeapSlots,
     in u32 dispatchFlags
 );
-[cpp_name("::NWB::Impl::ECSRenderDetail::SetShaderDrivenPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
-extern void SetShaderDrivenPushConstants(
+
+MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings, in u32 generatedVertex){
+    assert(frameBindings.bindingValid());
+    return MakeMeshFrameHeapSlots(
+        frameBindings.instanceHeapHandle.slot(),
+        frameBindings.materialTypedHeapHandle.slot(),
+        frameBindings.meshView.heapHandle.slot(),
+        generatedVertex
+    );
+}
+
+MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings){
+    return ResolveMeshFrameHeapSlots(frameBindings, 0u);
+}
+
+void SetShaderDrivenPushConstants(
     mut CommandList commandList,
     in u32 meshletCount,
     in u32 instanceIndex,
@@ -194,9 +155,19 @@ extern void SetShaderDrivenPushConstants(
     in ViewportState viewportState,
     in MeshFrameHeapSlots frameHeapSlots,
     in u32 dispatchFlags
-);
-[cpp_name("::NWB::Impl::ECSRenderDetail::SetTransparentDrawPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
-extern void SetTransparentDrawPushConstants(
+){
+    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        frameHeapSlots,
+        dispatchFlags
+    );
+    commandList.setPushConstants(pushConstants);
+}
+
+void SetTransparentDrawPushConstants(
     mut CommandList commandList,
     in u32 meshletCount,
     in u32 instanceIndex,
@@ -208,7 +179,79 @@ extern void SetTransparentDrawPushConstants(
     in b8 hdr10OutputActive,
     in u32 csgContextHeapSlot,
     in b8 refractionCapture
-);
+){
+    const TransparentDrawPushConstants pushConstants = ResolveTransparentDrawPushConstants(
+        BuildShaderDrivenPushConstants(
+            meshletCount,
+            instanceIndex,
+            materialConstantByteOffset,
+            viewportState,
+            frameHeapSlots,
+            dispatchFlags
+        ),
+        BuildRendererAvboitPushConstants(targets, hdr10OutputActive),
+        csgContextHeapSlot,
+        refractionCapture
+    );
+    commandList.setPushConstants(pushConstants);
+}
+
+void SetTransparentDrawPushConstants(
+    mut CommandList commandList,
+    in u32 meshletCount,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in ViewportState viewportState,
+    in AvboitFrameTargets targets,
+    in MeshFrameHeapSlots frameHeapSlots,
+    in u32 dispatchFlags,
+    in b8 hdr10OutputActive,
+    in u32 csgContextHeapSlot
+){
+    SetTransparentDrawPushConstants(
+        commandList,
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        targets,
+        frameHeapSlots,
+        dispatchFlags,
+        hdr10OutputActive,
+        csgContextHeapSlot,
+        false
+    );
+}
+
+void SetTransparentDrawPushConstants(
+    mut CommandList commandList,
+    in u32 meshletCount,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in ViewportState viewportState,
+    in AvboitFrameTargets targets,
+    in MeshFrameHeapSlots frameHeapSlots,
+    in u32 dispatchFlags,
+    in b8 hdr10OutputActive
+){
+    SetTransparentDrawPushConstants(
+        commandList,
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        targets,
+        frameHeapSlots,
+        dispatchFlags,
+        hdr10OutputActive,
+        0u,
+        false
+    );
+}
+
+void SetEmulatedVertexAttribute(in Format format, in u32 offsetByteCount, in Name name, mut VertexAttributeDesc attribute){
+    attribute.setFormat(format).setBufferIndex(s_EmulatedVertexBufferIndex).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(name);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

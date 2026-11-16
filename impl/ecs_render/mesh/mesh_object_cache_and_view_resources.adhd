@@ -213,17 +213,6 @@ MeshViewGpuData ResolveMeshViewState(const f32 fallbackAspectRatio, Core::ECS::W
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMeshState::invalidateResources()noexcept{
-    m_meshes.clear();
-    m_meshViewBuffer.reset();
-    m_frameBindings.reset();
-    m_meshViewGpuDataValid = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Core::BufferHandle& RendererMeshSystem::MeshSourceBuffer(const MeshResources& mesh, const u32 bindingSlot)noexcept{
     switch(bindingSlot){
     case NWB_MESH_BINDING_POSITION: return mesh.positionBuffer;

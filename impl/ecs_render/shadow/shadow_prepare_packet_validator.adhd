@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,7 +16,6 @@ native{
 
 
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
@@ -31,31 +36,31 @@ class RendererFramePipeline;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShadowPreparePacketValidator final : NoCopy{
-public:
-    explicit ShadowPreparePacketValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererFramePipeline")]
+extern class RendererFramePipeline;
+
+
+[modular]
+class ShadowPreparePacketValidator : NoCopy{
+    private in RendererFramePipeline m_pipeline;
+
+    public ShadowPreparePacketValidator(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
+
+    public void validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowPreparePacketValidationResult outResult)const;
 }
 
 

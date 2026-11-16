@@ -119,42 +119,41 @@ NWB_IMPL_BEGIN
 }
 
 ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::Capture(const MeshResources& mesh)noexcept{
-    ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot = {
-        .meshName = mesh.meshName,
-        .runtimeMeshVersion = mesh.runtimeMeshVersion,
-        .runtimeGeometryContentRevision = mesh.runtimeGeometryContentRevision,
-        .blasGeometryContentRevision = mesh.blasGeometryContentRevision,
-        .swBvhGeometryContentRevision = mesh.swBvhGeometryContentRevision,
-        .positionBuffer = mesh.positionBuffer,
-        .triangleIndexBuffer = mesh.triangleIndexBuffer,
-        .attributeBuffer = mesh.attributeBuffer,
-        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), ExpectedMeshletSolidTriangleWordCount(mesh.meshletPrimitiveIndexCount)),
-        .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
-        .meshletDescBuffer = {},
-        .meshletLocalBoundsBuffer = {},
-        .blas = mesh.blas,
-        .swBvhNodeBuffer = mesh.swBvhNodeBuffer,
-        .swBvhParentBuffer = mesh.swBvhParentBuffer,
-        .csgLocalBounds = mesh.csgLocalBounds,
-        .runtimeLocalBoundsHeapHandle = mesh.runtimeLocalBoundsHeapHandle,
-        .meshletDescHeapHandle = Core::GpuDescriptorHandle::Invalid(),
-        .meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid(),
-        .swBvhPositionHeapHandle = mesh.swBvhPositionHeapHandle,
-        .swBvhTriangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle,
-        .swBvhNodeHeapHandle = mesh.swBvhNodeHeapHandle,
-        .swBvhParentHeapHandle = mesh.swBvhParentHeapHandle,
-        .meshletCount = 0u,
-        .meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount,
-        .blasRefitsSinceRebuild = mesh.blasRefitsSinceRebuild,
-        .swBvhRefitsSinceRebuild = mesh.swBvhRefitsSinceRebuild,
-        .runtimeMesh = mesh.runtimeMesh,
-        .blasBuildPending = mesh.blasBuildPending,
-        .blasBackingFresh = mesh.blasBackingFresh,
-        .swBvhBuildPending = mesh.swBvhBuildPending,
-        .swBvhTopologyBuilt = mesh.swBvhTopologyBuilt,
-        .blasBuildAccepted = mesh.blasBuildAccepted,
-        .swBvhBuildAccepted = mesh.swBvhBuildAccepted,
-    };
+    ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot;
+    snapshot.meshName = mesh.meshName;
+    snapshot.runtimeMeshVersion = mesh.runtimeMeshVersion;
+    snapshot.runtimeGeometryContentRevision = mesh.runtimeGeometryContentRevision;
+    snapshot.blasGeometryContentRevision = mesh.blasGeometryContentRevision;
+    snapshot.swBvhGeometryContentRevision = mesh.swBvhGeometryContentRevision;
+    snapshot.positionBuffer = mesh.positionBuffer;
+    snapshot.triangleIndexBuffer = mesh.triangleIndexBuffer;
+    snapshot.attributeBuffer = mesh.attributeBuffer;
+    snapshot.solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), ExpectedMeshletSolidTriangleWordCount(mesh.meshletPrimitiveIndexCount));
+    snapshot.runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer;
+    snapshot.meshletDescBuffer = Core::BufferHandle{};
+    snapshot.meshletLocalBoundsBuffer = Core::BufferHandle{};
+    snapshot.blas = mesh.blas;
+    snapshot.swBvhNodeBuffer = mesh.swBvhNodeBuffer;
+    snapshot.swBvhParentBuffer = mesh.swBvhParentBuffer;
+    snapshot.csgLocalBounds = mesh.csgLocalBounds;
+    snapshot.runtimeLocalBoundsHeapHandle = mesh.runtimeLocalBoundsHeapHandle;
+    snapshot.meshletDescHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    snapshot.meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    snapshot.swBvhPositionHeapHandle = mesh.swBvhPositionHeapHandle;
+    snapshot.swBvhTriangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle;
+    snapshot.swBvhNodeHeapHandle = mesh.swBvhNodeHeapHandle;
+    snapshot.swBvhParentHeapHandle = mesh.swBvhParentHeapHandle;
+    snapshot.meshletCount = 0u;
+    snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
+    snapshot.blasRefitsSinceRebuild = mesh.blasRefitsSinceRebuild;
+    snapshot.swBvhRefitsSinceRebuild = mesh.swBvhRefitsSinceRebuild;
+    snapshot.runtimeMesh = mesh.runtimeMesh;
+    snapshot.blasBuildPending = mesh.blasBuildPending;
+    snapshot.blasBackingFresh = mesh.blasBackingFresh;
+    snapshot.swBvhBuildPending = mesh.swBvhBuildPending;
+    snapshot.swBvhTopologyBuilt = mesh.swBvhTopologyBuilt;
+    snapshot.blasBuildAccepted = mesh.blasBuildAccepted;
+    snapshot.swBvhBuildAccepted = mesh.swBvhBuildAccepted;
     if(BoundsReady(mesh)){
         snapshot.meshletCount = mesh.meshletCount;
         snapshot.meshletDescBuffer = mesh.meshletDescBuffer;
@@ -413,7 +412,7 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
         const auto identity = DeriveName(mesh.meshName, s_MeshShadowTraceSwParentSuffix);
         if(!identity)
             return MakeUnexpected(Failure{});
-        states.push_back({ .buffer = mesh.swBvhParentBuffer, .identity = *identity, });
+        states.push_back(ECSRenderDetail::MeshSoftwareBvhParentBuildState(mesh.swBvhParentBuffer, *identity));
     }
     return states;
 }
@@ -444,7 +443,7 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
             continue;
         // This predicate consumes only build/revision state; the graph output below retains the BLAS.
         const b8 nativeBuildsBlas = MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision);
-        outStates.push_back({ .meshName = mesh.meshName, .blas = mesh.blas, .backingFresh = mesh.blasBackingFresh, .nativeBuildsBlas = nativeBuildsBlas, });
+        outStates.push_back(ECSRenderDetail::MeshBlasGraphState(mesh.meshName, mesh.blas, mesh.blasBackingFresh, nativeBuildsBlas));
     }
 }
 

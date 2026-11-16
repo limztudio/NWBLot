@@ -104,7 +104,7 @@ using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
 using CrashIngestConfig = Log::CrashIngestConfig;
 using CrashIngestResult = Log::CrashIngestResult;
 using CrashPackageSummary = Log::CrashPackageSummary;
-using CrashReportComposer = Log::LoggerCrashSymbolicateDetail::CrashReportComposer;
+using Log::BuildOrderedCrashReport;
 using LogClient = Log::Client;
 using LogBytes = Log::LogBytes;
 using ProcessedMessageFile = Log::ProcessedMessageFile;
@@ -874,5 +874,4 @@ FOUNDATION_NOINLINE void CaptureRecoverableErrorForCrashObservation(const AStrin
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

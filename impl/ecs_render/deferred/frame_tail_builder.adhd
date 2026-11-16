@@ -45,31 +45,32 @@ struct DeferredFrameTailInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeferredFrameTailBuilder final : NoCopy{
-public:
-    explicit DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)noexcept
-        : m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<DeferredFrameTailResult> declare(const DeferredFrameTailInputs& inputs);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/deferred/graph_types.adhd>
+
+[cpp_name("::NWB::Impl::DeferredFrameTailInputs"), cpp_header("<impl/ecs_render/deferred/frame_tail_builder.adhd.h>")]
+extern class DeferredFrameTailInputs;
+
+[modular]
+class DeferredFrameTailBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+
+    public DeferredFrameTailBuilder(mut GpuTaskGraph graph){
+        this.m_graph = graph;
+    }
+
+    public Expected<DeferredFrameTailResult> declare(in DeferredFrameTailInputs inputs);
 }
 
 

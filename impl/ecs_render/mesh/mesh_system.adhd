@@ -47,54 +47,9 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct MeshSoftwareBvhParentBuildState{
-        Core::BufferHandle buffer;
-        Name identity = s_NameNone;
-    };
-    struct MeshBlasGraphState{
-        Name meshName = s_NameNone;
-        Core::RayTracingAccelStructHandle blas;
-        b8 backingFresh = false;
-        b8 nativeBuildsBlas = false;
-    };
-    // Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
-    struct MeshRayTracingResourceSnapshot{
-        Name meshName = s_NameNone;
-        u64 runtimeMeshVersion = 0u;
-        u64 runtimeGeometryContentRevision = 0u;
-        u64 blasGeometryContentRevision = 0u;
-        u64 swBvhGeometryContentRevision = 0u;
-        Core::BufferHandle positionBuffer;
-        Core::BufferHandle triangleIndexBuffer;
-        Core::BufferHandle attributeBuffer;
-        Span<const u32> solidTriangleWords;
-        Core::BufferHandle runtimeLocalBoundsBuffer;
-        // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
-        Core::BufferHandle meshletDescBuffer;
-        Core::BufferHandle meshletLocalBoundsBuffer;
-        Core::RayTracingAccelStructHandle blas;
-        Core::BufferHandle swBvhNodeBuffer;
-        Core::BufferHandle swBvhParentBuffer;
-        CsgReceiverCpuBounds csgLocalBounds;
-        Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle meshletDescHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        u32 meshletCount = 0u;
-        u32 meshletPrimitiveIndexCount = 0u;
-        u32 blasRefitsSinceRebuild = 0u;
-        u32 swBvhRefitsSinceRebuild = 0u;
-        b8 runtimeMesh = false;
-        b8 blasBuildPending = false;
-        b8 blasBackingFresh = false;
-        b8 swBvhBuildPending = false;
-        b8 swBvhTopologyBuilt = false;
-        b8 blasBuildAccepted = false;
-        b8 swBvhBuildAccepted = false;
-    };
+    using MeshSoftwareBvhParentBuildState = ::NWB::Impl::MeshSoftwareBvhParentBuildState;
+    using MeshBlasGraphState = ::NWB::Impl::MeshBlasGraphState;
+    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
     using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
     using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;
     using MeshBlasGraphStateVector = Vector<MeshBlasGraphState, Core::Alloc::ScratchArena>;

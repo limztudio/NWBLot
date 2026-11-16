@@ -93,20 +93,20 @@ NWB_IMPL_BEGIN
 
 
 RayTracingFrameCpuStateSnapshot RendererRayTracingState::captureFrameCpuState()const noexcept{
-    return RayTracingFrameCpuStateSnapshot{
-        .surfelCountReadbackSubmissionToken = m_surfelCountReadbackSubmissionToken,
-        .softShadowFrameIndex = m_softShadowFrameIndex,
-        .surfelFrameIndex = m_surfelFrameIndex,
-        .surfelCountReadbackFrame = m_surfelCountReadbackFrame,
-        .softShadowSlotMask = m_softShadowSlotMask,
-        .causticLightCount = m_causticLightCount,
-        .swShadowDispatchLogged = m_swShadowDispatchLogged,
-        .causticAccumulatorInitialized = m_causticAccumulatorInitialized,
-        .swCausticDispatchLogged = m_swCausticDispatchLogged,
-        .hwCausticDispatchLogged = m_hwCausticDispatchLogged,
-        .causticEmissionGateLogged = m_causticEmissionGateLogged,
-        .surfelSeeded = m_surfelSeeded,
-    };
+    RayTracingFrameCpuStateSnapshot snapshot;
+    snapshot.surfelCountReadbackSubmissionToken = m_surfelCountReadbackSubmissionToken;
+    snapshot.softShadowFrameIndex = m_softShadowFrameIndex;
+    snapshot.surfelFrameIndex = m_surfelFrameIndex;
+    snapshot.surfelCountReadbackFrame = m_surfelCountReadbackFrame;
+    snapshot.softShadowSlotMask = m_softShadowSlotMask;
+    snapshot.causticLightCount = m_causticLightCount;
+    snapshot.swShadowDispatchLogged = m_swShadowDispatchLogged;
+    snapshot.causticAccumulatorInitialized = m_causticAccumulatorInitialized;
+    snapshot.swCausticDispatchLogged = m_swCausticDispatchLogged;
+    snapshot.hwCausticDispatchLogged = m_hwCausticDispatchLogged;
+    snapshot.causticEmissionGateLogged = m_causticEmissionGateLogged;
+    snapshot.surfelSeeded = m_surfelSeeded;
+    return snapshot;
 }
 
 void RendererRayTracingState::restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
@@ -498,45 +498,45 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
     return PackRayTraceMaterialContextSlots(*sceneBvhNodes, *sceneInstances, *instanceMaterial, *materialTyped, *meshInstances, opticalValid, opticalSlot, opticalInstanceCount, hasCsgContext, csgContextSlot);
 }
 
-void RayTraceMaterialResources::releaseRayTraceMaterialContextHeapHandles(){
-    auto& device = m_graphics.getDevice();
+void RayTraceMaterialResources::releaseRayTraceMaterialContextHeapHandles()noexcept{
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        heap.free(m_scene.m_sceneBvhNodeHeapHandle);
-        heap.free(m_scene.m_sceneInstanceHeapHandle);
-        heap.free(m_shadow.m_shadowInstanceMaterialHeapHandle);
-        heap.free(m_shadow.m_shadowMaterialTypedHeapHandle);
-        heap.free(m_shadow.m_shadowInstanceHeapHandle);
-        heap.free(m_scene.m_rayTraceMaterialContextSlotsHeapHandle);
-        RetireDescriptor(heap, m_scene.m_csgTraceContextHeapHandle);
-        heap.free(m_shadow.m_swShadowEdgeCounterHeapHandle);
-        heap.free(m_shadow.m_swShadowEdgeListHeapHandle);
-        heap.free(m_shadow.m_swShadowIndirectArgsHeapHandle);
+        heap.free(m_scene->m_sceneBvhNodeHeapHandle);
+        heap.free(m_scene->m_sceneInstanceHeapHandle);
+        heap.free(m_shadow->m_shadowInstanceMaterialHeapHandle);
+        heap.free(m_shadow->m_shadowMaterialTypedHeapHandle);
+        heap.free(m_shadow->m_shadowInstanceHeapHandle);
+        heap.free(m_scene->m_rayTraceMaterialContextSlotsHeapHandle);
+        RetireDescriptor(heap, m_scene->m_csgTraceContextHeapHandle);
+        heap.free(m_shadow->m_swShadowEdgeCounterHeapHandle);
+        heap.free(m_shadow->m_swShadowEdgeListHeapHandle);
+        heap.free(m_shadow->m_swShadowIndirectArgsHeapHandle);
     }
-    m_scene.m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_scene.m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_shadow.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_shadow.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_shadow.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_scene.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_scene.m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_shadow.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_shadow.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_shadow.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene->m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene->m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow->m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow->m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow->m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene->m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_scene->m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow->m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow->m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_shadow->m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsBuffer(){
-    if(m_scene.m_rayTraceMaterialContextSlotsBuffer)
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsBuffer()noexcept{
+    if(m_scene->m_rayTraceMaterialContextSlotsBuffer)
         return true;
 
     Core::BufferDesc slotsBufferDesc;
     slotsBufferDesc.setByteSize(sizeof(RayTraceMaterialContextSlots)).setIsConstantBuffer(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameRaytraceMaterialContextSlots)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    auto rayTraceMaterialContextSlotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    auto rayTraceMaterialContextSlotsBufferResult = m_graphics->createBuffer(slotsBufferDesc);
     if(rayTraceMaterialContextSlotsBufferResult)
-        m_scene.m_rayTraceMaterialContextSlotsBuffer = Move(*rayTraceMaterialContextSlotsBufferResult);
+        m_scene->m_rayTraceMaterialContextSlotsBuffer = Move(*rayTraceMaterialContextSlotsBufferResult);
     else
-        m_scene.m_rayTraceMaterialContextSlotsBuffer.reset();
+        m_scene->m_rayTraceMaterialContextSlotsBuffer.reset();
     if(!rayTraceMaterialContextSlotsBufferResult){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
         return false;
@@ -544,24 +544,24 @@ b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsBuffer(){
     return true;
 }
 
-b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsHeapHandle(){
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsHeapHandle()noexcept{
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_scene.m_rayTraceMaterialContextSlotsBuffer.get(), m_scene.m_rayTraceMaterialContextSlotsHeapHandle)){
+    if(!heap.isInitialized() || !EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_scene->m_rayTraceMaterialContextSlotsBuffer.get(), m_scene->m_rayTraceMaterialContextSlotsHeapHandle)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
         return false;
     }
     return true;
 }
 
-b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle)noexcept{
     if(handle.valid())
         return true;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
@@ -575,8 +575,8 @@ b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(Core::Buff
     return true;
 }
 
-b8 RayTraceMaterialResources::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    auto& device = m_graphics.getDevice();
+b8 RayTraceMaterialResources::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle)noexcept{
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));

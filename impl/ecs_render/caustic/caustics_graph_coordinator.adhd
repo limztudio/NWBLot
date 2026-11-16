@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -9,12 +15,11 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
 #include <core/task/gpu/persistent_state.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +31,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererFramePipeline;
 class RendererMeshSystem;
 class RendererRayTracingSystem;
 class DeferredFrameTargets;
@@ -45,63 +49,6 @@ struct CausticsGraphContext{
 };
 
 
-class CausticsGraphCoordinator final : NoCopy{
-    friend class RendererFramePipeline;
-    friend struct FrameExecuteTimingState;
-    friend struct FrameExecuteStateLifecycleSet;
-    friend class DeferredFrameTopologyValidator;
-    friend class SurfelCausticsMergeValidator;
-
-
-public:
-    CausticsGraphCoordinator()noexcept = default;
-
-
-public:
-    [[nodiscard]] b8 declareDeferredSoftwareCausticsTask(
-        const CausticsGraphContext& context,
-        b8 hardwareCaustics,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
-        Core::GpuGraphResourceId worldPosition,
-        Core::GpuGraphResourceId depth,
-        Core::GpuGraphResourceId causticIrradiance,
-        Core::GpuGraphResourceId currentBindlessSlots,
-        Core::GpuGraphResourceId sceneShading,
-        Core::GpuGraphResourceId lights,
-        Core::GpuGraphResourceId materialContextSlots,
-        Core::GpuGraphResourceId opticalScene,
-        Span<const Core::GpuGraphResourceId> softwareTraceGeometryResources,
-        Core::GpuGraphResourceSetId softwareTraceGeometrySet,
-        Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
-        Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-        Optional<Core::GpuTimingMeasure>& causticResolveTiming
-    );
-    void resetDeferredCausticsTaskState()noexcept;
-
-
-private:
-    Core::GpuTaskId m_deferredSoftwareCausticsTask;
-    // The HW/SW caustic producer shares this clear's packet to preserve timing and acceptance.
-    Core::GpuTaskId m_deferredCausticIrradianceClearTask;
-    // The temporal bootstrap is conditional; when present it stays with the selected caustic producer, which commits only on acceptance.
-    Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
-    // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
-    Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, downsample, resolve prepare, wavelets, upsample, and timing close stay in one packet with compiler-owned handoffs.
-    Core::GpuTaskId m_deferredCausticPhotonTask;
-    Core::GpuTaskId m_deferredCausticGeometryTask;
-    Core::GpuTaskId m_deferredCausticResolvePrepareTask;
-    Array<Core::GpuTaskId, NWB_CAUSTIC_RESOLVE_PASS_COUNT> m_deferredCausticResolveWaveletTasks{};
-    Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
-    Core::GpuTaskId m_deferredHardwareCausticsTask;
-    b8 m_deferredCausticProducerDispatched = false;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -111,6 +58,78 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::CausticsGraphContext")]
+extern class CausticsGraphContext;
+[cpp_name("::NWB::Impl::DeferredLightingGraphResources")]
+extern class DeferredLightingGraphResources : NoCopy;
+[cpp_name("::NWB::Impl::DeferredFrameTargets")]
+extern class DeferredFrameTargets : NoCopy;
+[cpp_name("::NWB::Impl::RayTracingDeferredGraphResourceSnapshot")]
+extern class RayTracingDeferredGraphResourceSnapshot;
+
+[modular]
+class CausticsGraphCoordinator : NoCopy{
+    public GpuTaskId m_deferredSoftwareCausticsTask;
+    // The HW/SW caustic producer shares this clear's packet to preserve timing and acceptance.
+    public GpuTaskId m_deferredCausticIrradianceClearTask;
+    // The temporal bootstrap is conditional; when present it stays with the selected caustic producer, which commits only on acceptance.
+    public GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
+    // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
+    public GpuTaskId m_deferredCausticAccumulatorDecayTask;
+    // Photon, downsample, resolve prepare, wavelets, upsample, and timing close stay in one packet with compiler-owned handoffs.
+    public GpuTaskId m_deferredCausticPhotonTask;
+    public GpuTaskId m_deferredCausticGeometryTask;
+    public GpuTaskId m_deferredCausticResolvePrepareTask;
+    public Array<GpuTaskId, s_CausticResolvePassCount> m_deferredCausticResolveWaveletTasks;
+    public GpuTaskId m_deferredCausticResolveUpsampleTask;
+    public GpuTaskId m_deferredHardwareCausticsTask;
+    public b8 m_deferredCausticProducerDispatched = false;
+
+    public CausticsGraphCoordinator(){}
+
+    public b8 declareDeferredSoftwareCausticsTask(
+        in CausticsGraphContext context,
+        in b8 hardwareCaustics,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in GpuGraphResourceId worldPosition,
+        in GpuGraphResourceId depth,
+        in GpuGraphResourceId causticIrradiance,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId sceneShading,
+        in GpuGraphResourceId lights,
+        in GpuGraphResourceId materialContextSlots,
+        in GpuGraphResourceId opticalScene,
+        in Span<GpuGraphResourceId> softwareTraceGeometryResources,
+        in GpuGraphResourceSetId softwareTraceGeometrySet,
+        in GpuGraphResourceSetId traceMaterialSampledTextureSet,
+        mut ScratchArena scratchArena,
+        mut DeferredFrameTargets deferredTargets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticPhotonTiming,
+        mut Optional<GpuTimingMeasure> causticResolveTiming
+    );
+
+    public void resetDeferredCausticsTaskState(){
+        this.m_deferredSoftwareCausticsTask = GpuTaskId();
+        this.m_deferredCausticIrradianceClearTask = GpuTaskId();
+        this.m_deferredCausticAccumulatorBootstrapClearTask = GpuTaskId();
+        this.m_deferredCausticAccumulatorDecayTask = GpuTaskId();
+        this.m_deferredCausticPhotonTask = GpuTaskId();
+        this.m_deferredCausticGeometryTask = GpuTaskId();
+        this.m_deferredCausticResolvePrepareTask = GpuTaskId();
+        for(usize index = 0u; index < s_CausticResolvePassCount; ++index)
+            this.m_deferredCausticResolveWaveletTasks[index] = GpuTaskId();
+        this.m_deferredCausticResolveUpsampleTask = GpuTaskId();
+        this.m_deferredHardwareCausticsTask = GpuTaskId();
+        this.m_deferredCausticProducerDispatched = false;
+    }
 }
 
 

@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -35,77 +42,7 @@ class RendererRayTracingState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The material table, instance stream, and typed bytes share indices and offsets, so preflight freezes them against one storage generation.
-// A fresh context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
-// Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
-class PreparedShadowMaterialContext final : NoCopy{
-public:
-    [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
-
-
-public:
-    explicit PreparedShadowMaterialContext(Core::Alloc::GlobalArena& arena)noexcept
-        : m_instanceMaterialBytes(arena)
-        , m_instanceBytes(arena)
-        , m_materialTypedBytes(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 capture(
-        const RendererRayTracingState& state,
-        PreparedShadowMaterialContextRoute::Enum route,
-        b8 staticScene,
-        u64 hash,
-        Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
-        Span<const InstanceGpuData> instances,
-        Span<const u8> materialTypedBytes
-    );
-    [[nodiscard]] b8 captureCacheReuse(const RendererRayTracingState& state, u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
-    void clear()noexcept;
-
-    [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const;
-    // Publishes the accepted route hash; false when no fresh upload was pending.
-    [[nodiscard]] b8 publishAcceptedUpload(RendererRayTracingState& state)const noexcept;
-
-    [[nodiscard]] b8 storageMatches(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] b8 softwareSnapshotCovers(usize sceneInstanceCount)const noexcept;
-    // A fresh upload stays valid; cache reuse still needs the accepted software hash over the same scene instances.
-    [[nodiscard]] b8 softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
-    [[nodiscard]] b8 uploadRequired()const noexcept{ return m_uploadRequired; }
-    [[nodiscard]] PreparedShadowMaterialContextRoute::Enum route()const noexcept{ return m_route; }
-
-
-private:
-    void captureStorage(const RendererRayTracingState& state, u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
-
-
-private:
-    Vector<u8, Core::Alloc::GlobalArena> m_instanceMaterialBytes;
-    Vector<u8, Core::Alloc::GlobalArena> m_instanceBytes;
-    Vector<u8, Core::Alloc::GlobalArena> m_materialTypedBytes;
-    Core::BufferHandle m_instanceMaterialBuffer;
-    Core::BufferHandle m_instanceBuffer;
-    Core::BufferHandle m_materialTypedBuffer;
-    usize m_instanceMaterialCount = 0u;
-    usize m_instanceCount = 0u;
-    usize m_materialTypedUploadBytes = 0u;
-    usize m_instanceMaterialCapacity = 0u;
-    usize m_instanceCapacity = 0u;
-    usize m_materialTypedCapacity = 0u;
-    u64 m_hash = 0u;
-    Core::GpuDescriptorHandle m_instanceMaterialHeapHandle;
-    Core::GpuDescriptorHandle m_instanceHeapHandle;
-    Core::GpuDescriptorHandle m_materialTypedHeapHandle;
-    PreparedShadowMaterialContextRoute::Enum m_route = PreparedShadowMaterialContextRoute::None;
-    b8 m_static = false;
-    b8 m_ready = false;
-    b8 m_uploadRequired = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[[nodiscard]] b8 IsPreparedShadowMaterialStorageReady(const RendererRayTracingState& state, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
 
 
 // Names check sequentially; a missing name preserves the published prefix.
@@ -164,6 +101,90 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingState")]
+extern class RendererRayTracingState;
+
+
+// The material table, instance stream, and typed bytes share indices and offsets, so preflight freezes them against one storage generation.
+// A fresh context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
+// Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
+[modular]
+class PreparedShadowMaterialContext : NoCopy{
+    private Vector<u8> m_instanceMaterialBytes;
+    private Vector<u8> m_instanceBytes;
+    private Vector<u8> m_materialTypedBytes;
+    private BufferHandle m_instanceMaterialBuffer;
+    private BufferHandle m_instanceBuffer;
+    private BufferHandle m_materialTypedBuffer;
+    private usize m_instanceMaterialCount = 0u;
+    private usize m_instanceCount = 0u;
+    private usize m_materialTypedUploadBytes = 0u;
+    private usize m_instanceMaterialCapacity = 0u;
+    private usize m_instanceCapacity = 0u;
+    private usize m_materialTypedCapacity = 0u;
+    private u64 m_hash = 0u;
+    private GpuDescriptorHandle m_instanceMaterialHeapHandle;
+    private GpuDescriptorHandle m_instanceHeapHandle;
+    private GpuDescriptorHandle m_materialTypedHeapHandle;
+    private PreparedShadowMaterialContextRoute m_route = PreparedShadowMaterialContextRoute::None;
+    private b8 m_static = false;
+    private b8 m_ready = false;
+    private b8 m_uploadRequired = false;
+
+    public b8 capture(
+        in RendererRayTracingState state,
+        in PreparedShadowMaterialContextRoute route,
+        in b8 staticScene,
+        in u64 hash,
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialTypedBytes
+    );
+    public b8 captureCacheReuse(in RendererRayTracingState state, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
+    public void clear(){
+        this.m_instanceMaterialBytes.clear();
+        this.m_instanceBytes.clear();
+        this.m_materialTypedBytes.clear();
+        this.m_instanceMaterialBuffer.reset();
+        this.m_instanceBuffer.reset();
+        this.m_materialTypedBuffer.reset();
+        this.m_instanceMaterialHeapHandle = GpuDescriptorHandleInvalid();
+        this.m_instanceHeapHandle = GpuDescriptorHandleInvalid();
+        this.m_materialTypedHeapHandle = GpuDescriptorHandleInvalid();
+        this.m_instanceMaterialCount = 0u;
+        this.m_instanceCount = 0u;
+        this.m_materialTypedUploadBytes = 0u;
+        this.m_instanceMaterialCapacity = 0u;
+        this.m_instanceCapacity = 0u;
+        this.m_materialTypedCapacity = 0u;
+        this.m_hash = 0u;
+        this.m_route = PreparedShadowMaterialContextRoute::None;
+        this.m_static = false;
+        this.m_ready = false;
+        this.m_uploadRequired = false;
+    }
+
+    public Expected<PreparedShadowMaterialContextUploads> retainUploads(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
+    // Publishes the accepted route hash; false when no fresh upload was pending.
+    public b8 publishAcceptedUpload(mut RendererRayTracingState state)const;
+
+    public b8 storageMatches(in RendererRayTracingState state)const;
+    public b8 softwareSnapshotCovers(in usize sceneInstanceCount)const{
+        return ShadowMaterialContextPolicy().softwareSnapshotCovers(this.m_ready, this.m_route, this.m_instanceMaterialCount, this.m_instanceCount, sceneInstanceCount);
+    }
+    // A fresh upload stays valid; cache reuse still needs the accepted software hash over the same scene instances.
+    public b8 softwareSnapshotAccepted(in RendererRayTracingState state)const;
+    public b8 ready()const{ return this.m_ready; }
+    public b8 uploadRequired()const{ return this.m_uploadRequired; }
+    public PreparedShadowMaterialContextRoute route()const{ return this.m_route; }
+
+    private void captureStorage(in RendererRayTracingState state, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
 }
 
 

@@ -2,86 +2,137 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_mesh/runtime/mesh.adhd>
+#include <impl/ecs_mesh/skinning/deformation_state.adhd>
+#include <impl/ecs_mesh/skinning/submission_state.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/runtime/mesh.adhd.h>
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
-#include <impl/ecs_skeleton/components.adhd.h>
+class MeshSkinningRuntimeBindlessHeapHandles{
+    public GpuDescriptorHandle resourceSlots = GpuDescriptorHandleInvalid();
+    public Array<GpuDescriptorHandle, s_RuntimeStorageDescriptorCount> storageBuffers;
+}
 
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/task/gpu/types.h>
+class MeshSkinningRuntimeResources{
+    public RuntimeMeshHandle handle;
+    public MeshSkinningResourceBuffers buffers = MeshSkinningResourceBuffers();
+    public u32 editRevision = 0u;
+    public u32 positionCount = 0u;
+    public u32 attributeCount = 0u;
+    public u32 meshletCount = 0u;
+    public u32 skinCount = 0u;
+    public u32 jointCount = 0u;
+    public BufferHandle skinBuffer;
+    public BufferHandle jointPaletteBuffer;
+    public BufferHandle bindlessResourceSlotsBuffer;
+    public MeshSkinningBindlessResourceSlots bindlessResourceSlots;
+    public MeshSkinningRuntimeBindlessHeapHandles bindlessHeapHandles;
+    public b8 bindlessResourceSlotsUploaded = false;
 
+    public b8 hasPersistentHeapDescriptors(in b8 hasActiveSkin, in b8 hasAttributeBuffer)const{
+        if(!this.bindlessResourceSlotsBuffer.valid())
+            return false;
+        in GpuDescriptorHandle slotsHandle = this.bindlessHeapHandles.resourceSlots;
+        if(!slotsHandle.valid() || slotsHandle.descriptorClass() != GpuDescriptorClass::UniformBuffer)
+            return false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
+        for(usize index = 0u; index < s_RuntimeRequiredStorageDescriptorCount; ++index){
+            in GpuDescriptorHandle handle = this.bindlessHeapHandles.storageBuffers[index];
+            if(!handle.valid() || handle.descriptorClass() != GpuDescriptorClass::StorageBuffer)
+                return false;
+        }
+        if(hasActiveSkin){
+            in GpuDescriptorHandle skinHandle = this.bindlessHeapHandles.storageBuffers[cast<usize>(RuntimeStorageDescriptorSlot::SkinInfluences)];
+            in GpuDescriptorHandle paletteHandle = this.bindlessHeapHandles.storageBuffers[cast<usize>(RuntimeStorageDescriptorSlot::JointPalette)];
+            if(!skinHandle.valid() || skinHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer)
+                return false;
+            if(!paletteHandle.valid() || paletteHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer)
+                return false;
+        }
+        if(hasAttributeBuffer){
+            in GpuDescriptorHandle attribHandle = this.bindlessHeapHandles.storageBuffers[cast<usize>(RuntimeStorageDescriptorSlot::AttributeBuffer)];
+            if(!attribHandle.valid() || attribHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer)
+                return false;
+        }
+        return true;
+    }
+}
 
 // Graph tasks retain immutable dispatch inputs; publish commits only after packet accepts.
-struct MeshSkinningGraphDispatchPlan{
-    RuntimeMeshHandle handle;
-    u64 deformationCandidate = 0u;
-    Core::BufferHandle bindlessResourceSlotsBuffer;
-    Core::GpuGraphResourceId bindlessResourceSlotsResource;
-    Core::GpuGraphResourceId restPositionResource;
-    Core::GpuGraphResourceId restNormalResource;
-    Core::GpuGraphResourceId restTangentResource;
-    Core::GpuGraphResourceId skinnedPositionResource;
-    Core::GpuGraphResourceId skinnedNormalResource;
-    Core::GpuGraphResourceId skinnedTangentResource;
-    Core::GpuGraphResourceId meshletDescResource;
-    Core::GpuGraphResourceId meshletBoundsResource;
-    Core::GpuGraphResourceId meshletPositionRefDeltaResource;
-    Core::GpuGraphResourceId meshletAttributeRefDeltaResource;
-    Core::GpuGraphResourceId meshletLocalVertexRefResource;
-    Core::GpuGraphResourceId meshletPrimitiveIndexResource;
-    Core::GpuGraphResourceId attributeSkinResource;
-    Core::GpuGraphResourceId skinResource;
-    Core::GpuGraphResourceId jointPaletteResource;
-    Core::GpuGraphResourceId attributeResource;
-    Core::GpuGraphResourceId meshletLocalBoundsResource;
-    Core::GpuGraphResourceId localBoundsResource;
-    Core::GpuGraphPipelineId skinningPipeline;
-    Core::GpuGraphPipelineId boundsPipeline;
-    Core::GpuGraphPipelineId repackPipeline;
-    Core::GpuGraphPipelineId localBoundsPipeline;
-    u32 meshletCount = 0u;
-    u32 skinCount = 0u;
-    u32 jointCount = 0u;
-    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-    u32 bindlessResourceSlots = 0u;
-    Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::Invalid();
-    MeshSkinningSubmissionCommit submissionCommit;
+class MeshSkinningGraphDispatchPlan{
+    public RuntimeMeshHandle handle;
+    public u64 deformationCandidate = 0u;
+    public BufferHandle bindlessResourceSlotsBuffer;
+    public GpuGraphResourceId bindlessResourceSlotsResource;
+    public GpuGraphResourceId restPositionResource;
+    public GpuGraphResourceId restNormalResource;
+    public GpuGraphResourceId restTangentResource;
+    public GpuGraphResourceId skinnedPositionResource;
+    public GpuGraphResourceId skinnedNormalResource;
+    public GpuGraphResourceId skinnedTangentResource;
+    public GpuGraphResourceId meshletDescResource;
+    public GpuGraphResourceId meshletBoundsResource;
+    public GpuGraphResourceId meshletPositionRefDeltaResource;
+    public GpuGraphResourceId meshletAttributeRefDeltaResource;
+    public GpuGraphResourceId meshletLocalVertexRefResource;
+    public GpuGraphResourceId meshletPrimitiveIndexResource;
+    public GpuGraphResourceId attributeSkinResource;
+    public GpuGraphResourceId skinResource;
+    public GpuGraphResourceId jointPaletteResource;
+    public GpuGraphResourceId attributeResource;
+    public GpuGraphResourceId meshletLocalBoundsResource;
+    public GpuGraphResourceId localBoundsResource;
+    public GpuGraphPipelineId skinningPipeline;
+    public GpuGraphPipelineId boundsPipeline;
+    public GpuGraphPipelineId repackPipeline;
+    public GpuGraphPipelineId localBoundsPipeline;
+    public u32 meshletCount = 0u;
+    public u32 skinCount = 0u;
+    public u32 jointCount = 0u;
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+    public u32 bindlessResourceSlots = 0u;
+    public GpuDescriptorHandle bindlessResourceSlotsDescriptor = GpuDescriptorHandleInvalid();
+    public MeshSkinningSubmissionCommit submissionCommit;
     // Acceptance validates this exact selector generation before setting its residency bit.
-    MeshSkinningBindlessResourceSlots bindlessResourceSlotsPayload;
-    b8 hasActiveSkin = false;
-    b8 copiedRestStreams = false;
-    b8 updatesMeshletBounds = false;
-    b8 repacksNormals = false;
-};
-static_assert(sizeof(MeshSkinningGraphDispatchPlan) == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");
+    public MeshSkinningBindlessResourceSlots bindlessResourceSlotsPayload;
+    public b8 hasActiveSkin = false;
+    public b8 copiedRestStreams = false;
+    public b8 updatesMeshletBounds = false;
+    public b8 repacksNormals = false;
+}
 
+// Graph declarations retain resources; this snapshot keeps only the reduction dispatch contract.
+class MeshSkinningLocalBoundsDispatch{
+    public GpuGraphResourceId bindlessResourceSlotsResource;
+    public GpuGraphResourceId meshletLocalBoundsResource;
+    public GpuGraphResourceId localBoundsResource;
+    public GpuGraphPipelineId localBoundsPipeline;
+    public u32 meshletCount;
+    public u32 bindlessResourceSlots;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public MeshSkinningLocalBoundsDispatch(){
+        this.meshletCount = 0u;
+        this.bindlessResourceSlots = 0u;
+    }
 
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public MeshSkinningLocalBoundsDispatch(
+        in GpuGraphResourceId inBindlessResourceSlotsResource,
+        in GpuGraphResourceId inMeshletLocalBoundsResource,
+        in GpuGraphResourceId inLocalBoundsResource,
+        in GpuGraphPipelineId inLocalBoundsPipeline,
+        in u32 inMeshletCount,
+        in u32 inBindlessResourceSlots
+    ){
+        this.bindlessResourceSlotsResource = inBindlessResourceSlotsResource;
+        this.meshletLocalBoundsResource = inMeshletLocalBoundsResource;
+        this.localBoundsResource = inLocalBoundsResource;
+        this.localBoundsPipeline = inLocalBoundsPipeline;
+        this.meshletCount = inMeshletCount;
+        this.bindlessResourceSlots = inBindlessResourceSlots;
+    }
 }
 
 

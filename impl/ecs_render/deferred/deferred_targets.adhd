@@ -12,19 +12,6 @@ b8 ValidDeferredTargetExtent(in u32 width, in u32 height){
     return width > 0u && height > 0u;
 }
 
-b8 ValidDeferredCsgTargetLayerCounts(
-    in u32 peelLayerCount,
-    in u32 receiverEventLayerCount,
-    in u32 receiverSpanLayerCount,
-    in u32 removedIntervalLayerCount
-){
-    return peelLayerCount > 0u && receiverEventLayerCount > 0u && receiverSpanLayerCount > 0u && removedIntervalLayerCount > 0u;
-}
-
-b8 ValidLaggedLightingHistoryState(in b8 hasTextures, in b8 hasSlotsBuffer, in b8 descriptorsValid, in u64 generation){
-    return hasTextures && hasSlotsBuffer && descriptorsValid && generation != 0u;
-}
-
 b8 AllDeferredTargetFormatsKnown(in b8 gbufferFormatsKnown, in b8 csgPeelFormatsKnown, in b8 csgStorageFormatsKnown){
     return gbufferFormatsKnown && csgPeelFormatsKnown && csgStorageFormatsKnown;
 }
@@ -128,44 +115,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 DeferredLaggedLightingHistoryResources::valid()const noexcept{
-    const b8 hasTextures = shadowVisibility != nullptr && causticIrradiance != nullptr && surfelIrradiance != nullptr;
-    const b8 descriptorsValid = slotsBufferDescriptor.valid() && shadowVisibilityDescriptor.valid() && causticIrradianceDescriptor.valid() && surfelIrradianceDescriptor.valid();
-    return ValidLaggedLightingHistoryState(hasTextures, slotsBuffer != nullptr, descriptorsValid, generation);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 DeferredFrameTargets::csgIntervalTargetsValid()const noexcept{
-    return
-        csgCapNormalFormat != Core::Format::UNKNOWN
-        && csgIntervalDepthFormat != Core::Format::UNKNOWN
-        && csgIntervalIdFormat != Core::Format::UNKNOWN
-        && csgReceiverEventDataFormat != Core::Format::UNKNOWN
-        && csgReceiverEventCountFormat != Core::Format::UNKNOWN
-        && csgReceiverSpanDataFormat != Core::Format::UNKNOWN
-        && csgReceiverSpanCountFormat != Core::Format::UNKNOWN
-        && csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN
-        && csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN
-        && csgRemovedIntervalDataFormat != Core::Format::UNKNOWN
-        && csgRemovedIntervalCountFormat != Core::Format::UNKNOWN
-        && ValidDeferredCsgTargetLayerCounts(csgPeelLayerCount, csgReceiverEventLayerCount, csgReceiverSpanLayerCount, csgRemovedIntervalLayerCount)
-        && csgCapBackNormal != nullptr
-        && csgIntervalDepth != nullptr
-        && csgIntervalId != nullptr
-        && csgReceiverEventData != nullptr
-        && csgReceiverEventCount != nullptr
-        && csgReceiverSpanData != nullptr
-        && csgReceiverSpanCount != nullptr
-        && csgRemovedIntervalDepth != nullptr
-        && csgRemovedIntervalCapNormal != nullptr
-        && csgRemovedIntervalData != nullptr
-        && csgRemovedIntervalCount != nullptr
-    ;
-}
 
 b8 DeferredFrameTargets::valid()const noexcept{
 #if defined(NWB_DEBUG)

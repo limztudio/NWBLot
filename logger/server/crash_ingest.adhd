@@ -317,17 +317,17 @@ static void CaptureCrashIngestWarning(const StringView message, const StringView
 
 static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestConfig& config){
     const CrashScratchPath storageDirectory = CrashStorageDirectory(arena, config.storageDirectory);
-    const auto extracted = ApplyDirectoryRetention(arena, storageDirectory / s_CrashExtractedDirectoryName, config.retention.maxExtractedPackages);
+    const auto extracted = ApplyDirectoryRetention<::ArenaBase>(arena, storageDirectory / s_CrashExtractedDirectoryName, config.retention.maxExtractedPackages);
     if(!extracted){
         const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to apply retention to extracted crash packages: {}", extracted.error().message());
         CaptureCrashIngestWarning(detail.view(), __FILE__, __LINE__);
     }
-    const auto raw = ApplyDirectoryRetention(arena, storageDirectory / s_CrashRawDirectoryName, config.retention.maxRawArchives);
+    const auto raw = ApplyDirectoryRetention<::ArenaBase>(arena, storageDirectory / s_CrashRawDirectoryName, config.retention.maxRawArchives);
     if(!raw){
         const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to apply retention to raw crash archives: {}", raw.error().message());
         CaptureCrashIngestWarning(detail.view(), __FILE__, __LINE__);
     }
-    const auto invalid = ApplyDirectoryRetention(arena, storageDirectory / s_CrashInvalidDirectoryName, config.retention.maxInvalidArchives);
+    const auto invalid = ApplyDirectoryRetention<::ArenaBase>(arena, storageDirectory / s_CrashInvalidDirectoryName, config.retention.maxInvalidArchives);
     if(!invalid){
         const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to apply retention to invalid crash archives: {}", invalid.error().message());
         CaptureCrashIngestWarning(detail.view(), __FILE__, __LINE__);

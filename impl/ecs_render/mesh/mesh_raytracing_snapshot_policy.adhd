@@ -19,7 +19,11 @@ NWB_IMPL_BEGIN
 
 
 struct MeshResources;
-namespace ECSRenderDetail{ struct MeshRayTracingResourceSnapshot; };
+class MeshRayTracingResourceSnapshot;
+
+namespace ECSRenderDetail{
+    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
+};
 
 
 class MeshRayTracingSnapshotPolicy{

@@ -33,6 +33,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(static_cast<u32>(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
+
+
 // Renderer owns timing lifetime; compiler consumes only an immutable history snapshot.
 class RendererTaskTimingFeedback final : NoCopy{
 private:

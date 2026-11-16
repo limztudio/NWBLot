@@ -779,7 +779,7 @@ b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawCont
     state.setPipeline(pipeline.get());
     commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline.get());
-    const MeshFrameHeapSlots slots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings, cache.heapHandle.slot());
+    const MeshFrameHeapSlots slots = ResolveMeshFrameHeapSlots(context.frameBindings, cache.heapHandle.slot());
     const ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,

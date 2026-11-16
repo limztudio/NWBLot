@@ -36,6 +36,10 @@ b8 IsSupportedSharedComputeEmulationDrawCount(in usize drawCount){
     return drawCount >= s_SharedComputeEmulationMinimumDrawCount && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
 }
 
+b8 IsValidSharedComputeEmulationDrawWindow(in usize computeDrawCount, in usize minimumDrawCount, in usize allowedMaxDrawCount){
+    return computeDrawCount >= minimumDrawCount && computeDrawCount <= allowedMaxDrawCount;
+}
+
 usize SharedComputeEmulationPhaseCountForDrawCount(in usize drawCount){
     return drawCount * s_SharedComputeEmulationPhasesPerDraw;
 }

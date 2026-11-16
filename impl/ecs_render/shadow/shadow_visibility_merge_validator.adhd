@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,7 +16,6 @@ native{
 
 
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
@@ -31,37 +36,82 @@ class RendererFramePipeline;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShadowVisibilityMergeValidator final : NoCopy{
-public:
-    explicit ShadowVisibilityMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererFramePipeline")]
+extern class RendererFramePipeline;
+
+
+b8 HasEmptyPreparedShadowVisibilityRoute(in PreparedShadowVisibilityTasks tasks){
+    return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal && !tasks.diagnostics.valid();
+}
+
+b8 ValidatePreparedShadowVisibilityTaskShape(in PreparedShadowVisibilityTasks tasks){
+    if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
+        return false;
+    if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
+        return false;
+    if(tasks.combinedUpsample){
+        if(tasks.opaqueResolve.valid())
+            return false;
+    }
+    else if(!tasks.opaqueResolve.valid()){
+        return false;
+    }
+    if(!tasks.opaque.valid() || !tasks.transparentTrace.valid() || !tasks.transparentFirstWavelet.valid())
+        return false;
+    if(!tasks.combinedTemporal && !tasks.opaqueFirstWavelet.valid())
+        return false;
+    return true;
+}
+
+b8 PreparedShadowVisibilityTasksSharePacket(in GpuCompiledGraphReadView compiledPlan, in PreparedShadowVisibilityTasks tasks){
+    if(!tasks.opaque.valid()){
+        if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
+            return false;
+        if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
+            return false;
+        return HasEmptyPreparedShadowVisibilityRoute(tasks);
+    }
+    if(!ValidatePreparedShadowVisibilityTaskShape(tasks))
+        return false;
+    Array<GpuTaskId, 3u> required;
+    required[0u] = tasks.opaque;
+    required[1u] = tasks.transparentTrace;
+    required[2u] = tasks.transparentFirstWavelet;
+    for(usize index = 0u; index < 3u; ++index){
+        if(!compiledPlan.tasksSharePacket(tasks.terminal, required[index]))
+            return false;
+    }
+    if(!tasks.combinedTemporal && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueFirstWavelet))
+        return false;
+    if(tasks.opaqueResolve.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueResolve))
+        return false;
+    if(tasks.diagnostics.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.diagnostics))
+        return false;
+    return !tasks.transparentTemporalMerge.valid() || compiledPlan.tasksSharePacket(tasks.terminal, tasks.transparentTemporalMerge);
+}
+
+
+[modular]
+class ShadowVisibilityMergeValidator : NoCopy{
+    private in RendererFramePipeline m_pipeline;
+
+    public ShadowVisibilityMergeValidator(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
+
+    public void validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowVisibilityMergeValidationResult outResult)const;
 }
 
 

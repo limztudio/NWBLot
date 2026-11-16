@@ -129,7 +129,7 @@ struct AvboitSharedComputeEmulationTaskPayload{
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& timing;
     MeshFrameBindingSnapshot frameBindings;
-    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
+    RegularSharedComputeEmulationGraphPlan plan;
     usize drawIndex = 0u;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;

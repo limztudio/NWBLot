@@ -303,7 +303,7 @@ b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& to
 }
 
 b8 Builder::paintPopup(){
-    const LayoutBox* panel = m_scope->m_layout.box(0u);
+    const Optional<LayoutBox> panel = m_scope->m_layout.box(0u);
     const UiSkinRegion* background = region(m_scope->m_popupPaintStyle.background, m_scope->m_popupPaintStyle.fallback);
     if(!panel || !background)
         return false;

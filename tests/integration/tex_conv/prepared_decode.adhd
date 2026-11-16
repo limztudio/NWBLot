@@ -121,7 +121,7 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
     native(in texture, in mip, in mipIndex, in hdr, mut scratchArena, mut decodedBytes, mut decodedOk){
         basist::basisu_transcoder_init();
         NWB::Impl::TextureMipDecoder decoder;
-        const auto decoded = decoder.decode(texture, mip, mipIndex, hdr ? NWB::Core::Format::RGBA16_FLOAT : NWB::Core::Format::RGBA8_UNORM, scratchArena);
+        const auto decoded = decoder.decode(scratchArena, texture, mip, mipIndex, hdr ? NWB::Core::Format::RGBA16_FLOAT : NWB::Core::Format::RGBA8_UNORM);
         if(!decoded)
             return false;
         decodedBytes.assign(decoded->bytes.begin(), decoded->bytes.end());

@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 static_assert(Core::GpuGraphResourceId{}.generation == 0u && Core::GpuGraphResourceId{}.index == s_DeferredGraphInvalidIndex);
 
 
-struct RayTracingDeferredGraphResourceSnapshot;
+class RayTracingDeferredGraphResourceSnapshot;
 
 
 // Deferred graph resource imports own G-buffer, CSG, lighting-history, and AVBOIT target imports.

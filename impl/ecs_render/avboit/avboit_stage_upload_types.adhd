@@ -21,6 +21,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
+
 class RendererCsgSystem;
 class RendererMaterialSystem;
 class AvboitGeneratedGeometryReuse;
@@ -205,7 +207,7 @@ struct AvboitComputeEmulationCaptureResult{
     b8 regularCaptured = false;
     b8 csgCaptured = false;
     b8 sharedCaptured = false;
-    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedPlan;
+    RegularSharedComputeEmulationGraphPlan sharedPlan;
     usize sharedInstanceCount = 0u;
     usize sharedMaterialTypedByteCount = 0u;
 };

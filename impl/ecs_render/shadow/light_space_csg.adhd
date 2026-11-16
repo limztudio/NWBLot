@@ -30,8 +30,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class MeshRayTracingResourceSnapshot;
+
 namespace ECSRenderDetail{
-    struct MeshRayTracingResourceSnapshot;
+    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
 };
 
 static_assert(sizeof(LightSpaceCsgInstanceGpu) == NWB_CSG_RAY_INSTANCE_BYTES);

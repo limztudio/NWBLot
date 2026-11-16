@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/optics/coincident_volume_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,25 +16,6 @@ native{
 
 
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/optics/coincident_volume_types.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class World;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,38 +33,42 @@ class RendererMaterialSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Pipeline owns one frozen selection shared by all consumers; raster/RT keep their ABIs.
-class RendererOpticalVolumeSelection final : NoCopy{
-public:
-    explicit RendererOpticalVolumeSelection(Core::Alloc::GlobalArena& arena)
-        : m_suppressed(0u, Hasher<Core::ECS::EntityID>{}, EqualTo<Core::ECS::EntityID>{}, arena)
-    {}
-
-
-public:
-    void prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena);
-    // Candidates must contain each entity at most once.
-    void select(Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena);
-    void reset()noexcept{ m_suppressed.clear(); }
-    [[nodiscard]] b8 isSuppressed(const Core::ECS::EntityID entity)const noexcept{
-        return !m_suppressed.empty() && m_suppressed.contains(entity);
-    }
-
-
-private:
-    HashSet<Core::ECS::EntityID, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_suppressed;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererMaterialSystem")]
+extern class RendererMaterialSystem : NoCopy;
+
+// Pipeline owns one frozen selection shared by all consumers; raster/RT keep their ABIs.
+[modular]
+class RendererOpticalVolumeSelection : NoCopy{
+    private HashSet<EntityID> m_suppressed;
+
+    public RendererOpticalVolumeSelection(){}
+
+    public void prepare(mut World world, mut RendererMaterialSystem materials, mut ScratchArena scratchArena);
+
+    // Candidates must contain each entity at most once.
+    public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){
+        SelectSuppressedCoincidentOpticalVolumes(candidates, this.m_suppressed);
+    }
+
+    public void reset(){
+        this.m_suppressed.clear();
+    }
+
+    public b8 isSuppressed(in EntityID entity)const{
+        return !this.m_suppressed.empty() && this.m_suppressed.contains(entity);
+    }
 }
 
 

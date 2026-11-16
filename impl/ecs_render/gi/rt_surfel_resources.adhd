@@ -150,7 +150,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, SurfelGiResourcePlan& result){
+b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, SurfelGiResourcePlan& result)noexcept{
     using namespace RendererTaskGraphDetail;
     const auto& deferredTargets = inputs.deferredTargets;
     const auto& rayTracingResources = inputs.rayTracingResources;
@@ -188,8 +188,8 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
     auto& traceResourceUses = result.traceResourceUses;
     auto& graphOwnsSurfelGiResolve = result.graphOwnsSurfelGiResolve;
 
-    const auto surfelIrradianceHalfResult = ImportExternalTexture(m_graph, deferredTargets.surfelIrradianceHalf, Name(s_SurfelGraphIrradianceHalf), s_SurfelIrradianceHalfGraphLabel);
-    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_SurfelGraphSceneGeometry), s_SceneGeometryDomainLabel));
+    const auto surfelIrradianceHalfResult = ImportExternalTexture(*m_graph, deferredTargets.surfelIrradianceHalf, Name(s_SurfelGraphIrradianceHalf), s_SurfelIrradianceHalfGraphLabel);
+    const auto sceneGeometryDomainResult = m_graph->importHazardDomain(HazardDomainDesc(Name(s_SurfelGraphSceneGeometry), s_SceneGeometryDomainLabel));
     if(!surfelIrradianceHalfResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
         return false;
@@ -220,7 +220,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
     const auto appendOptionalBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state, const b8 writable = false) -> Expected<Core::GpuGraphResourceId>{
         if(!buffer)
             return Core::GpuGraphResourceId{};
-        const auto resourceResult = ImportExternalBuffer(m_graph, buffer, identity, label);
+        const auto resourceResult = ImportExternalBuffer(*m_graph, buffer, identity, label);
         if(!resourceResult)
             return MakeUnexpected(Failure{});
         const Core::GpuGraphResourceId resource = *resourceResult;
@@ -277,7 +277,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
     b8 optionalResourcesImported = importOptionalResources().has_value();
     if(optionalResourcesImported && rayTracingResources.csgTraceContextBuffer){
         {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);
+            const Core::GpuTaskGraph::DeclarationReadView declarations(*m_graph);
             csgTraceContext = declarations.findImportedBuffer(rayTracingResources.csgTraceContextBuffer);
         }
         optionalResourcesImported = csgTraceContext.valid();
@@ -285,7 +285,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
             resourceUses.push_back(ReadUse(csgTraceContext, Core::ResourceStates::ShaderResource));
     }
     if(optionalResourcesImported && rayTracingSurfelResources.traceIndirectArgsBuffer){
-        const auto surfelTraceIndirectArgsResult = ImportExternalBuffer(m_graph, rayTracingSurfelResources.traceIndirectArgsBuffer, Name(s_SurfelGraphTraceArgs), s_SurfelTraceArgsGraphLabel);
+        const auto surfelTraceIndirectArgsResult = ImportExternalBuffer(*m_graph, rayTracingSurfelResources.traceIndirectArgsBuffer, Name(s_SurfelGraphTraceArgs), s_SurfelTraceArgsGraphLabel);
         if(surfelTraceIndirectArgsResult)
             surfelTraceIndirectArgs = *surfelTraceIndirectArgsResult;
         optionalResourcesImported = surfelTraceIndirectArgsResult.has_value();
@@ -306,10 +306,10 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
         if(!rayTracingResources.sceneTlas)
             optionalResourcesImported = false;
         else{
-            const auto tlasResult = m_graph.importAccelStruct(
+            const auto tlasResult = m_graph->importAccelStruct(
                 rayTracingResources.sceneTlas,
                 AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel)
-                    .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
+                    .setInitialState(m_raytracingSystem->sceneTlasBackingInitialState())
             );
             if(tlasResult)
                 tlas = *tlasResult;
@@ -365,7 +365,7 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
         traceResourceUses.push_back(ReadUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
         if(csgTraceContext.valid()){
-            if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(rayTracingResources.csgTraceContextBuffer, rayTracingResources.csgTraceBoundsBuffers, m_graph, traceResourceUses))
+            if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(rayTracingResources.csgTraceContextBuffer, rayTracingResources.csgTraceBoundsBuffers, *m_graph, traceResourceUses))
                 return false;
             traceResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
         }
@@ -397,19 +397,19 @@ b8 SurfelGiResourceBuilder::prepare(const SurfelGiResourceInputs& inputs, Surfel
 
 
 RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSurfelPersistentResources()const noexcept{
-    return RayTracingSurfelPersistentResourceSnapshot{
-        .constantsBuffer = m_rayTracingState.m_surfelConstants,
-        .poolBuffer = m_rayTracingState.m_surfelPoolBuffer,
-        .guidePoolBuffer = m_rayTracingState.m_surfelGuidePoolBuffer,
-        .cellHeadBuffer = m_rayTracingState.m_surfelCellHeadBuffer,
-        .counterBuffer = m_rayTracingState.m_surfelCounterBuffer,
-        .traceIndirectArgsBuffer = m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
-        .freeListBuffer = m_rayTracingState.m_surfelFreeListBuffer,
-        .poolSnapshotBuffer = m_rayTracingState.m_surfelPoolSnapshotBuffer,
-        .cellHeadSnapshotBuffer = m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
-        .counterReadbackBuffer = m_rayTracingState.m_surfelCounterReadback,
-        .countReadbackSubmissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken,
-    };
+    RayTracingSurfelPersistentResourceSnapshot snapshot;
+    snapshot.constantsBuffer = m_rayTracingState.m_surfelConstants;
+    snapshot.poolBuffer = m_rayTracingState.m_surfelPoolBuffer;
+    snapshot.guidePoolBuffer = m_rayTracingState.m_surfelGuidePoolBuffer;
+    snapshot.cellHeadBuffer = m_rayTracingState.m_surfelCellHeadBuffer;
+    snapshot.counterBuffer = m_rayTracingState.m_surfelCounterBuffer;
+    snapshot.traceIndirectArgsBuffer = m_rayTracingState.m_surfelTraceIndirectArgsBuffer;
+    snapshot.freeListBuffer = m_rayTracingState.m_surfelFreeListBuffer;
+    snapshot.poolSnapshotBuffer = m_rayTracingState.m_surfelPoolSnapshotBuffer;
+    snapshot.cellHeadSnapshotBuffer = m_rayTracingState.m_surfelCellHeadSnapshotBuffer;
+    snapshot.counterReadbackBuffer = m_rayTracingState.m_surfelCounterReadback;
+    snapshot.countReadbackSubmissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
+    return snapshot;
 }
 
 b8 RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept{

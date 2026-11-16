@@ -1360,7 +1360,9 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
-    return LoggerCrashSymbolicateDetail::CrashReportComposer::BuildOrderedCrashReport(summary, Move(detailReport));
+    CrashReportText ordered(arena);
+    BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, AStringView(detailReport), ordered);
+    return ordered;
 }
 
 

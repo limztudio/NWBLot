@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,7 +16,6 @@ native{
 
 
 #include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,38 +33,40 @@ class RendererRayTracingSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShadowMaterialContextPreparer final : NoCopy{
-public:
-    explicit ShadowMaterialContextPreparer(RendererRayTracingSystem& system)noexcept
-        : m_system(system)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<u64> prepare(
-        PreparedShadowMaterialContextRoute::Enum route,
-        b8 staticScene,
-        usize sceneInstanceCount,
-        Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
-        Span<const InstanceGpuData> shadowInstanceData,
-        MaterialTypedByteDataVector& shadowMaterialTypedBytes
-    );
-
-
-private:
-    RendererRayTracingSystem& m_system;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
+extern class RendererRayTracingSystem;
+[cpp_name("::NWB::Impl::MaterialTypedByteDataVector"), cpp_header("<impl/ecs_render/material/renderer_pipeline_types.adhd.h>")]
+extern class MaterialTypedByteDataVector;
+
+
+[modular]
+class ShadowMaterialContextPreparer : NoCopy{
+    private mut RendererRayTracingSystem m_system;
+
+    public ShadowMaterialContextPreparer(mut RendererRayTracingSystem system){
+        this.m_system = system;
+    }
+
+    public Expected<u64> prepare(
+        in PreparedShadowMaterialContextRoute route,
+        in b8 staticScene,
+        in usize sceneInstanceCount,
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+        in Span<InstanceGpuData> shadowInstanceData,
+        mut MaterialTypedByteDataVector shadowMaterialTypedBytes
+    );
 }
 
 

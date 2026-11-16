@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,7 +16,6 @@ native{
 
 
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
@@ -30,8 +35,8 @@ NWB_IMPL_BEGIN
 
 
 class RendererRayTracingSystem;
-
 class DeferredFrameTargets;
+class DeferredLightingGraphResources;
 
 // Hardware caustics stage owns photon plus geometry plus resolve-wavelet declaration.
 struct HardwareCausticsStageInputs{
@@ -62,39 +67,6 @@ struct HardwareCausticsStageInputs{
     Optional<Core::GpuTimingMeasure>& resolveTiming;
 };
 
-struct HardwareCausticsStageResult{
-    Core::GpuTaskId hardwareCausticsTask;
-    Core::GpuTaskId causticIrradianceClearTask;
-    Core::GpuTaskId causticAccumulatorBootstrapClearTask;
-    Core::GpuTaskId causticAccumulatorDecayTask;
-    Core::GpuTaskId causticPhotonTask;
-    Core::GpuTaskId causticGeometryTask;
-    Core::GpuTaskId causticResolvePrepareTask;
-    Array<Core::GpuTaskId, NWB_CAUSTIC_RESOLVE_PASS_COUNT> causticResolveWaveletTasks{};
-    Core::GpuTaskId causticResolveUpsampleTask;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class HardwareCausticsStageBuilder final : NoCopy{
-public:
-    HardwareCausticsStageBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<HardwareCausticsStageResult> declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,6 +77,42 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
+extern class RendererRayTracingSystem : NoCopy;
+[cpp_name("::NWB::Impl::HardwareCausticsStageInputs")]
+extern class HardwareCausticsStageInputs : NoCopy;
+
+class HardwareCausticsStageResult{
+    public GpuTaskId hardwareCausticsTask;
+    public GpuTaskId causticIrradianceClearTask;
+    public GpuTaskId causticAccumulatorBootstrapClearTask;
+    public GpuTaskId causticAccumulatorDecayTask;
+    public GpuTaskId causticPhotonTask;
+    public GpuTaskId causticGeometryTask;
+    public GpuTaskId causticResolvePrepareTask;
+    public Array<GpuTaskId, s_CausticResolvePassCount> causticResolveWaveletTasks;
+    public GpuTaskId causticResolveUpsampleTask;
+
+    public HardwareCausticsStageResult(){}
+}
+
+[modular]
+class HardwareCausticsStageBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+
+    public HardwareCausticsStageBuilder(mut GpuTaskGraph graph, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_raytracingSystem = raytracingSystem;
+    }
+
+    public Expected<HardwareCausticsStageResult> declare(in HardwareCausticsStageInputs inputs, mut ScratchArena scratchArena);
 }
 
 

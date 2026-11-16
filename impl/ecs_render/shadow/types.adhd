@@ -428,5 +428,22 @@ class SoftwareTransparentShadowTraceInputs{
 }
 
 
+// Cross-frame Buffer* cache. keepAlive prevents key reuse; failed registrations stay uncached.
+class RtMeshHeapHandleCacheEntry{
+    public BufferHandle keepAlive; // Pins the Buffer* key.
+    public GpuDescriptorHandle handle;
+    public b8 seenThisFrame = false;
+}
+
+
+class SoftwareTransparentSamplingState{
+    public BindingLayoutHandle m_layout;
+    // Index zero keeps the fixed budget; index one consumes accepted sampling history.
+    public Array<ShaderHandle, 2u> m_shaders;
+    public Array<ComputePipelineHandle, 2u> m_pipelines;
+    public SoftwareTransparentSamplingHistory m_history;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

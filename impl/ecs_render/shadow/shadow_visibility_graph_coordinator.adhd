@@ -47,7 +47,7 @@ class RendererFramePipeline;
 class RendererRayTracingSystem;
 class DeferredFrameTargets;
 class DeferredLightingGraphResources;
-struct RayTracingSceneGraphReads;
+class RayTracingSceneGraphReads;
 
 
 struct ShadowVisibilityGraphContext{

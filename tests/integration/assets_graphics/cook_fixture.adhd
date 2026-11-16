@@ -3009,7 +3009,7 @@ usize TestArenaUsedBytes(in TestArena testArena){
 }
 
 b8 CanDecodeFirstTextureMip(mut TextureMipDecoder decoder, in TextureAsset texture, in FormatEnum format, mut ScratchArena scratchArena){
-    return decoder.decode(texture, texture.mipLevels().front(), 0u, format, scratchArena).has_value();
+    return decoder.decode(scratchArena, texture, texture.mipLevels().front(), 0u, format).has_value();
 }
 
 void AppendMeshletDesc(in u32 localVertOffset, in u32 primOffset, in u32 posRefByteOffset, in u32 attrRefByteOffset, in u32 counts, mut MeshletDescVector outMeshlets){

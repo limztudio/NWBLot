@@ -127,27 +127,6 @@ struct MaterialPipelineBuildInputs{
     b8 avboitCsgClipPipeline;
 };
 
-class MaterialPipelineBuilder final : NoCopy{
-public:
-    explicit MaterialPipelineBuilder(const MaterialPipelineBuildInputs& inputs)noexcept
-        : m_inputs(inputs)
-    {}
-
-
-public:
-    [[nodiscard]] b8 buildMesh();
-    [[nodiscard]] b8 buildIndexed();
-    [[nodiscard]] b8 buildCompute();
-
-
-private:
-    [[nodiscard]] b8 loadPassPixelShader();
-
-
-private:
-    const MaterialPipelineBuildInputs& m_inputs;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,6 +175,24 @@ NWB_IMPL_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_name("::NWB::Impl::MaterialPipelineBuildInputs")]
+extern class MaterialPipelineBuildInputs;
+
+[modular]
+class MaterialPipelineBuilder : NoCopy{
+    private in MaterialPipelineBuildInputs m_inputs;
+
+    public MaterialPipelineBuilder(in MaterialPipelineBuildInputs inputs){
+        this.m_inputs = inputs;
+    }
+
+    public b8 buildMesh();
+    public b8 buildIndexed();
+    public b8 buildCompute();
+
+    private b8 loadPassPixelShader();
+}
 
 b8 IsValidIndexedEmulationByteOffset(in b8 indexedGeometryOutput, in u32 emulationIndexByteOffset){
     return !indexedGeometryOutput || emulationIndexByteOffset != 0u;

@@ -98,7 +98,7 @@ struct FrameGraphAvboitMaterialUploadResult{
     Core::GpuGraphResourceSetId materialGeometrySet;
     Core::GpuGraphResourceSetId materialSampledTextureSet;
     Core::GpuTaskId reusedGeometryProducer;
-    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
+    RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
     usize sharedComputeEmulationInstanceCount = 0u;
     usize sharedComputeEmulationMaterialTypedByteCount = 0u;
     b8 streamsUploaded = false;

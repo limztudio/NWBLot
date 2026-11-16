@@ -513,12 +513,12 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
 
     if(!m_materialState.m_emulationInputLayout){
         Array<Core::VertexAttributeDesc, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT> attributes{};
-        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "POSITION", attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION]);
-        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "NORMAL", attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION]);
-        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "TANGENT", attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION]);
-        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RG32_FLOAT, NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "TEXCOORD", attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION]);
-        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "COLOR", attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION]);
-        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1", attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION]);
+        SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "POSITION", attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION]);
+        SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "NORMAL", attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION]);
+        SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "TANGENT", attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION]);
+        SetEmulatedVertexAttribute(Core::Format::RG32_FLOAT, NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "TEXCOORD", attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION]);
+        SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "COLOR", attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION]);
+        SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1", attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION]);
 
         auto& device = m_graphics.getDevice();
         auto emulationInputLayoutResult = device.createInputLayout(attributes.data(), NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());

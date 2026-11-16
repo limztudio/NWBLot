@@ -363,13 +363,13 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
     refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
     if(refractionCounters.valid())
         refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
-    RendererFramePipelineDetail::TraceResourceSetUses refractionSets{};
+    TraceResourceSetUses refractionSets{};
     if(refractionResources.usesHardwareTrace){
         for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
             refractionUses.push_back(read);
         for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
             refractionUses.push_back(read);
-        refractionSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(hardwareTraceGeometrySet, traceMaterialSampledTextureSet);
+        refractionSets = MakeTraceResourceSetUses(hardwareTraceGeometrySet, traceMaterialSampledTextureSet);
     }
     const Array<Core::GpuTaskId, 3> refractionDependencies = { inputs.reflectionCompletionTask, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
     Core::GpuTaskDesc refractionDesc;

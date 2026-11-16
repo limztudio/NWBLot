@@ -30,45 +30,7 @@ class RendererRayTracingState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hardware TLAS work records from this frozen preflight plan in Shadow Preparation; its static cache becomes valid only after that packet accepts.
-// Instance descs hold raw BLAS pointers; the plan retains every BLAS plus TLAS/backing until Shadow Preparation settles.
-class PreparedSceneTlasBuild final : NoCopy{
-public:
-    explicit PreparedSceneTlasBuild(Core::Alloc::GlobalArena& arena)noexcept
-        : m_instances(arena)
-        , m_blases(arena)
-    {}
-
-
-public:
-    [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize instanceCount)noexcept;
-
-    [[nodiscard]] b8 capture(
-        const RendererRayTracingState& state,
-        b8 staticScene,
-        u64 staticSceneHash,
-        Span<const Core::RayTracingInstanceDesc> instances,
-        Span<const Core::RayTracingAccelStructHandle> instanceBlases
-    );
-    [[nodiscard]] b8 record(RendererRayTracingState& state, Core::CommandList& commandList);
-    // Publishes the accepted static-scene hash and backing handoff, then clears the plan.
-    void confirm(RendererRayTracingState& state)noexcept;
-    void clear()noexcept;
-    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
-    [[nodiscard]] b8 storageMatches(const RendererRayTracingState& state)const noexcept;
-
-
-private:
-    Vector<Core::RayTracingInstanceDesc, Core::Alloc::GlobalArena> m_instances;
-    Vector<Core::RayTracingAccelStructHandle, Core::Alloc::GlobalArena> m_blases;
-    Core::RayTracingAccelStructHandle m_tlas;
-    Core::BufferHandle m_backingBuffer;
-    usize m_maxInstances = 0u;
-    u64 m_staticSceneHash = 0u;
-    Core::GpuDescriptorHandle m_heapHandle;
-    b8 m_static = false;
-    b8 m_ready = false;
-};
+[[nodiscard]] b8 IsPreparedSceneTlasStorageReady(const RendererRayTracingState& state, usize instanceCount)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,6 +42,53 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingState")]
+extern class RendererRayTracingState;
+
+
+// Hardware TLAS work records from this frozen preflight plan in Shadow Preparation; its static cache becomes valid only after that packet accepts.
+// Instance descs hold raw BLAS pointers; the plan retains every BLAS plus TLAS/backing until Shadow Preparation settles.
+[modular]
+class PreparedSceneTlasBuild : NoCopy{
+    private Vector<RayTracingInstanceDesc> m_instances;
+    private Vector<RayTracingAccelStructHandle> m_blases;
+    private RayTracingAccelStructHandle m_tlas;
+    private BufferHandle m_backingBuffer;
+    private usize m_maxInstances = 0u;
+    private u64 m_staticSceneHash = 0u;
+    private GpuDescriptorHandle m_heapHandle;
+    private b8 m_static = false;
+    private b8 m_ready = false;
+
+    public b8 capture(
+        in RendererRayTracingState state,
+        in b8 staticScene,
+        in u64 staticSceneHash,
+        in Span<RayTracingInstanceDesc> instances,
+        in Span<RayTracingAccelStructHandle> instanceBlases
+    );
+    public b8 record(mut RendererRayTracingState state, mut CommandList commandList);
+    // Publishes the accepted static-scene hash and backing handoff, then clears the plan.
+    public void confirm(mut RendererRayTracingState state);
+    public void clear(){
+        this.m_instances.clear();
+        this.m_blases.clear();
+        this.m_tlas.reset();
+        this.m_backingBuffer.reset();
+        this.m_heapHandle = GpuDescriptorHandleInvalid();
+        this.m_maxInstances = 0u;
+        this.m_staticSceneHash = 0u;
+        this.m_static = false;
+        this.m_ready = false;
+    }
+    public b8 ready()const{ return this.m_ready; }
+    public b8 storageMatches(in RendererRayTracingState state)const;
 }
 
 

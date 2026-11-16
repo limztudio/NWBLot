@@ -156,7 +156,7 @@ native{
 NWB_IMPL_BEGIN
 
 
-b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
+b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets)noexcept{
     if(!IsSupportedShadowReceiverFactor(targets.shadowReceiverFactor))
         return false;
     // Deferred lighting always samples this per-slot transmittance target.
@@ -164,7 +164,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
 
     const auto createShadowTarget = [&](Core::TextureDesc desc, const Name& name, const TStringView errorMessage, Core::TextureHandle& outTexture){
         desc.setName(name);
-        auto result = m_graphics.createTexture(desc);
+        auto result = m_graphics->createTexture(desc);
         if(!result){
             outTexture.reset();
             NWB_LOGGER_ERROR(errorMessage);
@@ -248,13 +248,13 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     )
         return false;
 
-    m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
-    m_rayTracingState.m_transparentShadowSamplingHistory.reset();
+    m_rayTracingState->m_softwareTransparentSampling.m_history.discard();
+    m_rayTracingState->m_transparentShadowSamplingHistory.reset();
     ResetSoftShadowTemporalHistoryState(
-        m_rayTracingState.m_softShadowTemporalSeeded,
-        m_rayTracingState.m_softShadowTemporalHistoryAdvancePending,
-        m_rayTracingState.m_prevWorldToClipValid,
-        m_rayTracingState.m_softShadowHistoryFrontIsA
+        m_rayTracingState->m_softShadowTemporalSeeded,
+        m_rayTracingState->m_softShadowTemporalHistoryAdvancePending,
+        m_rayTracingState->m_prevWorldToClipValid,
+        m_rayTracingState->m_softShadowHistoryFrontIsA
     );
 
     // Transparent temporal history shares geometry and the opaque history selector.
@@ -299,22 +299,22 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
         .setDebugName(Name(s_SoftwareShadowEdgeList))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    auto edgeListBufferResult = m_graphics.createBuffer(edgeListDesc);
+    auto edgeListBufferResult = m_graphics->createBuffer(edgeListDesc);
     if(!edgeListBufferResult){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
-        m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
+        m_rayTracingState->m_swShadowEdgeListCapacity = 0u;
         return false;
     }
     Core::BufferHandle edgeListBuffer = Move(*edgeListBufferResult);
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *edgeListBuffer.get(), m_rayTracingState.m_swShadowEdgeListHeapHandle)){
+    if(!heap.isInitialized() || !ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *edgeListBuffer.get(), m_rayTracingState->m_swShadowEdgeListHeapHandle)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
-        m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
+        m_rayTracingState->m_swShadowEdgeListCapacity = 0u;
         return false;
     }
-    m_rayTracingState.m_swShadowEdgeListBuffer = Move(edgeListBuffer);
-    m_rayTracingState.m_swShadowEdgeListCapacity = edgeListCapacityRecords;
+    m_rayTracingState->m_swShadowEdgeListBuffer = Move(edgeListBuffer);
+    m_rayTracingState->m_swShadowEdgeListCapacity = edgeListCapacityRecords;
 
     LogCreatedShadowReceiverGrid(targets.shadowReceiverFactor, targets.width, targets.height, softHalfWidth, softHalfHeight);
 

@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -39,10 +47,6 @@ class RendererMaterialSystem;
 using DeferredRendererMaterialSystem = RendererMaterialSystem;
 using DeferredMaterialPassDrawItemPartitions = MaterialPassDrawItemPartitions;
 
-[[nodiscard]] FOUNDATION_INLINE b8 HasOpaquePartitionMaterialGeometry(const MaterialPassDrawItemPartitions& drawItems)noexcept{
-    return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
-}
-
 [[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
     const MaterialPassDrawItemPartitions& drawItems,
     Core::GpuTaskGraph& graph,
@@ -55,52 +59,6 @@ using DeferredMaterialPassDrawItemPartitions = MaterialPassDrawItemPartitions;
     Core::GpuTaskGraph& graph,
     Core::Alloc::ScratchArena& scratchArena
 );
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DeferredBindlessDescriptorSources{
-    Core::Sampler& sampler;
-    Core::Sampler& avboitLinearSampler;
-    Core::Buffer& sceneShadingBuffer;
-    Core::Buffer& lightBuffer;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Registers every deferred frame target in the global descriptor heap, in the fixed order the slot table expects.
-class DeferredBindlessDescriptorRegistrar final : NoCopy{
-public:
-    DeferredBindlessDescriptorRegistrar(Core::GpuDescriptorHeap& heap, DeferredFrameTargets& targets, const DeferredBindlessDescriptorSources& sources)noexcept
-        : m_heap(heap)
-        , m_targets(targets)
-        , m_bindless(targets.bindless)
-        , m_sources(sources)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<void> registerAll();
-
-
-private:
-    [[nodiscard]] Expected<void> registerLightingTargets();
-    [[nodiscard]] Expected<void> registerTransparencyTargets();
-    [[nodiscard]] Expected<void> registerSceneBuffers();
-    [[nodiscard]] Expected<void> registerCsgIntervalTargets();
-    [[nodiscard]] Expected<void> registerCausticResolveTargets();
-    [[nodiscard]] Expected<void> registerSoftShadowTargets();
-
-
-private:
-    Core::GpuDescriptorHeap& m_heap;
-    DeferredFrameTargets& m_targets;
-    DeferredBindlessFrameResources& m_bindless;
-    const DeferredBindlessDescriptorSources& m_sources;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,69 +96,6 @@ template<typename Payload, typename Record>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportResult;
-
-
-class DeferredCsgTextureImports final{
-public:
-    void capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets);
-    [[nodiscard]] b8 valid()const noexcept;
-    void publish(DeferredGraphResourceImportResult& result)const noexcept;
-
-
-private:
-    Expected<Core::GpuGraphResourceId> m_csgCapBackNormal = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgIntervalDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgIntervalId = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverEventData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverEventCount = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverSpanData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverSpanCount = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalCapNormal = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalCount = MakeUnexpected(Failure{});
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredAvboitResourceImports final{
-public:
-    void capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets, b8 clearTargets);
-    [[nodiscard]] b8 validRefractionInputs()const noexcept;
-    [[nodiscard]] b8 validRefractionSpecular()const noexcept;
-    [[nodiscard]] b8 validAvboitInputs()const noexcept;
-    void publish(DeferredGraphResourceImportResult& result)const noexcept;
-
-
-private:
-    Expected<Core::GpuGraphResourceId> m_avboitLowRaster = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitAccumColor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitAccumExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionNormalIor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionTintCoverage = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionInstance = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionSpecularRoughness = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionResolve = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitForegroundColor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitForegroundExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitTransmittance = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitCoverage = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitDepthWarp = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitControl = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitExtinctionOverflow = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitMaterialDomain = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitCsgDomain = MakeUnexpected(Failure{});
 };
 
 
@@ -351,6 +246,99 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasOpaquePartitionMaterialGeometry(in MaterialPassDrawItemPartitions drawItems){
+    return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
+}
+
+class DeferredBindlessDescriptorSources{
+    public mut RhiSampler sampler;
+    public mut RhiSampler avboitLinearSampler;
+    public mut Buffer sceneShadingBuffer;
+    public mut Buffer lightBuffer;
+
+    public DeferredBindlessDescriptorSources(mut RhiSampler inSampler, mut RhiSampler inAvboitLinearSampler, mut Buffer inSceneShadingBuffer, mut Buffer inLightBuffer){
+        this.sampler = inSampler;
+        this.avboitLinearSampler = inAvboitLinearSampler;
+        this.sceneShadingBuffer = inSceneShadingBuffer;
+        this.lightBuffer = inLightBuffer;
+    }
+}
+
+// Registers every deferred frame target in the global descriptor heap, in the fixed order the slot table expects.
+[modular]
+class DeferredBindlessDescriptorRegistrar : NoCopy{
+    private mut GpuDescriptorHeap m_heap;
+    private mut DeferredFrameTargets m_targets;
+    private mut DeferredBindlessDescriptorSources m_sources;
+
+    public DeferredBindlessDescriptorRegistrar(mut GpuDescriptorHeap heap, mut DeferredFrameTargets targets, mut DeferredBindlessDescriptorSources sources){
+        this.m_heap = heap;
+        this.m_targets = targets;
+        this.m_sources = sources;
+    }
+
+    public Expected<void> registerAll();
+
+    private Expected<void> registerLightingTargets();
+    private Expected<void> registerTransparencyTargets();
+    private Expected<void> registerSceneBuffers();
+    private Expected<void> registerCsgIntervalTargets();
+    private Expected<void> registerCausticResolveTargets();
+    private Expected<void> registerSoftShadowTargets();
+}
+
+[modular]
+class DeferredCsgTextureImports{
+    private Expected<GpuGraphResourceId> m_csgCapBackNormal = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgIntervalDepth = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgIntervalId = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgReceiverEventData = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgReceiverEventCount = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgReceiverSpanData = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgReceiverSpanCount = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgRemovedIntervalDepth = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgRemovedIntervalCapNormal = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgRemovedIntervalData = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_csgRemovedIntervalCount = MakeUnexpected(Failure());
+
+    public void capture(mut GpuTaskGraph graph, in DeferredFrameTargets deferredTargets);
+    public b8 valid()const;
+    public void publish(mut DeferredGraphResourceImportResult result)const;
+}
+
+[modular]
+class DeferredAvboitResourceImports{
+    private Expected<GpuGraphResourceId> m_avboitLowRaster = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitAccumColor = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitAccumExtinction = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_refractionDepth = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_refractionNormalIor = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_refractionTintCoverage = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_refractionInstance = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_refractionSpecularRoughness = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_refractionResolve = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitForegroundColor = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitForegroundExtinction = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitTransmittance = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitCoverage = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitDepthWarp = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitControl = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitExtinction = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitExtinctionOverflow = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitMaterialDomain = MakeUnexpected(Failure());
+    private Expected<GpuGraphResourceId> m_avboitCsgDomain = MakeUnexpected(Failure());
+
+    public void capture(mut GpuTaskGraph graph, in DeferredFrameTargets deferredTargets, in b8 clearTargets);
+    public b8 validRefractionInputs()const;
+    public b8 validRefractionSpecular()const;
+    public b8 validAvboitInputs()const;
+    public void publish(mut DeferredGraphResourceImportResult result)const;
 }
 
 

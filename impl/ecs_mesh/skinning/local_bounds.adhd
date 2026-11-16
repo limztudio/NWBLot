@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
+#include <impl/ecs_mesh/skinning/runtime_instance.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -43,21 +50,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MeshSkinningRuntimeInstance;
-
-// Replacement is atomic; no uninitialized bounds become visible through the runtime mesh provider.
-[[nodiscard]] b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance);
-
-// Graph declarations retain resources; this snapshot keeps only the reduction dispatch contract.
-struct MeshSkinningLocalBoundsDispatch{
-    Core::GpuGraphResourceId bindlessResourceSlotsResource;
-    Core::GpuGraphResourceId meshletLocalBoundsResource;
-    Core::GpuGraphResourceId localBoundsResource;
-    Core::GpuGraphPipelineId localBoundsPipeline;
-    u32 meshletCount = 0u;
-    u32 bindlessResourceSlots = 0u;
-};
-
 struct MeshSkinningLocalBoundsTask{
     struct Payload{
         Core::GraphicsRuntime& graphics;
@@ -92,6 +84,59 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_RuntimeMeshBoundsByteSize = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComputeMeshletLocalBoundsByteSize(in usize meshletCount, in u64 boundsRecordByteSize){
+    return cast<u64>(meshletCount) * boundsRecordByteSize;
+}
+
+// Replacement is atomic; no uninitialized bounds become visible through the runtime mesh provider.
+b8 CreateMeshSkinningLocalBoundsBuffers(mut GraphicsRuntime graphics, mut MeshSkinningRuntimeInstance instance){
+    instance.deformationState.invalidateCurrent();
+    if(!ValidateMeshSkinningLocalBoundsMeshletCount(instance.meshlets.size(), s_RuntimeMeshBoundsByteSize))
+        return false;
+
+    const Name partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_MeshletLocalBoundsSuffix);
+    const Name outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_LocalBoundsSuffix);
+    if(partialName == s_NameNone || outputName == s_NameNone){
+        error("MeshSkinningSystem: failed to derive runtime local bounds buffer names");
+        return false;
+    }
+
+    BufferDesc desc = BufferDesc();
+    desc
+        .setByteSize(ComputeMeshletLocalBoundsByteSize(instance.meshlets.size(), cast<u64>(s_RuntimeMeshBoundsByteSize)))
+        .setCanHaveUAVs(true)
+        .setCanHaveRawViews(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(partialName)
+    ;
+    const Expected<BufferHandle> partialsResult = graphics.createBuffer(desc);
+    if(!partialsResult.has_value()){
+        error("MeshSkinningSystem: failed to create runtime local bounds partials");
+        return false;
+    }
+
+    desc.setByteSize(cast<u64>(s_RuntimeMeshBoundsByteSize)).setDebugName(outputName);
+    const Expected<BufferHandle> outputResult = graphics.createBuffer(desc);
+    if(!outputResult.has_value()){
+        error("MeshSkinningSystem: failed to create runtime local bounds output");
+        return false;
+    }
+
+    instance.meshletLocalBoundsBuffer = partialsResult.value();
+    instance.localBoundsBuffer = outputResult.value();
+    return true;
 }
 
 

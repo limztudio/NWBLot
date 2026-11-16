@@ -582,7 +582,7 @@ b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
 
 
 b8 Builder::paintPanel(){
-    const LayoutBox* panel = m_scope->m_layout.box(0u);
+    const Optional<LayoutBox> panel = m_scope->m_layout.box(0u);
     if(!panel)
         return false;
     m_paint.pushClip(visibleClip(panel->clip));
@@ -596,7 +596,7 @@ b8 Builder::paintPanel(){
 
 b8 Builder::paintItems(){
     for(const auto& item : m_scope->m_items){
-        const LayoutBox* box = m_scope->m_layout.box(item.node);
+        const Optional<LayoutBox> box = m_scope->m_layout.box(item.node);
         if(!popupAncestorsVisible() || !box || !paintItem(item, *box))
             return false;
     }

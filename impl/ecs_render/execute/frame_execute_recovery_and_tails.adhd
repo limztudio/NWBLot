@@ -86,33 +86,33 @@ void FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FrameExecuteRecovery::discardUnacceptedGraphPackets(){
-    RendererFramePipeline& renderer = m_renderer;
+b8 FrameExecuteRecovery::discardUnacceptedGraphPackets()noexcept{
+    RendererFramePipeline& renderer = *m_renderer;
     return renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration());
 }
 
-b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
-    RendererFramePipeline& renderer = m_renderer;
+b8 FrameExecuteRecovery::executeFrameRecoveryTask()noexcept{
+    RendererFramePipeline& renderer = *m_renderer;
 
     // Retire the scope after rejection; Graphics order needs no extra wait.
     if(renderer.m_graphics.getDevice().requiresRecreation()){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
         renderer.m_deferredFrameRecoveryArmed = false;
         renderer.m_deferredFrameRecoveryRetiresTiming = false;
-        m_frameTimingTransaction.discard();
+        m_frameTimingTransaction->discard();
         return false;
     }
-    if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !m_compiledPlan.findTask(renderer.m_deferredFrameRecoveryTask).valid()){
+    if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !m_compiledPlan->findTask(renderer.m_deferredFrameRecoveryTask).valid()){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
         renderer.m_deferredFrameRecoveryArmed = false;
         renderer.m_deferredFrameRecoveryRetiresTiming = false;
-        m_frameTimingTransaction.discard();
+        m_frameTimingTransaction->discard();
         return false;
     }
-    b8 retireTiming = m_frameTimingTransaction.needsRetirement();
-    if(retireTiming && !m_frameTimingTransaction.prepareForRecovery()){
+    b8 retireTiming = m_frameTimingTransaction->needsRetirement();
+    if(retireTiming && !m_frameTimingTransaction->prepareForRecovery()){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
-        m_frameTimingTransaction.discard();
+        m_frameTimingTransaction->discard();
         retireTiming = false;
     }
     renderer.m_deferredFrameRecoveryArmed = true;
@@ -121,7 +121,7 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
     const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
         renderer.m_deferredLightingCompiledGraph,
         renderer.m_deferredFrameRecoveryTask,
-        m_scratchArena,
+        *m_scratchArena,
         renderer.m_deferredLightingTaskGraph,
         renderer.m_deferredLightingRecordedGraph,
         renderer.m_deferredLightingSubmissionTransaction,
@@ -134,18 +134,18 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
     return true;
 }
 
-b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
-    return ShouldExecuteFrameRecoveryTask(m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), m_frameTimingTransaction.needsRetirement()) ? executeFrameRecoveryTask() : true;
+b8 FrameExecuteRecovery::recoverPendingFrameSubmission()noexcept{
+    return ShouldExecuteFrameRecoveryTask(m_renderer->m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), m_frameTimingTransaction->needsRetirement()) ? executeFrameRecoveryTask() : true;
 }
 
-b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
+b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted()noexcept{
     const b8 recovered = recoverPendingFrameSubmission();
     // Record/submit while Declared; then reject remaining normal packets.
     return discardUnacceptedGraphPackets() && recovered;
 }
 
-void FrameExecuteRecovery::failFrameRenderRecovery(){
-    RendererFramePipeline& renderer = m_renderer;
+void FrameExecuteRecovery::failFrameRenderRecovery()noexcept{
+    RendererFramePipeline& renderer = *m_renderer;
     if(renderer.m_frameRenderRecoveryFailed)
         return;
     renderer.m_frameRenderRecoveryFailed = true;

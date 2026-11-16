@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -89,26 +95,8 @@ static_assert(offsetof(ShadowCombinedTemporalPushConstants, transparentMomentsOu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cross-frame Buffer* cache. keepAlive prevents key reuse; failed registrations stay uncached.
-struct RtMeshHeapHandleCacheEntry{
-    Core::BufferHandle keepAlive; // Pins the Buffer* key.
-    Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::Invalid();
-    b8 seenThisFrame = false;
-};
-
 using RtMeshHeapHandleCache = HashMap<NotNull<const Core::Buffer*>, RtMeshHeapHandleCacheEntry, Core::Alloc::GlobalArena, Hasher<NotNull<const Core::Buffer*>>, EqualTo<NotNull<const Core::Buffer*>>>;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SoftwareTransparentSamplingState{
-    Core::BindingLayoutHandle m_layout;
-    // Index zero keeps the fixed budget; index one consumes accepted sampling history.
-    Array<Core::ShaderHandle, 2> m_shaders;
-    Array<Core::ComputePipelineHandle, 2> m_pipelines;
-    SoftwareTransparentSamplingHistory m_history;
-};
 
 static_assert(sizeof(SoftwareTransparentSamplingPush) == 116u);
 static_assert(offsetof(SoftwareTransparentSamplingPush, receiverFactor) == ECSRenderDetail::s_SoftwareTransparentSamplingReceiverFactorOffset);

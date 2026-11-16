@@ -8,91 +8,49 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-#include <core/graphics/rhi/format.h>
-#include <core/graphics/runtime/runtime.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Owns UASTC slice layout plus LDR/HDR mip decode feeding texture uploads.
-struct TextureDecodedMipUpload{
-    Vector<u8, Core::Alloc::ScratchArena> bytes;
-    usize rowPitch = 0u;
-    usize sliceByteCount = 0u;
-
-
-public:
-    explicit TextureDecodedMipUpload(Core::Alloc::ScratchArena& arena)noexcept
-        : bytes(arena)
-    {}
+class TextureDecodedMipUpload{
+    public Vector<u8> bytes;
+    public usize rowPitch = 0u;
+    public usize sliceByteCount = 0u;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TextureMipDecoder final : NoCopy{
-public:
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decode(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
+[modular]
+class TextureMipDecoder : NoCopy{
+    public Expected<TextureDecodedMipUpload> decode(
+        in Texture textureAsset,
+        in TextureMipLevel mip,
+        in u32 mipLevel,
+        in Format format
+    );
 
+    public b8 decodeAndUploadStaticTextureMips(
+        in Texture textureAsset,
+        in Format format,
+        mut GraphicsRuntime graphics,
+        in TextureHandle texture,
+        mut QueueSubmissionToken outUploadToken,
+        mut b8 outDecoded
+    );
 
-private:
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
+    private Expected<TextureDecodedMipUpload> decodeLdr(
+        in Texture textureAsset,
+        in TextureMipLevel mip,
+        in u32 mipLevel,
+        in Format format
+    );
 
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
+    private Expected<TextureDecodedMipUpload> decodeHdr(
+        in Texture textureAsset,
+        in TextureMipLevel mip,
+        in u32 mipLevel,
+        in Format format
+    );
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_texture_loader{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 DecodeAndUploadStaticTextureMips(
-    const Texture& textureAsset,
-    Core::Format::Enum format,
-    Core::GraphicsRuntime& graphics,
-    const Core::TextureHandle& texture,
-    Core::QueueSubmissionToken& outUploadToken,
-    b8& outDecoded
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -327,7 +285,8 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     QueueSubmissionToken uploadToken = QueueSubmissionToken();
     b8 decoded = false;
     b8 uploaded = false;
-    uploaded = __hidden_texture_loader::DecodeAndUploadStaticTextureMips(textureAsset, format, graphics, texture, uploadToken, decoded);
+    TextureMipDecoder mipDecoder = TextureMipDecoder();
+    uploaded = mipDecoder.decodeAndUploadStaticTextureMips(textureAsset, format, graphics, texture, uploadToken, decoded);
     if(!decoded)
         return false;
     if(!uploaded){
@@ -383,6 +342,9 @@ native{
 
 
 #include <impl/assets_texture/texture_mip_decoder.adhd.h>
+#include <core/alloc/scratch.h>
+#include <core/graphics/rhi/format.h>
+#include <core/graphics/runtime/runtime.h>
 #include <global/span.h>
 #include <global/sync.h>
 #include <basisu_transcoder.h>
@@ -646,18 +608,18 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(::ArenaBase& __adhd_caller_arena, const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format)noexcept{
     __hidden_texture_mip_decoder::InitializeBasisTranscoder();
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4)
-        return decodeLdr(textureAsset, mip, mipLevel, format, arena);
+        return decodeLdr(__adhd_caller_arena, textureAsset, mip, mipLevel, format);
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4)
-        return decodeHdr(textureAsset, mip, mipLevel, format, arena);
+        return decodeHdr(__adhd_caller_arena, textureAsset, mip, mipLevel, format);
 
     LogUnsupportedTexturePayloadFormat();
     return MakeUnexpected(Failure{});
 }
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(::ArenaBase& __adhd_caller_arena, const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format)noexcept{
     if(!ValidateSupportedLdrTextureUploadFormat(format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::BC7_UNORM || format == Core::Format::RGBA8_UNORM))
         return MakeUnexpected(Failure{});
 
@@ -666,7 +628,7 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& te
     usize totalUploadByteCount = 0u;
     if(!ValidateAndComputeLdrMipUploadLayout(mip, format == Core::Format::RGBA8_UNORM, rowPitch, sliceUploadByteCount, totalUploadByteCount))
         return MakeUnexpected(Failure{});
-    TextureDecodedMipUpload upload(arena);
+    TextureDecodedMipUpload upload(__adhd_caller_arena);
     upload.bytes.resize(totalUploadByteCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         const Span<u8> destination(upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount, sliceUploadByteCount);
@@ -685,7 +647,7 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& te
     return upload;
 }
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(::ArenaBase& __adhd_caller_arena, const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format)noexcept{
     const b8 compressedOutput = Core::Format::IsHdrCompressedFormat(format);
     if(!ValidateSupportedHdrTextureUploadFormat(compressedOutput || format == Core::Format::RGBA16_FLOAT))
         return MakeUnexpected(Failure{});
@@ -696,7 +658,7 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& te
     if(!ValidateAndComputeHdrMipUploadLayout(mip, compressedOutput, rowPitch, sliceUploadByteCount, totalUploadByteCount))
         return MakeUnexpected(Failure{});
 
-    TextureDecodedMipUpload upload(arena);
+    TextureDecodedMipUpload upload(__adhd_caller_arena);
     upload.bytes.resize(totalUploadByteCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         const Span<u8> destination(upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount, sliceUploadByteCount);
@@ -714,28 +676,21 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& te
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_texture_loader{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 DecodeAndUploadStaticTextureMips(
+b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
     const Texture& textureAsset,
     const Core::Format::Enum format,
     Core::GraphicsRuntime& graphics,
     const Core::TextureHandle& texture,
     Core::QueueSubmissionToken& outUploadToken,
     b8& outDecoded
-){
+)noexcept{
     outDecoded = false;
 
     Core::Alloc::ScratchArena scratchArena(s_TextureUploadScratchArena);
-    TextureMipDecoder mipDecoder;
     Vector<TextureDecodedMipUpload, Core::Alloc::ScratchArena> decodedMips{scratchArena};
     decodedMips.reserve(textureAsset.mipLevels().size());
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
-        auto decoded = mipDecoder.decode(textureAsset, textureAsset.mipLevels()[mipIndex], static_cast<u32>(mipIndex), format, scratchArena);
+        auto decoded = this->decode(scratchArena, textureAsset, textureAsset.mipLevels()[mipIndex], static_cast<u32>(mipIndex), format);
         if(!decoded)
             return false;
         decodedMips.push_back(Move(*decoded));
@@ -784,12 +739,6 @@ b8 DecodeAndUploadStaticTextureMips(
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
     });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -56,7 +56,7 @@ public:
         , m_preparedShadowMaterialContext(arena)
         , m_preparedSceneBvh(arena)
         , m_preparedSceneTlas(arena)
-        , m_preparedSceneSwBvhTraversal(*this, arena)
+        , m_preparedSceneSwBvhTraversal(arena, *this)
         , m_preparedMeshBlasBuilds(arena)
         , m_preparedMeshSwBvhBuilds(arena)
     {}

@@ -473,7 +473,7 @@ Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& 
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: malformed prepared .font input"));
             return MakeUnexpected(AStringView("prepared font face index must be zero"));
         }
-        return Move(prepared->fontBytes);
+        return Core::Assets::AssetBytes(prepared->fontBytes.begin(), prepared->fontBytes.end(), arena);
     }
     InputFileStream stream(path, InputFileStream::binary | InputFileStream::ate);
     if(!stream.is_open())

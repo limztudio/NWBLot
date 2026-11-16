@@ -40,7 +40,7 @@ struct OpaqueSharedComputeEmulationChainInputs{
     DeferredFrameTargets& targets;
     const DeferredGraphResourceImportResult& resources;
     const MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan;
+    const RegularSharedComputeEmulationGraphPlan& plan;
     Span<const Core::GpuTaskResourceUse> objectGeometryReads;
     Core::GpuTimingSubmissionTicket*& timingTicket;
     const b8& meshViewSetupReady;

@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/optics/graph_types.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -9,11 +18,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/global.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/raytracing.h>
@@ -32,42 +38,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Ray-tracing domain owns live scene/material tables; effects retain this snapshot post-preflight plus frozen geometry/texture bundles.
-// Schedulable != dispatchable: scene prep must also succeed.
-struct RayTracingSceneGraphResources{
-    RayTracingSceneContentStamp contentStamp;
-    Core::RayTracingAccelStructHandle sceneTlas;
-    Core::GpuDescriptorHandle tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::BufferHandle materialContextSlotsBuffer;
-    Core::BufferHandle instanceMaterialBuffer;
-    Core::BufferHandle materialTypedBuffer;
-    Core::BufferHandle instanceBuffer;
-    Core::BufferHandle csgTraceContextBuffer;
-    Span<const Core::BufferHandle> csgTraceBoundsBuffers{};
-    RayTracingOpticalSceneSnapshot opticalScene;
-    u32 materialContextSlotsHeapSlot = 0u;
-    b8 hardwareAvailable = false;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept;
-};
-
-struct RayTracingSceneGraphReads{
-    // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
-    Array<Core::GpuTaskResourceUse, s_FixedSceneResourceUseCount> uses{};
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses;
-
-
-public:
-    explicit RayTracingSceneGraphReads(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : csgUses(scratchArena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept;
-};
+class RayTracingSceneGraphResources;
+class RayTracingSceneGraphReads;
 
 // Import common scene reads once per physical resource.
 // Geometry buffers and material sampled textures belong to the existing frozen resource sets supplied separately by the caller.
@@ -90,16 +62,6 @@ namespace RendererFramePipelineDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TraceResourceSetUses{
-    // Trace geometry set and trace material sampled-texture set.
-    Array<Core::GpuTaskResourceSetUse, s_TraceResourceSetUseCapacity> uses{};
-    usize useCount = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Five raytracing scene/shadow buffers shared by the caustics and shadow-visibility graph declares.
 [[nodiscard]] b8 AppendRayTracingSceneShadowBuffers(
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -113,11 +75,12 @@ struct TraceResourceSetUses{
     Core::GpuTaskGraph& graph,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
 );
-
-[[nodiscard]] TraceResourceSetUses MakeTraceResourceSetUses(
-    Core::GpuGraphResourceSetId traceGeometrySet,
-    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet
-)noexcept;
+[[nodiscard]] b8 AppendCurrentCsgRayGeometry(
+    const Core::BufferHandle& context,
+    Span<const Core::BufferHandle> bounds,
+    Core::GpuTaskGraph& graph,
+    Vector<Core::GpuTaskResourceUse, ::ArenaBase>& resourceUses
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,6 +98,81 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Ray-tracing domain owns live scene/material tables; effects retain this snapshot post-preflight plus frozen geometry/texture bundles.
+// Schedulable != dispatchable: scene prep must also succeed.
+class RayTracingSceneGraphResources{
+    public RayTracingSceneContentStamp contentStamp;
+    public RayTracingAccelStructHandle sceneTlas;
+    public GpuDescriptorHandle tlasHeapHandle;
+    public BufferHandle materialContextSlotsBuffer;
+    public BufferHandle instanceMaterialBuffer;
+    public BufferHandle materialTypedBuffer;
+    public BufferHandle instanceBuffer;
+    public BufferHandle csgTraceContextBuffer;
+    public Span<BufferHandle> csgTraceBoundsBuffers;
+    public RayTracingOpticalSceneSnapshot opticalScene;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public b8 hardwareAvailable = false;
+
+    public b8 valid()const{
+        return this.hardwareAvailable
+            && this.sceneTlas.valid()
+            && this.tlasHeapHandle.valid()
+            && this.materialContextSlotsBuffer.valid()
+            && this.instanceMaterialBuffer.valid()
+            && this.materialTypedBuffer.valid()
+            && this.instanceBuffer.valid()
+            && this.opticalScene.valid();
+    }
+}
+
+class RayTracingSceneGraphReads{
+    // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
+    public Array<GpuTaskResourceUse, s_FixedSceneResourceUseCount> uses;
+    public Vector<GpuTaskResourceUse> csgUses;
+
+    public b8 valid()const{
+        for(usize index = 0u; index < this.uses.size(); ++index){
+            if(!this.uses[index].resource.valid())
+                return false;
+        }
+        for(usize index = 0u; index < this.csgUses.size(); ++index){
+            if(!this.csgUses[index].resource.valid())
+                return false;
+        }
+        return true;
+    }
+}
+
+class TraceResourceSetUses{
+    // Trace geometry set and trace material sampled-texture set.
+    public Array<GpuTaskResourceSetUse, s_TraceResourceSetUseCapacity> uses;
+    public usize useCount = 0u;
+}
+
+TraceResourceSetUses MakeTraceResourceSetUses(in GpuGraphResourceSetId traceGeometrySet, in GpuGraphResourceSetId traceMaterialSampledTextureSet){
+    TraceResourceSetUses result;
+    if(traceGeometrySet.valid()){
+        GpuTaskResourceSetUse use;
+        use.resourceSet = traceGeometrySet;
+        use.requiredState = ResourceStates::ShaderResource;
+        use.access = GpuTaskResourceAccess::Read;
+        result.uses[result.useCount++] = use;
+    }
+    if(traceMaterialSampledTextureSet.valid()){
+        GpuTaskResourceSetUse use;
+        use.resourceSet = traceMaterialSampledTextureSet;
+        use.requiredState = ResourceStates::ShaderResource;
+        use.access = GpuTaskResourceAccess::Read;
+        result.uses[result.useCount++] = use;
+    }
+    return result;
 }
 
 

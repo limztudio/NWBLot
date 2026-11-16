@@ -535,16 +535,16 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
 }
 
 RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const noexcept{
-    return RayTracingShadowPreparationResourceSnapshot{
-        .sceneTlas = m_rayTracingState.m_tlas,
-        .sceneTlasBackingBuffer = m_rayTracingState.m_tlas ? m_rayTracingState.m_tlas->getBackingBufferHandle() : nullptr,
-        .bvhSortKeysBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortKeysBuffer,
-        .bvhSortPayloadBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortPayloadBuffer,
-        .bvhVisitCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhVisitCounterBuffer,
-        .swShadowEdgeCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeCounterBuffer,
-        .swShadowEdgeListBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeListBuffer,
-        .swShadowIndirectArgsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowIndirectArgsBuffer,
-    };
+    RayTracingShadowPreparationResourceSnapshot snapshot;
+    snapshot.sceneTlas = m_rayTracingState.m_tlas;
+    snapshot.sceneTlasBackingBuffer = m_rayTracingState.m_tlas ? m_rayTracingState.m_tlas->getBackingBufferHandle() : nullptr;
+    snapshot.bvhSortKeysBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortKeysBuffer;
+    snapshot.bvhSortPayloadBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortPayloadBuffer;
+    snapshot.bvhVisitCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhVisitCounterBuffer;
+    snapshot.swShadowEdgeCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeCounterBuffer;
+    snapshot.swShadowEdgeListBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeListBuffer;
+    snapshot.swShadowIndirectArgsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowIndirectArgsBuffer;
+    return snapshot;
 }
 
 RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
@@ -557,41 +557,41 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
             break;
         }
     }
-    return RayTracingDeferredGraphResourceSnapshot{
-        .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
-        .csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr,
-        .rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u
-            ? Span<const Core::QueueSubmissionToken>(state.m_rayTraceContextReadSubmissionTokens.data(), contextReadTokenCount)
-            : Span<const Core::QueueSubmissionToken>{},
-        .csgTraceBoundsBuffers = hasCsgTrace ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds) : Span<const Core::BufferHandle>{},
-        .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
-        .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
-        .shadowInstanceBuffer = state.m_shadowInstanceBuffer,
-        .causticEmissionTargetBuffer = state.m_causticEmissionTargets.buffer,
-        .surfelFrameConstantsBuffer = state.m_surfelConstants,
-        .hardwareTransparentCrossingsBuffer = state.m_hardwareTransparentShadow.m_crossingsBuffer,
-        .hardwareTransparentOverflowListBuffer = state.m_hardwareTransparentShadow.m_overflowListBuffer,
-        .hardwareTransparentOverflowArgsBuffer = state.m_hardwareTransparentShadow.m_overflowArgsBuffer,
-        .sceneBvhNodeBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneBvhNodeBuffer,
-        .sceneInstanceBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneInstanceBuffer,
-        .sceneTlas = state.m_tlas,
-        .causticAccumulatorInitialized = state.m_causticAccumulatorInitialized,
-        .surfelUsesHardwareTrace = state.m_surfelUseHwTrace,
-        .surfelSplitGraphPipelinesReady = AreSurfelSplitGraphPipelinesReady(
-            static_cast<b8>(state.m_surfelAgeFreePipeline),
-            static_cast<b8>(state.m_surfelHashBuildPipeline),
-            static_cast<b8>(state.m_surfelSpawnPipeline),
-            state.m_surfelUseHwTrace,
-            state.m_surfelUseCsgTrace,
-            static_cast<b8>(state.m_surfelTraceCsgHwPipeline),
-            static_cast<b8>(state.m_surfelTraceHwPipeline),
-            static_cast<b8>(state.m_surfelTraceCsgPipeline),
-            static_cast<b8>(state.m_surfelTracePipeline),
-            static_cast<b8>(state.m_surfelResolvePipeline),
-            static_cast<b8>(state.m_surfelUpsamplePipeline),
-            static_cast<b8>(state.m_surfelTraceBuildArgsPipeline)
-        ),
-    };
+    RayTracingDeferredGraphResourceSnapshot snapshot;
+    snapshot.materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer;
+    snapshot.csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr;
+    snapshot.rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u
+        ? Span<const Core::QueueSubmissionToken>(state.m_rayTraceContextReadSubmissionTokens.data(), contextReadTokenCount)
+        : Span<const Core::QueueSubmissionToken>{};
+    snapshot.csgTraceBoundsBuffers = hasCsgTrace ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds) : Span<const Core::BufferHandle>{};
+    snapshot.shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
+    snapshot.shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
+    snapshot.shadowInstanceBuffer = state.m_shadowInstanceBuffer;
+    snapshot.causticEmissionTargetBuffer = state.m_causticEmissionTargets.buffer;
+    snapshot.surfelFrameConstantsBuffer = state.m_surfelConstants;
+    snapshot.hardwareTransparentCrossingsBuffer = state.m_hardwareTransparentShadow.m_crossingsBuffer;
+    snapshot.hardwareTransparentOverflowListBuffer = state.m_hardwareTransparentShadow.m_overflowListBuffer;
+    snapshot.hardwareTransparentOverflowArgsBuffer = state.m_hardwareTransparentShadow.m_overflowArgsBuffer;
+    snapshot.sceneBvhNodeBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneBvhNodeBuffer;
+    snapshot.sceneInstanceBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneInstanceBuffer;
+    snapshot.sceneTlas = state.m_tlas;
+    snapshot.causticAccumulatorInitialized = state.m_causticAccumulatorInitialized;
+    snapshot.surfelUsesHardwareTrace = state.m_surfelUseHwTrace;
+    snapshot.surfelSplitGraphPipelinesReady = AreSurfelSplitGraphPipelinesReady(
+        static_cast<b8>(state.m_surfelAgeFreePipeline),
+        static_cast<b8>(state.m_surfelHashBuildPipeline),
+        static_cast<b8>(state.m_surfelSpawnPipeline),
+        state.m_surfelUseHwTrace,
+        state.m_surfelUseCsgTrace,
+        static_cast<b8>(state.m_surfelTraceCsgHwPipeline),
+        static_cast<b8>(state.m_surfelTraceHwPipeline),
+        static_cast<b8>(state.m_surfelTraceCsgPipeline),
+        static_cast<b8>(state.m_surfelTracePipeline),
+        static_cast<b8>(state.m_surfelResolvePipeline),
+        static_cast<b8>(state.m_surfelUpsamplePipeline),
+        static_cast<b8>(state.m_surfelTraceBuildArgsPipeline)
+    );
+    return snapshot;
 }
 
 

@@ -599,7 +599,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         reflectionHardwareReads.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
         reflectionHardwareReads.push_back(ReadUse(inputs.lights));
     }
-    const RendererFramePipelineDetail::TraceResourceSetUses reflectionSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
+    const TraceResourceSetUses reflectionSets = MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
     const ReflectionGraphInputs reflectionInputs{
         .raytracingSystem = m_raytracingSystem,
         .opaqueDepth = inputs.depth,

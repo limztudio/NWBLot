@@ -373,7 +373,7 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
 
 
 void ShadowPreparePacketValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = m_pipeline;
+    const RendererFramePipeline& pipeline = *m_pipeline;
     // Software clears belong to the Shadow Preparation packet; a split would omit them.
     outResult.softwareBvhBuildsMerged =
         !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()

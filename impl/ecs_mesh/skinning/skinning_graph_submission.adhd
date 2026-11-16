@@ -204,23 +204,6 @@ b8 MeshSkinningLocalBoundsTask::Record(const Payload& payload, Core::CommandList
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskSchedulingHint MeshSkinningGraphDetail::MakeSerialMergeScheduling(const Core::GpuTaskCostHint::Enum cost)noexcept{
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = cost;
-    scheduling.overlapPreferred = false;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    // The external renderer consumes one accepted skinning state on this serial timeline.
-    scheduling.mergeWithPrevious = true;
-    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
-    return scheduling;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 TaskGraphSkinningFinalizerTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
     if(payload.plans.empty())
         return false;
@@ -299,14 +282,14 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     localBoundsDispatches.reserve(dispatchPlans.size());
     for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
         if(plan.updatesMeshletBounds){
-            localBoundsDispatches.push_back({
-                .bindlessResourceSlotsResource = plan.bindlessResourceSlotsResource,
-                .meshletLocalBoundsResource = plan.meshletLocalBoundsResource,
-                .localBoundsResource = plan.localBoundsResource,
-                .localBoundsPipeline = plan.localBoundsPipeline,
-                .meshletCount = plan.meshletCount,
-                .bindlessResourceSlots = plan.bindlessResourceSlots,
-            });
+            localBoundsDispatches.push_back(MeshSkinningLocalBoundsDispatch(
+                plan.bindlessResourceSlotsResource,
+                plan.meshletLocalBoundsResource,
+                plan.localBoundsResource,
+                plan.localBoundsPipeline,
+                plan.meshletCount,
+                plan.bindlessResourceSlots
+            ));
         }
     }
     const Span<const MeshSkinningGraphDispatchPlan> allDispatchPlans(dispatchPlans);
@@ -327,7 +310,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
         deformationDesc
             .setIdentity(s_FrameDeformationTaskName)
             .setMarkerLabel(s_FrameDeformationTaskLabel)
-            .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
+            .setScheduling(MakeSkinningDispatchScheduling())
             .setResourceUses(resourceUses->deformation)
         ;
         if(previousFrameStateSourceCount != 0u)
@@ -348,7 +331,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     postDispatchDesc
         .setIdentity(s_FrameBoundsRepackTaskName)
         .setMarkerLabel(s_FrameBoundsRepackTaskLabel)
-        .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
+        .setScheduling(MakeSkinningDispatchScheduling())
         .setResourceUses(resourceUses->postDispatch)
     ;
     if(previousFrameStateSourceCount != 0u)
@@ -366,7 +349,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     localBoundsDesc
         .setIdentity(s_FrameLocalBoundsTaskName)
         .setMarkerLabel(s_FrameLocalBoundsTaskLabel)
-        .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
+        .setScheduling(MakeSkinningDispatchScheduling())
         .setDependencies({ &postDispatchTask, 1u })
         .setResourceUses(resourceUses->localBounds)
     ;
@@ -382,7 +365,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     const Core::GpuTaskDesc finalizerDesc = Core::GpuTaskDesc{}
         .setIdentity(s_FrameFinalizeStatesTaskName)
         .setMarkerLabel(s_FrameFinalizeStatesTaskLabel)
-        .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
+        .setScheduling(MakeSkinningDispatchScheduling())
         .setDependencies({ &localBoundsTask, 1u })
         .setResourceUses(resourceUses->finalizer)
     ;
@@ -661,48 +644,6 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRunt
         return fail();
     resources.bindlessHeapHandles.resourceSlots = *resourceSlots;
     return true;
-}
-
-void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeResources& resources)noexcept{
-    Core::GpuDescriptorHeap& heap = m_graphics->getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        const auto release = [&](Core::GpuDescriptorHandle& handle){
-            if(handle.valid())
-                heap.free(handle);
-            handle = Core::GpuDescriptorHandle::Invalid();
-        };
-        release(resources.bindlessHeapHandles.resourceSlots);
-        for(Core::GpuDescriptorHandle& handle : resources.bindlessHeapHandles.storageBuffers)
-            release(handle);
-    }
-    resources.bindlessHeapHandles = MeshSkinningRuntimeBindlessHeapHandles{};
-    resources.bindlessResourceSlots = MeshSkinningBindlessResourceSlots{};
-    resources.bindlessResourceSlotsUploaded = false;
-}
-
-void MeshSkinningSystem::resolveFrameTaskGraphAttempt(const Core::GpuCompiledGraph::ReadView& planAccess)noexcept{
-    // This graph owns only skinning tasks and built-in copies/uploads; their discard hooks are absent or clear a token without callbacks or allocation.
-    if(!planAccess.valid())
-        return;
-    const u64 recordingAttemptGeneration = m_frameRecordedGraph.recordingAttemptGeneration();
-    if(recordingAttemptGeneration != 0u && !m_frameSubmissionTransaction.discardUnaccepted(m_frameTaskGraph, m_frameCompiledGraph, recordingAttemptGeneration))
-        FOUNDATION_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
-}
-
-void MeshSkinningSystem::resetFrameTaskGraph()noexcept{
-    {
-        const Core::GpuCompiledGraph::ReadView planAccess(m_frameCompiledGraph);
-        resolveFrameTaskGraphAttempt(planAccess);
-        if(planAccess.valid()){
-            m_frameSubmissionTransaction.reset(m_frameCompiledGraph);
-            m_frameRecordedGraph.reset(m_frameCompiledGraph);
-        }
-    }
-
-    m_frameTaskGraph.reset();
-    m_frameTaskGraphAnalysis.reset();
-    m_frameTaskGraphQueueAssignments.reset();
-    m_frameCompiledGraph.reset();
 }
 
 

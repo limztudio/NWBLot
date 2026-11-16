@@ -524,8 +524,9 @@ void DeferredPresentGraphTask::AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const DeferredFrameTailInputs& inputs){
+Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const DeferredFrameTailInputs& inputs)noexcept{
     using namespace RendererTaskGraphDetail;
+    Core::GpuTaskGraph& graph = *m_graph;
     DeferredFrameTailResult result{};
     if(!inputs.terminalPresentationTask.valid())
         return MakeUnexpected(Failure{});
@@ -552,7 +553,7 @@ Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const Deferr
         const Array<Core::GpuTaskId, 1> historyCopyDependencies = { inputs.terminalPresentationTask };
         Core::GpuTaskDesc historyCopyDesc;
         historyCopyDesc.setIdentity(Name(s_RenderNameRenderLaggedHistoryCopy)).setMarkerLabel("Lagged Lighting History Copy").setScheduling(historyCopyScheduling).setDependencies(historyCopyDependencies);
-        const auto historyCopyTaskResult = m_graph.addCopyTextureTask(historyCopyDesc, Core::GpuCopyTextureTaskDesc{ .regions = historyCopyRegions.data(), .regionCount = historyCopyRegions.size(), .acceptedToken = &inputs.historyCopySubmissionToken, });
+        const auto historyCopyTaskResult = graph.addCopyTextureTask(historyCopyDesc, Core::GpuCopyTextureTaskDesc{ .regions = historyCopyRegions.data(), .regionCount = historyCopyRegions.size(), .acceptedToken = &inputs.historyCopySubmissionToken, });
         if(!historyCopyTaskResult){
             result.historyCopyTask = {};
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
@@ -564,7 +565,7 @@ Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const Deferr
     // Recovery is a late independent Graphics tail.
     // It deliberately has no packet dependency on normal work: a rejected suffix must not prevent it from retiring the accepted frame prefix.
     // Its compiled packet asks the graph transaction to join every accepted non-Graphics physical queue at submit time.
-    const auto recoveryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_RenderNameRenderFrameRecoveryTiming), "Frame Recovery Timing"));
+    const auto recoveryDomainResult = graph.importHazardDomain(HazardDomainDesc(Name(s_RenderNameRenderFrameRecoveryTiming), "Frame Recovery Timing"));
     if(!recoveryDomainResult){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
         return MakeUnexpected(Failure{});
@@ -580,7 +581,7 @@ Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const Deferr
     recoveryScheduling.isRecoverySubmission = true;
     Core::GpuTaskDesc recoveryDesc;
     recoveryDesc.setIdentity(Name(s_RenderNameRenderFrameRecovery)).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryResourceUses);
-    const auto recoveryTaskResult = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
+    const auto recoveryTaskResult = graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
         recoveryDesc,
         ECSRenderDetail::FrameRecoveryGraphTask::Payload{ .frameTimingTransaction = inputs.frameTimingTransaction, .armed = inputs.recoveryArmed, .retiresFrameTiming = inputs.recoveryRetiresFrameTiming, });
     if(!recoveryTaskResult){

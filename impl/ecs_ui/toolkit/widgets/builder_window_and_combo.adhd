@@ -168,7 +168,7 @@ b8 Builder::endWindow(){
         const DisplayMetrics& display = m_paint.displayMetrics();
         const Rect viewport = ResolveWindowFirstUseViewport(m_scope->m_bounds, display);
         arranged = m_scope->m_layout.arrange(viewport);
-        const LayoutBox* root = m_scope->m_layout.box(0u);
+        const Optional<LayoutBox> root = m_scope->m_layout.box(0u);
         if(arranged && root){
             arranged = TryFinalizeWindowFirstUseArrangement(
                 m_scope->m_window.options,

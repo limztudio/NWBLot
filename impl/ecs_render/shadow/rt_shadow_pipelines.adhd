@@ -85,6 +85,27 @@ namespace __hidden_rt_shadow_pipelines{
     return true;
 }
 
+[[nodiscard]] b8 EnsureSwShadowPassPipeline(
+    RendererShaderSystem& shaderSystem,
+    Core::GraphicsRuntime& graphics,
+    const Core::BindingLayoutHandle& bindingLayout,
+    Core::ShaderHandle& shader,
+    Core::ComputePipelineHandle& pipeline,
+    const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember,
+    const NameText<char> debugLabel
+)noexcept{
+    if(pipeline)
+        return true;
+
+    if(!shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([shaderMember](const ShadowSubsystem& s){ return s.*shaderMember; }), Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
+        return false;
+    if(!CreateHeapComputePipeline(graphics.getDevice(), shader, bindingLayout, false, pipeline)){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -95,38 +116,38 @@ namespace __hidden_rt_shadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ShadowPipelineSet::ensureShadowPipeline(){
-    if(m_shadow.m_shadowPipeline)
+b8 ShadowPipelineSet::ensureShadowPipeline()noexcept{
+    if(m_shadow->m_shadowPipeline)
         return true;
-    if(m_shadow.m_shadowPipelineFailed)
+    if(m_shadow->m_shadowPipelineFailed)
         return false;
-    if(!m_graphics.queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
-        m_shadow.m_shadowPipelineFailed = true;
+    if(!m_graphics->queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics->queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        m_shadow->m_shadowPipelineFailed = true;
         return false;
     }
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
-        m_shadow.m_shadowPipelineFailed = true;
+        m_shadow->m_shadowPipelineFailed = true;
         return false;
     }
 
     // Trace layouts are push-only; resources come from the global heap.
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
-    if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShadowRqSoftPushConstants), Core::ShaderType::Compute, m_shadow.m_shadowBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(ShadowRqSoftPushConstants), Core::ShaderType::Compute, m_shadow->m_shadowBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow binding layout"));
-        m_shadow.m_shadowPipelineFailed = true;
+        m_shadow->m_shadowPipelineFailed = true;
         return false;
     }
 
     if(
-        !m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowRayqueryCs; }), Core::ShaderArchive::s_DefaultVariant, s_ShadowRayQueryShaderDebugName, m_shadow.m_shadowShader)
-        || !CreateHeapComputePipeline(device, m_shadow.m_shadowShader, m_shadow.m_shadowBindingLayout, true, m_shadow.m_shadowPipeline)
+        !m_shaderSystem->loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowRayqueryCs; }), Core::ShaderArchive::s_DefaultVariant, s_ShadowRayQueryShaderDebugName, m_shadow->m_shadowShader)
+        || !CreateHeapComputePipeline(device, m_shadow->m_shadowShader, m_shadow->m_shadowBindingLayout, true, m_shadow->m_shadowPipeline)
     ){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
-        m_shadow.m_shadowPipelineFailed = true;
+        m_shadow->m_shadowPipelineFailed = true;
         return false;
     }
 
@@ -134,37 +155,37 @@ b8 ShadowPipelineSet::ensureShadowPipeline(){
     return true;
 }
 
-b8 ShadowPipelineSet::ensureShadowSoftPipeline(){
-    if(m_softShadow.m_shadowSoftPipeline)
+b8 ShadowPipelineSet::ensureShadowSoftPipeline()noexcept{
+    if(m_softShadow->m_shadowSoftPipeline)
         return true;
-    if(m_softShadow.m_shadowSoftPipelineFailed)
+    if(m_softShadow->m_shadowSoftPipelineFailed)
         return false;
-    if(!m_graphics.queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
-        m_softShadow.m_shadowSoftPipelineFailed = true;
+    if(!m_graphics->queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics->queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        m_softShadow->m_shadowSoftPipelineFailed = true;
         return false;
     }
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
-        m_softShadow.m_shadowSoftPipelineFailed = true;
+        m_softShadow->m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     // Soft and hard traces share their push-only layout.
-    if(!m_shadow.m_shadowBindingLayout){
+    if(!m_shadow->m_shadowBindingLayout){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
-        m_softShadow.m_shadowSoftPipelineFailed = true;
+        m_softShadow->m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     if(
-        !m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowRayquerySoftCs; }), Core::ShaderArchive::s_DefaultVariant, s_ShadowRayQuerySoftShaderDebugName, m_softShadow.m_shadowSoftShader)
-        || !CreateHeapComputePipeline(device, m_softShadow.m_shadowSoftShader, m_shadow.m_shadowBindingLayout, true, m_softShadow.m_shadowSoftPipeline)
+        !m_shaderSystem->loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowRayquerySoftCs; }), Core::ShaderArchive::s_DefaultVariant, s_ShadowRayQuerySoftShaderDebugName, m_softShadow->m_shadowSoftShader)
+        || !CreateHeapComputePipeline(device, m_softShadow->m_shadowSoftShader, m_shadow->m_shadowBindingLayout, true, m_softShadow->m_shadowSoftPipeline)
     ){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
-        m_softShadow.m_shadowSoftPipelineFailed = true;
+        m_softShadow->m_shadowSoftPipelineFailed = true;
         return false;
     }
 
@@ -172,22 +193,22 @@ b8 ShadowPipelineSet::ensureShadowSoftPipeline(){
     return true;
 }
 
-b8 ShadowPipelineSet::ensureSwShadowPipeline(){
-    if(m_shadow.m_swShadowPipelineFailed)
+b8 ShadowPipelineSet::ensureSwShadowPipeline()noexcept{
+    if(m_shadow->m_swShadowPipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
-        m_shadow.m_swShadowPipelineFailed = true;
+        m_shadow->m_swShadowPipelineFailed = true;
         return false;
     }
 
-    if(!m_shadow.m_swShadowBindingLayout){
-        if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(SwShadowHeapPushConstants), Core::ShaderType::Compute, m_shadow.m_swShadowBindingLayout)){
+    if(!m_shadow->m_swShadowBindingLayout){
+        if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(SwShadowHeapPushConstants), Core::ShaderType::Compute, m_shadow->m_swShadowBindingLayout)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create software shadow binding layout"));
-            m_shadow.m_swShadowPipelineFailed = true;
+            m_shadow->m_swShadowPipelineFailed = true;
             return false;
         }
 
@@ -201,14 +222,14 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
             .setDebugName(Name(s_SoftwareShadowEdgeCounter))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        auto swShadowEdgeCounterBufferResult = m_graphics.createBuffer(edgeCounterDesc);
+        auto swShadowEdgeCounterBufferResult = m_graphics->createBuffer(edgeCounterDesc);
         if(swShadowEdgeCounterBufferResult)
-            m_shadow.m_swShadowEdgeCounterBuffer = Move(*swShadowEdgeCounterBufferResult);
+            m_shadow->m_swShadowEdgeCounterBuffer = Move(*swShadowEdgeCounterBufferResult);
         else
-            m_shadow.m_swShadowEdgeCounterBuffer.reset();
+            m_shadow->m_swShadowEdgeCounterBuffer.reset();
         if(!swShadowEdgeCounterBufferResult){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
-            m_shadow.m_swShadowPipelineFailed = true;
+            m_shadow->m_swShadowPipelineFailed = true;
             return false;
         }
 
@@ -222,161 +243,148 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
             .setDebugName(Name(s_SoftwareShadowIndirectArgs))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        auto swShadowIndirectArgsBufferResult = m_graphics.createBuffer(indirectArgsDesc);
+        auto swShadowIndirectArgsBufferResult = m_graphics->createBuffer(indirectArgsDesc);
         if(swShadowIndirectArgsBufferResult)
-            m_shadow.m_swShadowIndirectArgsBuffer = Move(*swShadowIndirectArgsBufferResult);
+            m_shadow->m_swShadowIndirectArgsBuffer = Move(*swShadowIndirectArgsBufferResult);
         else
-            m_shadow.m_swShadowIndirectArgsBuffer.reset();
+            m_shadow->m_swShadowIndirectArgsBuffer.reset();
         if(!swShadowIndirectArgsBufferResult){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
-            m_shadow.m_swShadowPipelineFailed = true;
+            m_shadow->m_swShadowPipelineFailed = true;
             return false;
         }
     }
 
     const b8 heapResourcesReady =
-        EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_shadow.m_swShadowEdgeCounterBuffer.get(), m_shadow.m_swShadowEdgeCounterHeapHandle)
-        && EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_shadow.m_swShadowIndirectArgsBuffer.get(), m_shadow.m_swShadowIndirectArgsHeapHandle)
+        EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_shadow->m_swShadowEdgeCounterBuffer.get(), m_shadow->m_swShadowEdgeCounterHeapHandle)
+        && EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_shadow->m_swShadowIndirectArgsBuffer.get(), m_shadow->m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
-        m_shadow.m_swShadowPipelineFailed = true;
+        m_shadow->m_swShadowPipelineFailed = true;
         return false;
     }
 
     const b8 passesReady =
-        ensureSwShadowPassPipeline(m_shadow.m_swShadowOpaquePrepassShader, m_shadow.m_swShadowOpaquePrepassPipeline, &ShadowSubsystem::swShadowOpaquePrepassCs, "ECSRender_SwShadowOpaquePrepass")
-        && ensureSwShadowPassPipeline(m_shadow.m_swShadowSoftOpaqueShader, m_shadow.m_swShadowSoftOpaquePipeline, &ShadowSubsystem::swShadowSoftOpaqueCs, "ECSRender_SwShadowSoftOpaque")
-        && ensureSwShadowPassPipeline(m_shadow.m_swShadowTransparentCoarseShader, m_shadow.m_swShadowTransparentCoarsePipeline, &ShadowSubsystem::swShadowTransparentCoarseCs, "ECSRender_SwShadowTransparentCoarse")
-        && ensureSwShadowPassPipeline(m_shadow.m_swShadowTransparentResolveShader, m_shadow.m_swShadowTransparentResolvePipeline, &ShadowSubsystem::swShadowTransparentResolveCs, "ECSRender_SwShadowTransparentResolve")
-        && ensureSwShadowPassPipeline(m_shadow.m_swShadowTransparentClassifyShader, m_shadow.m_swShadowTransparentClassifyPipeline, &ShadowSubsystem::swShadowTransparentClassifyCs, "ECSRender_SwShadowTransparentClassify")
-        && ensureSwShadowPassPipeline(m_shadow.m_swShadowTransparentBuildArgsShader, m_shadow.m_swShadowTransparentBuildArgsPipeline, &ShadowSubsystem::swShadowTransparentBuildargsCs, "ECSRender_SwShadowTransparentBuildArgs")
-        && ensureSwShadowPassPipeline(m_shadow.m_swShadowTransparentIndirectShader, m_shadow.m_swShadowTransparentIndirectPipeline, &ShadowSubsystem::swShadowTransparentIndirectCs, "ECSRender_SwShadowTransparentIndirect")
+        __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowOpaquePrepassShader, m_shadow->m_swShadowOpaquePrepassPipeline, &ShadowSubsystem::swShadowOpaquePrepassCs, "ECSRender_SwShadowOpaquePrepass")
+        && __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowSoftOpaqueShader, m_shadow->m_swShadowSoftOpaquePipeline, &ShadowSubsystem::swShadowSoftOpaqueCs, "ECSRender_SwShadowSoftOpaque")
+        && __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowTransparentCoarseShader, m_shadow->m_swShadowTransparentCoarsePipeline, &ShadowSubsystem::swShadowTransparentCoarseCs, "ECSRender_SwShadowTransparentCoarse")
+        && __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowTransparentResolveShader, m_shadow->m_swShadowTransparentResolvePipeline, &ShadowSubsystem::swShadowTransparentResolveCs, "ECSRender_SwShadowTransparentResolve")
+        && __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowTransparentClassifyShader, m_shadow->m_swShadowTransparentClassifyPipeline, &ShadowSubsystem::swShadowTransparentClassifyCs, "ECSRender_SwShadowTransparentClassify")
+        && __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowTransparentBuildArgsShader, m_shadow->m_swShadowTransparentBuildArgsPipeline, &ShadowSubsystem::swShadowTransparentBuildargsCs, "ECSRender_SwShadowTransparentBuildArgs")
+        && __hidden_rt_shadow_pipelines::EnsureSwShadowPassPipeline(*m_shaderSystem, *m_graphics, m_shadow->m_swShadowBindingLayout, m_shadow->m_swShadowTransparentIndirectShader, m_shadow->m_swShadowTransparentIndirectPipeline, &ShadowSubsystem::swShadowTransparentIndirectCs, "ECSRender_SwShadowTransparentIndirect")
         && ensureSoftwareTransparentSamplingPipeline()
     ;
     if(!passesReady){
-        m_shadow.m_swShadowPipelineFailed = true;
+        m_shadow->m_swShadowPipelineFailed = true;
         return false;
     }
     return true;
 }
 
-b8 ShadowPipelineSet::ensureSoftShadowResolvePipeline(){
-    auto& resolve = m_shadow.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftShadowResolvePipeline()noexcept{
+    auto& resolve = m_shadow->m_softShadowResolve;
     if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
         return true;
     if(resolve.m_scalar.m_failed)
         return false;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     if(!device.getDescriptorHeap().isInitialized())
         return false;
-    if(!EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShadowResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
+    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(ShadowResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
         resolve.m_scalar.m_failed = true;
         return false;
     }
-    return __hidden_rt_shadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, m_shaderSystem, device, resolve.m_scalar);
+    return __hidden_rt_shadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, *m_shaderSystem, device, resolve.m_scalar);
 }
 
-b8 ShadowPipelineSet::ensureShadowGeometryDownsamplePipeline(){
-    if(m_softShadow.m_shadowGeometryDownsamplePipeline)
+b8 ShadowPipelineSet::ensureShadowGeometryDownsamplePipeline()noexcept{
+    if(m_softShadow->m_shadowGeometryDownsamplePipeline)
         return true;
-    if(m_softShadow.m_shadowGeometryDownsamplePipelineFailed)
+    if(m_softShadow->m_shadowGeometryDownsamplePipelineFailed)
         return false;
 
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        m_arena,
-        m_graphics.getDevice(),
-        m_shaderSystem,
+        *m_arena,
+        m_graphics->getDevice(),
+        *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowGeometryDownsampleCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         s_ShadowGeometryDownsampleShaderScope,
         sizeof(ShadowGeometryDownsamplePushConstants),
         false,
-        m_softShadow.m_shadowGeometryDownsampleBindingLayout,
-        m_softShadow.m_shadowGeometryDownsampleShader,
-        m_softShadow.m_shadowGeometryDownsamplePipeline
+        m_softShadow->m_shadowGeometryDownsampleBindingLayout,
+        m_softShadow->m_shadowGeometryDownsampleShader,
+        m_softShadow->m_shadowGeometryDownsamplePipeline
     )){
-        m_softShadow.m_shadowGeometryDownsamplePipelineFailed = true;
+        m_softShadow->m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
     }
     return true;
 }
 
-b8 ShadowPipelineSet::ensureSoftTransparentResolvePipeline(){
-    auto& resolve = m_shadow.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftTransparentResolvePipeline()noexcept{
+    auto& resolve = m_shadow->m_softShadowResolve;
     if(resolve.m_rgb.m_wavelet.m_pipeline && resolve.m_rgb.m_upsample.m_pipeline)
         return true;
     if(resolve.m_rgb.m_failed || !resolve.m_bindingLayout)
         return false;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     if(!device.getDescriptorHeap().isInitialized())
         return false;
-    return __hidden_rt_shadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveRgbCs, m_shaderSystem, device, resolve.m_rgb);
+    return __hidden_rt_shadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveRgbCs, *m_shaderSystem, device, resolve.m_rgb);
 }
 
-b8 ShadowPipelineSet::ensureShadowReprojectMergePipeline(){
-    if(m_softShadow.m_shadowReprojectMergePipeline)
+b8 ShadowPipelineSet::ensureShadowReprojectMergePipeline()noexcept{
+    if(m_softShadow->m_shadowReprojectMergePipeline)
         return true;
-    if(m_softShadow.m_shadowReprojectMergePipelineFailed)
+    if(m_softShadow->m_shadowReprojectMergePipelineFailed)
         return false;
 
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        m_arena,
-        m_graphics.getDevice(),
-        m_shaderSystem,
+        *m_arena,
+        m_graphics->getDevice(),
+        *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowReprojectMergeCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         s_SoftShadowReprojectMergeShaderScope,
         sizeof(ShadowReprojectMergePushConstants),
         false,
-        m_softShadow.m_shadowReprojectMergeBindingLayout,
-        m_softShadow.m_shadowReprojectMergeShader,
-        m_softShadow.m_shadowReprojectMergePipeline
+        m_softShadow->m_shadowReprojectMergeBindingLayout,
+        m_softShadow->m_shadowReprojectMergeShader,
+        m_softShadow->m_shadowReprojectMergePipeline
     )){
-        m_softShadow.m_shadowReprojectMergePipelineFailed = true;
+        m_softShadow->m_shadowReprojectMergePipelineFailed = true;
         return false;
     }
     return true;
 }
 
 // Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
-void ShadowPipelineSet::prepareSoftCombinedResolvePipelines(){
-    if(!CanPrepareSoftCombinedResolvePipelines(m_softShadow.m_softShadowReady, m_softShadow.m_softTransparentReady))
+void ShadowPipelineSet::prepareSoftCombinedResolvePipelines()noexcept{
+    if(!CanPrepareSoftCombinedResolvePipelines(m_softShadow->m_softShadowReady, m_softShadow->m_softTransparentReady))
         return;
     if(!ensureSoftCombinedUpsamplePipeline())
-        m_shadow.m_softShadowResolve.m_combinedUpsampleFailed = true;
+        m_shadow->m_softShadowResolve.m_combinedUpsampleFailed = true;
     if(!ensureSoftCombinedWaveletPipeline())
-        m_shadow.m_softShadowResolve.m_combinedWaveletFailed = true;
+        m_shadow->m_softShadowResolve.m_combinedWaveletFailed = true;
     if(!ensureSoftCombinedTemporalPipeline())
-        m_shadow.m_softShadowResolve.m_combinedTemporalFailed = true;
+        m_shadow->m_softShadowResolve.m_combinedTemporalFailed = true;
 }
 
-b8 ShadowPipelineSet::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel){
-    if(pipeline)
-        return true;
-
-    if(!m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([shaderMember](const ShadowSubsystem& s){ return s.*shaderMember; }), Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
-        return false;
-    if(!CreateHeapComputePipeline(m_graphics.getDevice(), shader, m_shadow.m_swShadowBindingLayout, false, pipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
-        return false;
-    }
-    return true;
-}
-
-b8 ShadowPipelineSet::ensureSoftwareTransparentSamplingPipeline(){
-    auto& sampling = m_shadow.m_softwareTransparentSampling;
+b8 ShadowPipelineSet::ensureSoftwareTransparentSamplingPipeline()noexcept{
+    auto& sampling = m_shadow->m_softwareTransparentSampling;
     if(sampling.m_pipelines[0] && sampling.m_pipelines[1])
         return true;
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     const Array<AStringView, 2u> variants = { s_SwTransparentAdaptiveDisabledVariant, s_SwTransparentAdaptiveEnabledVariant };
     for(u32 index = 0u; index < variants.size(); ++index){
         if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-            m_arena,
+            *m_arena,
             device,
-            m_shaderSystem,
+            *m_shaderSystem,
             SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.swShadowTransparentSoftCs; }),
             variants[index],
             Name(s_SoftwareShadowShaderScope),
@@ -391,15 +399,15 @@ b8 ShadowPipelineSet::ensureSoftwareTransparentSamplingPipeline(){
     return true;
 }
 
-b8 ShadowPipelineSet::ensureSoftCombinedUpsamplePipeline(){
-    auto& resolve = m_shadow.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftCombinedUpsamplePipeline()noexcept{
+    auto& resolve = m_shadow->m_softShadowResolve;
     if(resolve.m_combinedUpsample.m_pipeline)
         return true;
     if(resolve.m_combinedUpsampleFailed || !resolve.m_bindingLayout)
         return false;
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     if(
-        !m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowResolveCombinedCs; }), Core::ShaderArchive::s_DefaultVariant, s_CombinedShadowUpsampleShaderScope, resolve.m_combinedUpsample.m_shader)
+        !m_shaderSystem->loadShader<ComputeShader, ShadowSubsystem>(SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowResolveCombinedCs; }), Core::ShaderArchive::s_DefaultVariant, s_CombinedShadowUpsampleShaderScope, resolve.m_combinedUpsample.m_shader)
         || !CreateHeapComputePipeline(device, resolve.m_combinedUpsample.m_shader, resolve.m_bindingLayout, false, resolve.m_combinedUpsample.m_pipeline)
     ){
         resolve.m_combinedUpsampleFailed = true;
@@ -408,16 +416,16 @@ b8 ShadowPipelineSet::ensureSoftCombinedUpsamplePipeline(){
     return true;
 }
 
-b8 ShadowPipelineSet::ensureSoftCombinedWaveletPipeline(){
-    auto& resolve = m_shadow.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftCombinedWaveletPipeline()noexcept{
+    auto& resolve = m_shadow->m_softShadowResolve;
     if(resolve.m_combinedWavelet.m_pipeline)
         return true;
     if(resolve.m_combinedWaveletFailed)
         return false;
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        m_arena,
-        m_graphics.getDevice(),
-        m_shaderSystem,
+        *m_arena,
+        m_graphics->getDevice(),
+        *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowResolveWaveletCombinedCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         s_CombinedShadowWaveletShaderScope,
@@ -433,16 +441,16 @@ b8 ShadowPipelineSet::ensureSoftCombinedWaveletPipeline(){
     return true;
 }
 
-b8 ShadowPipelineSet::ensureSoftCombinedTemporalPipeline(){
-    auto& resolve = m_shadow.m_softShadowResolve;
+b8 ShadowPipelineSet::ensureSoftCombinedTemporalPipeline()noexcept{
+    auto& resolve = m_shadow->m_softShadowResolve;
     if(resolve.m_combinedTemporal.m_pipeline)
         return true;
     if(resolve.m_combinedTemporalFailed)
         return false;
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        m_arena,
-        m_graphics.getDevice(),
-        m_shaderSystem,
+        *m_arena,
+        m_graphics->getDevice(),
+        *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowReprojectMergeCombinedCs; }),
         Core::ShaderArchive::s_DefaultVariant,
         s_CombinedShadowTemporalShaderScope,

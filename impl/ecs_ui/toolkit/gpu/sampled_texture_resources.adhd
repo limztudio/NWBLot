@@ -9,77 +9,87 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class GpuSampledTextureImportDesc{
+    public Name readyPrefix;
+    public StringView readyMarkerLabel;
+    public StringView completionLabel;
+    public QueueSubmissionToken readinessToken;
+    public Name texturePrefix;
+    public StringView textureMarkerLabel;
+    public TextureHandle texture;
+    public usize index;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public GpuSampledTextureImportDesc(){
+        this.readyMarkerLabel = "";
+        this.completionLabel = "";
+        this.textureMarkerLabel = "";
+        this.index = 0u;
+    }
 
-
-#include <core/common/log.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_PaintMaxImages + s_GpuRasterFixedResourceUses>;
-
-struct GpuSampledTextureImportDesc{
-    Name readyPrefix;
-    AStringView readyMarkerLabel;
-    TStringView completionLabel;
-    Core::QueueSubmissionToken readinessToken;
-    Name texturePrefix;
-    AStringView textureMarkerLabel;
-    Core::TextureHandle texture;
-    usize index = 0u;
+    public GpuSampledTextureImportDesc(
+        in Name readyPrefix,
+        in StringView readyMarkerLabel,
+        in StringView completionLabel,
+        in QueueSubmissionToken readinessToken,
+        in Name texturePrefix,
+        in StringView textureMarkerLabel,
+        in TextureHandle texture,
+        in usize index
+    ){
+        this.readyPrefix = readyPrefix;
+        this.readyMarkerLabel = readyMarkerLabel;
+        this.completionLabel = completionLabel;
+        this.readinessToken = readinessToken;
+        this.texturePrefix = texturePrefix;
+        this.textureMarkerLabel = textureMarkerLabel;
+        this.texture = texture;
+        this.index = index;
+    }
 };
 
-struct GpuPageTextureUploadDesc{
-    Name name;
-    const void* data = nullptr;
-    usize dataSize = 0u;
-    usize rowPitch = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    Core::Format::Enum format = Core::Format::UNKNOWN;
+class GpuPageTextureUploadDesc{
+    public Name name;
+    public Span<u8> pixels;
+    public usize rowPitch;
+    public u32 width;
+    public u32 height;
+    public Format format;
+
+
+    public GpuPageTextureUploadDesc(){
+        this.rowPitch = 0u;
+        this.width = 0u;
+        this.height = 0u;
+        this.format = Format::UNKNOWN;
+    }
+
+    public GpuPageTextureUploadDesc(
+        in Name name,
+        in Span<u8> pixels,
+        in usize rowPitch,
+        in u32 width,
+        in u32 height,
+        in Format format
+    ){
+        this.name = name;
+        this.pixels = pixels;
+        this.rowPitch = rowPitch;
+        this.width = width;
+        this.height = height;
+        this.format = format;
+    }
 };
 
-
-class GpuSampledTextures final{
-public:
-    [[nodiscard]] static b8 PrepareDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor);
-    [[nodiscard]] static b8 CreateAndUploadPage(
-        Core::GraphicsRuntime& graphics,
-        const GpuPageTextureUploadDesc& desc,
-        Core::TextureHandle& outTexture,
-        Core::QueueSubmissionToken& outReadinessToken
+[modular]
+class GpuSampledTextures{
+    public b8 createAndUploadPage(
+        mut GraphicsRuntime graphics,
+        in GpuPageTextureUploadDesc desc,
+        mut TextureHandle outTexture,
+        mut QueueSubmissionToken outReadinessToken
     );
-    [[nodiscard]] static Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses);
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,6 +97,75 @@ NWB_IMPL_UI_END
 
 b8 IsValidGpuUploadedReadinessToken(in b8 tokenValid, in b8 hasPhysicalQueueIdentity){
     return tokenValid && hasPhysicalQueueIdentity;
+}
+
+b8 PrepareGpuSampledTextureDescriptor(
+    mut GraphicsRuntime graphics,
+    in TextureHandle texture,
+    in Format format,
+    mut GpuDescriptorHandle inOutDescriptor
+){
+    if(inOutDescriptor.valid())
+        return true;
+    if(!texture.valid())
+        return false;
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    const Expected<GpuDescriptorHandle> descriptorResult = heap.allocate(GpuDescriptorClass::SampledImage);
+    if(!descriptorResult.has_value())
+        return false;
+    const GpuDescriptorHandle descriptor = descriptorResult.value();
+    GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
+    TextureHandle localTexture = texture;
+    if(!heap.write(descriptor, DescriptorWriteItemTextureSrv(0u, localTexture.deref(), format, s_AllSubresources, TextureDimension::Texture2D)))
+        return false;
+    inOutDescriptor = descriptor;
+    descriptorGuard.release();
+    return true;
+}
+
+Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTexture(
+    in GpuSampledTextureImportDesc desc,
+    mut GpuTaskGraph graph,
+    mut FixedVector<GpuTaskResourceUse, 68> uses
+){
+    CompactString suffix = CompactString("");
+    AppendUnsignedU64Text(suffix, cast<u64>(desc.index));
+    // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.
+    const Expected<Name> readyIdentity = DeriveName(desc.readyPrefix, suffix.view());
+    const Expected<Name> textureIdentity = DeriveName(desc.texturePrefix, suffix.view());
+    if(!readyIdentity.has_value() || !textureIdentity.has_value())
+        return MakeUnexpected(GpuSampledTextureImportError::Identity);
+    GpuExternalCompletionDesc completionDesc = GpuExternalCompletionDesc();
+    completionDesc.setIdentity(readyIdentity.value());
+    completionDesc.setMarkerLabel(desc.readyMarkerLabel);
+    completionDesc.setToken(desc.readinessToken);
+    const Expected<GpuExternalCompletionId> readyResult = graph.importExternalCompletion(completionDesc);
+    if(!readyResult.has_value()){
+        error(
+            "GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})",
+            desc.completionLabel,
+            desc.index,
+            desc.readinessToken.physicalQueueIndex,
+            desc.readinessToken.deviceGeneration,
+            desc.readinessToken.value
+        );
+        return MakeUnexpected(GpuSampledTextureImportError::Completion);
+    }
+    GpuGraphResourceDesc resourceDesc = GpuGraphResourceDesc();
+    resourceDesc.setIdentity(textureIdentity.value());
+    resourceDesc.setMarkerLabel(desc.textureMarkerLabel);
+    resourceDesc.setType(GpuGraphResourceType::Texture);
+    resourceDesc.setInitialAvailabilityCompletion(readyResult.value());
+    resourceDesc.setExternalFinalState(ResourceStates::ShaderResource);
+    const Expected<GpuGraphResourceId> textureResult = graph.importTexture(desc.texture, resourceDesc);
+    if(!textureResult.has_value())
+        return MakeUnexpected(GpuSampledTextureImportError::Texture);
+    GpuTaskResourceUse use = GpuTaskResourceUse();
+    use.resource = textureResult.value();
+    use.requiredState = ResourceStates::ShaderResource;
+    use.access = GpuTaskResourceAccess::Read;
+    uses.push_back(use);
+    return textureResult.value();
 }
 
 
@@ -100,34 +179,24 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/graphics/backend_selection.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_UI_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuSampledTextures::PrepareDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
-    if(inOutDescriptor.valid())
-        return true;
-    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!descriptorResult)
-        return false;
-    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
-        return false;
-    inOutDescriptor = descriptor;
-    descriptorGuard.release();
-    return true;
-}
-
-b8 GpuSampledTextures::CreateAndUploadPage(
+b8 GpuSampledTextures::createAndUploadPage(
     Core::GraphicsRuntime& graphics,
     const GpuPageTextureUploadDesc& desc,
     Core::TextureHandle& outTexture,
     Core::QueueSubmissionToken& outReadinessToken
-){
+)noexcept{
     Core::TextureDesc description;
     description
         .setName(desc.name).setWidth(desc.width).setHeight(desc.height)
@@ -141,7 +210,7 @@ b8 GpuSampledTextures::CreateAndUploadPage(
         outTexture.reset();
         return false;
     }
-    const Core::GraphicsStandaloneService::TextureUploadRegion region{ .data = desc.data, .dataSize = desc.dataSize, .rowPitch = desc.rowPitch, .depthPitch = desc.dataSize };
+    const Core::GraphicsStandaloneService::TextureUploadRegion region{ .data = desc.pixels.data(), .dataSize = desc.pixels.size(), .rowPitch = desc.rowPitch, .depthPitch = desc.pixels.size() };
     if(!graphics.standaloneGraph().uploadTextureBatch(Core::GraphicsStandaloneService::TextureUploadBatchDesc{
         .destination = outTexture,
         .regions = &region,
@@ -153,40 +222,6 @@ b8 GpuSampledTextures::CreateAndUploadPage(
     }))
         return false;
     return IsValidGpuUploadedReadinessToken(outReadinessToken.valid(), outReadinessToken.hasPhysicalQueueIdentity());
-}
-
-Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> GpuSampledTextures::ImportTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses){
-    Array<char, s_DecimalTextBufferBytes> identityText{};
-    const AStringView suffix = FormatDecimal(desc.index, identityText);
-    // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.
-    const auto readyIdentity = DeriveName(desc.readyPrefix, suffix);
-    const auto textureIdentity = DeriveName(desc.texturePrefix, suffix);
-    if(!readyIdentity || !textureIdentity)
-        return MakeUnexpected(GpuSampledTextureImportError::Identity);
-    const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel(desc.readyMarkerLabel).setToken(desc.readinessToken));
-    if(!readyResult){
-        NWB_LOGGER_ERROR(
-            FOUNDATION_TEXT("GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})")
-            , desc.completionLabel
-            , desc.index
-            , desc.readinessToken.physicalQueueIndex
-            , desc.readinessToken.deviceGeneration
-            , desc.readinessToken.value
-        );
-        return MakeUnexpected(GpuSampledTextureImportError::Completion);
-    }
-    const Core::GpuExternalCompletionId ready = *readyResult;
-    const auto textureResult = graph.importTexture(
-        desc.texture,
-        Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel(desc.textureMarkerLabel)
-            .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
-            .setExternalFinalState(Core::ResourceStates::ShaderResource)
-    );
-    if(!textureResult)
-        return MakeUnexpected(GpuSampledTextureImportError::Texture);
-    const Core::GpuGraphResourceId texture = *textureResult;
-    uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
-    return texture;
 }
 
 

@@ -101,11 +101,13 @@ class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererOpticalVolumeSelection;
 class CsgShapeRegistry;
-struct MaterialSurfaceInfo;
+class MaterialSurfaceInfo;
 class MeshViewBufferSnapshot;
 
+class MeshRayTracingResourceSnapshot;
+
 namespace ECSRenderDetail{
-    struct MeshRayTracingResourceSnapshot;
+    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
 };
 
 

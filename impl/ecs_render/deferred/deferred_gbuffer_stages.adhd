@@ -218,9 +218,9 @@ void OpaqueComputeEmulationPlanner::capture(
 Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     const OpaqueComputeEmulationProducerInputs& inputs,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
-    const Core::GpuTaskId& dependency,
+    const Core::GpuTaskId dependency,
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload& payload
-){
+)noexcept{
     using namespace RendererTaskGraphDetail;
 
     // G-buffer's semantic timing ticket spans its preparatory compute half and its raster half in one packet.
@@ -257,7 +257,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
         .setResourceUses(resourceUses)
         .setResourceSetUses({ opaqueComputeEmulationResourceSetUses.data(), opaqueComputeEmulationResourceSetUseCount })
     ;
-    const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask >(opaqueComputeEmulationDesc, Move(payload));
+    const auto taskResult = m_graph->addTask< ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask >(opaqueComputeEmulationDesc, Move(payload));
     if(!taskResult){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
         return MakeUnexpected(Failure{});
@@ -269,9 +269,9 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     const OpaqueComputeEmulationProducerInputs& inputs,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
-    const Core::GpuTaskId& dependency,
+    const Core::GpuTaskId dependency,
     ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload& payload
-){
+)noexcept{
     using namespace RendererTaskGraphDetail;
 
     payload.csgResources = csgResources;
@@ -316,7 +316,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
         .setResourceUses(resourceUses)
         .setResourceSetUses({ opaqueCsgReceiverComputeEmulationResourceSetUses.data(), opaqueCsgReceiverComputeEmulationResourceSetUseCount })
     ;
-    const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask >(opaqueCsgReceiverComputeEmulationDesc, Move(payload));
+    const auto taskResult = m_graph->addTask< ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask >(opaqueCsgReceiverComputeEmulationDesc, Move(payload));
     if(!taskResult){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG receiver compute-emulation producer"));
         return MakeUnexpected(Failure{});
@@ -402,7 +402,7 @@ Expected<Core::GpuTaskId> OpaqueSharedComputeEmulationChainBuilder::declarePhase
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
 ){
     Core::GpuTaskDesc desc;
-    RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
+    MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
     ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload{
         m_materialSystem,
         inputs.targets,

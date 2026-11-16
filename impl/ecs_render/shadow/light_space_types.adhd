@@ -113,6 +113,28 @@ class SoftShadowSplitRoute{
     public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
 }
 
+class LightSpaceShadowCaster{
+    public BufferHandle triangleIndexBuffer;
+    public BufferHandle meshletDescBuffer;
+    public BufferHandle meshletBoundsBuffer;
+    public u32 instanceIndex = 0u;
+    public u32 indexCount = 0u;
+    public u32 meshletCount = 0u;
+    public u32 meshletDescSlot = 0u;
+    public u32 meshletBoundsSlot = 0u;
+    public b8 transparent = false;
+    public b8 csg = false;
+}
+
+class LightSpaceShadowDiagnostics{
+    public BufferHandle readback;
+    public QueueSubmissionToken submission;
+    public QueueSubmissionToken contextInitialized;
+    public u32 frameIndex = 0u;
+    public u32 acceptedFrame = 0u;
+    public u32 reportedFailures = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

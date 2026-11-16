@@ -111,7 +111,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
-){
+)noexcept{
     using namespace RendererTaskGraphDetail;
 
     resetDeferredCausticsTaskState();
@@ -188,7 +188,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
             photonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
     }
-    const RendererFramePipelineDetail::TraceResourceSetUses photonResourceSetUses = RendererFramePipelineDetail::MakeTraceResourceSetUses(softwareTraceGeometrySet, traceMaterialSampledTextureSet);
+    const TraceResourceSetUses photonResourceSetUses = MakeTraceResourceSetUses(softwareTraceGeometrySet, traceMaterialSampledTextureSet);
 
     const Array<Core::GpuTaskExternalStateSource, 1u> scratchStateSources = { Core::GpuTaskExternalStateSource{ .states = context.causticsComputeState.source(), }, };
     const Span<const Core::GpuTaskExternalStateSource> scratchStateSourceSpan = context.causticsComputeState.valid()
@@ -284,22 +284,6 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     m_deferredSoftwareCausticsTask = geometryAndResolveResult->causticsTask;
     return true;
 }
-
-void CausticsGraphCoordinator::resetDeferredCausticsTaskState()noexcept{
-    m_deferredSoftwareCausticsTask = {};
-    m_deferredCausticIrradianceClearTask = {};
-    m_deferredCausticAccumulatorBootstrapClearTask = {};
-    m_deferredCausticAccumulatorDecayTask = {};
-    m_deferredCausticPhotonTask = {};
-    m_deferredCausticGeometryTask = {};
-    m_deferredCausticResolvePrepareTask = {};
-    m_deferredCausticResolveWaveletTasks = {};
-    m_deferredCausticResolveUpsampleTask = {};
-    m_deferredCausticProducerDispatched = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_rt_caustics_resolve_chain{
@@ -572,7 +556,7 @@ Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const 
     Array<Core::GpuGraphResourceId, s_CausticResolveActivityBufferCount> activityResources{};
     if(activity.valid()){
         for(u32 index = 0u; index < LengthOf(activityResources); ++index){
-            Core::GpuGraphResourceDesc desc = BufferResourceDesc(s_CausticResolveActivityBufferNames[index], "caustic resolve activity");
+            Core::GpuGraphResourceDesc desc = BufferResourceDesc(CausticResolveActivityBufferName(index), "caustic resolve activity");
             desc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
             const auto activityResourceResult = m_graph.importBuffer(activity.buffers[index], desc);
             if(!activityResourceResult)

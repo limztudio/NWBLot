@@ -117,6 +117,14 @@ b8 IsValidCsgReceiverDrawRange(in CsgReceiverDrawState drawState, in usize total
     return firstCutter <= totalCutterCount && cutterCount <= totalCutterCount - firstCutter;
 }
 
+Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(in World world, in EntityID entity){
+    if(world.hasComponent<StaticCsgMeshComponent>(entity))
+        return MakeCsgResolvedReceiver(world.getComponent<StaticCsgMeshComponent>(entity).asReceiver(), CsgReceiverKind::Static);
+    if(world.hasComponent<SkinnedCsgMeshComponent>(entity))
+        return MakeCsgResolvedReceiver(world.getComponent<SkinnedCsgMeshComponent>(entity).asReceiver(), CsgReceiverKind::Skinned);
+    return MakeUnexpected(Failure());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

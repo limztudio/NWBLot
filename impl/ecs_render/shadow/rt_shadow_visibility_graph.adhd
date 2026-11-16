@@ -67,29 +67,6 @@ SoftShadowSplitRoute MakeSoftShadowSplitRoute(in b8 hardwareShadowSupported, in 
     return route;
 }
 
-b8 HasEmptyPreparedShadowVisibilityRoute(in PreparedShadowVisibilityTasks tasks){
-    return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal && !tasks.diagnostics.valid();
-}
-
-b8 ValidatePreparedShadowVisibilityTaskShape(in PreparedShadowVisibilityTasks tasks){
-    if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
-        return false;
-    if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
-        return false;
-    if(tasks.combinedUpsample){
-        if(tasks.opaqueResolve.valid())
-            return false;
-    }
-    else if(!tasks.opaqueResolve.valid()){
-        return false;
-    }
-    if(!tasks.opaque.valid() || !tasks.transparentTrace.valid() || !tasks.transparentFirstWavelet.valid())
-        return false;
-    if(!tasks.combinedTemporal && !tasks.opaqueFirstWavelet.valid())
-        return false;
-    return true;
-}
-
 b8 ResolveAllLitShadowClearMerged(in b8 hasOpaqueSplitTask, in b8 hasAllLitClearTask, in b8 clearSharesTerminalPacket){
     if(hasOpaqueSplitTask)
         return !hasAllLitClearTask;
@@ -268,7 +245,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     const auto& adaptiveEdgeCounter = shadowResourcePlan.adaptiveEdgeCounter;
     const auto& resourceUses = shadowResourcePlan.resourceUses;
 
-    const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
+    const TraceResourceSetUses traceResourceSets = MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
     const Core::GpuTaskResourceSetUse traceGeometrySetUse = traceResourceSets.useCount != 0u ? traceResourceSets.uses[0u] : Core::GpuTaskResourceSetUse{};
 
     if(splitSoftTransparentFold){
@@ -402,36 +379,8 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks)noexcept{
-    if(!tasks.opaque.valid()){
-        if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
-            return false;
-        if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
-            return false;
-        return HasEmptyPreparedShadowVisibilityRoute(tasks);
-    }
-    if(!ValidatePreparedShadowVisibilityTaskShape(tasks))
-        return false;
-    const Array<Core::GpuTaskId, 3> required = { tasks.opaque, tasks.transparentTrace, tasks.transparentFirstWavelet };
-    for(const Core::GpuTaskId task : required){
-        if(!compiledPlan.tasksSharePacket(tasks.terminal, task))
-            return false;
-    }
-    if(!tasks.combinedTemporal && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueFirstWavelet))
-        return false;
-    if(tasks.opaqueResolve.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueResolve))
-        return false;
-    if(tasks.diagnostics.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.diagnostics))
-        return false;
-    return !tasks.transparentTemporalMerge.valid() || compiledPlan.tasksSharePacket(tasks.terminal, tasks.transparentTemporalMerge);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void ShadowVisibilityMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = m_pipeline;
+    const RendererFramePipeline& pipeline = *m_pipeline;
     outResult = ShadowVisibilityMergeValidationResult{};
     PreparedShadowVisibilityTasks tasks;
     tasks.terminal = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask;

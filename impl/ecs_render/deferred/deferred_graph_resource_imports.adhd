@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_internal.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidDeferredOptionalGraphImports(
     in b8 hasCsgFrameWork,
     in b8 csgTexturesValid,
@@ -11,6 +17,90 @@ b8 ValidDeferredOptionalGraphImports(
     in b8 historyCopyValid
 ){
     return (!hasCsgFrameWork || csgTexturesValid) && (!hasMaterialContextBuffer || materialContextValid) && (!capturesHistory || historyCopyValid);
+}
+
+b8 DeferredAvboitResourceImports::validRefractionInputs()const{
+    return
+        this.m_refractionDepth.has_value()
+        && this.m_refractionNormalIor.has_value()
+        && this.m_refractionTintCoverage.has_value()
+        && this.m_refractionInstance.has_value()
+        && this.m_refractionResolve.has_value()
+        && this.m_avboitForegroundColor.has_value()
+        && this.m_avboitForegroundExtinction.has_value()
+    ;
+}
+
+b8 DeferredAvboitResourceImports::validRefractionSpecular()const{
+    return this.m_refractionSpecularRoughness.has_value();
+}
+
+b8 DeferredAvboitResourceImports::validAvboitInputs()const{
+    return
+        this.m_avboitLowRaster.has_value()
+        && this.m_avboitAccumColor.has_value()
+        && this.m_avboitAccumExtinction.has_value()
+        && this.m_avboitTransmittance.has_value()
+        && this.m_avboitCoverage.has_value()
+        && this.m_avboitDepthWarp.has_value()
+        && this.m_avboitControl.has_value()
+        && this.m_avboitExtinction.has_value()
+        && this.m_avboitExtinctionOverflow.has_value()
+        && this.m_avboitMaterialDomain.has_value()
+        && this.m_avboitCsgDomain.has_value()
+    ;
+}
+
+void DeferredAvboitResourceImports::publish(mut DeferredGraphResourceImportResult result)const{
+    result.avboitLowRaster = this.m_avboitLowRaster.value();
+    result.avboitAccumColor = this.m_avboitAccumColor.value();
+    result.avboitAccumExtinction = this.m_avboitAccumExtinction.value();
+    result.refractionDepth = this.m_refractionDepth.value();
+    result.refractionNormalIor = this.m_refractionNormalIor.value();
+    result.refractionTintCoverage = this.m_refractionTintCoverage.value();
+    result.refractionInstance = this.m_refractionInstance.value();
+    result.refractionSpecularRoughness = this.m_refractionSpecularRoughness.value();
+    result.refractionResolve = this.m_refractionResolve.value();
+    result.avboitForegroundColor = this.m_avboitForegroundColor.value();
+    result.avboitForegroundExtinction = this.m_avboitForegroundExtinction.value();
+    result.avboitTransmittance = this.m_avboitTransmittance.value();
+    result.avboitCoverage = this.m_avboitCoverage.value();
+    result.avboitDepthWarp = this.m_avboitDepthWarp.value();
+    result.avboitControl = this.m_avboitControl.value();
+    result.avboitExtinction = this.m_avboitExtinction.value();
+    result.avboitExtinctionOverflow = this.m_avboitExtinctionOverflow.value();
+    result.avboitMaterialDomain = this.m_avboitMaterialDomain.value();
+    result.avboitCsgDomain = this.m_avboitCsgDomain.value();
+}
+
+b8 DeferredCsgTextureImports::valid()const{
+    return
+        this.m_csgCapBackNormal.has_value()
+        && this.m_csgIntervalDepth.has_value()
+        && this.m_csgIntervalId.has_value()
+        && this.m_csgReceiverEventData.has_value()
+        && this.m_csgReceiverEventCount.has_value()
+        && this.m_csgReceiverSpanData.has_value()
+        && this.m_csgReceiverSpanCount.has_value()
+        && this.m_csgRemovedIntervalDepth.has_value()
+        && this.m_csgRemovedIntervalCapNormal.has_value()
+        && this.m_csgRemovedIntervalData.has_value()
+        && this.m_csgRemovedIntervalCount.has_value()
+    ;
+}
+
+void DeferredCsgTextureImports::publish(mut DeferredGraphResourceImportResult result)const{
+    result.csgCapBackNormal = this.m_csgCapBackNormal.value();
+    result.csgIntervalDepth = this.m_csgIntervalDepth.value();
+    result.csgIntervalId = this.m_csgIntervalId.value();
+    result.csgReceiverEventData = this.m_csgReceiverEventData.value();
+    result.csgReceiverEventCount = this.m_csgReceiverEventCount.value();
+    result.csgReceiverSpanData = this.m_csgReceiverSpanData.value();
+    result.csgReceiverSpanCount = this.m_csgReceiverSpanCount.value();
+    result.csgRemovedIntervalDepth = this.m_csgRemovedIntervalDepth.value();
+    result.csgRemovedIntervalCapNormal = this.m_csgRemovedIntervalCapNormal.value();
+    result.csgRemovedIntervalData = this.m_csgRemovedIntervalData.value();
+    result.csgRemovedIntervalCount = this.m_csgRemovedIntervalCount.value();
 }
 
 
@@ -295,7 +385,7 @@ Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void DeferredAvboitResourceImports::capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets, const b8 clearTargets){
+void DeferredAvboitResourceImports::capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets, const b8 clearTargets)noexcept{
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return clearTargets
             ? RendererTaskGraphDetail::ImportExternalTexture(graph, texture, identity, label, Core::ResourceStates::Unknown)
@@ -323,65 +413,11 @@ void DeferredAvboitResourceImports::capture(Core::GpuTaskGraph& graph, const Def
     m_avboitCsgDomain = graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name(s_DeferredImportNameRenderAvboitCsgDomain), RendererGpuPassText::s_TransparentCsgIntervalsLabel));
 }
 
-b8 DeferredAvboitResourceImports::validRefractionInputs()const noexcept{
-    return
-        m_refractionDepth.has_value()
-        && m_refractionNormalIor.has_value()
-        && m_refractionTintCoverage.has_value()
-        && m_refractionInstance.has_value()
-        && m_refractionResolve.has_value()
-        && m_avboitForegroundColor.has_value()
-        && m_avboitForegroundExtinction.has_value()
-    ;
-}
-
-b8 DeferredAvboitResourceImports::validRefractionSpecular()const noexcept{
-    return m_refractionSpecularRoughness.has_value();
-}
-
-b8 DeferredAvboitResourceImports::validAvboitInputs()const noexcept{
-    return
-        m_avboitLowRaster.has_value()
-        && m_avboitAccumColor.has_value()
-        && m_avboitAccumExtinction.has_value()
-        && m_avboitTransmittance.has_value()
-        && m_avboitCoverage.has_value()
-        && m_avboitDepthWarp.has_value()
-        && m_avboitControl.has_value()
-        && m_avboitExtinction.has_value()
-        && m_avboitExtinctionOverflow.has_value()
-        && m_avboitMaterialDomain.has_value()
-        && m_avboitCsgDomain.has_value()
-    ;
-}
-
-void DeferredAvboitResourceImports::publish(DeferredGraphResourceImportResult& result)const noexcept{
-    result.avboitLowRaster = *m_avboitLowRaster;
-    result.avboitAccumColor = *m_avboitAccumColor;
-    result.avboitAccumExtinction = *m_avboitAccumExtinction;
-    result.refractionDepth = *m_refractionDepth;
-    result.refractionNormalIor = *m_refractionNormalIor;
-    result.refractionTintCoverage = *m_refractionTintCoverage;
-    result.refractionInstance = *m_refractionInstance;
-    result.refractionSpecularRoughness = *m_refractionSpecularRoughness;
-    result.refractionResolve = *m_refractionResolve;
-    result.avboitForegroundColor = *m_avboitForegroundColor;
-    result.avboitForegroundExtinction = *m_avboitForegroundExtinction;
-    result.avboitTransmittance = *m_avboitTransmittance;
-    result.avboitCoverage = *m_avboitCoverage;
-    result.avboitDepthWarp = *m_avboitDepthWarp;
-    result.avboitControl = *m_avboitControl;
-    result.avboitExtinction = *m_avboitExtinction;
-    result.avboitExtinctionOverflow = *m_avboitExtinctionOverflow;
-    result.avboitMaterialDomain = *m_avboitMaterialDomain;
-    result.avboitCsgDomain = *m_avboitCsgDomain;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void DeferredCsgTextureImports::capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets){
+void DeferredCsgTextureImports::capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets)noexcept{
     m_csgCapBackNormal = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgCapBackNormal, Name(s_DeferredImportNameRenderDeferredCsgCapBackNormal), "CSG Cap Back Normal");
     m_csgIntervalDepth = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgIntervalDepth, Name(s_DeferredImportNameRenderDeferredCsgIntervalDepth), "CSG Interval Depth");
     m_csgIntervalId = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgIntervalId, Name(s_DeferredImportNameRenderDeferredCsgIntervalId), "CSG Interval ID");
@@ -393,36 +429,6 @@ void DeferredCsgTextureImports::capture(Core::GpuTaskGraph& graph, const Deferre
     m_csgRemovedIntervalCapNormal = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalCapNormal, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalCapNormal), "CSG Removed Interval Cap Normal");
     m_csgRemovedIntervalData = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalData, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalData), "CSG Removed Interval Data");
     m_csgRemovedIntervalCount = RendererTaskGraphDetail::ImportExternalTexture(graph, deferredTargets.csgRemovedIntervalCount, Name(s_DeferredImportNameRenderDeferredCsgRemovedIntervalCount), "CSG Removed Interval Count");
-}
-
-b8 DeferredCsgTextureImports::valid()const noexcept{
-    return
-        m_csgCapBackNormal.has_value()
-        && m_csgIntervalDepth.has_value()
-        && m_csgIntervalId.has_value()
-        && m_csgReceiverEventData.has_value()
-        && m_csgReceiverEventCount.has_value()
-        && m_csgReceiverSpanData.has_value()
-        && m_csgReceiverSpanCount.has_value()
-        && m_csgRemovedIntervalDepth.has_value()
-        && m_csgRemovedIntervalCapNormal.has_value()
-        && m_csgRemovedIntervalData.has_value()
-        && m_csgRemovedIntervalCount.has_value()
-    ;
-}
-
-void DeferredCsgTextureImports::publish(DeferredGraphResourceImportResult& result)const noexcept{
-    result.csgCapBackNormal = *m_csgCapBackNormal;
-    result.csgIntervalDepth = *m_csgIntervalDepth;
-    result.csgIntervalId = *m_csgIntervalId;
-    result.csgReceiverEventData = *m_csgReceiverEventData;
-    result.csgReceiverEventCount = *m_csgReceiverEventCount;
-    result.csgReceiverSpanData = *m_csgReceiverSpanData;
-    result.csgReceiverSpanCount = *m_csgReceiverSpanCount;
-    result.csgRemovedIntervalDepth = *m_csgRemovedIntervalDepth;
-    result.csgRemovedIntervalCapNormal = *m_csgRemovedIntervalCapNormal;
-    result.csgRemovedIntervalData = *m_csgRemovedIntervalData;
-    result.csgRemovedIntervalCount = *m_csgRemovedIntervalCount;
 }
 
 

@@ -51,44 +51,49 @@ struct OpaqueComputeEmulationProducerInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Graph-owned compute producers that write generated vertices right before the G-buffer rasterizes them.
-class OpaqueComputeEmulationProducerBuilder final : NoCopy{
-public:
-    explicit OpaqueComputeEmulationProducerBuilder(Core::GpuTaskGraph& graph)noexcept
-        : m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<Core::GpuTaskId> declareRegular(
-        const OpaqueComputeEmulationProducerInputs& inputs,
-        const Core::GpuTaskResourceSetUse& outputUavSetUse,
-        const Core::GpuTaskId& dependency,
-        ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload& payload
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareCsgReceiver(
-        const OpaqueComputeEmulationProducerInputs& inputs,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const Core::GpuTaskResourceSetUse& outputUavSetUse,
-        const Core::GpuTaskId& dependency,
-        ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload& payload
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
+
+[cpp_name("::NWB::Impl::OpaqueComputeEmulationProducerInputs"), cpp_header("<impl/ecs_render/deferred/opaque_compute_emulation_producers.adhd.h>")]
+extern class OpaqueComputeEmulationProducerInputs;
+[cpp_name("::NWB::Impl::ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload"), cpp_header("<impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd.h>")]
+extern class OpaqueRegularComputeEmulationGraphTaskPayload;
+[cpp_name("::NWB::Impl::ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload"), cpp_header("<impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>")]
+extern class OpaqueCsgReceiverComputeEmulationGraphTaskPayload;
+
+// Graph-owned compute producers that write generated vertices right before the G-buffer rasterizes them.
+[modular]
+class OpaqueComputeEmulationProducerBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+
+    public OpaqueComputeEmulationProducerBuilder(mut GpuTaskGraph graph){
+        this.m_graph = graph;
+    }
+
+    public Expected<GpuTaskId> declareRegular(
+        in OpaqueComputeEmulationProducerInputs inputs,
+        in GpuTaskResourceSetUse outputUavSetUse,
+        in GpuTaskId dependency,
+        mut OpaqueRegularComputeEmulationGraphTaskPayload payload
+    );
+    public Expected<GpuTaskId> declareCsgReceiver(
+        in OpaqueComputeEmulationProducerInputs inputs,
+        in CsgGraphResourceSnapshot csgResources,
+        in GpuTaskResourceSetUse outputUavSetUse,
+        in GpuTaskId dependency,
+        mut OpaqueCsgReceiverComputeEmulationGraphTaskPayload payload
+    );
 }
 
 

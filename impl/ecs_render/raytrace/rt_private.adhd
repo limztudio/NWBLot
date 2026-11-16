@@ -73,6 +73,9 @@ static_assert(s_RtCsgInstanceMask == NWB_RT_CSG_INSTANCE_MASK);
 static_assert(s_RtRefractiveInstanceMask == NWB_RT_REFRACTIVE_INSTANCE_MASK);
 static_assert(s_SceneShadowSlotCount == NWB_SCENE_SHADOW_SLOT_COUNT);
 static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
+static_assert(Core::GpuUploadBlobId{}.generation == 0u && Core::GpuUploadBlobId{}.index == s_PreparedGraphInvalidIndex);
+static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
+static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 static_assert(s_BvhSortGroupSize == NWB_BVH_SORT_GROUP_SIZE);
 
 static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");

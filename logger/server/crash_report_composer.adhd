@@ -9,61 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-void BuildOrderedCrashReportText(AStringView triggerExpression, AStringView triggerMessage, AStringView triggerFile, u64 triggerLine, AStringView detailReport, AString<ArenaT>& report)noexcept;
-
-namespace LoggerCrashSymbolicateDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CrashReportComposer final{
-public:
-    template<typename ArenaT>
-    [[nodiscard]] static AString<ArenaT> BuildOrderedCrashReport(const CrashPackageSummary& summary, AString<ArenaT> detailReport){
-        ArenaT& outArena = detailReport.get_allocator().arena();
-        AString<ArenaT> ordered(outArena);
-        BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, AStringView(detailReport), ordered);
-        return ordered;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_ComposerCallstackBareHeader = "[callstack]\n";
 const StringView s_ComposerTombstoneBareHeader = "[tombstone_callstack]\n";
 const StringView s_ComposerCallstackHeading = "callstack:\n";
@@ -211,6 +156,12 @@ void BuildOrderedCrashReportText(
         if(report.back() != 10u)
             report.append(s_CrashSymbolicateReportLineEnd);
     }
+}
+
+String BuildOrderedCrashReport(in CrashPackageSummary summary, in StringView detailReport){
+    String ordered;
+    BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, detailReport, ordered);
+    return ordered;
 }
 
 

@@ -277,7 +277,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         }
         const b8 runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, instanceDesc.transform);
+            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
         else
             opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
 
@@ -587,7 +587,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         Float34 instanceWorld{};
         StoreFloat(objectToWorld, instanceWorld);
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, instanceWorld);
+            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
         else
             opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 

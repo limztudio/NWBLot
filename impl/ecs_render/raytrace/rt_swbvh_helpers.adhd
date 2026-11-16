@@ -44,13 +44,13 @@ using MeshBufferSlotLookup = HashMap<NotNull<Core::Buffer*>, u32, Core::Alloc::S
 
 [[nodiscard]] FOUNDATION_INLINE b8 HasPreparedShadowMaterialContextBuffers(const RendererRayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept{
     const usize requiredMaterialTypedBytes = AlignUp(Max<usize>(materialTypedUploadBytes, sizeof(u32)), sizeof(u32));
-    return PreparedShadowMaterialContext::StorageReady(state, materialCount, instanceCount, requiredMaterialTypedBytes);
+    return IsPreparedShadowMaterialStorageReady(state, materialCount, instanceCount, requiredMaterialTypedBytes);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 HasPreparedSceneBvhBuffers(const RendererRayTracingState& state, const u32 instanceCount)noexcept{
     FOUNDATION_ASSERT(instanceCount > 0u);
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
-    return PreparedSceneBvhUpload::StorageReady(state, requiredNodeCount, instanceCount);
+    return IsPreparedSceneBvhStorageReady(state, requiredNodeCount, instanceCount);
 }
 
 template<typename ArenaT>

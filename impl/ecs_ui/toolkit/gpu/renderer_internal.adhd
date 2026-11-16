@@ -76,6 +76,7 @@ inline constexpr Core::FormatSupport::Mask s_RequiredSampledTextureSupport = Cor
 
 
 using GpuSampledGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
+using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_PaintMaxImages + s_GpuRasterFixedResourceUses>;
 
 template<typename T, typename... Args>
 [[nodiscard]] Expected<GpuVersion<T>> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<RefCounter<T>, Args...>()){
@@ -433,6 +434,7 @@ NWB_IMPL_UI_END
 
 
 const StringView s_GpuRendererContext = "GpuRenderer";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

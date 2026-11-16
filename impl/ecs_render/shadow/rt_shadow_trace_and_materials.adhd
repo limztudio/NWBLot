@@ -141,29 +141,29 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
         static_cast<b8>(state.m_swShadowEdgeCounterBuffer)
     );
 
-    return RayTracingShadowVisibilityGraphPlanSnapshot{
-        .lightSpace = lightSpaceShadowSnapshot(),
-        .adaptivePlan = adaptivePlan,
-        .hardwareTransparentTrace = hardwareTransparentTrace,
-        .softTransparentFoldReady = softTransparentFoldReady,
-        .combinedSoftUpsample = CanUseCombinedSoftShadowUpsample(
-            softTransparentFoldReady,
-            static_cast<b8>(state.m_softShadowResolve.m_combinedUpsample.m_pipeline),
-            NWB_SHADOW_RESOLVE_PASS_COUNT,
-            NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
-        ),
-        .combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
-            && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady,
-        .combinedSoftTemporalReady = static_cast<b8>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline),
-        .softShadowHistoryReadable = SoftShadowTemporalHistoryUsable(
-            state.m_softShadowTemporalReady,
-            state.m_prevWorldToClipValid,
-            state.m_softShadowTemporalSeeded
-        ),
-        .opaqueTemporalMergeReady = state.m_softShadowTemporalReady,
-        .transparentTemporalMergeReady = state.m_softTransparentTemporalReady,
-        .historyFrontIsA = state.m_softShadowHistoryFrontIsA != 0u,
-    };
+    RayTracingShadowVisibilityGraphPlanSnapshot snapshot;
+    snapshot.lightSpace = lightSpaceShadowSnapshot();
+    snapshot.adaptivePlan = adaptivePlan;
+    snapshot.hardwareTransparentTrace = hardwareTransparentTrace;
+    snapshot.softTransparentFoldReady = softTransparentFoldReady;
+    snapshot.combinedSoftUpsample = CanUseCombinedSoftShadowUpsample(
+        softTransparentFoldReady,
+        static_cast<b8>(state.m_softShadowResolve.m_combinedUpsample.m_pipeline),
+        NWB_SHADOW_RESOLVE_PASS_COUNT,
+        NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
+    );
+    snapshot.combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
+        && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady;
+    snapshot.combinedSoftTemporalReady = static_cast<b8>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline);
+    snapshot.softShadowHistoryReadable = SoftShadowTemporalHistoryUsable(
+        state.m_softShadowTemporalReady,
+        state.m_prevWorldToClipValid,
+        state.m_softShadowTemporalSeeded
+    );
+    snapshot.opaqueTemporalMergeReady = state.m_softShadowTemporalReady;
+    snapshot.transparentTemporalMergeReady = state.m_softTransparentTemporalReady;
+    snapshot.historyFrontIsA = state.m_softShadowHistoryFrontIsA != 0u;
+    return snapshot;
 }
 
 b8 RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{

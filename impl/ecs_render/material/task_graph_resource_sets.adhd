@@ -53,7 +53,7 @@ namespace RendererTaskGraphDetail{
     Core::Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan, AStringView label);
+[[nodiscard]] Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const RegularSharedComputeEmulationGraphPlan& plan, AStringView label);
 
 [[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
     const RendererMaterialSystem& materialSystem,

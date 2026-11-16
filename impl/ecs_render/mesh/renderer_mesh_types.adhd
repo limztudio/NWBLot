@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -146,6 +152,85 @@ NWB_IMPL_END
 
 [cpp_name("::NWB::Impl::GeometryHeapHandlesReady"), cpp_header("<impl/ecs_render/mesh/renderer_mesh_types.adhd.h>")]
 extern b8 GeometryHeapHandlesReady(in Array<GpuDescriptorHandle, 12u> geometryHeapHandles);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshSoftwareBvhParentBuildState{
+    public BufferHandle buffer;
+    public Name identity;
+
+    public MeshSoftwareBvhParentBuildState(){
+        this.identity = s_NameNone;
+    }
+
+    public MeshSoftwareBvhParentBuildState(in BufferHandle inBuffer, in Name inIdentity){
+        this.buffer = inBuffer;
+        this.identity = inIdentity;
+    }
+}
+
+class MeshBlasGraphState{
+    public RayTracingAccelStructHandle blas;
+    public Name meshName;
+    public b8 backingFresh;
+    public b8 nativeBuildsBlas;
+
+    public MeshBlasGraphState(){
+        this.meshName = s_NameNone;
+        this.backingFresh = false;
+        this.nativeBuildsBlas = false;
+    }
+
+    public MeshBlasGraphState(in Name inMeshName, in RayTracingAccelStructHandle inBlas, in b8 inBackingFresh, in b8 inNativeBuildsBlas){
+        this.meshName = inMeshName;
+        this.blas = inBlas;
+        this.backingFresh = inBackingFresh;
+        this.nativeBuildsBlas = inNativeBuildsBlas;
+    }
+}
+
+// Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
+class MeshRayTracingResourceSnapshot{
+    public Span<u32> solidTriangleWords;
+    public CsgReceiverCpuBounds csgLocalBounds;
+    public RayTracingAccelStructHandle blas;
+    public BufferHandle positionBuffer;
+    public BufferHandle triangleIndexBuffer;
+    public BufferHandle attributeBuffer;
+    public BufferHandle runtimeLocalBoundsBuffer;
+    // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
+    public BufferHandle meshletDescBuffer;
+    public BufferHandle meshletLocalBoundsBuffer;
+    public BufferHandle swBvhNodeBuffer;
+    public BufferHandle swBvhParentBuffer;
+    public u64 runtimeMeshVersion = 0u;
+    public u64 runtimeGeometryContentRevision = 0u;
+    public u64 blasGeometryContentRevision = 0u;
+    public u64 swBvhGeometryContentRevision = 0u;
+    public Name meshName = s_NameNone;
+    public GpuDescriptorHandle runtimeLocalBoundsHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle meshletDescHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle meshletLocalBoundsHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle swBvhPositionHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle swBvhTriangleIndexHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle swBvhNodeHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle swBvhParentHeapHandle = GpuDescriptorHandleInvalid();
+    public u32 meshletCount = 0u;
+    public u32 meshletPrimitiveIndexCount = 0u;
+    public u32 blasRefitsSinceRebuild = 0u;
+    public u32 swBvhRefitsSinceRebuild = 0u;
+    public b8 runtimeMesh = false;
+    public b8 blasBuildPending = false;
+    public b8 blasBackingFresh = false;
+    public b8 swBvhBuildPending = false;
+    public b8 swBvhTopologyBuilt = false;
+    public b8 blasBuildAccepted = false;
+    public b8 swBvhBuildAccepted = false;
+
+    public MeshRayTracingResourceSnapshot(){}
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

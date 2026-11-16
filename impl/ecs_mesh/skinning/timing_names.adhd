@@ -55,3 +55,16 @@ NWB_IMPL_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_name("::NWB::Impl::MeshSkinningGpuTimingScope::s_Skinning"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeMeshSkinning;
+[cpp_name("::NWB::Impl::MeshSkinningGpuTimingScope::s_MeshletBounds"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeMeshSkinningMeshletBounds;
+[cpp_name("::NWB::Impl::MeshSkinningGpuTimingScope::s_LocalBounds"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeMeshSkinningLocalBounds;
+[cpp_name("::NWB::Impl::MeshSkinningGpuTimingScope::s_RepackNormals"), cpp_header("<core/graphics/gpu_timing_types.h>")]
+extern const GpuTimingScopeDefinition s_TimingScopeMeshSkinningRepackNormals;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -201,37 +201,3 @@ class OpticalBoundsEvaluator{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
-
-static_assert(::NWB::Impl::s_OpticalBoundsSignBit == NWB_OPTICAL_BOUNDS_SIGN_BIT);
-static_assert(::NWB::Impl::s_OpticalBoundsMagnitudeMask == NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK);
-static_assert(::NWB::Impl::s_OpticalBoundsFractionMask == NWB_OPTICAL_BOUNDS_FRACTION_MASK);
-static_assert(::NWB::Impl::s_OpticalBoundsHiddenBit == NWB_OPTICAL_BOUNDS_HIDDEN_BIT);
-static_assert(::NWB::Impl::s_OpticalBoundsMantissaBits == NWB_OPTICAL_BOUNDS_MANTISSA_BITS);
-static_assert(::NWB::Impl::s_OpticalBoundsExponentBias == NWB_OPTICAL_BOUNDS_EXPONENT_BIAS);
-static_assert(::NWB::Impl::s_OpticalBoundsOneBits == NWB_OPTICAL_BOUNDS_ONE_BITS);
-static_assert(::NWB::Impl::s_OpticalBoundsMinInputExponent == NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsMaxInputExponent == NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsMaxMagnitudeExponent == NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsZeroExponent == NWB_OPTICAL_BOUNDS_ZERO_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsFixedBits == NWB_OPTICAL_BOUNDS_FIXED_BITS);
-static_assert(::NWB::Impl::s_OpticalBoundsRelativeMarginShift == NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT);
-static_assert(::NWB::Impl::s_OpticalBoundsMinMarginExponent == NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

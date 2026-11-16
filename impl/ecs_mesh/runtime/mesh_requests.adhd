@@ -2,145 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_mesh/runtime/mesh.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <global/allocation_size.h>
-#include <global/hash_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+#include <impl/ecs_mesh/runtime/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // One liveness query owns identities and flags; no state survives the prune.
-class RuntimeMeshRequestSet final : NoCopy{
-private:
-    using Key = RuntimeMeshRequestKey;
-    using Entry = RuntimeMeshRequestEntry;
+class RuntimeMeshRequestSet : NoCopy{
+    private usize m_expectedRequestCount;
+    private Array<RuntimeMeshRequestEntry, s_RuntimeMeshRequestInlineCapacity> m_inlineEntries;
+    private usize m_inlineCount = 0u;
+    private usize m_remainingCount = 0u;
+    private Optional<HashMap<RuntimeMeshRequestKey, b8>> m_index;
 
-
-private:
-    struct Lookup{
-        const NameHash& name;
-        u64 version;
-    };
-    struct KeyHash{
-        [[nodiscard]] usize operator()(const Key& key)const noexcept{ return key.hash(); }
-        [[nodiscard]] usize operator()(const Lookup& key)const noexcept{ return HashRuntimeMeshRequestKey(key.name, key.version); }
-    };
-    struct KeyEqual{
-        using is_transparent = void;
-
-
-    public:
-        [[nodiscard]] b8 operator()(const Key& lhs, const Key& rhs)const noexcept{ return lhs == rhs; }
-        [[nodiscard]] b8 operator()(const Key& lhs, const Lookup& rhs)const noexcept{ return lhs.version == rhs.version && lhs.name == rhs.name; }
-    };
-
-
-private:
-    using Index = HashMap<Key, b8, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
-
-
-public:
-    RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, const usize expectedRequestCount)
-        : m_scratchArena(scratchArena)
-        , m_expectedRequestCount(expectedRequestCount)
-    {
-        if(expectedRequestCount > s_RuntimeMeshRequestInlineCapacity)
-            m_index.emplace(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
+    public RuntimeMeshRequestSet(in usize expectedRequestCount){
+        this.m_expectedRequestCount = expectedRequestCount;
+        if(expectedRequestCount > s_RuntimeMeshRequestInlineCapacity){
+            this.m_index = Optional<HashMap<RuntimeMeshRequestKey, b8>>(HashMap<RuntimeMeshRequestKey, b8>());
+            this.m_index.value().reserve(expectedRequestCount * s_RuntimeMeshIndexBucketsPerRequest);
+        }
     }
 
-
-public:
-    void add(const Name& meshKey, const u64 version){
-        if(!meshKey)
+    public void add(in Name meshKey, in u64 version){
+        if(meshKey == s_NameNone)
             return;
-        if(!m_index){
-            if(TryAddInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, m_remainingCount, meshKey.identityHash(), version))
+        const NameHash meshHash = meshKey.identityHash();
+        if(!this.m_index.has_value()){
+            if(TryAddInlineRuntimeMeshRequest(this.m_inlineEntries, this.m_inlineCount, this.m_remainingCount, meshHash, version))
                 return;
-            promoteIndex();
+            this.promoteIndex();
         }
-        if(m_index->try_emplace(Key(meshKey.identityHash(), version), false).second)
-            ++m_remainingCount;
-    }
-    void markLive(const Name& meshKey, const u64 version)noexcept{
-        if(!meshKey)
-            return;
-        if(m_index){
-            markIndexedLive(meshKey, version);
-            return;
+        const RuntimeMeshRequestKey key(meshHash, version);
+        if(!this.m_index.value().contains(key)){
+            this.m_index.value().try_emplace(key, false);
+            ++this.m_remainingCount;
         }
-        MarkInlineRuntimeMeshRequestLive(m_inlineEntries, m_remainingCount, m_inlineCount, meshKey.identityHash(), version);
     }
 
-    [[nodiscard]] b8 containsLive(const Name& meshKey, const u64 version)const noexcept{
-        if(!meshKey)
+    public void markLive(in Name meshKey, in u64 version){
+        if(meshKey == s_NameNone)
+            return;
+        const NameHash meshHash = meshKey.identityHash();
+        if(this.m_index.has_value()){
+            this.markIndexedLive(meshHash, version);
+            return;
+        }
+        MarkInlineRuntimeMeshRequestLive(this.m_inlineEntries, this.m_remainingCount, this.m_inlineCount, meshHash, version);
+    }
+
+    public b8 containsLive(in Name meshKey, in u64 version)const{
+        if(meshKey == s_NameNone)
             return false;
-        if(m_index)
-            return containsIndexedLive(meshKey, version);
-        return ContainsInlineRuntimeMeshRequestLive(m_inlineEntries, m_inlineCount, meshKey.identityHash(), version);
+        const NameHash meshHash = meshKey.identityHash();
+        if(this.m_index.has_value())
+            return this.containsIndexedLive(meshHash, version);
+        return ContainsInlineRuntimeMeshRequestLive(this.m_inlineEntries, this.m_inlineCount, meshHash, version);
     }
 
-    [[nodiscard]] b8 complete()const noexcept{ return m_remainingCount == 0u; }
-
-
-private:
-    void promoteIndex(){
-        Index index(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(Max(m_expectedRequestCount, s_RuntimeMeshRequestInlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
-        for(usize entryIndex = 0u; entryIndex < m_inlineCount; ++entryIndex){
-            const Entry& entry = m_inlineEntries[entryIndex];
-            index[entry.key] = entry.found;
-        }
-        static_assert(IsNothrowMoveConstructible_V<Index>);
-        m_index.emplace(Move(index));
+    public b8 complete()const{
+        return this.m_remainingCount == 0u;
     }
-    void markIndexedLive(const Name& meshKey, const u64 version)noexcept{
-        const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
-        if(found != m_index->end() && !found.value()){
-            found.value() = true;
-            --m_remainingCount;
+
+    private void promoteIndex(){
+        this.m_index = Optional<HashMap<RuntimeMeshRequestKey, b8>>(HashMap<RuntimeMeshRequestKey, b8>());
+        this.m_index.value().reserve(Max(this.m_expectedRequestCount, s_RuntimeMeshRequestInlineCapacity + 1u) * s_RuntimeMeshIndexBucketsPerRequest);
+        for(usize entryIndex = 0u; entryIndex < this.m_inlineCount; ++entryIndex){
+            in RuntimeMeshRequestEntry entry = this.m_inlineEntries[entryIndex];
+            this.m_index.value().insert_or_assign(entry.key, entry.found);
         }
     }
-    [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, const u64 version)const noexcept{
-        const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
-        return found != m_index->end() && found.value();
+
+    private void markIndexedLive(in NameHash meshHash, in u64 version){
+        const RuntimeMeshRequestKey key(meshHash, version);
+        if(this.m_index.value().contains(key) && !this.m_index.value().at(key)){
+            this.m_index.value().insert_or_assign(key, true);
+            --this.m_remainingCount;
+        }
     }
 
-
-private:
-    Core::Alloc::ScratchArena& m_scratchArena;
-    usize m_expectedRequestCount;
-    Array<Entry, s_RuntimeMeshRequestInlineCapacity> m_inlineEntries{};
-    usize m_inlineCount = 0u;
-    usize m_remainingCount = 0u;
-    Optional<Index> m_index;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private b8 containsIndexedLive(in NameHash meshHash, in u64 version)const{
+        const RuntimeMeshRequestKey key(meshHash, version);
+        return this.m_index.value().contains(key) && this.m_index.value().at(key);
+    }
 }
 
 

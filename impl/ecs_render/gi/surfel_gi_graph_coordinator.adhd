@@ -12,8 +12,8 @@ native{
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
 #include <core/task/gpu/persistent_state.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +25,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererFramePipeline;
 class RendererRayTracingSystem;
 class DeferredFrameTargets;
 class DeferredLightingGraphResources;
@@ -42,65 +41,6 @@ struct SurfelGiGraphContext{
 };
 
 
-class SurfelGiGraphCoordinator final : NoCopy{
-    friend class RendererFramePipeline;
-    friend class FrameExecutePresentTails;
-    friend struct FrameExecuteTimingState;
-    friend struct FrameExecuteStateLifecycleSet;
-    friend class DeferredFrameTopologyValidator;
-    friend class SurfelCausticsMergeValidator;
-
-
-public:
-    SurfelGiGraphCoordinator()noexcept = default;
-
-
-public:
-    [[nodiscard]] b8 declareDeferredSurfelGiTask(
-        const SurfelGiGraphContext& context,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
-        const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
-        Core::GpuGraphResourceId worldPosition,
-        Core::GpuGraphResourceId normal,
-        Core::GpuGraphResourceId surfelIrradiance,
-        Core::GpuGraphResourceId currentBindlessSlots,
-        Core::GpuGraphResourceId sceneShading,
-        Core::GpuGraphResourceId lights,
-        Core::GpuGraphResourceId materialContextSlots,
-        Span<const Core::GpuGraphResourceId> traceGeometryResources,
-        Core::GpuGraphResourceSetId traceGeometrySet,
-        Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
-        Core::GpuTaskId effectsTask,
-        b8 useLaggedLightingHistory,
-        Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
-        Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    void declareDeferredSurfelCountReadbackTask(const SurfelGiGraphContext& context, const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources);
-
-
-private:
-    // Surfel lifecycle publishes after all four clears accept; stages share one effects packet.
-    Core::GpuTaskId m_deferredSurfelGiPreparationTask;
-    Core::GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
-    Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
-    Core::GpuTaskId m_deferredSurfelGiIrradianceClearTask;
-    Core::GpuTaskId m_deferredSurfelGiAgeFreeTask;
-    Core::GpuTaskId m_deferredSurfelGiCellHeadClearTask;
-    Core::GpuTaskId m_deferredSurfelGiHashBuildTask;
-    Core::GpuTaskId m_deferredSurfelGiSpawnTask;
-    Core::GpuTaskId m_deferredSurfelGiTraceBuildArgsTask;
-    Core::GpuTaskId m_deferredSurfelGiTraceTask;
-    Core::GpuTaskId m_deferredSurfelGiResolveTask;
-    Core::GpuTaskId m_deferredSurfelGiTask;
-    // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
-    Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -110,6 +50,67 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::SurfelGiGraphContext")]
+extern class SurfelGiGraphContext;
+[cpp_name("::NWB::Impl::DeferredLightingGraphResources")]
+extern class DeferredLightingGraphResources : NoCopy;
+[cpp_name("::NWB::Impl::DeferredFrameTargets")]
+extern class DeferredFrameTargets : NoCopy;
+[cpp_name("::NWB::Impl::RayTracingDeferredGraphResourceSnapshot")]
+extern class RayTracingDeferredGraphResourceSnapshot;
+[cpp_name("::NWB::Impl::RayTracingSurfelPersistentResourceSnapshot")]
+extern class RayTracingSurfelPersistentResourceSnapshot;
+
+[modular]
+class SurfelGiGraphCoordinator : NoCopy{
+    // Surfel lifecycle publishes after all four clears accept; stages share one effects packet.
+    public GpuTaskId m_deferredSurfelGiPreparationTask;
+    public GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
+    public GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
+    public GpuTaskId m_deferredSurfelGiIrradianceClearTask;
+    public GpuTaskId m_deferredSurfelGiAgeFreeTask;
+    public GpuTaskId m_deferredSurfelGiCellHeadClearTask;
+    public GpuTaskId m_deferredSurfelGiHashBuildTask;
+    public GpuTaskId m_deferredSurfelGiSpawnTask;
+    public GpuTaskId m_deferredSurfelGiTraceBuildArgsTask;
+    public GpuTaskId m_deferredSurfelGiTraceTask;
+    public GpuTaskId m_deferredSurfelGiResolveTask;
+    public GpuTaskId m_deferredSurfelGiTask;
+    // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
+    public GpuTaskId m_deferredSurfelGiCounterReadbackTask;
+
+    public SurfelGiGraphCoordinator(){}
+
+    public b8 declareDeferredSurfelGiTask(
+        in SurfelGiGraphContext context,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources,
+        in GpuGraphResourceId worldPosition,
+        in GpuGraphResourceId normal,
+        in GpuGraphResourceId surfelIrradiance,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId sceneShading,
+        in GpuGraphResourceId lights,
+        in GpuGraphResourceId materialContextSlots,
+        in Span<GpuGraphResourceId> traceGeometryResources,
+        in GpuGraphResourceSetId traceGeometrySet,
+        in GpuGraphResourceSetId traceMaterialSampledTextureSet,
+        in GpuTaskId effectsTask,
+        in b8 useLaggedLightingHistory,
+        in GpuExternalCompletionId surfelCounterReadbackCompletion,
+        mut ScratchArena scratchArena,
+        mut DeferredFrameTargets deferredTargets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming
+    );
+    public void declareDeferredSurfelCountReadbackTask(in SurfelGiGraphContext context, in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources);
 }
 
 

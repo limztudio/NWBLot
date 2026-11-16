@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/raytrace/push_constants.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,13 +17,6 @@ native{
 
 
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-
-#include <core/task/gpu/task_graph.h>
-
-#include <global/simdmath.h>
-#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,58 +34,7 @@ class RendererRayTracingState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
-static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
-
-// Scene hierarchy and leaf instances share topology/indices; preflight freezes one batch per storage generation.
-// A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
-class PreparedSceneBvhUpload final : NoCopy{
-public:
-    [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize nodeCount, usize instanceCount)noexcept;
-
-
-public:
-    explicit PreparedSceneBvhUpload(Core::Alloc::GlobalArena& arena)noexcept
-        : m_nodeBytes(arena)
-        , m_instanceBytes(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 capture(const RendererRayTracingState& state, b8 staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
-    [[nodiscard]] b8 captureCacheReuse(const RendererRayTracingState& state, u64 staticSceneHash, u32 instanceCount)noexcept;
-    void clear()noexcept;
-
-    [[nodiscard]] Expected<PreparedSceneBvhUploads> retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const;
-    // Publishes the accepted static-scene hash; false when no fresh upload was pending.
-    [[nodiscard]] b8 publishAcceptedUpload(RendererRayTracingState& state)const noexcept;
-
-    [[nodiscard]] b8 storageMatches(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] b8 covers(usize sceneInstanceCount)const noexcept{ return m_ready && m_instanceCount == sceneInstanceCount; }
-    // A fresh upload stays valid; cache reuse still needs the accepted static-scene hash over the same instances.
-    [[nodiscard]] b8 snapshotAccepted(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
-    [[nodiscard]] b8 uploadRequired()const noexcept{ return m_uploadRequired; }
-    [[nodiscard]] const Core::BufferHandle& nodeBuffer()const noexcept{ return m_nodeBuffer; }
-    [[nodiscard]] Core::GpuDescriptorHandle nodeHeapHandle()const noexcept{ return m_nodeHeapHandle; }
-
-
-private:
-    Vector<u8, Core::Alloc::GlobalArena> m_nodeBytes;
-    Vector<u8, Core::Alloc::GlobalArena> m_instanceBytes;
-    Core::BufferHandle m_nodeBuffer;
-    Core::BufferHandle m_instanceBuffer;
-    usize m_nodeCount = 0u;
-    usize m_instanceCount = 0u;
-    usize m_nodeCapacity = 0u;
-    usize m_instanceCapacity = 0u;
-    u64 m_staticSceneHash = 0u;
-    Core::GpuDescriptorHandle m_nodeHeapHandle;
-    Core::GpuDescriptorHandle m_instanceHeapHandle;
-    b8 m_static = false;
-    b8 m_ready = false;
-    b8 m_uploadRequired = false;
-};
+[[nodiscard]] b8 IsPreparedSceneBvhStorageReady(const RendererRayTracingState& state, usize nodeCount, usize instanceCount)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,6 +46,66 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RendererRayTracingState")]
+extern class RendererRayTracingState;
+
+
+// Scene hierarchy and leaf instances share topology/indices; preflight freezes one batch per storage generation.
+// A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
+[modular]
+class PreparedSceneBvhUpload : NoCopy{
+    private Vector<u8> m_nodeBytes;
+    private Vector<u8> m_instanceBytes;
+    private BufferHandle m_nodeBuffer;
+    private BufferHandle m_instanceBuffer;
+    private usize m_nodeCount = 0u;
+    private usize m_instanceCount = 0u;
+    private usize m_nodeCapacity = 0u;
+    private usize m_instanceCapacity = 0u;
+    private u64 m_staticSceneHash = 0u;
+    private GpuDescriptorHandle m_nodeHeapHandle;
+    private GpuDescriptorHandle m_instanceHeapHandle;
+    private b8 m_static = false;
+    private b8 m_ready = false;
+    private b8 m_uploadRequired = false;
+
+    public b8 capture(in RendererRayTracingState state, in b8 staticScene, in u64 staticSceneHash, in Span<NwbBvhNodeGpu> nodes, in Span<SceneSwBvhInstanceGpu> instances);
+    public b8 captureCacheReuse(in RendererRayTracingState state, in u64 staticSceneHash, in u32 instanceCount);
+    public void clear(){
+        this.m_nodeBytes.clear();
+        this.m_instanceBytes.clear();
+        this.m_nodeBuffer.reset();
+        this.m_instanceBuffer.reset();
+        this.m_nodeHeapHandle = GpuDescriptorHandleInvalid();
+        this.m_instanceHeapHandle = GpuDescriptorHandleInvalid();
+        this.m_nodeCount = 0u;
+        this.m_instanceCount = 0u;
+        this.m_nodeCapacity = 0u;
+        this.m_instanceCapacity = 0u;
+        this.m_staticSceneHash = 0u;
+        this.m_static = false;
+        this.m_ready = false;
+        this.m_uploadRequired = false;
+    }
+
+    public Expected<PreparedSceneBvhUploads> retainUploads(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
+    // Publishes the accepted static-scene hash; false when no fresh upload was pending.
+    public b8 publishAcceptedUpload(mut RendererRayTracingState state)const;
+
+    public b8 storageMatches(in RendererRayTracingState state)const;
+    public b8 covers(in usize sceneInstanceCount)const{ return this.m_ready && this.m_instanceCount == sceneInstanceCount; }
+    // A fresh upload stays valid; cache reuse still needs the accepted static-scene hash over the same instances.
+    public b8 snapshotAccepted(in RendererRayTracingState state)const;
+    public b8 ready()const{ return this.m_ready; }
+    public b8 uploadRequired()const{ return this.m_uploadRequired; }
+    public in BufferHandle nodeBuffer()const{ return this.m_nodeBuffer; }
+    public GpuDescriptorHandle nodeHeapHandle()const{ return this.m_nodeHeapHandle; }
 }
 
 

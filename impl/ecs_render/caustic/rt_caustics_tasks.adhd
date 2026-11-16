@@ -54,7 +54,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
+Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept{
     using namespace RendererTaskGraphDetail;
     HardwareCausticsStageResult result{};
     if(!inputs.declaresHardwareCaustics)
@@ -69,10 +69,10 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
         || !inputs.graphicsPrefixTask.valid()
     )
         return MakeUnexpected(Failure{});
-    if(m_raytracingSystem.hasHwCausticWork(inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
+    if(m_raytracingSystem->hasHwCausticWork(inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
         return MakeUnexpected(Failure{});
 
-    CausticsResolveChainBuilder resolveChainBuilder(m_graph, m_raytracingSystem);
+    CausticsResolveChainBuilder resolveChainBuilder(*m_graph, *m_raytracingSystem);
     const auto stageTargetsResult = resolveChainBuilder.importStageTargets(inputs.targets, true);
     if(!stageTargetsResult)
         return MakeUnexpected(Failure{});
@@ -80,7 +80,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
     const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
-    const RendererFramePipelineDetail::TraceResourceSetUses hardwarePhotonResourceSetUses = RendererFramePipelineDetail::MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
+    const TraceResourceSetUses hardwarePhotonResourceSetUses = MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
     hardwarePhotonResourceUses.reserve(ComputePhotonResourceUseCapacity(
         s_HardwarePhotonResourceUseCapacity,
         inputs.rayTracingResources.csgTraceContextBuffer != nullptr,
@@ -101,7 +101,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
             return true;
-        const auto resourceResult = ImportExternalBuffer(m_graph, buffer, identity, label);
+        const auto resourceResult = ImportExternalBuffer(*m_graph, buffer, identity, label);
         if(!resourceResult)
             return false;
         hardwarePhotonResourceUses.push_back(ReadUse(*resourceResult, state));
@@ -131,10 +131,10 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
             hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     if(inputs.rayTracingResources.sceneTlas){
-        const auto tlas = m_graph.importAccelStruct(
+        const auto tlas = m_graph->importAccelStruct(
             inputs.rayTracingResources.sceneTlas,
             AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel)
-                .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
+                .setInitialState(m_raytracingSystem->sceneTlasBackingInitialState())
         );
         optionalResourcesImported = optionalResourcesImported && tlas.has_value();
         if(tlas.has_value())
@@ -143,7 +143,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
     optionalResourcesImported = optionalResourcesImported && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
         inputs.rayTracingResources.csgTraceContextBuffer,
         inputs.rayTracingResources.csgTraceBoundsBuffers,
-        m_graph,
+        *m_graph,
         hardwarePhotonResourceUses
     );
     if(!optionalResourcesImported){
@@ -201,8 +201,8 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
         .setResourceUses(hardwarePhotonResourceUses)
         .setResourceSetUses({ hardwarePhotonResourceSetUses.useCount != 0u ? hardwarePhotonResourceSetUses.uses.data() : nullptr, hardwarePhotonResourceSetUses.useCount })
     ;
-    const auto causticPhotonTaskResult = m_raytracingSystem.declareHardwareCausticsTask(
-        m_graph,
+    const auto causticPhotonTaskResult = m_raytracingSystem->declareHardwareCausticsTask(
+        *m_graph,
         hardwarePhotonDesc,
         inputs.lightingResources,
         inputs.meshViewSnapshot,

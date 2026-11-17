@@ -160,7 +160,7 @@ extern enum MouseButton : u32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_layout(8, 8), cpp_flags(self_defaulted, brace_init, polymorphic_base)]
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_flags(self_defaulted, brace_init, polymorphic_base)]
 extern class IInputEventHandler{
     b8 keyboardCharInput(...);
     KeyboardInputResult keyboardUpdate(...);
@@ -172,7 +172,7 @@ extern class IInputEventHandler{
     void windowFocusUpdate(...);
 };
 
-[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::KeyboardInputResult"), cpp_layout(2, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::KeyboardInputResult"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class KeyboardInputResult{
     b8 consumed;
     b8 blocksText;

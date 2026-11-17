@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_name("::StagedDirectoryPaths"), cpp_layout(64, 8), cpp_flags(self_defaulted, arena_first_ctor)]
+[arena, cpp_name("::StagedDirectoryPaths"), cpp_flags(self_defaulted, arena_first_ctor)]
 extern class StagedDirectoryPaths{
     Path backupDirectory;
     Path stageDirectory;

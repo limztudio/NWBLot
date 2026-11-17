@@ -19,7 +19,7 @@ extern enum AssetMetadataParseResult : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetBunchExpandContext"), cpp_layout(48, 8), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetBunchExpandContext"), cpp_flags(no_assign)]
 extern class AssetBunchExpandContext{
     Path assetRoot;
     StringView virtualRoot;
@@ -28,7 +28,7 @@ extern class AssetBunchExpandContext{
     ScratchArena scratchArena;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetDocumentMetadataParseContext"), cpp_layout(360, 8), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetDocumentMetadataParseContext"), cpp_flags(no_assign)]
 extern class AssetDocumentMetadataParseContext{
     GlobalArena cookArena;
     DiscoveredNwbFile discoveredNwbFile;
@@ -38,12 +38,12 @@ extern class AssetDocumentMetadataParseContext{
     ScratchArena scratchArena;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetPairedSidecarRule"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, borrow_view, brace_init)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetPairedSidecarRule"), cpp_flags(self_defaulted, small_value, borrow_view, brace_init)]
 extern class AssetPairedSidecarRule{
     StringView sidecarExtension;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetValueMetadataParseContext"), cpp_layout(680, 8), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetValueMetadataParseContext"), cpp_flags(no_assign)]
 extern class AssetValueMetadataParseContext{
     GlobalArena cookArena;
     DiscoveredNwbFile discoveredNwbFile;
@@ -54,7 +54,7 @@ extern class AssetValueMetadataParseContext{
     ScratchArena scratchArena;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParsedAssetMetadata"), cpp_layout(304, 8), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParsedAssetMetadata"), cpp_flags(no_assign)]
 extern class ParsedAssetMetadata{
     GlobalArena arena;
     CookEntryRegistry entryRegistry;

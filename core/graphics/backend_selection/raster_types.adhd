@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/backend_selection/raster_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::VertexInputBinding"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/backend_selection/raster_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::VertexInputBinding"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class VertexInputBinding{
     u32 slot;
     u32 stride;

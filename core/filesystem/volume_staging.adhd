@@ -2,12 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::StagedDirectoryCleanupGuard"), cpp_layout(64, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::StagedDirectoryCleanupGuard"), cpp_flags(no_copy, no_assign)]
 extern class StagedDirectoryCleanupGuard{
     void dismiss(...);
 };
 
-[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::VolumePublicationObserver"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::VolumePublicationObserver"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class VolumePublicationObserver;
 
 

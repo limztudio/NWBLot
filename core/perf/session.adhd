@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/perf/session.h>"), cpp_name("::NWB::Core::Perf::Session"), cpp_layout(784, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/perf/session.h>"), cpp_name("::NWB::Core::Perf::Session"), cpp_flags(no_copy, no_assign)]
 extern class Session{
     void beginFrame(...);
     void clear(...);

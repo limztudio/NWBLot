@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_header("<global/filesystem/path_identity.h>"), cpp_name("::PathIdentity"), cpp_layout(16, 8), cpp_flags(borrow_view, non_thread_safe, arena_omit_ctor, no_assign)]
+[arena, cpp_header("<global/filesystem/path_identity.h>"), cpp_name("::PathIdentity"), cpp_flags(borrow_view, non_thread_safe, arena_omit_ctor, no_assign)]
 extern class PathIdentity{
     Expected<b8, ErrorCode> sameExisting(...)const;
     Expected<b8, ErrorCode> sameOutput(...)const;

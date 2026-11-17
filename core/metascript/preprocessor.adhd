@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor"), cpp_layout(328, 8), cpp_flags(no_assign)]
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor"), cpp_flags(no_assign)]
 extern class MetascriptPreprocessor{
     void defineObjectMacro(...);
     Span<String> includedFiles(...)const;
@@ -12,7 +12,7 @@ extern class MetascriptPreprocessor{
     void undefineMacro(...);
 };
 
-[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorMacro"), cpp_layout(120, 8)]
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorMacro")]
 extern class MetascriptPreprocessorMacro{
     String name;
     String body;

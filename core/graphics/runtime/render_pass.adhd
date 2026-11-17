@@ -2,10 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::FramebufferPtr"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::FramebufferPtr"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class FramebufferPtr;
 
-[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::IRenderPass"), cpp_layout(16, 8), cpp_flags(no_assign, polymorphic_base)]
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::IRenderPass"), cpp_flags(no_assign, polymorphic_base)]
 extern class IRenderPass{
     void animate(...);
     void backBufferResized(...);
@@ -19,7 +19,7 @@ extern class IRenderPass{
     b8 validateResources(...);
 };
 
-[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::TexturePtr"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::TexturePtr"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class TexturePtr;
 
 

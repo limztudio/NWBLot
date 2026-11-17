@@ -2,25 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAbort"), cpp_layout(40, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAbort"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
 extern class GpuPacketRecordingAbort{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAccess"), cpp_layout(64, 8), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAccess"), cpp_flags(binary_serializable, no_copy, no_assign)]
 extern class GpuPacketRecordingAccess;
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingLease"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingLease"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
 extern class GpuPacketRecordingLease{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketSubmissionLease"), cpp_layout(56, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketSubmissionLease"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
 extern class GpuPacketSubmissionLease{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuRecordingAttemptScope"), cpp_layout(40, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuRecordingAttemptScope"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
 extern class GpuRecordingAttemptScope{
     void complete(...);
 };

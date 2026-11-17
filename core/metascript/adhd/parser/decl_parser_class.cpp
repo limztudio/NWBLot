@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/metascript/literal_decoder.h>
 #include <core/metascript/adhd/ast/keyword_semantics.h>
 
 #include "decl_parser.h"
@@ -96,31 +95,6 @@ b8 DeclParser::tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDe
     MStringView duplicateError;
     MStringView argError;
     const ExternAttributeKind::Enum kind = KeywordSemantics::TryParseExternAttribute(attr.name, &duplicateError, &argError);
-    if(kind == ExternAttributeKind::CppLayout){
-        if(outClass.hasExplicitLayout){
-            m_cursor.error(attr.line, attr.column, duplicateError);
-            return false;
-        }
-        if(attr.arguments.size() != 2u || attr.arguments[0].kind != TokenType::IntegerLiteral || attr.arguments[1].kind != TokenType::IntegerLiteral){
-            m_cursor.error(attr.line, attr.column, argError);
-            return false;
-        }
-        u64 sizeVal = 0u;
-        u64 alignVal = 0u;
-        if(!LiteralDecoder::TryParseUnsignedIntegerLiteral(attr.arguments[0].text, sizeVal)
-            || !LiteralDecoder::TryParseUnsignedIntegerLiteral(attr.arguments[1].text, alignVal)
-            || sizeVal == 0u || alignVal == 0u
-            || sizeVal > Limit<u32>::s_Max || alignVal > Limit<u32>::s_Max){
-            m_cursor.error(attr.line, attr.column, argError);
-            return false;
-        }
-        outClass.totalSize = static_cast<usize>(sizeVal);
-        outClass.totalAlign = static_cast<usize>(alignVal);
-        outClass.hasExplicitLayout = true;
-        outMatched = true;
-        return true;
-    }
-
     if(kind == ExternAttributeKind::CppFlags){
         if(inOutSeenFlags){
             m_cursor.error(attr.line, attr.column, duplicateError);

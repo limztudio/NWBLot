@@ -2,10 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/global.h>"), cpp_name("::NWB::Core::Assets::AssetArena"), cpp_layout(88, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/assets/global.h>"), cpp_name("::NWB::Core::Assets::AssetArena"), cpp_flags(no_copy, no_assign)]
 extern class AssetArena;
 
-[cpp_header("<core/assets/global.h>"), cpp_name("::NWB::Core::Assets::CookArena"), cpp_layout(88, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/assets/global.h>"), cpp_name("::NWB::Core::Assets::CookArena"), cpp_flags(no_copy, no_assign)]
 extern class CookArena;
 
 

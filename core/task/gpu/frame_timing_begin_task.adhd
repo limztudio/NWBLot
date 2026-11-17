@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/frame_timing_begin_task.h>"), cpp_name("::NWB::Core::FrameTimingBeginGraphTask"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/frame_timing_begin_task.h>"), cpp_name("::NWB::Core::FrameTimingBeginGraphTask"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class FrameTimingBeginGraphTask;
 
 

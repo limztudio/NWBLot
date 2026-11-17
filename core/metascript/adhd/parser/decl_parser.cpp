@@ -60,7 +60,7 @@ b8 DeclParser::tryParseExternAttribute(const ParsedAttribute& attr, MStringView&
         return true;
 
     if(!isExtern){
-        m_cursor.error(attr.line, attr.column, "'[cpp_name(...)]', '[cpp_header(...)]', '[cpp_layout(...)]', and '[cpp_flags(...)]' are only permitted on 'extern' declarations");
+        m_cursor.error(attr.line, attr.column, "'[cpp_name(...)]', '[cpp_header(...)]', and '[cpp_flags(...)]' are only permitted on 'extern' declarations");
         return false;
     }
     if(kind != ExternAttributeKind::CppName && kind != ExternAttributeKind::CppHeader)

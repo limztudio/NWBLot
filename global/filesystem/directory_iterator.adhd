@@ -2,16 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_name("::DirectoryEntry"), cpp_layout(40, 8), cpp_flags(non_thread_safe, arena_omit_ctor)]
+[arena, cpp_name("::DirectoryEntry"), cpp_flags(non_thread_safe, arena_omit_ctor)]
 extern class DirectoryEntry{
     Expected<b8, ErrorCode> isRegularFile(...)const;
     Path path(...)const;
 };
 
-[arena, cpp_name("::DirectoryIterator"), cpp_layout(32, 8), cpp_flags(non_thread_safe, arena_omit_ctor)]
+[arena, cpp_name("::DirectoryIterator"), cpp_flags(non_thread_safe, arena_omit_ctor)]
 extern class DirectoryIterator;
 
-[arena, cpp_name("::RecursiveDirectoryIterator"), cpp_layout(32, 8), cpp_flags(non_thread_safe, arena_omit_ctor)]
+[arena, cpp_name("::RecursiveDirectoryIterator"), cpp_flags(non_thread_safe, arena_omit_ctor)]
 extern class RecursiveDirectoryIterator;
 
 

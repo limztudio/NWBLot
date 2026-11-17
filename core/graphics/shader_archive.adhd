@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::Record"), cpp_layout(248, 8)]
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::Record")]
 extern class Record{
     Name shaderName;
     String variantName;

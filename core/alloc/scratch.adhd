@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Core::Alloc::ScratchArena"), cpp_layout(304, 8), cpp_flags(no_copy, no_assign)]
+[cpp_name("::NWB::Core::Alloc::ScratchArena"), cpp_flags(no_copy, no_assign)]
 extern class ScratchArena;
 
 

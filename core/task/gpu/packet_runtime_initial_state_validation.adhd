@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/packet_runtime_initial_state_validation.h>"), cpp_name("::NWB::Core::GpuInitialStateHandoffValidation"), cpp_layout(184, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/packet_runtime_initial_state_validation.h>"), cpp_name("::NWB::Core::GpuInitialStateHandoffValidation"), cpp_flags(no_copy, no_assign)]
 extern class GpuInitialStateHandoffValidation{
     b8 validate(...);
 };

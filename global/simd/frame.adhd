@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::TangentFrameDirections"), cpp_layout(32, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::TangentFrameDirections"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TangentFrameDirections{
     VectorSingle bitangent;
     VectorSingle tangent;

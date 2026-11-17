@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::BoundingDoubleSphere"), cpp_layout(32, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::BoundingDoubleSphere"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class BoundingDoubleSphere{
     f64x4 centerRadius;
 
@@ -19,7 +19,7 @@ extern class BoundingDoubleSphere{
     void transform(...)const;
 };
 
-[cpp_name("::BoundingSphere"), cpp_layout(16, 16), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_name("::BoundingSphere"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class BoundingSphere{
     f32x4 centerRadius;
 

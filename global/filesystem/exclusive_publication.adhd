@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/filesystem/exclusive_publication.h>"), cpp_name("::FilePublicationResult"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/filesystem/exclusive_publication.h>"), cpp_name("::FilePublicationResult"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class FilePublicationResult{
     ErrorCode error;
     b8 published;

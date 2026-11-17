@@ -13,7 +13,7 @@ extern enum HandlerMutationType : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/input/module.h>"), cpp_name("::NWB::Core::InputDispatcher"), cpp_layout(696, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_header("<core/input/module.h>"), cpp_name("::NWB::Core::InputDispatcher"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
 extern class InputDispatcher{
     void addHandlerToBack(...);
     void addHandlerToFront(...);

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolvedAssetRoot"), cpp_layout(296, 8)]
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolvedAssetRoot")]
 extern class ResolvedAssetRoot{
     Path path;
     CompactString virtualRoot;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/scheduler.h>"), cpp_name("::NWB::Core::GpuTaskScheduler"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/scheduler.h>"), cpp_name("::NWB::Core::GpuTaskScheduler"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
 extern class GpuTaskScheduler{
     b8 isInitialized(...)const;
     b8 scheduleGraph(...)const;

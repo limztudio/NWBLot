@@ -116,7 +116,7 @@ extern enum GpuCommandIrWireOpcode : u16{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrBuiltinTaskRecord"), cpp_layout(304, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrBuiltinTaskRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrBuiltinTaskRecord{
     GpuTaskId task;
     GpuSubmissionPacketId packet;
@@ -148,7 +148,7 @@ extern class GpuCommandIrBuiltinTaskRecord{
     b8 clearStencil;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCapture"), cpp_layout(264, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCapture"), cpp_flags(no_copy, no_assign)]
 extern class GpuCommandIrCapture{
     b8 beginRecordingAttempt(...);
     b8 captureClearBuffer(...);
@@ -169,10 +169,10 @@ extern class GpuCommandIrCapture{
     b8 rollback(...);
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCaptureCheckpoint"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCaptureCheckpoint"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrCaptureCheckpoint;
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrClearBufferRecord"), cpp_layout(24, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrClearBufferRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrClearBufferRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -180,7 +180,7 @@ extern class GpuCommandIrClearBufferRecord{
     u32 clearValue;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrClearTextureRecord"), cpp_layout(92, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrClearTextureRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrClearTextureRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -196,7 +196,7 @@ extern class GpuCommandIrClearTextureRecord{
     u8 reserved;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrClearTextureRectUIntRecord"), cpp_layout(68, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrClearTextureRectUIntRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrClearTextureRectUIntRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -206,7 +206,7 @@ extern class GpuCommandIrClearTextureRectUIntRecord{
     GpuCommandIrUIntColor uintClearValue;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCopyBufferRecord"), cpp_layout(48, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCopyBufferRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrCopyBufferRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -217,7 +217,7 @@ extern class GpuCommandIrCopyBufferRecord{
     u64 dataSizeBytes;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCopyTextureRecord"), cpp_layout(88, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCopyTextureRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrCopyTextureRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -227,7 +227,7 @@ extern class GpuCommandIrCopyTextureRecord{
     GpuCommandIrTextureSlice destinationSlice;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrFloatColor"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrFloatColor"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrFloatColor{
     f32 r;
     f32 g;
@@ -235,13 +235,13 @@ extern class GpuCommandIrFloatColor{
     f32 a;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrHeader"), cpp_layout(4, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrHeader"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrHeader{
     GpuCommandIrWireOpcode opcode;
     u16 byteSize;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrIntColor"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrIntColor"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrIntColor{
     i32 r;
     i32 g;
@@ -249,10 +249,10 @@ extern class GpuCommandIrIntColor{
     i32 a;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrOwnedStream"), cpp_layout(48, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrOwnedStream"), cpp_flags(no_copy, no_assign)]
 extern class GpuCommandIrOwnedStream;
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrRecordContext"), cpp_layout(12, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrRecordContext"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrRecordContext{
     u32 taskIndex;
     u32 packetIndex;
@@ -260,7 +260,7 @@ extern class GpuCommandIrRecordContext{
     u16 queueDeviceGeneration;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrRect"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrRect"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrRect{
     i32 minX;
     i32 maxX;
@@ -268,7 +268,7 @@ extern class GpuCommandIrRect{
     i32 maxY;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrReplayResult"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrReplayResult"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrReplayResult{
     GpuCommandIrReplayError error;
     GpuCommandIrStreamValidationResult streamValidation;
@@ -276,7 +276,7 @@ extern class GpuCommandIrReplayResult{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamHeader"), cpp_layout(48, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrStreamHeader{
     u32 magic;
     u16 version;
@@ -288,14 +288,14 @@ extern class GpuCommandIrStreamHeader{
     u64 blobBytes;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamHeaderPrefix"), cpp_layout(8, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamHeaderPrefix"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrStreamHeaderPrefix{
     u32 magic;
     u16 version;
     u16 reserved;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamReader"), cpp_layout(104, 8), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamReader"), cpp_flags(binary_serializable, no_copy, no_assign)]
 extern class GpuCommandIrStreamReader{
     u64 graphGeneration(...)const;
     Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus> next(...);
@@ -305,7 +305,7 @@ extern class GpuCommandIrStreamReader{
     GpuCommandIrStreamValidationResult validation(...)const;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamValidationResult"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrStreamValidationResult"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrStreamValidationResult{
     usize byteOffset;
     u64 recordIndex;
@@ -315,7 +315,7 @@ extern class GpuCommandIrStreamValidationResult{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrTextureSlice"), cpp_layout(32, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrTextureSlice"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrTextureSlice{
     u32 x;
     u32 y;
@@ -327,7 +327,7 @@ extern class GpuCommandIrTextureSlice{
     u32 arraySlice;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrTextureSubresourceSet"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrTextureSubresourceSet"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrTextureSubresourceSet{
     u32 baseMipLevel;
     u32 numMipLevels;
@@ -335,7 +335,7 @@ extern class GpuCommandIrTextureSubresourceSet{
     u32 numArraySlices;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrUIntColor"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrUIntColor"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrUIntColor{
     u32 r;
     u32 g;
@@ -343,7 +343,7 @@ extern class GpuCommandIrUIntColor{
     u32 a;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrUploadBufferRecord"), cpp_layout(56, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrUploadBufferRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrUploadBufferRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -356,7 +356,7 @@ extern class GpuCommandIrUploadBufferRecord{
     u32 reserved;
 };
 
-[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrUploadTextureRecord"), cpp_layout(96, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrUploadTextureRecord"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCommandIrUploadTextureRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;

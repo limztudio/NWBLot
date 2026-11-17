@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::BoundingBox"), cpp_layout(32, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::BoundingBox"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class BoundingBox{
     f32x4 center;
     f32x4 extents;
@@ -19,7 +19,7 @@ extern class BoundingBox{
     void transform(...)const;
 };
 
-[cpp_name("::BoundingDoubleBox"), cpp_layout(64, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::BoundingDoubleBox"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class BoundingDoubleBox{
     f64x4 center;
     f64x4 extents;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/cpu/profile_buffer.h>"), cpp_name("::NWB::Core::CpuTaskProfileBuffer"), cpp_layout(104, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/cpu/profile_buffer.h>"), cpp_name("::NWB::Core::CpuTaskProfileBuffer"), cpp_flags(no_copy, no_assign)]
 extern class CpuTaskProfileBuffer{
     usize capacity(...)const;
     u64 dropped(...)const;

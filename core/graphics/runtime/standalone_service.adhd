@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService"), cpp_layout(24, 8), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService"), cpp_flags(binary_serializable, no_copy, no_assign)]
 extern class GraphicsStandaloneService;
 
 

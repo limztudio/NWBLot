@@ -64,13 +64,13 @@ extern enum MetascriptTokenType : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Lexer"), cpp_layout(320, 8), cpp_flags(binary_serializable)]
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Lexer"), cpp_flags(binary_serializable)]
 extern class MetascriptLexer{
     b8 consumeBalancedBracesRaw(...);
     MetascriptToken next(...);
 };
 
-[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class MetascriptToken{
     StringView text;
     MetascriptTokenType type;

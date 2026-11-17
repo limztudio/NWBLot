@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/gather_merge_registry.h>"), cpp_name("::NWB::Core::Assets::AssetGatherMergeAutoRegistrar"), cpp_layout(1, 1), cpp_flags(small_value, binary_serializable)]
+[cpp_header("<core/assets/gather_merge_registry.h>"), cpp_name("::NWB::Core::Assets::AssetGatherMergeAutoRegistrar"), cpp_flags(small_value, binary_serializable)]
 extern class AssetGatherMergeAutoRegistrar;
 
 

@@ -22,7 +22,7 @@ extern enum GpuDescriptorClass : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle"), cpp_layout(4, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class GpuDescriptorHandle{
     u32 value;
     GpuDescriptorClass descriptorClass(...)const;
@@ -30,7 +30,7 @@ extern class GpuDescriptorHandle{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapAbi"), cpp_layout(56, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapAbi"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuDescriptorHeapAbi{
     u32 resourceSetIndex;
     u32 samplerSetIndex;
@@ -49,7 +49,7 @@ extern class GpuDescriptorHeapAbi{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapDesc"), cpp_layout(64, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuDescriptorHeapDesc{
     u32 resourceCapacity;
     u32 samplerCapacity;
@@ -57,7 +57,7 @@ extern class GpuDescriptorHeapDesc{
     GpuDescriptorHeapDesc setBindlessHeapAbi(...);
 };
 
-[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapLifecycleStatistics"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapLifecycleStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuDescriptorHeapLifecycleStatistics{
     b8 initialized;
     u32 resourceCapacity;

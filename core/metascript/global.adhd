@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/global.h>"), cpp_name("::NWB::Core::Metascript::IMetaReader"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/metascript/global.h>"), cpp_name("::NWB::Core::Metascript::IMetaReader"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class IMetaReader;
 
 

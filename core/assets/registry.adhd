@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/registry.h>"), cpp_name("::NWB::Core::Assets::AssetRegistry"), cpp_layout(176, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/assets/registry.h>"), cpp_name("::NWB::Core::Assets::AssetRegistry"), cpp_flags(no_copy, no_assign)]
 extern class AssetRegistry{
     b8 unregisterCodec(...);
 };

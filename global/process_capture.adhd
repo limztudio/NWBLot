@@ -22,7 +22,7 @@ extern enum ProcessCaptureFailureKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/process_capture.h>"), cpp_name("::ProcessCaptureFailure"), cpp_layout(20, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/process_capture.h>"), cpp_name("::ProcessCaptureFailure"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class ProcessCaptureFailure{
     ErrorCondition completionError;
     i32 exitCode;

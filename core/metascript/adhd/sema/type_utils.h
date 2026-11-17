@@ -9,6 +9,8 @@
 #include "../ast/keyword_semantics.h"
 #include "../ast/builtin_type_semantics.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -469,6 +471,118 @@ struct BuiltinSpecialMethodInfo{
 [[nodiscard]] SpecialFunctionKind::Enum FindSpecialFunctionKind(MStringView name)noexcept;
 [[nodiscard]] SimdLaneZeroRuleKind::Enum FindSimdLaneZeroRule(MStringView name)noexcept;
 [[nodiscard]] SpecialMethodKind::Enum FindSpecialMethodSemantics(MStringView methodName)noexcept;
+
+template<typename ResolveTypeFn, typename ParseCountFn>
+[[nodiscard]] b8 ResolveInlineGenericLayout(
+    const BuiltinGenericTypeInfo& genericInfo,
+    const TypeRef& type,
+    const u32 depth,
+    usize& outSize,
+    usize& outAlign,
+    const ResolveTypeFn& resolveType,
+    const ParseCountFn& parseCount
+)noexcept{
+    switch(genericInfo.inlineLayoutKind){
+    case InlineLayoutKind::Atomic:{
+        if(!type.templateArgs.empty() && type.templateArgs[0].type){
+            resolveType(*type.templateArgs[0].type, depth + 1u, outSize, outAlign);
+            return true;
+        }
+        outSize = 8u;
+        outAlign = 8u;
+        return true;
+    }
+    case InlineLayoutKind::Optional:{
+        if(!type.templateArgs.empty() && type.templateArgs[0].type){
+            usize innerSize = 8u;
+            usize innerAlign = 8u;
+            resolveType(*type.templateArgs[0].type, depth + 1u, innerSize, innerAlign);
+            outAlign = innerAlign;
+            outSize = ::AlignUp(innerSize + 1u, innerAlign);
+            return true;
+        }
+        outSize = 16u;
+        outAlign = 8u;
+        return true;
+    }
+    case InlineLayoutKind::Expected:{
+        if(!type.templateArgs.empty() && type.templateArgs[0].type){
+            usize valSize = 8u;
+            usize valAlign = 8u;
+            usize errSize = 1u;
+            usize errAlign = 1u;
+            resolveType(*type.templateArgs[0].type, depth + 1u, valSize, valAlign);
+            if(type.templateArgs.size() >= 2u && type.templateArgs[1].type)
+                resolveType(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
+            outAlign = valAlign > errAlign ? valAlign : errAlign;
+            const usize payloadSize = valSize > errSize ? valSize : errSize;
+            outSize = ::AlignUp(payloadSize + 1u, outAlign);
+            return true;
+        }
+        outSize = 24u;
+        outAlign = 8u;
+        return true;
+    }
+    case InlineLayoutKind::Array:
+    case InlineLayoutKind::FixedVector:{
+        usize elemSize = 4u;
+        usize elemAlign = 4u;
+        usize count = 1u;
+        if(!type.templateArgs.empty() && type.templateArgs[0].type)
+            resolveType(*type.templateArgs[0].type, depth + 1u, elemSize, elemAlign);
+        if(type.templateArgs.size() >= 2u)
+            count = parseCount(type.templateArgs[1].constantOrTypeName());
+        if(genericInfo.inlineLayoutKind == InlineLayoutKind::Array){
+            outSize = elemSize * count;
+            outAlign = elemAlign;
+        }
+        else{
+            outAlign = elemAlign > 4u ? elemAlign : 4u;
+            outSize = ::AlignUp(elemSize * count + 4u, outAlign);
+        }
+        return true;
+    }
+    case InlineLayoutKind::None:
+        break;
+    }
+    return false;
+}
+
+template<typename ResolveFieldFn>
+void ComputeSequentialExternClassLayout(
+    const ClassDecl& classDecl,
+    const b8 hasVtablePointer,
+    const ResolveFieldFn& resolveField,
+    usize& outSize,
+    usize& outAlign
+)noexcept{
+    usize offset = hasVtablePointer ? 8u : 0u;
+    usize maxAlign = offset > 0u ? 8u : 1u;
+    b8 hasField = false;
+    for(FieldDecl* field : classDecl.fields){
+        if(!field || !field->type || field->isStatic)
+            continue;
+        hasField = true;
+        usize fieldSize = 8u;
+        usize fieldAlign = 8u;
+        resolveField(*field->type, fieldSize, fieldAlign);
+        field->resolvedSize = fieldSize;
+        field->resolvedAlign = fieldAlign;
+        if(fieldAlign > maxAlign)
+            maxAlign = fieldAlign;
+        offset = ::AlignUp(offset, fieldAlign);
+        field->resolvedOffset = offset;
+        offset += fieldSize;
+    }
+    if(hasField){
+        outAlign = maxAlign;
+        outSize = offset == 0u ? 8u : ::AlignUp(offset, maxAlign);
+    }
+    else{
+        outSize = 8u;
+        outAlign = 8u;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

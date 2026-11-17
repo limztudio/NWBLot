@@ -2,27 +2,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::MatrixDecomposition"), cpp_layout(48, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::MatrixDecomposition"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class MatrixDecomposition{
     VectorSingle rotation;
     VectorSingle scale;
     VectorSingle translation;
 };
 
-[cpp_name("::MatrixDoubleDecomposition"), cpp_layout(96, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::MatrixDoubleDecomposition"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class MatrixDoubleDecomposition{
     VectorDouble rotation;
     VectorDouble scale;
     VectorDouble translation;
 };
 
-[cpp_name("::RigidDualQuaternion"), cpp_layout(32, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::RigidDualQuaternion"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class RigidDualQuaternion{
     VectorSingle dual;
     VectorSingle real;
 };
 
-[cpp_name("::RigidDualQuaternionDouble"), cpp_layout(64, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::RigidDualQuaternionDouble"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class RigidDualQuaternionDouble{
     VectorDouble dual;
     VectorDouble real;

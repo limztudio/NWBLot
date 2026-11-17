@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScheduler"), cpp_layout(1120, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScheduler"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
 extern class CpuTaskScheduler{
     CpuAffinity currentWorkerAffinity(...)const;
     usize currentWorkerIndex(...)const;
@@ -17,7 +17,7 @@ extern class CpuTaskScheduler{
     u32 workerThreadCount(...)const;
 };
 
-[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScope"), cpp_layout(40, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScope"), cpp_flags(no_copy, no_assign)]
 extern class CpuTaskScope{
     void cancel(...);
     void drain(...);

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::AssetCodecAutoRegistrar"), cpp_layout(16, 8)]
+[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::AssetCodecAutoRegistrar")]
 extern class AssetCodecAutoRegistrar{
     void finalize(...);
     b8 initialize(...);

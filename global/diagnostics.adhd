@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::DiagnosticEventRecord"), cpp_layout(96, 8), cpp_flags(self_defaulted, brace_init)]
+[cpp_name("::DiagnosticEventRecord"), cpp_flags(self_defaulted, brace_init)]
 extern class DiagnosticEventRecord{
     StringView category;
     StringView event;
@@ -14,7 +14,7 @@ extern class DiagnosticEventRecord{
     b8 terminatesProcess;
 };
 
-[cpp_name("::DiagnosticEventText"), cpp_layout(2048, 1), cpp_flags(self_defaulted, brace_init)]
+[cpp_name("::DiagnosticEventText"), cpp_flags(self_defaulted, brace_init)]
 extern class DiagnosticEventText{
     StringView c_str(...)const;
     StringView view(...)const;

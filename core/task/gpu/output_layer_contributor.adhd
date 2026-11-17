@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphOutputLayer"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphOutputLayer"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphOutputLayer{
     GpuTaskId readyTask;
     GpuGraphResourceId color;
@@ -12,7 +12,7 @@ extern class GpuTaskGraphOutputLayer{
     b8 validShape(...)const;
 };
 
-[cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphOutputLayerContributor"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphOutputLayerContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class IGpuTaskGraphOutputLayerContributor{
     void acceptTaskGraphOutputLayer(...);
     Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(...);

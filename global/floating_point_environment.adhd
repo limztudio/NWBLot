@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/floating_point_environment.h>"), cpp_name("::FloatingPointEnvironment"), cpp_layout(32, 8), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::FloatingPointEnvironment"), cpp_flags(self_defaulted, brace_init)]
 extern class FloatingPointEnvironment;
 
 

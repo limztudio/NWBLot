@@ -75,7 +75,7 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ActiveSceneSubsystemsConstPtr"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_name("::NWB::Impl::ActiveSceneSubsystemsConstPtr"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class ActiveSceneSubsystemsConstPtr;
 
 [arena, system("renderer")]

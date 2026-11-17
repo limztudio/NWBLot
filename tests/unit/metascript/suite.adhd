@@ -2419,12 +2419,12 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_FALSE(badErrors.empty());
 
     static constexpr const char kLayoutFlagsAndPreludeSource[] = R"adhd(
-[cpp_name("::MyExt::Contract"), cpp_header("<my_ext/types.h>"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_name("::MyExt::Contract"), cpp_header("<my_ext/types.h>"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class ExtContract{
     b8 probe(...)const;
 };
 
-[cpp_name("::MyExt::VariadicSink"), cpp_header("<my_ext/types.h>"), cpp_layout(32, 16), cpp_flags(self_defaulted, small_value, binary_serializable)]
+[cpp_name("::MyExt::VariadicSink"), cpp_header("<my_ext/types.h>"), cpp_flags(self_defaulted, small_value, binary_serializable)]
 extern class VariadicSink{
     u32 count;
     b8 pushAny(...);
@@ -2475,8 +2475,8 @@ class ImplContract : ExtContract{
         EXPECT_FALSE(Core::Metascript::Adhd::Compiler::Compile(src, path, nullptr, {}, {}, arena.arena, badRes)) << path;
     };
     expectExtFails(
-        "[cpp_layout(8, 8)]\nclass NonExternLayout{\n    public u32 x = 0u;\n}\n",
-        "impl/edge_cases/bad_non_extern_layout.adhd"
+        "[cpp_name(\"::MyExt::NonExtern\")]\nclass NonExternName{\n    public u32 x = 0u;\n}\n",
+        "impl/edge_cases/bad_non_extern_name.adhd"
     );
     expectExtFails(
         "[cpp_flags(small_value)]\nclass NonExternFlags{\n    public u32 x = 0u;\n}\n",
@@ -2487,7 +2487,7 @@ class ImplContract : ExtContract{
         "impl/edge_cases/bad_non_extern_variadic.adhd"
     );
     expectExtFails(
-        "[cpp_name(\"::MyExt::Abs\"), cpp_header(\"<my_ext/abs.h>\"), cpp_layout(8, 8), cpp_flags(abstract)]\nextern class AbsType;\nvoid F(){ const AbsType a; }\n",
+        "[cpp_name(\"::MyExt::Abs\"), cpp_header(\"<my_ext/abs.h>\"), cpp_flags(abstract)]\nextern class AbsType;\nvoid F(){ const AbsType a; }\n",
         "impl/edge_cases/bad_abstract_value.adhd"
     );
 }

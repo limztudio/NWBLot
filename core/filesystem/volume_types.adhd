@@ -13,14 +13,14 @@ extern enum VolumeUsage : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeBuildConfig"), cpp_layout(272, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeBuildConfig"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class VolumeBuildConfig{
     CompactString volumeName;
     u64 segmentSize;
     u64 metadataSize;
 };
 
-[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeMountDesc"), cpp_layout(328, 8)]
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeMountDesc")]
 extern class VolumeMountDesc{
     CompactString volumeName;
     Path mountDirectory;

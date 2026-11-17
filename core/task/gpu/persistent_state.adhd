@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache"), cpp_layout(272, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache"), cpp_flags(no_copy, no_assign)]
 extern class GpuPersistentResourceStateCache{
     b8 empty(...)const;
     b8 replaceBufferSubset(...);

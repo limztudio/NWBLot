@@ -34,7 +34,7 @@ extern enum CooperativeVectorMatrixLayout : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorConvertMatrixLayoutDesc"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorConvertMatrixLayoutDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class CooperativeVectorConvertMatrixLayoutDesc{
     CooperativeVectorMatrixLayoutDesc src;
     CooperativeVectorMatrixLayoutDesc dst;
@@ -42,14 +42,14 @@ extern class CooperativeVectorConvertMatrixLayoutDesc{
     u32 numColumns;
 };
 
-[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorDeviceFeatures"), cpp_layout(40, 8)]
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorDeviceFeatures")]
 extern class CooperativeVectorDeviceFeatures{
     Vector<CooperativeVectorMatMulFormatCombo> matMulFormats;
     b8 trainingFloat16;
     b8 trainingFloat32;
 };
 
-[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatMulFormatCombo"), cpp_layout(6, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatMulFormatCombo"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class CooperativeVectorMatMulFormatCombo{
     CooperativeVectorDataType inputType;
     CooperativeVectorDataType inputInterpretation;
@@ -59,7 +59,7 @@ extern class CooperativeVectorMatMulFormatCombo{
     b8 transposeSupported;
 };
 
-[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatrixLayoutDesc"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatrixLayoutDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class CooperativeVectorMatrixLayoutDesc{
     u64 offset;
     usize size;

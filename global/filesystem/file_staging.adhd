@@ -24,7 +24,7 @@ extern enum StagedFilePairFailureStage : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairPaths"), cpp_layout(240, 8), cpp_flags(non_thread_safe, arena_first_ctor)]
+[arena, cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairPaths"), cpp_flags(non_thread_safe, arena_first_ctor)]
 extern class StagedFilePairPaths{
     Path primary;
     Path primaryBackup;
@@ -34,7 +34,7 @@ extern class StagedFilePairPaths{
     Path secondaryTemporary;
 };
 
-[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairResult"), cpp_layout(176, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairResult"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class StagedFilePairResult{
     ErrorCode error;
     u32 failedIndex;

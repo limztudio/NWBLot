@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_overlap_metric_tracker.h>"), cpp_name("::NWB::Core::GpuOverlapMetricTracker"), cpp_layout(48, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_overlap_metric_tracker.h>"), cpp_name("::NWB::Core::GpuOverlapMetricTracker"), cpp_flags(no_copy, no_assign)]
 extern class GpuOverlapMetricTracker{
     b8 conflicts(...)const;
     void discardPendingRanges(...);

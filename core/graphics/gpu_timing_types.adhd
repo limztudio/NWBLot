@@ -17,7 +17,7 @@ extern enum GpuTimingScopeSkipReason : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingRecorderStatistics"), cpp_layout(160, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingRecorderStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTimingRecorderStatistics{
     u64 preparedScopeCount;
     u64 requestedQueryCount;
@@ -42,7 +42,7 @@ extern class GpuTimingRecorderStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSample"), cpp_layout(128, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSample"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTimingSample{
     u64 sourceFrameIndex;
     f64 durationSeconds;
@@ -53,22 +53,22 @@ extern class GpuTimingSample{
     b8 published;
 };
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleAttribution"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleAttribution"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class GpuTimingSampleAttribution{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleListener"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleListener"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuTimingSampleListener{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleSubscription"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleSubscription"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class GpuTimingSampleSubscription{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScope"), cpp_layout(136, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScope"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTimingScope{
     Name scopeName;
     u64 reservation;
@@ -79,7 +79,7 @@ extern class GpuTimingScope{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScopeDefinition"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScopeDefinition"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTimingScopeDefinition{
     Name identity;
     StringView markerLabel;

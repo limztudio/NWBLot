@@ -2,12 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::AssetManager"), cpp_layout(24, 8), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::AssetManager"), cpp_flags(binary_serializable, no_copy, no_assign)]
 extern class AssetManager{
     Expected<UniquePtr<IAsset>> loadSync(...)const;
 };
 
-[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::IAssetBinarySource"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::IAssetBinarySource"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class IAssetBinarySource{
     b8 readAssetBinary(...)const;
 };

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/process_memory_map.h>"), cpp_name("::LinuxProcessMemoryMapEntry"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/process_memory_map.h>"), cpp_name("::LinuxProcessMemoryMapEntry"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class LinuxProcessMemoryMapEntry{
     u64 begin;
     u64 end;

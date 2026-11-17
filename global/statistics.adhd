@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/statistics.h>"), cpp_name("::OnlineF64Statistics"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/statistics.h>"), cpp_name("::OnlineF64Statistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class OnlineF64Statistics{
     f64 average;
     u32 count;

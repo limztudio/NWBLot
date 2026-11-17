@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/task_graph_submission_binding.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionBinding"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/task_graph_submission_binding.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionBinding"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class GpuGraphSubmissionBinding{
     b8 valid(...)const;
 };

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/range_partition.h>"), cpp_name("::BalancedPartitionRange"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<global/range_partition.h>"), cpp_name("::BalancedPartitionRange"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class BalancedPartitionRange{
     usize first;
     usize last;

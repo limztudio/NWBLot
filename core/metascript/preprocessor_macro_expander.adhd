@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/preprocessor_macro_expander.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorMacroExpander"), cpp_layout(24, 8), cpp_flags(binary_serializable, no_assign)]
+[cpp_header("<core/metascript/preprocessor_macro_expander.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorMacroExpander"), cpp_flags(binary_serializable, no_assign)]
 extern class MetascriptPreprocessorMacroExpander{
     b8 expand(...);
 };

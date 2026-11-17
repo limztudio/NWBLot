@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/dependency_pair_hash.h>"), cpp_name("::NWB::Core::GpuTaskDependencyPairHasher"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/dependency_pair_hash.h>"), cpp_name("::NWB::Core::GpuTaskDependencyPairHasher"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuTaskDependencyPairHasher;
 
 

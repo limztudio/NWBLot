@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_submission_ticket.h>"), cpp_name("::NWB::Core::GpuTimingSubmissionTicket"), cpp_layout(96, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_timing_submission_ticket.h>"), cpp_name("::NWB::Core::GpuTimingSubmissionTicket"), cpp_flags(no_copy, no_assign)]
 extern class GpuTimingSubmissionTicket{
     void discard(...);
 };

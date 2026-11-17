@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::AabbTests::Bounds"), cpp_layout(32, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::AabbTests::Bounds"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class AabbBounds{
     VectorSingle maxBounds;
     VectorSingle minBounds;
 };
 
-[cpp_name("::AabbDoubleTests::Bounds"), cpp_layout(64, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::AabbDoubleTests::Bounds"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class AabbDoubleBounds{
     VectorDouble maxBounds;
     VectorDouble minBounds;

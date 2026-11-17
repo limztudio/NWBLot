@@ -64,7 +64,7 @@ extern enum GpuTaskQueueAssignmentReason : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphAnalysis"), cpp_layout(536, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphAnalysis"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphAnalysis{
     Vector<GpuTaskDependencyEdge> cycleEdges(...)const;
     Vector<GpuTaskId> cyclePath(...)const;
@@ -85,7 +85,7 @@ extern class GpuTaskGraphAnalysis{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphAnalysisDiagnostic"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphAnalysisDiagnostic"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphAnalysisDiagnostic{
     GpuTaskId task;
     GpuTaskId relatedTask;
@@ -94,7 +94,7 @@ extern class GpuTaskGraphAnalysisDiagnostic{
     GpuTaskGraphAnalysisStatus status;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileOptions"), cpp_layout(120, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileOptions"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphCompileOptions{
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
@@ -103,35 +103,35 @@ extern class GpuTaskGraphCompileOptions{
     b8 allowMetadataOnlyTasks;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphPacketTimingEnvelopeOptions"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphPacketTimingEnvelopeOptions"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphPacketTimingEnvelopeOptions{
     GpuTaskId firstTask;
     GpuTaskId lastTask;
     b8 enabled(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentOptions"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentOptions"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphQueueAssignmentOptions{
     usize queueLoadCount;
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignments"), cpp_layout(128, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignments"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphQueueAssignments{
     GpuTaskQueueAssignmentDiagnostic diagnostic(...)const;
     void reset(...);
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphSchedulingTaskIndexView"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphSchedulingTaskIndexView"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuTaskGraphSchedulingTaskIndexView{
     usize taskCount;
     b8 empty(...)const;
     u32 operator[](in usize a0)const;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignment"), cpp_layout(48, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignment"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskQueueAssignment{
     GpuTaskId task;
     GpuPhysicalQueueId initialQueue;
@@ -143,14 +143,14 @@ extern class GpuTaskQueueAssignment{
     GpuTaskQueueAssignmentModifier modifiers;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentDiagnostic"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentDiagnostic"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskQueueAssignmentDiagnostic{
     GpuTaskId task;
     GpuTaskGraphQueueAssignmentStatus status;
     GpuQueueCapability requiredCapabilities;
 };
 
-[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskQueueLoad"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskQueueLoad"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuTaskQueueLoad{
     GpuPhysicalQueueId queue;
     u64 estimatedCost;

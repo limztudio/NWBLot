@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::ArenaBase"), cpp_layout(88, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_name("::ArenaBase"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class ArenaBase{
     Name allocationLog(...)const;
     ArenaMemoryStats memoryStats(...)const;

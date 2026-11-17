@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/integer_rect.h>"), cpp_name("::IntegerRectBounds"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/integer_rect.h>"), cpp_name("::IntegerRectBounds"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class IntegerRectBounds{
     u64 xBegin;
     u64 xEnd;

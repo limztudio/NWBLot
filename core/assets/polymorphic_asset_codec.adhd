@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::PolymorphicAssetCodec"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::PolymorphicAssetCodec"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class PolymorphicAssetCodec;
 
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/unicode/property_table.h>"), cpp_name("::UnicodePropertyRange"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<global/unicode/property_table.h>"), cpp_name("::UnicodePropertyRange"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class UnicodePropertyRange{
     u32 first;
     u32 last;

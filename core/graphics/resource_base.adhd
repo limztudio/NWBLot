@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::GraphicsResource"), cpp_layout(16, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::GraphicsResource"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class GraphicsResource{
     u32 addReference(...);
     Object getNativeHandle(...);
     u32 release(...);
 };
 
-[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::Object"), cpp_layout(8, 8), cpp_flags(small_value, binary_serializable, equality_switch)]
+[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::Object"), cpp_flags(small_value, binary_serializable, equality_switch)]
 extern class Object{
     u64 integer;
 };

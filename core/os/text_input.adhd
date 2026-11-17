@@ -66,7 +66,7 @@ extern enum TextInputPollResult : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::ITextInputService"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::ITextInputService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class ITextInputService{
     TextInputSessionToken activeSession(...)const;
     Expected<TextInputSessionToken, TextInputAdmission> begin(...);
@@ -80,7 +80,7 @@ extern class ITextInputService{
     TextInputAdmission updateSurrounding(...);
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputCapabilities"), cpp_layout(5, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputCapabilities"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class TextInputCapabilities{
     b8 commit;
     b8 preedit;
@@ -89,7 +89,7 @@ extern class TextInputCapabilities{
     TextInputBackend backend;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent"), cpp_layout(112, 8)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent")]
 extern class TextInputEvent{
     String text;
     TextInputSessionToken token;
@@ -105,7 +105,7 @@ extern class TextInputEvent{
     TextInputDeletionBasis deletionBasis;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputRect"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputRect"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class TextInputRect{
     i32 x;
     i32 y;
@@ -113,7 +113,7 @@ extern class TextInputRect{
     i32 height;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionDesc"), cpp_layout(48, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TextInputSessionDesc{
     TextInputRect caret;
     StringView surrounding;
@@ -121,7 +121,7 @@ extern class TextInputSessionDesc{
     usize caretByte;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionToken"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionToken"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class TextInputSessionToken{
     u64 service;
     u64 generation;

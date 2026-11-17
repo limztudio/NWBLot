@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::EncodedTextLogPayloadHeader"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::EncodedTextLogPayloadHeader"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class EncodedTextLogPayloadHeader{
     u32 magic;
     u16 version;
@@ -11,7 +11,7 @@ extern class EncodedTextLogPayloadHeader{
     u64 messageBytes;
 };
 
-[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::TextLogPayload"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::TextLogPayload"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TextLogPayload{
     StringView messageUtf8;
     LogType type;

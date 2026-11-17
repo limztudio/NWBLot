@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::ErrorCode"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, equality_switch)]
+[cpp_name("::ErrorCode"), cpp_flags(self_defaulted, small_value, binary_serializable, equality_switch)]
 extern class ErrorCode{
     i32 value(...)const;
 };

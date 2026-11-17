@@ -13,7 +13,7 @@ extern enum MemorySource : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryDelta"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryDelta"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class MemoryDelta{
     u64 previousFrameIndex;
     u64 currentFrameIndex;
@@ -27,7 +27,7 @@ extern class MemoryDelta{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryRecorder"), cpp_layout(336, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryRecorder"), cpp_flags(no_copy, no_assign)]
 extern class MemoryRecorder{
     void clear(...);
     MemoryDelta delta(...)const;
@@ -42,14 +42,14 @@ extern class MemoryRecorder{
     MemorySnapshot snapshotAt(...)const;
 };
 
-[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryScopeId"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryScopeId"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class MemoryScopeId{
     u32 index;
     u32 generation;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemorySnapshot"), cpp_layout(128, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemorySnapshot"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class MemorySnapshot{
     Name scopeName;
     u64 frameIndex;
@@ -63,7 +63,7 @@ extern class MemorySnapshot{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryView"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryView"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class MemoryView{
     MemoryDelta delta(...)const;
     MemoryDelta deltaAt(...)const;

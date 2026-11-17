@@ -6,6 +6,7 @@
 #include <core/metascript/adhd/ast/operator_semantics.h>
 #include <core/metascript/adhd/parser/decl_parser.h>
 #include <core/metascript/arena_names.h>
+#include <core/metascript/literal_decoder.h>
 
 #include <global/filesystem.h>
 
@@ -789,8 +790,8 @@ private:
             obj.adhdName = ownString(cls->name);
             obj.cppExportName = ownString(cls->cppExportName);
             obj.requiredHeader = ownString(cls->requiredHeader);
-            obj.byteSize = static_cast<u32>(cls->totalSize);
-            obj.byteAlign = static_cast<u32>(cls->totalAlign);
+            obj.byteSize = cls->hasExplicitLayout ? static_cast<u32>(cls->totalSize) : 8u;
+            obj.byteAlign = cls->hasExplicitLayout ? static_cast<u32>(cls->totalAlign) : 8u;
             obj.isArenaBacked = cls->isArenaOwner;
             obj.isSelfDefaulted = cls->isSelfDefaulted;
             obj.isSmallValue = cls->isSmallValue;
@@ -865,6 +866,97 @@ private:
                     insertUniqueKey(m_receiverSigByKey, buildPairKey(obj.adhdName, rm.methodName), sigIdx);
                 }
             }
+        }
+
+        const auto computeTypeLayout = [&](const auto& self, const TypeRef& type, const u32 depth, usize& outSize, usize& outAlign)noexcept -> void{
+            if(depth > 16u || type.refMode != ParamPassingMode::None || type.isFuncType){
+                outSize = 8u;
+                outAlign = 8u;
+                return;
+            }
+            const MStringView tname = type.name;
+            if(const BuiltinScalarTypeInfo* scalarInfo = BuiltinTypeSemantics::FindBuiltinScalarType(tname)){
+                outSize = scalarInfo->byteSize;
+                outAlign = scalarInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinByAdhdName(s_BuiltinObjectTypes, tname)){
+                outSize = objInfo->byteSize;
+                outAlign = objInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinObjectTypeInfo* objInfo = findObjectType(tname)){
+                outSize = objInfo->byteSize;
+                outAlign = objInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinEnumInfo* enumInfo = findEnum(tname)){
+                outSize = enumInfo->byteSize;
+                outAlign = enumInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinByAdhdName(s_BuiltinUnalignedVectorTypes, tname)){
+                outSize = unalignedInfo->byteSize;
+                outAlign = unalignedInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinByAdhdName(s_BuiltinSimdVectorTypes, tname)){
+                outSize = vecInfo->byteSize;
+                outAlign = vecInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinByAdhdName(s_BuiltinSimdMatrixTypes, tname)){
+                outSize = matInfo->byteSize;
+                outAlign = matInfo->byteAlign;
+                return;
+            }
+            if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinByAdhdName(s_BuiltinGenericTypes, tname)){
+                if(genericInfo->byteSize > 0u){
+                    outSize = genericInfo->byteSize;
+                    outAlign = genericInfo->byteAlign;
+                    return;
+                }
+                const auto resolveInner = [&](const TypeRef& innerType, const u32 innerDepth, usize& innerSize, usize& innerAlign)noexcept{
+                    self(self, innerType, innerDepth, innerSize, innerAlign);
+                };
+                const auto parseCount = [](const MStringView countText)noexcept -> usize{
+                    u64 countVal = 0u;
+                    if(LiteralDecoder::TryParseUnsignedIntegerLiteral(countText, countVal) && countVal > 0u)
+                        return static_cast<usize>(countVal);
+                    return 1u;
+                };
+                if(ResolveInlineGenericLayout(*genericInfo, type, depth, outSize, outAlign, resolveInner, parseCount))
+                    return;
+            }
+            outSize = 8u;
+            outAlign = 8u;
+        };
+
+        for(usize pass = 0u; pass <= classes.size(); ++pass){
+            b8 changed = false;
+            for(const ClassDecl* cls : classes){
+                if(!cls || cls->name.empty() || cls->hasExplicitLayout)
+                    continue;
+                const auto it = m_objectTypeByName.find(cls->name);
+                if(it == m_objectTypeByName.end())
+                    continue;
+                usize computedSize = 8u;
+                usize computedAlign = 8u;
+                const auto resolveField = [&](const TypeRef& fieldType, usize& fieldSize, usize& fieldAlign)noexcept{
+                    computeTypeLayout(computeTypeLayout, fieldType, 0u, fieldSize, fieldAlign);
+                };
+                ComputeSequentialExternClassLayout(*cls, cls->isPolymorphicBase, resolveField, computedSize, computedAlign);
+                const u32 newSize = computedSize <= Limit<u32>::s_Max ? static_cast<u32>(computedSize) : Limit<u32>::s_Max;
+                const u32 newAlign = computedAlign <= Limit<u32>::s_Max ? static_cast<u32>(computedAlign) : Limit<u32>::s_Max;
+                BuiltinObjectTypeInfo& obj = m_objectTypes[it->second];
+                if(obj.byteSize != newSize || obj.byteAlign != newAlign){
+                    obj.byteSize = newSize;
+                    obj.byteAlign = newAlign;
+                    changed = true;
+                }
+            }
+            if(!changed)
+                break;
         }
     }
 

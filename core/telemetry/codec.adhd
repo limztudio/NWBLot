@@ -15,20 +15,20 @@ extern enum DecodeStatus : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeResult"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeResult"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class DecodeResult{
     usize bytesRead;
     DecodeStatus status;
     b8 ok(...)const;
 };
 
-[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodedEvent"), cpp_layout(80, 8)]
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodedEvent")]
 extern class DecodedEvent{
     EventRecord event;
     usize bytesRead;
 };
 
-[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodedEventHeader"), cpp_layout(37, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodedEventHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedEventHeader{
     u32 magic;
     u16 version;
@@ -40,7 +40,7 @@ extern class EncodedEventHeader{
     u64 payloadBytes;
 };
 
-[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodedStreamHeader"), cpp_layout(24, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodedStreamHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedStreamHeader{
     u32 magic;
     u16 version;

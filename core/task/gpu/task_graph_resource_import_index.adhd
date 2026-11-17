@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/task_graph_resource_import_index.h>"), cpp_name("::NWB::Core::GpuGraphResourceImportIndex"), cpp_layout(296, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph_resource_import_index.h>"), cpp_name("::NWB::Core::GpuGraphResourceImportIndex"), cpp_flags(no_copy, no_assign)]
 extern class GpuGraphResourceImportIndex{
     void clearResourceSets(...);
     void clearResources(...);

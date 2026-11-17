@@ -17,7 +17,7 @@ extern enum MetascriptValueType : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value"), cpp_layout(24, 8)]
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value")]
 extern class MetascriptValue{
     mut GlobalArena arena(...)const;
     f64 asDouble(...)const;

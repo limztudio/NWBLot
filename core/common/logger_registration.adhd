@@ -24,12 +24,12 @@ extern enum LoggerBreakPolicy : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::ILogger"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::ILogger"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class ILogger{
     mut GlobalArena arena(...);
 };
 
-[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::LoggerRegistrationGuard"), cpp_layout(72, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::LoggerRegistrationGuard"), cpp_flags(no_copy, no_assign)]
 extern class LoggerRegistrationGuard;
 
 

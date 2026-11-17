@@ -42,13 +42,13 @@ extern enum ClipboardStatus : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCapabilities"), cpp_layout(2, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCapabilities"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class ClipboardCapabilities{
     b8 readText;
     b8 writeText;
 };
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion"), cpp_layout(64, 8)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion")]
 extern class ClipboardCompletion{
     String text;
     ClipboardRequestToken token;
@@ -57,14 +57,14 @@ extern class ClipboardCompletion{
     ClipboardStatus status;
 };
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardRequestToken"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardRequestToken"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class ClipboardRequestToken{
     u64 service;
     u64 generation;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::IClipboardService"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::IClipboardService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class IClipboardService{
     b8 cancel(...);
     ClipboardCapabilities capabilities(...)const;

@@ -2,19 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::EventRecord"), cpp_layout(72, 8)]
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::EventRecord")]
 extern class EventRecord{
     EventHeader header;
     Vector<u8> payload;
 };
 
-[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::EventView"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::EventView"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class EventView{
     usize eventCount(...)const;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::Recorder"), cpp_layout(88, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::Recorder"), cpp_flags(no_copy, no_assign)]
 extern class Recorder{
     mut GlobalArena arena(...)const;
     void clear(...);

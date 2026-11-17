@@ -27,9 +27,6 @@ namespace __hidden_adhd_layout_optimizer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_BareOptionalFallbackBytes = 16u;
-inline constexpr usize s_BareExpectedFallbackBytes = 24u;
-
 [[nodiscard]] b8 IsInlineValueGenericType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
         return info->byteSize == 0u;
@@ -287,69 +284,14 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
             return;
 
         if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name)){
-            switch(genericInfo->inlineLayoutKind){
-            case InlineLayoutKind::Atomic:{
-                if(!type.templateArgs.empty() && type.templateArgs[0].type){
-                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, outSize, outAlign);
-                    return;
-                }
-                outSize = 8u;
-                outAlign = 8u;
+            const auto resolveInner = [&](const TypeRef& innerType, const u32 innerDepth, usize& innerSize, usize& innerAlign)noexcept{
+                resolveTypeSizeAndAlign(innerType, innerDepth, innerSize, innerAlign);
+            };
+            const auto parseCount = [&](const MStringView countText)noexcept -> usize{
+                return ParseUnsignedConstant(countText, m_symbols);
+            };
+            if(ResolveInlineGenericLayout(*genericInfo, type, depth, outSize, outAlign, resolveInner, parseCount))
                 return;
-            }
-            case InlineLayoutKind::Optional:{
-                if(!type.templateArgs.empty() && type.templateArgs[0].type){
-                    usize innerSize = 8u;
-                    usize innerAlign = 8u;
-                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, innerSize, innerAlign);
-                    outAlign = innerAlign;
-                    outSize = ::AlignUp(innerSize + 1u, innerAlign);
-                    return;
-                }
-                outSize = __hidden_adhd_layout_optimizer::s_BareOptionalFallbackBytes;
-                outAlign = 8u;
-                return;
-            }
-            case InlineLayoutKind::Expected:{
-                if(!type.templateArgs.empty() && type.templateArgs[0].type){
-                    usize valSize = 8u;
-                    usize valAlign = 8u;
-                    usize errSize = 1u;
-                    usize errAlign = 1u;
-                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, valSize, valAlign);
-                    if(type.templateArgs.size() >= 2u && type.templateArgs[1].type)
-                        resolveTypeSizeAndAlign(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
-                    outAlign = valAlign > errAlign ? valAlign : errAlign;
-                    const usize payloadSize = valSize > errSize ? valSize : errSize;
-                    outSize = ::AlignUp(payloadSize + 1u, outAlign);
-                    return;
-                }
-                outSize = __hidden_adhd_layout_optimizer::s_BareExpectedFallbackBytes;
-                outAlign = 8u;
-                return;
-            }
-            case InlineLayoutKind::Array:
-            case InlineLayoutKind::FixedVector:{
-                usize elemSize = 4u;
-                usize elemAlign = 4u;
-                usize count = 1u;
-                if(!type.templateArgs.empty() && type.templateArgs[0].type)
-                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, elemSize, elemAlign);
-                if(type.templateArgs.size() >= 2u)
-                    count = ParseUnsignedConstant(type.templateArgs[1].constantOrTypeName(), m_symbols);
-                if(genericInfo->inlineLayoutKind == InlineLayoutKind::Array){
-                    outSize = elemSize * count;
-                    outAlign = elemAlign;
-                }
-                else{
-                    outAlign = elemAlign > 4u ? elemAlign : 4u;
-                    outSize = ::AlignUp(elemSize * count + 4u, outAlign);
-                }
-                return;
-            }
-            case InlineLayoutKind::None:
-                break;
-            }
         }
 
         if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(name)){
@@ -392,8 +334,15 @@ void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& f
 }
 
 b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){
-    if(classDecl.isExtern)
+    if(classDecl.isExtern){
+        if(!classDecl.hasExplicitLayout){
+            const auto resolveField = [&](const TypeRef& fieldType, usize& fieldSize, usize& fieldAlign)noexcept{
+                resolveTypeSizeAndAlign(fieldType, fieldSize, fieldAlign);
+            };
+            ComputeSequentialExternClassLayout(classDecl, m_symbols.hasPolymorphicBase(classDecl), resolveField, classDecl.totalSize, classDecl.totalAlign);
+        }
         return true;
+    }
 
     if(classDecl.isSerialize && m_symbols.hasPolymorphicInterface(classDecl)){
         ReportAdhdDiagnostic(m_arena, errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");

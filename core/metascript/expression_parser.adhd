@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/expression_parser.h>"), cpp_name("::NWB::Core::Metascript::ExpressionParser"), cpp_layout(40, 8), cpp_flags(binary_serializable, no_assign)]
+[cpp_header("<core/metascript/expression_parser.h>"), cpp_name("::NWB::Core::Metascript::ExpressionParser"), cpp_flags(binary_serializable, no_assign)]
 extern class MetascriptExpressionParser{
     MetascriptValue parseExpression(...);
 };

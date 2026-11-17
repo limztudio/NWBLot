@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyItemContext"), cpp_layout(704, 8), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyItemContext"), cpp_flags(no_assign)]
 extern class CookDependencyItemContext{
     Path assetRoot;
     StringView virtualRoot;
@@ -14,7 +14,7 @@ extern class CookDependencyItemContext{
     ScratchArena scratchArena;
 };
 
-[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyRegistry"), cpp_layout(912, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyRegistry"), cpp_flags(no_copy, no_assign)]
 extern class CookDependencyRegistry{
     b8 registerType(...);
     b8 registerDefaultEntryAsset(...);
@@ -23,14 +23,14 @@ extern class CookDependencyRegistry{
     b8 extractDependencies(...)const;
 };
 
-[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::DefaultCookEntryAssetDescriptor"), cpp_layout(32, 8), cpp_flags(self_defaulted, borrow_view, brace_init)]
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::DefaultCookEntryAssetDescriptor"), cpp_flags(self_defaulted, borrow_view, brace_init)]
 extern class DefaultCookEntryAssetDescriptor{
     Name virtualPath;
     Name assetType;
     StringView virtualPathText;
 };
 
-[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::ICookDependencyCollector"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::ICookDependencyCollector"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class ICookDependencyCollector{
     b8 addAssetDependency(...);
 };

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::SizedFileCreateFailure"), cpp_layout(24, 8), cpp_flags(self_defaulted, brace_init)]
+[cpp_name("::SizedFileCreateFailure"), cpp_flags(self_defaulted, brace_init)]
 extern class SizedFileCreateFailure{
     ErrorCode code;
     b8 created;

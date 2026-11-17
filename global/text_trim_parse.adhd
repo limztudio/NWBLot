@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::DecodedUtf8CodePoint"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_name("::DecodedUtf8CodePoint"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class DecodedUtf8CodePoint{
     i32 byteCount;
     u32 codePoint;

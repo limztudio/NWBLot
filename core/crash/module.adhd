@@ -30,7 +30,7 @@ extern enum CrashGpuCrashDumpKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashCapturePolicy"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashCapturePolicy"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class CrashCapturePolicy{
     b8 captureAssertions;
     b8 captureFatalAssertions;
@@ -40,7 +40,7 @@ extern class CrashCapturePolicy{
     u32 maxDiagnosticDumpsPerSite;
 };
 
-[arena, cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashConfigT"), cpp_layout(184, 8), cpp_flags(self_defaulted, non_thread_safe, arena_first_ctor)]
+[arena, cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashConfigT"), cpp_flags(self_defaulted, non_thread_safe, arena_first_ctor)]
 extern class CrashConfig{
     Path spoolDirectory;
     CrashSpoolRetentionConfig spoolRetention;
@@ -48,14 +48,14 @@ extern class CrashConfig{
     CrashDumpDetailMode dumpDetailMode;
 };
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashDumpResult"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashDumpResult"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class CrashDumpResult{
     CrashDumpStatus status;
     b8 packageWritten(...)const;
     b8 requestAccepted(...)const;
 };
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashSpoolRetentionConfig"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashSpoolRetentionConfig"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class CrashSpoolRetentionConfig{
     usize maxPendingPackages;
     usize maxUploadedPackages;

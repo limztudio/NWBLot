@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Core::Alloc::GlobalArena"), cpp_layout(88, 8), cpp_flags(no_copy, no_assign)]
+[cpp_name("::NWB::Core::Alloc::GlobalArena"), cpp_flags(no_copy, no_assign)]
 extern class GlobalArena;
 
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::ClipboardTextAccumulator"), cpp_layout(48, 8)]
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::ClipboardTextAccumulator")]
 extern class ClipboardTextAccumulator{
     ClipboardStatus appendBytes(...);
     void clear(...);

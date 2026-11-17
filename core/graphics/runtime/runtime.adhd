@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/runtime/runtime.h>"), cpp_name("::NWB::Core::GraphicsRuntime"), cpp_layout(1520, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/runtime/runtime.h>"), cpp_name("::NWB::Core::GraphicsRuntime"), cpp_flags(no_copy, no_assign)]
 extern class GraphicsRuntime{
     AcquiredPresentationFrame acquiredPresentationFrame(...)const;
     void addRenderPassToBack(...);

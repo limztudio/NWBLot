@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphCompileRuntimeStatistics"), cpp_layout(352, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphCompileRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphCompileRuntimeStatistics{
     u64 taskCount;
     u64 resourceCount;
@@ -50,7 +50,7 @@ extern class EncodedFrameGraphCompileRuntimeStatistics{
     u64 resourceVersionEdgeCount;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphCompiledTask"), cpp_layout(20, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphCompiledTask"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphCompiledTask{
     u32 nodeIndex;
     u32 packetIndex;
@@ -59,7 +59,7 @@ extern class EncodedFrameGraphCompiledTask{
     Array<u8, 3> reserved;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphEdge"), cpp_layout(12, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphEdge"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class EncodedFrameGraphEdge{
     u32 fromNodeIndex;
     u32 toNodeIndex;
@@ -68,7 +68,7 @@ extern class EncodedFrameGraphEdge{
     u16 reserved;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphNode"), cpp_layout(72, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphNode"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphNode{
     NameHash nameHash;
     u32 labelOffset;
@@ -77,7 +77,7 @@ extern class EncodedFrameGraphNode{
     u16 reserved;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics"), cpp_layout(88, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPacketSubmissionStatistics{
     u32 ownerNodeIndex;
     u32 packetIndex;
@@ -97,7 +97,7 @@ extern class EncodedFrameGraphPacketSubmissionStatistics{
     f64 submissionSeconds;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPayloadHeader"), cpp_layout(52, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPayloadHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPayloadHeader{
     u32 magic;
     u16 version;
@@ -115,7 +115,7 @@ extern class EncodedFrameGraphPayloadHeader{
     Array<u8, 3> reservedTail;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics"), cpp_layout(112, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics{
     u64 taskCount;
     u64 packetCount;
@@ -133,13 +133,13 @@ extern class EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics{
     u64 concurrentSharingAdviceResourceCount;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueId"), cpp_layout(4, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueId"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPhysicalQueueId{
     u16 index;
     u16 deviceGeneration;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics"), cpp_layout(80, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics{
     u64 packetCount;
     u64 taskCount;
@@ -153,7 +153,7 @@ extern class EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics{
     f64 recordingSeconds;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics"), cpp_layout(328, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPhysicalQueueRuntimeStatistics{
     u32 ownerNodeIndex;
     EncodedFrameGraphPhysicalQueueId queue;
@@ -164,7 +164,7 @@ extern class EncodedFrameGraphPhysicalQueueRuntimeStatistics{
     EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics"), cpp_layout(120, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics{
     u64 acceptedPacketCount;
     u64 acceptedTaskCount;
@@ -183,7 +183,7 @@ extern class EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics{
     u64 recoverySubmissionCount;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphQueueAssignment"), cpp_layout(52, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphQueueAssignment"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphQueueAssignment{
     u32 nodeIndex;
     EncodedFrameGraphPhysicalQueueId initialQueue;
@@ -204,7 +204,7 @@ extern class EncodedFrameGraphQueueAssignment{
     Array<u8, 3> reserved;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphRecordingRuntimeStatistics"), cpp_layout(112, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphRecordingRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphRecordingRuntimeStatistics{
     u64 packetCount;
     u64 taskCount;
@@ -222,7 +222,7 @@ extern class EncodedFrameGraphRecordingRuntimeStatistics{
     f64 readyFrontierWorkerCapacitySeconds;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphRuntimeStatistics"), cpp_layout(616, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphRuntimeStatistics{
     u32 nodeIndex;
     u16 deviceGeneration;
@@ -235,7 +235,7 @@ extern class EncodedFrameGraphRuntimeStatistics{
     EncodedFrameGraphSubmissionRuntimeStatistics submission;
 };
 
-[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphSubmissionRuntimeStatistics"), cpp_layout(120, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphSubmissionRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class EncodedFrameGraphSubmissionRuntimeStatistics{
     u64 acceptedPacketCount;
     u64 acceptedTaskCount;

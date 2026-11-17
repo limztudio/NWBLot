@@ -132,7 +132,6 @@ NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Wait,      "wait")
 
 NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppName,   "cpp_name",   "duplicate '[cpp_name]' attribute",   "'[cpp_name(\"...\")]' requires a single non-empty string literal argument")
 NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppHeader, "cpp_header", "duplicate '[cpp_header]' attribute", "'[cpp_header(\"...\")]' requires a single non-empty string literal argument")
-NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppLayout, "cpp_layout", "duplicate '[cpp_layout]' attribute", "'[cpp_layout(size, align)]' requires two positive integer literal arguments")
 NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppFlags,  "cpp_flags",  "duplicate '[cpp_flags]' attribute",  "'[cpp_flags(...)]' requires one or more valid extern flag identifiers")
 
 NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(SelfDefaulted,      "self_defaulted")

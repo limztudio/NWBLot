@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/asset_file_discovery.h>"), cpp_name("::NWB::Core::Assets::DiscoveredNwbFile"), cpp_layout(400, 8)]
+[cpp_header("<core/assets/asset_file_discovery.h>"), cpp_name("::NWB::Core::Assets::DiscoveredNwbFile")]
 extern class DiscoveredNwbFile{
     Path assetRoot;
     Path filePath;

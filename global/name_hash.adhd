@@ -12,7 +12,7 @@ extern enum NameTextError : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NameHash"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_name("::NameHash"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
 extern class NameHash{
     Array<u64, 8u> qwords;
 };

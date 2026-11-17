@@ -43,13 +43,13 @@ extern enum TexturePayloadFormat : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipChainLayoutError"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipChainLayoutError"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class TextureMipChainLayoutError{
     MipChainLayoutFailure failure;
     u32 mipIndex;
 };
 
-[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipLevelLayout"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipLevelLayout"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TextureMipLevelLayout{
     u32 blockCountX;
     u32 blockCountY;
@@ -60,14 +60,14 @@ extern class TextureMipLevelLayout{
     u32 width;
 };
 
-[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::TextureMipPlaneBlockLayout"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::TextureMipPlaneBlockLayout"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class TextureMipPlaneBlockLayout{
     u32 blocksX;
     u32 blocksY;
     u64 planeByteCount;
 };
 
-[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::HeaderBinary"), cpp_layout(44, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::HeaderBinary"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TexturePayloadHeaderBinary{
     u32 alphaInfo;
     u32 depth;
@@ -81,7 +81,7 @@ extern class TexturePayloadHeaderBinary{
     u32 width;
 };
 
-[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::MipLevelBinary"), cpp_layout(40, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::MipLevelBinary"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TexturePayloadMipLevelBinary{
     u32 blockCountX;
     u32 blockCountY;

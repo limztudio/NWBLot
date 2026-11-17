@@ -15,12 +15,12 @@ extern enum GpuTaskQueueAssignmentAcceptance : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentTelemetryTracker"), cpp_layout(168, 8), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentTelemetryTracker"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphQueueAssignmentTelemetryTracker{
     void reset(...);
 };
 
-[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentTelemetry"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentTelemetry"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskQueueAssignmentTelemetry{
     GpuTaskQueueAssignment assignment;
     GpuPhysicalQueueId acceptedQueue;

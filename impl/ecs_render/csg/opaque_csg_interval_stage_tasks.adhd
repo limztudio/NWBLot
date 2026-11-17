@@ -104,7 +104,7 @@ NWB_IMPL_BEGIN
 
 void OpaqueCsgIntervalStage::capturePayloads(
     const MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
     const CsgFrameGpuDataView& csgFrameData,
     const usize instanceCount,
@@ -320,7 +320,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     const Core::GpuTaskResourceSetUse opaqueCsgIntervalSampleComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = opaqueCsgIntervalSampleComputeEmulationOutputSet,
         .range = {},
-        .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState,
+        .requiredState = s_ObjectGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Array<Core::GpuTaskResourceSetUse, s_OpaqueCsgIntervalSampleResourceSetUseCapacity> csgIntervalSampleMaterialResourceSetUses = {};
@@ -642,7 +642,7 @@ b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList&
                 payload.opaqueCsgComputeEmulationTiming->reset();
             }
             else{
-                Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, graphics.getDevice(), commandList);
+                Core::GpuTimingMeasure timing(graphics.gpuTiming(), s_TimingScopeOpaqueCsg, graphics.getDevice(), commandList);
 
                 materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
             }

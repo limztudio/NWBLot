@@ -3,6 +3,7 @@
 
 
 #include "selectable_paint.adhd"
+#include <impl/ecs_ui/toolkit/widgets/scroll.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -197,6 +198,65 @@ void CommitListReconcileState(
     inOutEnsureCursor = cursor != 0u && (inOutEnsureCursor || changed);
     inOutSourceGeneration = generation;
     inOutSourceRevision = revision;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ListState : NoCopy{
+    public ListMeasureKey m_measureKey;
+    public f32 m_rowHeight = 0.0f;
+    public f32 m_scrollRowHeight = 0.0f;
+    public u64 m_scrollSourceGeneration = 0u;
+    public ScrollState m_scroll;
+    public ScrollPlacement m_placement;
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_selected = 0u;
+    public u64 m_cursor = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+    public b8 m_ensureCursor = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_scroll.instanceGeneration();
+    }
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 selectedKey()const{
+        return this.m_selected;
+    }
+
+    public u64 cursorKey()const{
+        return this.m_cursor;
+    }
+
+    public f64 scrollOffset()const{
+        return this.m_scroll.offset();
+    }
+
+    public in ScrollPlacement placement()const{
+        return this.m_placement;
+    }
+
+    // Explicit application changes start a new input lifetime even when the value is unchanged.
+    public void select(in u64 key){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selected = key;
+        this.m_cursor = key;
+        this.m_ensureCursor = key != 0u;
+    }
+
+    public b8 scrollTo(in f64 offset){
+        if(!this.m_scroll.setOffset(offset))
+            return false;
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_ensureCursor = false;
+        return true;
+    }
 }
 
 

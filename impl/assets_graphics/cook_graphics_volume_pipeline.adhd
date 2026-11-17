@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_CsgShapeOwnerKindLabel = "CSG shape";
 const StringView s_CsgShapeEvalFieldLabel = "eval";
 const StringView s_MaterialOwnerKindLabel = "material";
@@ -38,6 +44,46 @@ b8 ValidateMaterialCookRequiresShaderEntries(in usize shaderEntryCount, in usize
 
     error("GraphicsCook: material assets require at least one shader entry");
     return false;
+}
+
+Path BuildShaderVariantBytecodeCachePath(in Path cacheDirectory, in StringView configurationSafeName, in StringView sourceChecksumHex){
+    String bytecodeFileName(sourceChecksumHex);
+    bytecodeFileName += s_ShaderVariantBytecodeExtension;
+    return cacheDirectory / configurationSafeName / bytecodeFileName;
+}
+
+ShaderVariantCacheReadStatus ReadCachedShaderVariantBytecode(
+    in StringView entryName,
+    in StringView entryStage,
+    in StringView entryPoint,
+    in Path bytecodePath,
+    mut Vector<u8> outBytecode
+){
+    const Expected<void, ErrorCode> read = ReadBinaryFile(bytecodePath, outBytecode);
+    if(read.has_value()){
+        const Expected<Optional<Name>, NameTextError> stageName = ToName(entryStage);
+        if(!stageName.has_value()){
+            error("GraphicsCook: shader stage contains an embedded null for entry '{}'", entryName);
+            return ShaderVariantCacheReadStatus::Error;
+        }
+        Name resolvedStage = s_NameNone;
+        if(stageName.value().has_value())
+            resolvedStage = stageName.value().value();
+        const ShaderType shaderType = ShaderTypeFromArchiveStageName(resolvedStage);
+        if(ResolveSpirvEntryPointName(outBytecode, entryPoint, ToMask(shaderType)).has_value())
+            return ShaderVariantCacheReadStatus::Hit;
+
+        outBytecode.clear();
+        return ShaderVariantCacheReadStatus::Miss;
+    }
+
+    if(!IsMissingPathError(read.error())){
+        error("GraphicsCook: failed to read bytecode cache '{}' for entry '{}' (error {})", bytecodePath, entryName, read.error().value());
+        return ShaderVariantCacheReadStatus::Error;
+    }
+
+    outBytecode.clear();
+    return ShaderVariantCacheReadStatus::Miss;
 }
 
 
@@ -328,34 +374,11 @@ b8 AppendPreparedShadersToManifest(
 
 
 ShaderVariantBytecodeCache::ScratchPath ShaderVariantBytecodeCache::BuildPath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
-    ScratchString bytecodeFileName(sourceChecksumHex, scratchArena);
-    bytecodeFileName += s_ShaderVariantBytecodeExtension;
-    return ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / bytecodeFileName;
+    return ScratchPath(scratchArena, BuildShaderVariantBytecodeCachePath(scratchArena, cacheDirectory, configurationSafeName, sourceChecksumHex));
 }
 
 ShaderVariantCacheReadStatus::Enum ShaderVariantBytecodeCache::ReadCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
-    const auto read = ReadBinaryFile(bytecodePath, outBytecode);
-    if(read){
-        const auto stageName = ToName(entry.stage);
-        if(!stageName){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: shader stage contains an embedded null for entry '{}'"), ConvertString(entry.name));
-            return ShaderVariantCacheReadStatus::Error;
-        }
-        const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(*stageName ? **stageName : s_NameNone);
-        if(Core::ResolveSpirvEntryPointName(BinaryByteView{ outBytecode.data(), outBytecode.size() }, AStringView(entry.entryPoint), Core::ShaderType::ToMask(shaderType)))
-            return ShaderVariantCacheReadStatus::Hit;
-
-        outBytecode.clear();
-        return ShaderVariantCacheReadStatus::Miss;
-    }
-
-    if(!IsMissingPathError(read.error())){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: failed to read bytecode cache '{}' for entry '{}': {}"), PathToString<tchar>(bytecodePath), ConvertString(entry.name), ConvertString(read.error().message()));
-        return ShaderVariantCacheReadStatus::Error;
-    }
-
-    outBytecode.clear();
-    return ShaderVariantCacheReadStatus::Miss;
+    return ReadCachedShaderVariantBytecode(AStringView(entry.name), AStringView(entry.stage), AStringView(entry.entryPoint), bytecodePath, outBytecode);
 }
 
 b8 ShaderVariantBytecodeCache::GetBytecode(

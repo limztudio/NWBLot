@@ -197,3 +197,174 @@ void CommitSliderAdmissionState(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// Public value intents retire copied input; diagnostics are published only after the enclosing Builder scope validates.
+class SliderState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public u64 m_admissionGeneration = 1u;
+    public f64 m_value = 0.0;
+    public f64 m_minimum = 0.0;
+    public f64 m_maximum = 1.0;
+    public f64 m_keyStep = 0.0;
+    public SliderPlacement m_admission;
+    public InputActionId m_press;
+    public SliderResult m_result;
+    public SliderPlacement m_placement;
+    public b8 m_enabled = true;
+    public b8 m_admitted = false;
+    public b8 m_pressMoved = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 admissionGeneration()const{
+        return this.m_admissionGeneration;
+    }
+
+    public f64 value()const{
+        return this.m_value;
+    }
+
+    public SliderResult result()const{
+        return this.m_result;
+    }
+
+    public in SliderPlacement placement()const{
+        return this.m_placement;
+    }
+
+    public ControlToken controlToken()const{
+        ControlToken token;
+        token.instanceGeneration = this.m_inputGeneration;
+        token.contentGeneration = this.m_admissionGeneration;
+        token.contentRevision = this.m_instanceGeneration;
+        return token;
+    }
+
+    public SliderSnapshot snapshot()const{
+        SliderSnapshot value;
+        value.press = this.m_press;
+        value.instanceGeneration = this.m_instanceGeneration;
+        value.inputGeneration = this.m_inputGeneration;
+        value.revision = this.m_revision;
+        value.admissionGeneration = this.m_admissionGeneration;
+        value.valueBits = bit_cast<u64>(this.m_value);
+        value.pressMoved = this.m_pressMoved;
+        return value;
+    }
+
+    public b8 matches(in SliderSnapshot value)const{
+        return this.snapshot() == value;
+    }
+
+    public b8 setValue(in f64 value){
+        if(!IsFinite(value))
+            return false;
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_value = value;
+        this.m_press = InputActionId();
+        this.m_pressMoved = false;
+        return true;
+    }
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        AdvanceNonWrappingRevision(this.m_admissionGeneration);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        ResetSliderStateFields(
+            this.m_value,
+            this.m_minimum,
+            this.m_maximum,
+            this.m_keyStep,
+            this.m_admission,
+            this.m_press,
+            this.m_result,
+            this.m_placement,
+            this.m_enabled,
+            this.m_admitted,
+            this.m_pressMoved
+        );
+    }
+}
+
+b8 AdmitSliderState(mut SliderState state, in SliderOptions options, in SliderPlacement placement){
+    const Expected<b8> changed = TryEvaluateSliderAdmission(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.m_admission, options, placement);
+    if(!changed.has_value())
+        return false;
+    if(!changed.value())
+        return true;
+    AdvanceNonWrappingRevision(state.m_revision);
+    AdvanceNonWrappingRevision(state.m_admissionGeneration);
+    CommitSliderAdmissionState(
+        options,
+        placement,
+        state.m_minimum,
+        state.m_maximum,
+        state.m_keyStep,
+        state.m_enabled,
+        state.m_admission,
+        state.m_admitted,
+        state.m_press,
+        state.m_pressMoved
+    );
+    return true;
+}
+
+b8 ApplySliderControlAction(in SliderOptions options, in ControlAction action, mut SliderState state, mut SliderResult result){
+    f64 value = state.m_value;
+    b8 advanceRevision = false;
+    if(!TryApplySliderControlAction(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_value, options, action, value, advanceRevision, result))
+        return false;
+    if(advanceRevision){
+        AdvanceNonWrappingRevision(state.m_revision);
+        state.m_value = value;
+    }
+    return true;
+}
+
+b8 SeekSliderPointerGesture(in SliderOptions options, in PointerGesture gesture, mut SliderState state, mut SliderResult result){
+    f64 value = state.m_value;
+    InputActionId press;
+    b8 advanceRevision = false;
+    if(!TrySeekSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, options, gesture, value, press, advanceRevision, result))
+        return false;
+    if(advanceRevision){
+        AdvanceNonWrappingRevision(state.m_revision);
+        state.m_value = value;
+        state.m_press = press;
+        state.m_pressMoved = false;
+    }
+    return true;
+}
+
+b8 DragSliderPointerGesture(in SliderOptions options, in PointerGesture gesture, mut SliderState state, mut SliderResult result){
+    f64 value = state.m_value;
+    InputActionId press = state.m_press;
+    b8 pressMoved = state.m_pressMoved;
+    b8 advanceRevision = false;
+    if(!TryDragSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, state.m_press, state.m_pressMoved, options, gesture, value, press, pressMoved, advanceRevision, result))
+        return false;
+    if(advanceRevision){
+        AdvanceNonWrappingRevision(state.m_revision);
+        state.m_value = value;
+        state.m_press = press;
+        state.m_pressMoved = pressMoved;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

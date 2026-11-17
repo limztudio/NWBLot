@@ -204,7 +204,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
         .setIdentity(Name(s_RenderNameRenderDeferredComposite))
-        .setMarkerLabel(RendererGpuPassText::s_DeferredCompositeLabel)
+        .setMarkerLabel(s_DeferredCompositeLabel)
         .setScheduling(compositeScheduling)
         .setDependencies(compositeDependencies)
         .setResourceUses(compositeResourceUses)
@@ -272,7 +272,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     Core::GpuTaskDesc presentDesc;
     presentDesc
         .setIdentity(Name(s_RenderNameRenderDeferredPresent))
-        .setMarkerLabel(RendererGpuPassText::s_DeferredPresentLabel)
+        .setMarkerLabel(s_DeferredPresentLabel)
         .setScheduling(presentScheduling)
         .setDependencies({ presentDependencies.data(), presentDependencyCount })
         .setResourceUses({ presentResourceUses.data(), presentResourceUseCount })
@@ -434,7 +434,7 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
         ReadTextureUse(inputs.normal, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
-        ReadTextureUse(inputs.shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources),
+        ReadTextureUse(inputs.shadowVisibility, s_ShadowVisibilitySubresources),
         ReadTextureUse(inputs.causticIrradiance, s_FramebufferSubresources),
         ReadTextureUse(inputs.surfelIrradiance, s_FramebufferSubresources),
         ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer),
@@ -450,7 +450,7 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name(s_RenderNameRenderDeferredLighting))
-        .setMarkerLabel(RendererGpuPassText::s_DeferredLightingLabel)
+        .setMarkerLabel(s_DeferredLightingLabel)
         .setScheduling(scheduling)
         .setDependencies({ resolvedLightingDependencies, lightingDependencyCount })
         .setExternalDependencies({ lightingExternalDependencies, lightingExternalDependencyCount })
@@ -492,7 +492,7 @@ b8 DeferredPresentGraphTask::Record(const Payload& payload, Core::CommandList& c
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     if(shadowVisibilityRunsOnCompute){
-        payload.asyncFinalTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncFinal, payload.graphics.getDevice(), commandList);
+        payload.asyncFinalTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeAsyncFinal, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.asyncFinalTiming))
             return false;
     }

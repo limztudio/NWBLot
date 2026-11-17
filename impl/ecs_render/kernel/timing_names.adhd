@@ -2,222 +2,81 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shared/frame_types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererGpuTimingScope{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Core::GpuTimingScopeDefinition s_MeshDispatch("render.mesh_dispatch");
-inline constexpr Core::GpuTimingScopeDefinition s_Raster("render.raster");
-inline constexpr Core::GpuTimingScopeDefinition s_Frame("render.frame");
+const GpuTimingScopeDefinition s_TimingScopeMeshDispatch("render.mesh_dispatch");
+const GpuTimingScopeDefinition s_TimingScopeRaster("render.raster");
+const GpuTimingScopeDefinition s_TimingScopeFrame("render.frame");
 // render.frame starts in the isolated primary-Graphics graph prelude and retires after final presentation.
 // Dedicated-queue envelopes remain separate from this primary-queue timestamp interval.
-inline constexpr Core::GpuTimingScopeDefinition s_AsyncPrefix("render.async_prefix");
-inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadow("render.async_shadow");
-inline constexpr Core::GpuTimingScopeDefinition s_AsyncSurfelGi("render.async_surfel_gi");
-inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final");
-inline constexpr Core::GpuTimingScopeDefinition s_DeferredGraphQueueOverlap("render.deferred_graph.queue_overlap");
-inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowCull("render.shadow.light_space_cull");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowViews("render.shadow.light_space_views");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowOpaqueCapture("render.shadow.light_space_opaque_capture");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowTransparentCapture("render.shadow.light_space_transparent_capture");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowShade("render.shadow.light_space_shade");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowMapOpaque("render.shadow.light_space_map_opaque");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowMapTransparent("render.shadow.light_space_map_transparent");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowFallbackOpaque("render.shadow.light_space_fallback_opaque");
-inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowFallbackTransparent("render.shadow.light_space_fallback_transparent");
+const GpuTimingScopeDefinition s_TimingScopeAsyncPrefix("render.async_prefix");
+const GpuTimingScopeDefinition s_TimingScopeAsyncShadow("render.async_shadow");
+const GpuTimingScopeDefinition s_TimingScopeAsyncSurfelGi("render.async_surfel_gi");
+const GpuTimingScopeDefinition s_TimingScopeAsyncFinal("render.async_final");
+const GpuTimingScopeDefinition s_TimingScopeDeferredGraphQueueOverlap("render.deferred_graph.queue_overlap");
+const GpuTimingScopeDefinition s_TimingScopeDeferredClear("render.deferred_clear");
+const GpuTimingScopeDefinition s_TimingScopeShadowVisibility("render.shadow_visibility");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowCull("render.shadow.light_space_cull");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowViews("render.shadow.light_space_views");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowOpaqueCapture("render.shadow.light_space_opaque_capture");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowTransparentCapture("render.shadow.light_space_transparent_capture");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowShade("render.shadow.light_space_shade");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowMapOpaque("render.shadow.light_space_map_opaque");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowMapTransparent("render.shadow.light_space_map_transparent");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowFallbackOpaque("render.shadow.light_space_fallback_opaque");
+const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowFallbackTransparent("render.shadow.light_space_fallback_transparent");
 // Keep the aggregate shadow envelope; publish expensive phases separately.
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTrace("render.shadow_opaque_trace");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowGeometryDownsample("render.shadow_geometry_downsample");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTemporal("render.shadow_opaque_temporal");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowCombinedTemporal("render.shadow_combined_temporal");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueResolve("render.shadow_opaque_resolve");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTrace("render.shadow_transparent_trace");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentGather("render.shadow_transparent_gather");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentEvaluate("render.shadow_transparent_evaluate");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentContinuation("render.shadow_transparent_continuation");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTemporal("render.shadow_transparent_temporal");
-inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentResolve("render.shadow_transparent_resolve");
-inline constexpr Core::GpuTimingScopeDefinition s_SwBvhSort("render.sw_bvh_sort");
-inline constexpr Core::GpuTimingScopeDefinition s_CausticPhotons("render.caustic_photons");
-inline constexpr Core::GpuTimingScopeDefinition s_CausticResolve("render.caustic_resolve");
+const GpuTimingScopeDefinition s_TimingScopeShadowOpaqueTrace("render.shadow_opaque_trace");
+const GpuTimingScopeDefinition s_TimingScopeShadowGeometryDownsample("render.shadow_geometry_downsample");
+const GpuTimingScopeDefinition s_TimingScopeShadowOpaqueTemporal("render.shadow_opaque_temporal");
+const GpuTimingScopeDefinition s_TimingScopeShadowCombinedTemporal("render.shadow_combined_temporal");
+const GpuTimingScopeDefinition s_TimingScopeShadowOpaqueResolve("render.shadow_opaque_resolve");
+const GpuTimingScopeDefinition s_TimingScopeShadowTransparentTrace("render.shadow_transparent_trace");
+const GpuTimingScopeDefinition s_TimingScopeShadowTransparentGather("render.shadow_transparent_gather");
+const GpuTimingScopeDefinition s_TimingScopeShadowTransparentEvaluate("render.shadow_transparent_evaluate");
+const GpuTimingScopeDefinition s_TimingScopeShadowTransparentContinuation("render.shadow_transparent_continuation");
+const GpuTimingScopeDefinition s_TimingScopeShadowTransparentTemporal("render.shadow_transparent_temporal");
+const GpuTimingScopeDefinition s_TimingScopeShadowTransparentResolve("render.shadow_transparent_resolve");
+const GpuTimingScopeDefinition s_TimingScopeSwBvhSort("render.sw_bvh_sort");
+const GpuTimingScopeDefinition s_TimingScopeCausticPhotons("render.caustic_photons");
+const GpuTimingScopeDefinition s_TimingScopeCausticResolve("render.caustic_resolve");
 // Match the graph task identity so detailed frame telemetry receives this dispatch timing.
-inline constexpr Core::GpuTimingScopeDefinition s_RefractionResolve("render.avboit.refraction_resolve");
-inline constexpr Core::GpuTimingScopeDefinition s_RefractionClassifyTiles("render.avboit.refraction_classify_tiles");
-inline constexpr Core::GpuTimingScopeDefinition s_RefractionClearTileArguments("render.avboit.refraction_tile_arguments_clear");
-inline constexpr Core::GpuTimingScopeDefinition s_OpticalBoundsFinalize("render.raytrace.optical_bounds_finalize");
-inline constexpr Core::GpuTimingScopeDefinition s_DeferredLighting("render.deferred_lighting");
-inline constexpr Core::GpuTimingScopeDefinition s_DeferredComposite("render.deferred_composite");
-inline constexpr Core::GpuTimingScopeDefinition s_DeferredPresent("render.deferred_present");
-inline constexpr Core::GpuTimingScopeDefinition s_MaterialUpload("render.material_upload");
-inline constexpr Core::GpuTimingScopeDefinition s_OpaqueRegular("render.opaque_regular");
-inline constexpr Core::GpuTimingScopeDefinition s_OpaqueCsgReceiverSurface("render.opaque_csg_receiver_surface");
-inline constexpr Core::GpuTimingScopeDefinition s_OpaqueCsg("render.opaque_csg");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgUpload("render.csg_upload");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgSampleStateUpload("render.csg_sample_state_upload");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgIntervalClear("render.csg_interval_clear");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgIntervalPeel("render.csg_interval_peel");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgReceiverSpanBuild("render.csg_receiver_span_build");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgIntervalCombine("render.csg_interval_combine");
-inline constexpr Core::GpuTimingScopeDefinition s_CsgCapFill("render.csg_cap_fill");
-inline constexpr Core::GpuTimingScopeDefinition s_TransparentCsgIntervals("render.transparent_csg_intervals");
-inline constexpr Core::GpuTimingScopeDefinition s_AvboitClear("render.avboit_clear");
-inline constexpr Core::GpuTimingScopeDefinition s_AvboitOccupancy("render.avboit_occupancy");
-inline constexpr Core::GpuTimingScopeDefinition s_AvboitDepthWarp("render.avboit_depth_warp");
-inline constexpr Core::GpuTimingScopeDefinition s_AvboitExtinction("render.avboit_extinction");
-inline constexpr Core::GpuTimingScopeDefinition s_AvboitIntegration("render.avboit_integration");
-inline constexpr Core::GpuTimingScopeDefinition s_AvboitAccumulate("render.avboit_accumulate");
-inline constexpr Core::GpuTimingScopeDefinition s_SurfelSpawn("render.surfel_spawn");
-inline constexpr Core::GpuTimingScopeDefinition s_SurfelAgeFree("render.surfel_age_free");
-inline constexpr Core::GpuTimingScopeDefinition s_SurfelHashBuild("render.surfel_hash_build");
-inline constexpr Core::GpuTimingScopeDefinition s_SurfelTrace("render.surfel_trace");
-inline constexpr Core::GpuTimingScopeDefinition s_SurfelResolve("render.surfel_resolve");
-inline constexpr Core::GpuTimingScopeDefinition s_SurfelUpsample("render.surfel_upsample");
+const GpuTimingScopeDefinition s_TimingScopeRefractionResolve("render.avboit.refraction_resolve");
+const GpuTimingScopeDefinition s_TimingScopeRefractionClassifyTiles("render.avboit.refraction_classify_tiles");
+const GpuTimingScopeDefinition s_TimingScopeRefractionClearTileArguments("render.avboit.refraction_tile_arguments_clear");
+const GpuTimingScopeDefinition s_TimingScopeOpticalBoundsFinalize("render.raytrace.optical_bounds_finalize");
+const GpuTimingScopeDefinition s_TimingScopeDeferredLighting("render.deferred_lighting");
+const GpuTimingScopeDefinition s_TimingScopeDeferredComposite("render.deferred_composite");
+const GpuTimingScopeDefinition s_TimingScopeDeferredPresent("render.deferred_present");
+const GpuTimingScopeDefinition s_TimingScopeMaterialUpload("render.material_upload");
+const GpuTimingScopeDefinition s_TimingScopeOpaqueRegular("render.opaque_regular");
+const GpuTimingScopeDefinition s_TimingScopeOpaqueCsgReceiverSurface("render.opaque_csg_receiver_surface");
+const GpuTimingScopeDefinition s_TimingScopeOpaqueCsg("render.opaque_csg");
+const GpuTimingScopeDefinition s_TimingScopeCsgUpload("render.csg_upload");
+const GpuTimingScopeDefinition s_TimingScopeCsgSampleStateUpload("render.csg_sample_state_upload");
+const GpuTimingScopeDefinition s_TimingScopeCsgIntervalClear("render.csg_interval_clear");
+const GpuTimingScopeDefinition s_TimingScopeCsgIntervalPeel("render.csg_interval_peel");
+const GpuTimingScopeDefinition s_TimingScopeCsgReceiverSpanBuild("render.csg_receiver_span_build");
+const GpuTimingScopeDefinition s_TimingScopeCsgIntervalCombine("render.csg_interval_combine");
+const GpuTimingScopeDefinition s_TimingScopeCsgCapFill("render.csg_cap_fill");
+const GpuTimingScopeDefinition s_TimingScopeTransparentCsgIntervals("render.transparent_csg_intervals");
+const GpuTimingScopeDefinition s_TimingScopeAvboitClear("render.avboit_clear");
+const GpuTimingScopeDefinition s_TimingScopeAvboitOccupancy("render.avboit_occupancy");
+const GpuTimingScopeDefinition s_TimingScopeAvboitDepthWarp("render.avboit_depth_warp");
+const GpuTimingScopeDefinition s_TimingScopeAvboitExtinction("render.avboit_extinction");
+const GpuTimingScopeDefinition s_TimingScopeAvboitIntegration("render.avboit_integration");
+const GpuTimingScopeDefinition s_TimingScopeAvboitAccumulate("render.avboit_accumulate");
+const GpuTimingScopeDefinition s_TimingScopeSurfelSpawn("render.surfel_spawn");
+const GpuTimingScopeDefinition s_TimingScopeSurfelAgeFree("render.surfel_age_free");
+const GpuTimingScopeDefinition s_TimingScopeSurfelHashBuild("render.surfel_hash_build");
+const GpuTimingScopeDefinition s_TimingScopeSurfelTrace("render.surfel_trace");
+const GpuTimingScopeDefinition s_TimingScopeSurfelResolve("render.surfel_resolve");
+const GpuTimingScopeDefinition s_TimingScopeSurfelUpsample("render.surfel_upsample");
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Pass graph names and labels shared by task declarations, imported stage resources, and frame telemetry.
-namespace RendererGpuPassText{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Impl::s_AvboitDepthWarpName;
-using Impl::s_AvboitDepthWarpLabel;
-using Impl::s_AvboitExtinctionName;
-using Impl::s_AvboitExtinctionLabel;
-using Impl::s_AvboitIntegrationLabel;
-using Impl::s_TransparentCsgIntervalsLabel;
-using Impl::s_ShadowVisibilityLabel;
-using Impl::s_DeferredLightingLabel;
-using Impl::s_DeferredCompositeLabel;
-using Impl::s_DeferredPresentLabel;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ReflectionGpuTimingScope{
-    inline constexpr Core::GpuTimingScopeDefinition s_DepthPyramid("render.reflection_depth_pyramid");
-    inline constexpr Core::GpuTimingScopeDefinition s_Classify("render.reflection_classify");
-    inline constexpr Core::GpuTimingScopeDefinition s_BuildArgs("render.reflection_build_args");
-    inline constexpr Core::GpuTimingScopeDefinition s_Hardware("render.reflection_hardware");
-    inline constexpr Core::GpuTimingScopeDefinition s_Temporal("render.reflection_temporal");
-    inline constexpr Core::GpuTimingScopeDefinition s_Spatial("render.reflection_spatial");
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_MeshDispatch"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeMeshDispatch;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_Raster"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeRaster;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_RefractionResolve"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeRefractionResolve;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_RefractionClassifyTiles"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeRefractionClassifyTiles;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_RefractionClearTileArguments"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeRefractionClearTileArguments;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_DeferredLighting"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeDeferredLighting;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_DeferredComposite"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeDeferredComposite;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_DeferredPresent"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeDeferredPresent;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgIntervalPeel"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeCsgIntervalPeel;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgReceiverSpanBuild"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeCsgReceiverSpanBuild;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgIntervalCombine"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeCsgIntervalCombine;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_CsgCapFill"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeCsgCapFill;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_TransparentCsgIntervals"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeTransparentCsgIntervals;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitClear"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeAvboitClear;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitOccupancy"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeAvboitOccupancy;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitDepthWarp"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeAvboitDepthWarp;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitExtinction"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeAvboitExtinction;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitIntegration"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeAvboitIntegration;
-[cpp_name("::NWB::Impl::RendererGpuTimingScope::s_AvboitAccumulate"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeAvboitAccumulate;
-[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeReflectionDepthPyramid;
-[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Classify"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeReflectionClassify;
-[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_BuildArgs"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeReflectionBuildArgs;
-[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Hardware"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeReflectionHardware;
-[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Temporal"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeReflectionTemporal;
-[cpp_name("::NWB::Impl::ReflectionGpuTimingScope::s_Spatial"), cpp_header("<core/graphics/gpu_timing_types.h>")]
-extern const GpuTimingScopeDefinition s_TimingScopeReflectionSpatial;
+const GpuTimingScopeDefinition s_TimingScopeReflectionDepthPyramid("render.reflection_depth_pyramid");
+const GpuTimingScopeDefinition s_TimingScopeReflectionClassify("render.reflection_classify");
+const GpuTimingScopeDefinition s_TimingScopeReflectionBuildArgs("render.reflection_build_args");
+const GpuTimingScopeDefinition s_TimingScopeReflectionHardware("render.reflection_hardware");
+const GpuTimingScopeDefinition s_TimingScopeReflectionTemporal("render.reflection_temporal");
+const GpuTimingScopeDefinition s_TimingScopeReflectionSpatial("render.reflection_spatial");
 
 
 Expected<Optional<Name>> ResolveDeferredGraphQueueInternalIdleScope(in b8 queueValid, in u32 queueIndex){

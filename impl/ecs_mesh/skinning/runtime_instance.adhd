@@ -6,6 +6,8 @@
 #include <impl/assets_mesh/skin_types.adhd>
 #include <impl/ecs_mesh/runtime/mesh.adhd>
 #include <impl/ecs_mesh/skinning/deformation_state.adhd>
+#include <impl/ecs_mesh/skinning/joint_palette_validation.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,6 +158,88 @@ MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(in MeshSkinningRu
     buffers[17u] = instance.meshletLocalBoundsBuffer;
     buffers[18u] = instance.localBoundsBuffer;
     return buffers;
+}
+
+// Keep the full current pose for validation and deformation history; the graph owns its upload copy.
+class RuntimeSkinPayloadScratch{
+    public Vector<SkeletonJointMatrix> poseJoints;
+    public Vector<SkeletonJointMatrix> jointMatrices;
+    public usize skinInfluenceCount = 0u;
+    public u32 resolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+
+    public b8 hasActiveSkin()const{
+        return this.skinInfluenceCount != 0u && !this.jointMatrices.empty();
+    }
+}
+
+Expected<Span<SkeletonJointMatrix>> ResolveMeshSkinningGpuJointPalette(
+    in MeshSkinningRuntimeInstance instance,
+    in RuntimeSkinPayloadScratch payload
+){
+    const usize jointCount = cast<usize>(instance.skeletonJointCount);
+    if(!CanResolveGpuJointPalette(payload.hasActiveSkin(), payload.skinInfluenceCount, instance.skin.size(), jointCount, payload.jointMatrices.size()))
+        return MakeUnexpected(Failure());
+    return Span<SkeletonJointMatrix>(payload.jointMatrices).subspan(0u, jointCount);
+}
+
+b8 BuildMeshSkinningJointPalette(
+    in MeshSkinningRuntimeInstance instance,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in u32 skinningMode,
+    mut Vector<SkeletonJointMatrix> outJointPalette
+){
+    return BuildSkinJointPaletteToGlobalVector(
+        instance.handle.value,
+        instance.skeletonJointCount,
+        instance.skin.size(),
+        sourceJoints,
+        instance.inverseBindMatrices,
+        skinningMode,
+        outJointPalette
+    );
+}
+
+b8 PopulateRuntimeSkinPayloadFromPose(
+    in MeshSkinningRuntimeInstance instance,
+    in SkeletonPoseComponent skeletonPose,
+    mut RuntimeSkinPayloadScratch payload
+){
+    payload.skinInfluenceCount = 0u;
+    payload.jointMatrices.clear();
+    payload.poseJoints.clear();
+    payload.resolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+
+    const Expected<u32> skinningMode = TryBuildStoredJointPaletteVectorFromSkeletonPose(skeletonPose, payload.poseJoints);
+    if(!skinningMode.has_value()){
+        payload.poseJoints.clear();
+        LogInvalidMeshSkinningSkeletonPose(instance.handle.value);
+        return false;
+    }
+    payload.resolvedSkinningMode = skinningMode.value();
+    if(!BuildMeshSkinningJointPalette(instance, payload.poseJoints, payload.resolvedSkinningMode, payload.jointMatrices)){
+        payload.poseJoints.clear();
+        return false;
+    }
+    if(!payload.jointMatrices.empty())
+        payload.skinInfluenceCount = instance.skin.size();
+    return true;
+}
+
+b8 PopulateRuntimeSkinPayloadFromPalette(
+    in MeshSkinningRuntimeInstance instance,
+    in SkeletonJointPaletteComponent jointPalette,
+    mut RuntimeSkinPayloadScratch payload
+){
+    payload.skinInfluenceCount = 0u;
+    payload.jointMatrices.clear();
+    payload.poseJoints.clear();
+    payload.resolvedSkinningMode = jointPalette.skinningMode;
+
+    if(!BuildMeshSkinningJointPalette(instance, jointPalette.joints, payload.resolvedSkinningMode, payload.jointMatrices))
+        return false;
+    if(!payload.jointMatrices.empty())
+        payload.skinInfluenceCount = instance.skin.size();
+    return true;
 }
 
 

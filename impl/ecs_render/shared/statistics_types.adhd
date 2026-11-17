@@ -48,3 +48,17 @@ class StatisticsPendingReadback{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<BufferHandle> CreateStatisticsReadbackBuffer(in usize counterByteSize, in Name debugName, mut GraphicsRuntime graphics){
+    BufferDesc desc;
+    desc.setByteSize(cast<u64>(counterByteSize));
+    desc.setCpuAccess(CpuAccessMode::Read);
+    desc.setDebugName(debugName);
+    desc.setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute);
+    desc.enableAutomaticStateTracking(ResourceStates::CopyDest);
+    return graphics.createBuffer(desc);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

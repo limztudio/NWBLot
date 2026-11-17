@@ -468,33 +468,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MatchesRetainedGeneratedGeometryOutputs(
-    const b8 captured,
-    const Span<const MaterialPassDrawItem> drawItems,
-    const Span<const Core::BufferHandle> outputBuffers,
-    const Span<const GeneratedGeometryOutputLayout> outputLayouts,
-    const Span<const u32> outputHeapSlots
-)noexcept{
-    if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || outputHeapSlots.size() != drawItems.size())
-        return false;
-    for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
-        const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
-        if(
-            !mesh.emulationVertexBuffer
-            || !mesh.emulationVertexHeapHandle.valid()
-            || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
-            || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
-            || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
-        )
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void AliasFreeComputeEmulationGraphPlan::reset()noexcept{
     drawItems.clear();
     outputBuffers.clear();

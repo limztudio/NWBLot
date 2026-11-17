@@ -8,79 +8,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <core/os/clipboard.h>
-#include <core/os/clipboard_text.h>
-
-#include <global/termination.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Copies are immutable native publications.
-// Their owned OS requests survive later edits, focus and widget removal.
-// Drain on the OS thread; destruction cancels remaining requests.
-// Service and arena outlive this bounded owner.
-class UiClipboardPublications final : NoCopy{
-private:
-    struct Publication{
-        Core::ClipboardRequestToken token;
-        Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard;
-    };
-
-
-private:
-    [[nodiscard]] static UiClipboardPublicationStatus::Enum Status(Core::ClipboardStatus::Enum status)noexcept;
-
-
-public:
-    UiClipboardPublications(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service);
-    ~UiClipboardPublications()noexcept;
-
-
-public:
-    [[nodiscard]] UiClipboardPublicationStatus::Enum request(AStringView text, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard);
-    [[nodiscard]] UiClipboardPublicationResult drain();
-    [[nodiscard]] b8 cancel();
-    [[nodiscard]] usize pending()const noexcept{ return m_requests.size(); }
-
-
-private:
-    Core::IClipboardService& m_service;
-    Core::ClipboardCompletion m_completion;
-    Vector<Publication, Core::Alloc::GlobalArena> m_requests;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class UiClipboardPublicationRecord{
+    public ClipboardRequestToken token;
+    public ClipboardChannel channel = ClipboardChannel::Clipboard;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+UiClipboardPublicationStatus MapUiClipboardPublicationStatus(in ClipboardStatus status){
+    switch(status){
+    case ClipboardStatus::Success: return UiClipboardPublicationStatus::Published;
+    case ClipboardStatus::Unsupported: return UiClipboardPublicationStatus::Unsupported;
+    case ClipboardStatus::InvalidText: return UiClipboardPublicationStatus::InvalidText;
+    case ClipboardStatus::TooLarge: return UiClipboardPublicationStatus::TooLarge;
+    default: return UiClipboardPublicationStatus::NativeFailure;
+    }
+}
 
 UiClipboardPublicationStatus ResolveUiClipboardAdmissionFailure(in b8 wrongThread){
     if(wrongThread)
@@ -101,6 +46,101 @@ void RecordUiClipboardDrainOutcome(in UiClipboardPublicationStatus status, mut U
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Copies are immutable native publications.
+// Their owned OS requests survive later edits, focus and widget removal.
+// Drain on the OS thread; destruction cancels remaining requests.
+// Service and arena outlive this bounded owner.
+[modular]
+class UiClipboardPublications : NoCopy{
+    private mut IClipboardService m_service;
+    private ClipboardCompletion m_completion;
+    private Vector<UiClipboardPublicationRecord> m_requests;
+
+    public UiClipboardPublications(mut IClipboardService service);
+
+    public ~UiClipboardPublications(){
+        if(!this.cancel())
+            TerminateInvariant();
+    }
+
+    public UiClipboardPublicationStatus request(in StringView text, in ClipboardChannel channel){
+        if(!this.m_service.isOwnerThread())
+            return UiClipboardPublicationStatus::WrongThread;
+        if(cast<u8>(channel) > cast<u8>(ClipboardChannel::PrimarySelection) || !this.m_service.capabilities(channel).writeText)
+            return UiClipboardPublicationStatus::Unsupported;
+        const ClipboardStatus validation = ValidateClipboardUtf8Text(text);
+        if(validation != ClipboardStatus::Success)
+            return MapUiClipboardPublicationStatus(validation);
+        if(this.m_requests.size() == s_UiClipboardMaxPublications)
+            return UiClipboardPublicationStatus::QueueFull;
+        const Expected<ClipboardRequestToken, ClipboardAdmission> result = this.m_service.requestWriteText(channel, text);
+        if(!result.has_value())
+            return ResolveUiClipboardAdmissionFailure(result.error() == ClipboardAdmission::WrongThread);
+        if(!result.value().valid())
+            return UiClipboardPublicationStatus::NativeFailure;
+        UiClipboardPublicationRecord record;
+        record.token = result.value();
+        record.channel = channel;
+        this.m_requests.push_back(record);
+        return UiClipboardPublicationStatus::Pending;
+    }
+
+    public UiClipboardPublicationStatus request(in StringView text){
+        return this.request(text, ClipboardChannel::Clipboard);
+    }
+
+    public UiClipboardPublicationResult drain(){
+        UiClipboardPublicationResult result;
+        if(!this.m_service.isOwnerThread()){
+            result.status = UiClipboardPublicationStatus::WrongThread;
+            return result;
+        }
+        usize index = 0u;
+        while(index < this.m_requests.size()){
+            const UiClipboardPublicationRecord publication = this.m_requests[index];
+            const ClipboardPollResult poll = this.m_service.poll(publication.token, this.m_completion);
+            if(poll == ClipboardPollResult::Pending){
+                ++index;
+                continue;
+            }
+            if(poll == ClipboardPollResult::WrongThread){
+                result.status = UiClipboardPublicationStatus::WrongThread;
+                return result;
+            }
+            UiClipboardPublicationStatus status = UiClipboardPublicationStatus::NativeFailure;
+            if(poll == ClipboardPollResult::Completed && this.m_completion.token == publication.token && this.m_completion.operation == ClipboardOperation::WriteText && this.m_completion.channel == publication.channel)
+                status = MapUiClipboardPublicationStatus(this.m_completion.status);
+            RecordUiClipboardDrainOutcome(status, result);
+            this.m_requests.erase(this.m_requests.begin() + cast<isize>(index));
+        }
+        FinalizeUiClipboardPublicationDrainStatus(this.m_requests.size(), result);
+        return result;
+    }
+
+    public b8 cancel(){
+        if(this.m_requests.empty())
+            return true;
+        if(!this.m_service.isOwnerThread())
+            return false;
+        b8 cancelled = true;
+        for(in UiClipboardPublicationRecord publication : this.m_requests){
+            if(!this.m_service.cancel(publication.token) && this.m_service.poll(publication.token, this.m_completion) != ClipboardPollResult::InvalidRequest)
+                cancelled = false;
+        }
+        if(cancelled)
+            this.m_requests.clear();
+        return cancelled;
+    }
+
+    public usize pending()const{
+        return this.m_requests.size();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -114,88 +154,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiClipboardPublicationStatus::Enum UiClipboardPublications::Status(const Core::ClipboardStatus::Enum status)noexcept{
-    switch(status){
-    case Core::ClipboardStatus::Success: return UiClipboardPublicationStatus::Published;
-    case Core::ClipboardStatus::Unsupported: return UiClipboardPublicationStatus::Unsupported;
-    case Core::ClipboardStatus::InvalidText: return UiClipboardPublicationStatus::InvalidText;
-    case Core::ClipboardStatus::TooLarge: return UiClipboardPublicationStatus::TooLarge;
-    default: return UiClipboardPublicationStatus::NativeFailure;
-    }
-}
-
-UiClipboardPublications::UiClipboardPublications(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)
-    : m_service(service)
-    , m_completion(arena)
-    , m_requests(arena)
+UiClipboardPublications::UiClipboardPublications(::ArenaBase& __adhd_mother_arena, Core::IClipboardService& service)noexcept
+    : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
+    , m_completion(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_service(::MakeNotNull(&service))
 {
     m_requests.reserve(s_UiClipboardMaxPublications);
-}
-
-UiClipboardPublications::~UiClipboardPublications()noexcept{
-    if(!cancel())
-        TerminateInvariant();
-}
-
-UiClipboardPublicationStatus::Enum UiClipboardPublications::request(const AStringView text, const Core::ClipboardChannel::Enum channel){
-    if(!m_service.isOwnerThread())
-        return UiClipboardPublicationStatus::WrongThread;
-    if(channel > Core::ClipboardChannel::PrimarySelection || !m_service.capabilities(channel).writeText)
-        return UiClipboardPublicationStatus::Unsupported;
-    const auto validation = Core::ValidateClipboardUtf8Text(text);
-    if(validation != Core::ClipboardStatus::Success)
-        return Status(validation);
-    if(m_requests.size() == s_UiClipboardMaxPublications)
-        return UiClipboardPublicationStatus::QueueFull;
-    const auto result = m_service.requestWriteText(channel, text);
-    if(!result)
-        return ResolveUiClipboardAdmissionFailure(result.error() == Core::ClipboardAdmission::WrongThread);
-    if(!result->valid())
-        return UiClipboardPublicationStatus::NativeFailure;
-    m_requests.push_back({ *result, channel });
-    return UiClipboardPublicationStatus::Pending;
-}
-
-UiClipboardPublicationResult UiClipboardPublications::drain(){
-    UiClipboardPublicationResult result;
-    if(!m_service.isOwnerThread()){
-        result.status = UiClipboardPublicationStatus::WrongThread;
-        return result;
-    }
-    for(usize index = 0u; index < m_requests.size();){
-        const Publication publication = m_requests[index];
-        const auto poll = m_service.poll(publication.token, m_completion);
-        if(poll == Core::ClipboardPollResult::Pending){
-            ++index;
-            continue;
-        }
-        if(poll == Core::ClipboardPollResult::WrongThread){
-            result.status = UiClipboardPublicationStatus::WrongThread;
-            return result;
-        }
-        UiClipboardPublicationStatus::Enum status = UiClipboardPublicationStatus::NativeFailure;
-        if(poll == Core::ClipboardPollResult::Completed && m_completion.token == publication.token && m_completion.operation == Core::ClipboardOperation::WriteText && m_completion.channel == publication.channel)
-            status = Status(m_completion.status);
-        RecordUiClipboardDrainOutcome(status, result);
-        m_requests.erase(m_requests.begin() + static_cast<isize>(index));
-    }
-    FinalizeUiClipboardPublicationDrainStatus(m_requests.size(), result);
-    return result;
-}
-
-b8 UiClipboardPublications::cancel(){
-    if(m_requests.empty())
-        return true;
-    if(!m_service.isOwnerThread())
-        return false;
-    b8 cancelled = true;
-    for(const auto& publication : m_requests){
-        if(!m_service.cancel(publication.token) && m_service.poll(publication.token, m_completion) != Core::ClipboardPollResult::InvalidRequest)
-            cancelled = false;
-    }
-    if(cancelled)
-        m_requests.clear();
-    return cancelled;
 }
 
 

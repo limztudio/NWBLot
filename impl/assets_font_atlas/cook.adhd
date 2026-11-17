@@ -290,6 +290,54 @@ b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPa
     return true;
 }
 
+b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
+    if(!atlas.checkVirtualPath("FontAtlas::validatePayload"))
+        return false;
+    return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
+}
+
+Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload, mut ScratchArena scratchArena){
+    FontAtlas candidate(virtualPath);
+    candidate.setPayload(payload);
+    if(!candidate.validatePayload(scratchArena))
+        return MakeUnexpected(Failure());
+    return candidate;
+}
+
+b8 PopulateFontAtlasPayloadFromPreparedSource(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    in PreparedFontSource source,
+    in Font font,
+    mut ScratchArena scratchArena,
+    mut FontAtlasPayload inOutPayload
+){
+    CopySourceGroups(source, inOutPayload);
+    inOutPayload.fontSha256 = source.fontSha256;
+    inOutPayload.faceIndex = font.faceIndex();
+
+    const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(font.fontBytes());
+    if(!ValidatePairedFontSourceMetrics(nwbFilePath, sfntMetrics.has_value()))
+        return false;
+    inOutPayload.unitsPerEm = sfntMetrics.value().unitsPerEm;
+    inOutPayload.sourceGlyphCount = sfntMetrics.value().sourceGlyphCount;
+    if(!font.validatePayload())
+        return false;
+
+    const Expected<Vector<FontAtlasPositioningTable>> positioningTablesResult = CopyFontAtlasPositioningTables(font.fontBytes(), font.faceIndex(), inOutPayload.sourceGlyphCount);
+    if(!positioningTablesResult.has_value())
+        return false;
+    inOutPayload.positioningTables = positioningTablesResult.value();
+    if(!ValidateFontAtlasSourceMatch(inOutPayload, font))
+        return false;
+
+    const Expected<Vector<FontAtlasGlyph>> glyphsResult = ParseFontAtlasGlyphMetadata(nwbFilePath, asset, inOutPayload);
+    if(!glyphsResult.has_value())
+        return false;
+    inOutPayload.glyphs = glyphsResult.value();
+    return ValidateFontAtlasPayload(inOutPayload, scratchArena);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -343,9 +391,7 @@ b8 FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
     const FontAtlas& atlas = *MakeNotNull(checked_cast<const FontAtlas*>(&asset));
-    if(!atlas.checkVirtualPath(FOUNDATION_TEXT("FontAtlas::validatePayload")))
-        return false;
-    return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
+    return SerializeFontAtlasAsset(atlas, outBinary);
 }
 
 
@@ -375,40 +421,16 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     if(!sourceResult)
         return MakeUnexpected(Failure{});
     PreparedFontSource& source = *sourceResult;
-    CopySourceGroups(source, candidate.payload);
-    candidate.payload.fontSha256 = source.fontSha256;
     Font font(arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
-    candidate.payload.faceIndex = font.faceIndex();
-    const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(font.fontBytes());
-    if(!ValidatePairedFontSourceMetrics(nwbFilePath, sfntMetrics.has_value()))
-        return MakeUnexpected(Failure{});
-    candidate.payload.unitsPerEm = sfntMetrics->unitsPerEm;
-    candidate.payload.sourceGlyphCount = sfntMetrics->sourceGlyphCount;
-    if(!font.validatePayload())
-        return MakeUnexpected(Failure{});
-    auto positioningTablesResult = CopyFontAtlasPositioningTables(arena, font.fontBytes(), font.faceIndex(), candidate.payload.sourceGlyphCount);
-    if(!positioningTablesResult)
-        return MakeUnexpected(Failure{});
-    candidate.payload.positioningTables = Move(*positioningTablesResult);
-    if(!ValidateFontAtlasSourceMatch(candidate.payload, font))
-        return MakeUnexpected(Failure{});
-    auto glyphsResult = ParseFontAtlasGlyphMetadata(arena, nwbFilePath, asset, candidate.payload);
-    if(!glyphsResult)
-        return MakeUnexpected(Failure{});
-    ::AdhdAssign(candidate.payload.glyphs, Move(*glyphsResult));
-    if(!ValidateFontAtlasPayload(candidate.payload, scratchArena))
+    if(!PopulateFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, scratchArena, candidate.payload))
         return MakeUnexpected(Failure{});
     candidate.virtualPath = virtualPath;
     return candidate;
 }
 
 Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    FontAtlas candidate(arena, entry.virtualPath);
-    candidate.setPayload(entry.payload);
-    if(!candidate.validatePayload(scratchArena))
-        return MakeUnexpected(Failure{});
-    return candidate;
+    return BuildFontAtlasAssetFromPayload(arena, entry.virtualPath, entry.payload, scratchArena);
 }
 
 

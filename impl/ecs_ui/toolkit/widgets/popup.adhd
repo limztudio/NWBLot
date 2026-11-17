@@ -2,106 +2,65 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-
-#include <impl/ecs_ui/toolkit/input/popup.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
-
-#include <global/atomic_identity.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/input/popup.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The host lends state through the outermost popup end; each opening binds to its exact parent lifetime.
-class PopupState final : NoCopy{
-    friend class Builder;
-    friend class ComboCoordinator;
-    friend class ContextMenuCoordinator;
+class PopupState : NoCopy{
+    public u64 m_instanceGeneration;
+    public u64 m_openGeneration = 0u;
+    public PopupPlacement m_placement;
+    public b8 m_parentBound = false;
+    public b8 m_open = false;
+    public PopupToken m_parent;
+    public u64 m_parentOpenGeneration = 0u;
 
-
-private:
-    [[nodiscard]] static u64 NextIdentity()noexcept{
-        static Atomic<u64> s_NextIdentity{ 1u };
-        return NextNonWrappingIdentity(s_NextIdentity);
+    public PopupState(){
+        this.m_instanceGeneration = AllocateServiceIdentity();
     }
 
-
-public:
-    PopupState()noexcept
-        : m_instanceGeneration(NextIdentity())
-    {}
-    PopupState(PopupState&&) = delete;
-
-
-public:
-    PopupState& operator=(PopupState&&) = delete;
-
-
-public:
-    void open()noexcept{
-        if(m_open)
+    public void open(){
+        if(this.m_open)
             return;
-        AdvanceNonWrappingRevision(m_openGeneration);
-        m_open = true;
+        AdvanceNonWrappingRevision(this.m_openGeneration);
+        this.m_open = true;
     }
-    void close()noexcept{ m_open = false; }
 
-    [[nodiscard]] b8 isOpen()const noexcept{ return m_open; }
+    public void close(){
+        this.m_open = false;
+    }
 
-    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+    public b8 isOpen()const{
+        return this.m_open;
+    }
 
-    [[nodiscard]] u64 openGeneration()const noexcept{ return m_openGeneration; }
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
 
-    [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_placement; }
+    public u64 openGeneration()const{
+        return this.m_openGeneration;
+    }
 
+    public in PopupPlacement placement()const{
+        return this.m_placement;
+    }
 
-private:
-    void bindParent(const PopupToken& parent)noexcept{
+    public void bindParent(in PopupToken parent){
         BindPopupParentState(
             parent,
-            m_openGeneration,
-            m_open,
-            m_parentBound,
-            m_parent,
-            m_parentOpenGeneration
+            this.m_openGeneration,
+            this.m_open,
+            this.m_parentBound,
+            this.m_parent,
+            this.m_parentOpenGeneration
         );
     }
-
-
-private:
-    const u64 m_instanceGeneration;
-    u64 m_openGeneration = 0u;
-    PopupPlacement m_placement;
-    b8 m_parentBound = false;
-    b8 m_open = false;
-    PopupToken m_parent;
-    u64 m_parentOpenGeneration = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

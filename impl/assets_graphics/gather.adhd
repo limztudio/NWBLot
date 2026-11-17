@@ -95,6 +95,59 @@ b8 ValidateMatchingGatheredShaderRecord(
     return false;
 }
 
+b8 ValidateGatheredShaderArchiveRecordIdentity(in Record record){
+    const Expected<Name> expectedPath = BuildVirtualPathName(record.shaderName, record.variantName, record.stage);
+    Name resolvedPath = s_NameNone;
+    if(expectedPath.has_value())
+        resolvedPath = expectedPath.value();
+    return ValidateGatheredShaderRecordIdentity(expectedPath.has_value(), resolvedPath, record.virtualPathHash);
+}
+
+b8 MergeShaderArchiveIndexRecords(in Span<Record> incomingRecords, mut Vector<Record> inOutRecords){
+    const Expected<usize> mergedCapacity = TryComputeMergedGraphicsShaderRecordCapacity(inOutRecords.size(), incomingRecords.size());
+    if(!mergedCapacity.has_value())
+        return false;
+
+    HashMap<NameHash, usize> recordIndices;
+    recordIndices.reserve(mergedCapacity.value());
+    inOutRecords.reserve(mergedCapacity.value());
+    for(usize i = 0u; i < inOutRecords.size(); ++i){
+        if(!ValidateGatheredShaderArchiveRecordIdentity(inOutRecords[i]))
+            return false;
+        if(!ValidateUniqueGatheredShaderRecordIndex(recordIndices.try_emplace(inOutRecords[i].virtualPathHash, i).second))
+            return false;
+    }
+
+    for(in Record record : incomingRecords){
+        if(!ValidateGatheredShaderArchiveRecordIdentity(record))
+            return false;
+        if(!recordIndices.contains(record.virtualPathHash)){
+            if(!recordIndices.try_emplace(record.virtualPathHash, inOutRecords.size()).second)
+                return false;
+            inOutRecords.push_back(record);
+            continue;
+        }
+
+        const usize previousIndex = recordIndices.at(record.virtualPathHash);
+        const Record previous = inOutRecords[previousIndex];
+        if(!ValidateMatchingGatheredShaderRecord(
+            previous.shaderName,
+            previous.stage,
+            previous.variantName,
+            previous.sourceChecksum,
+            previous.bytecodeChecksum,
+            record.shaderName,
+            record.stage,
+            record.variantName,
+            record.sourceChecksum,
+            record.bytecodeChecksum
+        ))
+            return false;
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -129,22 +182,8 @@ namespace __hidden_graphics_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
-    const Expected<Name> expectedPath = Core::ShaderArchive::BuildVirtualPathName(record.shaderName, record.variantName, record.stage);
-    return ValidateGatheredShaderRecordIdentity(expectedPath.has_value(), expectedPath ? *expectedPath : s_NameNone, record.virtualPathHash);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
+static b8 MergeGatheredGraphicsAssetImpl(const Name& virtualPath, const Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
+    (void)scratchArena;
     if(virtualPath != Core::ShaderArchive::s_IndexVirtualPathName)
         return false;
     if(!incomingPayload.empty() && incomingPayload.data() == nullptr)
@@ -158,53 +197,28 @@ b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> inco
     if(!parsedIncomingRecords)
         return false;
     auto& records = *parsedRecords;
-    auto& incomingRecords = *parsedIncomingRecords;
-    const Expected<usize> mergedCapacity = TryComputeMergedGraphicsShaderRecordCapacity(records.size(), incomingRecords.size());
-    if(!mergedCapacity)
+    if(!MergeShaderArchiveIndexRecords(*parsedIncomingRecords, records))
         return false;
-
-    HashMap<NameHash, usize, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> recordIndices(scratchArena);
-    recordIndices.reserve(*mergedCapacity);
-    records.reserve(*mergedCapacity);
-    for(usize i = 0u; i < records.size(); ++i){
-        if(!__hidden_graphics_gather::ValidateRecordIdentity(records[i]))
-            return false;
-        if(!ValidateUniqueGatheredShaderRecordIndex(recordIndices.emplace(records[i].virtualPathHash, i).second))
-            return false;
-    }
-
-    for(auto& record : incomingRecords){
-        if(!__hidden_graphics_gather::ValidateRecordIdentity(record))
-            return false;
-        const auto found = recordIndices.find(record.virtualPathHash);
-        if(found == recordIndices.end()){
-            if(!recordIndices.emplace(record.virtualPathHash, records.size()).second)
-                return false;
-            records.push_back(Move(record));
-            continue;
-        }
-
-        const auto& previous = records[found.value()];
-        if(!ValidateMatchingGatheredShaderRecord(
-            previous.shaderName,
-            previous.stage,
-            previous.variantName,
-            previous.sourceChecksum,
-            previous.bytecodeChecksum,
-            record.shaderName,
-            record.stage,
-            record.variantName,
-            record.sourceChecksum,
-            record.bytecodeChecksum
-        ))
-            return false;
-    }
 
     auto merged = Core::ShaderArchive::SerializeIndex(records, arena, scratchArena);
     if(!merged)
         return false;
     existingPayload = Move(*merged);
     return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
+    return __hidden_graphics_gather::MergeGatheredGraphicsAssetImpl(virtualPath, incomingPayload, scratchArena, existingPayload);
 }
 
 static Core::Assets::AssetGatherMergeAutoRegistrar s_GraphicsGatherMergeRegistrar(&MergeGatheredGraphicsAsset);

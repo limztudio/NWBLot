@@ -444,7 +444,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
     const Core::GpuTaskResourceSetUse computeEmulationOutputVertexBufferSetUse{
         .resourceSet = computeEmulationOutputSet,
         .range = {},
-        .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState,
+        .requiredState = s_ObjectGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Array<Core::GpuTaskResourceSetUse, s_AvboitMaterialResourceSetUseCapacity> materialResourceSetUses = {};
@@ -546,7 +546,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> sharedRasterResourceUses{ scratchArena };
         sharedRasterResourceUses.reserve(resourceUses.size() + 1u);
         sharedRasterResourceUses.assign(resourceUses.begin(), resourceUses.end());
-        sharedRasterResourceUses.push_back(ReadUse(sharedComputeEmulationOutput, ECSRenderDetail::s_ObjectGeometryRasterState));
+        sharedRasterResourceUses.push_back(ReadUse(sharedComputeEmulationOutput, s_ObjectGeometryRasterState));
 
         const usize sharedPhaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.sharedComputeEmulationPlan.drawCount);
         FOUNDATION_ASSERT(IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));

@@ -267,7 +267,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
 
 Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgReceiver(
     const OpaqueComputeEmulationProducerInputs& inputs,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
     const Core::GpuTaskId dependency,
     ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload& payload
@@ -345,7 +345,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     rasterResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     rasterResourceUses.push_back(ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange));
     rasterResourceUses.push_back(ReadBufferUse(resources.materialTyped, inputs.materialTypedRange));
-    rasterResourceUses.push_back(ReadUse(inputs.sharedOutput, ECSRenderDetail::s_ObjectGeometryRasterState));
+    rasterResourceUses.push_back(ReadUse(inputs.sharedOutput, s_ObjectGeometryRasterState));
     rasterResourceUses.push_back(ReadWriteUse(resources.albedo, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.normal, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.worldPosition, Core::ResourceStates::RenderTarget));
@@ -491,7 +491,7 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
         opaqueDrawContext.setFramebuffer(deferredTargets.framebuffer);
         if(regularDrawResourcesReady && (payload.regularSharedComputeEmulationDrawsGraphOwned || !regularDrawItemsForGbuffer.empty())){
             if(payload.regularSharedComputeEmulationDrawsGraphOwned){
-                payload.regularSharedComputeEmulationTiming->emplace(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
+                payload.regularSharedComputeEmulationTiming->emplace(graphics.gpuTiming(), s_TimingScopeOpaqueRegular, graphics.getDevice(), commandList);
                 // Close the marker before finalizing this command list.
                 if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
                     return false;
@@ -499,7 +499,7 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
                     materialSystem.drawRecorder().renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
             }
             else{
-                Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
+                Core::GpuTimingMeasure timing(graphics.gpuTiming(), s_TimingScopeOpaqueRegular, graphics.getDevice(), commandList);
 
                 materialSystem.drawRecorder().renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
             }
@@ -518,7 +518,7 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
         );
         csgReceiverSurfaceDrawContext.setFramebuffer(deferredTargets.framebuffer).setCsgResources(payload.csgResources);
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
-            Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure timing(graphics.gpuTiming(), s_TimingScopeOpaqueCsgReceiverSurface, graphics.getDevice(), commandList);
 
             materialSystem.drawRecorder().renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
         }

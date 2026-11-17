@@ -1,0 +1,281 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuGraphResourceDesc TextureResourceDesc(in Name identity, in StringView label){
+    GpuGraphResourceDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(GpuGraphResourceType::Texture);
+    return desc;
+}
+
+GpuGraphResourceDesc BufferResourceDesc(in Name identity, in StringView label){
+    GpuGraphResourceDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(GpuGraphResourceType::Buffer);
+    return desc;
+}
+
+GpuGraphResourceDesc HazardDomainDesc(in Name identity, in StringView label){
+    GpuGraphResourceDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(GpuGraphResourceType::HazardDomain);
+    return desc;
+}
+
+GpuGraphResourceDesc AccelStructResourceDesc(in Name identity, in StringView label){
+    GpuGraphResourceDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setType(GpuGraphResourceType::AccelStruct);
+    return desc;
+}
+
+Expected<GpuGraphResourceId> ImportExternalTexture(
+    in TextureHandle texture,
+    in Name identity,
+    in StringView label,
+    in Optional<ResourceStates> initialState,
+    in Optional<ResourceStates> externalFinalState,
+    mut GpuTaskGraph graph
+){
+    GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);
+    if(initialState.has_value())
+        desc.setInitialState(initialState.value());
+    if(externalFinalState.has_value())
+        desc.setExternalFinalState(externalFinalState.value());
+    return graph.importTexture(texture, desc);
+}
+
+Expected<GpuGraphResourceId> ImportExternalTexture(
+    mut GpuTaskGraph graph,
+    in TextureHandle texture,
+    in Name identity,
+    in StringView label,
+    in Optional<ResourceStates> initialState,
+    in Optional<ResourceStates> externalFinalState
+){
+    return ImportExternalTexture(texture, identity, label, initialState, externalFinalState, graph);
+}
+
+Expected<GpuGraphResourceId> ImportExternalTexture(
+    mut GpuTaskGraph graph,
+    in TextureHandle texture,
+    in Name identity,
+    in StringView label,
+    in Optional<ResourceStates> initialState
+){
+    return ImportExternalTexture(texture, identity, label, initialState, Optional<ResourceStates>(), graph);
+}
+
+Expected<GpuGraphResourceId> ImportExternalTexture(
+    mut GpuTaskGraph graph,
+    in TextureHandle texture,
+    in Name identity,
+    in StringView label
+){
+    return ImportExternalTexture(texture, identity, label, Optional<ResourceStates>(), Optional<ResourceStates>(), graph);
+}
+
+Expected<GpuGraphResourceId> ImportExternalBuffer(
+    in BufferHandle buffer,
+    in Name identity,
+    in StringView label,
+    in Optional<ResourceStates> initialState,
+    in Optional<ResourceStates> externalFinalState,
+    mut GpuTaskGraph graph
+){
+    GpuGraphResourceDesc desc = BufferResourceDesc(identity, label);
+    if(initialState.has_value())
+        desc.setInitialState(initialState.value());
+    if(externalFinalState.has_value())
+        desc.setExternalFinalState(externalFinalState.value());
+    return graph.importBuffer(buffer, desc);
+}
+
+Expected<GpuGraphResourceId> ImportExternalBuffer(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in Name identity,
+    in StringView label,
+    in Optional<ResourceStates> initialState,
+    in Optional<ResourceStates> externalFinalState
+){
+    return ImportExternalBuffer(buffer, identity, label, initialState, externalFinalState, graph);
+}
+
+Expected<GpuGraphResourceId> ImportExternalBuffer(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in Name identity,
+    in StringView label,
+    in Optional<ResourceStates> initialState
+){
+    return ImportExternalBuffer(buffer, identity, label, initialState, Optional<ResourceStates>(), graph);
+}
+
+Expected<GpuGraphResourceId> ImportExternalBuffer(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in Name identity,
+    in StringView label
+){
+    return ImportExternalBuffer(buffer, identity, label, Optional<ResourceStates>(), Optional<ResourceStates>(), graph);
+}
+
+Expected<GpuGraphResourceId> FindOrImportTexture(
+    mut GpuTaskGraph graph,
+    in TextureHandle texture,
+    in StringView resourceLabel,
+    in Optional<ResourceStates> initialState
+){
+    if(!texture.valid())
+        return MakeUnexpected(Failure());
+    {
+        const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadViewTryAcquire(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure());
+        const GpuGraphResourceId existing = declarations.findImportedTexture(texture);
+        if(existing.valid())
+            return existing;
+    }
+    GpuGraphResourceDesc desc = TextureResourceDesc(texture.deref().getCreationDescription().name, resourceLabel);
+    if(initialState.has_value())
+        desc.setInitialState(initialState.value());
+    return graph.importTexture(texture, desc);
+}
+
+Expected<GpuGraphResourceId> FindOrImportTexture(
+    mut GpuTaskGraph graph,
+    in TextureHandle texture,
+    in StringView resourceLabel
+){
+    return FindOrImportTexture(graph, texture, resourceLabel, Optional<ResourceStates>());
+}
+
+Expected<GpuGraphResourceId> FindOrImportBuffer(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView resourceLabel
+){
+    if(!buffer.valid())
+        return MakeUnexpected(Failure());
+    {
+        const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadViewTryAcquire(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure());
+        const GpuGraphResourceId existing = declarations.findImportedBuffer(buffer);
+        if(existing.valid())
+            return existing;
+    }
+    const Name bufferIdentity = buffer.deref().getCreationDescription().debugName;
+    if(bufferIdentity == s_NameNone)
+        return MakeUnexpected(Failure());
+    return graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, resourceLabel));
+}
+
+GpuTaskResourceUse ReadUse(
+    in GpuGraphResourceId resource,
+    in ResourceStates state,
+    in b8 hasIndependentStateSource
+){
+    GpuTaskResourceUse result;
+    result.resource = resource;
+    result.requiredState = state;
+    result.access = GpuTaskResourceAccess::Read;
+    result.hasIndependentStateSource = hasIndependentStateSource;
+    return result;
+}
+
+GpuTaskResourceUse ReadUse(in GpuGraphResourceId resource, in ResourceStates state){
+    return ReadUse(resource, state, false);
+}
+
+GpuTaskResourceUse ReadUse(in GpuGraphResourceId resource){
+    return ReadUse(resource, ResourceStates::ShaderResource, false);
+}
+
+GpuTaskResourceUse ReadBufferUse(
+    in GpuGraphResourceId resource,
+    in BufferRange range,
+    in ResourceStates state,
+    in b8 hasIndependentStateSource
+){
+    GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
+    result.range.bufferRange = range;
+    return result;
+}
+
+GpuTaskResourceUse ReadBufferUse(in GpuGraphResourceId resource, in BufferRange range, in ResourceStates state){
+    return ReadBufferUse(resource, range, state, false);
+}
+
+GpuTaskResourceUse ReadBufferUse(in GpuGraphResourceId resource, in BufferRange range){
+    return ReadBufferUse(resource, range, ResourceStates::ShaderResource, false);
+}
+
+GpuTaskResourceUse ReadTextureUse(
+    in GpuGraphResourceId resource,
+    in TextureSubresourceSet subresources,
+    in ResourceStates state,
+    in b8 hasIndependentStateSource
+){
+    GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
+    result.range.textureSubresources = subresources;
+    return result;
+}
+
+GpuTaskResourceUse ReadTextureUse(in GpuGraphResourceId resource, in TextureSubresourceSet subresources, in ResourceStates state){
+    return ReadTextureUse(resource, subresources, state, false);
+}
+
+GpuTaskResourceUse ReadTextureUse(in GpuGraphResourceId resource, in TextureSubresourceSet subresources){
+    return ReadTextureUse(resource, subresources, ResourceStates::ShaderResource, false);
+}
+
+GpuTaskResourceUse WriteUse(in GpuGraphResourceId resource, in ResourceStates state){
+    GpuTaskResourceUse result;
+    result.resource = resource;
+    result.requiredState = state;
+    result.access = GpuTaskResourceAccess::Write;
+    return result;
+}
+
+GpuTaskResourceUse WriteTextureUse(
+    in GpuGraphResourceId resource,
+    in TextureSubresourceSet subresources,
+    in ResourceStates state
+){
+    GpuTaskResourceUse result = WriteUse(resource, state);
+    result.range.textureSubresources = subresources;
+    return result;
+}
+
+GpuTaskResourceUse ReadWriteUse(in GpuGraphResourceId resource, in ResourceStates state){
+    GpuTaskResourceUse result;
+    result.resource = resource;
+    result.requiredState = state;
+    result.access = GpuTaskResourceAccess::ReadWrite;
+    return result;
+}
+
+GpuTaskResourceUse ReadWriteTextureUse(
+    in GpuGraphResourceId resource,
+    in TextureSubresourceSet subresources,
+    in ResourceStates state
+){
+    GpuTaskResourceUse result = ReadWriteUse(resource, state);
+    result.range.textureSubresources = subresources;
+    return result;
+}
+
+GpuTaskDesc TaskDesc(in Name identity, in StringView label){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
+    return desc;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

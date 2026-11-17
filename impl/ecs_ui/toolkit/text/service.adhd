@@ -554,8 +554,6 @@ namespace __hidden_ui_text_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Atomic<u64> s_NextServiceIdentity{ 1u };
-
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
     const auto plane = TextGlyphVisibility::LoadAtlasRectangle(placed, atlas, fontSize, {});
     if(!plane)
@@ -604,7 +602,7 @@ TextService::TextService(Core::Alloc::GlobalArena& arena)
     , m_atlas(Core::MakeGlobalUnique<GlyphAtlas>(arena, arena))
     , m_pages(arena)
     , m_sdfPages(arena)
-    , m_identity(NextNonWrappingIdentity(__hidden_ui_text_service::s_NextServiceIdentity))
+    , m_identity(AllocateServiceIdentity())
 {
     m_pages.reserve(s_GlyphAtlasMaxPages);
     m_sdfPages.reserve(s_PaintMaxImages);

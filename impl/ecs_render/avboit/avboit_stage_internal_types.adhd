@@ -40,31 +40,13 @@ class CsgGraphResourceSnapshot;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using CsgGraphResourceSnapshot = ::NWB::Impl::CsgGraphResourceSnapshot;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // AVBOIT stage owns the transparent CSG interval producer, refraction capture, occupancy, depth warp, extinction, integration, and accumulation.
 struct FrameGraphAvboitStageInputs{
     DeferredFrameTargets& targets;
     const DeferredGraphResourceImportResult& resources;
     const CsgFrameState& csgFrameState;
     const MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     const MeshViewGpuData& meshViewState;
     Core::GpuTaskId prefixTask;
     b8 hasTransparentRenderers = false;
@@ -371,7 +353,7 @@ namespace RendererTaskGraphDetail{
     RendererMaterialSystem& materialSystem,
     RendererCsgSystem& csgSystem,
     const CsgFrameState& csgFrameState,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MeshFrameBindingSnapshot& frameBindings,
     const MeshViewGpuData& meshViewState,
     Core::GpuTaskId dependency,
@@ -395,7 +377,7 @@ public:
         RendererCsgSystem& csgSystem,
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const CsgGraphResourceSnapshot& csgResources,
         const MeshFrameBindingSnapshot& frameBindings,
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& csgUses
     );
@@ -412,7 +394,7 @@ struct AvboitRefractionCapInputs{
     Core::Alloc::GlobalArena& arena;
     RendererCsgSystem& csgSystem;
     const DeferredFrameTargets& targets;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     const CsgFrameGpuData& csgFrameData;
     Span<const Core::GpuTaskResourceUse> commonUses;
     Span<const Core::GpuTaskResourceUse> csgUses;

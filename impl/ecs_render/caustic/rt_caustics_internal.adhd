@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -12,6 +19,7 @@ native{
 #include <impl/global.adhd.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/ecs_render/caustic/graph_types.adhd.h>
+#include <impl/ecs_render/caustic/rt_caustic_state.adhd.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -33,15 +41,6 @@ class RendererRayTracingSystem;
 class RendererShaderSystem;
 
 class DeferredFrameTargets;
-struct RtCausticState;
-
-[[nodiscard]] b8 EnsureCausticEmissionTargetBufferStorage(
-    Core::GraphicsRuntime& graphics,
-    usize targetCount,
-    Core::BufferHandle& inoutBuffer,
-    Core::GpuDescriptorHandle& inoutHeapHandle,
-    usize& inoutCapacity
-);
 
 // Shared prepare plus five-wavelet plus upsample plus timing-close resolve declaration.
 using CausticsResolveStageUses = Span<const Core::GpuTaskResourceUse>;
@@ -161,43 +160,72 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CausticPipelineSet final : NoCopy{
-public:
-    CausticPipelineSet(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtCausticState& caustic, const b8& hasCsg)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_caustic(caustic)
-        , m_hasCsg(hasCsg)
-    {}
-
-
-public:
-    [[nodiscard]] b8 ensureSwCausticPipeline();
-    [[nodiscard]] b8 ensureCausticResolvePipeline();
-    [[nodiscard]] b8 ensureCausticGeometryDownsamplePipeline();
-    [[nodiscard]] b8 ensureCausticAccumulatorDecayPipeline();
-    [[nodiscard]] b8 ensureCausticRtPipeline();
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    RtCausticState& m_caustic;
-    const b8& m_hasCsg;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::RtCausticState")]
+extern class RtCausticState{
+    BindingLayoutHandle m_swCausticBindingLayout;
+    ShaderHandle m_swCausticShader;
+    ComputePipelineHandle m_swCausticPipeline;
+    ShaderHandle m_swCausticCsgShader;
+    ComputePipelineHandle m_swCausticCsgPipeline;
+    BindingLayoutHandle m_hwCausticBindingLayout;
+    RayTracingPipelineHandle m_hwCausticPipeline;
+    RayTracingShaderTableHandle m_hwCausticShaderTable;
+    RayTracingPipelineHandle m_hwCausticCsgPipeline;
+    RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
+    CausticResolveState m_causticResolve;
+    BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
+    ShaderHandle m_causticGeometryDownsampleShader;
+    ComputePipelineHandle m_causticGeometryDownsamplePipeline;
+    BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
+    ShaderHandle m_causticAccumulatorDecayShader;
+    ComputePipelineHandle m_causticAccumulatorDecayPipeline;
+    b8 m_swCausticPipelineFailed;
+    b8 m_swCausticCsgPipelineFailed;
+    b8 m_hwCausticPipelineFailed;
+    b8 m_hwCausticCsgPipelineFailed;
+    b8 m_causticGeometryDownsamplePipelineFailed;
+    b8 m_causticAccumulatorDecayPipelineFailed;
+};
+
+[modular]
+class CausticPipelineSet : NoCopy{
+    private mut GlobalArena m_arena;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererShaderSystem m_shaderSystem;
+    private mut RtCausticState m_caustic;
+    private b8 m_hasCsg;
+
+    public CausticPipelineSet(
+        mut GlobalArena arena,
+        mut GraphicsRuntime graphics,
+        mut RendererShaderSystem shaderSystem,
+        mut RtCausticState caustic,
+        in b8 hasCsg
+    ){
+        this.m_arena = arena;
+        this.m_graphics = graphics;
+        this.m_shaderSystem = shaderSystem;
+        this.m_caustic = caustic;
+        this.m_hasCsg = hasCsg;
+    }
+
+    public b8 ensureSwCausticPipeline();
+    public b8 ensureCausticResolvePipeline();
+    public b8 ensureCausticGeometryDownsamplePipeline();
+    public b8 ensureCausticAccumulatorDecayPipeline();
+    public b8 ensureCausticRtPipeline();
 }
 
 

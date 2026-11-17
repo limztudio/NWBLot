@@ -2,7 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/csg_subsystem.adhd>
 #include <impl/ecs_render/csg/clip_bounds.adhd>
+#include <impl/ecs_render/csg/csg_system.adhd>
+#include <impl/ecs_render/csg/graph_types.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/material/renderer_render_state_private.adhd>
+#include <impl/ecs_render/shared/renderer_push_constants_private.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_CsgIntervalPeelShaderDebugName = "ECSRender_CsgIntervalPeelCS";
+const Name s_CsgReceiverSpanBuildShaderDebugName = "ECSRender_CsgReceiverSpanBuildCS";
+const Name s_CsgIntervalCombineShaderDebugName = "ECSRender_CsgIntervalCombineCS";
+const Name s_CsgIntervalCapFillShaderDebugName = "ECSRender_CsgIntervalCapFillPS";
+const Name s_CsgRefractionCapFillShaderDebugName = "ECSRender_CsgRefractionCapFillPS";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,93 +103,79 @@ b8 HasValidCsgIntervalPeelTargetState(
     ;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_graphics/csg_subsystem.adhd.h>
-#include <impl/ecs_render/csg/csg_system.adhd.h>
-#include <impl/ecs_render/csg/format_private.adhd.h>
-#include <impl/ecs_render/csg/graph_types.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_state.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/csg/types.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/material/renderer_render_state_private.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_csg_resources_and_peel{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 CreateIntervalCapFillPipeline(
-    Core::Device& device,
-    const Core::ShaderHandle& vertexShader,
-    const Core::ShaderHandle& pixelShader,
-    const Core::BindingLayoutHandle& clipBindingLayout,
-    const Core::FramebufferInfo& framebufferInfo,
-    Core::GraphicsPipelineHandle& pipeline
-){
-    if(pipeline && pipeline->getFramebufferInfo() == framebufferInfo)
-        return true;
-
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    Core::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.setVertexShader(vertexShader).setPixelShader(pixelShader).setRenderState(BuildCompositeRenderState()).addBindingLayout(clipBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-
-    auto pipelineResult = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    return static_cast<b8>(pipelineResult);
+FramebufferInfo BuildCsgFramebufferInfo(in FramebufferInfoEx infoEx){
+    FramebufferInfo framebufferInfo;
+    framebufferInfo.sampleCount = infoEx.sampleCount;
+    framebufferInfo.sampleQuality = infoEx.sampleQuality;
+    framebufferInfo.depthFormat = infoEx.depthFormat;
+    framebufferInfo.colorFormats = infoEx.colorFormats;
+    return framebufferInfo;
 }
 
-static void DispatchCsgIntervalCompute(
-    Core::CommandList& commandList,
-    Core::GpuDescriptorHeap& heap,
-    DeferredFrameTargets& targets,
-    const CsgFrameGpuDataView& csgFrameData,
-    Core::ComputePipeline& pipeline,
-    const u32 csgContextHeapSlot,
-    const u32 meshViewHeapSlot = 0u
+b8 CreateIntervalCapFillPipeline(
+    in ShaderHandle vertexShader,
+    in ShaderHandle pixelShader,
+    in BindingLayoutHandle clipBindingLayout,
+    in FramebufferInfo framebufferInfo,
+    mut Device device,
+    mut GraphicsPipelineHandle pipeline
 ){
-    Core::ComputeState computeState;
-    computeState.setPipeline(&pipeline);
+    if(pipeline.valid() && pipeline.deref().getFramebufferInfo() == framebufferInfo)
+        return true;
+
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    GraphicsPipelineDesc pipelineDesc;
+    pipelineDesc.setVertexShader(vertexShader).setPixelShader(pixelShader).setRenderState(BuildCompositeRenderState()).addBindingLayout(clipBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+
+    const Expected<GraphicsPipelineHandle> pipelineResult = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    if(pipelineResult.has_value()){
+        pipeline = pipelineResult.value();
+        return true;
+    }
+    pipeline.reset();
+    return false;
+}
+
+b8 CreateCsgTargetTexture(
+    in u32 width,
+    in u32 height,
+    in Format format,
+    in Name name,
+    in u32 layerCount,
+    in b8 renderTarget,
+    in StringView errorMessage,
+    mut GraphicsRuntime graphics,
+    mut TextureHandle outTexture
+){
+    TextureDesc desc;
+    desc.setWidth(width).setHeight(height).setArraySize(layerCount).setFormat(format).setDimension(TextureDimension::Texture2DArray).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute);
+    if(renderTarget)
+        desc.setIsRenderTarget(true);
+    desc.setIsUAV(true).setName(name);
+    const Expected<TextureHandle> result = graphics.createTexture(desc);
+    if(!result.has_value()){
+        outTexture.reset();
+        error("{}", errorMessage);
+        return false;
+    }
+    outTexture = result.value();
+    return true;
+}
+
+void DispatchCsgIntervalCompute(
+    in DeferredFrameTargets targets,
+    in CsgFrameGpuDataView csgFrameData,
+    in u32 csgContextHeapSlot,
+    in u32 meshViewHeapSlot,
+    mut CommandList commandList,
+    mut GpuDescriptorHeap heap,
+    mut ComputePipeline pipeline
+){
+    ComputeState computeState;
+    computeState.setPipeline(pipeline);
     // Push-only layout; the rest is heap-selected.
     commandList.setComputeState(computeState);
     // Bind after setComputeState so the StorageImage table resolves.
@@ -183,378 +186,329 @@ static void DispatchCsgIntervalCompute(
         targets.width,
         targets.height,
         targets.csgPeelLayerCount,
-        static_cast<u32>(csgFrameData.receiverRanges.size()),
+        cast<u32>(csgFrameData.receiverRanges.size()),
         meshViewHeapSlot,
         csgContextHeapSlot,
-        static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X),
-        static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)
+        s_CsgIntervalPeelGroupSizeX,
+        s_CsgIntervalPeelGroupSizeY
     );
     if(!dispatchPlan.active)
         return;
-    commandList.setPushConstants(&dispatchPlan.pushConstants, sizeof(dispatchPlan.pushConstants));
+    commandList.setPushConstants(dispatchPlan.pushConstants);
     commandList.dispatch(dispatchPlan.groupsX, dispatchPlan.groupsY, 1u);
 }
 
+void DispatchCsgIntervalCompute(
+    in DeferredFrameTargets targets,
+    in CsgFrameGpuDataView csgFrameData,
+    in u32 csgContextHeapSlot,
+    mut CommandList commandList,
+    mut GpuDescriptorHeap heap,
+    mut ComputePipeline pipeline
+){
+    DispatchCsgIntervalCompute(targets, csgFrameData, csgContextHeapSlot, 0u, commandList, heap, pipeline);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets)noexcept{
+b8 RendererCsgSystem::createCsgPeelTargets(mut DeferredFrameTargets targets){
     if(targets.csgIntervalTargetsValid())
         return true;
 
     ResetCsgIntervalTargets(targets);
 
-    FOUNDATION_ASSERT(targets.width > 0u && targets.height > 0u);
-    FOUNDATION_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgIntervalIdFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgReceiverEventDataFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgReceiverEventCountFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgReceiverSpanDataFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgReceiverSpanCountFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgRemovedIntervalDataFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgRemovedIntervalCountFormat != Core::Format::UNKNOWN);
-    FOUNDATION_ASSERT(targets.csgPeelLayerCount == s_CsgPeelLayerCount);
-    FOUNDATION_ASSERT(targets.csgReceiverEventLayerCount == s_CsgReceiverEventLayerCount);
-    FOUNDATION_ASSERT(targets.csgReceiverSpanLayerCount == s_CsgReceiverSpanLayerCount);
-    FOUNDATION_ASSERT(targets.csgRemovedIntervalLayerCount == s_CsgRemovedIntervalLayerCount);
-
-    const auto createCsgTexture = [&](
-        const Core::Format::Enum format,
-        const Name& name,
-        const u32 layerCount,
-        const b8 renderTarget,
-        const TStringView errorMessage,
-        Core::TextureHandle& outTexture
-    ){
-        Core::TextureDesc desc;
-        desc.setWidth(targets.width).setHeight(targets.height).setArraySize(layerCount).setFormat(format).setDimension(Core::TextureDimension::Texture2DArray).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-        if(renderTarget)
-            desc.setIsRenderTarget(true);
-        desc.setIsUAV(true).setName(name);
-        auto result = m_graphics->createTexture(desc);
-        if(!result){
-            outTexture.reset();
-            NWB_LOGGER_ERROR(errorMessage);
-            return false;
-        }
-        outTexture = Move(*result);
-        return true;
-    };
+    assert(targets.width > 0u && targets.height > 0u);
+    assert(targets.csgCapNormalFormat != Format::UNKNOWN);
+    assert(targets.csgIntervalDepthFormat != Format::UNKNOWN);
+    assert(targets.csgIntervalIdFormat != Format::UNKNOWN);
+    assert(targets.csgReceiverEventDataFormat != Format::UNKNOWN);
+    assert(targets.csgReceiverEventCountFormat != Format::UNKNOWN);
+    assert(targets.csgReceiverSpanDataFormat != Format::UNKNOWN);
+    assert(targets.csgReceiverSpanCountFormat != Format::UNKNOWN);
+    assert(targets.csgRemovedIntervalDepthFormat != Format::UNKNOWN);
+    assert(targets.csgRemovedIntervalCapNormalFormat != Format::UNKNOWN);
+    assert(targets.csgRemovedIntervalDataFormat != Format::UNKNOWN);
+    assert(targets.csgRemovedIntervalCountFormat != Format::UNKNOWN);
+    assert(targets.csgPeelLayerCount == s_CsgPeelLayerCount);
+    assert(targets.csgReceiverEventLayerCount == s_CsgReceiverEventLayerCount);
+    assert(targets.csgReceiverSpanLayerCount == s_CsgReceiverSpanLayerCount);
+    assert(targets.csgRemovedIntervalLayerCount == s_CsgRemovedIntervalLayerCount);
 
     return
-        createCsgTexture(targets.csgCapNormalFormat, Name(s_RenderNameEngineDeferredCsgCapBackNormal), targets.csgPeelLayerCount, true, FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG cap back-normal peel target"), targets.csgCapBackNormal)
-        && createCsgTexture(targets.csgIntervalDepthFormat, Name(s_RenderNameEngineDeferredCsgIntervalDepth), targets.csgPeelLayerCount, true, FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG interval depth peel target"), targets.csgIntervalDepth)
-        && createCsgTexture(targets.csgIntervalIdFormat, Name(s_RenderNameEngineDeferredCsgIntervalId), targets.csgPeelLayerCount, true, FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"), targets.csgIntervalId)
-        && createCsgTexture(
-            targets.csgReceiverEventDataFormat, Name(s_RenderNameEngineDeferredCsgReceiverEventData), targets.csgReceiverEventLayerCount, false,
-            FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG receiver event data target"), targets.csgReceiverEventData
-        )
-        && createCsgTexture(targets.csgReceiverEventCountFormat, Name(s_RenderNameEngineDeferredCsgReceiverEventCount), 1u, false, FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG receiver event count target"), targets.csgReceiverEventCount)
-        && createCsgTexture(
-            targets.csgReceiverSpanDataFormat, Name(s_RenderNameEngineDeferredCsgReceiverSpanData), targets.csgReceiverSpanLayerCount, false,
-            FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG receiver span data target"), targets.csgReceiverSpanData
-        )
-        && createCsgTexture(targets.csgReceiverSpanCountFormat, Name(s_RenderNameEngineDeferredCsgReceiverSpanCount), 1u, false, FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"), targets.csgReceiverSpanCount)
-        && createCsgTexture(
-            targets.csgRemovedIntervalDepthFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalDepth), targets.csgRemovedIntervalLayerCount, false,
-            FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG removed interval depth target"), targets.csgRemovedIntervalDepth
-        )
-        && createCsgTexture(
-            targets.csgRemovedIntervalCapNormalFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalCapNormal), targets.csgRemovedIntervalLayerCount, false,
-            FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG removed interval cap-normal target"), targets.csgRemovedIntervalCapNormal
-        )
-        && createCsgTexture(
-            targets.csgRemovedIntervalDataFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalData), targets.csgRemovedIntervalLayerCount, false,
-            FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG removed interval data target"), targets.csgRemovedIntervalData
-        )
-        && createCsgTexture(targets.csgRemovedIntervalCountFormat, Name(s_RenderNameEngineDeferredCsgRemovedIntervalCount), 1u, false, FOUNDATION_TEXT("RendererSystem: failed to create deferred CSG removed interval count target"), targets.csgRemovedIntervalCount)
+        CreateCsgTargetTexture(targets.width, targets.height, targets.csgCapNormalFormat, s_RenderNameEngineDeferredCsgCapBackNormal, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG cap back-normal peel target", this.m_graphics, targets.csgCapBackNormal)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgIntervalDepthFormat, s_RenderNameEngineDeferredCsgIntervalDepth, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG interval depth peel target", this.m_graphics, targets.csgIntervalDepth)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgIntervalIdFormat, s_RenderNameEngineDeferredCsgIntervalId, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG interval id peel target", this.m_graphics, targets.csgIntervalId)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverEventDataFormat, s_RenderNameEngineDeferredCsgReceiverEventData, targets.csgReceiverEventLayerCount, false, "RendererSystem: failed to create deferred CSG receiver event data target", this.m_graphics, targets.csgReceiverEventData)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverEventCountFormat, s_RenderNameEngineDeferredCsgReceiverEventCount, 1u, false, "RendererSystem: failed to create deferred CSG receiver event count target", this.m_graphics, targets.csgReceiverEventCount)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverSpanDataFormat, s_RenderNameEngineDeferredCsgReceiverSpanData, targets.csgReceiverSpanLayerCount, false, "RendererSystem: failed to create deferred CSG receiver span data target", this.m_graphics, targets.csgReceiverSpanData)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverSpanCountFormat, s_RenderNameEngineDeferredCsgReceiverSpanCount, 1u, false, "RendererSystem: failed to create deferred CSG receiver span count target", this.m_graphics, targets.csgReceiverSpanCount)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalDepthFormat, s_RenderNameEngineDeferredCsgRemovedIntervalDepth, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval depth target", this.m_graphics, targets.csgRemovedIntervalDepth)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalCapNormalFormat, s_RenderNameEngineDeferredCsgRemovedIntervalCapNormal, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval cap-normal target", this.m_graphics, targets.csgRemovedIntervalCapNormal)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalDataFormat, s_RenderNameEngineDeferredCsgRemovedIntervalData, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval data target", this.m_graphics, targets.csgRemovedIntervalData)
+        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalCountFormat, s_RenderNameEngineDeferredCsgRemovedIntervalCount, 1u, false, "RendererSystem: failed to create deferred CSG removed interval count target", this.m_graphics, targets.csgRemovedIntervalCount)
     ;
 }
 
-b8 RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets, const b8 capFillRequired)noexcept{
-    auto& device = m_graphics->getDevice();
-    if(!createCsgClipResources())
+b8 RendererCsgSystem::createCsgIntervalPeelResources(mut DeferredFrameTargets targets, in b8 capFillRequired){
+    mut Device device = this.m_graphics.getDevice();
+    if(!this.createCsgClipResources())
         return false;
-    if(!m_csgState->m_clipBindingLayout){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG interval peel requires a CSG clip binding layout"));
+    if(!this.m_csgState.m_clipBindingLayout.valid()){
+        error("RendererSystem: CSG interval peel requires a CSG clip binding layout");
         return false;
     }
-    if(!m_meshSystem->meshViewBufferSnapshot().valid()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
+    if(!this.m_meshSystem.meshViewBufferSnapshot().valid()){
+        error("RendererSystem: CSG interval peel requires a mesh view buffer");
         return false;
     }
     const b8 sampleTargetsValid = HasValidCsgIntervalSampleTargetState(
-        static_cast<b8>(targets.csgReceiverEventData),
-        static_cast<b8>(targets.csgReceiverEventCount),
-        static_cast<b8>(targets.csgRemovedIntervalDepth),
-        static_cast<b8>(targets.csgRemovedIntervalCapNormal),
-        static_cast<b8>(targets.csgRemovedIntervalData),
-        static_cast<b8>(targets.csgRemovedIntervalCount),
+        targets.csgReceiverEventData.valid(),
+        targets.csgReceiverEventCount.valid(),
+        targets.csgRemovedIntervalDepth.valid(),
+        targets.csgRemovedIntervalCapNormal.valid(),
+        targets.csgRemovedIntervalData.valid(),
+        targets.csgRemovedIntervalCount.valid(),
         targets.csgReceiverEventLayerCount,
         targets.csgRemovedIntervalLayerCount
     );
     if(!HasValidCsgIntervalPeelTargetState(
-        static_cast<b8>(targets.csgCapBackNormal),
-        static_cast<b8>(targets.csgIntervalDepth),
-        static_cast<b8>(targets.csgIntervalId),
-        static_cast<b8>(targets.csgReceiverSpanData),
-        static_cast<b8>(targets.csgReceiverSpanCount),
+        targets.csgCapBackNormal.valid(),
+        targets.csgIntervalDepth.valid(),
+        targets.csgIntervalId.valid(),
+        targets.csgReceiverSpanData.valid(),
+        targets.csgReceiverSpanCount.valid(),
         targets.csgPeelLayerCount,
         targets.csgReceiverSpanLayerCount,
         sampleTargetsValid
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG interval peel requires valid peel targets"));
+        error("RendererSystem: CSG interval peel requires valid peel targets");
         return false;
     }
 
-    if(!createCsgIntervalSampleStateBuffer())
+    if(!this.createCsgIntervalSampleStateBuffer())
         return false;
 
     // Push range selects the CSG context and mesh view; the rest is heap-owned.
-    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(CsgIntervalDispatchPushConstants), Core::ShaderType::Compute, m_csgState->m_intervalPeelBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG interval peel binding layout"));
+    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalPeelBindingLayout)){
+        error("RendererSystem: failed to create CSG interval peel binding layout");
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(CsgIntervalDispatchPushConstants), Core::ShaderType::Compute, m_csgState->m_receiverSpanBuildBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG receiver span build binding layout"));
+    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_receiverSpanBuildBindingLayout)){
+        error("RendererSystem: failed to create CSG receiver span build binding layout");
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(CsgIntervalDispatchPushConstants), Core::ShaderType::Compute, m_csgState->m_intervalCombineBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG interval combine binding layout"));
+    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalCombineBindingLayout)){
+        error("RendererSystem: failed to create CSG interval combine binding layout");
         return false;
     }
 
-    if(!m_csgState->m_intervalPeelComputeShader){
-        if(!m_shaderSystem->loadShader<ComputeShader, CsgSubsystem>(SubsystemAssetSelector<CsgSubsystem, ComputeShader>([](const CsgSubsystem& s){ return s.intervalPeelCs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalPeelCS", m_csgState->m_intervalPeelComputeShader))
+    if(!this.m_csgState.m_intervalPeelComputeShader.valid()){
+        if(!this.m_shaderSystem.loadShader<ComputeShader, CsgSubsystem>(lambda[](in CsgSubsystem s) -> AssetRef<ComputeShader>{ return s.intervalPeelCs; }, s_ShaderArchiveDefaultVariant, s_CsgIntervalPeelShaderDebugName, this.m_csgState.m_intervalPeelComputeShader))
             return false;
     }
 
-    if(!m_csgState->m_receiverSpanBuildComputeShader){
-        if(!m_shaderSystem->loadShader<ComputeShader, CsgSubsystem>(SubsystemAssetSelector<CsgSubsystem, ComputeShader>([](const CsgSubsystem& s){ return s.receiverSpanBuildCs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSpanBuildCS", m_csgState->m_receiverSpanBuildComputeShader))
+    if(!this.m_csgState.m_receiverSpanBuildComputeShader.valid()){
+        if(!this.m_shaderSystem.loadShader<ComputeShader, CsgSubsystem>(lambda[](in CsgSubsystem s) -> AssetRef<ComputeShader>{ return s.receiverSpanBuildCs; }, s_ShaderArchiveDefaultVariant, s_CsgReceiverSpanBuildShaderDebugName, this.m_csgState.m_receiverSpanBuildComputeShader))
             return false;
     }
 
-    if(!m_csgState->m_intervalCombineComputeShader){
-        if(!m_shaderSystem->loadShader<ComputeShader, CsgSubsystem>(SubsystemAssetSelector<CsgSubsystem, ComputeShader>([](const CsgSubsystem& s){ return s.intervalCombineCs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCombineCS", m_csgState->m_intervalCombineComputeShader))
+    if(!this.m_csgState.m_intervalCombineComputeShader.valid()){
+        if(!this.m_shaderSystem.loadShader<ComputeShader, CsgSubsystem>(lambda[](in CsgSubsystem s) -> AssetRef<ComputeShader>{ return s.intervalCombineCs; }, s_ShaderArchiveDefaultVariant, s_CsgIntervalCombineShaderDebugName, this.m_csgState.m_intervalCombineComputeShader))
             return false;
     }
 
     if(capFillRequired){
-        if(!m_shaderSystem->loadDeferredCompositeVertexShader())
+        if(!this.m_shaderSystem.loadDeferredCompositeVertexShader())
             return false;
 
-        if(!m_csgState->m_intervalCapFillPixelShader){
-            if(!m_shaderSystem->loadShader<PixelShader, CsgSubsystem>(SubsystemAssetSelector<CsgSubsystem, PixelShader>([](const CsgSubsystem& s){ return s.intervalCapFillPs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCapFillPS", m_csgState->m_intervalCapFillPixelShader))
+        if(!this.m_csgState.m_intervalCapFillPixelShader.valid()){
+            if(!this.m_shaderSystem.loadShader<PixelShader, CsgSubsystem>(lambda[](in CsgSubsystem s) -> AssetRef<PixelShader>{ return s.intervalCapFillPs; }, s_ShaderArchiveDefaultVariant, s_CsgIntervalCapFillShaderDebugName, this.m_csgState.m_intervalCapFillPixelShader))
                 return false;
         }
     }
 
-    if(!m_csgState->m_intervalPeelPipeline && !CreateHeapComputePipeline(device, m_csgState->m_intervalPeelComputeShader, m_csgState->m_intervalPeelBindingLayout, false, m_csgState->m_intervalPeelPipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
+    if(!this.m_csgState.m_intervalPeelPipeline.valid() && !CreateHeapComputePipeline(device, this.m_csgState.m_intervalPeelComputeShader, this.m_csgState.m_intervalPeelBindingLayout, false, this.m_csgState.m_intervalPeelPipeline)){
+        error("RendererSystem: failed to create CSG interval peel pipeline");
         return false;
     }
 
-    if(!m_csgState->m_receiverSpanBuildPipeline && !CreateHeapComputePipeline(device, m_csgState->m_receiverSpanBuildComputeShader, m_csgState->m_receiverSpanBuildBindingLayout, false, m_csgState->m_receiverSpanBuildPipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG receiver span build pipeline"));
+    if(!this.m_csgState.m_receiverSpanBuildPipeline.valid() && !CreateHeapComputePipeline(device, this.m_csgState.m_receiverSpanBuildComputeShader, this.m_csgState.m_receiverSpanBuildBindingLayout, false, this.m_csgState.m_receiverSpanBuildPipeline)){
+        error("RendererSystem: failed to create CSG receiver span build pipeline");
         return false;
     }
 
-    if(!m_csgState->m_intervalCombinePipeline && !CreateHeapComputePipeline(device, m_csgState->m_intervalCombineComputeShader, m_csgState->m_intervalCombineBindingLayout, false, m_csgState->m_intervalCombinePipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG interval combine pipeline"));
+    if(!this.m_csgState.m_intervalCombinePipeline.valid() && !CreateHeapComputePipeline(device, this.m_csgState.m_intervalCombineComputeShader, this.m_csgState.m_intervalCombineBindingLayout, false, this.m_csgState.m_intervalCombinePipeline)){
+        error("RendererSystem: failed to create CSG interval combine pipeline");
         return false;
     }
 
-    if(capFillRequired && !__hidden_csg_resources_and_peel::CreateIntervalCapFillPipeline(
+    if(capFillRequired && !CreateIntervalCapFillPipeline(
+        this.m_shaderSystem.deferredCompositeVertexShader(),
+        this.m_csgState.m_intervalCapFillPixelShader,
+        this.m_csgState.m_clipBindingLayout,
+        BuildCsgFramebufferInfo(targets.framebuffer.deref().getFramebufferInfo()),
         device,
-        m_shaderSystem->deferredCompositeVertexShader(),
-        m_csgState->m_intervalCapFillPixelShader,
-        m_csgState->m_clipBindingLayout,
-        targets.framebuffer->getFramebufferInfo(),
-        m_csgState->m_intervalCapFillPipeline
+        this.m_csgState.m_intervalCapFillPipeline
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG interval cap fill pipeline"));
+        error("RendererSystem: failed to create CSG interval cap fill pipeline");
         return false;
     }
 
-    if(!createCsgIntervalSampleResources(targets))
+    if(!this.createCsgIntervalSampleResources(targets))
         return false;
 
     return true;
 }
 
-b8 RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets)noexcept{
-    if(!m_meshSystem->meshViewBufferSnapshot().valid()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
+b8 RendererCsgSystem::createCsgIntervalSampleResources(mut DeferredFrameTargets targets){
+    if(!this.m_meshSystem.meshViewBufferSnapshot().valid()){
+        error("RendererSystem: CSG interval sampling requires a mesh view buffer");
         return false;
     }
     if(!HasValidCsgIntervalSampleTargetState(
-        static_cast<b8>(targets.csgReceiverEventData),
-        static_cast<b8>(targets.csgReceiverEventCount),
-        static_cast<b8>(targets.csgRemovedIntervalDepth),
-        static_cast<b8>(targets.csgRemovedIntervalCapNormal),
-        static_cast<b8>(targets.csgRemovedIntervalData),
-        static_cast<b8>(targets.csgRemovedIntervalCount),
+        targets.csgReceiverEventData.valid(),
+        targets.csgReceiverEventCount.valid(),
+        targets.csgRemovedIntervalDepth.valid(),
+        targets.csgRemovedIntervalCapNormal.valid(),
+        targets.csgRemovedIntervalData.valid(),
+        targets.csgRemovedIntervalCount.valid(),
         targets.csgReceiverEventLayerCount,
         targets.csgRemovedIntervalLayerCount
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
+        error("RendererSystem: CSG interval sampling requires valid peel targets");
         return false;
     }
 
-    if(!createCsgIntervalSampleStateBuffer())
+    if(!this.createCsgIntervalSampleStateBuffer())
         return false;
 
     return true;
 }
 
-b8 RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets)noexcept{
-    if(!targets.avboit.refractionFramebuffer || !m_csgState->m_clipBindingLayout)
+b8 RendererCsgSystem::prepareRefractionIntervalCapResources(in DeferredFrameTargets targets){
+    if(!targets.avboit.refractionFramebuffer.valid() || !this.m_csgState.m_clipBindingLayout.valid())
         return false;
-    if(!m_shaderSystem->loadDeferredCompositeVertexShader())
+    if(!this.m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
-    if(!m_csgState->m_refractionCapFillPixelShader){
-        if(!m_shaderSystem->loadShader<PixelShader, CsgSubsystem>(SubsystemAssetSelector<CsgSubsystem, PixelShader>([](const CsgSubsystem& s){ return s.refractionCapFillPs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgRefractionCapFillPS", m_csgState->m_refractionCapFillPixelShader))
+    if(!this.m_csgState.m_refractionCapFillPixelShader.valid()){
+        if(!this.m_shaderSystem.loadShader<PixelShader, CsgSubsystem>(lambda[](in CsgSubsystem s) -> AssetRef<PixelShader>{ return s.refractionCapFillPs; }, s_ShaderArchiveDefaultVariant, s_CsgRefractionCapFillShaderDebugName, this.m_csgState.m_refractionCapFillPixelShader))
             return false;
     }
-    if(!__hidden_csg_resources_and_peel::CreateIntervalCapFillPipeline(
-        m_graphics->getDevice(),
-        m_shaderSystem->deferredCompositeVertexShader(),
-        m_csgState->m_refractionCapFillPixelShader,
-        m_csgState->m_clipBindingLayout,
-        targets.avboit.refractionFramebuffer->getFramebufferInfo(),
-        m_csgState->m_refractionCapFillPipeline
+    if(!CreateIntervalCapFillPipeline(
+        this.m_shaderSystem.deferredCompositeVertexShader(),
+        this.m_csgState.m_refractionCapFillPixelShader,
+        this.m_csgState.m_clipBindingLayout,
+        BuildCsgFramebufferInfo(targets.avboit.refractionFramebuffer.deref().getFramebufferInfo()),
+        this.m_graphics.getDevice(),
+        this.m_csgState.m_refractionCapFillPipeline
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG refraction cap fill pipeline"));
+        error("RendererSystem: failed to create CSG refraction cap fill pipeline");
         return false;
     }
     return true;
 }
 
 void RendererCsgSystem::dispatchCsgIntervalPeels(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameGpuDataView& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const MeshFrameBindingSnapshot& frameBindings
-)noexcept{
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in CsgFrameGpuDataView csgFrameData,
+    in CsgGraphResourceSnapshot csgResources,
+    in MeshFrameBindingSnapshot frameBindings
+){
     if(!csgFrameData.hasWork())
         return;
-    FOUNDATION_ASSERT(m_csgState->m_intervalPeelPipeline);
-    FOUNDATION_ASSERT(csgResources.frameReady(csgFrameData));
-    FOUNDATION_ASSERT(frameBindings.bindingValid());
+    assert(this.m_csgState.m_intervalPeelPipeline.valid());
+    assert(csgResources.frameReady(csgFrameData));
+    assert(frameBindings.bindingValid());
 
-    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, m_graphics->getDevice(), commandList);
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeCsgIntervalPeel, this.m_graphics.getDevice(), commandList);
 
-    __hidden_csg_resources_and_peel::DispatchCsgIntervalCompute(
-        commandList,
-        m_graphics->getDevice().getDescriptorHeap(),
+    DispatchCsgIntervalCompute(
         targets,
         csgFrameData,
-        *m_csgState->m_intervalPeelPipeline,
         csgResources.clipContextSlotsHeapHandle.slot(),
-        frameBindings.meshView.heapHandle.slot()
+        frameBindings.meshView.heapHandle.slot(),
+        commandList,
+        this.m_graphics.getDevice().getDescriptorHeap(),
+        this.m_csgState.m_intervalPeelPipeline.deref()
     );
 }
 
-void RendererCsgSystem::dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept{
+void RendererCsgSystem::dispatchCsgReceiverSpanBuild(mut CommandList commandList, mut DeferredFrameTargets targets, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources){
     if(!csgFrameData.hasWork())
         return;
-    FOUNDATION_ASSERT(m_csgState->m_receiverSpanBuildPipeline);
-    FOUNDATION_ASSERT(csgResources.frameReady(csgFrameData));
+    assert(this.m_csgState.m_receiverSpanBuildPipeline.valid());
+    assert(csgResources.frameReady(csgFrameData));
 
-    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, m_graphics->getDevice(), commandList);
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeCsgReceiverSpanBuild, this.m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    __hidden_csg_resources_and_peel::DispatchCsgIntervalCompute(commandList, m_graphics->getDevice().getDescriptorHeap(), targets, csgFrameData, *m_csgState->m_receiverSpanBuildPipeline, csgResources.clipContextSlotsHeapHandle.slot());
+    DispatchCsgIntervalCompute(targets, csgFrameData, csgResources.clipContextSlotsHeapHandle.slot(), commandList, this.m_graphics.getDevice().getDescriptorHeap(), this.m_csgState.m_receiverSpanBuildPipeline.deref());
 }
 
-void RendererCsgSystem::dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept{
+void RendererCsgSystem::dispatchCsgIntervalCombine(mut CommandList commandList, mut DeferredFrameTargets targets, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources){
     if(!csgFrameData.hasWork())
         return;
-    FOUNDATION_ASSERT(m_csgState->m_intervalCombinePipeline);
-    FOUNDATION_ASSERT(csgResources.frameReady(csgFrameData));
+    assert(this.m_csgState.m_intervalCombinePipeline.valid());
+    assert(csgResources.frameReady(csgFrameData));
 
-    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, m_graphics->getDevice(), commandList);
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeCsgIntervalCombine, this.m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    __hidden_csg_resources_and_peel::DispatchCsgIntervalCompute(commandList, m_graphics->getDevice().getDescriptorHeap(), targets, csgFrameData, *m_csgState->m_intervalCombinePipeline, csgResources.clipContextSlotsHeapHandle.slot());
+    DispatchCsgIntervalCompute(targets, csgFrameData, csgResources.clipContextSlotsHeapHandle.slot(), commandList, this.m_graphics.getDevice().getDescriptorHeap(), this.m_csgState.m_intervalCombinePipeline.deref());
 }
 
-void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept{
-    FOUNDATION_ASSERT(m_csgState->m_intervalCapFillPipeline);
-    FOUNDATION_ASSERT(csgResources.frameReady(csgFrameData));
-    FOUNDATION_ASSERT(targets.framebuffer);
+void RendererCsgSystem::renderCsgIntervalCaps(mut CommandList commandList, mut DeferredFrameTargets targets, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources){
+    assert(this.m_csgState.m_intervalCapFillPipeline.valid());
+    assert(csgResources.frameReady(csgFrameData));
+    assert(targets.framebuffer.valid());
 
-    Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics->getDevice(), commandList);
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeCsgCapFill, this.m_graphics.getDevice(), commandList);
 
-    Core::ViewportState viewportState;
-    viewportState.addViewport(targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height)));
+    ViewportState viewportState;
+    viewportState.addViewport(targets.framebuffer.deref().getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height)));
 
-    Core::GraphicsState graphicsState;
-    graphicsState.setPipeline(m_csgState->m_intervalCapFillPipeline.get());
-    graphicsState.setFramebuffer(targets.framebuffer.get());
+    GraphicsState graphicsState;
+    graphicsState.setPipeline(this.m_csgState.m_intervalCapFillPipeline.deref());
+    graphicsState.setFramebuffer(targets.framebuffer.deref());
     graphicsState.setViewport(viewportState);
     commandList.setGraphicsState(graphicsState);
-    m_graphics->getDevice().getDescriptorHeap().bindGraphics(commandList, *m_csgState->m_intervalCapFillPipeline);
+    this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, this.m_csgState.m_intervalCapFillPipeline.deref());
 
     MeshFrameHeapSlots frameHeapSlots;
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
     SetShaderDrivenPushConstants(commandList, 0u, 0u, 0u, viewportState, frameHeapSlots, 0u);
 
-    Core::DrawArguments drawArgs;
+    DrawArguments drawArgs;
     drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
 }
 
-void RendererCsgSystem::renderRefractionIntervalCaps(Core::CommandList& commandList, const DeferredFrameTargets& targets, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Core::Rect workRect, const Span<const u32> receiverIndices)noexcept{
-    FOUNDATION_ASSERT(csgResources.refractionCapFillPipeline);
-    FOUNDATION_ASSERT(csgResources.bindingValid());
-    FOUNDATION_ASSERT(targets.avboit.refractionFramebuffer);
-    FOUNDATION_ASSERT(targets.bindless.slotsBufferDescriptor.valid());
-    FOUNDATION_ASSERT(!receiverIndices.empty());
+void RendererCsgSystem::renderRefractionIntervalCaps(mut CommandList commandList, in DeferredFrameTargets targets, in CsgGraphResourceSnapshot csgResources, in Rect workRect, in Span<u32> receiverIndices){
+    assert(csgResources.refractionCapFillPipeline.valid());
+    assert(csgResources.bindingValid());
+    assert(targets.avboit.refractionFramebuffer.valid());
+    assert(targets.bindless.slotsBufferDescriptor.valid());
+    assert(!receiverIndices.empty());
 
-    Core::ViewportState viewportState;
-    viewportState.addViewport(targets.avboit.refractionFramebuffer->getFramebufferInfo().getViewport()).addScissorRect(workRect);
-    Core::GraphicsState graphicsState;
-    graphicsState.setPipeline(csgResources.refractionCapFillPipeline.get());
-    graphicsState.setFramebuffer(targets.avboit.refractionFramebuffer.get());
+    ViewportState viewportState;
+    viewportState.addViewport(targets.avboit.refractionFramebuffer.deref().getFramebufferInfo().getViewport()).addScissorRect(workRect);
+    GraphicsState graphicsState;
+    graphicsState.setPipeline(csgResources.refractionCapFillPipeline.deref());
+    graphicsState.setFramebuffer(targets.avboit.refractionFramebuffer.deref());
     graphicsState.setViewport(viewportState);
     commandList.setGraphicsState(graphicsState);
-    m_graphics->getDevice().getDescriptorHeap().bindGraphics(commandList, *csgResources.refractionCapFillPipeline);
+    this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, csgResources.refractionCapFillPipeline.deref());
 
     MeshFrameHeapSlots frameHeapSlots;
     frameHeapSlots.view = targets.bindless.slotsBufferDescriptor.slot();
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
-    Core::DrawArguments drawArgs;
+    DrawArguments drawArgs;
     drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
-    for(const u32 receiverIndex : receiverIndices){
+    for(in u32 receiverIndex : receiverIndices){
         SetShaderDrivenPushConstants(commandList, 0u, receiverIndex, 0u, viewportState, frameHeapSlots, 0u);
         commandList.draw(drawArgs);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

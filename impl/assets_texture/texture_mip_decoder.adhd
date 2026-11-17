@@ -64,10 +64,6 @@ b8 ValidateSupportedHdrTextureUploadFormat(in b8 isSupported){
     return false;
 }
 
-void LogUnsupportedTexturePayloadFormat(){
-    error("TextureAssetLoader: unsupported texture payload format");
-}
-
 void LogUastcTranscodeFailure(in StringView message){
     error("TextureAssetLoader: {}", message);
 }

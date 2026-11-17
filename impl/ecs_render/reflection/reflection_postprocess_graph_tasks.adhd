@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <impl/ecs_render/reflection/feedback_planning.adhd>
 #include <impl/ecs_render/reflection/types.adhd>
 
@@ -38,6 +39,12 @@ ReflectionFeedbackOutcome ResolvePublishedReflectionFeedbackOutcome(in Reflectio
         outcome.reused = false;
     }
     return outcome;
+}
+
+Expected<GpuGraphResourceId> ImportReflectionGraphTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView resourceLabel, in b8 firstWrite){
+    if(firstWrite)
+        return FindOrImportTexture(graph, texture, resourceLabel, ResourceStates::Unknown);
+    return FindOrImportTexture(graph, texture, resourceLabel, ResourceStates::Common);
 }
 
 
@@ -126,7 +133,7 @@ public:
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *payload.pipeline.get());
         commandList.setPushConstants(&payload.parameters, sizeof(payload.parameters));
-        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_DepthPyramid, payload.graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeReflectionDepthPyramid, payload.graphics.getDevice(), commandList);
 
         commandList.dispatch(DivideUpWrapping(payload.parameters.destinationWidth, NWB_REFLECTION_DEPTH_GROUP_SIZE), DivideUpWrapping(payload.parameters.destinationHeight, NWB_REFLECTION_DEPTH_GROUP_SIZE), 1u);
         return true;
@@ -176,7 +183,7 @@ public:
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *payload.snapshot.temporalPipeline.get());
         commandList.setPushConstants(&parameters, sizeof(parameters));
-        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_Temporal, payload.graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeReflectionTemporal, payload.graphics.getDevice(), commandList);
 
         commandList.dispatch(DivideUpWrapping(payload.width, NWB_REFLECTION_TEMPORAL_GROUP_SIZE), DivideUpWrapping(payload.height, NWB_REFLECTION_TEMPORAL_GROUP_SIZE), 1u);
         return !commandList.commandRecordingFailed();
@@ -211,7 +218,7 @@ public:
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *payload.pipeline.get());
         commandList.setPushConstants(&payload.parameters, sizeof(payload.parameters));
-        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_Spatial, payload.graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeReflectionSpatial, payload.graphics.getDevice(), commandList);
 
         commandList.dispatch(DivideUpWrapping(payload.parameters.width, NWB_REFLECTION_SPATIAL_GROUP_SIZE), DivideUpWrapping(payload.parameters.height, NWB_REFLECTION_SPATIAL_GROUP_SIZE), 1u);
         return !commandList.commandRecordingFailed();
@@ -292,7 +299,7 @@ Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
     const b8 firstWrite
 ){
     // Producers overwrite everything; Unknown preserves fresh Undefined.
-    return FindOrImportTexture(graph, texture, resourceLabel, firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common);
+    return ImportReflectionGraphTexture(graph, texture, resourceLabel, firstWrite);
 }
 
 Core::GpuTaskDesc ReflectionTaskDesc(const Name identity, const AStringView label, const Core::GpuTaskId& dependency)noexcept{

@@ -2,12 +2,83 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/caustic/rt_caustics_internal.adhd>
+#include <impl/ecs_render/caustic/graph_types.adhd>
+#include <impl/ecs_render/caustic/settings.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+u64 ComputeCausticEmissionTargetBufferByteSize(in usize capacity){
+    return cast<u64>(s_CausticEmissionTargetGpuBytes * capacity);
+}
+
+b8 EnsureCausticEmissionTargetBufferStorage(
+    in usize targetCount,
+    mut GraphicsRuntime graphics,
+    mut BufferHandle inoutBuffer,
+    mut GpuDescriptorHandle inoutHeapHandle,
+    mut usize inoutCapacity
+){
+    // Replace the heap slot before retiring the old emission-target buffer.
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized()){
+        error("RendererSystem: caustic emission targets require the initialized global descriptor heap");
+        return false;
+    }
+
+    if(inoutBuffer.valid() && inoutCapacity >= targetCount){
+        if(inoutHeapHandle.valid()){
+            assert(inoutHeapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer);
+            return true;
+        }
+        const Expected<GpuDescriptorHandle> handle = RegisterHeapBuffer(heap, inoutBuffer.deref(), GpuDescriptorClass::StorageBuffer, false);
+        if(!handle.has_value()){
+            error("RendererSystem: failed to register caustic emission targets in the descriptor heap");
+            return false;
+        }
+        inoutHeapHandle = handle.value();
+        return true;
+    }
+
+    usize requiredCount = targetCount;
+    if(requiredCount < s_CausticEmissionTargetInitialCapacity)
+        requiredCount = s_CausticEmissionTargetInitialCapacity;
+    const usize capacity = NextGrowingCapacity(inoutCapacity, requiredCount);
+
+    BufferDesc targetBufferDesc;
+    targetBufferDesc
+        .setByteSize(ComputeCausticEmissionTargetBufferByteSize(capacity))
+        .setStructStride(cast<u32>(s_CausticEmissionTargetGpuBytes))
+        .setDebugName(s_RenderNameCausticEmissionTargets)
+        // The upload and asynchronous photon reads share this immutable per-frame input.
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .enableAutomaticStateTracking(ResourceStates::Common)
+    ;
+    const Expected<BufferHandle> targetBufferResult = graphics.createBuffer(targetBufferDesc);
+    if(!targetBufferResult.has_value()){
+        error("RendererSystem: failed to create caustic emission-target buffer");
+        return false;
+    }
+    BufferHandle targetBuffer = targetBufferResult.value();
+
+    const Expected<GpuDescriptorHandle> targetHeapHandle = RegisterHeapBuffer(heap, targetBuffer.deref(), GpuDescriptorClass::StorageBuffer, false);
+    if(!targetHeapHandle.has_value()){
+        error("RendererSystem: failed to register caustic emission targets in the descriptor heap");
+        return false;
+    }
+
+    GpuDescriptorRetirementGuard retireUnpublished(heap, targetHeapHandle.value());
+    if(inoutHeapHandle.valid())
+        heap.free(inoutHeapHandle);
+    inoutBuffer = targetBuffer;
+    inoutHeapHandle = targetHeapHandle.value();
+    inoutCapacity = capacity;
+    retireUnpublished.release();
+    info("RendererSystem: created caustic emission-target buffer (capacity {} targets)", cast<u64>(capacity));
+    return true;
+}
 
 class CausticEmissionTargetBuffer{
     public BufferHandle buffer = BufferHandle();
@@ -19,7 +90,7 @@ class CausticEmissionTargetBuffer{
             assert(IsDescriptorClass(this.heapHandle, GpuDescriptorClass::StorageBuffer));
             return true;
         }
-        return EnsureCausticEmissionTargetBufferStorage(graphics, targetCount, this.buffer, this.heapHandle, this.capacity);
+        return EnsureCausticEmissionTargetBufferStorage(targetCount, graphics, this.buffer, this.heapHandle, this.capacity);
     }
 
     public void releaseDescriptor(mut GraphicsRuntime graphics){

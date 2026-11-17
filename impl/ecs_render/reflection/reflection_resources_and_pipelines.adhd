@@ -127,12 +127,12 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !m_pipelines.prepare(prepareHardware, csgHardwareWork, m_resources))
         return false;
-    const Array<NotNull<const Core::GpuTimingScopeDefinition*>, 3> scopes = { MakeNotNull(&ReflectionGpuTimingScope::s_Classify), MakeNotNull(&ReflectionGpuTimingScope::s_BuildArgs), MakeNotNull(&ReflectionGpuTimingScope::s_Hardware), };
+    const Array<NotNull<const Core::GpuTimingScopeDefinition*>, 3> scopes = { MakeNotNull(&s_TimingScopeReflectionClassify), MakeNotNull(&s_TimingScopeReflectionBuildArgs), MakeNotNull(&s_TimingScopeReflectionHardware), };
     for(const NotNull<const Core::GpuTimingScopeDefinition*> scope : scopes){
         if(!m_graphics.gpuTiming().prepareScopeQueries(scope->identity, device, s_ReflectionGpuTimingQueriesPerRange))
             return false;
     }
-    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, ReflectionDepthPyramidTimingQueryCount(s_ReflectionGpuTimingQueriesPerRange, s_ReflectionMaxDepthMips)))
+    if(!m_graphics.gpuTiming().prepareScopeQueries(s_TimingScopeReflectionDepthPyramid.identity, device, ReflectionDepthPyramidTimingQueryCount(s_ReflectionGpuTimingQueriesPerRange, s_ReflectionMaxDepthMips)))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
         return

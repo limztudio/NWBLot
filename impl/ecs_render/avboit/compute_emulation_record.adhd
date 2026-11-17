@@ -87,7 +87,7 @@ struct AvboitComputeEmulationTaskPayload{
     Core::GraphicsRuntime& graphics;
     RendererMaterialSystem& materialSystem;
     MeshFrameBindingSnapshot frameBindings;
-    ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+    CsgGraphResourceSnapshot csgResources;
     DeferredFrameTargets& targets;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& timing;
@@ -148,7 +148,7 @@ struct AvboitRasterPassTaskPayload{
     Core::GpuTimingSubmissionTicket& timingTicket;
     MeshFrameBindingSnapshot frameBindings;
     ECSRenderDetail::TransparentMaterialPassGraphSnapshot snapshot;
-    ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+    CsgGraphResourceSnapshot csgResources;
     Optional<Core::GpuTimingMeasure>* computeEmulationTiming = nullptr;
     b8 phasePrepared = false;
     b8 streamsUploaded = false;

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/clip_bounds.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -59,10 +65,6 @@ namespace ECSRenderDetail{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 };
 
-[[nodiscard]] FOUNDATION_INLINE Core::Rect ToCoreRect(const CsgWorkRect& rect)noexcept{
-    return Core::Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
-}
-
 class MeshSystem;
 
 namespace CsgFrameCacheDetail{
@@ -71,6 +73,7 @@ namespace CsgFrameCacheDetail{
 
 // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
 [[nodiscard]] b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -87,8 +90,9 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ToCoreRect"), cpp_header("<impl/ecs_render/csg/renderer_csg_types.adhd.h>")]
-extern Rect ToCoreRect(in CsgWorkRect rect);
+Rect ToCoreRect(in CsgWorkRect rect){
+    return Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

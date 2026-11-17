@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_state.adhd>
+#include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +51,67 @@ b8 CanCapturePreparedShadowMaterialContextCacheReuse(
         && swHashValid
         && swHash == expectedHash
         && validStorage;
+}
+
+b8 PreparedShadowMaterialContext::capture(
+    in RendererRayTracingState state,
+    in PreparedShadowMaterialContextRoute route,
+    in b8 staticScene,
+    in u64 hash,
+    in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+    in Span<InstanceGpuData> instances,
+    in Span<u8> materialTypedBytes
+){
+    const usize instanceMaterialCount = instanceMaterials.size();
+    const usize instanceCount = instances.size();
+    const usize materialTypedByteCount = materialTypedBytes.size();
+    const b8 validStorage = IsPreparedShadowMaterialStorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    if(!CanCapturePreparedShadowMaterialContext(route, instanceMaterialCount, instanceCount, materialTypedByteCount, validStorage))
+        return false;
+
+    this.clear();
+    ShadowMaterialContextPolicy().captureBytes(
+        instanceMaterials,
+        instances,
+        materialTypedBytes,
+        this.m_instanceMaterialBytes,
+        this.m_instanceBytes,
+        this.m_materialTypedBytes
+    );
+    this.captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    this.m_route = route;
+    this.m_static = staticScene;
+    this.m_ready = true;
+    this.m_uploadRequired = true;
+    return true;
+}
+
+b8 PreparedShadowMaterialContext::captureCacheReuse(
+    in RendererRayTracingState state,
+    in u64 hash,
+    in usize instanceMaterialCount,
+    in usize instanceCount,
+    in usize materialTypedByteCount
+){
+    this.clear();
+    const b8 validStorage = IsPreparedShadowMaterialStorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    if(!CanCapturePreparedShadowMaterialContextCacheReuse(
+        instanceMaterialCount,
+        instanceCount,
+        materialTypedByteCount,
+        state.m_swShadowMaterialContextHashValid,
+        state.m_swShadowMaterialContextHash,
+        hash,
+        validStorage
+    ))
+        return false;
+
+    this.captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    this.m_route = PreparedShadowMaterialContextRoute::Software;
+    this.m_static = true;
+    this.m_ready = true;
+    this.m_uploadRequired = false;
+    return true;
 }
 
 
@@ -243,75 +305,6 @@ static_assert(sizeof(InstanceGpuData) == s_InstanceGpuDataByteSize, "Shadow inst
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsPreparedShadowMaterialStorageReady(const RendererRayTracingState& state, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
-    return
-        state.m_shadowInstanceMaterialBuffer
-        && state.m_shadowInstanceBuffer
-        && state.m_shadowMaterialTypedBuffer
-        && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
-        && state.m_shadowInstanceCapacity >= instanceCount
-        && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
-        && IsDescriptorClass(state.m_shadowInstanceMaterialHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.m_shadowInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.m_shadowMaterialTypedHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-    ;
-}
-
-b8 PreparedShadowMaterialContext::capture(
-    const RendererRayTracingState& state,
-    const PreparedShadowMaterialContextRoute::Enum route,
-    const b8 staticScene,
-    const u64 hash,
-    const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
-    const Span<const InstanceGpuData> instances,
-    const Span<const u8> materialTypedBytes
-)noexcept{
-    const usize instanceMaterialCount = instanceMaterials.size();
-    const usize instanceCount = instances.size();
-    const usize materialTypedByteCount = materialTypedBytes.size();
-    const b8 validStorage = IsPreparedShadowMaterialStorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
-    if(!CanCapturePreparedShadowMaterialContext(route, instanceMaterialCount, instanceCount, materialTypedByteCount, validStorage))
-        return false;
-
-    clear();
-    ShadowMaterialContextPolicy().captureBytes(
-        instanceMaterials,
-        instances,
-        materialTypedBytes,
-        m_instanceMaterialBytes,
-        m_instanceBytes,
-        m_materialTypedBytes
-    );
-    captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
-    m_route = route;
-    m_static = staticScene;
-    m_ready = true;
-    m_uploadRequired = true;
-    return true;
-}
-
-b8 PreparedShadowMaterialContext::captureCacheReuse(const RendererRayTracingState& state, const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
-    clear();
-    const b8 validStorage = IsPreparedShadowMaterialStorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
-    if(!CanCapturePreparedShadowMaterialContextCacheReuse(
-        instanceMaterialCount,
-        instanceCount,
-        materialTypedByteCount,
-        state.m_swShadowMaterialContextHashValid,
-        state.m_swShadowMaterialContextHash,
-        hash,
-        validStorage
-    ))
-        return false;
-
-    captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
-    m_route = PreparedShadowMaterialContextRoute::Software;
-    m_static = true;
-    m_ready = true;
-    m_uploadRequired = false;
-    return true;
-}
-
 Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const noexcept{
     PreparedShadowMaterialContextUploads result;
     if(!m_ready)
@@ -353,59 +346,6 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
     result.instance = *instanceResult;
     result.materialTyped = *materialTypedResult;
     return result;
-}
-
-b8 PreparedShadowMaterialContext::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
-    return ShadowMaterialContextPolicy().publishAcceptedUpload(
-        m_ready,
-        m_uploadRequired,
-        m_route,
-        m_hash,
-        m_static,
-        state.m_hwShadowMaterialContextHash,
-        state.m_hwShadowMaterialContextHashValid,
-        state.m_swShadowMaterialContextHash,
-        state.m_swShadowMaterialContextHashValid
-    );
-}
-
-b8 PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState& state)const noexcept{
-    return
-        state.m_shadowInstanceMaterialBuffer.get() == m_instanceMaterialBuffer.get()
-        && state.m_shadowInstanceBuffer.get() == m_instanceBuffer.get()
-        && state.m_shadowMaterialTypedBuffer.get() == m_materialTypedBuffer.get()
-        && state.m_shadowInstanceMaterialHeapHandle == m_instanceMaterialHeapHandle
-        && state.m_shadowInstanceHeapHandle == m_instanceHeapHandle
-        && state.m_shadowMaterialTypedHeapHandle == m_materialTypedHeapHandle
-    ;
-}
-
-b8 PreparedShadowMaterialContext::softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept{
-    return ShadowMaterialContextPolicy().softwareSnapshotAccepted(
-        m_uploadRequired,
-        m_static,
-        state.m_swShadowMaterialContextHashValid,
-        state.m_swShadowMaterialContextHash,
-        m_hash,
-        state.m_sceneBvhInstanceCount,
-        m_instanceCount
-    );
-}
-
-void PreparedShadowMaterialContext::captureStorage(const RendererRayTracingState& state, const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
-    m_instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
-    m_instanceBuffer = state.m_shadowInstanceBuffer;
-    m_materialTypedBuffer = state.m_shadowMaterialTypedBuffer;
-    m_instanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
-    m_instanceHeapHandle = state.m_shadowInstanceHeapHandle;
-    m_materialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
-    m_instanceMaterialCount = instanceMaterialCount;
-    m_instanceCount = instanceCount;
-    m_materialTypedUploadBytes = materialTypedByteCount;
-    m_instanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
-    m_instanceCapacity = state.m_shadowInstanceCapacity;
-    m_materialTypedCapacity = state.m_shadowMaterialTypedCapacity;
-    m_hash = hash;
 }
 
 

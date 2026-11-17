@@ -41,6 +41,56 @@ void LogSkinningComputePipelineCreateFailed(in StringView pipelineLabel){
     error("MeshSkinningSystem: failed to create {} compute pipeline", pipelineLabel);
 }
 
+b8 EnsurePushConstantBindingLayout(
+    in u32 pushConstantBytes,
+    in StringView layoutLabel,
+    mut GlobalArena arena,
+    mut Device device,
+    mut BindingLayoutHandle inOutBindingLayout
+){
+    if(inOutBindingLayout.valid())
+        return true;
+
+    BindingLayoutDesc bindingLayoutDesc = BindingLayoutDesc(arena);
+    bindingLayoutDesc.setVisibility(ShaderTypeMask::Compute);
+    bindingLayoutDesc.addItem(BindingLayoutItemPushConstants(0, pushConstantBytes));
+
+    const Expected<BindingLayoutHandle> bindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+    if(bindingLayoutResult.has_value()){
+        inOutBindingLayout = bindingLayoutResult.value();
+        return true;
+    }
+
+    inOutBindingLayout.reset();
+    LogSkinningBindingLayoutCreateFailed(layoutLabel);
+    return false;
+}
+
+b8 EnsureLoadedComputePipeline(
+    in ShaderHandle shader,
+    in BindingLayoutHandle bindingLayout,
+    in StringView pipelineLabel,
+    mut GraphicsRuntime graphics,
+    mut ComputePipelineHandle inOutPipeline
+){
+    if(inOutPipeline.valid())
+        return true;
+
+    mut Device device = graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    ComputePipelineDesc pipelineDesc = ComputePipelineDesc();
+    pipelineDesc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    const Expected<ComputePipelineHandle> computePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(computePipelineResult.has_value()){
+        inOutPipeline = computePipelineResult.value();
+        return true;
+    }
+
+    inOutPipeline.reset();
+    LogSkinningComputePipelineCreateFailed(pipelineLabel);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -140,31 +190,6 @@ namespace __hidden_skinning_system_lifecycle{
     return ShaderAssetLoader::Load<ComputeShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, debugName, FOUNDATION_TEXT("MeshSkinningSystem"), graphics, assetManager, shaderPathResolver, nullptr, shader);
 }
 
-[[nodiscard]] static b8 EnsurePushConstantBindingLayout(
-    Core::Alloc::GlobalArena& arena,
-    Core::Device& device,
-    const u32 pushConstantBytes,
-    const AStringView layoutLabel,
-    Core::BindingLayoutHandle& inOutBindingLayout
-){
-    if(inOutBindingLayout)
-        return true;
-
-    Core::BindingLayoutDesc bindingLayoutDesc(arena);
-    bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, pushConstantBytes));
-
-    auto bindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
-    if(bindingLayoutResult){
-        inOutBindingLayout = Move(*bindingLayoutResult);
-        return true;
-    }
-
-    inOutBindingLayout.reset();
-    LogSkinningBindingLayoutCreateFailed(layoutLabel);
-    return false;
-}
-
 [[nodiscard]] static b8 EnsureComputePipeline(
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
@@ -179,22 +204,7 @@ namespace __hidden_skinning_system_lifecycle{
 ){
     if(!LoadComputeShader(graphics, assetManager, shaderPathResolver, activeSceneSubsystems, member, debugName, inOutShader))
         return false;
-    if(inOutPipeline)
-        return true;
-
-    auto& device = graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(inOutShader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto computePipelineResult = device.createComputePipeline(pipelineDesc);
-    if(computePipelineResult){
-        inOutPipeline = Move(*computePipelineResult);
-        return true;
-    }
-
-    inOutPipeline.reset();
-    LogSkinningComputePipelineCreateFailed(pipelineLabel);
-    return false;
+    return EnsureLoadedComputePipeline(inOutShader, bindingLayout, pipelineLabel, graphics, inOutPipeline);
 }
 
 template<typename PushConstantsT>
@@ -218,7 +228,7 @@ template<typename PushConstantsT>
         LogSkinningDescriptorHeapRequired(heapRequirementLabel);
         return false;
     }
-    if(!EnsurePushConstantBindingLayout(arena, device, sizeof(PushConstantsT), pipelineLabel, inOutBindingLayout))
+    if(!EnsurePushConstantBindingLayout(sizeof(PushConstantsT), pipelineLabel, arena, device, inOutBindingLayout))
         return false;
     return EnsureComputePipeline(graphics, assetManager, shaderPathResolver, activeSceneSubsystems, member, debugName, inOutBindingLayout, pipelineLabel, inOutShader, inOutPipeline);
 }
@@ -334,18 +344,7 @@ void MeshSkinningSystem::invalidateResources()noexcept{
         releaseRuntimeResourceBindlessHeapHandles(it.value());
     m_runtimeResources.clear();
     m_runtimeMeshCache.clear();
-
-    m_skinningBindingLayout.reset();
-    m_skinningComputeShader.reset();
-    m_skinningComputePipeline.reset();
-    m_boundsBindingLayout.reset();
-    m_boundsComputeShader.reset();
-    m_boundsComputePipeline.reset();
-    m_localBoundsComputeShader.reset();
-    m_localBoundsComputePipeline.reset();
-    m_repackBindingLayout.reset();
-    m_repackComputeShader.reset();
-    m_repackComputePipeline.reset();
+    resetPipelineResources();
 }
 
 Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity)noexcept{

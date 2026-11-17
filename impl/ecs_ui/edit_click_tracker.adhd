@@ -3,6 +3,7 @@
 
 
 #include "clipboard_types.adhd"
+#include <impl/ecs_ui/toolkit/edit/model_snapshot.adhd>
 #include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd>
 
 
@@ -26,6 +27,9 @@ using Ui::EditBoxPlacement;
 using Ui::EditBoxResult;
 using Ui::EditCaretLine;
 using Ui::EditCompositionView;
+using Ui::EditLimits;
+using Ui::EditModel;
+using Ui::EditModelSnapshot;
 namespace EditNavigationDirection = Ui::EditNavigationDirection;
 namespace EditTextMode = Ui::EditTextMode;
 namespace EditTextStatus = Ui::EditTextStatus;
@@ -36,6 +40,7 @@ using Ui::NormalizeSingleLineTextInto;
 using Ui::Point;
 using Ui::PopupToken;
 using Ui::Rect;
+using Ui::TextAreaModelStamp;
 using Ui::TryHitEditWordCaretGeometry;
 using Ui::WidgetId;
 };

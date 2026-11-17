@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/bind_source_emitter.adhd>
+#include <impl/assets_material/cook_types.adhd>
 #include <impl/assets_material/material_shadow_dispatch.adhd>
 
 
@@ -25,6 +27,44 @@ b8 ShouldEmitMaterialAvboitPixelShader(in b8 transparent, in StringView surfaceS
 
 b8 ShouldEmitGeneratedMaterialPixelShader(in b8 hasExplicitShaders, in StringView surfaceSource){
     return !hasExplicitShaders && !surfaceSource.empty();
+}
+
+Expected<String> BuildMaterialBindIncludeVirtualPath(in StringView virtualPath, in StringView source){
+    if(!ValidateMaterialBindIncludePath(virtualPath, source))
+        return MakeUnexpected(Failure());
+
+    String includePath(virtualPath);
+    includePath += s_MaterialBindSourceExtensionText;
+    return includePath;
+}
+
+Expected<String> BuildMaterialBindIncludeSourceFromData(
+    in StringView source,
+    in StringView virtualPath,
+    in Span<MaterialBindStruct> structs,
+    in Span<MaterialBindInstance> instances
+){
+    String outSource;
+    MaterialBindSourceEmitter emitter;
+    if(!emitter.buildMaterialBindIncludeSourceFromData(source, virtualPath, structs, instances, outSource))
+        return MakeUnexpected(Failure());
+    return outSource;
+}
+
+b8 WriteDeferredBxdfDispatchIncludeFile(in Path includeRoot, in Span<StringView> sourceById){
+    const String source = BuildDeferredBxdfDispatchModuleSource(sourceById);
+    const Path outputPath = includeRoot / s_DeferredBxdfModuleSubPath;
+    const Path parentPath = outputPath.parentPath();
+    const auto ensureDirectoriesResult = EnsureDirectories(parentPath);
+    if(!ensureDirectoriesResult.has_value()){
+        error("Deferred bxdf dispatch: failed to create generated include parent '{}' (error {})", parentPath, ensureDirectoriesResult.error().value());
+        return false;
+    }
+    if(!WriteTextFile(outputPath, source)){
+        error("Deferred bxdf dispatch: failed to write generated include '{}'", outputPath);
+        return false;
+    }
+    return true;
 }
 
 
@@ -146,15 +186,6 @@ static constexpr MaterialAvboitPassPixelShaderSpec s_AvboitExtinctionPassSpec = 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(const MaterialBindEntry& entry, ScratchArena& arena){
-    if(!ValidateMaterialBindIncludePath(AStringView(entry.virtualPath), AStringView(entry.source)))
-        return MakeUnexpected(Failure{});
-
-    ScratchString includePath(AStringView(entry.virtualPath), arena);
-    includePath += s_MaterialBindSourceExtensionText;
-    return includePath;
-}
 
 static void AssignGeneratedMaterialShaderSource(const ScratchPath& sourcePath, CookString& inOutSource){
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
@@ -297,10 +328,10 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderG
 
 
 Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEntry& entry, MaterialCookArena& arena, Core::Alloc::ScratchArena&){
-    MaterialCookString source(arena);
-    if(!MaterialBindSourceEmitter{}.buildMaterialBindIncludeSourceFromData(AStringView(entry.source), AStringView(entry.virtualPath), entry.structs, entry.instances, source))
+    auto sourceResult = BuildMaterialBindIncludeSourceFromData(arena, AStringView(entry.source), AStringView(entry.virtualPath), entry.structs, entry.instances);
+    if(!sourceResult)
         return MakeUnexpected(Failure{});
-    return source;
+    return MaterialCookString(AStringView(*sourceResult), arena);
 }
 
 Expected<Path> EmitMaterialBindIncludes(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
@@ -316,10 +347,10 @@ Expected<Path> EmitMaterialBindIncludes(const Path& cacheDirectory, const AStrin
     seenIncludePaths.reserve(materialBindEntries.size());
 
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
-        auto includePathResult = BuildMaterialBindIncludeVirtualPathImpl(bindEntry, scratchArena);
+        auto includePathResult = BuildMaterialBindIncludeVirtualPath(scratchArena, AStringView(bindEntry.virtualPath), AStringView(bindEntry.source));
         if(!includePathResult)
             return MakeUnexpected(Failure{});
-        ScratchString includePath = Move(*includePathResult);
+        ScratchString includePath(AStringView(*includePathResult), scratchArena);
         if(!seenIncludePaths.insert(includePath).second){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind include generation: duplicate material bind include path '{}'"), ConvertString(includePath));
             return MakeUnexpected(Failure{});
@@ -433,18 +464,8 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
         slot = source;
     }
 
-    const AString<::ArenaBase> source = BuildDeferredBxdfDispatchModuleSource(scratchArena, sourceById);
-
-    const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_DeferredBxdfModuleSubPath;
-    auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
-    if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
+    if(!WriteDeferredBxdfDispatchIncludeFile(includeRoot, Span<const AStringView>(sourceById.data(), sourceById.size())))
         return MakeUnexpected(Failure{});
-    }
-    if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
-        return MakeUnexpected(Failure{});
-    }
     return includeRoot;
 }
 

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -76,6 +82,37 @@ const StringView s_RendererOpticalBoundaryModeChoices = "'unspecified', 'closed_
 
 b8 IsValidRendererOpticalVolumeGroupName(in b8 parsedOk, in Name groupName){
     return parsedOk && groupName != s_NameNone;
+}
+
+b8 ReadOptionalRendererVisibleField(in Path nwbFilePath, in MetascriptValue asset, mut b8 inOutVisible){
+    return ReadOptionalMetadataBoolField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentVisibleField, inOutVisible);
+}
+
+b8 ReadOptionalRendererOpticalVolumeGroupField(in Path nwbFilePath, in MetascriptValue asset, mut Name outGroup){
+    if(!asset.hasField(s_RendererComponentOpticalVolumeGroupField))
+        return true;
+
+    const Expected<MetadataStringField> groupField = ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeGroupField, true);
+    if(!groupField.has_value())
+        return false;
+    if(!ValidateRendererOpticalVolumeGroupUnpadded(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsUnpaddedRendererOpticalVolumeGroup(groupField.value().text)))
+        return false;
+
+    const Expected<Optional<Name>, NameTextError> groupName = ToName(groupField.value().text);
+    Name resolvedGroup = s_NameNone;
+    if(groupName.has_value() && groupName.value().has_value())
+        resolvedGroup = groupName.value().value();
+    if(!ValidateRendererOpticalVolumeGroupParsedName(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsValidRendererOpticalVolumeGroupName(groupName.has_value(), resolvedGroup)))
+        return false;
+
+    outGroup = resolvedGroup;
+    return true;
+}
+
+b8 ReadOptionalRendererPriorityFields(in Path nwbFilePath, in MetascriptValue asset, mut i32 inOutVolumePriority, mut i32 inOutMediumPriority){
+    if(!ReadOptionalI32Field(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumePriorityField, inOutVolumePriority))
+        return false;
+    return ReadOptionalI32Field(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalMediumPriorityField, inOutMediumPriority);
 }
 
 
@@ -234,12 +271,8 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
         return MakeUnexpected(Failure{});
     entry.component.material = *materialRef;
 
-    if(const Core::Metascript::Value* visibleValue = asset.findField(s_RendererComponentVisibleField)){
-        const auto visible = Core::Assets::ParseMetadataBoolField(nwbFilePath, s_RendererComponentDiagnosticPrefix, *visibleValue, s_RendererComponentVisibleField);
-        if(!visible)
-            return MakeUnexpected(Failure{});
-        entry.component.visible = *visible;
-    }
+    if(!ReadOptionalRendererVisibleField(nwbFilePath, asset, entry.component.visible))
+        return MakeUnexpected(Failure{});
 
     if(asset.findField(s_RendererComponentOpticalVolumeCoincidenceField)){
         static constexpr Array<::NamedEnumCase<OpticalVolumeCoincidence::Enum>, 3u> s_CoincidenceCases = {{
@@ -260,17 +293,8 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
         entry.component.opticalVolumeCoincidence = *parsedCoincidence;
     }
 
-    if(asset.findField(s_RendererComponentOpticalVolumeGroupField)){
-        const auto groupField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeGroupField, true);
-        if(!groupField)
-            return MakeUnexpected(Failure{});
-        if(!ValidateRendererOpticalVolumeGroupUnpadded(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsUnpaddedRendererOpticalVolumeGroup(groupField->text)))
-            return MakeUnexpected(Failure{});
-        const auto groupName = Name::FromText(groupField->text);
-        if(!ValidateRendererOpticalVolumeGroupParsedName(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsValidRendererOpticalVolumeGroupName(groupName.has_value(), groupName ? *groupName : s_NameNone)))
-            return MakeUnexpected(Failure{});
-        entry.component.opticalVolumeGroup = *groupName;
-    }
+    if(!ReadOptionalRendererOpticalVolumeGroupField(nwbFilePath, asset, entry.component.opticalVolumeGroup))
+        return MakeUnexpected(Failure{});
 
     if(asset.findField(s_RendererComponentOpticalBoundaryModeField)){
         static constexpr Array<::NamedEnumCase<OpticalBoundaryMode::Enum>, 3u> s_BoundaryModeCases = {{
@@ -291,10 +315,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
         entry.component.opticalBoundaryMode = *parsedBoundaryMode;
     }
 
-    if(
-        !Core::Assets::ReadOptionalI32Field(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumePriorityField, entry.component.opticalVolumePriority)
-        || !Core::Assets::ReadOptionalI32Field(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalMediumPriorityField, entry.component.opticalMediumPriority)
-    )
+    if(!ReadOptionalRendererPriorityFields(nwbFilePath, asset, entry.component.opticalVolumePriority, entry.component.opticalMediumPriority))
         return MakeUnexpected(Failure{});
 
     if(!SceneAssetCook::BuildComponentAssetFromEntry<RendererComponentAsset>(entry, arena))

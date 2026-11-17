@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_texture/asset.adhd>
+#include <impl/assets_texture/texture_binary_codec.adhd>
 #include <impl/assets_texture/types.adhd>
 
 
@@ -350,6 +351,71 @@ void LogTextureSidecarReadFailed(in Path nwbFilePath, in Path dataPath, in Error
     error("{} '{}': failed to read raw texture sidecar '{}': {}", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), PathToString(dataPath), errorMessage);
 }
 
+Path BuildTextureDataSidecarPath(in Path nwbFilePath){
+    Path dataPath = nwbFilePath;
+    dataPath.replaceExtension(s_TextureDataExtension);
+    return dataPath;
+}
+
+b8 SerializeTextureAsset(in Texture texture, mut Vector<u8> outBinary){
+    if(!texture.validatePayload())
+        return false;
+
+    return TextureBinaryCodec().serialize(
+        cast<u8>(texture.dimension()),
+        texture.width(),
+        texture.height(),
+        texture.depth(),
+        cast<u8>(texture.alphaMode()),
+        texture.alphaConstantUnorm8(),
+        cast<u8>(texture.payloadFormat()),
+        texture.mipLevels(),
+        texture.payloadBytes(),
+        outBinary
+    );
+}
+
+Expected<Texture> BuildTextureAssetFromCookData(
+    in Name virtualPath,
+    in TexturePayloadDimension dimension,
+    in u32 width,
+    in u32 height,
+    in u32 depth,
+    in TexturePayloadFormat payloadFormat,
+    in TextureAlphaMode alphaMode,
+    in u8 alphaConstantUnorm8,
+    in Vector<u8> payloadBytes
+){
+    Vector<TextureMipLevel> mipLevels;
+    if(!BuildTextureCookMipLevels(
+        cast<u8>(payloadFormat),
+        cast<u8>(dimension),
+        width,
+        height,
+        depth,
+        cast<u8>(alphaMode),
+        payloadBytes.size(),
+        mipLevels
+    ))
+        return MakeUnexpected(Failure());
+
+    Texture asset(virtualPath);
+    asset.setPayload(
+        width,
+        height,
+        mipLevels,
+        payloadBytes,
+        dimension,
+        depth,
+        payloadFormat,
+        alphaMode,
+        alphaConstantUnorm8
+    );
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -406,8 +472,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, cons
     entry.alphaMode = header->alphaMode;
     entry.alphaConstantUnorm8 = header->alphaConstantUnorm8;
 
-    ::Path<Core::Alloc::ScratchArena> dataPath(scratchArena, nwbFilePath);
-    dataPath.replaceExtension(TextureFormat::s_TextureDataExtension);
+    const ::Path<::ArenaBase> dataPath = BuildTextureDataSidecarPath(scratchArena, nwbFilePath);
     const Expected<void, ErrorCode> readResult = ReadBinaryFile(dataPath, entry.payloadBytes);
     if(!readResult){
         LogTextureSidecarReadFailed(nwbFilePath, dataPath, readResult.error());
@@ -429,21 +494,7 @@ b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     const Texture& texture = static_cast<const Texture&>(asset);
-    if(!texture.validatePayload())
-        return false;
-
-    return TextureBinaryCodec().serialize(
-        static_cast<u8>(texture.dimension()),
-        texture.width(),
-        texture.height(),
-        texture.depth(),
-        static_cast<u8>(texture.alphaMode()),
-        texture.alphaConstantUnorm8(),
-        static_cast<u8>(texture.payloadFormat()),
-        texture.mipLevels(),
-        texture.payloadBytes(),
-        outBinary
-    );
+    return SerializeTextureAsset(texture, outBinary);
 }
 
 
@@ -451,34 +502,18 @@ b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
 
 
 Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena){
-    Texture::MipLevelVector mipLevels(arena);
-    if(!BuildTextureCookMipLevels(
-        static_cast<u8>(textureEntry.payloadFormat),
-        static_cast<u8>(textureEntry.dimension),
-        textureEntry.width,
-        textureEntry.height,
-        textureEntry.depth,
-        static_cast<u8>(textureEntry.alphaMode),
-        textureEntry.payloadBytes.size(),
-        mipLevels
-    ))
-        return MakeUnexpected(Failure{});
-
-    Texture asset(arena, textureEntry.virtualPath);
-    asset.setPayload(
-        textureEntry.width,
-        textureEntry.height,
-        mipLevels,
-        textureEntry.payloadBytes,
+    return BuildTextureAssetFromCookData(
+        arena,
+        textureEntry.virtualPath,
         textureEntry.dimension,
+        textureEntry.width,
+        textureEntry.height,
         textureEntry.depth,
         textureEntry.payloadFormat,
         textureEntry.alphaMode,
-        textureEntry.alphaConstantUnorm8
+        textureEntry.alphaConstantUnorm8,
+        textureEntry.payloadBytes
     );
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
 }
 
 

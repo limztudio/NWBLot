@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,6 +68,14 @@ Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
     return ParseName(text.view());
 }
 
+Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView label){
+    return FindOrImportTexture(graph, texture, label);
+}
+
+Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureBuffer(mut GpuTaskGraph graph, in BufferHandle buffer, in StringView label){
+    return FindOrImportBuffer(graph, buffer, label);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -113,7 +122,7 @@ b8 AvboitRefractionCaptureResources::appendCsg(
     RendererCsgSystem& csgSystem,
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MeshFrameBindingSnapshot& frameBindings,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& csgUses
 ){
@@ -176,7 +185,7 @@ public:
     struct Payload{
         RendererCsgSystem& csgSystem;
         const DeferredFrameTargets& targets;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+        CsgGraphResourceSnapshot csgResources;
         Core::Rect workRect;
         Vector<u32, Core::Alloc::GlobalArena> receiverIndices;
 
@@ -279,11 +288,11 @@ namespace __hidden_avboit_refraction_capture{
 
 
 [[nodiscard]] Expected<Core::GpuGraphResourceId> ImportTexture(Core::GpuTaskGraph& graph, const Core::TextureHandle& texture){
-    return FindOrImportTexture(graph, texture, s_RefractionCaptureTextureLabel);
+    return ImportAvboitRefractionCaptureTexture(graph, texture, s_RefractionCaptureTextureLabel);
 }
 
 [[nodiscard]] Expected<Core::GpuGraphResourceId> ImportBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer){
-    return FindOrImportBuffer(graph, buffer, s_RefractionCaptureBufferLabel);
+    return ImportAvboitRefractionCaptureBuffer(graph, buffer, s_RefractionCaptureBufferLabel);
 }
 
 struct CaptureDrawTask{
@@ -291,7 +300,7 @@ struct CaptureDrawTask{
         RendererMaterialSystem& materialSystem;
         AvboitFrameTargets avboitTargets;
         MeshFrameBindingSnapshot frameBindings;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+        CsgGraphResourceSnapshot csgResources;
         Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena> drawItems;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
@@ -402,7 +411,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     RendererMaterialSystem& materialSystem,
     RendererCsgSystem& csgSystem,
     const CsgFrameState& csgFrameState,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MeshFrameBindingSnapshot& frameBindings,
     const MeshViewGpuData& meshViewState,
     Core::GpuTaskId dependency,
@@ -550,7 +559,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         if(csg)
             uses.insert(uses.end(), csgUses.begin(), csgUses.end());
         if(renderPath == RenderPath::ComputeEmulation)
-            uses.push_back(generate ? WriteUse(output, Core::ResourceStates::UnorderedAccess) : ReadUse(output, ECSRenderDetail::s_ObjectGeometryRasterState));
+            uses.push_back(generate ? WriteUse(output, Core::ResourceStates::UnorderedAccess) : ReadUse(output, s_ObjectGeometryRasterState));
         if(!generate){
             uses.push_back(ReadUse(opaqueDepth));
             uses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));

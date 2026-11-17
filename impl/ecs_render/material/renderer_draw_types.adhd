@@ -242,6 +242,29 @@ class MaterialPassDrawItemPartitionsView{
     }
 }
 
+b8 MatchesRetainedGeneratedGeometryOutputs(
+    in b8 captured,
+    in Span<MaterialPassDrawItem> drawItems,
+    in Span<BufferHandle> outputBuffers,
+    in Span<GeneratedGeometryOutputLayout> outputLayouts,
+    in Span<u32> outputHeapSlots
+){
+    if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || outputHeapSlots.size() != drawItems.size())
+        return false;
+    for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
+        in MaterialPassMeshResourceSnapshot mesh = drawItems[drawIndex].meshResources;
+        if(
+            !mesh.emulationVertexBuffer.valid()
+            || !mesh.emulationVertexHeapHandle.valid()
+            || mesh.emulationVertexBuffer != outputBuffers[drawIndex]
+            || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
+            || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
+        )
+            return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

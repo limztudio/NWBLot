@@ -163,15 +163,6 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     return true;
 }
 
-void HardwareTransparentShadowResources::releaseHardwareTransparentShadowResources()noexcept{
-    auto& state = *m_state;
-    auto& heap = m_graphics->getDevice().getDescriptorHeap();
-    RetireDescriptor(heap, state.m_crossingsHeapHandle);
-    RetireDescriptor(heap, state.m_overflowListHeapHandle);
-    RetireDescriptor(heap, state.m_overflowArgsHeapHandle);
-    state = HardwareTransparentShadowState{};
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -220,7 +211,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             commandList.setBufferState(state.m_crossingsBuffer.get(), Core::ResourceStates::UnorderedAccess, true);
             commandList.setBufferState(state.m_overflowListBuffer.get(), Core::ResourceStates::UnorderedAccess, true);
             commandList.setBufferState(state.m_overflowArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
+            commandList.setTextureState(targets.transparentSoftHalf.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
             const auto bind = [&](const u32 stage, const b8 indirect){
                 Core::ComputeState compute;
@@ -232,7 +223,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
                 commandList.setPushConstants(&push, sizeof(push));
             };
             {
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentGather, device, commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentGather, device, commandList);
 
                 bind(s_HwTransparentGatherStage, false);
                 commandList.dispatch(groupsX, groupsY, 1u);
@@ -242,16 +233,16 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             commandList.setBufferState(state.m_overflowArgsBuffer.get(), Core::ResourceStates::IndirectArgument | Core::ResourceStates::ShaderResource);
             commandList.commitBarriers();
             {
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentEvaluate, device, commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentEvaluate, device, commandList);
 
                 bind(s_HwTransparentEvaluateStage, false);
                 commandList.dispatch(groupsX, groupsY, 1u);
             }
             // Fast evaluation and continuation write disjoint pixels, but the next sample reads their accumulated result.
-            commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
+            commandList.setTextureState(targets.transparentSoftHalf.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
             {
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentContinuation, device, commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentContinuation, device, commandList);
 
                 bind(s_HwTransparentOverflowStage, true);
                 commandList.dispatchIndirect(0u);

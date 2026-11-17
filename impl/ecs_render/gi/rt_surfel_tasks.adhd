@@ -143,7 +143,7 @@ public:
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         if(queue->queueClass == Core::CommandQueue::Compute)
-            payload.asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncSurfelGi, payload.graphics.getDevice(), commandList);
+            payload.asyncTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeAsyncSurfelGi, payload.graphics.getDevice(), commandList);
 
         if(!payload.raytracingSystem.renderSurfelGiPhases(commandList, payload.targets, payload.deferredLightingResources, true, false, false, false, false, false, false)){
             if(payload.asyncTiming.has_value()){

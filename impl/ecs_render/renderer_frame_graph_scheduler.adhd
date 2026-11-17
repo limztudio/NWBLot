@@ -79,7 +79,7 @@ b8 RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::
     return m_graphics.gpuTiming().preparePacketEnvelopeMetrics(
         m_graphics.getFrameIndex(),
         packetScopes,
-        RendererGpuTimingScope::s_DeferredGraphQueueOverlap.identity,
+        s_TimingScopeDeferredGraphQueueOverlap.identity,
         queueOutputs
     );
 }
@@ -94,7 +94,7 @@ b8 RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTransa
             .setIdentity(Name(s_FrameGraphNameRenderFrameTimingBegin))
             .setMarkerLabel("Frame Timing Begin")
             .setScheduling(scheduling),
-        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = RendererGpuTimingScope::s_Frame, });
+        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = s_TimingScopeFrame, });
     if(!deferredFrameTimingBeginTaskResult || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(*deferredFrameTimingBeginTaskResult)){
         if(deferredFrameTimingBeginTaskResult)
             m_deferredFrameTimingBeginTask = *deferredFrameTimingBeginTaskResult;

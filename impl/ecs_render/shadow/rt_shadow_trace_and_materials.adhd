@@ -188,9 +188,9 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
         return;
 
     // White transmittance is the all-lit fallback.
-    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.clearTextureFloat(*targets.shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel));
+    commandList.clearTextureFloat(*targets.shadowVisibility, s_ShadowVisibilitySubresources, Core::Color(s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel));
 }
 
 Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
@@ -234,7 +234,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     Optional<Core::GpuTimingMeasure> timing;
     if(!splitSoftTransparentFold)
-        timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
+        timing.emplace(m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, m_graphics.getDevice(), commandList);
 
     // Subsequent visibility passes read/write this UAV in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
@@ -266,7 +266,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Soft upsample overwrites the opaque prepass.
     const b8 softWillRun = IsSoftShadowActive(m_rayTracingState.m_softShadowReady, m_rayTracingState.m_softShadowSlotMask);
     if(!softWillRun){
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         SwShadowHeapPushConstants opaquePush = makePush();
         opaquePush.width = targets.width;
@@ -278,7 +278,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     }
 
     // The transparent pass reads and multiplies the opaque mask in place.
-    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     // Soft opaque resolve replaces the full-resolution mask.
@@ -294,10 +294,10 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         // Resolve reads the soft trace and geometry scratch in place.
         enableSoftShadowResolveBarriers(commandList, targets);
 
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         {
-            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTrace, m_graphics.getDevice(), commandList);
 
             SwShadowHeapPushConstants softTracePush = makePush();
             PopulateSwShadowSoftOpaquePush(
@@ -425,7 +425,7 @@ void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
 ){
     // Split resolve declares the trace fence; the direct route retains its UAV fence.
     if(!splitOpaqueSoftResolve){
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
     }
     dispatchSoftShadowDenoiseAndTransparentFold(

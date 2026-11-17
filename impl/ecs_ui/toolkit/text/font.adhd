@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/text/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -12,7 +18,6 @@ native{
 #include <impl/ecs_ui/toolkit/text/baked_atlas.adhd.h>
 
 #include <impl/ecs_ui/toolkit/global.adhd.h>
-#include <impl/ecs_ui/toolkit/text/types.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.adhd.h>
 #include <impl/assets_font/asset.adhd.h>
 
@@ -33,20 +38,6 @@ struct FontSource{
     const Font& font;
     u64 generation = 0u;
     const FontAtlas* atlas = nullptr;
-};
-
-struct GlyphBitmap{
-    PaintVector<u8> pixels;
-    u32 width = 0u;
-    u32 height = 0u;
-    i32 bearingX = 0;
-    i32 bearingY = 0;
-
-
-public:
-    explicit GlyphBitmap(Core::Alloc::GlobalArena& arena)noexcept
-        : pixels(arena)
-    {}
 };
 
 class FontFaceState;

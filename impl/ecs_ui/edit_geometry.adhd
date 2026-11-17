@@ -140,6 +140,16 @@ class UiEditGeometry{
     }
 };
 
+TextInputRect MakeUiEditNativeCaretRect(in UiEditBoxGeometry geometry, in DisplayMetrics display){
+    const i32x4 bounds = UiEditGeometry().nativeCaretBounds(geometry.placement.caret, display);
+    TextInputRect rect;
+    rect.x = bounds.x;
+    rect.y = bounds.y;
+    rect.width = bounds.z;
+    rect.height = bounds.w;
+    return rect;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

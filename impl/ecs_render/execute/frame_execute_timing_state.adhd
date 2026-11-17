@@ -138,13 +138,13 @@ public:
             .graphics = &graphics,
             .timing = &deferredClearTiming,
             .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(DeferredGraphicsPrefixTimingSlot::DeferredClear)],
-            .scope = RendererGpuTimingScope::s_DeferredClear,
+            .scope = s_TimingScopeDeferredClear,
         }
         , opaqueCsgIntervalClearTimingState{
             .graphics = &graphics,
             .timing = &opaqueCsgIntervalClearTiming,
             .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(DeferredGraphicsPrefixTimingSlot::Gbuffer)],
-            .scope = RendererGpuTimingScope::s_CsgIntervalClear,
+            .scope = s_TimingScopeCsgIntervalClear,
         }
         , shadowVisibilityTimingTicket(graphics.gpuTiming())
         , softwareCausticsTimingTicket(graphics.gpuTiming())
@@ -155,8 +155,8 @@ public:
         , avboitExtinctionTimingTicket(graphics.gpuTiming())
         , avboitIntegrationTimingTicket(graphics.gpuTiming())
         , avboitAccumulationTimingTicket(graphics.gpuTiming())
-        , avboitClearTimingState{ .graphics = &graphics, .timing = &avboitClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = RendererGpuTimingScope::s_AvboitClear, }
-        , transparentCsgIntervalClearTimingState{ .graphics = &graphics, .timing = &transparentCsgIntervalClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = RendererGpuTimingScope::s_CsgIntervalClear, }
+        , avboitClearTimingState{ .graphics = &graphics, .timing = &avboitClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = s_TimingScopeAvboitClear, }
+        , transparentCsgIntervalClearTimingState{ .graphics = &graphics, .timing = &transparentCsgIntervalClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = s_TimingScopeCsgIntervalClear, }
         , deferredLightingTimingTicket(graphics.gpuTiming())
         , deferredCompositeTimingTicket(graphics.gpuTiming())
         , deferredPresentTimingTicket(graphics.gpuTiming())

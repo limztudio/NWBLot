@@ -559,7 +559,7 @@ public:
         );
         commandList.setPushConstants(&push, sizeof(push));
         {
-            Core::GpuTimingMeasure timing(resources.graphics.gpuTiming(), RendererGpuTimingScope::s_OpticalBoundsFinalize, resources.graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure timing(resources.graphics.gpuTiming(), s_TimingScopeOpticalBoundsFinalize, resources.graphics.getDevice(), commandList);
 
             commandList.dispatch(1u, 1u, 1u);
         }

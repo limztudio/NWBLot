@@ -2,19 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
+#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_target_builder.adhd>
 #include <impl/ecs_render/deferred/deferred_internal.adhd>
 #include <impl/ecs_render/deferred/deferred_system.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 #include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ECSRenderDetail::s_ShadowVisibilitySubresources"), cpp_header("<impl/ecs_render/shadow/rt_shadow_state.adhd.h>")]
-extern const TextureSubresourceSet s_ShadowVisibilitySubresources;
-[cpp_name("::NWB::Impl::ECSRenderDetail::s_CausticAccumulatorSubresources"), cpp_header("<impl/ecs_render/caustic/rt_caustic_state.adhd.h>")]
-extern const TextureSubresourceSet s_CausticAccumulatorSubresources;
+const Name s_DeferredBindlessSlotsBufferName = "ECSRender_DeferredBindlessResourceSlots";
+
 
 void LogDeferredBindlessHeapMissing(){
     error("RendererSystem: deferred lighting/compositor requires the global descriptor heap");
@@ -317,71 +319,41 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(mut DeferredFra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+void ResetCreatedDeferredFrameTargets(
+    mut RendererAvboitSystem avboit,
+    mut RendererDeferredSystem deferred,
+    mut DeferredFrameTargets createdTargets
+){
+    avboit.resetAvboitFrameTargets(createdTargets.avboit);
+    deferred.resetDeferredFrameTargets(createdTargets);
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_target_builder.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/deferred/deferred_internal.adhd.h>
-#include <impl/ecs_render/deferred/deferred_system.adhd.h>
-#include <impl/ecs_render/deferred/renderer_deferred_state.adhd.h>
-#include <impl/ecs_render/avboit/avboit_system.adhd.h>
-#include <impl/ecs_render/csg/csg_system.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_target_builder.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/api.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/runtime/runtime.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler)noexcept{
-    auto& device = m_graphics->getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+b8 RendererDeferredSystem::createDeferredBindlessFrameResources(mut DeferredFrameTargets targets, mut RhiSampler avboitLinearSampler){
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         LogDeferredBindlessHeapMissing();
         return false;
     }
-    FOUNDATION_ASSERT(m_deferredState->m_sampler);
-    FOUNDATION_ASSERT(m_deferredState->m_sceneShadingBuffer);
-    FOUNDATION_ASSERT(m_deferredState->m_lightBuffer);
-    FOUNDATION_ASSERT(targets.csgIntervalTargetsValid());
+    assert(this.m_deferredState.m_sampler.valid());
+    assert(this.m_deferredState.m_sceneShadingBuffer.valid());
+    assert(this.m_deferredState.m_lightBuffer.valid());
+    assert(targets.csgIntervalTargetsValid());
 
-    DeferredBindlessFrameResources& bindless = targets.bindless;
+    mut DeferredBindlessFrameResources bindless = targets.bindless;
     DeferredBindlessDescriptorSources sources(
-        *m_deferredState->m_sampler.get(),
+        this.m_deferredState.m_sampler.deref(),
         avboitLinearSampler,
-        *m_deferredState->m_sceneShadingBuffer.get(),
-        *m_deferredState->m_lightBuffer.get()
+        this.m_deferredState.m_sceneShadingBuffer.deref(),
+        this.m_deferredState.m_lightBuffer.deref()
     );
     DeferredBindlessDescriptorRegistrar registrar(heap, targets, sources);
-    if(!registrar.registerAll()){
+    if(!registrar.registerAll().has_value()){
         LogDeferredBindlessRegistrationFailed();
-        resetDeferredBindlessFrameResources(targets);
+        this.resetDeferredBindlessFrameResources(targets);
         return false;
     }
 
-    bindless.slots = DeferredBindlessSlotsBuilder{}.build(
+    bindless.slots = DeferredBindlessSlotsBuilder().build(
         bindless.gbufferBaseColor.slot(),
         bindless.gbufferNormal.slot(),
         bindless.gbufferWorldPosition.slot(),
@@ -421,99 +393,81 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
         bindless.csgRemovedIntervalCount.slot()
     );
 
-    Core::BufferDesc slotsBufferDesc;
+    BufferDesc slotsBufferDesc;
     slotsBufferDesc
         .setByteSize(sizeof(DeferredBindlessResourceSlots))
         .setIsConstantBuffer(true)
-        .setDebugName("ECSRender_DeferredBindlessResourceSlots")
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_DeferredBindlessSlotsBufferName)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
         // Selector spans packets; retain descriptor-visible state at every native close.
-        .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
+        .enableAutomaticStateTracking(ResourceStates::ConstantBuffer)
     ;
-    auto slotsBufferResult = m_graphics->createBuffer(slotsBufferDesc);
-    if(slotsBufferResult)
-        bindless.slotsBuffer = Move(*slotsBufferResult);
-    else
+    const Expected<BufferHandle> slotsBufferResult = this.m_graphics.createBuffer(slotsBufferDesc);
+    if(!slotsBufferResult.has_value()){
         bindless.slotsBuffer.reset();
-    if(!slotsBufferResult){
         LogDeferredBindlessSlotBufferCreateFailed();
-        resetDeferredBindlessFrameResources(targets);
+        this.resetDeferredBindlessFrameResources(targets);
         return false;
     }
+    bindless.slotsBuffer = slotsBufferResult.value();
 
     // The indirection payload is itself heap-addressable.
     // Every consumer takes this one slot in push constants, not a local selector; the heap stays the binding surface.
-    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RegisterConstantBuffer(heap, bindless.slotsBuffer);
-    bindless.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
-    if(!slotsBufferDescriptor){
+    if(!TryAdoptDescriptor(RegisterConstantBuffer(heap, bindless.slotsBuffer), bindless.slotsBufferDescriptor)){
         LogDeferredBindlessSlotBufferRegisterFailed();
-        resetDeferredBindlessFrameResources(targets);
+        this.resetDeferredBindlessFrameResources(targets);
         return false;
     }
 
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<DeferredFrameTargets> DeferredFrameTargetBuilder::build(const u32 width, const u32 height, const u32 shadowReceiverFactor, const u32 surfelResolveFactor)noexcept{
-    auto createdTargetsResult = m_deferred->createDeferredFrameTargets(width, height);
-    if(!createdTargetsResult)
-        return MakeUnexpected(Failure{});
-    DeferredFrameTargets& createdTargets = *createdTargetsResult;
-    const auto resetCreatedTargets = [this, &createdTargets](){
-        m_avboit->resetAvboitFrameTargets(createdTargets.avboit);
-        m_deferred->resetDeferredFrameTargets(createdTargets);
-    };
-    if(!m_avboit->createAvboitSampler()){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+Expected<DeferredFrameTargets> DeferredFrameTargetBuilder::build(
+    in u32 width,
+    in u32 height,
+    in u32 shadowReceiverFactor,
+    in u32 surfelResolveFactor
+){
+    Expected<DeferredFrameTargets> createdTargetsResult = this.m_deferred.createDeferredFrameTargets(width, height);
+    if(!createdTargetsResult.has_value())
+        return MakeUnexpected(Failure());
+    DeferredFrameTargets createdTargets = createdTargetsResult.value();
+    if(!this.m_avboit.createAvboitSampler()){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
-    if(!m_avboit->createAvboitFrameTargets(createdTargets)){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    if(!this.m_avboit.createAvboitFrameTargets(createdTargets)){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
-    if(!m_csg->createCsgPeelTargets(createdTargets)){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    if(!this.m_csg.createCsgPeelTargets(createdTargets)){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
     createdTargets.shadowReceiverFactor = shadowReceiverFactor;
-    if(!ShadowVisibilityTargetBuilder(*m_graphics, *m_rayTracingState).build(createdTargets)){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    ShadowVisibilityTargetBuilder shadowVisibilityTargetBuilder(this.m_graphics, this.m_rayTracingState);
+    if(!shadowVisibilityTargetBuilder.build(createdTargets)){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
-    if(!m_rayTracing->createCausticTargets(createdTargets)){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    if(!this.m_rayTracing.createCausticTargets(createdTargets)){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
     createdTargets.surfelResolveFactor = surfelResolveFactor;
-    if(!m_rayTracing->createSurfelTargets(createdTargets)){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    if(!this.m_rayTracing.createSurfelTargets(createdTargets)){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
-    if(!m_deferred->createDeferredFrameTargetResources(createdTargets, m_avboit->linearSampler())){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    if(!this.m_deferred.createDeferredFrameTargetResources(createdTargets, this.m_avboit.linearSampler())){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
-    if(!m_avboit->registerAvboitFrameTargetDescriptors(createdTargets, createdTargets.avboit)){
-        resetCreatedTargets();
-        return MakeUnexpected(Failure{});
+    if(!this.m_avboit.registerAvboitFrameTargetDescriptors(createdTargets, createdTargets.avboit)){
+        ResetCreatedDeferredFrameTargets(this.m_avboit, this.m_deferred, createdTargets);
+        return MakeUnexpected(Failure());
     }
-    return Move(createdTargets);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    return createdTargets;
 }
 
 

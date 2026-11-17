@@ -524,7 +524,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     Core::GpuTaskDesc avboitIntervalDesc;
     avboitIntervalDesc
         .setIdentity(Name(s_RenderNameRenderAvboitIntervals))
-        .setMarkerLabel(RendererGpuPassText::s_TransparentCsgIntervalsLabel)
+        .setMarkerLabel(s_TransparentCsgIntervalsLabel)
         .setScheduling(avboitIntervalScheduling)
         .setDependencies({ &intervalDependency, 1u })
         .setResourceUses(avboitIntervalResourceUses)

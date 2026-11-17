@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_render/avboit/avboit.adhd>
-#include <impl/ecs_render/shared/frame_push_constants.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
@@ -70,33 +70,7 @@ static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * NWB_SCENE_SHADING_BUF
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
 static_assert(sizeof(SceneLightGpuData) == sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT, "SceneLightGpuData layout must match the shading shaders");
 static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData must stay SIMD-aligned");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
-    const Core::ViewportState& viewportState,
-    const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags
-)noexcept{
-    const b8 hasViewport = !viewportState.viewports.empty();
-    const Core::Viewport viewport = hasViewport ? viewportState.viewports[0] : Core::Viewport{};
-    const Core::Rect scissorRect = hasViewport ? (!viewportState.scissorRects.empty() ? viewportState.scissorRects[0] : Core::Rect::FromViewport(viewport)) : Core::Rect{};
-    return ResolveShaderDrivenPushConstants(
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        hasViewport,
-        VectorSet(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
-        VectorSet(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
-        frameHeapSlots,
-        dispatchFlags
-    );
-}
+static_assert(s_EmulatedVertexBufferIndex == NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX, "s_EmulatedVertexBufferIndex must match NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,18 +94,35 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX"), cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>")]
-extern const u32 s_EmulatedVertexBufferIndex;
-
-[cpp_name("::NWB::Impl::ECSRenderDetail::BuildShaderDrivenPushConstants"), cpp_header("<impl/ecs_render/shared/renderer_push_constants_private.adhd.h>")]
-extern ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     in u32 meshletCount,
     in u32 instanceIndex,
     in u32 materialConstantByteOffset,
     in ViewportState viewportState,
     in MeshFrameHeapSlots frameHeapSlots,
     in u32 dispatchFlags
-);
+){
+    const b8 hasViewport = !viewportState.viewports.empty();
+    Viewport viewport = Viewport();
+    Rect scissorRect = Rect();
+    if(hasViewport){
+        viewport = viewportState.viewports[0u];
+        if(!viewportState.scissorRects.empty())
+            scissorRect = viewportState.scissorRects[0u];
+        else
+            scissorRect = RectFromViewport(viewport);
+    }
+    return ResolveShaderDrivenPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        hasViewport,
+        VectorSingle(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
+        VectorSingle(cast<f32>(scissorRect.minX), cast<f32>(scissorRect.minY), cast<f32>(scissorRect.maxX), cast<f32>(scissorRect.maxY)),
+        frameHeapSlots,
+        dispatchFlags
+    );
+}
 
 MeshFrameHeapSlots ResolveMeshFrameHeapSlots(in MeshFrameBindingSnapshot frameBindings, in u32 generatedVertex){
     assert(frameBindings.bindingValid());

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/csg/types.adhd>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,16 +50,18 @@ void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(han
     handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
-    b8 ready = true;
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
-        const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
-        ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    });
-    return ready;
-}
-
-
+static_assert(s_MeshBindingPosition == NWB_MESH_BINDING_POSITION);
+static_assert(s_MeshBindingNormal == NWB_MESH_BINDING_NORMAL);
+static_assert(s_MeshBindingTangent == NWB_MESH_BINDING_TANGENT);
+static_assert(s_MeshBindingUv0 == NWB_MESH_BINDING_UV0);
+static_assert(s_MeshBindingColor == NWB_MESH_BINDING_COLOR);
+static_assert(s_MeshBindingMeshletDesc == NWB_MESH_BINDING_MESHLET_DESC);
+static_assert(s_MeshInstanceCsgContextHeapSlot == NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT);
+static_assert(s_MeshBindingMeshletBounds == NWB_MESH_BINDING_MESHLET_BOUNDS);
+static_assert(s_MeshBindingMeshletPositionRefs == NWB_MESH_BINDING_MESHLET_POSITION_REFS);
+static_assert(s_MeshBindingMeshletAttributeRefs == NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS);
+static_assert(s_MeshBindingMeshletLocalVertexRefs == NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS);
+static_assert(s_MeshBindingMeshletPrimitiveIndices == NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES);
 static_assert(s_MeshInstanceGeometrySlotCount == NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT, "s_MeshInstanceGeometrySlotCount must match NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT");
 static_assert(offsetof(InstanceGpuData, rotation) == sizeof(f32) * NWB_MESH_INSTANCE_ROTATION_FLOAT_OFFSET, "InstanceGpuData rotation must be first");
 static_assert(offsetof(InstanceGpuData, translation) == sizeof(f32) * NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET, "InstanceGpuData translation must follow rotation");
@@ -150,8 +153,24 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::GeometryHeapHandlesReady"), cpp_header("<impl/ecs_render/mesh/renderer_mesh_types.adhd.h>")]
-extern b8 GeometryHeapHandlesReady(in Array<GpuDescriptorHandle, 12u> geometryHeapHandles);
+b8 IsStorageBufferGeometryHeapHandle(in GpuDescriptorHandle handle){
+    return handle.valid() && handle.descriptorClass() == GpuDescriptorClass::StorageBuffer;
+}
+
+b8 GeometryHeapHandlesReady(in Array<GpuDescriptorHandle, s_MeshInstanceGeometrySlotCount> geometryHeapHandles){
+    return IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingPosition])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingNormal])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingTangent])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingUv0])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingColor])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingMeshletDesc])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingMeshletBounds])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingMeshletPositionRefs])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingMeshletAttributeRefs])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingMeshletLocalVertexRefs])
+        && IsStorageBufferGeometryHeapHandle(geometryHeapHandles[s_MeshBindingMeshletPrimitiveIndices])
+    ;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

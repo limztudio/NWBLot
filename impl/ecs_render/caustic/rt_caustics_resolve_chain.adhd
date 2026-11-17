@@ -2,10 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/graph_types.adhd>
 #include <impl/ecs_render/caustic/settings.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CausticsStageTargets> ImportCausticsStageTargets(
+    in DeferredFrameTargets targets,
+    in b8 hardwareCaustics,
+    mut GpuTaskGraph graph
+){
+    CausticsStageTargetNaming naming;
+    if(hardwareCaustics){
+        naming = CausticsStageTargetNaming(
+            s_CausticsNameRenderHardwareCausticsAccumulator,
+            s_CausticsNameRenderHardwareCausticsHistory,
+            s_CausticsNameRenderHardwareCausticsResolveHalf,
+            s_CausticsNameRenderHardwareCausticsResolveGeometry,
+            s_CausticsNameRenderHardwareCausticsSceneGeometry,
+            s_SceneGeometryDomainLabel,
+            "RendererSystem: could not import hardware-caustics graph resources"
+        );
+    }
+    else{
+        naming = CausticsStageTargetNaming(
+            s_CausticsNameRenderSoftwareCausticsAccumulator,
+            s_CausticsNameRenderSoftwareCausticsHistory,
+            s_CausticsNameRenderSoftwareCausticsResolveHalf,
+            s_CausticsNameRenderSoftwareCausticsResolveGeometry,
+            s_CausticsNameRenderSoftwareCausticsSceneGeometry,
+            "Software BVH Scene Geometry",
+            "RendererSystem: could not import deferred software-caustics graph resources"
+        );
+    }
+
+    const Expected<GpuGraphResourceId> causticAccumulatorResult = ImportExternalTexture(graph, targets.causticAccumulator, naming.accumulator, s_CausticAccumulatorLabel);
+    const Expected<GpuGraphResourceId> causticHistoryResult = ImportExternalTexture(graph, targets.causticHistory, naming.history, s_CausticHistoryLabel);
+    const Expected<GpuGraphResourceId> causticResolveHalfResult = ImportExternalTexture(graph, targets.causticResolveHalf, naming.resolveHalf, s_CausticResolveHalfLabel);
+    const Expected<GpuGraphResourceId> causticResolveGeometryResult = ImportExternalTexture(graph, targets.causticResolveGeometry, naming.resolveGeometry, s_CausticResolveGeometryLabel);
+    const Expected<GpuGraphResourceId> sceneGeometryDomainResult = graph.importHazardDomain(HazardDomainDesc(naming.sceneGeometryDomain, naming.sceneGeometryDomainLabel));
+    if(!causticAccumulatorResult.has_value() || !causticHistoryResult.has_value() || !causticResolveHalfResult.has_value() || !causticResolveGeometryResult.has_value() || !sceneGeometryDomainResult.has_value()){
+        warning("{}", naming.importWarnText);
+        return MakeUnexpected(Failure());
+    }
+    return CausticsStageTargets(
+        causticAccumulatorResult.value(),
+        causticHistoryResult.value(),
+        causticResolveHalfResult.value(),
+        causticResolveGeometryResult.value(),
+        sceneGeometryDomainResult.value()
+    );
+}
 
 
 class CausticResolveStageActivityPlan{
@@ -154,7 +206,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     // Declared layout must match the shader read.
     photonResourceUses.push_back(ReadTextureUse(depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     photonResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    photonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
+    photonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
     photonResourceUses.push_back(ReadUse(stageTargets.sceneGeometryDomain));
 
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
@@ -316,40 +368,7 @@ inline constexpr usize s_ResolveStageCount = NWB_CAUSTIC_RESOLVE_PASS_COUNT + 2u
 
 
 Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(const DeferredFrameTargets& targets, const b8 hardwareCaustics){
-    using namespace RendererTaskGraphDetail;
-    const CausticsStageTargetNaming naming = [&]()noexcept{
-        if(hardwareCaustics){
-            return CausticsStageTargetNaming(
-                s_CausticsNameRenderHardwareCausticsAccumulator,
-                s_CausticsNameRenderHardwareCausticsHistory,
-                s_CausticsNameRenderHardwareCausticsResolveHalf,
-                s_CausticsNameRenderHardwareCausticsResolveGeometry,
-                s_CausticsNameRenderHardwareCausticsSceneGeometry,
-                s_SceneGeometryDomainLabel,
-                "RendererSystem: could not import hardware-caustics graph resources"
-            );
-        }
-        return CausticsStageTargetNaming(
-            s_CausticsNameRenderSoftwareCausticsAccumulator,
-            s_CausticsNameRenderSoftwareCausticsHistory,
-            s_CausticsNameRenderSoftwareCausticsResolveHalf,
-            s_CausticsNameRenderSoftwareCausticsResolveGeometry,
-            s_CausticsNameRenderSoftwareCausticsSceneGeometry,
-            "Software BVH Scene Geometry",
-            "RendererSystem: could not import deferred software-caustics graph resources"
-        );
-    }();
-
-    const auto causticAccumulatorResult = ImportExternalTexture(m_graph, targets.causticAccumulator, naming.accumulator, s_CausticAccumulatorLabel);
-    const auto causticHistoryResult = ImportExternalTexture(m_graph, targets.causticHistory, naming.history, s_CausticHistoryLabel);
-    const auto causticResolveHalfResult = ImportExternalTexture(m_graph, targets.causticResolveHalf, naming.resolveHalf, s_CausticResolveHalfLabel);
-    const auto causticResolveGeometryResult = ImportExternalTexture(m_graph, targets.causticResolveGeometry, naming.resolveGeometry, s_CausticResolveGeometryLabel);
-    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(naming.sceneGeometryDomain, naming.sceneGeometryDomainLabel));
-    if(!causticAccumulatorResult || !causticHistoryResult || !causticResolveHalfResult || !causticResolveGeometryResult || !sceneGeometryDomainResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("{}"), ConvertString(naming.importWarnText));
-        return MakeUnexpected(Failure{});
-    }
-    return CausticsStageTargets(*causticAccumulatorResult, *causticHistoryResult, *causticResolveHalfResult, *causticResolveGeometryResult, *sceneGeometryDomainResult);
+    return ImportCausticsStageTargets(targets, hardwareCaustics, m_graph);
 }
 
 Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTasks(const CausticsStagePrefixInputs& inputs){
@@ -407,7 +426,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         ;
         Core::GpuClearTextureTaskDesc accumulatorBootstrapClear;
         accumulatorBootstrapClear.destination = inputs.causticAccumulator;
-        accumulatorBootstrapClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
+        accumulatorBootstrapClear.subresources = s_CausticAccumulatorSubresources;
         accumulatorBootstrapClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
         accumulatorBootstrapClear.uintValue = Core::UIntColor(0u);
         const auto accumulatorBootstrapClearTaskResult = m_graph.addClearTextureTask(accumulatorBootstrapClearDesc, accumulatorBootstrapClear);
@@ -430,7 +449,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
         ConfigureComputeEffectRoutingHint(true, accumulatorDecayScheduling);
         const Array<Core::GpuTaskResourceUse, 1u> accumulatorDecayUses = {
-            ReadWriteTextureUse(inputs.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadWriteTextureUse(inputs.causticAccumulator, s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess),
         };
         Core::GpuTaskDesc accumulatorDecayDesc;
         accumulatorDecayDesc
@@ -478,7 +497,7 @@ Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareG
     const Core::GpuGraphResourceId oddWaveletSource = s_CausticResolvePrepareWritesHalf ? inputs.stageTargets.causticResolveHalf : inputs.stageTargets.causticHistory;
     const Core::GpuGraphResourceId oddWaveletDest = s_CausticResolvePrepareWritesHalf ? inputs.stageTargets.causticHistory : inputs.stageTargets.causticResolveHalf;
     const Array<Core::GpuTaskResourceUse, 3u> resolvePrepareResourceUses = {
-        ReadTextureUse(inputs.stageTargets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.stageTargets.causticResolveGeometry, s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         WriteTextureUse(oddWaveletSource, s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };

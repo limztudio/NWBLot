@@ -234,11 +234,11 @@ public:
         else
             commandList.setPushConstants(&resources.frameParametersSlot, sizeof(resources.frameParametersSlot));
 
-        NotNull<const Core::GpuTimingScopeDefinition*> scope(&ReflectionGpuTimingScope::s_BuildArgs);
+        NotNull<const Core::GpuTimingScopeDefinition*> scope(&s_TimingScopeReflectionBuildArgs);
         if(hardware)
-            scope = &ReflectionGpuTimingScope::s_Hardware;
+            scope = &s_TimingScopeReflectionHardware;
         else if(payload.stage == DispatchStage::Classify)
-            scope = &ReflectionGpuTimingScope::s_Classify;
+            scope = &s_TimingScopeReflectionClassify;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), *scope, payload.graphics.getDevice(), commandList);
 
         if(hardware)
@@ -305,7 +305,7 @@ public:
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, resources.scene.tlasHeapHandle);
         const ReflectionCsgDispatchPushConstants parameters = MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, ReflectionCsgSliceRayOffset(payload.slice, s_ReflectionTraceSliceRays));
         commandList.setPushConstants(&parameters, sizeof(parameters));
-        if(payload.slice == 0u && !payload.dispatch->timing->begin(ReflectionGpuTimingScope::s_Hardware, payload.graphics.getDevice(), commandList))
+        if(payload.slice == 0u && !payload.dispatch->timing->begin(s_TimingScopeReflectionHardware, payload.graphics.getDevice(), commandList))
             return false;
 
         commandList.dispatchIndirect(ReflectionCsgSliceIndirectByteOffset(payload.slice, s_ReflectionIndirectArgumentBytes));

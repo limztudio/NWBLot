@@ -20,7 +20,12 @@ native{
 #include <impl/ecs_render/kernel/timing_names.adhd.h>
 
 namespace NWB::Tests::Smoke{
-namespace ReflectionGpuTimingScope = Impl::ReflectionGpuTimingScope;
+using Impl::s_TimingScopeReflectionDepthPyramid;
+using Impl::s_TimingScopeReflectionClassify;
+using Impl::s_TimingScopeReflectionBuildArgs;
+using Impl::s_TimingScopeReflectionHardware;
+using Impl::s_TimingScopeReflectionTemporal;
+using Impl::s_TimingScopeReflectionSpatial;
 inline constexpr u32 s_ReflectionMaxDepthMipsCap = NWB_REFLECTION_MAX_DEPTH_MIPS;
 };
 
@@ -82,23 +87,23 @@ class ReflectionTimingRenderPass{
             return false;
         }
         Array<Name, 17u> singleRangeScopes;
-        singleRangeScopes[0u] = RendererGpuTimingScope::s_Frame.identity;
-        singleRangeScopes[1u] = RendererGpuTimingScope::s_OpaqueRegular.identity;
-        singleRangeScopes[2u] = RendererGpuTimingScope::s_ShadowVisibility.identity;
-        singleRangeScopes[3u] = RendererGpuTimingScope::s_DeferredLighting.identity;
-        singleRangeScopes[4u] = RendererGpuTimingScope::s_DeferredComposite.identity;
-        singleRangeScopes[5u] = RendererGpuTimingScope::s_DeferredPresent.identity;
-        singleRangeScopes[6u] = RendererGpuTimingScope::s_AvboitClear.identity;
-        singleRangeScopes[7u] = RendererGpuTimingScope::s_AvboitOccupancy.identity;
-        singleRangeScopes[8u] = RendererGpuTimingScope::s_AvboitDepthWarp.identity;
-        singleRangeScopes[9u] = RendererGpuTimingScope::s_AvboitExtinction.identity;
-        singleRangeScopes[10u] = RendererGpuTimingScope::s_AvboitIntegration.identity;
-        singleRangeScopes[11u] = RendererGpuTimingScope::s_AvboitAccumulate.identity;
-        singleRangeScopes[12u] = ReflectionGpuTimingScope::s_Classify.identity;
-        singleRangeScopes[13u] = ReflectionGpuTimingScope::s_BuildArgs.identity;
-        singleRangeScopes[14u] = ReflectionGpuTimingScope::s_Hardware.identity;
-        singleRangeScopes[15u] = ReflectionGpuTimingScope::s_Temporal.identity;
-        singleRangeScopes[16u] = ReflectionGpuTimingScope::s_Spatial.identity;
+        singleRangeScopes[0u] = s_TimingScopeFrame.identity;
+        singleRangeScopes[1u] = s_TimingScopeOpaqueRegular.identity;
+        singleRangeScopes[2u] = s_TimingScopeShadowVisibility.identity;
+        singleRangeScopes[3u] = s_TimingScopeDeferredLighting.identity;
+        singleRangeScopes[4u] = s_TimingScopeDeferredComposite.identity;
+        singleRangeScopes[5u] = s_TimingScopeDeferredPresent.identity;
+        singleRangeScopes[6u] = s_TimingScopeAvboitClear.identity;
+        singleRangeScopes[7u] = s_TimingScopeAvboitOccupancy.identity;
+        singleRangeScopes[8u] = s_TimingScopeAvboitDepthWarp.identity;
+        singleRangeScopes[9u] = s_TimingScopeAvboitExtinction.identity;
+        singleRangeScopes[10u] = s_TimingScopeAvboitIntegration.identity;
+        singleRangeScopes[11u] = s_TimingScopeAvboitAccumulate.identity;
+        singleRangeScopes[12u] = s_TimingScopeReflectionClassify.identity;
+        singleRangeScopes[13u] = s_TimingScopeReflectionBuildArgs.identity;
+        singleRangeScopes[14u] = s_TimingScopeReflectionHardware.identity;
+        singleRangeScopes[15u] = s_TimingScopeReflectionTemporal.identity;
+        singleRangeScopes[16u] = s_TimingScopeReflectionSpatial.identity;
         // Reserve enough timer queries to cover all in-flight passes and depth mips.
         for(usize i = 0u; i < singleRangeScopes.size(); ++i){
             const Name scope = singleRangeScopes[i];
@@ -108,7 +113,7 @@ class ReflectionTimingRenderPass{
             }
         }
         if(!this.m_graphics.gpuTiming().prepareScopeQueries(
-            ReflectionGpuTimingScope::s_DepthPyramid.identity,
+            s_TimingScopeReflectionDepthPyramid.identity,
             this.m_graphics.getDevice(),
             s_ReflectionTimingInFlightRanges * mipCount
         )){
@@ -248,8 +253,8 @@ class ReflectionCpuTimingProbe{
             total.wallSeconds < s_SmokeProbeMinimumMeasurementSeconds
             || total.presentations() < s_SmokeProbeMinimumPresentations
             || this.m_positiveIntervals < s_ReflectionCpuTimingMinPositiveIntervals
-            || !this.m_publications.hasCompletedGpuSamples(RendererGpuTimingScope::s_Frame.identity, s_SmokeProbeMinimumPresentations)
-            || !this.m_publications.hasCompletedGpuSamples(ReflectionGpuTimingScope::s_Hardware.identity, s_SmokeProbeMinimumPresentations)
+            || !this.m_publications.hasCompletedGpuSamples(s_TimingScopeFrame.identity, s_SmokeProbeMinimumPresentations)
+            || !this.m_publications.hasCompletedGpuSamples(s_TimingScopeReflectionHardware.identity, s_SmokeProbeMinimumPresentations)
         )
             return true;
 
@@ -588,7 +593,7 @@ class ReflectionSpatialOwnerProbe{
     }
 
     private b8 observeTiming(in TimingView timing){
-        const TimingStats work = timing.stats(ReflectionGpuTimingScope::s_Spatial.identity);
+        const TimingStats work = timing.stats(s_TimingScopeReflectionSpatial.identity);
         if(!work.valid() || (this.m_hasPublication && work.publishFrameIndex == this.m_lastPublish))
             return true;
         if(

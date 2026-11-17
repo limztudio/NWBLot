@@ -8,63 +8,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshSystem;
-class RendererRayTracingSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_name("::NWB::Impl::RendererMeshSystem"), cpp_header("<impl/ecs_render/mesh/mesh_system.adhd.h>")]
+extern class RendererMeshSystem;
+[cpp_name("::NWB::Impl::RendererRayTracingSystem"), cpp_header("<impl/ecs_render/raytrace/raytracing_system.adhd.h>")]
+extern class RendererRayTracingSystem;
 
 
 // Software-BVH build-state import owns the mesh software-BVH parent plus raytracing BVH sort-buffer graph imports.
-struct FrameGraphSoftwareBvhBuildStateInputs{
-    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources;
-    b8 softwareTraceResourcesPrepared = false;
-};
+class FrameGraphSoftwareBvhBuildStateInputs{
+    public in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources;
+    public b8 softwareTraceResourcesPrepared;
 
+    public FrameGraphSoftwareBvhBuildStateInputs(in RayTracingShadowPreparationResourceSnapshot inRayTracingShadowResources){
+        this.rayTracingShadowResources = inRayTracingShadowResources;
+        this.softwareTraceResourcesPrepared = false;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public FrameGraphSoftwareBvhBuildStateInputs(
+        in RayTracingShadowPreparationResourceSnapshot inRayTracingShadowResources,
+        in b8 inSoftwareTraceResourcesPrepared
+    ){
+        this.rayTracingShadowResources = inRayTracingShadowResources;
+        this.softwareTraceResourcesPrepared = inSoftwareTraceResourcesPrepared;
+    }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RendererMeshSystem")]
-extern class RendererMeshSystem;
-[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
-extern class RendererRayTracingSystem;
-[cpp_name("::NWB::Impl::FrameGraphSoftwareBvhBuildStateInputs")]
-extern class FrameGraphSoftwareBvhBuildStateInputs;
 
 
 class FrameGraphSoftwareBvhBuildStateResult{

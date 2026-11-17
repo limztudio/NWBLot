@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/timing_names.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -15,7 +21,39 @@ native{
 #include <core/graphics/runtime/runtime.h>
 
 namespace NWB::Tests::Smoke{
-namespace RendererGpuTimingScope = Impl::RendererGpuTimingScope;
+using Impl::s_TimingScopeFrame;
+using Impl::s_TimingScopeOpaqueRegular;
+using Impl::s_TimingScopeShadowVisibility;
+using Impl::s_TimingScopeLightSpaceShadowViews;
+using Impl::s_TimingScopeLightSpaceShadowOpaqueCapture;
+using Impl::s_TimingScopeLightSpaceShadowTransparentCapture;
+using Impl::s_TimingScopeLightSpaceShadowShade;
+using Impl::s_TimingScopeLightSpaceShadowMapOpaque;
+using Impl::s_TimingScopeLightSpaceShadowMapTransparent;
+using Impl::s_TimingScopeLightSpaceShadowFallbackOpaque;
+using Impl::s_TimingScopeLightSpaceShadowFallbackTransparent;
+using Impl::s_TimingScopeDeferredLighting;
+using Impl::s_TimingScopeDeferredComposite;
+using Impl::s_TimingScopeDeferredPresent;
+using Impl::s_TimingScopeAvboitClear;
+using Impl::s_TimingScopeAvboitOccupancy;
+using Impl::s_TimingScopeAvboitDepthWarp;
+using Impl::s_TimingScopeAvboitExtinction;
+using Impl::s_TimingScopeAvboitIntegration;
+using Impl::s_TimingScopeAvboitAccumulate;
+using Impl::s_TimingScopeRefractionResolve;
+using Impl::s_TimingScopeRefractionClassifyTiles;
+using Impl::s_TimingScopeRefractionClearTileArguments;
+using Impl::s_TimingScopeOpticalBoundsFinalize;
+using Impl::s_TimingScopeCausticPhotons;
+using Impl::s_TimingScopeCausticResolve;
+using Impl::s_TimingScopeShadowOpaqueTrace;
+using Impl::s_TimingScopeShadowGeometryDownsample;
+using Impl::s_TimingScopeShadowOpaqueTemporal;
+using Impl::s_TimingScopeShadowOpaqueResolve;
+using Impl::s_TimingScopeShadowTransparentTrace;
+using Impl::s_TimingScopeShadowTransparentTemporal;
+using Impl::s_TimingScopeShadowTransparentResolve;
 using Core::GraphicsRuntime;
 using Core::IRenderPass;
 
@@ -80,34 +118,34 @@ class AvboitTimingRenderPass{
             return this.m_includeCaustics == includeCaustics;
 
         Array<Name, 24u> scopes;
-        scopes[0u] = RendererGpuTimingScope::s_Frame.identity;
-        scopes[1u] = RendererGpuTimingScope::s_OpaqueRegular.identity;
-        scopes[2u] = RendererGpuTimingScope::s_ShadowVisibility.identity;
-        scopes[3u] = RendererGpuTimingScope::s_LightSpaceShadowViews.identity;
-        scopes[4u] = RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture.identity;
-        scopes[5u] = RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture.identity;
-        scopes[6u] = RendererGpuTimingScope::s_LightSpaceShadowShade.identity;
-        scopes[7u] = RendererGpuTimingScope::s_LightSpaceShadowMapOpaque.identity;
-        scopes[8u] = RendererGpuTimingScope::s_LightSpaceShadowMapTransparent.identity;
-        scopes[9u] = RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque.identity;
-        scopes[10u] = RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent.identity;
-        scopes[11u] = RendererGpuTimingScope::s_DeferredLighting.identity;
-        scopes[12u] = RendererGpuTimingScope::s_DeferredComposite.identity;
-        scopes[13u] = RendererGpuTimingScope::s_DeferredPresent.identity;
-        scopes[14u] = RendererGpuTimingScope::s_AvboitClear.identity;
-        scopes[15u] = RendererGpuTimingScope::s_AvboitOccupancy.identity;
-        scopes[16u] = RendererGpuTimingScope::s_AvboitDepthWarp.identity;
-        scopes[17u] = RendererGpuTimingScope::s_AvboitExtinction.identity;
-        scopes[18u] = RendererGpuTimingScope::s_AvboitIntegration.identity;
-        scopes[19u] = RendererGpuTimingScope::s_AvboitAccumulate.identity;
-        scopes[20u] = RendererGpuTimingScope::s_RefractionResolve.identity;
-        scopes[21u] = RendererGpuTimingScope::s_RefractionClassifyTiles.identity;
-        scopes[22u] = RendererGpuTimingScope::s_RefractionClearTileArguments.identity;
-        scopes[23u] = RendererGpuTimingScope::s_OpticalBoundsFinalize.identity;
+        scopes[0u] = s_TimingScopeFrame.identity;
+        scopes[1u] = s_TimingScopeOpaqueRegular.identity;
+        scopes[2u] = s_TimingScopeShadowVisibility.identity;
+        scopes[3u] = s_TimingScopeLightSpaceShadowViews.identity;
+        scopes[4u] = s_TimingScopeLightSpaceShadowOpaqueCapture.identity;
+        scopes[5u] = s_TimingScopeLightSpaceShadowTransparentCapture.identity;
+        scopes[6u] = s_TimingScopeLightSpaceShadowShade.identity;
+        scopes[7u] = s_TimingScopeLightSpaceShadowMapOpaque.identity;
+        scopes[8u] = s_TimingScopeLightSpaceShadowMapTransparent.identity;
+        scopes[9u] = s_TimingScopeLightSpaceShadowFallbackOpaque.identity;
+        scopes[10u] = s_TimingScopeLightSpaceShadowFallbackTransparent.identity;
+        scopes[11u] = s_TimingScopeDeferredLighting.identity;
+        scopes[12u] = s_TimingScopeDeferredComposite.identity;
+        scopes[13u] = s_TimingScopeDeferredPresent.identity;
+        scopes[14u] = s_TimingScopeAvboitClear.identity;
+        scopes[15u] = s_TimingScopeAvboitOccupancy.identity;
+        scopes[16u] = s_TimingScopeAvboitDepthWarp.identity;
+        scopes[17u] = s_TimingScopeAvboitExtinction.identity;
+        scopes[18u] = s_TimingScopeAvboitIntegration.identity;
+        scopes[19u] = s_TimingScopeAvboitAccumulate.identity;
+        scopes[20u] = s_TimingScopeRefractionResolve.identity;
+        scopes[21u] = s_TimingScopeRefractionClassifyTiles.identity;
+        scopes[22u] = s_TimingScopeRefractionClearTileArguments.identity;
+        scopes[23u] = s_TimingScopeOpticalBoundsFinalize.identity;
 
         Array<Name, 2u> causticScopes;
-        causticScopes[0u] = RendererGpuTimingScope::s_CausticPhotons.identity;
-        causticScopes[1u] = RendererGpuTimingScope::s_CausticResolve.identity;
+        causticScopes[0u] = s_TimingScopeCausticPhotons.identity;
+        causticScopes[1u] = s_TimingScopeCausticResolve.identity;
 
         if(!PrepareTimingProbeScopes(this.m_graphics, scopes, s_AvboitTimingProbeName))
             return false;
@@ -150,19 +188,19 @@ class ShadowTimingRenderPass{
             return true;
 
         Array<Name, 13u> scopes;
-        scopes[0u] = RendererGpuTimingScope::s_Frame.identity;
-        scopes[1u] = RendererGpuTimingScope::s_OpaqueRegular.identity;
-        scopes[2u] = RendererGpuTimingScope::s_DeferredLighting.identity;
-        scopes[3u] = RendererGpuTimingScope::s_DeferredComposite.identity;
-        scopes[4u] = RendererGpuTimingScope::s_DeferredPresent.identity;
-        scopes[5u] = RendererGpuTimingScope::s_ShadowVisibility.identity;
-        scopes[6u] = RendererGpuTimingScope::s_ShadowOpaqueTrace.identity;
-        scopes[7u] = RendererGpuTimingScope::s_ShadowGeometryDownsample.identity;
-        scopes[8u] = RendererGpuTimingScope::s_ShadowOpaqueTemporal.identity;
-        scopes[9u] = RendererGpuTimingScope::s_ShadowOpaqueResolve.identity;
-        scopes[10u] = RendererGpuTimingScope::s_ShadowTransparentTrace.identity;
-        scopes[11u] = RendererGpuTimingScope::s_ShadowTransparentTemporal.identity;
-        scopes[12u] = RendererGpuTimingScope::s_ShadowTransparentResolve.identity;
+        scopes[0u] = s_TimingScopeFrame.identity;
+        scopes[1u] = s_TimingScopeOpaqueRegular.identity;
+        scopes[2u] = s_TimingScopeDeferredLighting.identity;
+        scopes[3u] = s_TimingScopeDeferredComposite.identity;
+        scopes[4u] = s_TimingScopeDeferredPresent.identity;
+        scopes[5u] = s_TimingScopeShadowVisibility.identity;
+        scopes[6u] = s_TimingScopeShadowOpaqueTrace.identity;
+        scopes[7u] = s_TimingScopeShadowGeometryDownsample.identity;
+        scopes[8u] = s_TimingScopeShadowOpaqueTemporal.identity;
+        scopes[9u] = s_TimingScopeShadowOpaqueResolve.identity;
+        scopes[10u] = s_TimingScopeShadowTransparentTrace.identity;
+        scopes[11u] = s_TimingScopeShadowTransparentTemporal.identity;
+        scopes[12u] = s_TimingScopeShadowTransparentResolve.identity;
 
         if(!PrepareTimingProbeScopes(this.m_graphics, scopes, s_ShadowTimingProbeName))
             return false;

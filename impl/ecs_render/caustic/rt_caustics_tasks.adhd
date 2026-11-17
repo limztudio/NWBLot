@@ -96,7 +96,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
     if(inputs.opticalScene.valid())
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.opticalScene));
     hardwarePhotonResourceUses.push_back(ReadUse(stageTargets.sceneGeometryDomain));
-    hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
+    hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
 
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
@@ -291,7 +291,7 @@ public:
         // A rejected record may retry before discard. Release the incomplete reservation before the retry's interval.
         Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, payload.graphics.getDevice(), commandList);
+        payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeCausticPhotons, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.causticPhotonTiming))
             return false;
         const b8 dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, payload.targets);
@@ -425,7 +425,7 @@ public:
             return true;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        payload.causticResolveTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticResolve, payload.graphics.getDevice(), commandList);
+        payload.causticResolveTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeCausticResolve, payload.graphics.getDevice(), commandList);
         payload.raytracingSystem.dispatchCausticGeometryDownsample(commandList, payload.targets);
         // The next callback ends timestamps on this same list. Close this nested marker before the recorder advances.
         return Core::FinishSplitGpuTimingMarker(&payload.causticResolveTiming);

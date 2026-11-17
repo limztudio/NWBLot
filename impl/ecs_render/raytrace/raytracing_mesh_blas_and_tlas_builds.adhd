@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd>
 #include <impl/ecs_render/raytrace/raytrace_internal.adhd>
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +94,23 @@ MeshBlasBuildPlanDecision ResolveMeshBlasBuildPlanDecision(
     decision.refitsBeforeBuild = blasRefitsSinceRebuild;
     decision.refitsAfterBuild = AdvanceAccelerationRefitCount(decision.performRefit, blasRefitsSinceRebuild);
     return decision;
+}
+
+void PreparedSceneTlasBuild::confirm(mut RendererRayTracingState state){
+    if(!this.m_ready)
+        return;
+
+    // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
+    RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(this.storageMatches(state), this.m_static, this.m_staticSceneHash, state.m_tlasStaticSceneHash, state.m_tlasStaticSceneHashValid, state.m_tlasBackingFresh);
+    this.clear();
+}
+
+b8 PreparedSceneTlasBuild::storageMatches(in RendererRayTracingState state)const{
+    return state.m_tlas.valid()
+        && state.m_tlas == this.m_tlas
+        && state.m_tlas.deref().getBackingBufferHandle() == this.m_backingBuffer
+        && state.m_tlasMaxInstances == this.m_maxInstances
+        && state.m_tlasHeapHandle == this.m_heapHandle;
 }
 
 
@@ -435,14 +454,6 @@ b8 PreparedMeshBlasBuilder::Record(const PreparedMeshBlasBuild& build, const b8 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsPreparedSceneTlasStorageReady(const RendererRayTracingState& state, const usize instanceCount)noexcept{
-    return state.m_tlas
-        && state.m_tlas->getBackingBufferHandle()
-        && state.m_tlasMaxInstances >= instanceCount
-        && state.m_tlasHeapHandle.valid()
-        && state.m_tlasHeapHandle.descriptorClass() == Core::GpuDescriptorClass::AccelStruct;
-}
-
 b8 PreparedSceneTlasBuild::capture(const RendererRayTracingState& state, const b8 staticScene, const u64 staticSceneHash, const Span<const Core::RayTracingInstanceDesc> instances, const Span<const Core::RayTracingAccelStructHandle> instanceBlases)noexcept{
     clear();
     if(instances.empty() || instances.size() != instanceBlases.size() || !IsPreparedSceneTlasStorageReady(state, instances.size()))
@@ -483,23 +494,6 @@ b8 PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandL
 
     commandList.buildTopLevelAccelStruct(m_tlas.get(), m_instances.data(), m_instances.size(), Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
     return true;
-}
-
-void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
-    if(!m_ready)
-        return;
-
-    // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
-    RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(storageMatches(state), m_static, m_staticSceneHash, state.m_tlasStaticSceneHash, state.m_tlasStaticSceneHashValid, state.m_tlasBackingFresh);
-    clear();
-}
-
-b8 PreparedSceneTlasBuild::storageMatches(const RendererRayTracingState& state)const noexcept{
-    return state.m_tlas
-        && state.m_tlas.get() == m_tlas.get()
-        && state.m_tlas->getBackingBufferHandle().get() == m_backingBuffer.get()
-        && state.m_tlasMaxInstances == m_maxInstances
-        && state.m_tlasHeapHandle == m_heapHandle;
 }
 
 

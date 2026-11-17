@@ -37,6 +37,21 @@ b8 ReleaseSkinningSourceReference(mut u32 inOutReferenceCount){
     return inOutReferenceCount == 0u;
 }
 
+b8 FinalizeRuntimeBufferUpload(
+    in Expected<BufferHandle, BufferSetupFailure> buffer,
+    in u64 handleValue,
+    in StringView label,
+    mut BufferHandle outBuffer
+){
+    if(buffer.has_value()){
+        outBuffer = buffer.value();
+        return true;
+    }
+    outBuffer.reset();
+    ReportRuntimeBufferUploadFailure(buffer.error(), label, handleValue);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -177,21 +192,6 @@ static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("MeshSkinningR
     return true;
 }
 
-[[nodiscard]] b8 FinalizeRuntimeBufferUpload(
-    Expected<Core::BufferHandle, BufferSetupFailure::Enum>&& buffer,
-    const MeshSkinningRuntimeInstance& instance,
-    const AStringView label,
-    Core::BufferHandle& outBuffer
-){
-    if(buffer){
-        outBuffer = Move(*buffer);
-        return true;
-    }
-    outBuffer.reset();
-    ReportRuntimeBufferUploadFailure(buffer.error(), label, instance.handle.value);
-    return false;
-}
-
 template<typename PayloadT>
 [[nodiscard]] b8 AssignRuntimeBuffer(
     const MeshSkinningRuntimeInstance& instance,
@@ -213,7 +213,7 @@ template<typename PayloadT>
     }
 
     auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, bufferName, payload, { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer });
-    return FinalizeRuntimeBufferUpload(Move(buffer), instance, label, outBuffer);
+    return FinalizeRuntimeBufferUpload(buffer, instance.handle.value, label, outBuffer);
 }
 
 [[nodiscard]] b8 AssignPaddedRawRuntimeBuffer(
@@ -233,7 +233,7 @@ template<typename PayloadT>
     }
 
     auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, bufferName, payload, { canHaveUavs, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
-    return FinalizeRuntimeBufferUpload(Move(buffer), instance, label, outBuffer);
+    return FinalizeRuntimeBufferUpload(buffer, instance.handle.value, label, outBuffer);
 }
 
 template<typename HandleMapT, typename InstanceMapT>

@@ -149,7 +149,7 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::Command
     commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resolve.m_combinedTemporal.m_pipeline.get());
     commandList.setPushConstants(&push, sizeof(push));
-    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowCombinedTemporal, m_graphics.getDevice(), commandList);
+    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeShadowCombinedTemporal, m_graphics.getDevice(), commandList);
 
     commandList.dispatch(groupsX, groupsY, 1u);
     m_rayTracingState.m_transparentShadowSamplingHistory.record(m_rayTracingState.m_softShadowSlotMask);

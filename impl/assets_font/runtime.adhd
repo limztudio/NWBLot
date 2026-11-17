@@ -11,6 +11,9 @@
 
 const i64 s_AdmittedFontFaceCount = 1;
 
+[cpp_name("::NWB::Impl::ValidateFontSource")]
+extern b8 ValidateFontSource(in Vector<u8> bytes, in u32 faceIndex);
+
 b8 IsAdmittedStaticScalableFontFace(
     in i64 faceCount,
     in i64 glyphCount,
@@ -53,6 +56,10 @@ b8 Font::loadBinary(in Span<u8> binary){
         return false;
     this = candidate;
     return true;
+}
+
+b8 Font::validatePayload()const{
+    return this.checkVirtualPath("Font::validatePayload") && ValidateFontSource(this.m_fontBytes, this.m_faceIndex);
 }
 
 
@@ -290,10 +297,6 @@ template<typename PathArenaT>
 b8 ValidateFontSourceNative(const Span<const u8> bytes, const u32 faceIndex, ::ArenaBase& arena){
     FreeTypeMemoryFace validator(arena);
     return validator.openAndValidate(bytes, faceIndex);
-}
-
-b8 Font::validatePayload()const noexcept{
-    return checkVirtualPath(FOUNDATION_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
 }
 
 Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){

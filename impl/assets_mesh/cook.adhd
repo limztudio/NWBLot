@@ -4,7 +4,9 @@
 
 #include <impl/assets_mesh/cook_meshlet_growth.adhd>
 #include <impl/assets_mesh/mesh_binary_codec.adhd>
+#include <impl/assets_mesh/skin_asset.adhd>
 #include <impl/assets_mesh/skin_cook.adhd>
+#include <impl/assets_skeleton/cook.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,6 +171,65 @@ b8 SerializeMeshBinaryPayload(
     );
 }
 
+Expected<Vector<SkeletonJointMatrix>> ParseSkinCookInverseBindMatrices(in Path nwbFilePath, in MetascriptValue asset){
+    Vector<SkeletonJointMatrix> values;
+
+    const Expected<Span<MetascriptValue>> matrices = ReadMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinInverseBindMatricesField);
+    if(!matrices.has_value())
+        return MakeUnexpected(Failure());
+
+    const Span<MetascriptValue> matrixList = matrices.value();
+    values.reserve(matrixList.size());
+    const String filePathText = PathToString(nwbFilePath);
+    for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
+        const Expected<SkeletonJointMatrix> matrix = ParseSkeletonJointMatrix(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_SkinInverseBindMatricesField);
+        if(!matrix.has_value())
+            return MakeUnexpected(Failure());
+
+        if(!ValidateSkinCookInverseBindMatrix(MatrixSingle(matrix.value()), filePathText, matrixIndex))
+            return MakeUnexpected(Failure());
+        values.push_back(matrix.value());
+    }
+
+    if(!ValidateSkinCookInverseBindMatricesNonEmpty(values.size(), filePathText))
+        return MakeUnexpected(Failure());
+    return values;
+}
+
+b8 ValidateSkinCookInfluenceJointIndexBounds(in Path nwbFilePath, in usize jointCount, in Span<SkinInfluence4> influences){
+    b8 invalid = jointCount > cast<usize>(u16.max) + 1u;
+    if(!invalid){
+        for(in SkinInfluence4 influence : influences){
+            if(TryFindOutOfRangeSkinInfluenceJoint(influence, cast<u32>(jointCount)).has_value()){
+                invalid = true;
+                break;
+            }
+        }
+    }
+    if(!invalid)
+        return true;
+
+    const String filePathText = PathToString(nwbFilePath);
+    return ValidateSkinCookInfluenceJointIndices(filePathText, jointCount, influences);
+}
+
+Expected<Skin> BuildSkinAssetFromPayload(
+    in Name virtualPath,
+    in AssetRef<Mesh> mesh,
+    in AssetRef<Skeleton> skeleton,
+    in Vector<SkinInfluence4> influences,
+    in Vector<SkeletonJointMatrix> inverseBindMatrices,
+    mut AssetArena arena
+){
+    Skin asset(arena, virtualPath);
+    asset.setMesh(mesh);
+    asset.setSkeleton(skeleton);
+    asset.setPayload(influences, inverseBindMatrices);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -256,68 +317,6 @@ static b8 ParseSourceMeshMeta(const Path& nwbFilePath, const Core::Metascript::V
         outEntry.meshletLocalVertexRefs,
         outEntry.meshletPrimitiveIndices
     );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_skin_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Metascript;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
-    Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
-
-    const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinInverseBindMatricesField);
-    if(!matrices)
-        return MakeUnexpected(matrices.error());
-
-    const auto& matrixList = (*matrices)->asList();
-    values.reserve(matrixList.size());
-    for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
-        const auto matrix = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_SkinInverseBindMatricesField);
-        if(!matrix)
-            return MakeUnexpected(Failure{});
-
-        if(!IsValidSkinInverseBindMatrix(LoadFloat(*matrix)) && !Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), arena, [&](const AStringView filePathText){ return ValidateSkinCookInverseBindMatrix(LoadFloat(*matrix), filePathText, matrixIndex); }))
-            return MakeUnexpected(Failure{});
-        values.push_back(*matrix);
-    }
-
-    if(values.empty() && !Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), arena, [&](const AStringView filePathText){ return ValidateSkinCookInverseBindMatricesNonEmpty(values.size(), filePathText); }))
-        return MakeUnexpected(Failure{});
-    return values;
-}
-
-[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry, Core::Assets::AssetArena& arena){
-    const usize jointCount = entry.inverseBindMatrices.size();
-    b8 invalid = jointCount > static_cast<usize>(Limit<u16>::s_Max) + 1u;
-    if(!invalid){
-        for(const SkinInfluence4& influence : entry.influences){
-            if(TryFindOutOfRangeSkinInfluenceJoint(influence, static_cast<u32>(jointCount)).has_value()){
-                invalid = true;
-                break;
-            }
-        }
-    }
-    if(!invalid)
-        return true;
-    return Core::Assets::AssetPathsDetail::ValidateWithNativeText(nwbFilePath.native(), arena, [&](const AStringView filePathText){ return ValidateSkinCookInfluenceJointIndices(filePathText, jointCount, entry.influences); });
 }
 
 
@@ -479,8 +478,6 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStri
 }
 
 Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
-    using namespace __hidden_skin_cook;
-
     SkinCookEntry entry(arena);
 
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix))
@@ -498,27 +495,21 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
-    if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, FOUNDATION_TEXT("Skin"), {}, true, entry.influences))
+    if(!ParseSkinInfluenceMetadataInto(nwbFilePath, asset, s_SkinMetaKind, {}, true, entry.influences))
         return MakeUnexpected(Failure{});
 
-    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
+    auto inverseBindMatricesResult = ParseSkinCookInverseBindMatrices(arena, nwbFilePath, asset);
     if(!inverseBindMatricesResult)
         return MakeUnexpected(Failure{});
-    entry.inverseBindMatrices = Move(*inverseBindMatricesResult);
-    if(!ValidateSkinInfluenceJointIndices(nwbFilePath, entry, arena))
+    AssignVector(entry.inverseBindMatrices, *inverseBindMatricesResult);
+    if(!ValidateSkinCookInfluenceJointIndexBounds(nwbFilePath, entry.inverseBindMatrices.size(), entry.influences))
         return MakeUnexpected(Failure{});
 
     return entry;
 }
 
 Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena){
-    Skin asset(arena, skinEntry.virtualPath);
-    asset.setMesh(skinEntry.mesh);
-    asset.setSkeleton(skinEntry.skeleton);
-    asset.setPayload(Move(skinEntry.influences), Move(skinEntry.inverseBindMatrices));
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
+    return BuildSkinAssetFromPayload(arena, skinEntry.virtualPath, skinEntry.mesh, skinEntry.skeleton, skinEntry.influences, skinEntry.inverseBindMatrices, arena);
 }
 
 

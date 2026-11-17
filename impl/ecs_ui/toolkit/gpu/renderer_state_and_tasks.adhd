@@ -23,15 +23,6 @@ b8 ShouldExpandGpuRgbSdfUpload(in u32 channelCount, in b8 rgbSampledSupported){
     return channelCount == s_GpuRgbChannelCount && !rgbSampledSupported;
 }
 
-b8 IsGpuQueueTimelineComplete(
-    in b8 timelineValid,
-    in b8 queueMatches,
-    in u64 completedValue,
-    in u64 requiredValue
-){
-    return timelineValid && queueMatches && completedValue >= requiredValue;
-}
-
 b8 CanPrepareGpuPresentationFrame(in b8 acquiredValid, in b8 hasSharedResources, in u32 width, in u32 height){
     return acquiredValid && hasSharedResources && width != 0u && height != 0u;
 }
@@ -40,6 +31,15 @@ u32 ResolveGpuPresentationMode(in b8 hdr10Active, in u32 hdr10Mode, in u32 sdrMo
     if(hdr10Active)
         return hdr10Mode;
     return sdrMode;
+}
+
+b8 MatchesGpuAcquiredPresentationFrame(in AcquiredPresentationFrame first, in AcquiredPresentationFrame second){
+    return
+        first.valid() && second.valid()
+        && first.backBuffer.texture == second.backBuffer.texture && first.framebuffer == second.framebuffer
+        && first.backBuffer.index == second.backBuffer.index && first.backBuffer.nativeInitialState == second.backBuffer.nativeInitialState
+        && first.backBuffer.availabilityCompletion == second.backBuffer.availabilityCompletion
+    ;
 }
 
 
@@ -805,32 +805,8 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept{
-    if(descriptor.valid())
-        graphics.getDevice().getDescriptorHeap().free(descriptor);
-}
-
-b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token){
-    if(!token.valid())
-        return true;
-    if(!token.hasPhysicalQueueIdentity())
-        return false;
-    const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
-    const auto timeline = device.getQueueTimelineSnapshot(queue);
-    return timeline && IsGpuQueueTimelineComplete(timeline->valid(), timeline->queue == queue, timeline->completedValue, token.value);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept{
-    return
-        first.valid() && second.valid()
-        && first.backBuffer.texture == second.backBuffer.texture && first.framebuffer == second.framebuffer
-        && first.backBuffer.index == second.backBuffer.index && first.backBuffer.nativeInitialState == second.backBuffer.nativeInitialState
-        && first.backBuffer.availabilityCompletion == second.backBuffer.availabilityCompletion
-    ;
+    return MatchesGpuAcquiredPresentationFrame(first, second);
 }
 
 

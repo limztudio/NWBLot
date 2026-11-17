@@ -543,7 +543,7 @@ b8 RecordLightSpaceResolve(
     u32 groupsY = 0u;
     ResolveLightSpaceResolveDispatchGroups(push.width, push.height, push.receiverFactor, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE), groupsX, groupsY);
     {
-        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowMapTransparent : RendererGpuTimingScope::s_LightSpaceShadowMapOpaque;
+        const auto& scope = transparent ? s_TimingScopeLightSpaceShadowMapTransparent : s_TimingScopeLightSpaceShadowMapOpaque;
         Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
 
         commandList.dispatch(groupsX, groupsY, 1u);
@@ -557,7 +557,7 @@ b8 RecordLightSpaceResolve(
     heap.bindCompute(commandList, *fallback);
     commandList.setPushConstants(&push, sizeof(push));
     {
-        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent : RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque;
+        const auto& scope = transparent ? s_TimingScopeLightSpaceShadowFallbackTransparent : s_TimingScopeLightSpaceShadowFallbackOpaque;
         Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
 
         commandList.dispatch(groupsX, groupsY, 1u);

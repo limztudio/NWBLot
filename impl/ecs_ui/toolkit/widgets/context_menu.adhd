@@ -2,92 +2,65 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/widgets/list.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
+class ContextMenuState : NoCopy{
+    public PopupState m_popup;
+    public ListState m_list;
+    public WidgetId m_owner;
+    public WidgetId m_anchorWidget;
+    public u64 m_ownerDeclaration = 0u;
+    public u64 m_anchorDeclaration = 0u;
+    public u64 m_revision = 1u;
+    public Rect m_anchor;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ContextMenuState final : NoCopy{
-    friend class Builder;
-    friend class ContextMenuCoordinator;
-
-
-public:
-    ContextMenuState()noexcept = default;
-    ContextMenuState(ContextMenuState&&) = delete;
-
-
-public:
-    ContextMenuState& operator=(ContextMenuState&&) = delete;
-
-
-public:
-    [[nodiscard]] b8 open(const Rect& anchor)noexcept{
+    public b8 open(in Rect anchor){
         if(!IsValidUiRect(anchor))
             return false;
-        m_popup.close();
-        m_popup.open();
-        m_list.select(0u);
-        if(!m_list.scrollTo(0.0))
+        this.m_popup.close();
+        this.m_popup.open();
+        this.m_list.select(0u);
+        if(!this.m_list.scrollTo(0.0))
             TerminateInvariant();
-        m_anchor = anchor;
-        AdvanceNonWrappingRevision(m_revision);
+        this.m_anchor = anchor;
+        AdvanceNonWrappingRevision(this.m_revision);
         return true;
     }
-    void close()noexcept{
-        m_popup.close();
-        m_list.select(0u);
-        AdvanceNonWrappingRevision(m_revision);
+
+    public void close(){
+        this.m_popup.close();
+        this.m_list.select(0u);
+        AdvanceNonWrappingRevision(this.m_revision);
     }
-    [[nodiscard]] b8 isOpen()const noexcept{ return m_popup.isOpen(); }
 
-    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_popup.instanceGeneration(); }
+    public b8 isOpen()const{
+        return this.m_popup.isOpen();
+    }
 
-    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+    public u64 instanceGeneration()const{
+        return this.m_popup.instanceGeneration();
+    }
 
-    [[nodiscard]] u64 cursorKey()const noexcept{ return m_list.cursorKey(); }
+    public u64 revision()const{
+        return this.m_revision;
+    }
 
-    [[nodiscard]] const ListState& listState()const noexcept{ return m_list; }
+    public u64 cursorKey()const{
+        return this.m_list.cursorKey();
+    }
 
-    [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_popup.placement(); }
+    public in ListState listState()const{
+        return this.m_list;
+    }
 
-
-private:
-    PopupState m_popup;
-    ListState m_list;
-    WidgetId m_owner;
-    WidgetId m_anchorWidget;
-    u64 m_ownerDeclaration = 0u;
-    u64 m_anchorDeclaration = 0u;
-    u64 m_revision = 1u;
-    Rect m_anchor;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public in PopupPlacement placement()const{
+        return this.m_popup.placement();
+    }
 }
 
 

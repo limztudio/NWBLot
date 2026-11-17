@@ -245,7 +245,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     ;
     const auto surfelIrradianceClearTaskResult = context.graph.addTask<ECSRenderDetail::FloatTextureClearGraphTask>(
         surfelIrradianceClearDesc,
-        ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = surfelIrradiance, .subresources = s_FramebufferSubresources, .floatValue = ECSRenderDetail::s_SurfelIrradianceClearColor, });
+        ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = surfelIrradiance, .subresources = s_FramebufferSubresources, .floatValue = s_SurfelIrradianceClearColor, });
     if(!surfelIrradianceClearTaskResult){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
         return false;

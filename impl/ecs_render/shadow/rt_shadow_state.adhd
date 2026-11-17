@@ -44,8 +44,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Core::Color s_ShadowVisibilityAllLitClearColor = Core::Color(1.f, 1.f, 1.f, 1.f);
-inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_SCENE_SHADOW_SLOT_COUNT);
 using Impl::s_ShadowRqSoftReceiverFactorOffset;
 using Impl::s_ShadowGeometryDownsampleReceiverFactorOffset;
 using Impl::s_ShadowCombinedTemporalReceiverFactorOffset;

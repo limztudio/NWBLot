@@ -23,6 +23,42 @@ b8 IsMaterialResourceParameterValue(in StringView valueText, mut ScratchArena sc
     return HasReservedAssetVirtualRoot(trimmed, scratchArena);
 }
 
+Expected<Vector<Name>> CollectSortedMaterialResourceDependencyNames(
+    in HashMap<CompactString, CompactString> parameters,
+    mut ScratchArena scratchArena
+){
+    Vector<StringView> resourceParameterValues;
+    resourceParameterValues.reserve(parameters.size());
+    for(in auto entry : parameters){
+        const StringView valueView = TrimView(entry.second.view());
+        if(IsMaterialResourceParameterValue(valueView, scratchArena))
+            resourceParameterValues.push_back(valueView);
+    }
+
+    for(usize i = 1u; i < resourceParameterValues.size(); ++i){
+        const StringView current = resourceParameterValues[i];
+        usize j = i;
+        while(j > 0u && current < resourceParameterValues[j - 1u]){
+            resourceParameterValues[j] = resourceParameterValues[j - 1u];
+            --j;
+        }
+        resourceParameterValues[j] = current;
+    }
+
+    Vector<Name> resourceNames;
+    resourceNames.reserve(resourceParameterValues.size());
+    for(in StringView resourceValue : resourceParameterValues){
+        const Expected<Optional<Name>, NameTextError> resourceName = ToName(resourceValue);
+        Name resolvedName = s_NameNone;
+        if(resourceName.has_value() && resourceName.value().has_value())
+            resolvedName = resourceName.value().value();
+        if(!IsValidMaterialResourceDependencyName(resourceName.has_value() && resourceName.value().has_value(), resolvedName))
+            return MakeUnexpected(Failure());
+        resourceNames.push_back(resolvedName);
+    }
+    return resourceNames;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,19 +133,11 @@ static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCont
             return false;
     }
 
-    Vector<AStringView, Core::Alloc::ScratchArena> resourceParameterValues(context.scratchArena);
-    resourceParameterValues.reserve(materialEntry->parameters.size());
-    for([[maybe_unused]] const auto& [paramKey, paramValue] : materialEntry->parameters){
-        const AStringView valueView = TrimView(paramValue);
-        if(IsMaterialResourceParameterValue(valueView, context.scratchArena))
-            resourceParameterValues.push_back(valueView);
-    }
-    Sort(resourceParameterValues.begin(), resourceParameterValues.end());
-    for(const AStringView resourceValue : resourceParameterValues){
-        const auto resourceName = Name::FromText(resourceValue);
-        if(!IsValidMaterialResourceDependencyName(resourceName.has_value(), resourceName ? *resourceName : s_NameNone))
-            return false;
-        if(!collector.addAssetDependency(*resourceName))
+    const auto resourceNames = CollectSortedMaterialResourceDependencyNames(context.scratchArena, materialEntry->parameters, context.scratchArena);
+    if(!resourceNames)
+        return false;
+    for(const Name resourceName : *resourceNames){
+        if(!collector.addAssetDependency(resourceName))
             return false;
     }
     return true;

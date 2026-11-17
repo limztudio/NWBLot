@@ -156,8 +156,7 @@ private:
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(const Ui::EditBoxOptions& options, b8 inputMethod, Entry& entry, Ui::EditModel& model);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
-        const Int4 bounds = UiEditGeometry().nativeCaretBounds(geometry.placement.caret, m_display);
-        return { bounds.x, bounds.y, bounds.z, bounds.w };
+        return MakeUiEditNativeCaretRect(geometry, m_display);
     }
     void cancelTransfers();
     void drainPublications();

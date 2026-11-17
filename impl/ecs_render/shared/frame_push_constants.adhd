@@ -22,6 +22,7 @@ const Name s_PrepareArena = "impl/ecs_render/prepare";
 const Name s_RenderArena = "impl/ecs_render/render";
 const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
 const u32 s_FullscreenTriangleVertexCount = 3u;
+const u32 s_EmulatedVertexBufferIndex = 0u;
 const u32 s_EmulatedVertexStride = 64u;
 const StringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
 const StringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";

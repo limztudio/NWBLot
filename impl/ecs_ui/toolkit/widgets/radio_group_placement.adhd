@@ -236,3 +236,104 @@ void CommitRadioGroupReconcileState(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// An optional guard is borrowed only during reconciliation to stop source calls when its declaration context fails.
+interface IRadioGroupReconcileGuard{
+    b8 current()const;
+}
+
+// Application state is borrowed through its enclosing Builder scope; accepted public intents retire copied input.
+class RadioGroupState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public u64 m_selected = 0u;
+    public u64 m_cursor = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+    public RadioGroupPlacement m_placement;
+    public b8 m_reconciling = false;
+    public b8 m_reentryObserved = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 selectedKey()const{
+        return this.m_selected;
+    }
+
+    public u64 cursorKey()const{
+        return this.m_cursor;
+    }
+
+    public in RadioGroupPlacement placement()const{
+        return this.m_placement;
+    }
+
+    public RadioGroupSnapshot snapshot()const{
+        RadioGroupSnapshot value;
+        value.instanceGeneration = this.m_instanceGeneration;
+        value.inputGeneration = this.m_inputGeneration;
+        value.revision = this.m_revision;
+        value.selectedKey = this.m_selected;
+        value.cursorKey = this.m_cursor;
+        value.sourceGeneration = this.m_sourceGeneration;
+        value.sourceRevision = this.m_sourceRevision;
+        return value;
+    }
+
+    public b8 matches(in RadioGroupSnapshot value)const{
+        return this.snapshot() == value;
+    }
+
+    public void select(in u64 key){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selected = key;
+        this.m_cursor = key;
+    }
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        ResetRadioGroupStateFields(this.m_selected, this.m_cursor, this.m_sourceGeneration, this.m_sourceRevision, this.m_placement);
+    }
+}
+
+b8 ApplyRadioGroupControlAction(
+    in RadioGroupChoices choices,
+    in RadioGroupOptions options,
+    in ControlAction action,
+    mut RadioGroupState state,
+    mut RadioGroupResult result
+){
+    if(state.m_reconciling){
+        state.m_reentryObserved = true;
+        return false;
+    }
+    ControlToken token;
+    token.instanceGeneration = state.m_inputGeneration;
+    token.contentGeneration = state.m_sourceGeneration;
+    token.contentRevision = state.m_sourceRevision;
+    u64 selected = state.m_selected;
+    u64 cursor = state.m_cursor;
+    if(!TryApplyRadioGroupControlAction(choices, options, action, token, state.m_selected, state.m_cursor, selected, cursor, result))
+        return false;
+    AdvanceNonWrappingRevision(state.m_revision);
+    state.m_selected = selected;
+    state.m_cursor = cursor;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

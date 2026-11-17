@@ -76,6 +76,10 @@ class CausticLightSelector{
     }
 };
 
+u32 ResolveCausticLights(in Span<f32> causticImportance, in u32 refractiveInstanceCount, mut Span<SceneLightGpuData> lights){
+    return CausticLightSelector().assignSlots(causticImportance, refractiveInstanceCount, lights);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

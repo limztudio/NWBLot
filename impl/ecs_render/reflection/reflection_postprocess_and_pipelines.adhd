@@ -211,7 +211,7 @@ b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 he
         if(
             !preparePipeline(&ReflectionSubsystem::temporalCs, Core::ShaderArchive::s_DefaultVariant, m_temporalPipeline, m_temporalShader)
             || !prepareImage(m_history, s_ReflectionHistoryDescriptorIndex, s_ReflectionOpaqueHistoryName)
-            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, s_ReflectionGpuTimingQueriesPerRange)
+            || !m_graphics.gpuTiming().prepareScopeQueries(s_TimingScopeReflectionTemporal.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
             return false;
     }
@@ -220,7 +220,7 @@ b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 he
         if(
             !preparePipeline(&ReflectionSubsystem::spatialCs, ResolveReflectionSpatialVariant(radiusIndex), m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex])
             || !prepareImage(m_spatial, s_ReflectionSpatialDescriptorIndex, s_ReflectionOpaqueSpatialName)
-            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, s_ReflectionGpuTimingQueriesPerRange)
+            || !m_graphics.gpuTiming().prepareScopeQueries(s_TimingScopeReflectionSpatial.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
             return false;
     }

@@ -183,7 +183,6 @@ b8 ReadSkeletonJointsPayload(
 b8 SerializeSkeletonBinaryPayload(
     in Span<SkeletonJoint> joints,
     in HashMap<Name, u32> jointIndices,
-    mut Span<NameHash> jointNameHashes,
     mut Vector<u8> outBinary
 ){
     usize reserveBytes = s_SkeletonHeaderBinaryBytes;
@@ -192,6 +191,7 @@ b8 SerializeSkeletonBinaryPayload(
         return false;
     }
 
+    Vector<NameHash> jointNameHashes;
     CollectSkeletonJointNameHashes(joints.size(), jointIndices, jointNameHashes);
 
     outBinary.clear();

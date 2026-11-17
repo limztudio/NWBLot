@@ -5,6 +5,8 @@
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
 #include <impl/ecs_render/csg/renderer_csg_types.adhd>
 #include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -537,6 +539,65 @@ void RendererAvboitSystem::renderAvboitMaterialPass(
     commandList.endRenderPass();
 }
 
+b8 DrawInputsMatch(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
+    const MaterialPassMeshResourceSnapshot leftMesh = left.meshResources;
+    const MaterialPassMeshResourceSnapshot rightMesh = right.meshResources;
+    if(
+        !AvboitReuseDrawScalarComparisonPolicy().matchesScalarDrawFields(
+            left.meshKey,
+            right.meshKey,
+            left.instanceIndex,
+            right.instanceIndex,
+            left.pipelineKey.material,
+            right.pipelineKey.material,
+            left.pipelineKey.twoSided,
+            right.pipelineKey.twoSided,
+            left.pipelineKey.csgEvaluatorVariant,
+            right.pipelineKey.csgEvaluatorVariant,
+            left.materialConstantByteOffset,
+            right.materialConstantByteOffset,
+            left.shadingModelId,
+            right.shadingModelId,
+            left.meshletConeCullScaleSafe,
+            right.meshletConeCullScaleSafe,
+            leftMesh.meshletCount,
+            rightMesh.meshletCount,
+            leftMesh.meshletPrimitiveIndexCount,
+            rightMesh.meshletPrimitiveIndexCount,
+            leftMesh.runtimeMesh,
+            rightMesh.runtimeMesh,
+            leftMesh.dynamicMeshletBoundsFresh,
+            rightMesh.dynamicMeshletBoundsFresh,
+            leftMesh.dynamicMeshletConesFresh,
+            rightMesh.dynamicMeshletConesFresh,
+            leftMesh.emulationIndexByteOffset,
+            rightMesh.emulationIndexByteOffset,
+            left.pipelineResources.indexedGeometryOutput,
+            right.pipelineResources.indexedGeometryOutput
+        )
+        || leftMesh.emulationVertexBuffer != rightMesh.emulationVertexBuffer
+        || leftMesh.emulationVertexHeapHandle != rightMesh.emulationVertexHeapHandle
+        || !leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers)
+    )
+        return false;
+    // The four eligible AVBOIT passes derive equal generation flags from the retained freshness/two-sided/cull inputs.
+    for(usize index = 0u; index < leftMesh.geometryHeapHandles.size(); ++index){
+        if(leftMesh.geometryHeapHandles[index] != rightMesh.geometryHeapHandles[index])
+            return false;
+    }
+    return true;
+}
+
+b8 FrameBindingsMatch(in MeshFrameBindingSnapshot left, in MeshFrameBindingSnapshot right){
+    return
+        left.instanceBuffer == right.instanceBuffer && left.materialTypedBuffer == right.materialTypedBuffer
+        && left.meshView.buffer == right.meshView.buffer && left.meshView.heapHandle == right.meshView.heapHandle
+        && left.instanceHeapHandle == right.instanceHeapHandle && left.materialTypedHeapHandle == right.materialTypedHeapHandle
+        && left.instanceBufferCapacity == right.instanceBufferCapacity
+        && left.materialTypedBufferCapacity == right.materialTypedBufferCapacity
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -595,65 +656,6 @@ namespace __hidden_avboit_pass_and_geometry_reuse{
     return true;
 }
 
-[[nodiscard]] static b8 DrawInputsMatch(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
-    const MaterialPassMeshResourceSnapshot& leftMesh = left.meshResources;
-    const MaterialPassMeshResourceSnapshot& rightMesh = right.meshResources;
-    if(
-        !AvboitReuseDrawScalarComparisonPolicy().matchesScalarDrawFields(
-            left.meshKey,
-            right.meshKey,
-            left.instanceIndex,
-            right.instanceIndex,
-            left.pipelineKey.material,
-            right.pipelineKey.material,
-            left.pipelineKey.twoSided,
-            right.pipelineKey.twoSided,
-            left.pipelineKey.csgEvaluatorVariant,
-            right.pipelineKey.csgEvaluatorVariant,
-            left.materialConstantByteOffset,
-            right.materialConstantByteOffset,
-            left.shadingModelId,
-            right.shadingModelId,
-            left.meshletConeCullScaleSafe,
-            right.meshletConeCullScaleSafe,
-            leftMesh.meshletCount,
-            rightMesh.meshletCount,
-            leftMesh.meshletPrimitiveIndexCount,
-            rightMesh.meshletPrimitiveIndexCount,
-            leftMesh.runtimeMesh,
-            rightMesh.runtimeMesh,
-            leftMesh.dynamicMeshletBoundsFresh,
-            rightMesh.dynamicMeshletBoundsFresh,
-            leftMesh.dynamicMeshletConesFresh,
-            rightMesh.dynamicMeshletConesFresh,
-            leftMesh.emulationIndexByteOffset,
-            rightMesh.emulationIndexByteOffset,
-            left.pipelineResources.indexedGeometryOutput,
-            right.pipelineResources.indexedGeometryOutput
-        )
-        || leftMesh.emulationVertexBuffer != rightMesh.emulationVertexBuffer
-        || leftMesh.emulationVertexHeapHandle != rightMesh.emulationVertexHeapHandle
-        || !leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers)
-    )
-        return false;
-    // The four eligible AVBOIT passes derive equal generation flags from the retained freshness/two-sided/cull inputs.
-    for(usize index = 0u; index < LengthOf(leftMesh.geometryHeapHandles); ++index){
-        if(leftMesh.geometryHeapHandles[index] != rightMesh.geometryHeapHandles[index])
-            return false;
-    }
-    return true;
-}
-
-[[nodiscard]] static b8 FrameBindingsMatch(const MeshFrameBindingSnapshot& left, const MeshFrameBindingSnapshot& right)noexcept{
-    return
-        left.instanceBuffer == right.instanceBuffer && left.materialTypedBuffer == right.materialTypedBuffer
-        && left.meshView.buffer == right.meshView.buffer && left.meshView.heapHandle == right.meshView.heapHandle
-        && left.instanceHeapHandle == right.instanceHeapHandle && left.materialTypedHeapHandle == right.materialTypedHeapHandle
-        && left.instanceBufferCapacity == right.instanceBufferCapacity
-        && left.materialTypedBufferCapacity == right.materialTypedBufferCapacity
-    ;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -704,7 +706,7 @@ b8 AvboitGeneratedGeometryReuse::matches(
     const b8 eligibleGroup = m_captured && m_producer.valid() && __hidden_avboit_pass_and_geometry_reuse::EligibleGroup(draws, instances, frameBindings, pass, m_arena);
     if(
         !CanMatchAvboitReusableGeometry(m_captured, m_producer.valid(), eligibleGroup, m_draws.size(), draws.regular.computeDrawItems.size())
-        || !__hidden_avboit_pass_and_geometry_reuse::FrameBindingsMatch(m_frameBindings, frameBindings)
+        || !FrameBindingsMatch(m_frameBindings, frameBindings)
         || FOUNDATION_MEMCMP(m_viewBytes.data(), &view, sizeof(view)) != 0
     ){
         reset();
@@ -712,7 +714,7 @@ b8 AvboitGeneratedGeometryReuse::matches(
     }
     for(usize index = 0u; index < m_draws.size(); ++index){
         const MaterialPassDrawItem& current = draws.regular.computeDrawItems[index];
-        if(!__hidden_avboit_pass_and_geometry_reuse::DrawInputsMatch(m_draws[index], current) || FOUNDATION_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0){
+        if(!DrawInputsMatch(m_draws[index], current) || FOUNDATION_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0){
             reset();
             return false;
         }

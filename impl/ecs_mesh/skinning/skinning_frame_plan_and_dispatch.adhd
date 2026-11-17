@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
+#include <impl/ecs_mesh/skinning/runtime_instance.adhd>
+#include <impl/ecs_mesh/skinning/submission_state.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SkinningFramePlanFlags{
     public b8 hasActiveSkin = false;
     public b8 copiesRestStreams = false;
@@ -84,6 +92,32 @@ b8 ValidateFramePlanDispatchState(
 
 void LogSkinningFramePlanError(in StringView actionLabel, in StringView detailLabel, in u64 handleValue){
     error("MeshSkinningSystem: failed to {} {} for runtime mesh '{}'", actionLabel, detailLabel, handleValue);
+}
+
+void ConfirmMeshSkinningInstanceDispatch(
+    in MeshSkinningGraphDispatchPlan plan,
+    mut MeshSkinningRuntimeInstance instance,
+    mut MeshSkinningRuntimeResources resources
+){
+    if(instance.editRevision != plan.submissionCommit.editRevision)
+        return;
+    if(!CanConfirmGraphOwnedSkinningDispatch(
+        plan.updatesMeshletBounds,
+        plan.localBoundsResource.valid(),
+        plan.meshletLocalBoundsResource.valid(),
+        resources.editRevision,
+        plan.submissionCommit.editRevision,
+        resources.buffers == CaptureMeshSkinningResourceBuffers(instance),
+        resources.bindlessResourceSlotsBuffer == plan.bindlessResourceSlotsBuffer,
+        resources.bindlessHeapHandles.resourceSlots == plan.bindlessResourceSlotsDescriptor,
+        resources.bindlessResourceSlots == plan.bindlessResourceSlotsPayload
+    ))
+        return;
+
+    if(!instance.deformationState.accept(plan.deformationCandidate))
+        return;
+
+    ApplyMeshSkinningSubmissionCommit(true, instance.editRevision, plan.submissionCommit, instance.dirtyFlags, resources.bindlessResourceSlotsUploaded);
 }
 
 
@@ -381,7 +415,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     const MeshSkinningPushConstants pushConstants = MakeMeshSkinningPushConstants(plan.meshletCount, plan.skinCount, plan.jointCount, plan.skinningMode, plan.bindlessResourceSlots);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, device, commandList);
+        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), s_TimingScopeMeshSkinning, device, commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
     }
@@ -420,7 +454,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
     const MeshletBoundsPushConstants boundsPushConstants = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
     commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, device, commandList);
+        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), s_TimingScopeMeshSkinningMeshletBounds, device, commandList);
 
         commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
     }
@@ -440,7 +474,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
 
         commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
         {
-            Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, device, commandList);
+            Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), s_TimingScopeMeshSkinningRepackNormals, device, commandList);
 
             commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
         }
@@ -450,30 +484,13 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
 
 void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept{
     MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(plan.handle);
-    if(!instance || instance->editRevision != plan.submissionCommit.editRevision)
+    if(!instance)
         return;
 
     const auto foundResources = m_runtimeResources.find(plan.handle.value);
     if(foundResources == m_runtimeResources.end())
         return;
-    MeshSkinningRuntimeResources& resources = foundResources.value();
-    if(!CanConfirmGraphOwnedSkinningDispatch(
-        plan.updatesMeshletBounds,
-        plan.localBoundsResource.valid(),
-        plan.meshletLocalBoundsResource.valid(),
-        resources.editRevision,
-        plan.submissionCommit.editRevision,
-        resources.buffers == CaptureMeshSkinningResourceBuffers(*instance),
-        resources.bindlessResourceSlotsBuffer.get() == plan.bindlessResourceSlotsBuffer.get(),
-        resources.bindlessHeapHandles.resourceSlots == plan.bindlessResourceSlotsDescriptor,
-        resources.bindlessResourceSlots == plan.bindlessResourceSlotsPayload
-    ))
-        return;
-
-    if(!instance->deformationState.accept(plan.deformationCandidate))
-        return;
-
-    ApplyMeshSkinningSubmissionCommit(true, instance->editRevision, plan.submissionCommit, instance->dirtyFlags, resources.bindlessResourceSlotsUploaded);
+    ConfirmMeshSkinningInstanceDispatch(plan, *instance, foundResources.value());
 }
 
 

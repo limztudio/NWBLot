@@ -444,14 +444,14 @@ void SoftShadowTemporalMergeRecorder::record(
     const u32 historyValid = EncodeShadowHistoryValidFlag(m_historyReadable);
     FOUNDATION_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
     if(!graphOwnsSoftTraceInputState)
-        m_commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        m_commandList.setTextureState(resources.softTrace, s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
     if(!graphOwnsMergeTemporalEntryStates){
         if(m_historyReadable){
-            m_commandList.setTextureState(resources.historyIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-            m_commandList.setTextureState(resources.momentsIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+            m_commandList.setTextureState(resources.historyIn, s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+            m_commandList.setTextureState(resources.momentsIn, s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         }
-        m_commandList.setTextureState(resources.historyOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        m_commandList.setTextureState(resources.momentsOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        m_commandList.setTextureState(resources.historyOut, s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        m_commandList.setTextureState(resources.momentsOut, s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     }
     if(!graphOwnsMergeCurrentGeometryEntryState)
         m_commandList.setTextureState(m_targets.shadowSoftGeometry.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -529,8 +529,8 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
 
     // Coarse transmittance feeds both adaptive resolve modes.
     commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
-    commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     SwShadowHeapPushConstants coarsePush = makePush();
     PopulateSwShadowViewportPush(targets.width, targets.height, coarseWidth, coarseHeight, coarsePush);
@@ -540,7 +540,7 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
     commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
     // Synchronize the coarse write before resolve.
-    commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     if(compact){
@@ -553,8 +553,8 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
         commandList.commitBarriers();
 
         // Classify interpolated interiors and append traceable edges.
-        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         SwShadowHeapPushConstants classifyPush = makePush();
         PopulateSwShadowClassifyPush(targets.width, targets.height, coarseWidth, coarseHeight, state.m_swShadowEdgeListCapacity, classifyPush);
@@ -566,7 +566,7 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
         // Classify produces the list and in-place visibility writes.
         commandList.setBufferState(state.m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(state.m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
         // Build indirect dispatch arguments from the clamped list count.
@@ -586,7 +586,7 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
 
         SwShadowHeapPushConstants tracePush = makePush();
         PopulateSwShadowIndirectTracePush(targets.width, targets.height, static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP), tracePush);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(state.m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
         commandList.commitBarriers();
         Core::ComputeState computeStateIndirect = RayTracingDetail::MakeComputePassState(state.m_swShadowTransparentIndirectPipeline);
@@ -598,8 +598,8 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
     }
     else{
         // Full-resolution adaptive fallback.
-        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         SwShadowHeapPushConstants resolvePush = makePush();
         PopulateSwShadowViewportPush(targets.width, targets.height, coarseWidth, coarseHeight, resolvePush);
@@ -617,8 +617,8 @@ void SoftwareAdaptiveShadowRecorder::Record(const GraphOwnedAdaptiveShadowPlan* 
 void SoftwareTransparentShadowTraceRecorder::Record(const SoftwareTransparentShadowTraceInputs& inputs, const RendererRayTracingState& state, Core::CommandList& commandList, DeferredFrameTargets& targets, Core::GpuDescriptorHeap& heap){
     // The software route is retained for devices without hardware ray queries.
     if(!inputs.graphOwnsOpaqueToTransparentBoundary){
-        commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.transparentSoftHalf.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     }
     commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
     if(!inputs.graphOwnsOpaqueToTransparentBoundary)
@@ -629,7 +629,7 @@ void SoftwareTransparentShadowTraceRecorder::Record(const SoftwareTransparentSha
         // These reads also belong to the split trace task; unsplit phases retain local transitions.
         commandList.setTextureState(targets.shadowSoftGeometry.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(inputs.historyFrontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(inputs.historyFrontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
     }
     const SoftwareTransparentSamplingPush tracePush = MakeSoftwareTransparentSamplingPush(

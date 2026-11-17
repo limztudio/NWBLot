@@ -2,14 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/persistent_state.h>
@@ -26,8 +31,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererRayTracingSystem;
-class DeferredFrameTargets;
-class DeferredLightingGraphResources;
 
 
 struct SurfelGiGraphContext{
@@ -58,14 +61,6 @@ NWB_IMPL_END
 
 [cpp_name("::NWB::Impl::SurfelGiGraphContext")]
 extern class SurfelGiGraphContext;
-[cpp_name("::NWB::Impl::DeferredLightingGraphResources")]
-extern class DeferredLightingGraphResources : NoCopy;
-[cpp_name("::NWB::Impl::DeferredFrameTargets")]
-extern class DeferredFrameTargets : NoCopy;
-[cpp_name("::NWB::Impl::RayTracingDeferredGraphResourceSnapshot")]
-extern class RayTracingDeferredGraphResourceSnapshot;
-[cpp_name("::NWB::Impl::RayTracingSurfelPersistentResourceSnapshot")]
-extern class RayTracingSurfelPersistentResourceSnapshot;
 
 [modular]
 class SurfelGiGraphCoordinator : NoCopy{

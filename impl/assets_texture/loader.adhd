@@ -52,6 +52,21 @@ class TextureMipDecoder : NoCopy{
     );
 };
 
+Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(
+    in Texture textureAsset,
+    in TextureMipLevel mip,
+    in u32 mipLevel,
+    in Format format
+){
+    if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4)
+        return this.decodeLdr(textureAsset, mip, mipLevel, format);
+    if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4)
+        return this.decodeHdr(textureAsset, mip, mipLevel, format);
+
+    error("TextureAssetLoader: unsupported texture payload format");
+    return MakeUnexpected(Failure());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -608,18 +623,8 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(::ArenaBase& __adhd_caller_arena, const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format)noexcept{
-    __hidden_texture_mip_decoder::InitializeBasisTranscoder();
-    if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4)
-        return decodeLdr(__adhd_caller_arena, textureAsset, mip, mipLevel, format);
-    if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4)
-        return decodeHdr(__adhd_caller_arena, textureAsset, mip, mipLevel, format);
-
-    LogUnsupportedTexturePayloadFormat();
-    return MakeUnexpected(Failure{});
-}
-
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(::ArenaBase& __adhd_caller_arena, const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format)noexcept{
+    __hidden_texture_mip_decoder::InitializeBasisTranscoder();
     if(!ValidateSupportedLdrTextureUploadFormat(format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::BC7_UNORM || format == Core::Format::RGBA8_UNORM))
         return MakeUnexpected(Failure{});
 
@@ -648,6 +653,7 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(::ArenaBase& __ad
 }
 
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(::ArenaBase& __adhd_caller_arena, const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format)noexcept{
+    __hidden_texture_mip_decoder::InitializeBasisTranscoder();
     const b8 compressedOutput = Core::Format::IsHdrCompressedFormat(format);
     if(!ValidateSupportedHdrTextureUploadFormat(compressedOutput || format == Core::Format::RGBA16_FLOAT))
         return MakeUnexpected(Failure{});

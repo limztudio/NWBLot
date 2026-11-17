@@ -126,7 +126,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
     Optional<Core::GpuTimingMeasure> timing;
     if(!splitSoftTransparentFold)
-        timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
+        timing.emplace(m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, m_graphics.getDevice(), commandList);
 
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_shadowSoftPipeline && m_rayTracingState.m_softShadowSlotMask != 0u){
@@ -141,7 +141,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         producedFrameIndex = frameIndex;
 
         {
-            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTrace, m_graphics.getDevice(), commandList);
 
             Core::ComputeState softState;
             softState.setPipeline(m_rayTracingState.m_shadowSoftPipeline.get());
@@ -165,7 +165,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         }
 
         if(lightSpace && lightSpace->ready){
-            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
+            commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
             if(!RecordLightSpaceResolve(
                 *lightSpace,
@@ -184,7 +184,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
     // Full-resolution inline-RayQuery fallback.
     {
-        Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTrace, m_graphics.getDevice(), commandList);
 
         Core::ComputeState shadowState;
         shadowState.setPipeline(m_rayTracingState.m_shadowPipeline.get());
@@ -234,7 +234,7 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const b8 replaceTransparent = composeCsg && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) != 0u;
     if(ShouldReplaceTransparentSoftTraceWithLightSpace(lightSpaceReady, composeCsg, replaceTransparent)){
         FOUNDATION_ASSERT(graphOwnsOpaqueToTransparentBoundary);
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentTrace, m_graphics.getDevice(), commandList);
 
         const u32 sampleCount = transparentShadowSampleCount();
         if(!RecordLightSpaceResolve(*lightSpace, frameIndex, sampleCount, targets.bindless.transparentSoftHalfStorage.slot(), true, commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(), *targets.transparentSoftHalf))
@@ -245,7 +245,7 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, true, false, false, graphOwnsOpaqueToTransparentBoundary, false, false, false, false, false);
     if(composeCsg){
-        commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
+        commandList.setTextureState(targets.transparentSoftHalf.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
         commandList.commitBarriers();
         if(!RecordLightSpaceResolve(
             *lightSpace, frameIndex, transparentShadowSampleCount(),
@@ -345,11 +345,11 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
                 if(!dispatch.graphOwnsWaveletGeometryEntryState)
                     commandList.setTextureState(targets.shadowSoftGeometry.get(), s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                 if(!graphOwnsInputColorState)
-                    commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(resources.inputColorTexture, s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(dispatch.temporalMomentsValid && !dispatch.graphOwnsWaveletMomentsEntryState)
-                    commandList.setTextureState(resources.momentsTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(resources.momentsTexture, s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(!graphOwnsOutputState)
-                    commandList.setTextureState(resources.outputTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                    commandList.setTextureState(resources.outputTexture, s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
                 commandList.setEnableUavBarriersForTexture(resources.outputTexture, true);
                 break;
             case ShadowResolveStage::Upsample:
@@ -360,9 +360,9 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
                     commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
                 }
                 if(!graphOwnsInputColorState)
-                    commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(resources.inputColorTexture, s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(!graphOwnsOutputState)
-                    commandList.setTextureState(dispatch.visibilityTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                    commandList.setTextureState(dispatch.visibilityTexture, s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
                 commandList.setEnableUavBarriersForTexture(dispatch.visibilityTexture, true);
                 break;
         }
@@ -466,7 +466,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
 
         {
-            Core::GpuTimingMeasure geometryTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowGeometryDownsample, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure geometryTiming(m_graphics.gpuTiming(), s_TimingScopeShadowGeometryDownsample, m_graphics.getDevice(), commandList);
 
             const ShadowGeometryDownsamplePushConstants geometryPush = MakeShadowGeometryDownsamplePushConstants(
                 targets.width,
@@ -518,7 +518,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         ;
         // Merge writes the NEXT pair; the wavelet must read that same pair, never stale A.
         if(ShouldDispatchOpaqueTemporalMerge(dispatchOpaqueResolve, opaqueTemporalActive, opaquePhase)){
-            Core::GpuTimingMeasure opaqueTemporalTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTemporal, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure opaqueTemporalTiming(m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTemporal, m_graphics.getDevice(), commandList);
 
             // The graph owns the selected history/moments plus stable previous-geometry/world reads.
             // The geometry downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
@@ -538,7 +538,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             };
             const SoftShadowResolveDispatch opaqueDispatch = SoftShadowResolveDispatchBuilder::Opaque(opaqueOptions, m_rayTracingState, targets);
             if(dispatchOpaqueResolve && dispatchOpaqueResolveTail){
-                Core::GpuTimingMeasure opaqueResolveTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueResolve, m_graphics.getDevice(), commandList);
+                Core::GpuTimingMeasure opaqueResolveTiming(m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueResolve, m_graphics.getDevice(), commandList);
 
                 dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch);
             }
@@ -551,7 +551,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
     if(dispatchTransparentTrace && m_rayTracingState.m_softTransparentReady){
         {
-            Core::GpuTimingMeasure transparentTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure transparentTraceTiming(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentTrace, m_graphics.getDevice(), commandList);
 
             if(hardwareTransparentShadowReady())
                 dispatchHardwareTransparentShadow(commandList, targets, frameIndex);
@@ -589,7 +589,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         ;
         // Keep the RGB wavelet's temporal variance paired with the history just emitted by the transparent merge.
         if(dispatchTransparentMerge && transparentTemporalActive){
-            Core::GpuTimingMeasure transparentTemporalTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTemporal, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure transparentTemporalTiming(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentTemporal, m_graphics.getDevice(), commandList);
 
             mergeRecorder.record(transparentMerge, graphOwnsTransparentTraceToResolveBoundary, graphOwnsTransparentTemporalMergeEntryStates, graphOwnsTransparentTemporalMergeEntryStates, graphOwnsTransparentTemporalMergeEntryStates);
             m_rayTracingState.m_transparentShadowSamplingHistory.record(m_rayTracingState.m_softShadowSlotMask);
@@ -607,7 +607,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             };
             const SoftShadowResolveDispatch transparentDispatch = SoftShadowResolveDispatchBuilder::Transparent(transparentOptions, m_rayTracingState, targets);
             if(dispatchTransparentResolve && !splitTransparentResolve){
-                Core::GpuTimingMeasure transparentResolveTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentResolve, m_graphics.getDevice(), commandList);
+                Core::GpuTimingMeasure transparentResolveTiming(m_graphics.gpuTiming(), s_TimingScopeShadowTransparentResolve, m_graphics.getDevice(), commandList);
 
                 dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch);
             }

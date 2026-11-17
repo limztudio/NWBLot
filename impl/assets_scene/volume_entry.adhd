@@ -2,6 +2,54 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/asset.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SortedSceneAssetDependencyEntry{
+    public Name nickname = s_NameNone;
+    public Name assetName = s_NameNone;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 LessSortedSceneAssetDependencyEntry(in SortedSceneAssetDependencyEntry lhs, in SortedSceneAssetDependencyEntry rhs){
+    if(lhs.nickname != rhs.nickname)
+        return lhs.nickname < rhs.nickname;
+    return lhs.assetName < rhs.assetName;
+}
+
+Vector<Name> CollectSortedSceneAssetDependencyNames(in AssetMap assets){
+    Vector<SortedSceneAssetDependencyEntry> sortedEntries;
+    sortedEntries.reserve(assets.size());
+    for(in auto entry : assets){
+        SortedSceneAssetDependencyEntry candidate;
+        candidate.nickname = entry.first;
+        candidate.assetName = entry.second.name();
+        usize insertIndex = sortedEntries.size();
+        while(insertIndex > 0u && LessSortedSceneAssetDependencyEntry(candidate, sortedEntries[insertIndex - 1u]))
+            --insertIndex;
+        sortedEntries.push_back(candidate);
+        for(usize moveIndex = sortedEntries.size() - 1u; moveIndex > insertIndex; --moveIndex)
+            sortedEntries[moveIndex] = sortedEntries[moveIndex - 1u];
+        sortedEntries[insertIndex] = candidate;
+    }
+
+    Vector<Name> sortedNames;
+    sortedNames.reserve(sortedEntries.size());
+    for(in SortedSceneAssetDependencyEntry entry : sortedEntries)
+        sortedNames.push_back(entry.assetName);
+    return sortedNames;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -142,17 +190,9 @@ static b8 ExtractSceneDependencies(const Core::Assets::CookDependencyItemContext
             return false;
     }
 
-    Vector<Pair<Name, Name>, Core::Alloc::ScratchArena> sortedAssets(context.scratchArena);
-    sortedAssets.reserve(sceneEntry->assets.size());
-    for(const auto& [nickname, assetRef] : sceneEntry->assets)
-        sortedAssets.emplace_back(nickname, assetRef.name());
-    Sort(sortedAssets.begin(), sortedAssets.end(), [](const Pair<Name, Name>& lhs, const Pair<Name, Name>& rhs)noexcept{
-        if(lhs.first() != rhs.first())
-            return lhs.first() < rhs.first();
-        return lhs.second() < rhs.second();
-    });
-    for(const Pair<Name, Name>& entry : sortedAssets){
-        if(!collector.addAssetDependency(entry.second()))
+    const Vector<Name, ::ArenaBase> sortedAssets = CollectSortedSceneAssetDependencyNames(context.scratchArena, sceneEntry->assets);
+    for(const Name& assetName : sortedAssets){
+        if(!collector.addAssetDependency(assetName))
             return false;
     }
     return true;

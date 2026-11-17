@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "popup_style.adhd"
-#include <impl/ecs_ui/toolkit/input/popup.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,6 +163,101 @@ b8 BindTooltipOwner(
         return false;
     inOutOwner = owner;
     inOutOwnerDeclaration = ownerDeclaration;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The host owns each state and lends it through the matching endPanel/endWindow/endPopup.
+class TooltipState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public WidgetId m_owner;
+    public u64 m_ownerDeclaration = 0u;
+    public WidgetId m_anchor;
+    public u64 m_declarationGeneration = 0u;
+    public PopupToken m_popup;
+    public u64 m_focusLossGeneration = 0u;
+    public u64 m_hoverActivityGeneration = 0u;
+    public TooltipOptions m_options;
+    public PopupPlacement m_placement;
+    public b8 m_hovered = false;
+    public b8 m_visible = false;
+    public f64 m_elapsed = 0.0;
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        ResetTooltipStateFields(
+            this.m_owner,
+            this.m_ownerDeclaration,
+            this.m_anchor,
+            this.m_declarationGeneration,
+            this.m_popup,
+            this.m_focusLossGeneration,
+            this.m_hoverActivityGeneration,
+            this.m_options,
+            this.m_placement,
+            this.m_elapsed,
+            this.m_hovered,
+            this.m_visible
+        );
+    }
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public b8 visible()const{
+        return this.m_visible;
+    }
+
+    public in PopupPlacement placement()const{
+        return this.m_placement;
+    }
+}
+
+// A new hover starts at zero; only contiguous accepted hover updates accrue time. Invalid inputs preserve the state.
+b8 UpdateTooltipState(
+    mut TooltipState state,
+    in WidgetId anchor,
+    in u64 declarationGeneration,
+    in PopupToken popup,
+    in u64 focusLossGeneration,
+    in u64 hoverActivityGeneration,
+    in b8 hovered,
+    in f32 deltaSeconds,
+    in TooltipOptions options
+){
+    const Expected<b8> changed = TryEvaluateTooltipStateUpdate(
+        anchor,
+        declarationGeneration,
+        popup,
+        focusLossGeneration,
+        hoverActivityGeneration,
+        hovered,
+        deltaSeconds,
+        options,
+        state.m_anchor,
+        state.m_declarationGeneration,
+        state.m_popup,
+        state.m_focusLossGeneration,
+        state.m_hoverActivityGeneration,
+        state.m_options,
+        state.m_placement,
+        state.m_hovered,
+        state.m_visible,
+        state.m_elapsed
+    );
+    if(!changed.has_value())
+        return false;
+    if(changed.value())
+        AdvanceNonWrappingRevision(state.m_revision);
     return true;
 }
 

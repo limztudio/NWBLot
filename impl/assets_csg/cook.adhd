@@ -83,7 +83,6 @@ public:
 
 private:
     [[nodiscard]] static b8 WriteModuleInclude(Span<const CsgShapeCookEntry> csgShapeEntries, Name shaderModule, AStringView moduleInclude, const Path& includeRoot, ScratchArena& scratchArena, CookString& source);
-    [[nodiscard]] static b8 WriteEmptyDefaultModuleInclude(const Path& includeRoot, ScratchArena& scratchArena);
 };
 
 
@@ -174,6 +173,40 @@ b8 ValidateCsgReservedVirtualRoot(in Path nwbFilePath, in StringView fieldName, 
     return false;
 }
 
+Expected<StringView> ParseCsgStringField(in Path nwbFilePath, in MetascriptValue asset, in StringView fieldName, in b8 required){
+    const Expected<MetadataStringField> textResult = ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, required);
+    if(!textResult.has_value())
+        return MakeUnexpected(Failure());
+    if(!textResult.value().present)
+        return StringView();
+    if(!ValidateCsgNonEmptyMetadataField(nwbFilePath, fieldName, textResult.value().text))
+        return MakeUnexpected(Failure());
+    return textResult.value().text;
+}
+
+b8 ValidateCsgIncludePathValue(in Path nwbFilePath, in StringView fieldName, in StringView includePath){
+    const Path includePathValue = Path(includePath);
+    return ValidateCsgIncludePath(
+        nwbFilePath,
+        fieldName,
+        includePath,
+        includePathValue.isAbsolute() || includePathValue.empty(),
+        IsRelativeSlashPathWithoutDotSegments(includePath)
+    );
+}
+
+b8 HasCsgSlangIncludeExtension(in StringView includePath){
+    const Path includePathValue = Path(includePath);
+    Array<StringView, 1u> slangIncludeExtensions;
+    slangIncludeExtensions[0u] = s_CsgSlangIncludeExtension;
+    return PathHasListedExtension(includePathValue, slangIncludeExtensions);
+}
+
+// `eval` is hand-written source and `module_include` is the generated module include; both are engine/project-rooted virtual paths.
+b8 ValidateCsgReservedVirtualRootPath(in Path nwbFilePath, in StringView fieldName, in StringView includePath, mut ScratchArena scratchArena){
+    return ValidateCsgReservedVirtualRoot(nwbFilePath, fieldName, HasReservedAssetVirtualRoot(includePath, scratchArena));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -194,7 +227,6 @@ native{
 #include <impl/assets_csg/shape_module_writer.adhd.h>
 
 #include <core/assets/cook_paths.h>
-#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 #include <global/allocation_size.h>
@@ -205,62 +237,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_csg_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Metascript = Core::Metascript;
-using Core::Assets::ScratchArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<AStringView> ParseStringField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName, const b8 required){
-    auto textResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, required);
-    if(!textResult)
-        return MakeUnexpected(Failure{});
-    if(!textResult->present)
-        return AStringView{};
-    if(!ValidateCsgNonEmptyMetadataField(nwbFilePath, fieldName, textResult->text))
-        return MakeUnexpected(Failure{});
-    return textResult->text;
-}
-
-[[nodiscard]] static b8 ValidateIncludePath(const Path& nwbFilePath, const AStringView fieldName, const AStringView includePath, ScratchArena& scratchArena){
-    const ::Path<ScratchArena> includePathValue(scratchArena, includePath);
-    return ValidateCsgIncludePath(
-        nwbFilePath,
-        fieldName,
-        includePath,
-        includePathValue.isAbsolute() || includePathValue.empty(),
-        IsRelativeSlashPathWithoutDotSegments(includePath)
-    );
-}
-
-[[nodiscard]] static b8 HasSlangIncludeExtension(const AStringView includePath, ScratchArena& scratchArena){
-    const ::Path<ScratchArena> includePathValue(scratchArena, includePath);
-    static constexpr Array<AStringView, 1u> s_SlangIncludeExtensions = { s_CsgSlangIncludeExtension };
-    return PathHasListedExtension(includePathValue, s_SlangIncludeExtensions);
-}
-
-// `eval` is hand-written source and `module_include` is the generated module include; both are engine/project-rooted virtual paths.
-[[nodiscard]] static b8 ValidateReservedVirtualRoot(const Path& nwbFilePath, const AStringView fieldName, const AStringView includePath, ScratchArena& scratchArena){
-    return ValidateCsgReservedVirtualRoot(nwbFilePath, fieldName, Core::Assets::HasReservedAssetVirtualRoot(includePath, scratchArena));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -279,8 +255,6 @@ using Core::Assets::ScratchString;
 
 
 Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, const Core::Metascript::Document& doc, CookArena& cookArena, ScratchArena& scratchArena){
-    using namespace __hidden_assets_csg_cook;
-
     CsgShapeCookEntry entry(cookArena);
 
     const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_CsgShapeMetaDiagnosticPrefix);
@@ -298,11 +272,11 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
     if(!shaderModuleResult)
         return MakeUnexpected(Failure{});
     entry.shaderModule = *shaderModuleResult;
-    const auto evalInclude = ParseStringField(nwbFilePath, asset, s_CsgEvalField, true);
+    const auto evalInclude = ParseCsgStringField(nwbFilePath, asset, s_CsgEvalField, true);
     if(!evalInclude)
         return MakeUnexpected(Failure{});
     entry.evalInclude = *evalInclude;
-    const auto moduleInclude = ParseStringField(nwbFilePath, asset, s_CsgModuleIncludeField, false);
+    const auto moduleInclude = ParseCsgStringField(nwbFilePath, asset, s_CsgModuleIncludeField, false);
     if(!moduleInclude)
         return MakeUnexpected(Failure{});
     entry.moduleInclude = *moduleInclude;
@@ -315,24 +289,22 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
         }
         entry.moduleInclude.assign(AStringView(*generatedInclude));
     }
-    if(!ValidateIncludePath(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude), scratchArena))
+    if(!ValidateCsgIncludePathValue(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude)))
         return MakeUnexpected(Failure{});
-    if(!ValidateIncludePath(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude), scratchArena))
+    if(!ValidateCsgIncludePathValue(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude)))
         return MakeUnexpected(Failure{});
-    if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgEvalField, HasSlangIncludeExtension(AStringView(entry.evalInclude), scratchArena)))
+    if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgEvalField, HasCsgSlangIncludeExtension(AStringView(entry.evalInclude))))
         return MakeUnexpected(Failure{});
-    if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgModuleIncludeField, HasSlangIncludeExtension(AStringView(entry.moduleInclude), scratchArena)))
+    if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgModuleIncludeField, HasCsgSlangIncludeExtension(AStringView(entry.moduleInclude))))
         return MakeUnexpected(Failure{});
-    if(!ValidateReservedVirtualRoot(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude), scratchArena))
+    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude), scratchArena))
         return MakeUnexpected(Failure{});
-    if(!ValidateReservedVirtualRoot(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude), scratchArena))
+    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude), scratchArena))
         return MakeUnexpected(Failure{});
     return entry;
 }
 
 b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena&){
-    using namespace __hidden_assets_csg_cook;
-
     Sort(csgShapeEntries.begin(), csgShapeEntries.end(), [](const CsgShapeCookEntry& lhs, const CsgShapeCookEntry& rhs){
         return IsBeforeCsgShapeCookName(lhs.shapeName, rhs.shapeName);
     });
@@ -355,7 +327,7 @@ Expected<Path> CsgShapeModuleWriter::emit(const Path& cacheDirectory, const AStr
     if(csgShapeEntries.empty()){
         if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, s_CsgShapeIncludeGenerationLabel))
             return MakeUnexpected(Failure{});
-        if(!WriteEmptyDefaultModuleInclude(includeRoot, scratchArena))
+        if(!WriteEmptyDefaultCsgModuleInclude(includeRoot))
             return MakeUnexpected(Failure{});
         return includeRoot;
     }
@@ -435,10 +407,6 @@ b8 CsgShapeModuleWriter::WriteModuleInclude(const Span<const CsgShapeCookEntry> 
     }
 
     return WriteCsgGeneratedIncludeFile(ResolveCsgModuleOutputPath(scratchArena, includeRoot, moduleInclude), AStringView(source));
-}
-
-b8 CsgShapeModuleWriter::WriteEmptyDefaultModuleInclude(const Path& includeRoot, ScratchArena& scratchArena){
-    return WriteCsgGeneratedIncludeFile(ResolveDefaultCsgModuleOutputPath(scratchArena, includeRoot), s_CsgEmptyGeneratedModule);
 }
 
 

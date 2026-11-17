@@ -196,6 +196,20 @@ b8 LightComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)cons
     return ComponentAssetBinaryCodec().serializeLight(this.component, outPayload);
 }
 
+b8 InstantiateSceneLoadedEntity(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){
+    if(!ValidateSceneLoadedEntityHasComponents(!components.empty(), entityName))
+        return false;
+    Entity entity = world.createEntity();
+    if(!ValidateCreatedSceneEcsEntity(entity.id(), entityName))
+        return false;
+    for(usize i = 0u; i < components.size(); ++i){
+        if(!components[i].valid())
+            return false;
+        components[i].deref().applyToEntity(entity);
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -392,16 +406,8 @@ b8 ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
         return false;
 
     for(const LoadedEntity& loadedEntity : m_loadedEntities){
-        if(!ValidateSceneLoadedEntityHasComponents(!loadedEntity.components.empty(), loadedEntity.entity.name()))
+        if(!InstantiateSceneLoadedEntity(loadedEntity.entity.name(), loadedEntity.components, world))
             return false;
-        Core::ECS::Entity entity = world.createEntity();
-        if(!ValidateCreatedSceneEcsEntity(entity.id(), loadedEntity.entity.name()))
-            return false;
-        for(const UniquePtr<IComponent>& component : loadedEntity.components){
-            if(!component)
-                return false;
-            component->applyToEntity(entity);
-        }
     }
     return true;
 }

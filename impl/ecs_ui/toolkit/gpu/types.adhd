@@ -213,6 +213,32 @@ b8 IsValidGpuPresentationAttachments(
         && backBufferSampleCount == 1u;
 }
 
+b8 IsGpuQueueTimelineComplete(
+    in b8 timelineValid,
+    in b8 queueMatches,
+    in u64 completedValue,
+    in u64 requiredValue
+){
+    return timelineValid && queueMatches && completedValue >= requiredValue;
+}
+
+void FreeGpuDescriptor(mut GraphicsRuntime graphics, in GpuDescriptorHandle descriptor){
+    if(descriptor.valid())
+        graphics.getDevice().getDescriptorHeap().free(descriptor);
+}
+
+b8 GpuTokenComplete(mut Device device, in QueueSubmissionToken token){
+    if(!token.valid())
+        return true;
+    if(!token.hasPhysicalQueueIdentity())
+        return false;
+    GpuPhysicalQueueId queue;
+    queue.index = token.physicalQueueIndex;
+    queue.deviceGeneration = token.deviceGeneration;
+    const Expected<GpuQueueTimelineSnapshot> timeline = device.getQueueTimelineSnapshot(queue);
+    return timeline.has_value() && IsGpuQueueTimelineComplete(timeline.value().valid(), timeline.value().queue == queue, timeline.value().completedValue, token.value);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

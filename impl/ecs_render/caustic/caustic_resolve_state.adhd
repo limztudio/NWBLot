@@ -10,6 +10,8 @@
 
 
 const usize s_CausticResolvePassCount = 5u;
+// Caustic splats are fixed-point R32_UINT (no float atomics), one RGB layer each; resolve converts to RGBA16F.
+const TextureSubresourceSet s_CausticAccumulatorSubresources = TextureSubresourceSet(0u, 1u, 0u, s_CausticAccumulatorChannelCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

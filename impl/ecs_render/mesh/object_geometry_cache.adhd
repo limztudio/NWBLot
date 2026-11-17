@@ -43,8 +43,6 @@ namespace ECSRenderDetail{
 using ObjectGeometryCacheState = ::NWB::Impl::ObjectGeometryCacheState;
 using ObjectGeometryCacheSnapshot = ::NWB::Impl::ObjectGeometryCacheSnapshot;
 
-inline constexpr Core::ResourceStates::Mask s_ObjectGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
-
 [[nodiscard]] b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
 
 
@@ -69,8 +67,7 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ECSRenderDetail::s_ObjectGeometryRasterState"), cpp_header("<core/graphics/rhi/resource.h>")]
-extern const ResourceStates s_ObjectGeometryRasterState;
+const ResourceStates s_ObjectGeometryRasterState = ResourceStates::VertexBuffer | ResourceStates::IndexBuffer;
 
 
 class ObjectGeometryCacheState{

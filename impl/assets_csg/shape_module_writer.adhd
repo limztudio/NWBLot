@@ -57,6 +57,10 @@ b8 WriteCsgGeneratedIncludeFile(in Path outputPath, in StringView source){
     return true;
 }
 
+b8 WriteEmptyDefaultCsgModuleInclude(in Path includeRoot){
+    return WriteCsgGeneratedIncludeFile(ResolveDefaultCsgModuleOutputPath(includeRoot), s_CsgEmptyGeneratedModule);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

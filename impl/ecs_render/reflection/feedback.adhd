@@ -103,11 +103,7 @@ public:
         if(plan.generation != m_generation || plan.sequence != m_reservedSequence)
             return false;
         m_reservedSequence = 0u;
-        if(
-            !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration
-            || token.queue != Core::CommandQueue::Graphics
-            || (m_acceptedToken.valid() && (!token.matchesPhysicalQueue(m_acceptedToken.physicalQueueIndex, m_acceptedToken.deviceGeneration) || token.value <= m_acceptedToken.value))
-        ){
+        if(!IsValidAcceptedReflectionFeedbackToken(token, m_deviceGeneration, m_acceptedToken)){
             // Accepted work blocks discard-based overwrite proof.
             m_quarantined = true;
             return false;

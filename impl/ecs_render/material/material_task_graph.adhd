@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/material/pipeline_types.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,6 +67,38 @@ Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
     CompactString text = CompactString("render.object_geometry.ready_");
     AppendUnsignedU64Text(text, cast<u64>(phaseIndex));
     return ParseName(text.view());
+}
+
+ObjectGeometryDecodeIdentity MakeDecodeIdentity(in MaterialPassDrawItem item){
+    in ObjectGeometryCacheSnapshot cache = item.meshResources.objectGeometryCache;
+    ObjectGeometryDecodeIdentity identity;
+    identity.meshKey = item.meshKey;
+    identity.sourceRevision = cache.sourceRevision;
+    identity.meshletCount = item.meshResources.meshletCount;
+    identity.indexByteOffset = cache.indexByteOffset;
+    identity.indexCount = cache.indexCount;
+    identity.runtimeMesh = item.meshResources.runtimeMesh;
+    identity.requiresDecode = cache.requiresDecode;
+    identity.initialized = cache.initialized;
+    return identity;
+}
+
+b8 SameDecode(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
+    in ObjectGeometryCacheSnapshot leftCache = left.meshResources.objectGeometryCache;
+    in ObjectGeometryCacheSnapshot rightCache = right.meshResources.objectGeometryCache;
+    if(
+        !MakeDecodeIdentity(left).matches(MakeDecodeIdentity(right))
+        || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
+        || leftCache.decoderPipeline != rightCache.decoderPipeline
+    )
+        return false;
+    if(!left.meshResources.sourceBuffers.sameBuffers(right.meshResources.sourceBuffers))
+        return false;
+    for(usize index = 0u; index < LengthOf(left.meshResources.geometryHeapHandles); ++index){
+        if(left.meshResources.geometryHeapHandles[index] != right.meshResources.geometryHeapHandles[index])
+            return false;
+    }
+    return true;
 }
 
 
@@ -323,37 +356,7 @@ namespace __hidden_material_task_graph{
 
 using namespace RendererTaskGraphDetail;
 
-[[nodiscard]] ObjectGeometryDecodeIdentity MakeDecodeIdentity(const MaterialPassDrawItem& item)noexcept{
-    const auto& cache = item.meshResources.objectGeometryCache;
-    ObjectGeometryDecodeIdentity identity;
-    identity.meshKey = item.meshKey;
-    identity.sourceRevision = cache.sourceRevision;
-    identity.meshletCount = item.meshResources.meshletCount;
-    identity.indexByteOffset = cache.indexByteOffset;
-    identity.indexCount = cache.indexCount;
-    identity.runtimeMesh = item.meshResources.runtimeMesh;
-    identity.requiresDecode = cache.requiresDecode;
-    identity.initialized = cache.initialized;
-    return identity;
-}
-
-[[nodiscard]] b8 SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
-    const auto& leftCache = left.meshResources.objectGeometryCache;
-    const auto& rightCache = right.meshResources.objectGeometryCache;
-    if(
-        !MakeDecodeIdentity(left).matches(MakeDecodeIdentity(right))
-        || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
-        || leftCache.decoderPipeline != rightCache.decoderPipeline
-    )
-        return false;
-    if(!left.meshResources.sourceBuffers.sameBuffers(right.meshResources.sourceBuffers))
-        return false;
-    for(usize index = 0u; index < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++index){
-        if(left.meshResources.geometryHeapHandles[index] != right.meshResources.geometryHeapHandles[index])
-            return false;
-    }
-    return true;
-}
+static_assert(LengthOf(decltype(MaterialPassMeshResourceSnapshot::geometryHeapHandles){}) == NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT);
 
 struct DecodeTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
@@ -381,7 +384,7 @@ public:
         MaterialPassDrawContext context(commandList, viewport, payload.frameBindings, MaterialPipelinePass::Opaque, true, true, true);
         if(!payload.materialSystem.recordObjectGeometryDecode(context, payload.draw))
             return false;
-        commandList.setBufferState(payload.draw.meshResources.objectGeometryCache.buffer.get(), ECSRenderDetail::s_ObjectGeometryRasterState);
+        commandList.setBufferState(payload.draw.meshResources.objectGeometryCache.buffer.get(), s_ObjectGeometryRasterState);
         commandList.commitBarriers();
         return true;
     }
@@ -447,7 +450,7 @@ b8 ObjectGeometryCacheGraph::prepare(
         }
         if(!retained){
             Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(cache.buffer->getCreationDescription().debugName, s_ObjectGeometryCacheLabel);
-            bufferDesc.setInitialState(cache.initialized ? ECSRenderDetail::s_ObjectGeometryRasterState : Core::ResourceStates::Common).setExternalFinalState(ECSRenderDetail::s_ObjectGeometryRasterState);
+            bufferDesc.setInitialState(cache.initialized ? s_ObjectGeometryRasterState : Core::ResourceStates::Common).setExternalFinalState(s_ObjectGeometryRasterState);
             Entry entry{draw, {}, {}};
             const auto importedResource = m_graph.importBuffer(cache.buffer, bufferDesc);
             if(!importedResource)
@@ -473,7 +476,7 @@ b8 ObjectGeometryCacheGraph::prepare(
                     return false;
                 uses.push_back(ReadBufferUse(instances, Core::BufferRange(ComputeObjectGeometryInstanceByteOffset(draw.instanceIndex, sizeof(InstanceGpuData)), sizeof(InstanceGpuData))));
                 uses.push_back(WriteUse(entry.resource, Core::ResourceStates::UnorderedAccess));
-                uses.push_back(ReadUse(entry.resource, ECSRenderDetail::s_ObjectGeometryRasterState));
+                uses.push_back(ReadUse(entry.resource, s_ObjectGeometryRasterState));
                 const Expected<Name> identity = FormatObjectGeometryDecodeIdentity(m_entries.size());
                 if(!identity)
                     return false;
@@ -494,7 +497,7 @@ b8 ObjectGeometryCacheGraph::prepare(
         for(const Core::GpuTaskResourceUse& use : cacheReads)
             alreadyRead = alreadyRead || use.resource == retained->resource;
         if(!alreadyRead){
-            cacheReads.push_back(ReadUse(retained->resource, ECSRenderDetail::s_ObjectGeometryRasterState));
+            cacheReads.push_back(ReadUse(retained->resource, s_ObjectGeometryRasterState));
             if(retained->producer.valid())
                 producers.push_back(retained->producer);
         }

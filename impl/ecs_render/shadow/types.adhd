@@ -143,6 +143,8 @@ const u32 s_ShadowHistorySelectorCount = 2u;
 const usize s_SoftShadowOpaqueResourceUseCapacity = 18u;
 const usize s_SoftShadowTransparentTraceResourceUseCapacity = 16u;
 const usize s_SoftShadowLightSpaceReadCapacity = 9u;
+const Color s_ShadowVisibilityAllLitClearColor = Color(1.0f, 1.0f, 1.0f, 1.0f);
+const TextureSubresourceSet s_ShadowVisibilitySubresources = TextureSubresourceSet(0u, 1u, 0u, s_SceneShadowSlotCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

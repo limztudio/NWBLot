@@ -128,3 +128,39 @@ NWB_IMPL_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_name("::NWB::Impl::RendererRayTracingState")]
+extern class RendererRayTracingState{
+    usize m_tlasMaxInstances;
+    u64 m_tlasStaticSceneHash;
+    u64 m_sceneSwBvhStaticSceneHash;
+    usize m_sceneBvhNodeCapacity;
+    usize m_sceneInstanceCapacity;
+    RayTracingAccelStructHandle m_tlas;
+    BufferHandle m_sceneBvhNodeBuffer;
+    BufferHandle m_sceneInstanceBuffer;
+    GpuDescriptorHandle m_tlasHeapHandle;
+    u32 m_sceneBvhInstanceCount;
+    GpuDescriptorHandle m_sceneBvhNodeHeapHandle;
+    GpuDescriptorHandle m_sceneInstanceHeapHandle;
+    b8 m_tlasStaticSceneHashValid;
+    b8 m_sceneSwBvhStaticSceneHashValid;
+    b8 m_tlasBackingFresh;
+    u64 m_hwShadowMaterialContextHash;
+    u64 m_swShadowMaterialContextHash;
+    usize m_shadowInstanceMaterialCapacity;
+    usize m_shadowInstanceCapacity;
+    usize m_shadowMaterialTypedCapacity;
+    BufferHandle m_shadowInstanceMaterialBuffer;
+    BufferHandle m_shadowInstanceBuffer;
+    BufferHandle m_shadowMaterialTypedBuffer;
+    GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle;
+    GpuDescriptorHandle m_shadowInstanceHeapHandle;
+    GpuDescriptorHandle m_shadowMaterialTypedHeapHandle;
+    b8 m_hwShadowMaterialContextHashValid;
+    b8 m_swShadowMaterialContextHashValid;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

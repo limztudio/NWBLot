@@ -31,26 +31,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Caustic splats are fixed-point R32_UINT (no float atomics), one RGB layer each; resolve converts to RGBA16F.
-inline constexpr Core::TextureSubresourceSet s_CausticAccumulatorSubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT);
-
-// Assigns caustic slots to top caustic-enabled lights after ResolveSceneLights when a refractive instance and caustic opt-in are present.
-[[nodiscard]] u32 ResolveCausticLights(Span<const f32> causticImportance, u32 refractiveInstanceCount, Span<SceneLightGpuData> lights)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static_assert(s_CausticAccumulatorChannelCount == NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT, "s_CausticAccumulatorChannelCount must match NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT");
 
 
 static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");

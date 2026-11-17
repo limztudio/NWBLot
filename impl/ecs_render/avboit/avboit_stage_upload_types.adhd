@@ -35,7 +35,7 @@ class DeferredFrameTargets;
 // Shared AVBOIT material upload owns instance plus typed plus CSG buffer uploads.
 struct AvboitMaterialUploadInputs{
     const DeferredFrameTargets& targets;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     const MeshFrameBindingSnapshot& frameBindings;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
@@ -101,7 +101,7 @@ struct AvboitPassUploadInputs{
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::AvboitOccupancy;
     const CsgFrameState& csgFrameState;
     const MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
@@ -122,7 +122,7 @@ struct FrameGraphAvboitPassUploadInputs{
     DeferredFrameTargets& targets;
     const CsgFrameState& csgFrameState;
     const MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;

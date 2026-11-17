@@ -141,6 +141,33 @@ usize ComputeMaterialPipelineBaseHash(
     return HashCombineValue(seed, sampleQuality);
 }
 
+usize HashMaterialPipelineKey(in MaterialPipelineKey key){
+    usize seed = ComputeMaterialPipelineBaseHash(
+        key.material,
+        key.pass,
+        key.twoSided,
+        key.csgMode,
+        key.csgEvaluatorVariant,
+        key.csgShapeRegistryRevision,
+        cast<u32>(key.framebufferInfo.depthFormat),
+        key.framebufferInfo.sampleCount,
+        key.framebufferInfo.sampleQuality
+    );
+    for(in Format format : key.framebufferInfo.colorFormats)
+        seed = HashCombineValue(seed, format);
+    return seed;
+}
+
+b8 EqualMaterialPipelineKey(in MaterialPipelineKey lhs, in MaterialPipelineKey rhs){
+    return lhs.material == rhs.material
+        && lhs.pass == rhs.pass
+        && lhs.twoSided == rhs.twoSided
+        && lhs.csgMode == rhs.csgMode
+        && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
+        && lhs.csgShapeRegistryRevision == rhs.csgShapeRegistryRevision
+        && lhs.framebufferInfo == rhs.framebufferInfo;
+}
+
 b8 MeshletConeCullScaleSafe(in VectorSingle scale){
     if(!IsFinite(scale.xyz))
         return false;

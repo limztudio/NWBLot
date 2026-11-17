@@ -56,9 +56,6 @@ class DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
 class MeshFrameBindingSnapshot;
 class CsgGraphResourceSnapshot;
-namespace ECSRenderDetail{
-    using CsgGraphResourceSnapshot = ::NWB::Impl::CsgGraphResourceSnapshot;
-};
 
 
 struct GraphicsPrefixGraphContext{
@@ -92,7 +89,7 @@ public:
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
         const MeshFrameBindingSnapshot& frameBindings,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const CsgGraphResourceSnapshot& csgResources,
         b8 hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         const MeshViewGpuData& meshViewState,

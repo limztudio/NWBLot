@@ -327,7 +327,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     allLitClearScheduling.allowPacketMerge = true;
     allLitClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
     ConfigureComputeEffectRoutingHint(adaptivePrimitivePrecedesVisibility, allLitClearScheduling);
-    const Core::GpuTaskResourceUse allLitClearResourceUse = WriteTextureUse(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
+    const Core::GpuTaskResourceUse allLitClearResourceUse = WriteTextureUse(shadowVisibility, s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     Core::GpuTaskDesc allLitClearDesc;
     allLitClearDesc
         .setIdentity(Name(s_ShadowPassAllLitClear))
@@ -339,7 +339,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     ;
     const auto deferredShadowVisibilityAllLitClearTaskResult = context.graph.addTask<ECSRenderDetail::FloatTextureClearGraphTask>(
         allLitClearDesc,
-        ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = shadowVisibility, .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources, .floatValue = ECSRenderDetail::s_ShadowVisibilityAllLitClearColor }
+        ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = shadowVisibility, .subresources = s_ShadowVisibilitySubresources, .floatValue = s_ShadowVisibilityAllLitClearColor }
     );
     if(!deferredShadowVisibilityAllLitClearTaskResult){
         m_deferredShadowVisibilityAllLitClearTask = {};
@@ -358,7 +358,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name(s_ShadowVisibilityPass))
-        .setMarkerLabel(RendererGpuPassText::s_ShadowVisibilityLabel)
+        .setMarkerLabel(s_ShadowVisibilityLabel)
         .setScheduling(scheduling)
         .setDependencies({ &shadowVisibilityDependency, 1u })
         .setExternalStateSources({ shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount })

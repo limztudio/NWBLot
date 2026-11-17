@@ -339,7 +339,7 @@ template<typename PayloadT>
 FOUNDATION_INLINE void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
     payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
     // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
-    commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(payload.targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     payload.opaqueProduced = false;
     if(payload.asyncTiming.has_value()){

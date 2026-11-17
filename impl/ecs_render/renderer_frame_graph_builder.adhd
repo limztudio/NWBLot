@@ -38,6 +38,24 @@ b8 IsDeferredGraphPresentationAndHistoryReady(in b8 backBufferMatchesAttachment,
     return backBufferMatchesAttachment && hasTransparentRenderers == featureHasTransparentRenderers && (!useLaggedLightingHistory || historyValid) && (!capturesLaggedLightingHistory || captureHistoryValid);
 }
 
+b8 ImportDeferredExternalCompletion(
+    in Name identity,
+    in StringView markerLabel,
+    in QueueSubmissionToken token,
+    mut GpuTaskGraph graph,
+    mut GpuExternalCompletionId outCompletion
+){
+    GpuExternalCompletionDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(markerLabel).setToken(token);
+    const Expected<GpuExternalCompletionId> completionResult = graph.importExternalCompletion(desc);
+    if(!completionResult.has_value()){
+        outCompletion = GpuExternalCompletionId();
+        return false;
+    }
+    outCompletion = completionResult.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,34 +96,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_renderer_frame_graph_builder{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 ImportDeferredExternalCompletion(Core::GpuTaskGraph& graph, const Name& identity, const AStringView markerLabel, const Core::QueueSubmissionToken& token, Core::GpuExternalCompletionId& outCompletion){
-    Core::GpuExternalCompletionDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(markerLabel).setToken(token);
-    const auto completionResult = graph.importExternalCompletion(desc);
-    if(!completionResult){
-        outCompletion = {};
-        return false;
-    }
-    outCompletion = *completionResult;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -166,7 +156,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& presentTimingTicket
 ){
     using namespace RendererTaskGraphDetail;
-    using namespace __hidden_renderer_frame_graph_builder;
 
     const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources = m_raytracingSystem.snapshotShadowPreparationResources();
     const RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources = m_raytracingSystem.snapshotDeferredGraphResources();
@@ -195,7 +184,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
     const MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
     const b8 retainRefractionCapPipeline = ShouldRetainRefractionCapPipeline(m_preparedRefractionActive, csgFrameState.hasTransparentStaticWork, csgFrameState.hasTransparentSkinnedWork);
-    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = csgFrameState.empty() ? ECSRenderDetail::CsgGraphResourceSnapshot{} : m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
+    const CsgGraphResourceSnapshot csgResources = csgFrameState.empty() ? CsgGraphResourceSnapshot{} : m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
     const MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     const b8 backBufferMatchesAttachment = presentationFramebufferDesc.colorAttachments.size() == 1u && presentationFramebufferDesc.colorAttachments[0].texture == presentationFrame.backBuffer.texture.get();
     if(!IsDeferredGraphTargetAndViewReady(deferredTargets.valid(), deferredTargets.bindless.valid(), meshViewBufferSnapshot.valid(), csgFrameState.empty(), frameBindings.bindingValid(), deferredLightingResources.valid()))
@@ -317,15 +306,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         causticOpticalScene = optical->resource;
     }
 
-    if(useLaggedLightingHistory && !ImportDeferredExternalCompletion(m_deferredLightingTaskGraph, Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryReadReady), "Lagged Lighting History Read Ready", laggedLightingHistoryReadReadyToken, m_deferredLightingHistoryReadReadyCompletion)){
+    if(useLaggedLightingHistory && !ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryReadReady), "Lagged Lighting History Read Ready", laggedLightingHistoryReadReadyToken, m_deferredLightingTaskGraph, m_deferredLightingHistoryReadReadyCompletion)){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
         return;
     }
-    if(features.laggedLightingHistoryWriterWaitPending && !ImportDeferredExternalCompletion(m_deferredLightingTaskGraph, Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryWriterDrain), "Lagged Lighting History Writer Drain", laggedLightingHistoryWriterDrainToken, m_deferredLightingHistoryWriterDrainCompletion)){
+    if(features.laggedLightingHistoryWriterWaitPending && !ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryWriterDrain), "Lagged Lighting History Writer Drain", laggedLightingHistoryWriterDrainToken, m_deferredLightingTaskGraph, m_deferredLightingHistoryWriterDrainCompletion)){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
         return;
     }
-    if(m_raytracingSystem.hasSurfelWork() && rayTracingSurfelResources.countReadbackSubmissionToken.valid() && !ImportDeferredExternalCompletion(m_deferredLightingTaskGraph, Name(s_FrameGraphNameRenderSurfelGiCounterReadbackComplete), "Surfel Counter Readback Complete", surfelCounterReadbackCompletionToken, m_deferredSurfelGiCounterReadbackCompletion)){
+    if(m_raytracingSystem.hasSurfelWork() && rayTracingSurfelResources.countReadbackSubmissionToken.valid() && !ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderSurfelGiCounterReadbackComplete), "Surfel Counter Readback Complete", surfelCounterReadbackCompletionToken, m_deferredLightingTaskGraph, m_deferredSurfelGiCounterReadbackCompletion)){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import surfel counter-readback completion"));
         return;
     }

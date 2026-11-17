@@ -303,12 +303,12 @@ b8 MeshViewSetupGraphTask::Record(const Payload& payload, Core::CommandList& com
 
     const b8 shadowVisibilityRunsOnCompute = shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const b8 recordsGraphicsFrameMarker = ShouldRecordMeshGraphicsFrameMarker(shadowVisibilityRunsOnCompute, RendererGpuTimingScope::s_Frame.valid());
+    const b8 recordsGraphicsFrameMarker = ShouldRecordMeshGraphicsFrameMarker(shadowVisibilityRunsOnCompute, s_TimingScopeFrame.valid());
     if(recordsGraphicsFrameMarker)
-        commandList.beginMarker(RendererGpuTimingScope::s_Frame.markerLabel);
+        commandList.beginMarker(s_TimingScopeFrame.markerLabel);
 
     if(ShouldRecordMeshSplitAsyncPrefixTiming(shadowVisibilityRunsOnCompute, payload.asyncPrefixTimingSpansOnePacket)){
-        payload.asyncPrefixTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncPrefix, payload.graphics.getDevice(), commandList);
+        payload.asyncPrefixTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeAsyncPrefix, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.asyncPrefixTiming))
             return false;
     }

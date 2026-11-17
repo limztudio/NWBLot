@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/asset.adhd>
+#include <impl/assets_font/font_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -90,6 +97,21 @@ b8 IsValidFontCookVirtualPath(in Name virtualPath){
     return virtualPath != s_NameNone;
 }
 
+b8 SerializeFontAssetPayload(in Font font, mut Vector<u8> outBinary){
+    if(!font.validatePayload())
+        return false;
+    FontBinaryCodec().serialize(font.faceIndex(), font.fontBytes(), outBinary);
+    return true;
+}
+
+Expected<Font> BuildFontAssetFromPayload(in Name virtualPath, in Vector<u8> fontBytes, in u32 faceIndex){
+    Font candidate(virtualPath);
+    candidate.setFontBytes(fontBytes, faceIndex);
+    if(!candidate.validatePayload())
+        return MakeUnexpected(Failure());
+    return candidate;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,11 +170,7 @@ b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("FontAssetCodec::serialize")))
         return false;
     const Font& font = *MakeNotNull(checked_cast<const Font*>(&asset));
-    if(!font.validatePayload())
-        return false;
-
-    FontBinaryCodec{}.serialize(font.faceIndex(), font.fontBytes(), outBinary);
-    return true;
+    return SerializeFontAssetPayload(font, outBinary);
 }
 
 
@@ -193,12 +211,7 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
 }
 
 Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena){
-    Font candidate(arena, entry.virtualPath);
-    Vector<u8, ::ArenaBase> bytes(entry.fontBytes.begin(), entry.fontBytes.end(), arena);
-    candidate.setFontBytes(bytes, entry.faceIndex);
-    if(!candidate.validatePayload())
-        return MakeUnexpected(Failure{});
-    return candidate;
+    return BuildFontAssetFromPayload(arena, entry.virtualPath, entry.fontBytes, entry.faceIndex);
 }
 
 

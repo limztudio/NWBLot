@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/runtime/types.adhd>
 #include <impl/ecs_render/mesh/mesh_raytracing_snapshots.adhd>
 
 
@@ -25,6 +26,18 @@ b8 RuntimeMeshSourceDimensionsMatch(
     in u32 descPrimitiveIndexCount
 ){
     return meshVersion == descVersion && meshletCount == descMeshletCount && primitiveIndexCount == descPrimitiveIndexCount;
+}
+
+b8 ValidateRawBufferLogicalByteCount(
+    in BufferHandle buffer,
+    in u32 logicalByteCount,
+    in Name meshName,
+    in StringView label
+){
+    if(!buffer.valid())
+        return ValidateMeshRawBufferLogicalByteCount(false, 0u, 0u, logicalByteCount, meshName, label);
+    const BufferDesc desc = buffer.deref().getCreationDescription();
+    return ValidateMeshRawBufferLogicalByteCount(true, desc.structStride, desc.byteSize, logicalByteCount, meshName, label);
 }
 
 
@@ -370,12 +383,6 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     RefreshRuntimeMeshCsgBounds(LoadFloatInt(desc.localBounds.minBounds), LoadFloatInt(desc.localBounds.maxBounds), desc.localBounds.finite(), mesh.csgLocalBounds);
 }
 
-[[nodiscard]] static b8 ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const AStringView label){
-    const Core::BufferDesc emptyDesc{};
-    const Core::BufferDesc& desc = buffer ? buffer->getCreationDescription() : emptyDesc;
-    return ValidateMeshRawBufferLogicalByteCount(buffer != nullptr, desc.structStride, desc.byteSize, logicalByteCount, meshName, label);
-}
-
 
 };
 
@@ -433,7 +440,7 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::create(const Runtime
     __hidden_runtime_mesh_resource_cache::RefreshRuntimeMeshContent(createdMesh, desc);
     if(!ValidateRuntimeMeshPrimitiveIndexCount(createdMesh.meshName, createdMesh.meshletPrimitiveIndexCount, s_MeshletTriangleIndexCount))
         return MakeUnexpected(Failure{});
-    if(!__hidden_runtime_mesh_resource_cache::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, s_MeshletPrimitiveIndexBufferLabel))
+    if(!ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, s_MeshletPrimitiveIndexBufferLabel))
         return MakeUnexpected(Failure{});
     FOUNDATION_ASSERT(createdMesh.valid());
     MeshDescriptorTransaction retireUnpublished(m_system, createdMesh);

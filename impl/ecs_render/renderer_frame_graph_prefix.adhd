@@ -151,7 +151,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const b8 hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     const MeshViewGpuData& meshViewState,
@@ -476,9 +476,9 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const Core::GpuTaskResourceSetUse gbufferMaterialGeometrySetUse{ .resourceSet = gbufferMaterialGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse gbufferMaterialSampledTextureSetUse{ .resourceSet = gbufferMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputUavSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
-    const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputVertexBufferSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState, .access = Core::GpuTaskResourceAccess::Read, };
+    const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputVertexBufferSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = s_ObjectGeometryRasterState, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputUavSetUse{ .resourceSet = opaqueCsgReceiverComputeEmulationOutputSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
-    const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputVertexBufferSetUse{ .resourceSet = opaqueCsgReceiverComputeEmulationOutputSet, .range = {}, .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState, .access = Core::GpuTaskResourceAccess::Read, };
+    const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputVertexBufferSetUse{ .resourceSet = opaqueCsgReceiverComputeEmulationOutputSet, .range = {}, .requiredState = s_ObjectGeometryRasterState, .access = Core::GpuTaskResourceAccess::Read, };
     Array<Core::GpuTaskResourceSetUse, s_GbufferMaterialResourceSetUseCapacity> gbufferMaterialResourceSetUses = {};
     usize gbufferMaterialResourceSetUseCount = 0u;
     if(gbufferPayload.materialGeometryStatesGraphOwned)

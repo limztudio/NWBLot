@@ -38,15 +38,12 @@ using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& sha
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept;
 
 [[nodiscard]] FOUNDATION_INLINE Expected<CsgShapeBounds> LoadCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
-    if(!localBounds.finiteBounds)
-        return CsgShapeBounds{};
-    const SIMDVectorSingle localMin = LoadFloat(localBounds.minBounds);
-    const SIMDVectorSingle localMax = LoadFloat(localBounds.maxBounds);
-    SIMDVectorSingle worldMin = VectorZero();
-    SIMDVectorSingle worldMax = VectorZero();
-    if(!TryTransformAabb(shapeToWorld, localMin, localMax, worldMin, worldMax))
+    const Expected<CsgShapeLocalBounds> bounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
+    if(!bounds)
         return MakeUnexpected(Failure{});
-    return CsgShapeBounds{ worldMin, worldMax, true };
+    if(!bounds->finiteBounds)
+        return CsgShapeBounds{};
+    return CsgShapeBounds{ LoadFloat(bounds->minBounds), LoadFloat(bounds->maxBounds), true };
 }
 
 template<typename ShapeT>

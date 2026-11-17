@@ -7314,6 +7314,8 @@ extern class Viewport{
 
 [cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ViewportState"), cpp_layout(656, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class ViewportState{
+    FixedVector<Viewport, 16> viewports;
+    FixedVector<Rect, 16> scissorRects;
     ViewportState addScissorRect(...);
     ViewportState addViewport(...);
     ViewportState addViewportAndScissorRect(...);

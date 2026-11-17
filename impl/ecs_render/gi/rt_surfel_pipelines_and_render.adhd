@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/gi_subsystem.adhd>
 #include <impl/ecs_render/gi/quality_settings.adhd>
+#include <impl/ecs_render/gi/rt_surfel_internal.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,6 +152,229 @@ b8 HasCompletedSurfelCountReadbackValue(in u64 completedValue, in u64 tokenValue
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 EnsureSurfelComputePipeline(
+    in Func<64u, AssetRef<ComputeShader>(in GiSubsystem)> selector,
+    in StringView variantName,
+    in Name debugName,
+    in b8 includeAccelStruct,
+    in StringView passLabel,
+    mut GlobalArena arena,
+    mut Device device,
+    mut RendererShaderSystem shaderSystem,
+    mut BindingLayoutHandle inOutLayout,
+    mut ShaderHandle inOutShader,
+    mut ComputePipelineHandle inOutPipeline,
+    mut b8 inOutFailed
+){
+    if(inOutPipeline.valid())
+        return true;
+    if(inOutFailed)
+        return false;
+
+    in GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!ValidateSurfelPipelineDescriptorHeap(heap.isInitialized(), includeAccelStruct, heap.hasAccelStructLayout(), passLabel)){
+        inOutFailed = true;
+        return false;
+    }
+    if(!EnsurePushConstantBindingLayout(arena, device, sizeof(SurfelHeapPushConstants), ShaderTypeMask::Compute, inOutLayout)){
+        LogSurfelBindingLayoutCreateFailed(passLabel);
+        inOutFailed = true;
+        return false;
+    }
+    if(!shaderSystem.loadShader<ComputeShader, GiSubsystem>(selector, variantName, debugName, inOutShader)){
+        inOutFailed = true;
+        return false;
+    }
+    if(!CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline)){
+        LogSurfelPipelineCreateFailed(passLabel);
+        inOutFailed = true;
+        return false;
+    }
+    LogSurfelPipelineCreated(passLabel);
+    return true;
+}
+
+b8 EnsureSurfelHwTracePipelineVariant(
+    in b8 csg,
+    mut GlobalArena arena,
+    mut GraphicsRuntime graphics,
+    mut RendererShaderSystem shaderSystem,
+    mut BindingLayoutHandle inOutLayout,
+    mut ShaderHandle shader,
+    mut ComputePipelineHandle pipeline,
+    mut b8 failed
+){
+    if(pipeline.valid())
+        return true;
+    if(failed)
+        return false;
+    if(!graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) || !graphics.queryFeatureSupport(Feature::RayQuery)){
+        failed = true;
+        return false;
+    }
+
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelTraceHwCs; },
+        ResolveGiCsgVariant(csg),
+        s_SurfelTraceHwShaderDebugName,
+        true,
+        s_SurfelTraceHwPassLabel,
+        arena,
+        graphics.getDevice(),
+        shaderSystem,
+        inOutLayout,
+        shader,
+        pipeline,
+        failed
+    );
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelSpawnPipeline(){
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelSpawnCs; },
+        s_ShaderArchiveDefaultVariant,
+        s_SurfelSpawnShaderDebugName,
+        false,
+        s_SurfelSpawnPassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelSpawnShader,
+        this.m_rayTracingState.m_surfelSpawnPipeline,
+        this.m_rayTracingState.m_surfelSpawnPipelineFailed
+    );
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelAgeFreePipeline(){
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelAgeFreeCs; },
+        s_ShaderArchiveDefaultVariant,
+        s_SurfelAgeFreeShaderDebugName,
+        false,
+        s_SurfelAgeFreePassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelAgeFreeShader,
+        this.m_rayTracingState.m_surfelAgeFreePipeline,
+        this.m_rayTracingState.m_surfelAgeFreePipelineFailed
+    );
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelHashBuildPipeline(){
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelHashBuildCs; },
+        s_ShaderArchiveDefaultVariant,
+        s_SurfelHashBuildShaderDebugName,
+        false,
+        s_SurfelHashBuildPassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelHashBuildShader,
+        this.m_rayTracingState.m_surfelHashBuildPipeline,
+        this.m_rayTracingState.m_surfelHashBuildPipelineFailed
+    );
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelTracePipeline(){
+    if(this.m_rayTracingState.m_surfelUseCsgTrace){
+        return EnsureSurfelComputePipeline(
+            lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelTraceCs; },
+            ResolveGiCsgVariant(true),
+            s_SurfelTraceShaderDebugName,
+            false,
+            s_SurfelTracePassLabel,
+            this.m_arena,
+            this.m_graphics.getDevice(),
+            this.m_shaderSystem,
+            this.m_rayTracingState.m_surfelHeapBindingLayout,
+            this.m_rayTracingState.m_surfelTraceCsgShader,
+            this.m_rayTracingState.m_surfelTraceCsgPipeline,
+            this.m_rayTracingState.m_surfelTraceCsgPipelineFailed
+        );
+    }
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelTraceCs; },
+        ResolveGiCsgVariant(false),
+        s_SurfelTraceShaderDebugName,
+        false,
+        s_SurfelTracePassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelTraceShader,
+        this.m_rayTracingState.m_surfelTracePipeline,
+        this.m_rayTracingState.m_surfelTracePipelineFailed
+    );
+}
+
+// Hardware trace twin; other surfel passes are shared.
+b8 SurfelGiPipelineSet::ensureSurfelTraceHwPipeline(){
+    if(this.m_rayTracingState.m_surfelUseCsgTrace)
+        return EnsureSurfelHwTracePipelineVariant(true, this.m_arena, this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.m_surfelHeapBindingLayout, this.m_rayTracingState.m_surfelTraceCsgHwShader, this.m_rayTracingState.m_surfelTraceCsgHwPipeline, this.m_rayTracingState.m_surfelTraceCsgHwPipelineFailed);
+    return EnsureSurfelHwTracePipelineVariant(false, this.m_arena, this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.m_surfelHeapBindingLayout, this.m_rayTracingState.m_surfelTraceHwShader, this.m_rayTracingState.m_surfelTraceHwPipeline, this.m_rayTracingState.m_surfelTraceHwPipelineFailed);
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelResolvePipeline(){
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelResolveCs; },
+        s_ShaderArchiveDefaultVariant,
+        s_SurfelResolveShaderDebugName,
+        false,
+        s_SurfelResolvePassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelResolveShader,
+        this.m_rayTracingState.m_surfelResolvePipeline,
+        this.m_rayTracingState.m_surfelResolvePipelineFailed
+    );
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelUpsamplePipeline(){
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelUpsampleCs; },
+        s_ShaderArchiveDefaultVariant,
+        s_SurfelUpsampleShaderDebugName,
+        false,
+        s_SurfelUpsamplePassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelUpsampleShader,
+        this.m_rayTracingState.m_surfelUpsamplePipeline,
+        this.m_rayTracingState.m_surfelUpsamplePipelineFailed
+    );
+}
+
+b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline(){
+    return EnsureSurfelComputePipeline(
+        lambda[](in GiSubsystem s) -> AssetRef<ComputeShader>{ return s.surfelTraceBuildArgsCs; },
+        s_ShaderArchiveDefaultVariant,
+        s_SurfelTraceBuildArgsShaderDebugName,
+        false,
+        s_SurfelTraceBuildArgsPassLabel,
+        this.m_arena,
+        this.m_graphics.getDevice(),
+        this.m_shaderSystem,
+        this.m_rayTracingState.m_surfelHeapBindingLayout,
+        this.m_rayTracingState.m_surfelTraceBuildArgsShader,
+        this.m_rayTracingState.m_surfelTraceBuildArgsPipeline,
+        this.m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -182,181 +408,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_rt_surfel_pipelines_and_render{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 EnsureSurfelComputePipeline(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsBackend::Device& device,
-    RendererShaderSystem& shaderSystem,
-    const Core::Assets::AssetRef<ComputeShader> GiSubsystem::* member,
-    const AStringView variantName,
-    const Name& debugName,
-    const b8 includeAccelStruct,
-    const AStringView passLabel,
-    Core::BindingLayoutHandle& inOutLayout,
-    Core::ShaderHandle& inOutShader,
-    Core::ComputePipelineHandle& inOutPipeline,
-    b8& inOutFailed
-){
-    if(inOutPipeline)
-        return true;
-    if(inOutFailed)
-        return false;
-
-    const Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!ValidateSurfelPipelineDescriptorHeap(heap.isInitialized(), includeAccelStruct, heap.hasAccelStructLayout(), passLabel)){
-        inOutFailed = true;
-        return false;
-    }
-    if(!EnsurePushConstantBindingLayout(arena, device, sizeof(SurfelHeapPushConstants), Core::ShaderType::Compute, inOutLayout)){
-        LogSurfelBindingLayoutCreateFailed(passLabel);
-        inOutFailed = true;
-        return false;
-    }
-    if(!shaderSystem.loadShader<ComputeShader, GiSubsystem>(SubsystemAssetSelector<GiSubsystem, ComputeShader>([member](const GiSubsystem& s){ return s.*member; }), variantName, debugName, inOutShader)){
-        inOutFailed = true;
-        return false;
-    }
-    if(!CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline)){
-        LogSurfelPipelineCreateFailed(passLabel);
-        inOutFailed = true;
-        return false;
-    }
-    LogSurfelPipelineCreated(passLabel);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 SurfelGiPipelineSet::ensureSurfelSpawnPipeline()noexcept{
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(*m_arena, m_graphics->getDevice(), *m_shaderSystem, &GiSubsystem::surfelSpawnCs, Core::ShaderArchive::s_DefaultVariant, s_SurfelSpawnShaderDebugName, false, s_SurfelSpawnPassLabel, m_rayTracingState->m_surfelHeapBindingLayout, m_rayTracingState->m_surfelSpawnShader, m_rayTracingState->m_surfelSpawnPipeline, m_rayTracingState->m_surfelSpawnPipelineFailed);
-}
-
-b8 SurfelGiPipelineSet::ensureSurfelAgeFreePipeline()noexcept{
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(*m_arena, m_graphics->getDevice(), *m_shaderSystem, &GiSubsystem::surfelAgeFreeCs, Core::ShaderArchive::s_DefaultVariant, s_SurfelAgeFreeShaderDebugName, false, s_SurfelAgeFreePassLabel, m_rayTracingState->m_surfelHeapBindingLayout, m_rayTracingState->m_surfelAgeFreeShader, m_rayTracingState->m_surfelAgeFreePipeline, m_rayTracingState->m_surfelAgeFreePipelineFailed);
-}
-
-b8 SurfelGiPipelineSet::ensureSurfelHashBuildPipeline()noexcept{
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(*m_arena, m_graphics->getDevice(), *m_shaderSystem, &GiSubsystem::surfelHashBuildCs, Core::ShaderArchive::s_DefaultVariant, s_SurfelHashBuildShaderDebugName, false, s_SurfelHashBuildPassLabel, m_rayTracingState->m_surfelHeapBindingLayout, m_rayTracingState->m_surfelHashBuildShader, m_rayTracingState->m_surfelHashBuildPipeline, m_rayTracingState->m_surfelHashBuildPipelineFailed);
-}
-
-b8 SurfelGiPipelineSet::ensureSurfelTracePipeline()noexcept{
-    const b8 csg = m_rayTracingState->m_surfelUseCsgTrace;
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(
-        *m_arena,
-        m_graphics->getDevice(),
-        *m_shaderSystem,
-        &GiSubsystem::surfelTraceCs,
-        ResolveGiCsgVariant(csg),
-        s_SurfelTraceShaderDebugName,
-        false,
-        s_SurfelTracePassLabel,
-        m_rayTracingState->m_surfelHeapBindingLayout,
-        csg ? m_rayTracingState->m_surfelTraceCsgShader : m_rayTracingState->m_surfelTraceShader,
-        csg ? m_rayTracingState->m_surfelTraceCsgPipeline : m_rayTracingState->m_surfelTracePipeline,
-        csg ? m_rayTracingState->m_surfelTraceCsgPipelineFailed : m_rayTracingState->m_surfelTracePipelineFailed
-    );
-}
-
-// Hardware trace twin; other surfel passes are shared.
-b8 SurfelGiPipelineSet::ensureSurfelTraceHwPipeline()noexcept{
-    const b8 csg = m_rayTracingState->m_surfelUseCsgTrace;
-    auto& pipeline = csg ? m_rayTracingState->m_surfelTraceCsgHwPipeline : m_rayTracingState->m_surfelTraceHwPipeline;
-    auto& shader = csg ? m_rayTracingState->m_surfelTraceCsgHwShader : m_rayTracingState->m_surfelTraceHwShader;
-    auto& failed = csg ? m_rayTracingState->m_surfelTraceCsgHwPipelineFailed : m_rayTracingState->m_surfelTraceHwPipelineFailed;
-
-    if(pipeline)
-        return true;
-    if(failed)
-        return false;
-    if(!m_graphics->queryFeatureSupport(Core::Feature::RayTracingAccelStruct) || !m_graphics->queryFeatureSupport(Core::Feature::RayQuery)){
-        failed = true;
-        return false;
-    }
-
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(
-        *m_arena,
-        m_graphics->getDevice(),
-        *m_shaderSystem,
-        &GiSubsystem::surfelTraceHwCs,
-        ResolveGiCsgVariant(csg),
-        s_SurfelTraceHwShaderDebugName,
-        true,
-        s_SurfelTraceHwPassLabel,
-        m_rayTracingState->m_surfelHeapBindingLayout,
-        shader,
-        pipeline,
-        failed
-    );
-}
-
-b8 SurfelGiPipelineSet::ensureSurfelResolvePipeline()noexcept{
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(
-        *m_arena,
-        m_graphics->getDevice(),
-        *m_shaderSystem,
-        &GiSubsystem::surfelResolveCs,
-        Core::ShaderArchive::s_DefaultVariant,
-        s_SurfelResolveShaderDebugName,
-        false,
-        s_SurfelResolvePassLabel,
-        m_rayTracingState->m_surfelHeapBindingLayout,
-        m_rayTracingState->m_surfelResolveShader,
-        m_rayTracingState->m_surfelResolvePipeline,
-        m_rayTracingState->m_surfelResolvePipelineFailed
-    );
-}
-
-b8 SurfelGiPipelineSet::ensureSurfelUpsamplePipeline()noexcept{
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(
-        *m_arena,
-        m_graphics->getDevice(),
-        *m_shaderSystem,
-        &GiSubsystem::surfelUpsampleCs,
-        Core::ShaderArchive::s_DefaultVariant,
-        s_SurfelUpsampleShaderDebugName,
-        false,
-        s_SurfelUpsamplePassLabel,
-        m_rayTracingState->m_surfelHeapBindingLayout,
-        m_rayTracingState->m_surfelUpsampleShader,
-        m_rayTracingState->m_surfelUpsamplePipeline,
-        m_rayTracingState->m_surfelUpsamplePipelineFailed
-    );
-}
-
-b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline()noexcept{
-    return __hidden_rt_surfel_pipelines_and_render::EnsureSurfelComputePipeline(
-        *m_arena,
-        m_graphics->getDevice(),
-        *m_shaderSystem,
-        &GiSubsystem::surfelTraceBuildArgsCs,
-        Core::ShaderArchive::s_DefaultVariant,
-        s_SurfelTraceBuildArgsShaderDebugName,
-        false,
-        s_SurfelTraceBuildArgsPassLabel,
-        m_rayTracingState->m_surfelHeapBindingLayout,
-        m_rayTracingState->m_surfelTraceBuildArgsShader,
-        m_rayTracingState->m_surfelTraceBuildArgsPipeline,
-        m_rayTracingState->m_surfelTraceBuildArgsPipelineFailed
-    );
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -455,7 +506,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Age-free recycles unseen surfels before the graph-owned cell-head reset and hash rebuild.
     if(dispatchAgeFree){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelAgeFree, m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -471,7 +522,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Rebuild bucket lists before spawning uncovered surface representatives.
     if(dispatchHashBuild){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelHashBuild, m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -487,7 +538,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Spawn retains compatible surfaces and inserts uncovered candidates into bounded bucket lists.
     if(dispatchSpawn){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelSpawn, m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
 
@@ -519,7 +570,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         return true;
 
     if(dispatchTrace){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelTrace, m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -544,7 +595,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(dispatchResolve){
         const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, targets.surfelResolveFactor);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, m_graphics.getDevice(), commandList);
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelResolve, m_graphics.getDevice(), commandList);
 
             commandList.commitBarriers();
 
@@ -568,7 +619,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Surface-aware upsample preserves coverage across edges.
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelUpsample, m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
 

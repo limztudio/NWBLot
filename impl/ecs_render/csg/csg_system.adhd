@@ -61,7 +61,9 @@ extern class CsgShapeRegistry;
 [cpp_name("::NWB::Impl::IMaterialSurfaceLookup")]
 extern class IMaterialSurfaceLookup;
 [cpp_name("::NWB::Impl::RendererMeshSystem")]
-extern class RendererMeshSystem;
+extern class RendererMeshSystem{
+    public MeshViewBufferSnapshot meshViewBufferSnapshot()const;
+};
 [cpp_name("::NWB::Impl::CsgFrameReceiverLookup")]
 extern class CsgFrameReceiverLookup;
 

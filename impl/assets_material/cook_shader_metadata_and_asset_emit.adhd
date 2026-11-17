@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/asset.adhd>
+#include <impl/assets_material/material_binary_writer.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u8> MaterialBindDependencyMergeAction{
     KeepMultiInterface = 0,
     AssignFirstInterface = 1,
@@ -68,6 +75,133 @@ Expected<b8> ParseMaterialBoolProperty(in Path nwbFilePath, in MetascriptValue a
     }
     error("Material meta '{}': '{}' must be 0 or 1", PathToString(nwbFilePath), fieldName);
     return MakeUnexpected(Failure());
+}
+
+b8 AppendParsedMaterialParameter(
+    in Path nwbFilePath,
+    in StringView paramKeyText,
+    in MetascriptValue paramValue,
+    mut HashMap<CompactString, CompactString> outParameters
+){
+    if(!paramValue.isString()){
+        error("Material meta '{}': parameter '{}' must be a string", nwbFilePath, paramKeyText);
+        return false;
+    }
+
+    CompactString key;
+    CompactString value;
+    if(!key.assign(paramKeyText) || !value.assign(paramValue.asString())){
+        error("Material meta '{}': parameter '{}' exceeds ACompactString capacity", nwbFilePath, paramKeyText);
+        return false;
+    }
+    if(key.view().empty()){
+        error("Material meta '{}': parameter names must not be empty", nwbFilePath);
+        return false;
+    }
+
+    if(!outParameters.try_emplace(key, value).second){
+        error("Material meta '{}': duplicate parameter '{}'", nwbFilePath, key.view());
+        return false;
+    }
+
+    return true;
+}
+
+b8 ParseMaterialMetadataParametersInto(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    mut HashMap<CompactString, CompactString> outParameters
+){
+    outParameters.clear();
+
+    b8 found = false;
+    b8 isMap = false;
+    b8 ok = true;
+    asset.visitField(
+        s_MaterialMetaParametersField,
+        lambda[in nwbFilePath, mut found, mut isMap, mut ok, mut outParameters](in MetascriptValue parametersValue) -> void{
+            found = true;
+            isMap = parametersValue.isMap();
+            if(!isMap){
+                ok = false;
+                return;
+            }
+            if(!parametersValue.forEachMapEntry(
+                lambda[in nwbFilePath, mut ok, mut outParameters](in StringView paramKeyText, in MetascriptValue paramValue) -> b8{
+                    if(paramValue.isString()){
+                        error("Material meta '{}': interface parameter '{}' must be declared inside a block map", nwbFilePath, paramKeyText);
+                        ok = false;
+                        return false;
+                    }
+                    if(!paramValue.isMap()){
+                        error("Material meta '{}': parameter '{}' must be a block map", nwbFilePath, paramKeyText);
+                        ok = false;
+                        return false;
+                    }
+                    if(paramKeyText.empty()){
+                        error("Material meta '{}': parameter block names must not be empty", nwbFilePath);
+                        ok = false;
+                        return false;
+                    }
+
+                    return paramValue.forEachMapEntry(
+                        lambda[in nwbFilePath, in paramKeyText, mut ok, mut outParameters](in StringView blockParamKeyText, in MetascriptValue blockParamValue) -> b8{
+                            if(blockParamKeyText.empty()){
+                                error("Material meta '{}': parameter names in block '{}' must not be empty", nwbFilePath, paramKeyText);
+                                ok = false;
+                                return false;
+                            }
+
+                            const Expected<CompactString> flattenedKey = BuildMaterialBindParameterKey(paramKeyText, blockParamKeyText);
+                            if(!flattenedKey.has_value()){
+                                error("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity", nwbFilePath, paramKeyText, blockParamKeyText);
+                                ok = false;
+                                return false;
+                            }
+                            if(!AppendParsedMaterialParameter(nwbFilePath, flattenedKey.value().view(), blockParamValue, outParameters)){
+                                ok = false;
+                                return false;
+                            }
+                            return true;
+                        }
+                    );
+                }
+            ))
+                ok = false;
+        }
+    );
+    if(!found)
+        return true;
+    if(!isMap){
+        error("Material meta '{}': parameters must be a map", nwbFilePath);
+        return false;
+    }
+    return ok;
+}
+
+b8 SerializeMaterialAsset(in Material material, mut Vector<u8> outBinary){
+    if(!material.validatePayload(s_MaterialSerializeContextText, s_MaterialSerializeContextText))
+        return false;
+    return MaterialBinaryWriter().serialize(
+        material.shaderVariant(),
+        material.materialInterface(),
+        material.typedLayoutHash(),
+        material.typedLayoutBlocks(),
+        material.typedLayoutFields(),
+        material.typedBlockBytes(),
+        material.resourceReferences(),
+        material.stageShaders(),
+        material.stageShaderCount(),
+        material.transparent(),
+        material.twoSided(),
+        material.refractive(),
+        material.shadingModelId(),
+        material.surfaceDispatchId(),
+        material.avboitAccumulatePixelShader(),
+        material.avboitOccupancyPixelShader(),
+        material.avboitExtinctionPixelShader(),
+        outBinary
+    );
 }
 
 
@@ -300,79 +434,6 @@ static b8 ValidateMaterialOpticalStageContract(const Path& nwbFilePath, const Ma
 
     NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': explicit 'shaders' cannot be used with transparent/refractive materials; author a project 'surface' hook so AVBOIT and shadow optical passes use the material contract"), PathToString<tchar>(nwbFilePath));
     return false;
-}
-
-static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena){
-    MaterialCookEntry::ParameterMap parameters(0u, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena);
-
-    const auto* parametersValue = asset.findField(s_MaterialMetaParametersField);
-    if(!parametersValue)
-        return parameters;
-    if(!parametersValue->isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameters must be a map"), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-    parameters.reserve(parametersValue->asMap().size());
-
-    auto appendParameter = [&](const AStringView paramKeyText, const Core::Metascript::Value& paramValue) -> b8{
-        if(!paramValue.isString()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter '{}' must be a string"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText));
-            return false;
-        }
-
-        ACompactString key;
-        ACompactString value;
-        const AStringView paramValueText(paramValue.asString().data(), paramValue.asString().size());
-        if(!key.assign(paramKeyText) || !value.assign(paramValueText)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter '{}' exceeds ACompactString capacity"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText));
-            return false;
-        }
-        if(!key){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter names must not be empty"), PathToString<tchar>(nwbFilePath));
-            return false;
-        }
-
-        if(!parameters.emplace(key, value).second){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': duplicate parameter '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(key.view()));
-            return false;
-        }
-
-        return true;
-    };
-
-    for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
-        const AStringView paramKeyText(paramKey.data(), paramKey.size());
-        if(paramValue.isString()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': interface parameter '{}' must be declared inside a block map"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText));
-            return MakeUnexpected(Failure{});
-        }
-        if(!paramValue.isMap()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter '{}' must be a block map"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText));
-            return MakeUnexpected(Failure{});
-        }
-        if(paramKeyText.empty()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter block names must not be empty"), PathToString<tchar>(nwbFilePath));
-            return MakeUnexpected(Failure{});
-        }
-
-        for(const auto& [blockParamKey, blockParamValue] : paramValue.asMap()){
-            const AStringView blockParamKeyText(blockParamKey.data(), blockParamKey.size());
-            if(blockParamKeyText.empty()){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter names in block '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText));
-                return MakeUnexpected(Failure{});
-            }
-
-            const Expected<ACompactString> flattenedKey = BuildMaterialBindParameterKey(paramKeyText, blockParamKeyText);
-            if(!flattenedKey){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText), ConvertString(blockParamKeyText));
-                return MakeUnexpected(Failure{});
-            }
-            if(!appendParameter(flattenedKey->view(), blockParamValue))
-                return MakeUnexpected(Failure{});
-        }
-    }
-
-    return parameters;
 }
 
 static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena, ScratchArena& scratchArena){
@@ -646,10 +707,8 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, con
     entry.stageShaders = Move(*stageShaders);
     if(!ValidateMaterialOpticalStageContract(nwbFilePath, entry))
         return MakeUnexpected(Failure{});
-    auto parameters = ParseMaterialParameters(nwbFilePath, asset, arena);
-    if(!parameters)
+    if(!ParseMaterialMetadataParametersInto(nwbFilePath, asset, entry.parameters))
         return MakeUnexpected(Failure{});
-    entry.parameters = Move(*parameters);
 
     return entry;
 }
@@ -730,28 +789,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         return false;
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.validatePayload(s_MaterialSerializeContextText, s_MaterialSerializeContextText))
-        return false;
-    return MaterialBinaryWriter().serialize(
-        material.shaderVariant(),
-        material.materialInterface(),
-        material.typedLayoutHash(),
-        material.typedLayoutBlocks(),
-        material.typedLayoutFields(),
-        material.typedBlockBytes(),
-        material.resourceReferences(),
-        material.stageShaders(),
-        material.stageShaderCount(),
-        material.transparent(),
-        material.twoSided(),
-        material.refractive(),
-        material.shadingModelId(),
-        material.surfaceDispatchId(),
-        material.avboitAccumulatePixelShader(),
-        material.avboitOccupancyPixelShader(),
-        material.avboitExtinctionPixelShader(),
-        outBinary
-    );
+    return SerializeMaterialAsset(material, outBinary);
 }
 
 

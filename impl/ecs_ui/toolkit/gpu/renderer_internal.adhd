@@ -86,13 +86,6 @@ template<typename T, typename... Args>
     return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
-void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
-[[nodiscard]] b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GpuSkinVersion : NoCopy{
 public:
     explicit GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept

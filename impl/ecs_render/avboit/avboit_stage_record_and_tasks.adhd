@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +33,27 @@ b8 AreAvboitIntegrationResourcesValid(in b8 extinctionTaskValid, in b8 extinctio
     return extinctionTaskValid && extinctionValid && controlValid && extinctionOverflowValid && transmittanceValid && currentBindlessSlotsValid;
 }
 
+GpuTaskSchedulingHint BuildAvboitComputeEffectSchedulingHint(){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    // Keep each effect in one recording packet while the compiler chooses its queue.
+    ConfigureComputeEffectRoutingHint(true, scheduling);
+    // Accepted samples use the queue class and exact transport chosen by this compile.
+    scheduling.allowTimingFeedbackRouting = true;
+    scheduling.allowCrossClassTimingFeedbackRouting = true;
+    return scheduling;
+}
+
+GpuTaskTimingMetadata BuildAvboitComputeStageTimingMetadata(in AvboitFrameTargets targets){
+    GpuTaskTimingMetadata metadata;
+    metadata.resolutionClass = ResolveAvboitTimingResolutionClass(targets.lowWidth, targets.lowHeight);
+    return metadata;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,22 +78,11 @@ namespace __hidden_avboit_stage_record_and_tasks{
 
 
 [[nodiscard]] static Core::GpuTaskSchedulingHint ComputeEffectScheduling()noexcept{
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Medium;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    scheduling.allowMergeAcrossConsumerFrontier = true;
-    // Keep each effect in one recording packet while the compiler chooses its queue.
-    ConfigureComputeEffectRoutingHint(true, scheduling);
-    // Accepted samples use the queue class and exact transport chosen by this compile.
-    scheduling.allowTimingFeedbackRouting = true;
-    scheduling.allowCrossClassTimingFeedbackRouting = true;
-    return scheduling;
+    return BuildAvboitComputeEffectSchedulingHint();
 }
 
 [[nodiscard]] static Core::GpuTaskTimingMetadata AvboitComputeStageTimingMetadata(const AvboitFrameTargets& targets)noexcept{
-    return Core::GpuTaskTimingMetadata{ .resolutionClass = ResolveAvboitTimingResolutionClass(targets.lowWidth, targets.lowHeight) };
+    return BuildAvboitComputeStageTimingMetadata(targets);
 }
 
 
@@ -106,8 +117,8 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
         const Array<Core::GpuTaskId, 1> preDependency = { inputs.occupancyTask };
         Core::GpuTaskDesc depthWarpDesc;
         depthWarpDesc
-            .setIdentity(Name(RendererGpuPassText::s_AvboitDepthWarpName))
-            .setMarkerLabel(RendererGpuPassText::s_AvboitDepthWarpLabel)
+            .setIdentity(Name(s_AvboitDepthWarpName))
+            .setMarkerLabel(s_AvboitDepthWarpLabel)
             .setScheduling(avboitComputeScheduling)
             .setTiming(avboitComputeStageTiming)
             .setDependencies(preDependency)
@@ -115,7 +126,7 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
         ;
         const auto depthWarpTaskResult = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
-            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, });
+            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &s_TimingScopeAvboitDepthWarp, });
         if(!depthWarpTaskResult){
             m_avboitSystem.taskGraphStage().m_depthWarpTask = {};
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
@@ -156,7 +167,7 @@ b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationSt
     Core::GpuTaskDesc integrationDesc;
     integrationDesc
         .setIdentity(Name(s_RenderIdentityRenderAvboitIntegration))
-        .setMarkerLabel(RendererGpuPassText::s_AvboitIntegrationLabel)
+        .setMarkerLabel(s_AvboitIntegrationLabel)
         .setScheduling(avboitComputeScheduling)
         .setTiming(avboitComputeStageTiming)
         .setDependencies(integrationDependency)
@@ -164,7 +175,7 @@ b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationSt
     ;
     const auto integrationTaskResult = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
-        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, });
+        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &s_TimingScopeAvboitIntegration, });
     if(!integrationTaskResult){
         m_avboitSystem.taskGraphStage().m_integrationTask = {};
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
@@ -275,8 +286,8 @@ b8 AvboitExtinctionRecordBuilder::declare(
         NWB_MAKE_AVBOIT_RASTER_RECORD_PHASE_DESC(
             "render.avboit.extinction",
             "AVBOIT Extinction",
-            Name(RendererGpuPassText::s_AvboitExtinctionName),
-            RendererGpuPassText::s_AvboitExtinctionLabel,
+            Name(s_AvboitExtinctionName),
+            s_AvboitExtinctionLabel,
             s_AvboitResourceBaseCount
         ),
         extinctionPayload,
@@ -418,13 +429,13 @@ b8 AvboitPreGraphTask::Record(const Payload& payload, Core::CommandList& command
 }
 
 b8 AvboitOccupancyComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    const AvboitComputeEmulationRecordTrait trait(RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, AvboitTargetFramebufferKind::Low);
+    const AvboitComputeEmulationRecordTrait trait(s_TimingScopeAvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, AvboitTargetFramebufferKind::Low);
 
     return RecordAvboitComputeEmulation(payload, commandList, trait);
 }
 
 b8 AvboitOccupancySharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    const AvboitComputeEmulationRecordTrait trait(RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, AvboitTargetFramebufferKind::Low);
+    const AvboitComputeEmulationRecordTrait trait(s_TimingScopeAvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, AvboitTargetFramebufferKind::Low);
 
     return RecordAvboitSharedComputeEmulation(payload, commandList, trait);
 }
@@ -439,7 +450,7 @@ b8 AvboitOccupancyGraphTask::Record(const Payload& payload, Core::CommandList& c
             DeferredFrameTargets& targets,
             const MaterialPassDrawItemPartitionsView& drawItems,
             const CsgFrameGpuDataView& csgFrameData,
-            const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+            const CsgGraphResourceSnapshot& csgResources,
             const MeshFrameBindingSnapshot& frameBindings,
             const usize instanceCount,
             const usize materialTypedByteCount,
@@ -470,13 +481,13 @@ b8 AvboitDepthWarpGraphTask::Record(const Payload& payload, Core::CommandList& c
 }
 
 b8 AvboitExtinctionComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    const AvboitComputeEmulationRecordTrait trait(RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, AvboitTargetFramebufferKind::Low);
+    const AvboitComputeEmulationRecordTrait trait(s_TimingScopeAvboitExtinction, MaterialPipelinePass::AvboitExtinction, AvboitTargetFramebufferKind::Low);
 
     return RecordAvboitComputeEmulation(payload, commandList, trait);
 }
 
 b8 AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    const AvboitComputeEmulationRecordTrait trait(RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, AvboitTargetFramebufferKind::Low);
+    const AvboitComputeEmulationRecordTrait trait(s_TimingScopeAvboitExtinction, MaterialPipelinePass::AvboitExtinction, AvboitTargetFramebufferKind::Low);
 
     return RecordAvboitSharedComputeEmulation(payload, commandList, trait);
 }
@@ -491,7 +502,7 @@ b8 AvboitExtinctionGraphTask::Record(const Payload& payload, Core::CommandList& 
             DeferredFrameTargets& targets,
             const MaterialPassDrawItemPartitionsView& drawItems,
             const CsgFrameGpuDataView& csgFrameData,
-            const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+            const CsgGraphResourceSnapshot& csgResources,
             const MeshFrameBindingSnapshot& frameBindings,
             const usize instanceCount,
             const usize materialTypedByteCount,
@@ -522,13 +533,13 @@ b8 AvboitIntegrationGraphTask::Record(const Payload& payload, Core::CommandList&
 }
 
 b8 AvboitAccumulationComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    const AvboitComputeEmulationRecordTrait trait(RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, AvboitTargetFramebufferKind::Accumulation);
+    const AvboitComputeEmulationRecordTrait trait(s_TimingScopeAvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, AvboitTargetFramebufferKind::Accumulation);
 
     return RecordAvboitComputeEmulation(payload, commandList, trait);
 }
 
 b8 AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    const AvboitComputeEmulationRecordTrait trait(RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, AvboitTargetFramebufferKind::Accumulation);
+    const AvboitComputeEmulationRecordTrait trait(s_TimingScopeAvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, AvboitTargetFramebufferKind::Accumulation);
 
     return RecordAvboitSharedComputeEmulation(payload, commandList, trait);
 }
@@ -543,7 +554,7 @@ b8 AvboitAccumulationGraphTask::Record(const Payload& payload, Core::CommandList
             DeferredFrameTargets& targets,
             const MaterialPassDrawItemPartitionsView& drawItems,
             const CsgFrameGpuDataView& csgFrameData,
-            const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+            const CsgGraphResourceSnapshot& csgResources,
             const MeshFrameBindingSnapshot& frameBindings,
             const usize instanceCount,
             const usize materialTypedByteCount,

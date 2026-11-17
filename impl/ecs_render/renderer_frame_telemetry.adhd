@@ -146,52 +146,52 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
     builder.addEdge(frameSetup, meshViewBuffer, Edge::Writes);
     builder.addEdge(frameSetup, sceneShadingBuffer, Edge::Writes);
 
-    const Handle deferredClear = appendPass(RendererGpuTimingScope::s_DeferredClear, "Deferred Clear");
+    const Handle deferredClear = appendPass(s_TimingScopeDeferredClear, "Deferred Clear");
     builder.addEdge(deferredClear, deferredTargets, Edge::Writes);
 
-    const Handle materialUpload = appendPass(RendererGpuTimingScope::s_MaterialUpload, "Material Upload");
+    const Handle materialUpload = appendPass(s_TimingScopeMaterialUpload, "Material Upload");
     builder.addEdge(materialUpload, materialBuffers, Edge::Writes);
 
     Handle csgIntervalTargets;
     if(hasOpaqueCsgFrameWork){
         csgIntervalTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderCsgIntervalTargets), "CSG Interval Targets");
 
-        const Handle csgUpload = appendPass(RendererGpuTimingScope::s_CsgUpload, "CSG Upload");
+        const Handle csgUpload = appendPass(s_TimingScopeCsgUpload, "CSG Upload");
         builder.addEdge(csgUpload, csgIntervalTargets, Edge::Writes);
 
-        const Handle csgSampleStateUpload = appendPass(RendererGpuTimingScope::s_CsgSampleStateUpload, "CSG Sample State Upload");
+        const Handle csgSampleStateUpload = appendPass(s_TimingScopeCsgSampleStateUpload, "CSG Sample State Upload");
         builder.addEdge(csgSampleStateUpload, csgIntervalTargets, Edge::Writes);
 
-        const Handle csgIntervalPeel = appendPass(RendererGpuTimingScope::s_CsgIntervalPeel, "CSG Interval Peel");
+        const Handle csgIntervalPeel = appendPass(s_TimingScopeCsgIntervalPeel, "CSG Interval Peel");
         builder.addEdge(csgIntervalPeel, csgIntervalTargets, Edge::Writes);
 
-        const Handle csgReceiverSurface = appendPass(RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, "Opaque CSG Receiver Surface");
+        const Handle csgReceiverSurface = appendPass(s_TimingScopeOpaqueCsgReceiverSurface, "Opaque CSG Receiver Surface");
         builder.addEdge(meshViewBuffer, csgReceiverSurface, Edge::Reads);
         builder.addEdge(csgReceiverSurface, csgIntervalTargets, Edge::Writes);
 
-        const Handle csgReceiverSpanBuild = appendPass(RendererGpuTimingScope::s_CsgReceiverSpanBuild, "CSG Receiver Span Build");
+        const Handle csgReceiverSpanBuild = appendPass(s_TimingScopeCsgReceiverSpanBuild, "CSG Receiver Span Build");
         builder.addEdge(csgIntervalTargets, csgReceiverSpanBuild, Edge::Reads);
         builder.addEdge(csgReceiverSpanBuild, csgIntervalTargets, Edge::Writes);
 
-        const Handle csgIntervalCombine = appendPass(RendererGpuTimingScope::s_CsgIntervalCombine, "CSG Interval Combine");
+        const Handle csgIntervalCombine = appendPass(s_TimingScopeCsgIntervalCombine, "CSG Interval Combine");
         builder.addEdge(csgIntervalTargets, csgIntervalCombine, Edge::Reads);
         builder.addEdge(csgIntervalCombine, csgIntervalTargets, Edge::Writes);
     }
 
-    const Handle opaqueRegular = appendPass(RendererGpuTimingScope::s_OpaqueRegular, "Opaque Regular");
+    const Handle opaqueRegular = appendPass(s_TimingScopeOpaqueRegular, "Opaque Regular");
     builder.addEdge(meshViewBuffer, opaqueRegular, Edge::Reads);
     builder.addEdge(sceneShadingBuffer, opaqueRegular, Edge::Reads);
     builder.addEdge(materialBuffers, opaqueRegular, Edge::Reads);
     builder.addEdge(opaqueRegular, deferredTargets, Edge::Writes);
 
     if(hasOpaqueCsgFrameWork){
-        const Handle opaqueCsg = appendPass(RendererGpuTimingScope::s_OpaqueCsg, "Opaque CSG");
+        const Handle opaqueCsg = appendPass(s_TimingScopeOpaqueCsg, "Opaque CSG");
         builder.addEdge(meshViewBuffer, opaqueCsg, Edge::Reads);
         builder.addEdge(materialBuffers, opaqueCsg, Edge::Reads);
         builder.addEdge(csgIntervalTargets, opaqueCsg, Edge::Reads);
         builder.addEdge(opaqueCsg, deferredTargets, Edge::Writes);
 
-        const Handle csgCapFill = appendPass(RendererGpuTimingScope::s_CsgCapFill, "CSG Cap Fill");
+        const Handle csgCapFill = appendPass(s_TimingScopeCsgCapFill, "CSG Cap Fill");
         builder.addEdge(csgIntervalTargets, csgCapFill, Edge::Reads);
         builder.addEdge(csgCapFill, deferredTargets, Edge::Writes);
     }
@@ -200,46 +200,46 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
     if(hasAvboitWork){
         avboitTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderAvboitTargets), "AVBOIT Targets");
 
-        const Handle avboitClear = appendPass(RendererGpuTimingScope::s_AvboitClear, "AVBOIT Clear");
+        const Handle avboitClear = appendPass(s_TimingScopeAvboitClear, "AVBOIT Clear");
         builder.addEdge(avboitClear, avboitTargets, Edge::Writes);
     }
     if(hasTransparentRenderers){
         if(hasTransparentCsgFrameWork){
-            const Handle transparentCsgIntervals = appendPass(RendererGpuTimingScope::s_TransparentCsgIntervals, RendererGpuPassText::s_TransparentCsgIntervalsLabel);
+            const Handle transparentCsgIntervals = appendPass(s_TimingScopeTransparentCsgIntervals, s_TransparentCsgIntervalsLabel);
             builder.addEdge(deferredTargets, transparentCsgIntervals, Edge::Reads);
             builder.addEdge(transparentCsgIntervals, avboitTargets, Edge::Writes);
         }
 
-        const Handle avboitOccupancy = appendPass(RendererGpuTimingScope::s_AvboitOccupancy, "AVBOIT Occupancy");
+        const Handle avboitOccupancy = appendPass(s_TimingScopeAvboitOccupancy, "AVBOIT Occupancy");
         builder.addEdge(meshViewBuffer, avboitOccupancy, Edge::Reads);
         builder.addEdge(materialBuffers, avboitOccupancy, Edge::Reads);
         builder.addEdge(avboitOccupancy, avboitTargets, Edge::Writes);
 
-        const Handle avboitDepthWarp = appendPass(RendererGpuTimingScope::s_AvboitDepthWarp, RendererGpuPassText::s_AvboitDepthWarpLabel);
+        const Handle avboitDepthWarp = appendPass(s_TimingScopeAvboitDepthWarp, s_AvboitDepthWarpLabel);
         builder.addEdge(avboitTargets, avboitDepthWarp, Edge::Reads);
         builder.addEdge(avboitDepthWarp, avboitTargets, Edge::Writes);
 
-        const Handle avboitExtinction = appendPass(RendererGpuTimingScope::s_AvboitExtinction, RendererGpuPassText::s_AvboitExtinctionLabel);
+        const Handle avboitExtinction = appendPass(s_TimingScopeAvboitExtinction, s_AvboitExtinctionLabel);
         builder.addEdge(avboitTargets, avboitExtinction, Edge::Reads);
         builder.addEdge(avboitExtinction, avboitTargets, Edge::Writes);
 
-        const Handle avboitIntegration = appendPass(RendererGpuTimingScope::s_AvboitIntegration, RendererGpuPassText::s_AvboitIntegrationLabel);
+        const Handle avboitIntegration = appendPass(s_TimingScopeAvboitIntegration, s_AvboitIntegrationLabel);
         builder.addEdge(avboitTargets, avboitIntegration, Edge::Reads);
         builder.addEdge(avboitIntegration, avboitTargets, Edge::Writes);
 
-        const Handle avboitAccumulate = appendPass(RendererGpuTimingScope::s_AvboitAccumulate, "AVBOIT Accumulate");
+        const Handle avboitAccumulate = appendPass(s_TimingScopeAvboitAccumulate, "AVBOIT Accumulate");
         builder.addEdge(avboitTargets, avboitAccumulate, Edge::Reads);
         builder.addEdge(avboitAccumulate, deferredTargets, Edge::Writes);
     }
 
-    const Handle deferredLighting = appendPass(RendererGpuTimingScope::s_DeferredLighting, RendererGpuPassText::s_DeferredLightingLabel);
+    const Handle deferredLighting = appendPass(s_TimingScopeDeferredLighting, s_DeferredLightingLabel);
     builder.addEdge(deferredTargets, deferredLighting, Edge::Reads);
     builder.addEdge(deferredLighting, deferredTargets, Edge::Writes);
 
-    const Handle deferredComposite = appendPass(RendererGpuTimingScope::s_DeferredComposite, RendererGpuPassText::s_DeferredCompositeLabel);
+    const Handle deferredComposite = appendPass(s_TimingScopeDeferredComposite, s_DeferredCompositeLabel);
     builder.addEdge(deferredTargets, deferredComposite, Edge::Reads);
 
-    const Handle deferredPresent = appendPass(RendererGpuTimingScope::s_DeferredPresent, RendererGpuPassText::s_DeferredPresentLabel);
+    const Handle deferredPresent = appendPass(s_TimingScopeDeferredPresent, s_DeferredPresentLabel);
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 

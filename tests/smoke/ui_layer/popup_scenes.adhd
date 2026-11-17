@@ -332,7 +332,6 @@ void ObserveNestedPopupSmokeTargets(
 
 UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(mut GlobalArena arena){
     this.m_source = UiNestedPopupSmokeSource(arena);
-    this.m_search = SearchComboState(arena);
     const b8 initialized = this.m_beforeText.setText("Before") && this.m_afterText.setText("After") && this.m_childText.setText("Child");
     [essential] assert(initialized, "UI nested popup smoke models must initialize");
     this.m_combo.select(1u);

@@ -424,6 +424,18 @@ b8 ValidateCanonicalDependencyRootAliasKey(in StringView canonicalKey){
     return false;
 }
 
+Path NormalizeDependencyRootAliasPath(in Path source){
+    Path path = source.lexicallyNormal();
+    while(!path.empty() && !path.hasFilename()){
+        const Path parentPath = path.parentPath();
+        if(parentPath.empty() || parentPath == path)
+            break;
+        path = parentPath;
+    }
+    return path;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -500,17 +512,6 @@ public:
         , path(&dependency)
     {}
 };
-
-static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
-    ScratchPath path = source.lexicallyNormal();
-    while(!path.empty() && !path.hasFilename()){
-        const ScratchPath parentPath = path.parentPath();
-        if(parentPath.empty() || parentPath == path)
-            break;
-        path = parentPath;
-    }
-    return path;
-}
 
 static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, const b8 allowUnaliasedPath, Core::Alloc::ScratchArena& scratchArena){
     const auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
@@ -618,7 +619,7 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
             return MakeUnexpected(Failure{});
         }
 
-        normalizedAlias.root = __hidden_shader_cook_checksum::NormalizeDependencyRootAliasPath(*rootPath);
+        normalizedAlias.root = __hidden_shader_cook_checksum::ScratchPath(scratchArena, NWB::Impl::NormalizeDependencyRootAliasPath(scratchArena, *rootPath));
         normalizedAlias.key = rootAlias.key;
         CanonicalizeTextInPlace(normalizedAlias.key);
         if(!ValidateCanonicalDependencyRootAliasKey(AStringView(normalizedAlias.key)))

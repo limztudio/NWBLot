@@ -243,7 +243,7 @@ static void RecordCausticPhotonPass(
         causticPhotonTiming->reset();
     }
     else{
-        Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics.gpuTiming(), s_TimingScopeCausticPhotons, graphics.getDevice(), commandList);
 
         recordPhotons();
     }
@@ -256,26 +256,6 @@ static void RecordCausticPhotonPass(
         state.m_causticRefractiveInstanceCount,
         dispatchLogged
     );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u32 ResolveCausticLights(const Span<const f32> causticImportance, const u32 refractiveInstanceCount, Span<SceneLightGpuData> lights)noexcept{
-    return CausticLightSelector().assignSlots(causticImportance, refractiveInstanceCount, lights);
 }
 
 

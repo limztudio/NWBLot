@@ -880,7 +880,6 @@ void UiRadioGroupSmokeScene::paintMarkers(mut UiPaintContext context)const{
 
 UiSearchComboSmokeScene::UiSearchComboSmokeScene(mut GlobalArena arena){
     this.m_source = UiSearchComboSmokeSource(arena);
-    this.m_state = SearchComboState(arena);
     this.m_selectionView = EditBoxView(arena);
 }
 

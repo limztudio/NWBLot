@@ -95,7 +95,7 @@ public:
 
         if(plan.generation != m_generation || plan.sequence != m_reservedSequence)
             return;
-        if(!token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration)
+        if(!IsValidAcceptedReflectionHistoryToken(token, m_deviceGeneration))
             return;
         ApplyAcceptedReflectionHistoryPlan(
             plan,

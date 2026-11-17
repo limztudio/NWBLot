@@ -80,7 +80,7 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
     FrameGraphSoftwareBvhBuildStateResult result(__adhd_caller_arena);
     using namespace RendererTaskGraphDetail;
     const TraceGeometryImportPolicy importPolicy;
-    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = inputs.rayTracingShadowResources;
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = *inputs.rayTracingShadowResources;
     Vector<Core::GpuGraphResourceId, ::ArenaBase> softwareBvhBuildStateResources{ __adhd_caller_arena };
     Vector<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ scratchArena };
     if(inputs.softwareTraceResourcesPrepared){
@@ -196,7 +196,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(*m_graph, *m_meshSystem);
     auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
         __adhd_caller_arena,
-        FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = rayTracingShadowResources, .softwareTraceResourcesPrepared = result.softwareTraceResourcesPrepared, },
+        FrameGraphSoftwareBvhBuildStateInputs(rayTracingShadowResources, result.softwareTraceResourcesPrepared),
         scratchArena
     );
     if(!softwareBvhBuildStateResult){

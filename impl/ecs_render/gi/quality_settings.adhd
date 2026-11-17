@@ -44,6 +44,7 @@ const f32 s_SurfelNormalBias = 0.05f;
 // Delayed counter readback avoids stalling on the asynchronous copy.
 const u32 s_SurfelCountLogInterval = 120u;
 const u32 s_SurfelCountLogDelay = 3u;
+const Color s_SurfelIrradianceClearColor = Color(0.f, 0.f, 0.f, 0.f);
 const StringView s_GiCsgDisabledVariant = "NWB_GI_CSG_ENABLED=0";
 const StringView s_GiCsgEnabledVariant = "NWB_GI_CSG_ENABLED=1";
 const StringView s_SurfelConstantsName = "render.surfel_gi.constants";

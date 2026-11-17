@@ -115,7 +115,7 @@ public:
             return false;
         if(!payload.shadowPrepared)
             return true;
-        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowViews, payload.graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowViews, payload.graphics.getDevice(), commandList);
 
         return RecordLightSpaceViews(payload.snapshot, commandList, payload.graphics.getDevice().getDescriptorHeap());
     }
@@ -135,7 +135,7 @@ public:
             return false;
         if(!payload.shadowPrepared)
             return true;
-        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowShade, payload.graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowShade, payload.graphics.getDevice(), commandList);
 
         if(!RecordLightSpaceShade(payload.snapshot, commandList, payload.graphics.getDevice().getDescriptorHeap()))
             return false;
@@ -223,7 +223,7 @@ public:
             return false;
         if(!payload.shadowPrepared)
             return true;
-        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowCull, payload.graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowCull, payload.graphics.getDevice(), commandList);
 
         return RecordLightSpaceCull(payload.frozenSnapshot(), commandList, payload.graphics.getDevice().getDescriptorHeap());
     }
@@ -253,7 +253,7 @@ public:
         if(!payload.shadowPrepared)
             return true;
         const LightSpaceShadowSnapshot snapshot = payload.frozenSnapshot();
-        const auto& scope = payload.transparent ? RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture : RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture;
+        const auto& scope = payload.transparent ? s_TimingScopeLightSpaceShadowTransparentCapture : s_TimingScopeLightSpaceShadowOpaqueCapture;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), scope, payload.graphics.getDevice(), commandList);
 
         for(u32 view = 0u; view < snapshot.plan.viewCount; ++view){

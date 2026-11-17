@@ -57,33 +57,12 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 
 struct MaterialPipelineKeyHasher{
     [[nodiscard]] usize operator()(const MaterialPipelineKey& key)const noexcept{
-        usize seed = ComputeMaterialPipelineBaseHash(
-            key.material,
-            key.pass,
-            key.twoSided,
-            key.csgMode,
-            key.csgEvaluatorVariant,
-            key.csgShapeRegistryRevision,
-            static_cast<u32>(key.framebufferInfo.depthFormat),
-            key.framebufferInfo.sampleCount,
-            key.framebufferInfo.sampleQuality
-        );
-        for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
-            ::HashCombine(seed, format);
-        return seed;
+        return HashMaterialPipelineKey(key);
     }
 };
 struct MaterialPipelineKeyEqualTo{
     [[nodiscard]] b8 operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{
-        return
-            lhs.material == rhs.material
-            && lhs.pass == rhs.pass
-            && lhs.twoSided == rhs.twoSided
-            && lhs.csgMode == rhs.csgMode
-            && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
-            && lhs.csgShapeRegistryRevision == rhs.csgShapeRegistryRevision
-            && lhs.framebufferInfo == rhs.framebufferInfo
-        ;
+        return EqualMaterialPipelineKey(lhs, rhs);
     }
 };
 

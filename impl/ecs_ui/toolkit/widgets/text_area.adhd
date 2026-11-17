@@ -2,97 +2,74 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area_scroll.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area_scroll.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Model and viewport remain lent through the enclosing scope; public intents retire even identical prior loans.
-class TextAreaState final : NoCopy{
-    friend class Builder;
-    friend class TextAreaCoordinator;
+class TextAreaState : NoCopy{
+    public EditBoxState m_visual;
+    public EditNavigationState m_navigation;
+    public TextAreaScrollState m_scrollInput;
+    public u64 m_revision = 1u;
+    public u64 m_compositionGeneration = 0u;
+    public f32 m_scrollY = 0.0f;
+    public b8 m_revealCaret = true;
 
+    public u64 instanceGeneration()const{
+        return this.m_navigation.instanceGeneration();
+    }
 
-public:
-    TextAreaState()noexcept = default;
-    TextAreaState(TextAreaState&&) = delete;
+    public u64 revision()const{
+        return this.m_revision;
+    }
 
+    public in EditBoxPlacement placement()const{
+        return this.m_visual.placement;
+    }
 
-public:
-    TextAreaState& operator=(TextAreaState&&) = delete;
+    public in ScrollViewportPlacement scrollbars()const{
+        return this.m_scrollInput.placement;
+    }
 
+    public Point scroll()const{
+        return Point(this.m_visual.scroll, this.m_scrollY);
+    }
 
-public:
-    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_navigation.instanceGeneration(); }
+    public in EditNavigationState navigation()const{
+        return this.m_navigation;
+    }
 
-    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+    public b8 focused()const{
+        return this.m_visual.focused;
+    }
 
-    [[nodiscard]] const EditBoxPlacement& placement()const noexcept{ return m_visual.placement; }
-
-    [[nodiscard]] const ScrollViewportPlacement& scrollbars()const noexcept{ return m_scrollInput.placement; }
-
-    [[nodiscard]] Point scroll()const noexcept{ return { m_visual.scroll, m_scrollY }; }
-
-    [[nodiscard]] const EditNavigationState& navigation()const noexcept{ return m_navigation; }
-
-    [[nodiscard]] b8 focused()const noexcept{ return m_visual.focused; }
     // Explicit scrolling suppresses caret reveal until a later accepted text, selection or ownership intent.
-    [[nodiscard]] b8 scrollTo(const Point scroll)noexcept{
+    public b8 scrollTo(in Point scroll){
         if(!IsValidUiExtent(scroll))
             return false;
-        AdvanceNonWrappingRevision(m_revision);
-        m_scrollInput.retire();
-        m_visual.scroll = scroll.x;
-        m_scrollY = scroll.y;
-        m_revealCaret = false;
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_scrollInput.retire();
+        this.m_visual.scroll = scroll.x;
+        this.m_scrollY = scroll.y;
+        this.m_revealCaret = false;
         return true;
     }
-    void reset()noexcept{
-        AdvanceNonWrappingRevision(m_revision);
-        m_scrollInput.retire();
-        m_visual = {};
-        m_navigation.reset();
-        m_compositionGeneration = 0u;
-        m_scrollY = 0.0f;
-        m_revealCaret = true;
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_scrollInput.retire();
+        this.m_visual = EditBoxState();
+        this.m_navigation.reset();
+        this.m_compositionGeneration = 0u;
+        this.m_scrollY = 0.0f;
+        this.m_revealCaret = true;
     }
-
-
-private:
-    EditBoxState m_visual;
-    EditNavigationState m_navigation;
-    TextAreaScrollState m_scrollInput;
-    u64 m_revision = 1u;
-    u64 m_compositionGeneration = 0u;
-    f32 m_scrollY = 0.0f;
-    b8 m_revealCaret = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -43,9 +43,7 @@ template<usize SlotCount>
 ){
     Array<Core::BufferHandle, SlotCount> buffers;
     for(usize index = 0u; index < SlotCount; ++index){
-        Core::BufferDesc desc;
-        desc.setByteSize(counterByteSize).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
-        auto bufferResult = graphics.createBuffer(desc);
+        auto bufferResult = CreateStatisticsReadbackBuffer(counterByteSize, names[index], graphics);
         if(!bufferResult)
             return MakeUnexpected(Failure{});
         buffers[index] = Move(*bufferResult);

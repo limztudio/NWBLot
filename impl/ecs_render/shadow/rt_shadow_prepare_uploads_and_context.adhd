@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
 
 
@@ -107,6 +108,12 @@ Expected<Name> FormatCsgQueueReadCompleteIdentity(in u32 physicalQueueIndex){
     return ParseName(text.view());
 }
 
+Expected<GpuGraphResourceId> ImportOptionalShadowPrepareExternalBuffer(mut GpuTaskGraph graph, in BufferHandle buffer, in Name identity, in StringView label){
+    if(!buffer.valid())
+        return GpuGraphResourceId();
+    return ImportExternalBuffer(graph, buffer, identity, label);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -137,9 +144,7 @@ inline constexpr Array<Core::BufferHandle MeshSnapshot::*, s_ShadowTraceMemberCo
 };
 
 [[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceId> ImportOptionalExternalBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer, const Name identity, const AStringView label){
-    if(!buffer)
-        return Core::GpuGraphResourceId{};
-    return RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, identity, label);
+    return ::NWB::Impl::ImportOptionalShadowPrepareExternalBuffer(graph, buffer, identity, label);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 AppendChainedUploadBufferTask(

@@ -38,7 +38,7 @@ class RendererMaterialSystem;
 struct OpaqueUploadChainInputs{
     DeferredFrameTargets& targets;
     const MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     MaterialPassDrawItemPartitionsView drawItems{};
     Span<InstanceGpuData> instanceData;
     CsgFrameGpuDataView csgFrameData{};

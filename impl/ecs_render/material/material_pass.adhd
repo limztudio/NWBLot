@@ -455,9 +455,9 @@ inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
 
 [[nodiscard]] FOUNDATION_INLINE const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
-    case MaterialPipelinePass::AvboitOccupancy: return RendererGpuTimingScope::s_AvboitOccupancy;
-    case MaterialPipelinePass::AvboitExtinction: return RendererGpuTimingScope::s_AvboitExtinction;
-    case MaterialPipelinePass::AvboitAccumulate: return RendererGpuTimingScope::s_AvboitAccumulate;
+    case MaterialPipelinePass::AvboitOccupancy: return s_TimingScopeAvboitOccupancy;
+    case MaterialPipelinePass::AvboitExtinction: return s_TimingScopeAvboitExtinction;
+    case MaterialPipelinePass::AvboitAccumulate: return s_TimingScopeAvboitAccumulate;
     default: return s_NoneGpuTimingScope;
     }
 }
@@ -479,7 +479,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const AvboitFrameTargets* const avboitTargets,
     const MaterialPassDrawItemPartitionsView& drawItems,
     const CsgFrameGpuDataView& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
@@ -581,7 +581,7 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
     const AvboitFrameTargets& avboitTargets,
     const MaterialPassDrawItemPartitionsView& drawItems,
     const CsgFrameGpuDataView& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
@@ -618,7 +618,7 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
     const AvboitFrameTargets& avboitTargets,
     const MaterialPassDrawItemPartitionsView& drawItems,
     const CsgFrameGpuDataView& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const CsgGraphResourceSnapshot& csgResources,
     const MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
@@ -720,7 +720,7 @@ b8 RendererMaterialSystem::prepareMaterialPassResources(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Span<InstanceGpuData> instanceData)noexcept{
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const CsgGraphResourceSnapshot& csgResources, const Span<InstanceGpuData> instanceData)noexcept{
     // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
     const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
     for(InstanceGpuData& instance : instanceData)
@@ -780,7 +780,7 @@ b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawCont
     commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline.get());
     const MeshFrameHeapSlots slots = ResolveMeshFrameHeapSlots(context.frameBindings, cache.heapHandle.slot());
-    const ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(
+    const ShaderDrivenPushConstants meshPush = BuildShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,
         drawItem.materialConstantByteOffset,
@@ -791,7 +791,7 @@ b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawCont
     const MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
     commandList.setPushConstants(&push, sizeof(push));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, m_graphics.getDevice(), commandList);
 
         commandList.dispatch(ComputeObjectGeometryDecodeGroupCount(mesh.meshletCount));
     }

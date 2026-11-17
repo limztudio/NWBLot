@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "search_combo_filter.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -11,7 +17,6 @@ native{
 
 #include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-#include "search_combo_filter.adhd.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,54 +41,6 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class SearchComboState final : NoCopy{
-    friend class Builder;
-    friend class ComboCoordinator;
-    friend class SearchComboBehavior;
-
-
-public:
-    explicit SearchComboState(Core::Alloc::GlobalArena& arena)
-        : m_arena(arena)
-        , m_query(arena)
-        , m_filteredQuery(arena)
-    {}
-    SearchComboState(SearchComboState&&) = delete;
-
-
-public:
-    SearchComboState& operator=(SearchComboState&&) = delete;
-
-
-public:
-    [[nodiscard]] const ComboState& combo()const noexcept{ return m_combo; }
-
-    [[nodiscard]] ComboState& combo()noexcept{ return m_combo; }
-
-    [[nodiscard]] const EditModel& query()const noexcept{ return m_query; }
-
-    [[nodiscard]] EditModel& query()noexcept{ return m_query; }
-
-    [[nodiscard]] const EditBoxState& editorState()const noexcept{ return m_editor; }
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    ComboState m_combo;
-    EditModel m_query;
-    EditBoxState m_editor;
-    AString<Core::Alloc::GlobalArena> m_filteredQuery;
-    u64 m_sourceGeneration = 0u;
-    u64 m_sourceRevision = 0u;
-    u64 m_sourceCount = 0u;
-    u64 m_viewGeneration = 0u;
-    u64 m_viewRevision = 0u;
-    u64 m_viewCount = 0u;
-    u64 m_queryGeneration = 0u;
-    u64 m_queryExternalRevision = 0u;
-    b8 m_filterValid = false;
-};
 
 class SearchComboBehavior final{
 public:
@@ -111,7 +68,7 @@ public:
             cachedQuery,
             state.m_query.text()
         );
-        AString<Core::Alloc::GlobalArena> candidate(state.m_arena);
+        AString<::ArenaBase> candidate(state.m_filteredQuery.get_allocator().arena());
         if(rebuild){
             const AStringView text = state.m_query.text();
             if(!text.empty())
@@ -156,9 +113,7 @@ public:
 
 private:
     [[nodiscard]] static b8 Matches(const SearchComboState& state, const TextAreaModelStamp& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
-        return state.query().matchesStamp(query)
-            && state.combo().inputGeneration() == comboGeneration
-            && state.combo().listState().inputGeneration() == previewGeneration;
+        return MatchesSearchComboState(state, query, comboGeneration, previewGeneration);
     }
 };
 

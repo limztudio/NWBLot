@@ -4,6 +4,41 @@
 
 #include <impl/ecs_render/shadow/shadow_material_context_policy.adhd>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsPreparedShadowMaterialStorageReady(
+    in RendererRayTracingState state,
+    in usize instanceMaterialCount,
+    in usize instanceCount,
+    in usize materialTypedByteCount
+){
+    return state.m_shadowInstanceMaterialBuffer.valid()
+        && state.m_shadowInstanceBuffer.valid()
+        && state.m_shadowMaterialTypedBuffer.valid()
+        && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
+        && state.m_shadowInstanceCapacity >= instanceCount
+        && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
+        && IsDescriptorClass(state.m_shadowInstanceMaterialHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.m_shadowInstanceHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.m_shadowMaterialTypedHeapHandle, GpuDescriptorClass::StorageBuffer)
+    ;
+}
+
+b8 HasPreparedShadowMaterialContextBuffers(
+    in RendererRayTracingState state,
+    in usize materialCount,
+    in usize instanceCount,
+    in usize materialTypedUploadBytes
+){
+    const usize wordByteSize = 4u;
+    const usize requiredMaterialTypedBytes = AlignUp(Max(materialTypedUploadBytes, wordByteSize), wordByteSize);
+    return IsPreparedShadowMaterialStorageReady(state, materialCount, instanceCount, requiredMaterialTypedBytes);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,15 +69,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingState;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 IsPreparedShadowMaterialStorageReady(const RendererRayTracingState& state, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
 
 
 // Names check sequentially; a missing name preserves the published prefix.
@@ -107,10 +133,6 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::RendererRayTracingState")]
-extern class RendererRayTracingState;
-
-
 // The material table, instance stream, and typed bytes share indices and offsets, so preflight freezes them against one storage generation.
 // A fresh context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
 // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
@@ -172,19 +194,62 @@ class PreparedShadowMaterialContext : NoCopy{
 
     public Expected<PreparedShadowMaterialContextUploads> retainUploads(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
     // Publishes the accepted route hash; false when no fresh upload was pending.
-    public b8 publishAcceptedUpload(mut RendererRayTracingState state)const;
+    public b8 publishAcceptedUpload(mut RendererRayTracingState state)const{
+        return ShadowMaterialContextPolicy().publishAcceptedUpload(
+            this.m_ready,
+            this.m_uploadRequired,
+            this.m_route,
+            this.m_hash,
+            this.m_static,
+            state.m_hwShadowMaterialContextHash,
+            state.m_hwShadowMaterialContextHashValid,
+            state.m_swShadowMaterialContextHash,
+            state.m_swShadowMaterialContextHashValid
+        );
+    }
 
-    public b8 storageMatches(in RendererRayTracingState state)const;
+    public b8 storageMatches(in RendererRayTracingState state)const{
+        return state.m_shadowInstanceMaterialBuffer == this.m_instanceMaterialBuffer
+            && state.m_shadowInstanceBuffer == this.m_instanceBuffer
+            && state.m_shadowMaterialTypedBuffer == this.m_materialTypedBuffer
+            && state.m_shadowInstanceMaterialHeapHandle == this.m_instanceMaterialHeapHandle
+            && state.m_shadowInstanceHeapHandle == this.m_instanceHeapHandle
+            && state.m_shadowMaterialTypedHeapHandle == this.m_materialTypedHeapHandle;
+    }
     public b8 softwareSnapshotCovers(in usize sceneInstanceCount)const{
         return ShadowMaterialContextPolicy().softwareSnapshotCovers(this.m_ready, this.m_route, this.m_instanceMaterialCount, this.m_instanceCount, sceneInstanceCount);
     }
     // A fresh upload stays valid; cache reuse still needs the accepted software hash over the same scene instances.
-    public b8 softwareSnapshotAccepted(in RendererRayTracingState state)const;
+    public b8 softwareSnapshotAccepted(in RendererRayTracingState state)const{
+        return ShadowMaterialContextPolicy().softwareSnapshotAccepted(
+            this.m_uploadRequired,
+            this.m_static,
+            state.m_swShadowMaterialContextHashValid,
+            state.m_swShadowMaterialContextHash,
+            this.m_hash,
+            state.m_sceneBvhInstanceCount,
+            this.m_instanceCount
+        );
+    }
     public b8 ready()const{ return this.m_ready; }
     public b8 uploadRequired()const{ return this.m_uploadRequired; }
     public PreparedShadowMaterialContextRoute route()const{ return this.m_route; }
 
-    private void captureStorage(in RendererRayTracingState state, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
+    private void captureStorage(in RendererRayTracingState state, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount){
+        this.m_instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
+        this.m_instanceBuffer = state.m_shadowInstanceBuffer;
+        this.m_materialTypedBuffer = state.m_shadowMaterialTypedBuffer;
+        this.m_instanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
+        this.m_instanceHeapHandle = state.m_shadowInstanceHeapHandle;
+        this.m_materialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
+        this.m_instanceMaterialCount = instanceMaterialCount;
+        this.m_instanceCount = instanceCount;
+        this.m_materialTypedUploadBytes = materialTypedByteCount;
+        this.m_instanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
+        this.m_instanceCapacity = state.m_shadowInstanceCapacity;
+        this.m_materialTypedCapacity = state.m_shadowMaterialTypedCapacity;
+        this.m_hash = hash;
+    }
 }
 
 

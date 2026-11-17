@@ -43,7 +43,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming;
         MeshFrameBindingSnapshot frameBindings;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+        CsgGraphResourceSnapshot csgResources;
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         b8 hasTransparentRenderers = false;
         b8 transparentCsgStreamsUploaded = false;

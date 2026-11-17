@@ -244,6 +244,19 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         if(recordingAttemptGeneration != 0u && !this.m_frameSubmissionTransaction.discardUnaccepted(this.m_frameTaskGraph, this.m_frameCompiledGraph, recordingAttemptGeneration))
             [essential] assert(false, "skinning task-graph reset must resolve every unaccepted packet");
     }
+    private void resetPipelineResources(){
+        this.m_skinningBindingLayout.reset();
+        this.m_skinningComputeShader.reset();
+        this.m_skinningComputePipeline.reset();
+        this.m_boundsBindingLayout.reset();
+        this.m_boundsComputeShader.reset();
+        this.m_boundsComputePipeline.reset();
+        this.m_localBoundsComputeShader.reset();
+        this.m_localBoundsComputePipeline.reset();
+        this.m_repackBindingLayout.reset();
+        this.m_repackComputeShader.reset();
+        this.m_repackComputePipeline.reset();
+    }
     // Resets reused frame graph storage so the next render() redeclares into clean members.
     private void resetFrameTaskGraph(){
         {

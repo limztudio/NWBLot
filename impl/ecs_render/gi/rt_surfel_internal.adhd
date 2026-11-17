@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/gi/lifecycle_types.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,7 +19,6 @@ native{
 
 
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/gi/lifecycle_types.adhd.h>
 #include <impl/ecs_render/gi/rt_surfel_gi_state.adhd.h>
 #include <impl/ecs_render/gi/surfel_gi_graph_coordinator.adhd.h>
 
@@ -30,11 +38,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererRayTracingSystem;
-class RendererShaderSystem;
-class DeferredFrameTargets;
-class DeferredLightingGraphResources;
-class RayTracingDeferredGraphResourceSnapshot;
-class RayTracingSurfelPersistentResourceSnapshot;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,20 +132,43 @@ NWB_IMPL_END
 
 [cpp_name("::NWB::Impl::RendererRayTracingSystem")]
 extern class RendererRayTracingSystem : NoCopy;
-[cpp_name("::NWB::Impl::RendererShaderSystem")]
-extern class RendererShaderSystem : NoCopy;
-[cpp_name("::NWB::Impl::DeferredFrameTargets")]
-extern class DeferredFrameTargets : NoCopy;
-[cpp_name("::NWB::Impl::DeferredLightingGraphResources")]
-extern class DeferredLightingGraphResources : NoCopy;
-[cpp_name("::NWB::Impl::RayTracingSurfelPersistentResourceSnapshot")]
-extern class RayTracingSurfelPersistentResourceSnapshot;
 [cpp_name("::NWB::Impl::RtSurfelGiState")]
-extern class RtSurfelGiState;
+extern class RtSurfelGiState{
+    BindingLayoutHandle m_surfelHeapBindingLayout;
+    ShaderHandle m_surfelSpawnShader;
+    ComputePipelineHandle m_surfelSpawnPipeline;
+    ShaderHandle m_surfelAgeFreeShader;
+    ComputePipelineHandle m_surfelAgeFreePipeline;
+    ShaderHandle m_surfelHashBuildShader;
+    ComputePipelineHandle m_surfelHashBuildPipeline;
+    ShaderHandle m_surfelTraceShader;
+    ComputePipelineHandle m_surfelTracePipeline;
+    ShaderHandle m_surfelTraceCsgShader;
+    ComputePipelineHandle m_surfelTraceCsgPipeline;
+    ShaderHandle m_surfelResolveShader;
+    ComputePipelineHandle m_surfelResolvePipeline;
+    ShaderHandle m_surfelUpsampleShader;
+    ComputePipelineHandle m_surfelUpsamplePipeline;
+    ShaderHandle m_surfelTraceBuildArgsShader;
+    ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
+    ShaderHandle m_surfelTraceHwShader;
+    ComputePipelineHandle m_surfelTraceHwPipeline;
+    ShaderHandle m_surfelTraceCsgHwShader;
+    ComputePipelineHandle m_surfelTraceCsgHwPipeline;
+    b8 m_surfelTraceHwPipelineFailed;
+    b8 m_surfelUseCsgTrace;
+    b8 m_surfelTraceCsgPipelineFailed;
+    b8 m_surfelTraceCsgHwPipelineFailed;
+    b8 m_surfelTraceBuildArgsPipelineFailed;
+    b8 m_surfelUpsamplePipelineFailed;
+    b8 m_surfelResolvePipelineFailed;
+    b8 m_surfelTracePipelineFailed;
+    b8 m_surfelHashBuildPipelineFailed;
+    b8 m_surfelAgeFreePipelineFailed;
+    b8 m_surfelSpawnPipelineFailed;
+};
 [cpp_name("::NWB::Impl::SurfelGiLifecycleInputs")]
 extern class SurfelGiLifecycleInputs;
-[cpp_name("::NWB::Impl::SurfelGiLifecycleResult")]
-extern class SurfelGiLifecycleResult;
 [cpp_name("::NWB::Impl::SurfelGiResourceInputs")]
 extern class SurfelGiResourceInputs;
 [cpp_name("::NWB::Impl::SurfelGiResourcePlan")]

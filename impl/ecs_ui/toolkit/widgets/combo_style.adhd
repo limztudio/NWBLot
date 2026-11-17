@@ -4,6 +4,7 @@
 
 #include "list_navigation.adhd"
 #include <impl/ecs_ui/toolkit/id.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,6 +150,89 @@ b8 MatchesComboFrameStateValues(
         && popupOpenGeneration == expectedPopupOpenGeneration
         && popupParent == expectedParentToken
         && queryMatches;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Hosts own the committed selection; the popup list keeps navigation separate until an explicit activation.
+class ComboState : NoCopy{
+    public ListState m_list;
+    public PopupState m_popup;
+    public Rect m_bounds;
+    public WidgetId m_owner;
+    public u64 m_ownerDeclaration = 0u;
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_selectedKey = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 selectedKey()const{
+        return this.m_selectedKey;
+    }
+
+    public b8 isOpen()const{
+        return this.m_popup.isOpen();
+    }
+
+    public in PopupPlacement placement()const{
+        return this.m_popup.placement();
+    }
+
+    public in Rect bounds()const{
+        return this.m_bounds;
+    }
+
+    public in ListState listState()const{
+        return this.m_list;
+    }
+
+    // Explicit application changes renew the field input lifetime even when the value is unchanged.
+    public void select(in u64 key){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKey = key;
+        this.m_list.select(this.m_selectedKey);
+        this.m_popup.close();
+    }
+
+    public void open(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_list.select(this.m_selectedKey);
+        this.m_popup.close();
+        this.m_popup.open();
+    }
+
+    public void close(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_list.select(this.m_selectedKey);
+        this.m_popup.close();
+    }
+}
+
+void OpenComboState(mut ComboState state){
+    state.m_list.select(state.m_selectedKey);
+    state.m_popup.close();
+    state.m_popup.open();
+}
+
+void CloseComboState(mut ComboState state){
+    state.m_list.select(state.m_selectedKey);
+    state.m_popup.close();
+}
+
+// Rebinding after omission or to another field retires popup interaction while preserving committed selection.
+b8 BindComboState(mut ComboState state, in WidgetId owner, in u64 declarationGeneration){
+    const Expected<b8> shouldClose = TryBindComboOwner(owner, declarationGeneration, state.m_owner, state.m_ownerDeclaration);
+    if(!shouldClose.has_value())
+        return false;
+    if(shouldClose.value())
+        CloseComboState(state);
+    return true;
 }
 
 

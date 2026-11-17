@@ -43,7 +43,7 @@ struct OpaqueCsgIntervalStageInputs{
     DeferredFrameTargets& targets;
     const DeferredGraphResourceImportResult& resources;
     const MeshFrameBindingSnapshot& frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const CsgGraphResourceSnapshot& csgResources;
     MaterialPassDrawItemPartitionsView opaqueDrawItems{};
     CsgFrameGpuDataView csgFrameData{};
     Core::GpuTimingSubmissionTicket** intervalSampleTimingTicket = nullptr;
@@ -96,7 +96,7 @@ public:
     // Copies the frozen opaque draw stream and the G-buffer upload state into the CSG payloads.
     void capturePayloads(
         const MeshFrameBindingSnapshot& frameBindings,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const CsgGraphResourceSnapshot& csgResources,
         const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
         const CsgFrameGpuDataView& csgFrameData,
         usize instanceCount,

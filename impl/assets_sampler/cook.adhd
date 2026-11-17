@@ -59,6 +59,30 @@ b8 ValidateSamplerCookEntryVirtualPath(in Name virtualPath){
     return false;
 }
 
+b8 SerializeSamplerAsset(in Sampler sampler, mut Vector<u8> outBinary){
+    if(!sampler.validatePayload())
+        return false;
+
+    const SamplerDesc description = sampler.description();
+    SerializeSamplerBinaryPayload(
+        description.borderColor.r,
+        description.borderColor.g,
+        description.borderColor.b,
+        description.borderColor.a,
+        description.maxAnisotropy,
+        description.mipBias,
+        description.minFilter,
+        description.magFilter,
+        description.mipFilter,
+        cast<u32>(description.addressU),
+        cast<u32>(description.addressV),
+        cast<u32>(description.addressW),
+        cast<u32>(description.reductionType),
+        outBinary
+    );
+    return true;
+}
+
 Expected<b8> ReadSamplerFilterField(in Path nwbFilePath, in MetascriptValue object, in StringView fieldName){
     const Expected<MetadataStringField> field = ReadMetadataStringField(nwbFilePath, object, s_SamplerMetaDiagnosticPrefix, fieldName, true);
     if(!field.has_value())
@@ -237,27 +261,7 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     const Sampler& sampler = *MakeNotNull(checked_cast<const Sampler*>(&asset));
-    if(!sampler.validatePayload())
-        return false;
-
-    const Core::SamplerDesc& description = sampler.description();
-    SerializeSamplerBinaryPayload(
-        description.borderColor.r,
-        description.borderColor.g,
-        description.borderColor.b,
-        description.borderColor.a,
-        description.maxAnisotropy,
-        description.mipBias,
-        description.minFilter,
-        description.magFilter,
-        description.mipFilter,
-        static_cast<u32>(description.addressU),
-        static_cast<u32>(description.addressV),
-        static_cast<u32>(description.addressW),
-        static_cast<u32>(description.reductionType),
-        outBinary
-    );
-    return true;
+    return SerializeSamplerAsset(sampler, outBinary);
 }
 
 

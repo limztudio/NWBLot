@@ -70,7 +70,7 @@ namespace __hidden_renderer_frame_prepare_and_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<Name, 2> s_DeferredTaskTimingFeedbackScopes = { RendererGpuTimingScope::s_AvboitDepthWarp.identity, RendererGpuTimingScope::s_AvboitIntegration.identity, };
+static constexpr Array<Name, 2> s_DeferredTaskTimingFeedbackScopes = { s_TimingScopeAvboitDepthWarp.identity, s_TimingScopeAvboitIntegration.identity, };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -41,12 +41,12 @@ native{
 
 namespace NWB::Tests::Smoke{
 inline constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScopes = {
-    Impl::RendererGpuTimingScope::s_Frame,
-    Impl::RendererGpuTimingScope::s_CausticPhotons,
-    Impl::RendererGpuTimingScope::s_CausticResolve,
-    Impl::RendererGpuTimingScope::s_OpaqueRegular,
-    Impl::RendererGpuTimingScope::s_DeferredComposite,
-    Impl::RendererGpuTimingScope::s_DeferredPresent,
+    Impl::s_TimingScopeFrame,
+    Impl::s_TimingScopeCausticPhotons,
+    Impl::s_TimingScopeCausticResolve,
+    Impl::s_TimingScopeOpaqueRegular,
+    Impl::s_TimingScopeDeferredComposite,
+    Impl::s_TimingScopeDeferredPresent,
 };
 
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
@@ -121,16 +121,16 @@ class CsgCausticTimingInterval{
 
 Name CsgCausticGpuTimingScopeName(in usize index){
     if(index == 0u)
-        return RendererGpuTimingScope::s_Frame.identity;
+        return s_TimingScopeFrame.identity;
     if(index == 1u)
-        return RendererGpuTimingScope::s_CausticPhotons.identity;
+        return s_TimingScopeCausticPhotons.identity;
     if(index == 2u)
-        return RendererGpuTimingScope::s_CausticResolve.identity;
+        return s_TimingScopeCausticResolve.identity;
     if(index == 3u)
-        return RendererGpuTimingScope::s_OpaqueRegular.identity;
+        return s_TimingScopeOpaqueRegular.identity;
     if(index == 4u)
-        return RendererGpuTimingScope::s_DeferredComposite.identity;
-    return RendererGpuTimingScope::s_DeferredPresent.identity;
+        return s_TimingScopeDeferredComposite.identity;
+    return s_TimingScopeDeferredPresent.identity;
 }
 
 Name CsgCausticCpuTimingScopeName(in usize index){

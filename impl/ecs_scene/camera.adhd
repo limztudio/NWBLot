@@ -91,15 +91,8 @@ public:
         break;
     }
 
-    if(activeCamera.valid()){
-        auto* transform = world.tryGetComponent<TransformComponent>(activeCamera);
-        auto* camera = world.tryGetComponent<CameraComponent>(activeCamera);
-        if(transform && camera){
-            const auto requestedCamera = tryBuildSceneCameraView(activeCamera, *transform, *camera);
-            if(requestedCamera)
-                return *requestedCamera;
-        }
-    }
+    if(const auto requestedProjection = TryResolveEntityCameraProjection(world, activeCamera, fallbackAspectRatio))
+        return SceneCameraView{ activeCamera, world.tryGetComponent<TransformComponent>(activeCamera), world.tryGetComponent<CameraComponent>(activeCamera), *requestedProjection };
 
     const auto cameraView = world.view<TransformComponent, CameraComponent>();
     for(auto it = cameraView.begin(); it != cameraView.end(); ++it){

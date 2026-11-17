@@ -1449,9 +1449,9 @@ struct SkinReference{
     );
 }
 
-[[nodiscard]] static Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName){
-    UtilityVector<MeshSkinInfluence> outInfluences;
-    if(!Impl::SkinInfluenceMetadataParser::Parse(nwbFilePath, skinAsset, Impl::s_MeshMetaKind, skinVariableName, false, outInfluences))
+[[nodiscard]] static Expected<UtilityScratchVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName, Core::Alloc::ScratchArena& scratchArena){
+    UtilityScratchVector<MeshSkinInfluence> outInfluences(scratchArena);
+    if(!Impl::ParseSkinInfluenceMetadataInto(nwbFilePath, skinAsset, Impl::s_MeshMetaKindText, skinVariableName, false, outInfluences))
         return MakeUnexpected(Failure{});
     return outInfluences;
 }
@@ -2195,10 +2195,10 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         const AStringView skinVariableName = skinReference->variableName;
         const Core::Metascript::Value* skinValue = skinReference->value;
         if(skinValue){
-            auto influences = ParseSkinInfluences(inputPath, *skinValue, skinVariableName);
+            auto influences = ParseSkinInfluences(inputPath, *skinValue, skinVariableName, scratchArena);
             if(!influences)
                 return MakeUnexpected(Failure{});
-            const UtilityVector<MeshSkinInfluence>& skinInfluences = *influences;
+            const UtilityScratchVector<MeshSkinInfluence>& skinInfluences = *influences;
             const auto canonicalized = CanonicalizeSkinnedCanonicalMeshStreams(
                 scratchArena,
                 skinInfluences,

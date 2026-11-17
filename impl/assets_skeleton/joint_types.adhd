@@ -95,10 +95,10 @@ SkeletonJoint UnpackSkeletonJointBinary(in SkeletonJointBinary jointBinary){
 void CollectSkeletonJointNameHashes(
     in usize jointCount,
     in HashMap<Name, u32> jointIndices,
-    mut Span<NameHash> outJointNameHashes
+    mut Vector<NameHash> outJointNameHashes
 ){
-    for(usize i = 0u; i < jointCount && i < outJointNameHashes.size(); ++i)
-        outJointNameHashes[i] = NameHash();
+    outJointNameHashes.clear();
+    outJointNameHashes.resize(jointCount);
     for(in auto jointLookup : jointIndices)
         outJointNameHashes[cast<usize>(jointLookup.second)] = jointLookup.first.hash();
 }

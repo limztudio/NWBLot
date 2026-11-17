@@ -241,7 +241,7 @@ b8 RefractionRenderer::recordRefractionTileClassification(Core::CommandList& com
     commandList.setComputeState(state);
     m_system.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.classifyTilesPipeline);
     commandList.setPushConstants(&push, sizeof(push));
-    Core::GpuTimingMeasure timing(m_system.m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionClassifyTiles, m_system.m_graphics.getDevice(), commandList);
+    Core::GpuTimingMeasure timing(m_system.m_graphics.gpuTiming(), s_TimingScopeRefractionClassifyTiles, m_system.m_graphics.getDevice(), commandList);
 
     commandList.dispatch(ComputeRefractionTileDispatchGroups(targets.width, NWB_REFRACTION_GROUP_SIZE), ComputeRefractionTileDispatchGroups(targets.height, NWB_REFRACTION_GROUP_SIZE), 1u);
     // Finalization consumes the completed counter and replaces both mutually exclusive argument records.
@@ -279,7 +279,7 @@ b8 RefractionRenderer::recordRefractionResolve(Core::CommandList& commandList, c
     m_system.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.pipeline.get(), resources.tlasHeapHandle);
     commandList.setPushConstants(&push, sizeof(push));
     {
-        Core::GpuTimingMeasure timing(m_system.m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionResolve, m_system.m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_system.m_graphics.gpuTiming(), s_TimingScopeRefractionResolve, m_system.m_graphics.getDevice(), commandList);
 
         commandList.dispatchIndirect(0u);
         // Both kernels declare the same output; retain its write dependency even though one argument record is empty.

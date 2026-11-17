@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,6 +93,52 @@ class SearchComboFilterRules{
         outQueryExternalRevision = query.externalRevision;
         outFilterValid = true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SearchComboState : NoCopy{
+    public ComboState m_combo;
+    public EditModel m_query;
+    public EditBoxState m_editor;
+    public String m_filteredQuery = "";
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+    public u64 m_sourceCount = 0u;
+    public u64 m_viewGeneration = 0u;
+    public u64 m_viewRevision = 0u;
+    public u64 m_viewCount = 0u;
+    public u64 m_queryGeneration = 0u;
+    public u64 m_queryExternalRevision = 0u;
+    public b8 m_filterValid = false;
+
+    public in ComboState combo()const{
+        return this.m_combo;
+    }
+
+    public mut ComboState combo(){
+        return this.m_combo;
+    }
+
+    public in EditModel query()const{
+        return this.m_query;
+    }
+
+    public mut EditModel query(){
+        return this.m_query;
+    }
+
+    public in EditBoxState editorState()const{
+        return this.m_editor;
+    }
+}
+
+b8 MatchesSearchComboState(in SearchComboState state, in TextAreaModelStamp query, in u64 comboGeneration, in u64 previewGeneration){
+    return state.query().matchesStamp(query)
+        && state.combo().inputGeneration() == comboGeneration
+        && state.combo().listState().inputGeneration() == previewGeneration;
 }
 
 

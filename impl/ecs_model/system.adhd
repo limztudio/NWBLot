@@ -79,6 +79,79 @@ void ResolveModelAttachmentJointQueries(
     }
 }
 
+b8 IsInactiveModelObjectOwner(in World world, in EntityID owner){
+    return !world.hasComponent<ModelRuntimeComponent>(owner) || !world.hasComponent<ModelComponent>(owner);
+}
+
+void UpdateNonStaticModelObjectTransform(in World world, in ModelObjectComponent object, mut TransformComponent outTransform){
+    if(object.kind == ModelObjectKind::StaticMesh)
+        return;
+
+    TryDecomposeAndAssignTransformComponent(
+        ComputeModelObjectWorldMatrix(LoadEntityTransformMatrix(world, object.owner), MatrixSingle(object.localTransform)),
+        outTransform
+    );
+}
+
+void AppendModelStaticMeshAttachmentJointQuery(
+    in ModelStaticMeshAttachmentComponent attachment,
+    mut b8 inOutSharedParent,
+    mut Vector<ModelAttachmentJointQuery> inOutJointQueries
+){
+    if(!attachment.hasJointAttachment())
+        return;
+    if(!inOutJointQueries.empty() && inOutJointQueries.front().parentEntity != attachment.parentEntity)
+        inOutSharedParent = false;
+    inOutJointQueries.push_back(MakeModelAttachmentJointQuery(attachment.parentEntity, attachment.parentJointIndex));
+}
+
+MatrixSingle ResolveModelStaticMeshAttachmentParentMatrix(in World world, in EntityID owner, in EntityID parentEntity){
+    if(parentEntity.valid() && world.hasComponent<TransformComponent>(parentEntity))
+        return LoadTransformMatrix(world.getComponent<TransformComponent>(parentEntity));
+    return LoadEntityTransformMatrix(world, owner);
+}
+
+void UpdateModelStaticMeshAttachmentTransform(
+    in World world,
+    in usize queryCount,
+    in Span<ModelAttachmentJointQuery> jointQueries,
+    in ModelObjectComponent object,
+    in ModelStaticMeshAttachmentComponent attachment,
+    mut usize inOutNextQuery,
+    mut TransformComponent outTransform
+){
+    const MatrixSingle parentMatrix = ResolveModelStaticMeshAttachmentParentMatrix(world, object.owner, attachment.parentEntity);
+    const MatrixSingle localMatrix = MatrixSingle(attachment.localTransform);
+    if(!attachment.hasJointAttachment()){
+        TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(parentMatrix, localMatrix), outTransform);
+        return;
+    }
+
+    MatrixSingle jointMatrix = MatrixIdentity();
+    if(queryCount > 1u){
+        in ModelAttachmentJointQuery query = jointQueries[inOutNextQuery];
+        ++inOutNextQuery;
+        if(!query.resolved)
+            return;
+        jointMatrix = MatrixSingle(query.jointMatrix);
+    }
+    else{
+        if(!world.hasComponent<SkeletonPoseComponent>(attachment.parentEntity))
+            return;
+        const Expected<MatrixSingle> resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(
+            world.getComponent<SkeletonPoseComponent>(attachment.parentEntity),
+            attachment.parentJointIndex
+        );
+        if(!resolvedJointMatrix.has_value())
+            return;
+        jointMatrix = resolvedJointMatrix.value();
+    }
+    TryDecomposeAndAssignTransformComponent(
+        ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix),
+        outTransform
+    );
+}
+
 [arena, system("model")]
 class ModelSystem{
     private mut World m_world;
@@ -318,12 +391,9 @@ void ModelSystem::syncModelRuntimes()noexcept{
 void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena)noexcept{
     const auto objects = m_world->view<ModelObjectComponent>();
     const auto runtimes = m_world->view<ModelRuntimeComponent>();
-    const auto objectIsInactive = [&](const ModelObjectComponent& object)noexcept{
-        return !m_world->tryGetComponent<ModelRuntimeComponent>(object.owner) || !m_world->tryGetComponent<ModelComponent>(object.owner);
-    };
     usize inactiveObjectCount = 0u;
     objects.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
-        if(objectIsInactive(object))
+        if(IsInactiveModelObjectOwner(*m_world, object.owner))
             ++inactiveObjectCount;
     });
     usize inactiveRuntimeCount = 0u;
@@ -338,7 +408,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
     if(inactiveObjectCount != 0u){
         objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
-            if(objectIsInactive(object))
+            if(IsInactiveModelObjectOwner(*m_world, object.owner))
                 inactiveEntities.push_back(entity);
         });
         for(const Core::ECS::EntityID entity : inactiveEntities)
@@ -394,10 +464,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
         m_world->taskScope(),
         s_ParallelModelObjectTransformGrainSize,
         [&]([[maybe_unused]] const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform)noexcept{
-            if(object.kind == ModelObjectKind::StaticMesh)
-                return;
-
-            (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(*m_world, object.owner), LoadFloat(object.localTransform)), transform);
+            UpdateNonStaticModelObjectTransform(*m_world, object, transform);
         });
 }
 
@@ -419,11 +486,7 @@ void ModelSystem::updateStaticMeshAttachments()noexcept{
         jointQueries.reserve(queryCount);
         b8 sharedParent = true;
         attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, [[maybe_unused]] const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, [[maybe_unused]] const Scene::TransformComponent& transform)noexcept{
-            if(!attachment.hasJointAttachment())
-                return;
-            if(!jointQueries.empty() && jointQueries.front().parentEntity != attachment.parentEntity)
-                sharedParent = false;
-            jointQueries.push_back(MakeModelAttachmentJointQuery(attachment.parentEntity, attachment.parentJointIndex));
+            AppendModelStaticMeshAttachmentJointQuery(attachment, sharedParent, jointQueries);
         });
         const Span<const ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
         if(sharedParent)
@@ -437,36 +500,7 @@ void ModelSystem::updateStaticMeshAttachments()noexcept{
 
     usize nextQuery = 0u;
     attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
-        const Scene::TransformComponent* ownerTransform = m_world->tryGetComponent<Scene::TransformComponent>(object.owner);
-        const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid() ? m_world->tryGetComponent<Scene::TransformComponent>(attachment.parentEntity) : ownerTransform;
-        const Scene::TransformComponent* basisTransform = parentTransform ? parentTransform : ownerTransform;
-        const SIMDMatrix parentMatrix = basisTransform ? Scene::LoadTransformMatrix(*basisTransform) : MatrixIdentity();
-        const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
-
-        SIMDMatrix worldTransform{};
-        if(!attachment.hasJointAttachment())
-            worldTransform = ComputeModelObjectWorldMatrix(parentMatrix, localMatrix);
-        else{
-            SIMDMatrix jointMatrix{};
-            if(queryCount > 1u){
-                const ModelAttachmentJointQuery& query = jointQueries[nextQuery++];
-                if(!query.resolved)
-                    return;
-                jointMatrix = LoadFloat(query.jointMatrix);
-            }
-            else{
-                const SkeletonPoseComponent* const pose = m_world->tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-                if(!pose)
-                    return;
-                const auto resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(*pose, attachment.parentJointIndex);
-                if(!resolvedJointMatrix)
-                    return;
-                jointMatrix = *resolvedJointMatrix;
-            }
-            worldTransform = ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix);
-        }
-
-        (void)Scene::TryDecomposeAndAssignTransformComponent(worldTransform, transform);
+        UpdateModelStaticMeshAttachmentTransform(*m_world, queryCount, jointQueries, object, attachment, nextQuery, transform);
     });
 }
 

@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/edit_types.adhd>
+#include <impl/ecs_ui/edit_geometry.adhd>
+#include <impl/ecs_ui/text_edit_session.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,6 +44,51 @@ b8 IsUiEditEntryRebound(
 
 b8 IsMutatingUiEditClipboardAction(in EditClipboardAction action){
     return action == EditClipboardAction::Cut || action == EditClipboardAction::Paste;
+}
+
+void SynchronizeUiEditBoxSession(
+    in EditBoxOptions options,
+    in b8 inputMethod,
+    in b8 entryFocused,
+    in DisplayMetrics display,
+    in UiEditBoxGeometry displayed,
+    in UiTextEditOwner owner,
+    in PopupToken popup,
+    mut UiTextEditSession session,
+    mut EditModel model,
+    mut u64 inOutLastNativeSequence,
+    mut TextInputSessionToken inOutRejectedNative,
+    mut TextAreaModelStamp inOutNativePublished
+){
+    if(!options.enabled || options.readOnly || !entryFocused){
+        if(session.owner() == owner && !session.cancel())
+            TerminateInvariant();
+        model.cancelComposition();
+        return;
+    }
+    if(!UiEditGeometry().sessionReady(displayed, owner, popup))
+        return;
+    if(session.token().valid() && session.owner() != owner && !session.cancel())
+        TerminateInvariant();
+    TextInputChangeCause cause = TextInputChangeCause::Other;
+    if(inputMethod)
+        cause = TextInputChangeCause::InputMethod;
+    if(!session.token().valid()){
+        model.cancelComposition();
+        if(session.begin(owner, MakeUiEditNativeCaretRect(displayed, display), model) != TextInputAdmission::Accepted)
+            return;
+        inOutLastNativeSequence = 0u;
+        inOutRejectedNative = TextInputSessionToken();
+    }
+    else{
+        if(session.adoptLocal(owner, model, MakeUiEditNativeCaretRect(displayed, display), cause) != TextInputAdmission::Accepted){
+            model.cancelComposition();
+            if(!session.cancel())
+                TerminateInvariant();
+            return;
+        }
+    }
+    inOutNativePublished = model.stamp();
 }
 
 
@@ -418,34 +465,20 @@ b8 UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::EditA
 }
 
 void UiEditBoxHost::synchronizeSession(const Ui::EditBoxOptions& options, const b8 inputMethod, Entry& entry, Ui::EditModel& model){
-    if(!options.enabled || options.readOnly || m_context.input().focus() != entry.widget.id){
-        if(m_session.owner() == entry.owner && !m_session.cancel())
-            TerminateInvariant();
-        model.cancelComposition();
-        return;
-    }
-    if(!UiEditGeometry().sessionReady(entry.displayed, entry.owner, entry.popup))
-        return;
-    if(m_session.token().valid() && m_session.owner() != entry.owner && !m_session.cancel())
-        TerminateInvariant();
-    if(!m_session.token().valid()){
-        model.cancelComposition();
-        const auto admission = m_session.begin(entry.owner, nativeCaret(entry.displayed), model);
-        if(admission != Core::TextInputAdmission::Accepted)
-            return;
-        m_lastNativeSequence = 0u;
-        entry.rejectedNative = {};
-    }
-    else{
-        const auto admission = m_session.adoptLocal(entry.owner, model, nativeCaret(entry.displayed), inputMethod ? Core::TextInputChangeCause::InputMethod : Core::TextInputChangeCause::Other);
-        if(admission != Core::TextInputAdmission::Accepted){
-            model.cancelComposition();
-            if(!m_session.cancel())
-                TerminateInvariant();
-            return;
-        }
-    }
-    m_nativePublished = model.stamp();
+    SynchronizeUiEditBoxSession(
+        options,
+        inputMethod,
+        m_context.input().focus() == entry.widget.id,
+        m_display,
+        entry.displayed,
+        entry.owner,
+        entry.popup,
+        m_session,
+        model,
+        m_lastNativeSequence,
+        entry.rejectedNative,
+        m_nativePublished
+    );
 }
 
 

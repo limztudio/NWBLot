@@ -165,6 +165,14 @@ void ApplyReflectionStatisticsFeedbackOutcome(
     inOutMetadata.feedbackResetReason = feedback.resetReason;
 }
 
+b8 IsValidAcceptedReflectionFeedbackToken(in QueueSubmissionToken token, in u16 deviceGeneration, in QueueSubmissionToken acceptedToken){
+    if(!token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != deviceGeneration || token.queue != CommandQueue::Graphics)
+        return false;
+    if(acceptedToken.valid() && (!token.matchesPhysicalQueue(acceptedToken.physicalQueueIndex, acceptedToken.deviceGeneration) || token.value <= acceptedToken.value))
+        return false;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/widgets/list_navigation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,10 +16,7 @@ native{
 
 
 #include <impl/ecs_ui/toolkit/widgets/scroll.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list_navigation.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
-
-#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,77 +49,6 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class ListState final : NoCopy{
-    friend class Builder;
-    friend class ListCoordinator;
-    friend class ContextMenuCoordinator;
-    friend class BuilderScopeFrame;
-    friend class ListBehavior;
-    friend class ListInput;
-    friend class ListLayoutPreparer;
-
-
-private:
-    [[nodiscard]] static u64 NextIdentity()noexcept{
-        static Atomic<u64> s_NextIdentity{ 1u };
-        return NextNonWrappingIdentity(s_NextIdentity);
-    }
-
-
-public:
-    ListState()noexcept
-        : m_inputGeneration(NextIdentity())
-    {}
-    ListState(ListState&&) = delete;
-
-
-public:
-    ListState& operator=(ListState&&) = delete;
-
-
-public:
-    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_scroll.instanceGeneration(); }
-
-    [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
-
-    [[nodiscard]] u64 selectedKey()const noexcept{ return m_selected; }
-
-    [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
-
-    [[nodiscard]] f64 scrollOffset()const noexcept{ return m_scroll.offset(); }
-
-    [[nodiscard]] const ScrollPlacement& placement()const noexcept{ return m_placement; }
-    // Explicit application changes start a new input lifetime even when the value is unchanged.
-    void select(const u64 key)noexcept{
-        m_inputGeneration = NextIdentity();
-        m_selected = key;
-        m_cursor = key;
-        m_ensureCursor = key != 0u;
-    }
-    [[nodiscard]] b8 scrollTo(const f64 offset)noexcept{
-        if(!m_scroll.setOffset(offset))
-            return false;
-        m_inputGeneration = NextIdentity();
-        m_ensureCursor = false;
-        return true;
-    }
-
-
-private:
-    ListMeasureKey m_measureKey;
-    f32 m_rowHeight = 0.0f;
-    f32 m_scrollRowHeight = 0.0f;
-    u64 m_scrollSourceGeneration = 0u;
-    ScrollState m_scroll;
-    ScrollPlacement m_placement;
-    u64 m_inputGeneration = 0u;
-    u64 m_selected = 0u;
-    u64 m_cursor = 0u;
-    u64 m_sourceGeneration = 0u;
-    u64 m_sourceRevision = 0u;
-    b8 m_ensureCursor = false;
-};
 
 class ListBehavior final{
 public:

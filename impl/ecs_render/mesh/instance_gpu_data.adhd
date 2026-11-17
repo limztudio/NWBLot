@@ -3,6 +3,18 @@
 
 
 const u32 s_MeshInstanceGeometrySlotCount = 12u;
+const u32 s_MeshBindingPosition = 0u;
+const u32 s_MeshBindingNormal = 1u;
+const u32 s_MeshBindingTangent = 2u;
+const u32 s_MeshBindingUv0 = 3u;
+const u32 s_MeshBindingColor = 4u;
+const u32 s_MeshBindingMeshletDesc = 5u;
+const u32 s_MeshInstanceCsgContextHeapSlot = 6u;
+const u32 s_MeshBindingMeshletBounds = 7u;
+const u32 s_MeshBindingMeshletPositionRefs = 8u;
+const u32 s_MeshBindingMeshletAttributeRefs = 9u;
+const u32 s_MeshBindingMeshletLocalVertexRefs = 10u;
+const u32 s_MeshBindingMeshletPrimitiveIndices = 11u;
 const usize s_InstanceGpuDataByteSize = 3u * 16u + cast<usize>(s_MeshInstanceGeometrySlotCount) * 4u;
 const u64 s_MeshletLocalVertexRefByteSize = 4ull;
 const u64 s_MeshEmulationVertexByteSize = 64ull;

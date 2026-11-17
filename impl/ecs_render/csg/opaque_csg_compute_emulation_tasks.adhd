@@ -305,7 +305,7 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& paylo
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
-    payload.opaqueCsgTiming.emplace(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, graphics.getDevice(), commandList);
+    payload.opaqueCsgTiming.emplace(graphics.gpuTiming(), s_TimingScopeOpaqueCsg, graphics.getDevice(), commandList);
     // Close the marker here; the sample callback owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(&payload.opaqueCsgTiming))
         return false;

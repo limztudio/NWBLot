@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/material/material_internal.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +66,18 @@ Expected<usize> ValidateAndAlignMaterialTypedByteRequest(in usize byteCount, in 
 
 void LogMeshSystemNotRegisteredForMaterialPass(){
     error("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes");
+}
+
+MaterialPassPipelineResourceSnapshot CaptureMaterialPassPipelineResourceSnapshot(in MaterialPipelineResources pipelineResources){
+    MaterialPassPipelineResourceSnapshot snapshot;
+    snapshot.indexedPipeline = pipelineResources.indexedPipeline;
+    snapshot.emulationPipeline = pipelineResources.emulationPipeline;
+    snapshot.meshletPipeline = pipelineResources.meshletPipeline;
+    snapshot.computePipeline = pipelineResources.computePipeline;
+    snapshot.objectGeometryDecodePipeline = pipelineResources.objectGeometryDecodePipeline;
+    snapshot.sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram;
+    snapshot.indexedGeometryOutput = pipelineResources.indexedGeometryOutput;
+    return snapshot;
 }
 
 
@@ -140,15 +153,7 @@ namespace __hidden_material_pass_gatherer{
 }
 
 [[nodiscard]] static MaterialPassPipelineResourceSnapshot CapturePipelineResourceSnapshot(const MaterialPipelineResources& pipelineResources)noexcept{
-    return {
-        .indexedPipeline = pipelineResources.indexedPipeline,
-        .emulationPipeline = pipelineResources.emulationPipeline,
-        .meshletPipeline = pipelineResources.meshletPipeline,
-        .computePipeline = pipelineResources.computePipeline,
-        .objectGeometryDecodePipeline = pipelineResources.objectGeometryDecodePipeline,
-        .sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram,
-        .indexedGeometryOutput = pipelineResources.indexedGeometryOutput,
-    };
+    return CaptureMaterialPassPipelineResourceSnapshot(pipelineResources);
 }
 
 

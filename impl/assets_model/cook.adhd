@@ -119,6 +119,20 @@ b8 SerializeModelBinaryPayload(
     return codec.serialize(skeletonObjects, staticMeshObjects, skinnedMeshObjects, outBinary);
 }
 
+Expected<Model> BuildModelAssetFromObjects(
+    in Name virtualPath,
+    in Vector<ModelSkeletonObject> skeletonObjects,
+    in Vector<ModelStaticMeshObject> staticMeshObjects,
+    in Vector<ModelSkinnedMeshObject> skinnedMeshObjects,
+    mut ScratchArena scratchArena
+){
+    Model asset(virtualPath);
+    asset.setObjects(skeletonObjects, staticMeshObjects, skinnedMeshObjects);
+    if(!asset.validatePayload(scratchArena))
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
 Expected<SkeletonJointMatrix> ReadModelTransformField(in Path nwbFilePath, in MetascriptValue object, in StringView objectKind){
     b8 transformOk = true;
     SkeletonJointMatrix transform = DefaultModelObjectTransform();
@@ -320,6 +334,28 @@ b8 ParseModelSkinnedMeshObjectsInto(in Path nwbFilePath, in MetascriptValue asse
     return ok;
 }
 
+b8 ParseModelObjectsInto(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    mut Vector<ModelSkeletonObject> outSkeletonObjects,
+    mut Vector<ModelStaticMeshObject> outStaticMeshObjects,
+    mut Vector<ModelSkinnedMeshObject> outSkinnedMeshObjects
+){
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix))
+        return false;
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedModelMetadataField(fieldName);
+    }))
+        return false;
+    if(!ParseModelSkeletonObjectsInto(nwbFilePath, asset, outSkeletonObjects))
+        return false;
+    if(!ParseModelStaticMeshObjectsInto(nwbFilePath, asset, outStaticMeshObjects))
+        return false;
+    if(!ParseModelSkinnedMeshObjectsInto(nwbFilePath, asset, outSkinnedMeshObjects))
+        return false;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -373,14 +409,7 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
 
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, &IsAllowedModelMetadataField))
-        return MakeUnexpected(Failure{});
-
-    if(!ParseModelSkeletonObjectsInto(nwbFilePath, asset, entry.skeletonObjects))
-        return MakeUnexpected(Failure{});
-    if(!ParseModelStaticMeshObjectsInto(nwbFilePath, asset, entry.staticMeshObjects))
-        return MakeUnexpected(Failure{});
-    if(!ParseModelSkinnedMeshObjectsInto(nwbFilePath, asset, entry.skinnedMeshObjects))
+    if(!ParseModelObjectsInto(nwbFilePath, asset, entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects))
         return MakeUnexpected(Failure{});
 
     Model candidateModel(entry.skeletonObjects.get_allocator().arena(), entry.virtualPath);
@@ -396,11 +425,7 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, const ASt
 }
 
 Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    Model asset(arena, modelEntry.virtualPath);
-    asset.setObjects(Move(modelEntry.skeletonObjects), Move(modelEntry.staticMeshObjects), Move(modelEntry.skinnedMeshObjects));
-    if(!asset.validatePayload(scratchArena))
-        return MakeUnexpected(Failure{});
-    return asset;
+    return BuildModelAssetFromObjects(arena, modelEntry.virtualPath, modelEntry.skeletonObjects, modelEntry.staticMeshObjects, modelEntry.skinnedMeshObjects, scratchArena);
 }
 
 

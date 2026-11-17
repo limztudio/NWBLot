@@ -108,6 +108,16 @@ Expected<CameraProjection> TryResolveCameraComponentProjection(
     );
 }
 
+Expected<CameraProjection> TryResolveEntityCameraProjection(in World world, in EntityID entity, in f32 fallbackAspectRatio){
+    if(!entity.valid() || !world.hasComponent<TransformComponent>(entity) || !world.hasComponent<CameraComponent>(entity))
+        return MakeUnexpected(Failure());
+    return TryResolveCameraComponentProjection(
+        world.getComponent<TransformComponent>(entity),
+        world.getComponent<CameraComponent>(entity),
+        fallbackAspectRatio
+    );
+}
+
 MatrixSingle LoadTransformMatrix(in TransformComponent transform){
     return MatrixAffineTransformation(
         VectorSingle(transform.scale),

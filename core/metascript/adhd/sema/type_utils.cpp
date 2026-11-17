@@ -3,6 +3,11 @@
 
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
+#include <core/metascript/adhd/ast/operator_semantics.h>
+#include <core/metascript/adhd/parser/decl_parser.h>
+#include <core/metascript/arena_names.h>
+
+#include <global/filesystem.h>
 
 #include "type_utils.h"
 
@@ -174,13 +179,6 @@ inline constexpr BuiltinReceiverMethodInfo s_BuiltinReceiverMethods[] = {
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD
 };
 
-inline constexpr BuiltinReceiverSignatureInfo s_BuiltinReceiverSignatures[] = {
-#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE(receiverTypeName, methodName, arity, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
-    BuiltinReceiverSignatureInfo{ receiverTypeName, methodName, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule }, arity },
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
-};
-
 inline constexpr BuiltinFieldInfo s_BuiltinFields[] = {
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText) \
     BuiltinFieldInfo{ receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText },
@@ -195,14 +193,8 @@ inline constexpr BuiltinFunctionArgRuleInfo s_BuiltinFunctionArgRules[] = {
 #undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
 };
 
-inline constexpr BuiltinVisitorRuleInfo s_BuiltinVisitorRules[] = {
-#define NWB_ADHD_EXPORT_VISITOR_RULE(ruleName, valueType, keyType, mutableWithReceiver) \
-    BuiltinVisitorRuleInfo{ BuiltinFunctionArgRule::ruleName, valueType, keyType, mutableWithReceiver },
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_VISITOR_RULE
-};
-
 static_assert(BuiltinFunctionArgRule::Any == 0u);
+static_assert(BuiltinFunctionArgRule::StaticCount == sizeof(s_BuiltinFunctionArgRules) / sizeof(s_BuiltinFunctionArgRules[0]));
 
 inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
@@ -359,6 +351,597 @@ template<typename EntryT, usize N>
     return nullptr;
 }
 
+template<typename Fn>
+[[nodiscard]] decltype(auto) WithJoinedKey(const MStringView a, const MStringView sep, const MStringView b, const Fn& fn)noexcept{
+    MChar stackBuf[512];
+    const usize totalLen = a.size() + sep.size() + b.size();
+    if(totalLen <= sizeof(stackBuf)){
+        if(!a.empty())
+            FOUNDATION_MEMCPY(stackBuf, a.size(), a.data(), a.size());
+        if(!sep.empty())
+            FOUNDATION_MEMCPY(stackBuf + a.size(), sep.size(), sep.data(), sep.size());
+        if(!b.empty())
+            FOUNDATION_MEMCPY(stackBuf + a.size() + sep.size(), b.size(), b.data(), b.size());
+        return fn(MStringView(stackBuf, totalLen));
+    }
+    Alloc::ScratchArena scratch(MetascriptArenaScope::s_ParserScratch);
+    AString<Alloc::ScratchArena> heapBuf(scratch);
+    heapBuf.reserve(totalLen);
+    heapBuf.append(a.data(), a.size());
+    heapBuf.append(sep.data(), sep.size());
+    heapBuf.append(b.data(), b.size());
+    return fn(MStringView(heapBuf.data(), heapBuf.size()));
+}
+
+class CoreExternRegistry final{
+public:
+    CoreExternRegistry()
+        : m_arena(MetascriptArenaScope::s_ParserScratch)
+        , m_sourceText(m_arena)
+        , m_ownedStrings(m_arena)
+        , m_objectTypes(m_arena)
+        , m_enums(m_arena)
+        , m_enumEntries(m_arena)
+        , m_fields(m_arena)
+        , m_receiverMethods(m_arena)
+        , m_receiverSignatures(m_arena)
+        , m_argRules(m_arena)
+        , m_visitorRules(m_arena)
+        , m_functions(m_arena)
+        , m_globalConstants(m_arena)
+        , m_objectTypeByName(m_arena)
+        , m_enumByName(m_arena)
+        , m_enumEntryByKey(m_arena)
+        , m_fieldByKey(m_arena)
+        , m_receiverMethodByKey(m_arena)
+        , m_receiverSigByKey(m_arena)
+        , m_functionByName(m_arena)
+        , m_functionByCppName(m_arena)
+        , m_globalConstantByName(m_arena)
+        , m_globalConstantByCppName(m_arena)
+        , m_simdFieldTypes(m_arena)
+        , m_exactRuleByKey(m_arena)
+        , m_visitorRuleByKey(m_arena)
+    {
+        load();
+    }
+
+    [[nodiscard]] const BuiltinObjectTypeInfo* findObjectType(const MStringView name)const noexcept{
+        return FindInMap(m_objectTypes, m_objectTypeByName, name);
+    }
+
+    [[nodiscard]] const BuiltinEnumInfo* findEnum(const MStringView name)const noexcept{
+        return FindInMap(m_enums, m_enumByName, name);
+    }
+
+    [[nodiscard]] b8 hasEnumEntry(const MStringView enumName, const MStringView entryName)const noexcept{
+        return WithJoinedKey(enumName, MStringView("\n", 1u), entryName, [&](const MStringView key)noexcept{
+            return m_enumEntryByKey.find(key) != m_enumEntryByKey.end();
+        });
+    }
+
+    [[nodiscard]] const BuiltinFieldInfo* findField(const MStringView receiverTypeName, const MStringView fieldName)const noexcept{
+        return FindPairInMap(m_fields, m_fieldByKey, receiverTypeName, fieldName);
+    }
+
+    [[nodiscard]] const BuiltinReceiverMethodInfo* findReceiverMethod(const MStringView receiverTypeName, const MStringView methodName)const noexcept{
+        return FindPairInMap(m_receiverMethods, m_receiverMethodByKey, receiverTypeName, methodName);
+    }
+
+    [[nodiscard]] const BuiltinReceiverSignatureInfo* findReceiverSignature(const MStringView receiverTypeName, const MStringView methodName)const noexcept{
+        return FindPairInMap(m_receiverSignatures, m_receiverSigByKey, receiverTypeName, methodName);
+    }
+
+    [[nodiscard]] const BuiltinFunctionArgRuleInfo* findArgRule(const BuiltinFunctionArgRule::Enum rule)const noexcept{
+        if(static_cast<usize>(rule) < static_cast<usize>(BuiltinFunctionArgRule::StaticCount))
+            return nullptr;
+        const usize idx = static_cast<usize>(rule) - static_cast<usize>(BuiltinFunctionArgRule::StaticCount);
+        return (idx < m_argRules.size()) ? &m_argRules[idx] : nullptr;
+    }
+
+    [[nodiscard]] const BuiltinVisitorRuleInfo* findVisitorRule(const BuiltinFunctionArgRule::Enum rule)const noexcept{
+        for(const BuiltinVisitorRuleInfo& info : m_visitorRules){
+            if(info.rule == rule)
+                return &info;
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] const BuiltinFunctionInfo* findFunction(const MStringView name)const noexcept{
+        return FindInMap(m_functions, m_functionByName, name);
+    }
+
+    [[nodiscard]] const BuiltinFunctionInfo* findScopedFunction(const MStringView scopeTypeName, const MStringView memberName)const noexcept{
+        return FindScopedInMap(m_functions, m_functionByCppName, scopeTypeName, memberName, true);
+    }
+
+    [[nodiscard]] const BuiltinGlobalConstantInfo* findGlobalConstant(const MStringView name)const noexcept{
+        return FindInMap(m_globalConstants, m_globalConstantByName, name);
+    }
+
+    [[nodiscard]] const BuiltinGlobalConstantInfo* findScopedConstant(const MStringView scopeTypeName, const MStringView memberName)const noexcept{
+        return FindScopedInMap(m_globalConstants, m_globalConstantByCppName, scopeTypeName, memberName, false);
+    }
+
+    [[nodiscard]] b8 hasSimdRegisterField(const MStringView typeName)const noexcept{
+        return m_simdFieldTypes.find(typeName) != m_simdFieldTypes.end();
+    }
+
+
+private:
+    template<typename InfoT>
+    [[nodiscard]] static const InfoT* FindInMap(const MVector<InfoT>& items, const MStringMap<usize>& indexMap, const MStringView key)noexcept{
+        const auto it = indexMap.find(key);
+        return (it != indexMap.end()) ? &items[it->second] : nullptr;
+    }
+
+    template<typename InfoT>
+    [[nodiscard]] static const InfoT* FindPairInMap(const MVector<InfoT>& items, const MStringMap<usize>& indexMap, const MStringView a, const MStringView b)noexcept{
+        return WithJoinedKey(a, MStringView("\n", 1u), b, [&](const MStringView key)noexcept -> const InfoT*{
+            return FindInMap(items, indexMap, key);
+        });
+    }
+
+    template<typename InfoT>
+    [[nodiscard]] static const InfoT* FindScopedInMap(
+        const MVector<InfoT>& items,
+        const MStringMap<usize>& cppMap,
+        const MStringView scopeTypeName,
+        const MStringView memberName,
+        const b8 allowArenaTemplateScope
+    )noexcept{
+        if(memberName.empty())
+            return nullptr;
+        const MStringView prefix = ResolveBuiltinScopePrefix(scopeTypeName);
+        if(prefix.empty())
+            return nullptr;
+        if(const InfoT* direct = WithJoinedKey(prefix, ContractSemantics::s_CppScopeSeparator, memberName, [&](const MStringView key)noexcept{
+            return FindInMap(items, cppMap, key);
+        }))
+            return direct;
+        if(allowArenaTemplateScope){
+            return WithJoinedKey(prefix, ContractSemantics::s_CppArenaTemplateScopeSep, memberName, [&](const MStringView key)noexcept{
+                return FindInMap(items, cppMap, key);
+            });
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] MStringView ownString(const MStringView text){
+        if(text.empty())
+            return {};
+        const char* const srcBegin = m_sourceText.data();
+        const char* const srcEnd = srcBegin + m_sourceText.size();
+        if(text.data() >= srcBegin && text.data() + text.size() <= srcEnd)
+            return text;
+        m_ownedStrings.push_back(MakeGlobalUnique<MString>(m_arena, text.data(), text.size(), m_arena));
+        const MString& stored = *m_ownedStrings.back();
+        return MStringView(stored.data(), stored.size());
+    }
+
+    [[nodiscard]] MStringView allocOwnedString(MString&& text){
+        if(text.empty())
+            return {};
+        m_ownedStrings.push_back(MakeGlobalUnique<MString>(m_arena, Move(text)));
+        const MString& stored = *m_ownedStrings.back();
+        return MStringView(stored.data(), stored.size());
+    }
+
+    [[nodiscard]] MString buildPairKey(const MStringView a, const MStringView b){
+        MString key(m_arena);
+        key.reserve(a.size() + 1u + b.size());
+        key.append(a.data(), a.size());
+        key.push_back('\n');
+        key.append(b.data(), b.size());
+        return key;
+    }
+
+    void insertUniqueIndex(MStringMap<usize>& map, const MStringView key, const usize idx){
+        if(!key.empty() && map.find(key) == map.end())
+            map.emplace(MString(key.data(), key.size(), m_arena), idx);
+    }
+
+    void insertUniqueKey(MStringMap<usize>& map, MString&& key, const usize idx){
+        const MStringView view(key.data(), key.size());
+        if(!view.empty() && map.find(view) == map.end())
+            map.emplace(Move(key), idx);
+    }
+
+    [[nodiscard]] BuiltinFunctionArgRule::Enum allocRuleId()const noexcept{
+        return static_cast<BuiltinFunctionArgRule::Enum>(
+            static_cast<usize>(BuiltinFunctionArgRule::StaticCount) + m_argRules.size()
+        );
+    }
+
+    [[nodiscard]] BuiltinFunctionArgRule::Enum resolveArgRule(const ParamDecl& param){
+        if(!param.type)
+            return BuiltinFunctionArgRule::Any;
+        const TypeRef& type = *param.type;
+        const b8 isMut = (param.mode == ParamPassingMode::Mut);
+
+        if(type.isFuncType){
+            MStringView keyType;
+            MStringView valueType;
+            b8 mutableWithReceiver = false;
+            if(type.funcParams.size() == 2u){
+                keyType = ownString(type.funcParams[0].type ? type.funcParams[0].type->name : MStringView{});
+                valueType = ownString(type.funcParams[1].type ? type.funcParams[1].type->name : MStringView{});
+                mutableWithReceiver = (type.funcParams[1].mode == ParamPassingMode::Mut);
+            }
+            else if(type.funcParams.size() == 1u){
+                valueType = ownString(type.funcParams[0].type ? type.funcParams[0].type->name : MStringView{});
+                mutableWithReceiver = (type.funcParams[0].mode == ParamPassingMode::Mut);
+            }
+            MString vKey(m_arena);
+            vKey.append(keyType.data(), keyType.size());
+            vKey.push_back('\n');
+            vKey.append(valueType.data(), valueType.size());
+            vKey.push_back('\n');
+            vKey.push_back(mutableWithReceiver ? '1' : '0');
+            if(const auto it = m_visitorRuleByKey.find(MStringView(vKey.data(), vKey.size())); it != m_visitorRuleByKey.end())
+                return it->second;
+            const BuiltinFunctionArgRule::Enum ruleId = allocRuleId();
+            m_argRules.push_back(BuiltinFunctionArgRuleInfo{ ruleId, {}, {}, {}, false, false, false });
+            m_visitorRules.push_back(BuiltinVisitorRuleInfo{ ruleId, valueType, keyType, mutableWithReceiver });
+            m_visitorRuleByKey.emplace(Move(vKey), ruleId);
+            return ruleId;
+        }
+
+        if(type.isAuto)
+            return isMut ? BuiltinFunctionArgRule::MutAny : BuiltinFunctionArgRule::Any;
+
+        const MStringView tname = type.name;
+        if(!isMut && tname == BuiltinTypeSemantics::StringViewTypeName())
+            return BuiltinFunctionArgRule::TextView;
+        if(isMut && tname == "String")
+            return BuiltinFunctionArgRule::MutString;
+        if(isMut && tname == BuiltinTypeSemantics::UInt64ScalarTypeName())
+            return BuiltinFunctionArgRule::MutU64;
+        if(!isMut && tname == BuiltinTypeSemantics::UInt64ScalarTypeName())
+            return BuiltinFunctionArgRule::U64Scalar;
+        if(isMut && tname == BuiltinTypeSemantics::UsizeScalarTypeName())
+            return BuiltinFunctionArgRule::MutUsize;
+        if(!isMut && tname == BuiltinTypeSemantics::BoolScalarTypeName())
+            return BuiltinFunctionArgRule::BoolScalar;
+        if(!isMut && tname == "isize")
+            return BuiltinFunctionArgRule::Integer;
+        if(!isMut && tname == BuiltinTypeSemantics::NameTypeName())
+            return BuiltinFunctionArgRule::NameValue;
+        if(!isMut && tname == BuiltinTypeSemantics::PathTypeName())
+            return BuiltinFunctionArgRule::PathValue;
+        if(!isMut && tname == "Span" && type.templateArgs.size() == 1u && type.templateArgs[0].type && type.templateArgs[0].type->name == BuiltinTypeSemantics::ByteScalarTypeName())
+            return BuiltinFunctionArgRule::ReadableByteSequence;
+
+        MString key = buildPairKey(tname, isMut ? MStringView("1") : MStringView("0"));
+        if(const auto it = m_exactRuleByKey.find(MStringView(key.data(), key.size())); it != m_exactRuleByKey.end())
+            return it->second;
+
+        const BuiltinFunctionArgRule::Enum ruleId = allocRuleId();
+        const MStringView ownedType = ownString(tname);
+        const MStringView msgPrefix = isMut
+            ? MStringView("built-in function argument must be a mutable ")
+            : MStringView("built-in function argument must be ");
+        const MStringView msgSuffix = isMut ? MStringView(" variable") : MStringView{};
+        MString msg(m_arena);
+        msg.reserve(msgPrefix.size() + ownedType.size() + msgSuffix.size());
+        msg.append(msgPrefix.data(), msgPrefix.size());
+        msg.append(ownedType.data(), ownedType.size());
+        msg.append(msgSuffix.data(), msgSuffix.size());
+        const MStringView ownedMsg = allocOwnedString(Move(msg));
+
+        m_argRules.push_back(BuiltinFunctionArgRuleInfo{ ruleId, ownedType, ownedType, ownedMsg, isMut, false, false });
+        m_exactRuleByKey.emplace(Move(key), ruleId);
+        return ruleId;
+    }
+
+    void unpackReturnType(
+        const TypeRef* const retType,
+        const MStringView templateParamName,
+        MStringView& outTypeName,
+        MStringView& outTypeArgName,
+        MStringView& outNestedTypeArgName,
+        MStringView& outErrorTypeName,
+        BuiltinFunctionReturnRule::Enum* const outReturnRule
+    ){
+        outTypeName = {};
+        outTypeArgName = {};
+        outNestedTypeArgName = {};
+        outErrorTypeName = {};
+        if(outReturnRule)
+            *outReturnRule = BuiltinFunctionReturnRule::FixedType;
+        if(!retType)
+            return;
+
+        if(!templateParamName.empty()){
+            if(retType->name == templateParamName){
+                if(outReturnRule)
+                    *outReturnRule = BuiltinFunctionReturnRule::CallTemplateArg0;
+                return;
+            }
+            if(!retType->templateArgs.empty() && retType->templateArgs[0].type){
+                const TypeRef* const arg0 = retType->templateArgs[0].type;
+                if(arg0->name == templateParamName){
+                    outTypeName = ownString(retType->name);
+                    if(retType->templateArgs.size() >= 2u && retType->templateArgs[1].type)
+                        outErrorTypeName = ownString(retType->templateArgs[1].type->name);
+                    if(outReturnRule)
+                        *outReturnRule = BuiltinFunctionReturnRule::CallTemplateArg0;
+                    return;
+                }
+                if(!arg0->templateArgs.empty() && arg0->templateArgs[0].type && arg0->templateArgs[0].type->name == templateParamName){
+                    outTypeName = ownString(retType->name);
+                    outTypeArgName = ownString(arg0->name);
+                    if(retType->templateArgs.size() >= 2u && retType->templateArgs[1].type)
+                        outErrorTypeName = ownString(retType->templateArgs[1].type->name);
+                    if(outReturnRule)
+                        *outReturnRule = BuiltinFunctionReturnRule::CallTemplateArg0;
+                    return;
+                }
+            }
+        }
+
+        outTypeName = ownString(retType->name);
+        if(!retType->templateArgs.empty() && retType->templateArgs[0].type){
+            const TypeRef* const arg0 = retType->templateArgs[0].type;
+            outTypeArgName = ownString(arg0->name);
+            if(!arg0->templateArgs.empty() && arg0->templateArgs[0].type)
+                outNestedTypeArgName = ownString(arg0->templateArgs[0].type->name);
+        }
+        if(retType->templateArgs.size() >= 2u && retType->templateArgs[1].type)
+            outErrorTypeName = ownString(retType->templateArgs[1].type->name);
+    }
+
+    void loadEnums(const MVector<EnumDecl*>& enums){
+        for(const EnumDecl* en : enums){
+            if(!en || en->name.empty())
+                continue;
+            BuiltinEnumInfo info{};
+            info.adhdName = ownString(en->name);
+            info.cppTypeName = ownString(en->cppExportName);
+            info.cppScopeName = ownString(ContractSemantics::StripWrappedNwbEnumSuffix(en->cppExportName));
+            info.requiredHeader = ownString(en->requiredHeader);
+            info.byteSize = static_cast<u32>(en->underlyingSize);
+            info.byteAlign = static_cast<u32>(en->underlyingAlign);
+            info.isFlag = en->isFlag;
+
+            const usize idx = m_enums.size();
+            m_enums.push_back(info);
+            insertUniqueIndex(m_enumByName, info.adhdName, idx);
+
+            for(const EnumEntry& entry : en->entries){
+                if(entry.name.empty())
+                    continue;
+                const MStringView ownedEntry = ownString(entry.name);
+                m_enumEntries.push_back(BuiltinEnumEntryInfo{ info.adhdName, ownedEntry });
+                MString entryKey = buildPairKey(info.adhdName, ownedEntry);
+                const MStringView entryKeyView(entryKey.data(), entryKey.size());
+                if(m_enumEntryByKey.find(entryKeyView) == m_enumEntryByKey.end())
+                    m_enumEntryByKey.emplace(Move(entryKey), 1u);
+            }
+        }
+    }
+
+    void loadClasses(const MVector<ClassDecl*>& classes){
+        for(const ClassDecl* cls : classes){
+            if(!cls || cls->name.empty())
+                continue;
+            BuiltinObjectTypeInfo obj{};
+            obj.adhdName = ownString(cls->name);
+            obj.cppExportName = ownString(cls->cppExportName);
+            obj.requiredHeader = ownString(cls->requiredHeader);
+            obj.byteSize = static_cast<u32>(cls->totalSize);
+            obj.byteAlign = static_cast<u32>(cls->totalAlign);
+            obj.isArenaBacked = cls->isArenaOwner;
+            obj.isSelfDefaulted = cls->isSelfDefaulted;
+            obj.isSmallValue = cls->isSmallValue;
+            obj.isBorrowView = cls->isBorrowView;
+            obj.isBinarySerializable = cls->isBinarySerializable;
+            obj.isSingleValueCtor = false;
+            obj.emitsBraceFieldInit = cls->emitsBraceFieldInit;
+            obj.isStringLike = false;
+            obj.isStringSwitch = cls->isEqualitySwitch;
+            obj.isNonThreadSafeContainer = cls->isNonThreadSafeContainer;
+            obj.isNwbMapKey = cls->isNwbMapKey;
+            obj.requiresTCharAdaptation = false;
+            obj.arenaCtorMode = cls->arenaCtorMode;
+            obj.isCopyMoveConstructible = cls->isCopyConstructible;
+            obj.isAssignable = cls->isCopyAssignable;
+            obj.isAbstract = cls->isAbstract;
+            obj.isPolymorphicBase = cls->isPolymorphicBase;
+            obj.formatArgWrapKind = 0u;
+
+            const usize objIdx = m_objectTypes.size();
+            m_objectTypes.push_back(obj);
+            insertUniqueIndex(m_objectTypeByName, obj.adhdName, objIdx);
+
+            for(const FieldDecl* field : cls->fields){
+                if(!field || !field->type || field->name.empty())
+                    continue;
+                BuiltinFieldInfo fInfo{};
+                fInfo.receiverTypeName = obj.adhdName;
+                fInfo.fieldName = ownString(field->name);
+                fInfo.fieldTypeName = ownString(field->type->name);
+                if(!field->type->templateArgs.empty()){
+                    fInfo.elemTypeName = ownString(field->type->templateArgs[0].constantOrTypeName());
+                    if(field->type->templateArgs.size() >= 2u)
+                        fInfo.countText = ownString(field->type->templateArgs[1].constantOrTypeName());
+                }
+                if(SymbolTable::IsSimdRegisterType(fInfo.fieldTypeName) && m_simdFieldTypes.find(obj.adhdName) == m_simdFieldTypes.end())
+                    m_simdFieldTypes.emplace(MString(obj.adhdName.data(), obj.adhdName.size(), m_arena), 1u);
+
+                const usize fIdx = m_fields.size();
+                m_fields.push_back(fInfo);
+                insertUniqueKey(m_fieldByKey, buildPairKey(obj.adhdName, fInfo.fieldName), fIdx);
+            }
+
+            for(const MethodDecl* method : cls->methods){
+                if(!method || method->name.empty())
+                    continue;
+                BuiltinReceiverMethodInfo rm{};
+                rm.receiverTypeName = obj.adhdName;
+                rm.methodName = ownString(method->name);
+                const MStringView methodTplName = !method->templateParams.empty() ? method->templateParams[0].name : MStringView{};
+                unpackReturnType(method->returnType, methodTplName, rm.returnTypeName, rm.returnTypeArgName, rm.returnNestedTypeArgName, rm.returnErrorTypeName, nullptr);
+                rm.synthesizeTypeRef = true;
+                rm.isMutating = !method->isConst;
+                rm.returnsReference = method->returnsReference || (method->returnType && method->returnType->refMode != ParamPassingMode::None);
+
+                const usize rmIdx = m_receiverMethods.size();
+                m_receiverMethods.push_back(rm);
+                insertUniqueKey(m_receiverMethodByKey, buildPairKey(obj.adhdName, rm.methodName), rmIdx);
+
+                if(!method->isVariadic && !method->isOperator && method->params.size() <= 9u){
+                    BuiltinReceiverSignatureInfo sig{};
+                    sig.receiverTypeName = obj.adhdName;
+                    sig.methodName = rm.methodName;
+                    for(BuiltinFunctionArgRule::Enum& r : sig.argRules)
+                        r = BuiltinFunctionArgRule::Any;
+                    sig.arity = static_cast<u8>(method->params.size());
+                    for(usize pi = 0u; pi < method->params.size(); ++pi)
+                        sig.argRules[pi] = resolveArgRule(method->params[pi]);
+
+                    const usize sigIdx = m_receiverSignatures.size();
+                    m_receiverSignatures.push_back(sig);
+                    insertUniqueKey(m_receiverSigByKey, buildPairKey(obj.adhdName, rm.methodName), sigIdx);
+                }
+            }
+        }
+    }
+
+    void loadFunctions(const MVector<MethodDecl*>& functions){
+        for(const MethodDecl* fn : functions){
+            if(!fn || fn->name.empty())
+                continue;
+            BuiltinFunctionInfo info{};
+            info.adhdName = ownString(fn->name);
+            info.cppExportName = ownString(fn->cppExportName);
+            info.requiredHeader = ownString(fn->requiredHeader);
+            const MStringView fnTplName = !fn->templateParams.empty() ? fn->templateParams[0].name : MStringView{};
+            unpackReturnType(fn->returnType, fnTplName, info.returnTypeName, info.returnTypeArgName, info.returnNestedTypeArgName, info.returnErrorTypeName, &info.returnRule);
+            info.minArity = fn->minArgCount;
+            info.arity = fn->params.size() <= info.argRules.size() ? fn->params.size() : info.argRules.size();
+            if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg0))
+                info.callLowering = BuiltinCallLowering::BinaryByteViewArg0;
+            else if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg1))
+                info.callLowering = BuiltinCallLowering::BinaryByteViewArg1;
+            else
+                info.callLowering = BuiltinCallLowering::None;
+            info.prependsScratchArena = fn->injectsCallerArena;
+            info.isVariadic = fn->isVariadic;
+            info.wrapsFormatArgs = false;
+            info.requiresExplicitTypeArg = !fn->templateParams.empty();
+            info.returnsBorrowedView = fn->returnsBorrowedView;
+            info.rejectsSimdStorage = false;
+            info.returnsReference = fn->returnsReference || (fn->returnType && fn->returnType->refMode != ParamPassingMode::None);
+            for(BuiltinFunctionArgRule::Enum& r : info.argRules)
+                r = BuiltinFunctionArgRule::Any;
+            for(usize pi = 0u; pi < info.arity; ++pi)
+                info.argRules[pi] = resolveArgRule(fn->params[pi]);
+
+            const usize fnIdx = m_functions.size();
+            m_functions.push_back(info);
+            insertUniqueIndex(m_functionByName, info.adhdName, fnIdx);
+            insertUniqueIndex(m_functionByCppName, info.cppExportName, fnIdx);
+        }
+    }
+
+    void loadGlobalConstants(const MVector<Stmt*>& constants){
+        for(const Stmt* stmt : constants){
+            if(!stmt || stmt->kind != StmtKind::VarDecl || stmt->name.empty() || !stmt->varType)
+                continue;
+            BuiltinGlobalConstantInfo gc{};
+            gc.adhdName = ownString(stmt->name);
+            gc.cppExportName = ownString(stmt->cppExportName);
+            gc.adhdTypeName = ownString(stmt->varType->name);
+            gc.requiredHeader = ownString(stmt->requiredHeader);
+
+            const usize gcIdx = m_globalConstants.size();
+            m_globalConstants.push_back(gc);
+            insertUniqueIndex(m_globalConstantByName, gc.adhdName, gcIdx);
+            insertUniqueIndex(m_globalConstantByCppName, gc.cppExportName, gcIdx);
+        }
+    }
+
+    void load(){
+        const auto tryReadPrelude = [&](const MStringView pathText) -> b8{
+            const TString<MetaArena> nativePath = ConvertString(m_arena, pathText);
+            const ::Path<MetaArena> diskPath(m_arena, TStringView(nativePath.data(), nativePath.size()));
+            m_sourceText.clear();
+            return static_cast<b8>(ReadTextFile(diskPath, m_sourceText));
+        };
+
+        b8 loaded = false;
+#if defined(NWB_PROJECT_SOURCE_DIR)
+        {
+            const MStringView root = NWB_PROJECT_SOURCE_DIR;
+            if(!root.empty()){
+                MString fullPath(root.data(), root.size(), m_arena);
+                if(fullPath.back() != '/' && fullPath.back() != '\\')
+                    fullPath.push_back('/');
+                fullPath.append(ContractSemantics::s_CoreExternPreludePath.data(), ContractSemantics::s_CoreExternPreludePath.size());
+                loaded = tryReadPrelude(MStringView(fullPath.data(), fullPath.size()));
+            }
+        }
+#endif
+        if(!loaded)
+            loaded = tryReadPrelude(ContractSemantics::s_CoreExternPreludePath);
+        FOUNDATION_ASSERT(loaded && !m_sourceText.empty());
+        if(!loaded || m_sourceText.empty())
+            return;
+
+        const MStringView activeSource(m_sourceText.data(), m_sourceText.size());
+        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
+        MetaArena parseArena(MetascriptArenaScope::s_ParserScratch);
+        MVector<ParseError> errors(parseArena);
+        TranslationUnit parseUnit(parseArena);
+        ParserCursor cursor(activeSource, parseArena, scratchArena, errors);
+        DeclParser declParser(cursor, activeSource, nullptr);
+        const b8 parsed = declParser.parseTranslationUnit(parseUnit);
+        FOUNDATION_ASSERT(parsed && errors.empty());
+        if(!parsed || !errors.empty())
+            return;
+
+        loadEnums(parseUnit.enums);
+        loadClasses(parseUnit.classes);
+        loadFunctions(parseUnit.freeFunctions);
+        loadGlobalConstants(parseUnit.globalConstants);
+    }
+
+
+private:
+    MetaArena m_arena;
+    MString m_sourceText;
+    MVector<GlobalUniquePtr<MString>> m_ownedStrings;
+    MVector<BuiltinObjectTypeInfo> m_objectTypes;
+    MVector<BuiltinEnumInfo> m_enums;
+    MVector<BuiltinEnumEntryInfo> m_enumEntries;
+    MVector<BuiltinFieldInfo> m_fields;
+    MVector<BuiltinReceiverMethodInfo> m_receiverMethods;
+    MVector<BuiltinReceiverSignatureInfo> m_receiverSignatures;
+    MVector<BuiltinFunctionArgRuleInfo> m_argRules;
+    MVector<BuiltinVisitorRuleInfo> m_visitorRules;
+    MVector<BuiltinFunctionInfo> m_functions;
+    MVector<BuiltinGlobalConstantInfo> m_globalConstants;
+    MStringMap<usize> m_objectTypeByName;
+    MStringMap<usize> m_enumByName;
+    MStringMap<u8> m_enumEntryByKey;
+    MStringMap<usize> m_fieldByKey;
+    MStringMap<usize> m_receiverMethodByKey;
+    MStringMap<usize> m_receiverSigByKey;
+    MStringMap<usize> m_functionByName;
+    MStringMap<usize> m_functionByCppName;
+    MStringMap<usize> m_globalConstantByName;
+    MStringMap<usize> m_globalConstantByCppName;
+    MStringMap<u8> m_simdFieldTypes;
+    MStringMap<BuiltinFunctionArgRule::Enum> m_exactRuleByKey;
+    MStringMap<BuiltinFunctionArgRule::Enum> m_visitorRuleByKey;
+};
+
+[[nodiscard]] inline const CoreExternRegistry& GetCoreExternRegistry()noexcept{
+    static const CoreExternRegistry s_Registry;
+    return s_Registry;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -370,11 +953,15 @@ template<typename EntryT, usize N>
 
 
 const BuiltinObjectTypeInfo* FindBuiltinObjectType(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinObjectTypes, name);
+    if(const BuiltinObjectTypeInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinObjectTypes, name))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findObjectType(name);
 }
 
 const BuiltinEnumInfo* FindBuiltinEnum(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinEnums, name);
+    if(const BuiltinEnumInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinEnums, name))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findEnum(name);
 }
 
 b8 HasBuiltinEnumEntry(const MStringView enumName, const MStringView entryName)noexcept{
@@ -382,7 +969,7 @@ b8 HasBuiltinEnumEntry(const MStringView enumName, const MStringView entryName)n
         if(info.adhdEnumName == enumName && info.entryName == entryName)
             return true;
     }
-    return false;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().hasEnumEntry(enumName, entryName);
 }
 
 b8 IsArenaFirstCtorType(const MStringView name)noexcept{
@@ -500,15 +1087,11 @@ const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(const MStringView rec
         if(info.receiverTypeName == receiverTypeName && info.methodName == methodName)
             return &info;
     }
-    return nullptr;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findReceiverMethod(receiverTypeName, methodName);
 }
 
 const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(const MStringView receiverTypeName, const MStringView methodName)noexcept{
-    for(const BuiltinReceiverSignatureInfo& info : __hidden_adhd_type_utils::s_BuiltinReceiverSignatures){
-        if(info.receiverTypeName == receiverTypeName && info.methodName == methodName)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findReceiverSignature(receiverTypeName, methodName);
 }
 
 const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, const MStringView fieldName)noexcept{
@@ -516,31 +1099,41 @@ const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, con
         if(info.receiverTypeName == receiverTypeName && info.fieldName == fieldName)
             return &info;
     }
-    return nullptr;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findField(receiverTypeName, fieldName);
 }
 
 const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_BuiltinFunctionArgRules, rule);
+    if(const BuiltinFunctionArgRuleInfo* info = __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_BuiltinFunctionArgRules, rule))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findArgRule(rule);
 }
 
 const BuiltinVisitorRuleInfo* FindBuiltinVisitorRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_BuiltinVisitorRules, rule);
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findVisitorRule(rule);
 }
 
 const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinFunctions, name);
+    if(const BuiltinFunctionInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinFunctions, name))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findFunction(name);
 }
 
 const BuiltinFunctionInfo* FindBuiltinScopedFunction(const MStringView scopeTypeName, const MStringView memberName)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinFunctions, scopeTypeName, memberName, true);
+    if(const BuiltinFunctionInfo* info = __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinFunctions, scopeTypeName, memberName, true))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findScopedFunction(scopeTypeName, memberName);
 }
 
 const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, name);
+    if(const BuiltinGlobalConstantInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, name))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findGlobalConstant(name);
 }
 
 const BuiltinGlobalConstantInfo* FindBuiltinScopedConstant(const MStringView scopeTypeName, const MStringView memberName)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, scopeTypeName, memberName, false);
+    if(const BuiltinGlobalConstantInfo* info = __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, scopeTypeName, memberName, false))
+        return info;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findScopedConstant(scopeTypeName, memberName);
 }
 
 b8 IsBorrowViewType(const MStringView name)noexcept{
@@ -779,7 +1372,7 @@ b8 HasBuiltinSimdRegisterField(const MStringView typeName)noexcept{
         if(info.receiverTypeName == typeName && SymbolTable::IsSimdRegisterType(info.fieldTypeName))
             return true;
     }
-    return false;
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().hasSimdRegisterField(typeName);
 }
 
 b8 IsOverAlignedBuiltinType(const MStringView typeName)noexcept{

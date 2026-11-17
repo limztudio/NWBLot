@@ -391,6 +391,8 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
     if(const ClassDecl* cls = findClass(baseName)){
         if(cls->isExtern && cls->isAbstract)
             return false;
+        if(cls->isExtern && cls->isSelfDefaulted)
+            return true;
         b8 hasAnyCtor = false;
         for(const MethodDecl* m : cls->methods){
             if(m && m->isConstructor){
@@ -422,6 +424,8 @@ b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
     typeName = resolveBaseTypeName(typeName);
     if(BuiltinTypeSemantics::IsScalarType(typeName) || IsSimdRegisterVectorType(typeName) || findEnum(typeName) != nullptr)
         return true;
+    if(const ClassDecl* cls = findClass(typeName); cls && cls->isExtern)
+        return cls->isSmallValue;
     if(!hasTypeSymbol(typeName)){
         if(FindBuiltinEnum(typeName) != nullptr)
             return true;
@@ -472,6 +476,8 @@ b8 SymbolTable::isAbstractBuiltinType(const MStringView name)const noexcept{
 
 b8 SymbolTable::isPolymorphicBaseBuiltinType(const MStringView name)const noexcept{
     const MStringView baseName = resolveBaseTypeName(name);
+    if(const ClassDecl* cls = findClass(baseName); cls && cls->isExtern && cls->isPolymorphicBase)
+        return true;
     if(hasTypeSymbol(baseName))
         return false;
     const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName);

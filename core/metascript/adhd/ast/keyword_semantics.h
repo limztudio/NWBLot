@@ -27,6 +27,26 @@ namespace ExternAttributeKind{
     };
 };
 
+namespace ExternTypeFlagKind{
+    enum Enum : u8{
+        None = 0u,
+#define NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(idName, flagText) \
+        idName,
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG
+    };
+};
+
+namespace ExternCallableFlagKind{
+    enum Enum : u8{
+        None = 0u,
+#define NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(idName, flagText) \
+        idName,
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG
+    };
+};
+
 
 struct ProhibitedKeywordEntry{
     MStringView keyword;
@@ -111,6 +131,22 @@ public:
     #include "../export_keywords.h"
     #undef NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE
         return ExternAttributeKind::None;
+    }
+
+    [[nodiscard]] static constexpr b8 TryParseExternTypeFlag(const MStringView text, ExternTypeFlagKind::Enum& outFlag)noexcept{
+    #define NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(idName, flagText) \
+        if(text == flagText){ outFlag = ExternTypeFlagKind::idName; return true; }
+    #include "../export_keywords.h"
+    #undef NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG
+        return false;
+    }
+
+    [[nodiscard]] static constexpr b8 TryParseExternCallableFlag(const MStringView text, ExternCallableFlagKind::Enum& outFlag)noexcept{
+    #define NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(idName, flagText) \
+        if(text == flagText){ outFlag = ExternCallableFlagKind::idName; return true; }
+    #include "../export_keywords.h"
+    #undef NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG
+        return false;
     }
 
     [[nodiscard]] static constexpr b8 IsThisKeyword(const MStringView text)noexcept{

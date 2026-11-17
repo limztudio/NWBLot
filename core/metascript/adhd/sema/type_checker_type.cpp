@@ -67,11 +67,11 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
                 reportError(errors, param.span, "duplicate interface bound on template parameter");
                 ok = false;
             }
-            if(m_symbols.findClass(boundName)){
+            if(const ClassDecl* boundCls = m_symbols.findClass(boundName); boundCls && !(boundCls->isExtern && boundCls->isPolymorphicBase)){
                 reportError(errors, param.span, "template parameter bound must be an 'interface', not a concrete 'class'");
                 ok = false;
             }
-            else if(!m_symbols.findInterface(boundName) && !m_symbols.isPolymorphicBaseBuiltinType(boundName)){
+            else if(!m_symbols.findClass(boundName) && !m_symbols.findInterface(boundName) && !m_symbols.isPolymorphicBaseBuiltinType(boundName)){
                 reportError(errors, param.span, "unknown interface bound on template parameter");
                 ok = false;
             }

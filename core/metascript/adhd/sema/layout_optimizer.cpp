@@ -102,6 +102,8 @@ inline constexpr usize s_BareExpectedFallbackBytes = 24u;
     }
 
     if(const ClassDecl* subCls = symbols.findClass(name)){
+        if(subCls->isExtern && subCls->isBinarySerializable)
+            return true;
         if(symbols.hasPolymorphicInterface(*subCls)){
             outReason = "'[serialize]' class cannot contain non-transient polymorphic class members implementing an interface";
             return false;
@@ -261,6 +263,11 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
     }
 
     if(const ClassDecl* classDecl = m_symbols.findClass(name)){
+        if(classDecl->hasExplicitLayout){
+            outSize = classDecl->totalSize;
+            outAlign = classDecl->totalAlign;
+            return;
+        }
         if(!type.templateArgs.empty() && m_unit){
             for(const ClassTemplateInstantiation* inst : m_unit->templateInstantiations){
                 if(inst && inst->templateDecl == classDecl && TypeComparator(m_symbols).areTemplateArgListsEqual(inst->templateArgs, type.templateArgs)){

@@ -193,7 +193,7 @@ function(nwb_target_adhd_sources target_name)
             OUTPUT "${gen_h}" "${gen_cpp}"
             COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" --depfile "${gen_h}.d" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
             DEPFILE "${gen_h}.d"
-            DEPENDS nwb_adhd_compiler "${adhd_abs}" "${namespace_map_file}"
+            DEPENDS nwb_adhd_compiler "${PROJECT_SOURCE_DIR}/core/metascript/adhd/export_core_prelude.adhd" "${adhd_abs}" "${namespace_map_file}"
             COMMENT "Compiling adhd source ${adhd_file}"
             VERBATIM
         )

@@ -304,15 +304,32 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     return expectClosingAngle();
 }
 
-b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto, const b8 isExtern, usize* outMinArgCount, b8* outHasDefaultArgs){
+b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto, const b8 isExtern, usize* outMinArgCount, b8* outHasDefaultArgs, b8* outIsVariadic){
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for parameter list"))
         return false;
 
     usize minArgCount = 0u;
     b8 hasDefaultArgs = false;
+    b8 isVariadic = false;
 
     if(!m_cursor.check(TokenType::RightParen)){
         for(;;){
+            if(isExtern && m_cursor.check(TokenType::Dot)){
+                usize dotCount = 0u;
+                while(m_cursor.match(TokenType::Dot))
+                    ++dotCount;
+                if(dotCount != 2u && dotCount != 3u){
+                    m_cursor.error("expected '..' or '...' for variadic 'extern' parameter list");
+                    return false;
+                }
+                if(!m_cursor.check(TokenType::RightParen)){
+                    m_cursor.errorExpected("expected ')' after variadic 'extern' parameter pack");
+                    return false;
+                }
+                isVariadic = true;
+                break;
+            }
+
             ParamDecl param;
             param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
             param.mode = MatchParamPassingMode(m_cursor);
@@ -395,6 +412,8 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto,
         *outMinArgCount = minArgCount;
     if(outHasDefaultArgs)
         *outHasDefaultArgs = hasDefaultArgs;
+    if(outIsVariadic)
+        *outIsVariadic = isVariadic;
 
     return m_cursor.expect(TokenType::RightParen, "expected ')' after parameter list");
 }

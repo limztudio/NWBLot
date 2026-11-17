@@ -178,10 +178,53 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
     return decl;
 }
 
+b8 DeclParser::tryParseExternCallableAttribute(const ParsedAttribute& attr, MethodDecl& outMethod, b8& inOutSeenFlags, b8& outMatched){
+    outMatched = false;
+    if(!outMethod.isExtern)
+        return true;
+
+    MStringView duplicateError;
+    MStringView argError;
+    const ExternAttributeKind::Enum kind = KeywordSemantics::TryParseExternAttribute(attr.name, &duplicateError, &argError);
+    if(kind != ExternAttributeKind::CppFlags)
+        return true;
+
+    if(inOutSeenFlags){
+        m_cursor.error(attr.line, attr.column, duplicateError);
+        return false;
+    }
+    if(attr.arguments.empty()){
+        m_cursor.error(attr.line, attr.column, argError);
+        return false;
+    }
+    for(const ParsedAttributeArg& arg : attr.arguments){
+        ExternCallableFlagKind::Enum flagKind = ExternCallableFlagKind::None;
+        if(arg.kind != TokenType::Identifier || !KeywordSemantics::TryParseExternCallableFlag(arg.text, flagKind)){
+            m_cursor.error(attr.line, attr.column, argError);
+            return false;
+        }
+        switch(flagKind){
+        case ExternCallableFlagKind::ScratchArena: outMethod.injectsCallerArena = true; break;
+        case ExternCallableFlagKind::BorrowView:   outMethod.returnsBorrowedView = true; break;
+        case ExternCallableFlagKind::ByteViewArg0:
+        case ExternCallableFlagKind::ByteViewArg1:
+            outMethod.callLoweringKind = static_cast<u8>(flagKind);
+            break;
+        default: break;
+        }
+    }
+    inOutSeenFlags = true;
+    outMatched = true;
+    return true;
+}
+
 b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attributes, MethodDecl& decl){
+    b8 seenExternFlags = false;
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
         if(!tryParseExternAttribute(attr, decl.cppExportName, decl.requiredHeader, decl.isExtern, matchedAttr))
+            return false;
+        if(!matchedAttr && !tryParseExternCallableAttribute(attr, decl, seenExternFlags, matchedAttr))
             return false;
 #define NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE(attrName, declField) \
         if(!matchedAttr && attr.name == attrName && attr.arguments.empty()){ \

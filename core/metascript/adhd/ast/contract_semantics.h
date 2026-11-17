@@ -152,7 +152,7 @@ public:
     }
 
     [[nodiscard]] static constexpr b8 HasWrappedNwbEnumSuffix(const MStringView cppExportName)noexcept{
-        return cppExportName.ends_with(s_EnumScopeSuffix) || cppExportName.ends_with(s_FlagScopeSuffix);
+        return cppExportName.ends_with(s_EnumScopeSuffix) || cppExportName.ends_with(s_FlagScopeSuffix) || cppExportName.ends_with(s_MaskScopeSuffix);
     }
 
     [[nodiscard]] static constexpr MStringView StripWrappedNwbEnumSuffix(MStringView scopeName)noexcept{
@@ -160,6 +160,8 @@ public:
             scopeName.remove_suffix(s_EnumScopeSuffix.size());
         else if(scopeName.size() > s_FlagScopeSuffix.size() && scopeName.ends_with(s_FlagScopeSuffix))
             scopeName.remove_suffix(s_FlagScopeSuffix.size());
+        else if(scopeName.size() > s_MaskScopeSuffix.size() && scopeName.ends_with(s_MaskScopeSuffix))
+            scopeName.remove_suffix(s_MaskScopeSuffix.size());
         return scopeName;
     }
 

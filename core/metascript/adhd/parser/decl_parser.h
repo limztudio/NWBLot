@@ -42,6 +42,8 @@ private:
     [[nodiscard]] b8 isCurrentTokenImported()const noexcept;
     [[nodiscard]] MStringView currentTokenImportedNamespace()const noexcept;
     [[nodiscard]] b8 tryParseExternAttribute(const ParsedAttribute& attr, MStringView& outCppExportName, MStringView& outRequiredHeader, b8 isExtern, b8& outMatched);
+    [[nodiscard]] b8 tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDecl& outClass, b8 isExtern, b8& inOutSeenFlags, b8& outMatched);
+    [[nodiscard]] b8 tryParseExternCallableAttribute(const ParsedAttribute& attr, MethodDecl& outMethod, b8& inOutSeenFlags, b8& outMatched);
     [[nodiscard]] b8 parseTopLevelDeclaration(TranslationUnit& outUnit);
     [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false);
     [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isFlag, b8 isExtern = false);

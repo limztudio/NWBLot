@@ -137,6 +137,9 @@ struct MethodDecl{
     b8 returnsReference = false;
     b8 isImported = false;
     b8 isExtern = false;
+    b8 isVariadic = false;
+    b8 returnsBorrowedView = false;
+    u8 callLoweringKind = 0u;
 
 
 public:
@@ -149,6 +152,8 @@ public:
     {}
 
     [[nodiscard]] constexpr b8 acceptsArgCount(const usize count)const noexcept{
+        if(isVariadic)
+            return count >= minArgCount;
         return params.size() == count || (hasDefaultArgs && count >= minArgCount && count <= params.size());
     }
 };
@@ -214,6 +219,16 @@ struct ClassDecl{
     b8 isMoveAssignable = true;
     b8 hasExplicitDestructor = false;
     b8 hasExplicitLayout = false;
+    u8 arenaCtorMode = 0u;
+    b8 isSelfDefaulted = false;
+    b8 isSmallValue = false;
+    b8 isBorrowView = false;
+    b8 isBinarySerializable = false;
+    b8 emitsBraceFieldInit = false;
+    b8 isEqualitySwitch = false;
+    b8 isNonThreadSafeContainer = false;
+    b8 isNwbMapKey = false;
+    b8 isPolymorphicBase = false;
 
 
 public:

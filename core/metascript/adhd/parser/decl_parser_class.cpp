@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/literal_decoder.h>
 #include <core/metascript/adhd/ast/keyword_semantics.h>
 
 #include "decl_parser.h"
@@ -29,9 +30,12 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     decl->isExtern = isExtern;
     m_cursor.advance();
 
+    b8 seenExternFlags = false;
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
         if(!tryParseExternAttribute(attr, decl->cppExportName, decl->requiredHeader, isExtern, matchedAttr))
+            return nullptr;
+        if(!matchedAttr && !tryParseExternClassAttribute(attr, *decl, isExtern, seenExternFlags, matchedAttr))
             return nullptr;
 #define NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE(attrName, declField) \
         if(!matchedAttr && attr.name == attrName && attr.arguments.empty()){ \
@@ -84,6 +88,85 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     return decl;
 }
 
+b8 DeclParser::tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDecl& outClass, const b8 isExtern, b8& inOutSeenFlags, b8& outMatched){
+    outMatched = false;
+    if(!isExtern)
+        return true;
+
+    MStringView duplicateError;
+    MStringView argError;
+    const ExternAttributeKind::Enum kind = KeywordSemantics::TryParseExternAttribute(attr.name, &duplicateError, &argError);
+    if(kind == ExternAttributeKind::CppLayout){
+        if(outClass.hasExplicitLayout){
+            m_cursor.error(attr.line, attr.column, duplicateError);
+            return false;
+        }
+        if(attr.arguments.size() != 2u || attr.arguments[0].kind != TokenType::IntegerLiteral || attr.arguments[1].kind != TokenType::IntegerLiteral){
+            m_cursor.error(attr.line, attr.column, argError);
+            return false;
+        }
+        u64 sizeVal = 0u;
+        u64 alignVal = 0u;
+        if(!LiteralDecoder::TryParseUnsignedIntegerLiteral(attr.arguments[0].text, sizeVal)
+            || !LiteralDecoder::TryParseUnsignedIntegerLiteral(attr.arguments[1].text, alignVal)
+            || sizeVal == 0u || alignVal == 0u
+            || sizeVal > Limit<u32>::s_Max || alignVal > Limit<u32>::s_Max){
+            m_cursor.error(attr.line, attr.column, argError);
+            return false;
+        }
+        outClass.totalSize = static_cast<usize>(sizeVal);
+        outClass.totalAlign = static_cast<usize>(alignVal);
+        outClass.hasExplicitLayout = true;
+        outMatched = true;
+        return true;
+    }
+
+    if(kind == ExternAttributeKind::CppFlags){
+        if(inOutSeenFlags){
+            m_cursor.error(attr.line, attr.column, duplicateError);
+            return false;
+        }
+        if(attr.arguments.empty()){
+            m_cursor.error(attr.line, attr.column, argError);
+            return false;
+        }
+        for(const ParsedAttributeArg& arg : attr.arguments){
+            ExternTypeFlagKind::Enum flagKind = ExternTypeFlagKind::None;
+            if(arg.kind != TokenType::Identifier || !KeywordSemantics::TryParseExternTypeFlag(arg.text, flagKind)){
+                m_cursor.error(attr.line, attr.column, argError);
+                return false;
+            }
+            switch(flagKind){
+            case ExternTypeFlagKind::SelfDefaulted:      outClass.isSelfDefaulted = true; break;
+            case ExternTypeFlagKind::SmallValue:         outClass.isSmallValue = true; break;
+            case ExternTypeFlagKind::BorrowView:         outClass.isBorrowView = true; break;
+            case ExternTypeFlagKind::BinarySerializable: outClass.isBinarySerializable = true; break;
+            case ExternTypeFlagKind::BraceInit:          outClass.emitsBraceFieldInit = true; break;
+            case ExternTypeFlagKind::EqualitySwitch:     outClass.isEqualitySwitch = true; break;
+            case ExternTypeFlagKind::NonThreadSafe:      outClass.isNonThreadSafeContainer = true; break;
+            case ExternTypeFlagKind::MapKey:             outClass.isNwbMapKey = true; break;
+            case ExternTypeFlagKind::ArenaFirstCtor:     outClass.arenaCtorMode = 1u; break;
+            case ExternTypeFlagKind::NoCopy:
+                outClass.isCopyConstructible = false;
+                outClass.isMoveConstructible = false;
+                break;
+            case ExternTypeFlagKind::NoAssign:
+                outClass.isCopyAssignable = false;
+                outClass.isMoveAssignable = false;
+                break;
+            case ExternTypeFlagKind::Abstract:           outClass.isAbstract = true; break;
+            case ExternTypeFlagKind::PolymorphicBase:    outClass.isPolymorphicBase = true; break;
+            default: break;
+            }
+        }
+        inOutSeenFlags = true;
+        outMatched = true;
+        return true;
+    }
+
+    return true;
+}
+
 void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
     while(m_cursor.check(TokenType::Identifier) && KeywordSemantics::IsMethodQualifierKeyword(m_cursor.current().text)){
 #define NWB_ADHD_EXPORT_METHOD_QUALIFIER(adhdKeyword, declField, duplicateErrorMessage) \
@@ -117,7 +200,7 @@ b8 DeclParser::parseDestructorEmptyParams(const MStringView missingLeftParenMess
 }
 
 b8 DeclParser::parseConstructorParamsAndRejectInitList(MethodDecl& method){
-    if(!m_typeParser.parseParamList(method.params, method.isExtern, method.isExtern, &method.minArgCount, &method.hasDefaultArgs))
+    if(!m_typeParser.parseParamList(method.params, method.isExtern, method.isExtern, &method.minArgCount, &method.hasDefaultArgs, &method.isVariadic))
         return false;
     if(m_cursor.check(TokenType::Colon)){
         m_cursor.error("C++ constructor initializer lists (': member(...)') are prohibited in adhd; initialize 'this.member' inside the constructor body");
@@ -127,7 +210,7 @@ b8 DeclParser::parseConstructorParamsAndRejectInitList(MethodDecl& method){
 }
 
 b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const SourceSpan span){
-    if(!m_typeParser.parseParamList(method.params, method.isExtern, method.isExtern, &method.minArgCount, &method.hasDefaultArgs))
+    if(!m_typeParser.parseParamList(method.params, method.isExtern, method.isExtern, &method.minArgCount, &method.hasDefaultArgs, &method.isVariadic))
         return false;
     if(method.isOperator){
         MStringView opErr;
@@ -335,7 +418,9 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     if(m_cursor.check(TokenType::LeftParen)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         m_cursor.advance();
-        b8 isMethodSig = m_cursor.check(TokenType::RightParen) || MatchParamPassingMode(m_cursor) != ParamPassingMode::None;
+        b8 isMethodSig = m_cursor.check(TokenType::RightParen)
+            || MatchParamPassingMode(m_cursor) != ParamPassingMode::None
+            || (isMemberExtern && m_cursor.check(TokenType::Dot));
         if(!isMethodSig && m_cursor.check(TokenType::Identifier)){
             if(!KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text).empty()){
                 isMethodSig = true;

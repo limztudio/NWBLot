@@ -76,6 +76,8 @@ b8 TypeLayoutAnalyzer::interfaceInheritsNoCopy(const TypeRef& ifaceRef, const u3
         return false;
     if(IsNonCopyableBaseInterfaceName(ifaceRef.name))
         return true;
+    if(const ClassDecl* cls = m_symbols.findClass(ifaceRef.name); cls && cls->isExtern && !cls->isCopyConstructible)
+        return true;
     if(!m_symbols.hasTypeSymbol(ifaceRef.name)){
         if(const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceRef.name); builtinObj && !builtinObj->isCopyMoveConstructible)
             return true;

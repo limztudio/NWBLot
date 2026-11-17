@@ -242,7 +242,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 const ClassDecl* switchCls = nullptr;
                 const MethodDecl* eqOp = resolveCustomOperator(ownerClass, &method, subjTypeRef, subjectType, OperatorSemantics::MapTokenTypeToOperatorSymbol(TokenType::EqualEqual), 1u, true, &switchCls);
                 if(switchCls){
-                    if(!eqOp){
+                    if(!eqOp && !(switchCls->isExtern && switchCls->isEqualitySwitch)){
                         reportError(errors, stmt.span, "switch on custom class requires 'operator==' to be defined on the class");
                         ok = false;
                     }

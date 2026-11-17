@@ -30,6 +30,8 @@ NWB_ADHD_EXPORT_PREAMBLE_HEADER(HeaderTaskScope,  "<core/task/cpu/scheduler.h>")
 NWB_ADHD_EXPORT_NAMESPACE_PREAMBLE("NWB::Impl::Scene", false, "<impl/ecs_scene/global.adhd.h>")
 NWB_ADHD_EXPORT_NAMESPACE_PREAMBLE("NWB::Impl",        true,  "<impl/global.adhd.h>")
 
+NWB_ADHD_EXPORT_FILE_CONVENTION(CoreExternPreludePath, "core/metascript/adhd/export_core_prelude.adhd")
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -87,11 +87,12 @@ namespace BuiltinCallLowering{
 };
 
 namespace BuiltinFunctionArgRule{
-    enum Enum : u8{
+    enum Enum : u16{
 #define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ruleName, expectedParamType, isMut, requiredExactType, requiresStringLike, requiresIntegerScalar, errorMessage) \
         ruleName,
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
+        StaticCount,
     };
 };
 

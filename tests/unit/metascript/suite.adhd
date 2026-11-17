@@ -2417,6 +2417,79 @@ void RunCoreCppHeaderImportVerification(){
     Core::Metascript::MVector<Core::Metascript::ParseError> badErrors(arena.arena);
     EXPECT_FALSE(Core::Metascript::Adhd::CppHeaderImporter::ImportHeaders(badOpts, arena.arena, badUnit, badErrors));
     EXPECT_FALSE(badErrors.empty());
+
+    static constexpr const char kLayoutFlagsAndPreludeSource[] = R"adhd(
+[cpp_name("::MyExt::Contract"), cpp_header("<my_ext/types.h>"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class ExtContract{
+    b8 probe(...)const;
+};
+
+[cpp_name("::MyExt::VariadicSink"), cpp_header("<my_ext/types.h>"), cpp_layout(32, 16), cpp_flags(self_defaulted, small_value, binary_serializable)]
+extern class VariadicSink{
+    u32 count;
+    b8 pushAny(...);
+};
+
+class ImplContract : ExtContract{
+    public b8 validate(in ExtContract contract, mut VariadicSink sink)const{
+        const Path spoolDir = DefaultCrashSpoolDirectory();
+        const CrashDumpResult dump = CaptureCrashDump();
+        const usize compId = ComponentType<ImplContract>();
+        const BlendFactor bf = BlendFactor::SrcAlpha;
+        const ColorMask mask = ColorMask::Red | ColorMask::Green;
+        const Viewport vp = Viewport();
+        const b8 okSink = sink.pushAny(1u, "ok", vp.minX, s_BackBufferWidth, spoolDir, dump.packageWritten());
+        const b8 okValid = contract.probe() && contract.probe(bf, mask, compId);
+        return okSink && okValid;
+    }
+}
+)adhd";
+
+    CompileResult extPreludeRes(arena.arena);
+    const b8 extPreludeOk = Core::Metascript::Adhd::Compiler::Compile(
+        kLayoutFlagsAndPreludeSource,
+        "impl/edge_cases/extern_prelude_flags.adhd",
+        nullptr,
+        {},
+        {},
+        arena.arena,
+        extPreludeRes
+    );
+    EXPECT_TRUE(extPreludeOk) << FirstErrorMessage(extPreludeRes);
+    if(extPreludeOk){
+        const AStringView hdr = GeneratedHeaderView(extPreludeRes);
+        const AStringView cpp = GeneratedSourceView(extPreludeRes);
+        EXPECT_NE(hdr.find("#include <my_ext/types.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/crash/module.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/ecs/type_id.h>"), AStringView::npos);
+        EXPECT_NE(hdr.find("#include <core/graphics/rhi/pipeline_state.h>"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::Crash::DefaultCrashSpoolDirectory(__adhd_scratch)"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::ECS::ComponentType<ImplContract>()"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::BlendFactor::SrcAlpha"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::ColorMask::Red"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::s_BackBufferWidth"), AStringView::npos);
+    }
+
+    auto expectExtFails = [&arena](const char* src, const char* path){
+        CompileResult badRes(arena.arena);
+        EXPECT_FALSE(Core::Metascript::Adhd::Compiler::Compile(src, path, nullptr, {}, {}, arena.arena, badRes)) << path;
+    };
+    expectExtFails(
+        "[cpp_layout(8, 8)]\nclass NonExternLayout{\n    public u32 x = 0u;\n}\n",
+        "impl/edge_cases/bad_non_extern_layout.adhd"
+    );
+    expectExtFails(
+        "[cpp_flags(small_value)]\nclass NonExternFlags{\n    public u32 x = 0u;\n}\n",
+        "impl/edge_cases/bad_non_extern_flags.adhd"
+    );
+    expectExtFails(
+        "class NonExternVariadic{\n    public void f(...){}\n}\n",
+        "impl/edge_cases/bad_non_extern_variadic.adhd"
+    );
+    expectExtFails(
+        "[cpp_name(\"::MyExt::Abs\"), cpp_header(\"<my_ext/abs.h>\"), cpp_layout(8, 8), cpp_flags(abstract)]\nextern class AbsType;\nvoid F(){ const AbsType a; }\n",
+        "impl/edge_cases/bad_abstract_value.adhd"
+    );
 }
 
 

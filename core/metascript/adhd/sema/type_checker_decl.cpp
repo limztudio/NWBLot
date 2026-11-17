@@ -359,11 +359,12 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             ok = false;
         }
         const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
-        if(m_symbols.findClass(ifaceName)){
-            if(!classDecl.isExtern){
+        if(const ClassDecl* baseCls = m_symbols.findClass(ifaceName)){
+            if(!classDecl.isExtern && !(baseCls->isExtern && baseCls->isPolymorphicBase)){
                 reportError(errors, classDecl.span, "concrete class inheritance is prohibited in adhd; classes are implicitly final and may only implement interfaces");
                 ok = false;
             }
+            recordRequiredHeader(baseCls->requiredHeader);
             continue;
         }
         if(!m_symbols.findInterface(ifaceName)){

@@ -140,14 +140,18 @@ invalidates entries made by older inputs. When the executable cannot be
 read, the builder reports the problem and cooks without reading or writing that
 cache. Shader compilation also fingerprints its configured compiler and options.
 
-The C++ build entry point is `NWB::Pipeline::AssetBuilder::BuildAssets`, declared
-in `pipeline/asset_builder/build.adhd`, with `AssetBuildOptions` in the same namespace.
-Link `nwb_pipeline_asset_builder` to call it. The gather entry point is
-`NWB::Pipeline::AssetGatherer::GatherAssets`, declared with `AssetGatherOptions` in
-`pipeline/asset_gatherer/gather.adhd`; link `nwb_pipeline_asset_gatherer` to call it.
-Each tool owns its orchestration API and implementation. Shared artifact, cache,
-manifest, and volume-writing support remains in `core/assets/volume`; asset codecs,
-metadata parsers, and build registrations remain in their owning asset modules.
+The C++ dependency entry point is `NWB::Pipeline::DependencyComputer::ComputeAssetDependencies`
+(and `WriteAssetDependencies`), declared with `AssetDependencyOptions` in
+`pipeline/dependency_computer/dependencies.adhd`; link
+`nwb_pipeline_dependency_computer` to call it. The build entry point is
+`NWB::Pipeline::AssetBuilder::BuildAssets`, declared in `pipeline/asset_builder/build.adhd`,
+with `AssetBuildOptions` in the same namespace; link `nwb_pipeline_asset_builder`
+to call it. The gather entry point is `NWB::Pipeline::AssetGatherer::GatherAssets`,
+declared with `AssetGatherOptions` in `pipeline/asset_gatherer/gather.adhd`; link
+`nwb_pipeline_asset_gatherer` to call it. Each tool owns its orchestration API and
+implementation. Shared artifact, cache, manifest, and volume-writing support remains
+in `core/assets/volume`; asset codecs, metadata parsers, and build registrations
+remain in their owning asset modules.
 
 Library callers gathering independently built graphics assets set
 `NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` to

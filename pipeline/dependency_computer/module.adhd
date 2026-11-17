@@ -2,31 +2,52 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "constants.adhd"
+[source]
+native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 WriteDependencyListOutput(in StringView outputPathText, in StringView encodedListText){
-    const Expected<Path, ErrorCode> output = AbsolutePath(Path(outputPathText));
-    if(!output.has_value())
-        return false;
-    if(!EnsureDirectories(output.value().parentPath()).has_value())
-        return false;
-    return WriteTextFileAtomic(output.value(), encodedListText);
+#include <pipeline/dependency_computer/dependencies.adhd.h>
+#include <pipeline/command_line.h>
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+int RunPipelineTool(const int argc, char** argv){
+    Core::Assets::AssetArena arena(DependencyComputer::s_DependencyComputerArena);
+    Core::Alloc::ScratchArena scratchArena(DependencyComputer::s_DependencyComputerArena);
+    PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
+    return commandLine.run(argc, argv, [&](PipelineOptions& options){
+        DependencyComputer::AssetDependencyOptions dependencyOptions(arena);
+        dependencyOptions.inputs = Move(options.inputs);
+        dependencyOptions.assetRoots = Move(options.assetRoots);
+        dependencyOptions.repoRoot = Move(options.repoRoot);
+        dependencyOptions.outputPath = Move(options.outputPath);
+        return DependencyComputer::WriteAssetDependencies(dependencyOptions, scratchArena) ? s_PipelineExitSuccess : s_PipelineExitFailure;
+    }, arena, scratchArena);
 }
 
-void LogUnrepresentableDependencyList(){
-    error("DependencyComputer: input paths cannot be represented in the dependency list");
-}
 
-void LogDependencyOutputWriteFailure(in StringView outputPath){
-    error("DependencyComputer: failed to write output '{}'", outputPath);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void LogReturnedDependencyInputCount(in usize count){
-    [essential] info("DependencyComputer: returned {} inputs", count);
+
+NWB_PIPELINE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

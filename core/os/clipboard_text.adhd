@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::ClipboardTextAccumulator"), cpp_layout(48, 8)]
+extern class ClipboardTextAccumulator{
+    ClipboardStatus appendBytes(...);
+    void clear(...);
+    String text(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::DecodeClipboardLatin1")]
+extern ClipboardStatus DecodeClipboardLatin1(in StringView a0, mut String a1);
+
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::EncodeClipboardLatin1")]
+extern ClipboardStatus EncodeClipboardLatin1(in StringView a0, mut String a1);
+
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::ValidateClipboardUtf8Text")]
+extern ClipboardStatus ValidateClipboardUtf8Text(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/ast/ast_expr.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ExprKind::Enum")]
+extern enum AdhdExprKind : u8{
+    IntegerLiteral,
+    FloatLiteral,
+    DoubleLiteral,
+    BoolLiteral,
+    StringLiteral,
+    Identifier,
+    ThisMember,
+    MemberAccess,
+    ScopeAccess,
+    Call,
+    Index,
+    Unary,
+    Binary,
+    Cast,
+    BitCast,
+    Lambda
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/ast/ast_expr.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsLiteralExprKind")]
+extern b8 IsLiteralExprKind(in AdhdExprKind a0);
+
+[cpp_header("<core/metascript/adhd/ast/ast_expr.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsAlwaysRvalueExprKind")]
+extern b8 IsAlwaysRvalueExprKind(in AdhdExprKind a0);
+
+[cpp_header("<core/metascript/adhd/ast/ast_expr.h>"), cpp_name("::NWB::Core::Metascript::Adhd::LookupFixedLiteralExprTypeName")]
+extern StringView LookupFixedLiteralExprTypeName(in AdhdExprKind a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

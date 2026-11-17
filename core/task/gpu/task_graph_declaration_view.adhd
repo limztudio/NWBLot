@@ -1,0 +1,139 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuPresentEndpoint"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuPresentEndpoint{
+    GpuTaskId producer;
+    GpuGraphResourceId backBuffer;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphDeclarationReadView"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuTaskGraphDeclarationReadView{
+    b8 appendFrameGraphTelemetry(...)const;
+    u64 declarationRevision(...)const;
+    GpuTaskGraphExternalCompletionView externalCompletionAt(...)const;
+    usize externalCompletionCount(...)const;
+    GpuGraphResourceId findImportedBuffer(...)const;
+    GpuGraphResourceId findImportedTexture(...)const;
+    u64 generation(...)const;
+    GpuTaskGraphPipelineView pipelineAt(...)const;
+    usize pipelineCount(...)const;
+    GpuTaskGraphResourceView resourceAt(...)const;
+    usize resourceCount(...)const;
+    GpuTaskGraphResourceSetView resourceSetAt(...)const;
+    usize resourceSetCount(...)const;
+    GpuTaskGraphResourceVersionView resourceVersionAt(...)const;
+    usize resourceVersionCount(...)const;
+    GpuTaskGraphTaskView taskAt(...)const;
+    usize taskCount(...)const;
+    usize uploadBlobCount(...)const;
+    b8 valid(...)const;
+    b8 validExternalCompletion(...)const;
+    b8 validFor(...)const;
+    b8 validForDeviceGeneration(...)const;
+    b8 validPipeline(...)const;
+    b8 validResource(...)const;
+    b8 validResourceSet(...)const;
+    b8 validResourceVersion(...)const;
+    b8 validTask(...)const;
+    b8 validUploadBlob(...)const;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphExternalCompletionView"), cpp_layout(120, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphExternalCompletionView{
+    GpuExternalCompletionId id;
+    Name identity;
+    StringView markerLabel;
+    b8 hasToken;
+    QueueSubmissionToken token;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphInitialOwnerHandoffSourceView"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphInitialOwnerHandoffSourceView{
+    GpuTaskResourceRange range;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    GpuExternalCompletionId completion;
+    QueueSubmissionToken minimumCompletionToken;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphPipelineView"), cpp_layout(104, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphPipelineView{
+    GpuGraphPipelineId id;
+    Name identity;
+    StringView markerLabel;
+    b8 hasBackendPipeline;
+    GpuGraphPipelineType type;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphResourceSetView"), cpp_layout(112, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphResourceSetView{
+    GpuGraphResourceSetId id;
+    Name identity;
+    StringView markerLabel;
+    usize memberCount;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphResourceVersionView"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphResourceVersionView{
+    GpuGraphResourceVersionId id;
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuGraphResourceVersionOrigin origin;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphResourceView"), cpp_layout(168, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphResourceView{
+    GpuGraphResourceId id;
+    Name identity;
+    StringView markerLabel;
+    usize initialOwnerHandoffSourceCount;
+    GpuExternalCompletionId initialAvailabilityCompletion;
+    ResourceQueueAdmissionSnapshot queueAdmission;
+    ResourceStates initialState;
+    ResourceStates externalFinalState;
+    GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
+    GpuPhysicalQueueId initialOwnerQueue;
+    GpuPhysicalQueueId directConsumerQueue;
+    GpuGraphResourceType type;
+    ResourceQueueSharing queueSharing;
+    b8 hasQueueAdmission;
+    b8 hasBackendResource;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskView"), cpp_layout(312, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphTaskView{
+    GpuTaskId id;
+    Name identity;
+    StringView markerLabel;
+    GpuTaskCommandRequirements commands;
+    GpuTaskSchedulingHint scheduling;
+    usize dependencyCount;
+    usize externalDependencyCount;
+    usize externalStateSourceCount;
+    usize resourceUseCount;
+    usize resourceVersionUseCount;
+    usize payloadObjectSize;
+    usize directResourceUseCount;
+    usize declaredResourceSetUseCount;
+    usize expandedResourceSetMemberUseCount;
+    GpuTaskTimingMetadata timing;
+    b8 hasPayload;
+    b8 hasRecordPayload;
+    b8 hasAcceptedPayload;
+};
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphTelemetryOptions"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphTelemetryOptions;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphDeclarationReadView::TryAcquire")]
+extern GpuTaskGraphDeclarationReadView GpuTaskGraphDeclarationReadViewTryAcquire(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

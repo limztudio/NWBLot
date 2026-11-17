@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/arena_names.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemArenaScope::s_CompactScratch")]
+extern const Name s_CompactScratch;
+[cpp_header("<core/filesystem/arena_names.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemArenaScope::s_LoadMetadataScratch")]
+extern const Name s_LoadMetadataScratch;
+[cpp_header("<core/filesystem/arena_names.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemArenaScope::s_SaveMetadataScratch")]
+extern const Name s_SaveMetadataScratch;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

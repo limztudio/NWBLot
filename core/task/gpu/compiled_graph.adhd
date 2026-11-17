@@ -1,0 +1,275 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuOwnershipTransferRoute::Enum")]
+extern enum GpuOwnershipTransferRoute : u8{
+    Internal,
+    ExternalImport,
+    ExternalExport,
+    Count
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskPacketizationDecision::Enum")]
+extern enum GpuTaskPacketizationDecision : u8{
+    Unknown,
+    FirstTask,
+    MergeNotRequested,
+    TaskForcesBoundary,
+    QueueChanged,
+    PrecedingTaskForcesBoundary,
+    ScoredMergeIneligible,
+    MergeRequiresExplicitImmediateDependency,
+    CrossQueueConsumerFrontier,
+    MergedExplicit,
+    MergedFrontierScored,
+    ScoredMergeDomainMismatch,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExport"), cpp_layout(56, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledExternalResourceExport{
+    GpuGraphResourceId resource;
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    u32 sourceOffset;
+    u32 sourceCount;
+    GpuPhysicalQueueId destinationQueue;
+    ResourceStates finalState;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportSource"), cpp_layout(56, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledExternalResourceExportSource{
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    GpuTaskResourceRange range;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportView"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuCompiledExternalResourceExportView{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledGraph"), cpp_layout(1232, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuCompiledGraph{
+    void reset(...);
+    b8 tryReset(...);
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledGraph::ReadView"), cpp_layout(24, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuCompiledGraphReadView{
+    GpuTaskGraphCompileStatistics compileStatistics(...)const;
+    u16 deviceGeneration(...)const;
+    Optional<GpuPhysicalQueueInfo> findQueueInfoForTask(...)const;
+    GpuCompiledTaskView findTask(...)const;
+    u64 generation(...)const;
+    usize logicalOwnershipTransferCount(...)const;
+    Span<GpuCompiledOwnershipTransfer> logicalOwnershipTransferSpan(...)const;
+    GpuCompiledPacketView packet(...)const;
+    usize packetCount(...)const;
+    GpuSubmissionPacketId packetForTask(...)const;
+    GpuSubmissionPacketId packetIdAt(...)const;
+    GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(...)const;
+    u64 planGeneration(...)const;
+    GpuPhysicalQueueTopology queueTopology(...)const;
+    usize taskCount(...)const;
+    b8 taskJoinsAcceptedQueueFrontier(...)const;
+    b8 taskPrecedesInSamePacket(...)const;
+    b8 taskPrecedesOrSharesPacket(...)const;
+    b8 tasksFormContiguousPacketSequence(...)const;
+    b8 tasksSharePacket(...)const;
+    b8 valid(...)const;
+    b8 validFor(...)const;
+    b8 validPacket(...)const;
+    b8 validPacketRange(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledOwnershipTransfer"), cpp_layout(200, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledOwnershipTransfer{
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuTaskId sourceTask;
+    GpuTaskId destinationTask;
+    GpuSubmissionPacketId sourcePacket;
+    GpuSubmissionPacketId destinationPacket;
+    u32 sourceQueueFamilyIndex;
+    u32 destinationQueueFamilyIndex;
+    Name resourceIdentity;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    ResourceQueueSharing declaredQueueSharing;
+    GpuGraphResourceType resourceType;
+    GpuOwnershipTransferRoute route;
+    b8 concurrentSharingCouldAvoid;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPacketView"), cpp_layout(48, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledPacketView{
+    GpuSubmissionPacketId id;
+    Optional<GpuSubmissionPacket> packetPlan(...)const;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPresentEndpoint"), cpp_layout(56, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledPresentEndpoint{
+    GpuTaskId producer;
+    GpuGraphResourceId backBuffer;
+    GpuSubmissionPacketId packet;
+    GpuPhysicalQueueId queue;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTask"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledTask{
+    GpuTaskId task;
+    GpuSubmissionPacketId packet;
+    u32 prologueStateSeedOffset;
+    u32 prologueStateSeedCount;
+    u32 prologueBarrierOffset;
+    u32 prologueBarrierCount;
+    u32 epilogueBarrierOffset;
+    u32 epilogueBarrierCount;
+    GpuPhysicalQueueId queue;
+    GpuTaskPacketizationDecision packetizationDecision;
+    GpuTaskTimingPolicy timingPolicy;
+    b8 recordsNonCommittingTimingSample;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTaskView"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCompiledTaskView{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuPacketDependency"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuPacketDependency{
+    GpuSubmissionPacketId producer;
+    GpuSubmissionPacketId consumer;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuSubmissionPacket"), cpp_layout(36, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuSubmissionPacket{
+    u32 taskOffset;
+    u32 taskCount;
+    u32 dependencyOffset;
+    u32 dependencyCount;
+    u32 externalDependencyOffset;
+    u32 externalDependencyCount;
+    u32 recordingFrontier;
+    GpuPhysicalQueueId queue;
+    b8 joinsAcceptedQueueFrontier;
+    b8 isRecoverySubmission;
+    b8 recordsPacketEnvelopeTiming;
+    b8 recordsTiming;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileStatistics"), cpp_layout(608, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphCompileStatistics{
+    u64 graphGeneration;
+    u64 planGeneration;
+    usize taskCount;
+    usize resourceCount;
+    usize resourceUseCount;
+    usize resourceVersionCount;
+    usize resourceVersionEdgeCount;
+    usize explicitDependencyCount;
+    usize inferredDependencyCount;
+    usize declaredExternalDependencyCount;
+    usize initialOwnershipExternalDependencyCount;
+    usize initialAvailabilityExternalDependencyCount;
+    usize externalDependencyCount;
+    usize packetCount;
+    usize packetDependencyCount;
+    usize packetExternalDependencyCount;
+    usize crossQueuePacketDependencyCount;
+    usize crossFamilyPacketDependencyCount;
+    usize mergedTaskCount;
+    usize prologueStateSeedCount;
+    usize prologueBarrierCount;
+    usize epilogueBarrierCount;
+    usize transitionBarrierCount;
+    usize uavBarrierCount;
+    usize ownershipReleaseBarrierCount;
+    usize ownershipAcquireBarrierCount;
+    usize stateExportBarrierCount;
+    usize logicalOwnershipTransferCount;
+    usize logicalOwnershipTransferSignatureCount;
+    usize repeatedOwnershipTransferSignatureCount;
+    usize concurrentSharingCouldAvoidTransferCount;
+    usize concurrentSharingAdviceResourceCount;
+    Array<usize, 3> logicalOwnershipTransferCountByRoute;
+    usize recordingFrontierCount;
+    f64 declarationSeconds;
+    f64 analysisSeconds;
+    f64 validationSeconds;
+    f64 dependencyAnalysisSeconds;
+    f64 hazardAnalysisSeconds;
+    f64 topologicalOrderSeconds;
+    f64 queueAssignmentSeconds;
+    f64 planningSeconds;
+    f64 totalSeconds;
+    usize resourceSetCount;
+    usize resourceSetMemberCount;
+    usize directResourceUseCount;
+    usize declaredResourceSetUseCount;
+    usize expandedResourceSetMemberUseCount;
+    usize payloadObjectCount;
+    usize payloadObjectBytes;
+    usize uploadBlobCount;
+    usize uploadBlobBytes;
+    f64 packetizationSeconds;
+    f64 resourceStatePlanningSeconds;
+    f64 packetDependencyPlanningSeconds;
+    u16 deviceGeneration;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueCompileStatistics"), cpp_layout(136, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphPhysicalQueueCompileStatistics{
+    u64 graphGeneration;
+    u64 planGeneration;
+    GpuPhysicalQueueId queue;
+    CommandQueue queueClass;
+    u16 deviceGeneration;
+    usize taskCount;
+    usize packetCount;
+    usize mergedTaskCount;
+    usize prologueBarrierCount;
+    usize epilogueBarrierCount;
+    usize ownershipReleaseBarrierCount;
+    usize ownershipAcquireBarrierCount;
+    usize incomingLogicalOwnershipTransferCount;
+    usize outgoingLogicalOwnershipTransferCount;
+    usize incomingLogicalOwnershipTransferSignatureCount;
+    usize outgoingLogicalOwnershipTransferSignatureCount;
+    usize incomingRepeatedOwnershipTransferSignatureCount;
+    usize outgoingRepeatedOwnershipTransferSignatureCount;
+    usize concurrentSharingAdviceResourceCount;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskRecordContext"), cpp_layout(72, 8), cpp_flags(binary_serializable, no_assign)]
+extern class GpuTaskRecordContext{
+    GpuTaskGraphDeclarationReadView declarations;
+    u64 recordingAttemptGeneration;
+    GpuTaskId task;
+    GpuSubmissionPacketId packet;
+    GpuPhysicalQueueId queue;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileStatistics::s_OwnershipTransferRouteCount")]
+extern const usize s_OwnershipTransferRouteCount;
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileStatistics::s_PacketizationDecisionCount")]
+extern const usize s_PacketizationDecisionCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

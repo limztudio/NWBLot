@@ -1,0 +1,20 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/diagnostic_capture_policy.h>"), cpp_name("::NWB::Core::Crash::DiagnosticCapturePolicy"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class DiagnosticCapturePolicy;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/diagnostic_capture_policy.h>"), cpp_name("::NWB::Core::Crash::DiagnosticCapturePolicy::CanSuppressDuplicate")]
+extern b8 DiagnosticCapturePolicyCanSuppressDuplicate(in auto a0);
+
+[cpp_header("<core/crash/diagnostic_capture_policy.h>"), cpp_name("::NWB::Core::Crash::DiagnosticCapturePolicy::Reserve")]
+extern b8 DiagnosticCapturePolicyReserve(in auto a0, in StringView a1, in StringView a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

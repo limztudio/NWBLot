@@ -1,0 +1,12 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/arena_names.h>"), cpp_name("::NWB::Core::Metascript::MetascriptArenaScope::s_DocumentReaderScratch")]
+extern const Name s_DocumentReaderScratch;
+[cpp_header("<core/metascript/arena_names.h>"), cpp_name("::NWB::Core::Metascript::MetascriptArenaScope::s_ParserScratch")]
+extern const Name s_ParserScratch;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

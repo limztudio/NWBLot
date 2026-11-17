@@ -1,0 +1,84 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedGraph"), cpp_layout(80, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuRecordedGraph{
+    Optional<GpuRecordedPacket> packetSnapshot(...)const;
+    u64 recordingAttemptGeneration(...)const;
+    b8 releaseCommandListCache(...);
+    void reset(...);
+    b8 tryReset(...);
+};
+
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedPacket"), cpp_layout(472, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GpuRecordedPacket{
+    GpuSubmissionPacketId packet;
+    u32 taskCount;
+    u32 barrierCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    u64 recordingBeginNanoseconds;
+    u64 recordingEndNanoseconds;
+    f64 recordingSeconds;
+    u64 recordingWorkerDomain;
+    u32 recordingWorkerIndex;
+    u8 commandListCount;
+};
+
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueRecordingStatistics"), cpp_layout(112, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphPhysicalQueueRecordingStatistics{
+    u64 graphGeneration;
+    u64 planGeneration;
+    u64 recordingAttemptGeneration;
+    GpuPhysicalQueueId queue;
+    u16 deviceGeneration;
+    CommandQueue queueClass;
+    usize packetCount;
+    usize taskCount;
+    usize commandListCount;
+    usize barrierCount;
+    usize workerRoutedPacketCount;
+    usize parallelPacketCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    f64 recordingSeconds;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphRecordingStatistics"), cpp_layout(144, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphRecordingStatistics{
+    u64 graphGeneration;
+    u64 planGeneration;
+    u64 recordingAttemptGeneration;
+    u16 deviceGeneration;
+    usize packetCount;
+    usize taskCount;
+    usize commandListCount;
+    usize barrierCount;
+    usize workerRoutedPacketCount;
+    usize parallelPacketCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    f64 recordingSeconds;
+    f64 recordingElapsedSeconds;
+    f64 readyFrontierElapsedSeconds;
+    f64 readyFrontierWorkerBusySeconds;
+    f64 readyFrontierWorkerCapacitySeconds;
+    f64 readyFrontierWorkerUtilization(...)const;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedPacket::s_MaxCommandLists")]
+extern const usize s_MaxCommandLists;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

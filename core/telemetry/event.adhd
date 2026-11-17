@@ -1,0 +1,92 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureFlag::Mask")]
+extern enum TelemetryCaptureFlag : u32{
+    None,
+    TextLog,
+    Diagnostic,
+    Perf,
+    FrameGraph,
+    All
+};
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::EventKind::Enum")]
+extern enum EventKind : u16{
+    Unknown,
+    TextLog,
+    Diagnostic,
+    PerfFrame,
+    FrameGraphFrame,
+    MemoryFrame
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions"), cpp_layout(4, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TelemetryCaptureOptions{
+    TelemetryCaptureFlag flags;
+    b8 diagnosticEnabled(...)const;
+    b8 enabled(...)const;
+    b8 frameGraphEnabled(...)const;
+    b8 perfEnabled(...)const;
+};
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::EventHeader"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EventHeader{
+    u64 frameIndex;
+    u64 timestampNanoseconds;
+    u64 payloadBytes;
+    u32 magic;
+    u32 streamId;
+    u16 version;
+    EventKind kind;
+    u8 reserved;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::AnyCapture")]
+extern b8 AnyCapture(in auto a0);
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureFlagForEventKind")]
+extern TelemetryCaptureFlag CaptureFlagForEventKind(in auto a0);
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::HasCapture")]
+extern b8 HasCapture(in auto a0, in auto a1);
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::IsValidEventKind")]
+extern b8 IsValidEventKind(in auto a0);
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions::All")]
+extern TelemetryCaptureOptions TelemetryCaptureOptionsAll();
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions::Disabled")]
+extern TelemetryCaptureOptions TelemetryCaptureOptionsDisabled();
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions::FrameGraphOnly")]
+extern TelemetryCaptureOptions TelemetryCaptureOptionsFrameGraphOnly();
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions::PerfOnly")]
+extern TelemetryCaptureOptions TelemetryCaptureOptionsPerfOnly();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureFlag::s_CaptureFlagNoneBase")]
+extern const u32 s_CaptureFlagNoneBase;
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::s_EventMagic")]
+extern const u32 s_EventMagic;
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::s_TelemetryFormatVersion")]
+extern const u16 s_TelemetryFormatVersion;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,343 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::OpacityMicromapFormat::Enum")]
+extern enum OpacityMicromapFormat : u8{
+    OC1_2_State,
+    OC1_4_State
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingAccelStructBuildFlags::Mask")]
+extern flag RayTracingAccelStructBuildFlags : u8{
+    None,
+    AllowUpdate,
+    PreferFastTrace,
+    PreferFastBuild,
+    MinimizeMemory,
+    PerformUpdate,
+    AllowEmptyInstances
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationFlags::Mask")]
+extern flag RayTracingClusterOperationFlags : u8{
+    None,
+    FastTrace,
+    FastBuild,
+    NoOverlap,
+    AllowOMM
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationMode::Enum")]
+extern enum RayTracingClusterOperationMode : u8{
+    ImplicitDestinations,
+    ExplicitDestinations,
+    GetSizes
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationMoveType::Enum")]
+extern enum RayTracingClusterOperationMoveType : u8{
+    BottomLevel,
+    ClusterLevel,
+    Template
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationType::Enum")]
+extern enum RayTracingClusterOperationType : u8{
+    Move,
+    ClasBuild,
+    ClasBuildTemplates,
+    ClasInstantiateTemplates,
+    BlasBuild
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryFlags::Mask")]
+extern flag RayTracingGeometryFlags : u8{
+    None,
+    Opaque,
+    NoDuplicateAnyHitInvocation
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryLssEndcapMode::Enum")]
+extern enum RayTracingGeometryLssEndcapMode : u8{
+    None,
+    Chained
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryLssPrimitiveFormat::Enum")]
+extern enum RayTracingGeometryLssPrimitiveFormat : u8{
+    List,
+    SuccessiveImplicit
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryType::Enum")]
+extern enum RayTracingGeometryType : u8{
+    Triangles,
+    AABBs,
+    Spheres,
+    Lss
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingInstanceFlags::Mask")]
+extern flag RayTracingInstanceFlags : u32{
+    None,
+    TriangleCullDisable,
+    TriangleFrontCounterclockwise,
+    ForceOpaque,
+    ForceNonOpaque,
+    ForceOMM2State,
+    DisableOMMs
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromapBuildFlags::Mask")]
+extern flag RayTracingOpacityMicromapBuildFlags : u8{
+    None,
+    FastTrace,
+    FastBuild,
+    AllowCompaction
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingAccelStructDesc"), cpp_layout(112, 8)]
+extern class RayTracingAccelStructDesc{
+    usize topLevelMaxInstances;
+    Vector<RayTracingGeometryDesc> bottomLevelGeometries;
+    Name debugName;
+    RayTracingAccelStructBuildFlags buildFlags;
+    ResourceQueueSharing queueSharing;
+    b8 isTopLevel;
+    b8 isVirtual;
+    RayTracingAccelStructDesc addBottomLevelGeometry(...);
+    RayTracingAccelStructDesc setBuildFlags(...);
+    RayTracingAccelStructDesc setDebugName(...);
+    RayTracingAccelStructDesc setQueueSharing(...);
+    RayTracingAccelStructDesc setTopLevelMaxInstances(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingAccelStructHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class RayTracingAccelStructHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut RayTracingAccelStruct deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationBlasBuildParams"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RayTracingClusterOperationBlasBuildParams{
+    u32 maxClasPerBlasCount;
+    u32 maxTotalClasCount;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationClasBuildParams"), cpp_layout(32, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingClusterOperationClasBuildParams{
+    u32 maxGeometryIndex;
+    u32 maxUniqueGeometryCount;
+    u32 maxTriangleCount;
+    u32 maxVertexCount;
+    u32 maxTotalTriangleCount;
+    u32 maxTotalVertexCount;
+    u32 minPositionTruncateBitCount;
+    Format vertexFormat;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationDesc"), cpp_layout(144, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingClusterOperationDesc{
+    RayTracingClusterOperationParams params;
+    u64 scratchSizeInBytes;
+    u64 inIndirectArgCountOffsetInBytes;
+    u64 inIndirectArgsOffsetInBytes;
+    u64 inOutAddressesOffsetInBytes;
+    u64 outSizesOffsetInBytes;
+    u64 outAccelerationStructuresOffsetInBytes;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationMoveParams"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RayTracingClusterOperationMoveParams{
+    u32 maxBytes;
+    RayTracingClusterOperationMoveType type;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationParams"), cpp_layout(56, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingClusterOperationParams{
+    u32 maxArgCount;
+    RayTracingClusterOperationType type;
+    RayTracingClusterOperationMode mode;
+    RayTracingClusterOperationFlags flags;
+    RayTracingClusterOperationMoveParams move;
+    RayTracingClusterOperationClasBuildParams clas;
+    RayTracingClusterOperationBlasBuildParams blas;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationSizeInfo"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RayTracingClusterOperationSizeInfo{
+    u64 resultMaxSizeInBytes;
+    u64 scratchSizeInBytes;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryAABB"), cpp_layout(24, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingGeometryAABB{
+    f32 minX;
+    f32 minY;
+    f32 minZ;
+    f32 maxX;
+    f32 maxY;
+    f32 maxZ;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryAABBs"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingGeometryAABBs{
+    u64 offset;
+    u32 count;
+    u32 stride;
+    RayTracingGeometryAABBs setCount(...);
+    RayTracingGeometryAABBs setOffset(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryDesc"), cpp_layout(144, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingGeometryDesc{
+    f32x3x4 transform;
+    RayTracingGeometryFlags flags;
+    RayTracingGeometryType geometryType;
+    b8 useTransform;
+    RayTracingGeometryDesc setFlags(...);
+    RayTracingGeometryDesc setTransform(...);
+    RayTracingGeometryDesc setTriangles(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryLss"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingGeometryLss{
+    u64 indexOffset;
+    u64 vertexPositionOffset;
+    u64 vertexRadiusOffset;
+    u32 indexCount;
+    u32 primitiveCount;
+    u32 vertexCount;
+    u32 indexStride;
+    u32 vertexPositionStride;
+    u32 vertexRadiusStride;
+    Format indexFormat;
+    Format vertexPositionFormat;
+    Format vertexRadiusFormat;
+    RayTracingGeometryLssPrimitiveFormat primitiveFormat;
+    RayTracingGeometryLssEndcapMode endcapMode;
+    RayTracingGeometryLss setIndexCount(...);
+    RayTracingGeometryLss setIndexFormat(...);
+    RayTracingGeometryLss setVertexCount(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometrySpheres"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingGeometrySpheres{
+    u64 indexOffset;
+    u64 vertexPositionOffset;
+    u64 vertexRadiusOffset;
+    u32 indexCount;
+    u32 vertexCount;
+    u32 indexStride;
+    u32 vertexPositionStride;
+    u32 vertexRadiusStride;
+    Format indexFormat;
+    Format vertexPositionFormat;
+    Format vertexRadiusFormat;
+    RayTracingGeometrySpheres setIndexCount(...);
+    RayTracingGeometrySpheres setIndexFormat(...);
+    RayTracingGeometrySpheres setVertexCount(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryTriangles"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingGeometryTriangles{
+    u64 indexOffset;
+    u64 vertexOffset;
+    u64 ommIndexBufferOffset;
+    u32 indexCount;
+    u32 vertexCount;
+    u32 vertexStride;
+    u32 numOmmUsageCounts;
+    Format indexFormat;
+    Format vertexFormat;
+    Format ommIndexFormat;
+    RayTracingGeometryTriangles setIndexCount(...);
+    RayTracingGeometryTriangles setIndexFormat(...);
+    RayTracingGeometryTriangles setVertexCount(...);
+    RayTracingGeometryTriangles setVertexFormat(...);
+    RayTracingGeometryTriangles setVertexStride(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingInstanceDesc"), cpp_layout(64, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RayTracingInstanceDesc{
+    f32x3x4 transform;
+    u32 instanceID;
+    u32 instanceMask;
+    u32 instanceContributionToHitGroupIndex;
+    RayTracingInstanceFlags flags;
+    RayTracingInstanceDesc setFlags(...);
+    RayTracingInstanceDesc setInstanceID(...);
+    RayTracingInstanceDesc setInstanceMask(...);
+    RayTracingInstanceDesc setTransform(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromapDesc"), cpp_layout(136, 8)]
+extern class RayTracingOpacityMicromapDesc{
+    Name debugName;
+    RayTracingOpacityMicromapBuildFlags flags;
+    Vector<RayTracingOpacityMicromapUsageCount> counts;
+    u64 inputBufferOffset;
+    u64 perOmmDescsOffset;
+    RayTracingOpacityMicromapDesc setDebugName(...);
+    RayTracingOpacityMicromapDesc setFlags(...);
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromapHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class RayTracingOpacityMicromapHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut RayTracingOpacityMicromap deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromapUsageCount"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RayTracingOpacityMicromapUsageCount{
+    u32 count;
+    u32 subdivisionLevel;
+    OpacityMicromapFormat format;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationMode::IsDestinationTopologyValid")]
+extern b8 IsDestinationTopologyValid(in auto a0, in b8 a1, in b8 a2, in b8 a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::s_AffineTransformFloatCount")]
+extern const usize s_AffineTransformFloatCount;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingInstanceDesc::s_ByteSize")]
+extern const usize s_RayTracingInstanceDescByteSize;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::s_IdentityTransform")]
+extern const f32x3x4 s_IdentityTransform;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::OpacityMicromapFormat::s_OpacityMicromapFormatOC1_2_StateBase")]
+extern const u8 s_OpacityMicromapFormatOC1_2_StateBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingAccelStructBuildFlags::s_RayTracingAccelStructBuildFlagsNoneBase")]
+extern const u8 s_RayTracingAccelStructBuildFlagsNoneBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingClusterOperationFlags::s_RayTracingClusterOperationFlagsNoneBase")]
+extern const u8 s_RayTracingClusterOperationFlagsNoneBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryFlags::s_RayTracingGeometryFlagsNoneBase")]
+extern const u8 s_RayTracingGeometryFlagsNoneBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryLssEndcapMode::s_RayTracingGeometryLssEndcapModeNoneBase")]
+extern const u8 s_RayTracingGeometryLssEndcapModeNoneBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryLssPrimitiveFormat::s_RayTracingGeometryLssPrimitiveFormatListBase")]
+extern const u8 s_RayTracingGeometryLssPrimitiveFormatListBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryType::s_RayTracingGeometryTypeTrianglesBase")]
+extern const u8 s_RayTracingGeometryTypeTrianglesBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingInstanceFlags::s_RayTracingInstanceFlagsNoneBase")]
+extern const i32 s_RayTracingInstanceFlagsNoneBase;
+[cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromapBuildFlags::s_RayTracingOpacityMicromapBuildFlagsNoneBase")]
+extern const u8 s_RayTracingOpacityMicromapBuildFlagsNoneBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

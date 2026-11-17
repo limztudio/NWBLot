@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashDumpKind::Enum")]
+extern enum GpuCrashDumpKind : u8{
+    None,
+    Aftermath,
+    RadeonGpuDetective
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashMarkerTracker"), cpp_layout(80, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuCrashMarkerTracker{
+    void popEvent(...);
+    usize pushEvent(...);
+    void resetEventStack(...);
+};
+
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashReport"), cpp_layout(104, 8)]
+extern class GpuCrashReport{
+    String context;
+    String details;
+    usize binaryDumpSize;
+};
+
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashTracker"), cpp_layout(600, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuCrashTracker;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::DispatchGpuCrash")]
+extern void DispatchGpuCrash(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

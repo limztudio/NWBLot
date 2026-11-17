@@ -1,0 +1,20 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/literal_decoder.h>"), cpp_name("::NWB::Core::Metascript::LiteralDecoder"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class MetascriptLiteralDecoder;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/literal_decoder.h>"), cpp_name("::NWB::Core::Metascript::LiteralDecoder::TryDecodeCharLiteral")]
+extern b8 MetascriptLiteralDecoderTryDecodeCharLiteral(in StringView a0, mut auto a1);
+
+[cpp_header("<core/metascript/literal_decoder.h>"), cpp_name("::NWB::Core::Metascript::LiteralDecoder::TryParseUnsignedIntegerLiteral")]
+extern b8 MetascriptLiteralDecoderTryParseUnsignedIntegerLiteral(in StringView a0, mut u64 a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

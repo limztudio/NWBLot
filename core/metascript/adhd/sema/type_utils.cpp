@@ -469,6 +469,50 @@ public:
 
 
 private:
+    class PreludeIncludeResolver final : public IIncludeResolver{
+    public:
+        explicit PreludeIncludeResolver(CoreExternRegistry& owner)noexcept
+            : m_owner(owner)
+        {}
+
+
+    public:
+        virtual b8 resolveInclude(const MStringView includePath, const b8, MetaArena& arena, MString& outResolvedKey, MString& outContent)override{
+            if(includePath.empty())
+                return false;
+            outResolvedKey.assign(includePath.data(), includePath.size());
+            return m_owner.tryReadProjectFile(includePath, arena, outContent);
+        }
+
+
+    private:
+        CoreExternRegistry& m_owner;
+    };
+
+    [[nodiscard]] b8 tryReadProjectFile(const MStringView relativePath, MetaArena& arena, MString& outText)const{
+        const auto tryReadPath = [&](const MStringView pathText) -> b8{
+            const TString<MetaArena> nativePath = ConvertString(arena, pathText);
+            const ::Path<MetaArena> diskPath(arena, TStringView(nativePath.data(), nativePath.size()));
+            outText.clear();
+            return static_cast<b8>(ReadTextFile(diskPath, outText));
+        };
+
+#if defined(NWB_PROJECT_SOURCE_DIR)
+        {
+            const MStringView root = NWB_PROJECT_SOURCE_DIR;
+            if(!root.empty()){
+                MString fullPath(root.data(), root.size(), arena);
+                if(fullPath.back() != '/' && fullPath.back() != '\\')
+                    fullPath.push_back('/');
+                fullPath.append(relativePath.data(), relativePath.size());
+                if(tryReadPath(MStringView(fullPath.data(), fullPath.size())))
+                    return true;
+            }
+        }
+#endif
+        return tryReadPath(relativePath);
+    }
+
     template<typename InfoT>
     [[nodiscard]] static const InfoT* FindInMap(const MVector<InfoT>& items, const MStringMap<usize>& indexMap, const MStringView key)noexcept{
         const auto it = indexMap.find(key);
@@ -863,36 +907,25 @@ private:
     }
 
     void load(){
-        const auto tryReadPrelude = [&](const MStringView pathText) -> b8{
-            const TString<MetaArena> nativePath = ConvertString(m_arena, pathText);
-            const ::Path<MetaArena> diskPath(m_arena, TStringView(nativePath.data(), nativePath.size()));
-            m_sourceText.clear();
-            return static_cast<b8>(ReadTextFile(diskPath, m_sourceText));
-        };
+        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
+        MetaArena parseArena(MetascriptArenaScope::s_ParserScratch);
 
-        b8 loaded = false;
-#if defined(NWB_PROJECT_SOURCE_DIR)
-        {
-            const MStringView root = NWB_PROJECT_SOURCE_DIR;
-            if(!root.empty()){
-                MString fullPath(root.data(), root.size(), m_arena);
-                if(fullPath.back() != '/' && fullPath.back() != '\\')
-                    fullPath.push_back('/');
-                fullPath.append(ContractSemantics::s_CoreExternPreludePath.data(), ContractSemantics::s_CoreExternPreludePath.size());
-                loaded = tryReadPrelude(MStringView(fullPath.data(), fullPath.size()));
-            }
-        }
-#endif
-        if(!loaded)
-            loaded = tryReadPrelude(ContractSemantics::s_CoreExternPreludePath);
-        FOUNDATION_ASSERT(loaded && !m_sourceText.empty());
-        if(!loaded || m_sourceText.empty())
+        MString rawPreludeSource(parseArena);
+        const b8 loaded = tryReadProjectFile(ContractSemantics::s_CoreExternPreludePath, parseArena, rawPreludeSource);
+        FOUNDATION_ASSERT(loaded && !rawPreludeSource.empty());
+        if(!loaded || rawPreludeSource.empty())
+            return;
+
+        MVector<ParseError> errors(parseArena);
+        PreludeIncludeResolver includeResolver(*this);
+        Preprocessor preprocessor(parseArena, scratchArena, errors, &includeResolver, false);
+        m_sourceText.clear();
+        const b8 preprocessed = preprocessor.process(MStringView(rawPreludeSource.data(), rawPreludeSource.size()), m_sourceText);
+        FOUNDATION_ASSERT(preprocessed && errors.empty() && !m_sourceText.empty());
+        if(!preprocessed || !errors.empty() || m_sourceText.empty())
             return;
 
         const MStringView activeSource(m_sourceText.data(), m_sourceText.size());
-        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
-        MetaArena parseArena(MetascriptArenaScope::s_ParserScratch);
-        MVector<ParseError> errors(parseArena);
         TranslationUnit parseUnit(parseArena);
         ParserCursor cursor(activeSource, parseArena, scratchArena, errors);
         DeclParser declParser(cursor, activeSource, nullptr);

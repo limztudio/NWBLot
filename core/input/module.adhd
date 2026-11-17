@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/input/module.h>"), cpp_name("::NWB::Core::HandlerMutationType::Enum")]
+extern enum HandlerMutationType : u8{
+    AddFront,
+    AddBack,
+    Remove
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/input/module.h>"), cpp_name("::NWB::Core::InputDispatcher"), cpp_layout(696, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+extern class InputDispatcher{
+    void addHandlerToBack(...);
+    void addHandlerToFront(...);
+    void keyboardCharInput(...);
+    b8 keyboardTextBlocked(...)const;
+    void keyboardUpdate(...);
+    void mouseButtonUpdate(...);
+    void mousePosUpdate(...);
+    void mouseScrollUpdate(...);
+    void pointerCaptureLost(...);
+    void pointerLeave(...);
+    void removeHandler(...);
+    void setMousePositionScale(...);
+    void windowFocusUpdate(...);
+    b8 windowFocused(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

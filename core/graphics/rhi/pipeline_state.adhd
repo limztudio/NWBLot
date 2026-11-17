@@ -1,0 +1,219 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendFactor::Enum")]
+extern enum BlendFactor : u8{
+    Zero,
+    One,
+    SrcColor,
+    InvSrcColor,
+    SrcAlpha,
+    InvSrcAlpha,
+    DstAlpha,
+    InvDstAlpha,
+    DstColor,
+    InvDstColor,
+    SrcAlphaSaturate,
+    ConstantColor,
+    InvConstantColor,
+    Src1Color,
+    InvSrc1Color,
+    Src1Alpha,
+    InvSrc1Alpha
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendOp::Enum")]
+extern enum BlendOp : u8{
+    Add,
+    Subtract,
+    ReverseSubtract,
+    Min,
+    Max
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ColorMask::Mask")]
+extern flag ColorMask : u8{
+    None,
+    Red,
+    Green,
+    Blue,
+    Alpha,
+    All
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ComparisonFunc::Enum")]
+extern enum ComparisonFunc : u8{
+    Never,
+    Less,
+    Equal,
+    LessOrEqual,
+    Greater,
+    NotEqual,
+    GreaterOrEqual,
+    Always
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::RasterCullMode::Enum")]
+extern enum RasterCullMode : u8{
+    Back,
+    Front,
+    None
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::RasterFillMode::Enum")]
+extern enum RasterFillMode : u8{
+    Solid,
+    Wireframe
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerAddressMode::Enum")]
+extern enum SamplerAddressMode : u8{
+    Clamp,
+    Wrap,
+    Border,
+    Mirror,
+    MirrorOnce
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerReductionType::Enum")]
+extern enum SamplerReductionType : u8{
+    Standard,
+    Comparison,
+    Minimum,
+    Maximum
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::StencilOp::Enum")]
+extern enum StencilOp : u8{
+    Keep,
+    Zero,
+    Replace,
+    IncrementAndClamp,
+    DecrementAndClamp,
+    Invert,
+    IncrementAndWrap,
+    DecrementAndWrap
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendState"), cpp_layout(65, 1), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch, map_key)]
+extern class BlendState{
+    b8 alphaToCoverageEnable;
+    Array<BlendStateRenderTarget, 8> targets;
+    BlendState setRenderTarget(in isize a0, in BlendStateRenderTarget a1);
+    b8 usesConstantColor(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendState::RenderTarget"), cpp_layout(8, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class BlendStateRenderTarget{
+    BlendFactor srcBlend;
+    BlendFactor destBlend;
+    BlendOp blendOp;
+    BlendFactor srcBlendAlpha;
+    BlendFactor destBlendAlpha;
+    BlendOp blendOpAlpha;
+    ColorMask colorWriteMask;
+    b8 blendEnable;
+    BlendStateRenderTarget enableBlend();
+    BlendStateRenderTarget setSrcBlend(in BlendFactor a0);
+    BlendStateRenderTarget setDestBlend(in BlendFactor a0);
+    BlendStateRenderTarget setBlendOp(in BlendOp a0);
+    BlendStateRenderTarget setSrcBlendAlpha(in BlendFactor a0);
+    BlendStateRenderTarget setDestBlendAlpha(in BlendFactor a0);
+    BlendStateRenderTarget setBlendOpAlpha(in BlendOp a0);
+    BlendStateRenderTarget setColorWriteMask(in ColorMask a0);
+    b8 usesConstantColor()const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::DepthStencilState"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class DepthStencilState{
+    b8 depthTestEnable;
+    b8 depthWriteEnable;
+    ComparisonFunc depthFunc;
+    b8 stencilEnable;
+    u8 stencilReadMask;
+    u8 stencilWriteMask;
+    u8 stencilRefValue;
+    b8 dynamicStencilRef;
+    DepthStencilState disableDepthTest(...);
+    DepthStencilState disableDepthWrite(...);
+    DepthStencilState enableDepthTest(...);
+    DepthStencilState enableDepthWrite(...);
+    DepthStencilState setDepthFunc(...);
+    DepthStencilState setDepthTestEnable(...);
+    DepthStencilState setDepthWriteEnable(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::RasterState"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RasterState{
+    RasterFillMode fillMode;
+    RasterCullMode cullMode;
+    b8 frontCounterClockwise;
+    b8 depthClipEnable;
+    i32 depthBias;
+    f32 depthBiasClamp;
+    f32 slopeScaledDepthBias;
+    RasterState enableDepthClip(...);
+    RasterState setCullBack(...);
+    RasterState setCullMode(...);
+    RasterState setCullNone(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerDesc"), cpp_layout(32, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class SamplerDesc{
+    Color borderColor;
+    f32 maxAnisotropy;
+    f32 mipBias;
+    b8 minFilter;
+    b8 magFilter;
+    b8 mipFilter;
+    SamplerAddressMode addressU;
+    SamplerAddressMode addressV;
+    SamplerAddressMode addressW;
+    SamplerReductionType reductionType;
+    SamplerDesc setAllAddressModes(...);
+    SamplerDesc setAllFilters(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class SamplerHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut RhiSampler deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ViewportState"), cpp_layout(656, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class ViewportState{
+    FixedVector<Viewport, 16> viewports;
+    FixedVector<Rect, 16> scissorRects;
+    ViewportState addScissorRect(...);
+    ViewportState addViewport(...);
+    ViewportState addViewportAndScissorRect(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::DepthStencilState::s_AllStencilBits")]
+extern const u8 s_AllStencilBits;
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendFactor::s_BlendFactorConstantColorBase")]
+extern const u8 s_BlendFactorConstantColorBase;
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendFactor::s_BlendFactorZeroBase")]
+extern const u8 s_BlendFactorZeroBase;
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendOp::s_BlendOpAddBase")]
+extern const u8 s_BlendOpAddBase;
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ColorMask::s_ColorMaskNoneBase")]
+extern const u8 s_ColorMaskNoneBase;
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ComparisonFunc::s_ComparisonFuncNeverBase")]
+extern const u8 s_ComparisonFuncNeverBase;
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::StencilOp::s_StencilOpKeepBase")]
+extern const u8 s_StencilOpKeepBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

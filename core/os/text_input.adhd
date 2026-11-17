@@ -1,0 +1,146 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputAdmission::Enum")]
+extern enum TextInputAdmission : u8{
+    Accepted,
+    WrongThread,
+    InvalidSession,
+    InvalidText,
+    InvalidRange,
+    TooLarge,
+    QueueFull,
+    Unsupported,
+    Unavailable,
+    Busy,
+    NativeFailure
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputBackend::Enum")]
+extern enum TextInputBackend : u8{
+    Unsupported,
+    Win32Imm32,
+    X11Xim,
+    Wayland
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputCancelReason::Enum")]
+extern enum TextInputCancelReason : u8{
+    FocusLost,
+    NativeCancelled,
+    Overflow,
+    NativeFailure
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputChangeCause::Enum")]
+extern enum TextInputChangeCause : u8{
+    InputMethod,
+    Other
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputDeletionBasis::Enum")]
+extern enum TextInputDeletionBasis : u8{
+    Caret,
+    Selection,
+    Count
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEventKind::Enum")]
+extern enum TextInputEventKind : u8{
+    Commit,
+    Preedit,
+    DeleteSurrounding,
+    Cancelled
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputPollResult::Enum")]
+extern enum TextInputPollResult : u8{
+    InvalidSession,
+    Pending,
+    Event,
+    WrongThread
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::ITextInputService"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class ITextInputService{
+    TextInputSessionToken activeSession(...)const;
+    Expected<TextInputSessionToken, TextInputAdmission> begin(...);
+    TextInputCapabilities capabilities(...)const;
+    b8 end(...);
+    b8 isOwnerThread(...)const;
+    TextInputPollResult poll(...);
+    b8 setFocused(...);
+    u64 surroundingRevision(...)const;
+    TextInputAdmission updateCaret(...);
+    TextInputAdmission updateSurrounding(...);
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputCapabilities"), cpp_layout(5, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TextInputCapabilities{
+    b8 commit;
+    b8 preedit;
+    b8 surrounding;
+    b8 deleteSurrounding;
+    TextInputBackend backend;
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent"), cpp_layout(112, 8)]
+extern class TextInputEvent{
+    String text;
+    TextInputSessionToken token;
+    u64 sequence;
+    u64 surroundingRevision;
+    usize anchorByte;
+    usize caretByte;
+    usize deleteBeforeBytes;
+    usize deleteAfterBytes;
+    TextInputEventKind kind;
+    b8 caretVisible;
+    TextInputCancelReason cancelReason;
+    TextInputDeletionBasis deletionBasis;
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputRect"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TextInputRect{
+    i32 x;
+    i32 y;
+    i32 width;
+    i32 height;
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionDesc"), cpp_layout(48, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TextInputSessionDesc{
+    TextInputRect caret;
+    StringView surrounding;
+    usize anchorByte;
+    usize caretByte;
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionToken"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class TextInputSessionToken{
+    u64 service;
+    u64 generation;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::s_TextInputMaxEventTextBytes")]
+extern const usize s_TextInputMaxEventTextBytes;
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::s_TextInputMaxEvents")]
+extern const usize s_TextInputMaxEvents;
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::s_TextInputMaxQueuedTextBytes")]
+extern const usize s_TextInputMaxQueuedTextBytes;
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::s_TextInputMaxSurroundingBytes")]
+extern const usize s_TextInputMaxSurroundingBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

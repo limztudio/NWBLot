@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::ReadVectorPayload")]
+extern b8 ReadVectorPayload(in auto a0, in isize a1, in StringView a2, in StringView a3, mut usize a4, mut auto a5);
+
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::ReadMagicHeaderPayload")]
+extern Expected<T> ReadMagicHeaderPayload<T>(in auto a0, in isize a1, in StringView a2, in StringView a3, mut usize a4);
+
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::AppendVectorPayload")]
+extern b8 AppendVectorPayload(in auto a0, in StringView a1, in StringView a2, mut auto a3);
+
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::ReadCompletePayload")]
+extern b8 ReadCompletePayload(in auto a0, in isize a1, in StringView a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

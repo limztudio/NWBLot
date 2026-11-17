@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/session.h>"), cpp_name("::NWB::Core::Telemetry::CaptureSession"), cpp_layout(152, 8), cpp_flags(no_copy, no_assign)]
+extern class CaptureSession{
+    void clear(...);
+    b8 enabled(...)const;
+    usize eventCount(...)const;
+    u64 frameIndex(...)const;
+    b8 recordFrameGraph(...);
+    PerfSessionRecordResult recordPerfReport(...);
+    mut Recorder recorder(...)const;
+    void setFrameIndex(...);
+    void setStreamId(...);
+    u32 streamId(...)const;
+    EventView view(...)const;
+};
+
+[cpp_header("<core/telemetry/session.h>"), cpp_name("::NWB::Core::Telemetry::CaptureSessionCaptureScope"), cpp_layout(136, 8), cpp_flags(no_copy, no_assign)]
+extern class CaptureSessionCaptureScope;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

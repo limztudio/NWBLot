@@ -1,0 +1,236 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputAction::Enum")]
+extern enum InputAction : u32{
+    Release,
+    Press,
+    Repeat
+};
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::Enum")]
+extern enum InputModifier : u32{
+    Shift,
+    Control,
+    Alt,
+    Super,
+    CapsLock,
+    NumLock
+};
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::Enum")]
+extern enum Key : u32{
+    Unknown,
+    Space,
+    Apostrophe,
+    Comma,
+    Minus,
+    Period,
+    Slash,
+    Number0,
+    Number1,
+    Number2,
+    Number3,
+    Number4,
+    Number5,
+    Number6,
+    Number7,
+    Number8,
+    Number9,
+    Semicolon,
+    Equal,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    LeftBracket,
+    Backslash,
+    RightBracket,
+    GraveAccent,
+    World1,
+    World2,
+    Escape,
+    Enter,
+    Tab,
+    Backspace,
+    Insert,
+    Delete,
+    Right,
+    Left,
+    Down,
+    Up,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    CapsLock,
+    ScrollLock,
+    NumLock,
+    PrintScreen,
+    Pause,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    F13,
+    F14,
+    F15,
+    F16,
+    F17,
+    F18,
+    F19,
+    F20,
+    F21,
+    F22,
+    F23,
+    F24,
+    F25,
+    Keypad0,
+    Keypad1,
+    Keypad2,
+    Keypad3,
+    Keypad4,
+    Keypad5,
+    Keypad6,
+    Keypad7,
+    Keypad8,
+    Keypad9,
+    KeypadDecimal,
+    KeypadDivide,
+    KeypadMultiply,
+    KeypadSubtract,
+    KeypadAdd,
+    KeypadEnter,
+    KeypadEqual,
+    LeftShift,
+    LeftControl,
+    LeftAlt,
+    LeftSuper,
+    RightShift,
+    RightControl,
+    RightAlt,
+    RightSuper,
+    Menu
+};
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::MouseButton::Enum")]
+extern enum MouseButton : u32{
+    Left,
+    Right,
+    Middle,
+    Button4,
+    Button5,
+    Button6,
+    Button7,
+    Button8
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_layout(8, 8), cpp_flags(self_defaulted, brace_init, polymorphic_base)]
+extern class IInputEventHandler{
+    b8 keyboardCharInput(...);
+    KeyboardInputResult keyboardUpdate(...);
+    b8 mouseButtonUpdate(...);
+    b8 mousePosUpdate(...);
+    b8 mouseScrollUpdate(...);
+    void pointerCaptureLost(...);
+    void pointerLeave(...);
+    void windowFocusUpdate(...);
+};
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::KeyboardInputResult"), cpp_layout(2, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class KeyboardInputResult{
+    b8 consumed;
+    b8 blocksText;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputAction::s_InputActionReleaseBase")]
+extern const i32 s_InputActionReleaseBase;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyACode")]
+extern const i32 s_KeyACode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyApostropheCode")]
+extern const i32 s_KeyApostropheCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyCapsLockCode")]
+extern const i32 s_KeyCapsLockCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyCommaCode")]
+extern const i32 s_KeyCommaCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyEqualCode")]
+extern const i32 s_KeyEqualCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyEscapeCode")]
+extern const i32 s_KeyEscapeCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyF1Code")]
+extern const i32 s_KeyF1Code;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyGraveAccentCode")]
+extern const i32 s_KeyGraveAccentCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyKeypad0Code")]
+extern const i32 s_KeyKeypad0Code;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyLeftBracketCode")]
+extern const i32 s_KeyLeftBracketCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyLeftShiftCode")]
+extern const i32 s_KeyLeftShiftCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeySemicolonCode")]
+extern const i32 s_KeySemicolonCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeySpaceAscii")]
+extern const i32 s_KeySpaceAscii;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyUnknownCode")]
+extern const i32 s_KeyUnknownCode;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyWorld1Code")]
+extern const i32 s_KeyWorld1Code;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyWorld2Code")]
+extern const i32 s_KeyWorld2Code;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::s_ModifierAltBits")]
+extern const i32 s_ModifierAltBits;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::s_ModifierCapsLockBits")]
+extern const i32 s_ModifierCapsLockBits;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::s_ModifierControlBits")]
+extern const i32 s_ModifierControlBits;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::s_ModifierNumLockBits")]
+extern const i32 s_ModifierNumLockBits;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::s_ModifierShiftBits")]
+extern const i32 s_ModifierShiftBits;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputModifier::s_ModifierSuperBits")]
+extern const i32 s_ModifierSuperBits;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::MouseButton::s_MouseButtonLeftBase")]
+extern const i32 s_MouseButtonLeftBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

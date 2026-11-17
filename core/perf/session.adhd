@@ -1,0 +1,21 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/perf/session.h>"), cpp_name("::NWB::Core::Perf::Session"), cpp_layout(784, 8), cpp_flags(no_copy, no_assign)]
+extern class Session{
+    void beginFrame(...);
+    void clear(...);
+    mut TimingSink cpuTimingSink(...);
+    TimingView cpuTimingView(...)const;
+    u64 frameIndex(...)const;
+    mut TimingSink gpuTimingSink(...);
+    TimingView gpuTimingView(...)const;
+    MemoryView memoryView(...)const;
+    void publishFrame(...);
+    SessionReport report(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeStatus::Enum")]
+extern enum DecodeStatus : u8{
+    Ok,
+    TruncatedHeader,
+    InvalidHeader,
+    PayloadSizeOverflow,
+    TruncatedPayload
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeResult"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class DecodeResult{
+    usize bytesRead;
+    DecodeStatus status;
+    b8 ok(...)const;
+};
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodedEvent"), cpp_layout(80, 8)]
+extern class DecodedEvent{
+    EventRecord event;
+    usize bytesRead;
+};
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodedEventHeader"), cpp_layout(37, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedEventHeader{
+    u32 magic;
+    u16 version;
+    u16 kind;
+    u8 reserved;
+    u32 streamId;
+    u64 frameIndex;
+    u64 timestampNanoseconds;
+    u64 payloadBytes;
+};
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodedStreamHeader"), cpp_layout(24, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedStreamHeader{
+    u32 magic;
+    u16 version;
+    u16 reserved;
+    u64 eventCount;
+    u64 payloadBytes;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodeEvent")]
+extern b8 EncodeEvent(in auto a0, mut auto a1);
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodeEventStream")]
+extern b8 EncodeEventStream(in auto a0, mut auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::s_CodecPackedAlignBytes")]
+extern const usize s_CodecPackedAlignBytes;
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedEventHeaderByteSize")]
+extern const usize s_EncodedEventHeaderByteSize;
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedStreamHeaderByteSize")]
+extern const usize s_EncodedStreamHeaderByteSize;
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::s_StreamMagic")]
+extern const u32 s_StreamMagic;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

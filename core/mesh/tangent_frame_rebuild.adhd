@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/mesh/tangent_frame_rebuild.h>"), cpp_name("::NWB::Core::Mesh::TangentFrameRebuildResult"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TangentFrameRebuildResult{
+    u32 rebuiltVertexCount;
+    u32 degenerateUvTriangleCount;
+    u32 fallbackTangentVertexCount;
+};
+
+[cpp_header("<core/mesh/tangent_frame_rebuild.h>"), cpp_name("::NWB::Core::Mesh::TangentFrameRebuildVertex"), cpp_layout(64, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TangentFrameRebuildVertex{
+    f32x4 position;
+    f32x4 normal;
+    f32x4 tangent;
+    f32x2u uv0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

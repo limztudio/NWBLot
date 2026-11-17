@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphBuilder"), cpp_layout(232, 8), cpp_flags(no_copy, no_assign)]
+extern class FrameGraphBuilder{
+    void addEdge(...);
+    FrameGraphNodeHandle addExternal(...);
+    b8 addPacketSubmissionStatistics(...);
+    FrameGraphNodeHandle addPass(...);
+    b8 addPhysicalQueueRuntimeStatistics(...);
+    FrameGraphNodeHandle addResource(...);
+    void dependsOnByName(...);
+    u64 frameIndex(...)const;
+    mut ScratchArena scratchArena(...);
+};
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeHandle"), cpp_layout(4, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class FrameGraphNodeHandle{
+    u32 index;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPassMetadata"), cpp_layout(680, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPassMetadata{
+    FrameGraphQueueAssignment queueAssignment;
+    FrameGraphCompiledTask compiledTask;
+    FrameGraphRuntimeStatistics runtimeStatistics;
+};
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdge"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPendingNameEdge{
+    Name toName;
+    u32 fromNodeIndex;
+    FrameGraphEdgeKind kind;
+    u8 flags;
+};
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::IFrameGraphContributor"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IFrameGraphContributor{
+    b8 appendFrameGraph(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::s_InvalidFrameGraphNodeIndex")]
+extern const u32 s_InvalidFrameGraphNodeIndex;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

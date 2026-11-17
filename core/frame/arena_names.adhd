@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/frame/arena_names.h>"), cpp_name("::NWB::Core::FrameArenaScope::s_GraphicsObjectArena")]
+extern const Name s_GraphicsObjectArena;
+[cpp_header("<core/frame/arena_names.h>"), cpp_name("::NWB::Core::FrameArenaScope::s_LinuxEnvironmentArena")]
+extern const Name s_LinuxEnvironmentArena;
+[cpp_header("<core/frame/arena_names.h>"), cpp_name("::NWB::Core::FrameArenaScope::s_ProjectObjectArena")]
+extern const Name s_ProjectObjectArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::FramebufferPtr"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class FramebufferPtr;
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::IRenderPass"), cpp_layout(16, 8), cpp_flags(no_assign, polymorphic_base)]
+extern class IRenderPass{
+    void animate(...);
+    void backBufferResized(...);
+    void backBufferResizing(...);
+    void displayScaleChanged(...);
+    mut GraphicsRuntime getGraphics(...)const;
+    void invalidateResources(...);
+    b8 prepareResources(...);
+    void render(...);
+    b8 shouldRenderUnfocused(...);
+    b8 validateResources(...);
+};
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::TexturePtr"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class TexturePtr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::DerefFramebufferPtr")]
+extern mut Framebuffer DerefFramebufferPtr(in auto a0);
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::DerefTexturePtr")]
+extern mut RhiTexture DerefTexturePtr(in auto a0);
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::IsValidFramebufferPtr")]
+extern b8 IsValidFramebufferPtr(in auto a0);
+
+[cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::IsValidTexturePtr")]
+extern b8 IsValidTexturePtr(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

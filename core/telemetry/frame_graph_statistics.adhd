@@ -1,0 +1,193 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphCompileRuntimeStatistics"), cpp_layout(352, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphCompileRuntimeStatistics{
+    u64 taskCount;
+    u64 resourceCount;
+    u64 resourceVersionCount;
+    u64 resourceVersionEdgeCount;
+    u64 resourceUseCount;
+    u64 explicitDependencyCount;
+    u64 inferredDependencyCount;
+    u64 packetCount;
+    u64 packetDependencyCount;
+    u64 mergedTaskCount;
+    u64 transitionBarrierCount;
+    u64 uavBarrierCount;
+    u64 ownershipReleaseBarrierCount;
+    u64 ownershipAcquireBarrierCount;
+    u64 stateExportBarrierCount;
+    u64 logicalOwnershipTransferCount;
+    u64 logicalOwnershipTransferSignatureCount;
+    u64 repeatedOwnershipTransferSignatureCount;
+    u64 concurrentSharingCouldAvoidTransferCount;
+    u64 concurrentSharingAdviceResourceCount;
+    u64 logicalOwnershipTransferInternalCount;
+    u64 logicalOwnershipTransferExternalImportCount;
+    u64 logicalOwnershipTransferExternalExportCount;
+    u64 resourceSetCount;
+    u64 resourceSetMemberCount;
+    u64 directResourceUseCount;
+    u64 declaredResourceSetUseCount;
+    u64 expandedResourceSetMemberUseCount;
+    u64 payloadObjectCount;
+    u64 payloadObjectBytes;
+    u64 uploadBlobCount;
+    u64 uploadBlobBytes;
+    f64 declarationSeconds;
+    f64 analysisSeconds;
+    f64 validationSeconds;
+    f64 dependencyAnalysisSeconds;
+    f64 hazardAnalysisSeconds;
+    f64 topologicalOrderSeconds;
+    f64 queueAssignmentSeconds;
+    f64 planningSeconds;
+    f64 packetizationSeconds;
+    f64 resourceStatePlanningSeconds;
+    f64 packetDependencyPlanningSeconds;
+    f64 totalSeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPacketSubmissionStatisticsRecord{
+    u64 packetGeneration;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    f64 submissionSeconds;
+    FrameGraphPhysicalQueueId queue;
+    u32 ownerNodeIndex;
+    u32 packetIndex;
+    FrameGraphQueueClass queueClass;
+    b8 joinsAcceptedQueueFrontier;
+    b8 recoverySubmission;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics"), cpp_layout(112, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPhysicalQueueCompileRuntimeStatistics{
+    u64 taskCount;
+    u64 packetCount;
+    u64 mergedTaskCount;
+    u64 prologueBarrierCount;
+    u64 epilogueBarrierCount;
+    u64 ownershipReleaseBarrierCount;
+    u64 ownershipAcquireBarrierCount;
+    u64 incomingLogicalOwnershipTransferCount;
+    u64 outgoingLogicalOwnershipTransferCount;
+    u64 incomingLogicalOwnershipTransferSignatureCount;
+    u64 outgoingLogicalOwnershipTransferSignatureCount;
+    u64 incomingRepeatedOwnershipTransferSignatureCount;
+    u64 outgoingRepeatedOwnershipTransferSignatureCount;
+    u64 concurrentSharingAdviceResourceCount;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPhysicalQueueRecordingRuntimeStatistics{
+    u64 packetCount;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 barrierCount;
+    u64 workerRoutedPacketCount;
+    u64 parallelPacketCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    f64 recordingSeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics"), cpp_layout(344, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPhysicalQueueRuntimeStatistics{
+    u64 graphGeneration;
+    u64 planGeneration;
+    u64 recordingAttemptGeneration;
+    FrameGraphPhysicalQueueId queue;
+    u16 deviceGeneration;
+    FrameGraphQueueClass queueClass;
+    FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
+    FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
+    FrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord"), cpp_layout(352, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+    u32 ownerNodeIndex;
+    FrameGraphPhysicalQueueRuntimeStatistics statistics;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics"), cpp_layout(120, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPhysicalQueueSubmissionRuntimeStatistics{
+    u64 acceptedPacketCount;
+    u64 acceptedTaskCount;
+    u64 rejectedPacketCount;
+    u64 rejectedTaskCount;
+    u64 nativeSubmissionCount;
+    u64 rejectedSubmissionCount;
+    u64 nativeCommandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    u64 acceptedFrontierSubmissionCount;
+    u64 recoverySubmissionCount;
+    f64 submissionSeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphRecordingRuntimeStatistics"), cpp_layout(112, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphRecordingRuntimeStatistics{
+    u64 packetCount;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 barrierCount;
+    u64 workerRoutedPacketCount;
+    u64 parallelPacketCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    f64 recordingSeconds;
+    f64 recordingElapsedSeconds;
+    f64 readyFrontierElapsedSeconds;
+    f64 readyFrontierWorkerBusySeconds;
+    f64 readyFrontierWorkerCapacitySeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphRuntimeStatistics"), cpp_layout(616, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphRuntimeStatistics{
+    u64 graphGeneration;
+    u64 planGeneration;
+    u64 recordingAttemptGeneration;
+    FrameGraphCompileRuntimeStatistics compile;
+    FrameGraphRecordingRuntimeStatistics recording;
+    FrameGraphSubmissionRuntimeStatistics submission;
+    u16 deviceGeneration;
+    b8 present;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphSubmissionRuntimeStatistics"), cpp_layout(120, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphSubmissionRuntimeStatistics{
+    u64 acceptedPacketCount;
+    u64 acceptedTaskCount;
+    u64 rejectedPacketCount;
+    u64 rejectedTaskCount;
+    u64 nativeSubmissionCount;
+    u64 rejectedSubmissionCount;
+    u64 nativeCommandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    u64 acceptedFrontierSubmissionCount;
+    u64 recoverySubmissionCount;
+    f64 submissionSeconds;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

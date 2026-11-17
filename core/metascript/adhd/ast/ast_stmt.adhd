@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/ast/ast_stmt.h>"), cpp_name("::NWB::Core::Metascript::Adhd::StmtKind::Enum")]
+extern enum AdhdStmtKind : u8{
+    Block,
+    VarDecl,
+    ExprStmt,
+    Return,
+    If,
+    Switch,
+    ForRange,
+    ForIndex,
+    While,
+    DoWhile,
+    Break,
+    Continue,
+    ParallelForRange,
+    ParallelForIndex,
+    ParallelBlock,
+    ParallelCall,
+    NativeBlock,
+    Diagnostic
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/ast/ast_stmt.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsTerminalJumpStmtKind")]
+extern b8 IsTerminalJumpStmtKind(in AdhdStmtKind a0);
+
+[cpp_header("<core/metascript/adhd/ast/ast_stmt.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsSequentialLoopStmtKind")]
+extern b8 IsSequentialLoopStmtKind(in AdhdStmtKind a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

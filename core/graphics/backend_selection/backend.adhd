@@ -1,0 +1,331 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::BindingLayout"), cpp_layout(400, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class BindingLayout{
+    b8 isDescriptorBufferCompatible(...)const;
+    u32 getDescriptorBufferSetSizeBytes(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Buffer"), cpp_layout(992, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class Buffer{
+    mut BufferDesc getDescription(...)const;
+    mut BufferDesc getCreationDescription(...)const;
+    b8 descriptionMatchesCreation(...)const;
+    u64 getGpuVirtualAddress(...)const;
+    u16 getDeviceGeneration(...)const;
+    ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot(...)const;
+    ResourceStates resolveTaskGraphImportInitialState(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::CommandList"), cpp_layout(3184, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class CommandList{
+    void open(...);
+    void close(...);
+    b8 hasCommandBuffer(...)const;
+    b8 isRecording(...)const;
+    b8 commandRecordingFailed(...)const;
+    u64 recordingLeaseSerial(...)const;
+    b8 matchesRecordingLease(...)const;
+    b8 isRenderPassActive(...)const;
+    void clearState(...);
+    void beginRenderPass(...);
+    void endRenderPass(...);
+    void setResourceStatesForFramebuffer(...);
+    void commitBarriers(...);
+    void setTextureState(...);
+    void setBufferState(...);
+    void setAccelStructState(...);
+    void releaseTextureOwnership(...);
+    void releaseBufferOwnership(...);
+    void setPermanentTextureState(...);
+    void setPermanentBufferState(...);
+    void clearTextureFloat(...);
+    void clearTextureRectFloat(...);
+    void clearTextureBoxFloat(...);
+    void clearDepthStencilTexture(...);
+    void clearDepthStencilTextureRect(...);
+    void clearDepthStencilTextureBox(...);
+    void clearTextureUInt(...);
+    void clearTextureRectUInt(...);
+    void clearTextureBoxUInt(...);
+    void clearTextureInt(...);
+    void clearTextureRectInt(...);
+    void clearTextureBoxInt(...);
+    void copyTexture(...);
+    b8 tryWriteBuffer(...);
+    void writeBuffer(...);
+    void clearBufferUInt(...);
+    void copyBuffer(...);
+    b8 tryWriteTexture(...);
+    void resolveTexture(...);
+    void setPushConstants(...);
+    void setGraphicsState(...);
+    void draw(...);
+    void drawIndexed(...);
+    void drawIndirect(...);
+    void drawIndexedIndirect(...);
+    void setComputeState(...);
+    void dispatch(...);
+    void dispatchIndirect(...);
+    void setMeshletState(...);
+    void dispatchMesh(...);
+    void setRayTracingState(...);
+    void dispatchRays(...);
+    void buildBottomLevelAccelStruct(...);
+    void buildTopLevelAccelStruct(...);
+    void buildOpacityMicromap(...);
+    void buildTopLevelAccelStructFromBuffer(...);
+    void executeMultiIndirectClusterOperation(...);
+    b8 resetTimerQuery(...);
+    b8 canRecordTimerQueryHere(...)const;
+    b8 canResetTimerQueryHere(...)const;
+    Expected<TimerQueryRecordingToken> beginTimerQuery(...);
+    b8 endTimerQuery(...);
+    b8 endTimerQueryFromExistingClaim(...);
+    void beginMarker(...);
+    void endMarker(...);
+    void abandonMarker(...);
+    void setEnableUavBarriersForTexture(...);
+    void setEnableUavBarriersForBuffer(...);
+    void beginTrackingTextureState(...);
+    void beginTrackingBufferState(...);
+    void seedBufferState(...);
+    ResourceStates getTextureSubresourceState(...);
+    ResourceStates getBufferState(...);
+    ResourceStates getPermanentTextureState(...)const;
+    ResourceStates getPermanentBufferState(...)const;
+    b8 hasExplicitTextureSubresourceState(...)const;
+    b8 hasExplicitBufferState(...)const;
+    mut Device getDevice(...);
+    mut CommandListParameters getDescription(...);
+    CommandListParameters getResolvedDescription(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::ComputePipeline"), cpp_layout(376, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class ComputePipeline{
+    mut ComputePipelineDesc getDescription(...)const;
+    u16 getDeviceGeneration(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Device"), cpp_layout(12776, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class Device{
+    Expected<HeapHandle> createHeap(...);
+    Expected<TextureHandle> createTexture(...);
+    Expected<MemoryRequirements> getTextureMemoryRequirements(...);
+    b8 bindTextureMemory(...);
+    b8 isTextureReadyForGpuUse(...)const;
+    Expected<StagingTextureHandle> createStagingTexture(...);
+    Expected<StagingTextureMapping> mapStagingTexture(...);
+    void unmapStagingTexture(...);
+    Expected<BufferHandle> createBuffer(...);
+    void unmapBuffer(...);
+    b8 readMappedBuffer(...);
+    Expected<MemoryRequirements> getBufferMemoryRequirements(...);
+    b8 bindBufferMemory(...);
+    b8 isBufferReadyForGpuUse(...)const;
+    Expected<ShaderHandle> createShader(...);
+    Expected<ShaderHandle> createShaderSpecialization(...);
+    Expected<ShaderLibraryHandle> createShaderLibrary(...);
+    Expected<SamplerHandle> createSampler(...);
+    Expected<InputLayoutHandle> createInputLayout(...);
+    Expected<EventQueryHandle> createEventQuery(...);
+    b8 setEventQuery(...);
+    Expected<b8> pollEventQuery(...);
+    b8 waitEventQuery(...);
+    Expected<TimerQueryHandle> createTimerQuery(...);
+    Expected<b8> pollTimerQuery(...);
+    Expected<TimerQueryResult> getTimerQueryResult(...);
+    Expected<f32> getTimerQueryTime(...);
+    b8 resetTimerQuery(...);
+    Expected<FramebufferHandle> createFramebuffer(...);
+    Expected<GraphicsPipelineHandle> createGraphicsPipeline(...);
+    Expected<ComputePipelineHandle> createComputePipeline(...);
+    Expected<MeshletPipelineHandle> createMeshletPipeline(...);
+    Expected<RayTracingPipelineHandle> createRayTracingPipeline(...);
+    Expected<BindingLayoutHandle> createBindingLayout(...);
+    Expected<BindingLayoutHandle> createBindlessLayout(...);
+    Expected<RayTracingOpacityMicromapHandle> createOpacityMicromap(...);
+    Expected<RayTracingAccelStructHandle> createAccelStruct(...);
+    Expected<MemoryRequirements> getAccelStructMemoryRequirements(...);
+    Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(...);
+    b8 bindAccelStructMemory(...);
+    b8 isAccelStructReadyForGpuUse(...)const;
+    Expected<CommandListHandle> createCommandList(...);
+    Expected<QueueSubmissionReceipt> executeCommandLists(...);
+    u16 getDeviceGeneration(...)const;
+    u16 getPhysicalQueueIndex(...)const;
+    GpuPhysicalQueueId getPrimaryPhysicalQueue(...)const;
+    GpuPhysicalQueueTopology getPhysicalQueueTopology(...)const;
+    b8 tryGetPhysicalQueueInfo(...)const;
+    Expected<GpuQueueTimelineSnapshot> getQueueTimelineSnapshot(...);
+    b8 supportsComparableGpuTimestamps(...)const;
+    GpuCommandArenaStatistics getCommandArenaStatistics(...)const;
+    GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(...)const;
+    b8 matchesPhysicalQueueIdentity(...)const;
+    b8 validateSubmissionWaitToken(...)const;
+    b8 waitForSubmissionToken(...);
+    b8 isDeviceLost(...)const;
+    b8 requiresRecreation(...)const;
+    void quarantineDevice(...);
+    u32 getQueueFamilyIndex(...)const;
+    b8 usesConcurrentQueueSharing(...)const;
+    b8 waitForIdle(...);
+    void runGarbageCollection(...);
+    b8 queryFeatureSupport(...)const;
+    WaveLaneCountRange getWaveLaneCounts(...)const;
+    u64 getMaxStorageBufferRange(...)const;
+    FormatSupport queryFormatSupport(...);
+    Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures(...);
+    Expected<usize> getCoopVecMatrixSize(...);
+    b8 isGpuCrashDiagnosticsEnabled(...)const;
+    b8 isAmdBreadcrumbEnabled(...)const;
+    mut GpuCrashTracker getGpuCrashTracker(...);
+    void captureDeviceLoss(...);
+    Expected<u64> queueGetCompletedInstance(...);
+    mut GpuDescriptorHeap getDescriptorHeap(...);
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::EventQuery"), cpp_layout(48, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class EventQuery;
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Framebuffer"), cpp_layout(464, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class Framebuffer{
+    mut FramebufferDesc getDescription(...)const;
+    mut FramebufferInfoEx getFramebufferInfo(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorHeap"), cpp_layout(1008, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class GpuDescriptorHeap{
+    PendingRecordingLease acquirePendingRecordingLease(...);
+    b8 initialize(...);
+    void shutdown(...);
+    b8 isInitialized(...)const;
+    GpuDescriptorHeapLifecycleStatistics lifecycleStatistics(...)const;
+    Expected<GpuDescriptorHandle> allocate(...);
+    void free(...);
+    void collectRetired(...);
+    b8 write(...);
+    void bindCompute(...);
+    void bindGraphics(...);
+    void bindRayTracing(...);
+    mut BindingLayoutHandle getResourceLayout(...)const;
+    mut BindingLayoutHandle getSamplerLayout(...)const;
+    mut BindingLayoutHandle getAccelStructLayout(...)const;
+    b8 hasAccelStructLayout(...)const;
+    u32 getRegisterSlot(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorHeap::PendingRecordingLease"), cpp_layout(16, 8), cpp_flags(no_copy, no_assign)]
+extern class PendingRecordingLease{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorRetirementGuard<::NWB::Core::GpuDescriptorHeap>"), cpp_layout(32, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuDescriptorRetirementGuard{
+    void release(...);
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GraphicsPipeline"), cpp_layout(608, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class GraphicsPipeline{
+    mut GraphicsPipelineDesc getDescription(...)const;
+    u16 getDeviceGeneration(...)const;
+    mut FramebufferInfo getFramebufferInfo(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Heap"), cpp_layout(464, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class Heap{
+    mut HeapDesc getDescription(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::InputLayout"), cpp_layout(152, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class InputLayout{
+    u32 getNumAttributes(...)const;
+    u32 getNumBindings(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::MeshletPipeline"), cpp_layout(544, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class MeshletPipeline{
+    mut MeshletPipelineDesc getDescription(...)const;
+    u16 getDeviceGeneration(...)const;
+    mut FramebufferInfo getFramebufferInfo(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingAccelStruct"), cpp_layout(472, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class RayTracingAccelStruct{
+    mut RayTracingAccelStructDesc getDescription(...)const;
+    ResourceQueueSharing getCreationQueueSharing(...)const;
+    b8 queueSharingMatchesCreation(...)const;
+    u16 getDeviceGeneration(...)const;
+    u64 getDeviceAddress(...)const;
+    mut BufferHandle getBackingBufferHandle(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromap"), cpp_layout(480, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class RayTracingOpacityMicromap{
+    mut RayTracingOpacityMicromapDesc getDescription(...)const;
+    u64 getDeviceAddress(...)const;
+    u32 getMaxOpacity2StateSubdivisionLevel(...)const;
+    u32 getMaxOpacity4StateSubdivisionLevel(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingPipeline"), cpp_layout(552, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class RayTracingPipeline{
+    mut RayTracingPipelineDesc getDescription(...)const;
+    u16 getDeviceGeneration(...)const;
+    b8 allowsClusterAccelerationStructures(...)const;
+    Expected<RayTracingShaderTableHandle> createShaderTable(...);
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingShaderTable"), cpp_layout(288, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class RayTracingShaderTable{
+    b8 setRayGenerationShader(...);
+    Expected<u32> addMissShader(...);
+    Expected<u32> addHitGroup(...);
+    Expected<u32> addCallableShader(...);
+    void clearMissShaders(...);
+    void clearHitShaders(...);
+    void clearCallableShaders(...);
+    mut RayTracingPipeline getPipeline(...);
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Sampler"), cpp_layout(72, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class RhiSampler{
+    mut SamplerDesc getDescription(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Shader"), cpp_layout(520, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class Shader{
+    mut ShaderDesc getDescription(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::ShaderLibrary"), cpp_layout(176, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class ShaderLibrary{
+    Expected<ShaderHandle> getShader(...);
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::StagingTexture"), cpp_layout(960, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class StagingTexture{
+    mut TextureDesc getDescription(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Texture"), cpp_layout(1184, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class RhiTexture{
+    mut TextureDesc getDescription(...)const;
+    mut TextureDesc getCreationDescription(...)const;
+    b8 descriptionMatchesCreation(...)const;
+    u16 getDeviceGeneration(...)const;
+    ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot(...)const;
+    ResourceStates resolveTaskGraphImportInitialState(...)const;
+};
+
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::TimerQuery"), cpp_layout(248, 8), cpp_flags(no_copy, no_assign, abstract)]
+extern class TimerQuery{
+    b8 discardUnacceptedRecording(...);
+    b8 releaseUnacceptedEndForRecovery(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

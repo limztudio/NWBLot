@@ -1,0 +1,177 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrBindGraphicsHeapRecord"), cpp_layout(24, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrBindGraphicsHeapRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u32 pipelineIndex;
+    u32 heapOwnerIndex;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrDecodedRecord"), cpp_layout(1032, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrDecodedRecord{
+    GpuCommandIrWireOpcode opcode;
+    GpuCommandIrBuiltinTaskRecord builtin;
+    GpuCommandIrRasterTaskRecord raster;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrDrawRecord"), cpp_layout(36, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrDrawRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u32 vertexCount;
+    u32 instanceCount;
+    u32 startIndexLocation;
+    u32 startVertexLocation;
+    u32 startInstanceLocation;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrEndRenderPassRecord"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuCommandIrEndRenderPassRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrOwnerAnchor"), cpp_layout(8, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GpuCommandIrOwnerAnchor{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterHeapOwner"), cpp_layout(48, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GpuCommandIrRasterHeapOwner{
+    GraphicsPipelineHandle pipeline;
+    GpuCommandIrOwnerAnchor lease;
+    GpuCommandIrOwnerAnchor descriptors;
+    usize recordIndex;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterOwnerTable"), cpp_layout(64, 8)]
+extern class GpuCommandIrRasterOwnerTable{
+    Vector<GpuCommandIrRasterStateOwner> stateOwners;
+    Vector<GpuCommandIrRasterHeapOwner> heapOwners;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterStateDesc"), cpp_layout(936, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GpuCommandIrRasterStateDesc{
+    GpuGraphPipelineId pipeline;
+    GraphicsPipelineHandle pipelineOwner;
+    GpuGraphResourceId colorAttachment;
+    FramebufferHandle framebufferOwner;
+    Viewport viewport;
+    Rect scissor;
+    Color blendConstantColor;
+    GpuGraphResourceId indexResource;
+    BufferHandle indexBuffer;
+    u32 indexOffset;
+    Format indexFormat;
+    b8 hasScissor;
+    u8 dynamicStencilRefValue;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterStateOwner"), cpp_layout(336, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GpuCommandIrRasterStateOwner{
+    GraphicsPipelineHandle pipeline;
+    FramebufferHandle framebuffer;
+    BufferHandle indexBuffer;
+    GpuGraphResourceId colorAttachment;
+    usize recordIndex;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterTaskRecord"), cpp_layout(720, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrRasterTaskRecord{
+    GpuTaskId task;
+    GpuSubmissionPacketId packet;
+    GpuGraphPipelineId pipeline;
+    GpuGraphResourceId colorAttachment;
+    GpuGraphResourceId indexResource;
+    Viewport viewport;
+    Rect scissor;
+    Color blendConstantColor;
+    DrawArguments drawArguments;
+    GpuPhysicalQueueId queue;
+    u64 blobOffsetBytes;
+    u64 blobSizeBytes;
+    u32 framebufferOwnerIndex;
+    u32 heapOwnerIndex;
+    u32 indexOffset;
+    Format indexFormat;
+    GpuCommandIrWireOpcode opcode;
+    b8 hasScissor;
+    u8 dynamicStencilRefValue;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterVertexBinding"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrRasterVertexBinding{
+    GpuGraphResourceId resource;
+    u32 slot;
+    u64 offset;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterVertexOwner"), cpp_layout(48, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GpuCommandIrRasterVertexOwner{
+    GpuGraphResourceId resource;
+    BufferHandle buffer;
+    u32 slot;
+    u64 offset;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterVertexWire"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuCommandIrRasterVertexWire{
+    u32 resourceIndex;
+    u32 slot;
+    u64 offset;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrSetGraphicsStateRecord"), cpp_layout(112, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrSetGraphicsStateRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u32 pipelineIndex;
+    u32 colorAttachmentIndex;
+    u32 framebufferOwnerIndex;
+    u32 indexResourceIndex;
+    u32 indexOffset;
+    u64 blobOffsetBytes;
+    u64 blobSizeBytes;
+    GpuCommandIrFloatColor blendConstantColor;
+    f32 viewportMinX;
+    f32 viewportMaxX;
+    f32 viewportMinY;
+    f32 viewportMaxY;
+    f32 viewportMinZ;
+    f32 viewportMaxZ;
+    GpuCommandIrRect scissor;
+    u8 vertexBindingCount;
+    u8 hasScissor;
+    u8 indexFormat;
+    u8 stencilRef;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrSetPushConstantsRecord"), cpp_layout(32, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandIrSetPushConstantsRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u64 blobOffsetBytes;
+    u64 blobSizeBytes;
+};
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::IGpuCommandIrRetainedOwner"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IGpuCommandIrRetainedOwner{
+    void release(...);
+    void retain(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::s_GpuCommandIrDrawRecordBytes")]
+extern const usize s_GpuCommandIrDrawRecordBytes;
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::s_GpuCommandIrGraphicsStateRecordBytes")]
+extern const usize s_GpuCommandIrGraphicsStateRecordBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

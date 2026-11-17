@@ -1,0 +1,69 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingAccumulator"), cpp_layout(136, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+extern class TimingAccumulator{
+    void clear(...);
+    TimingStats lastStats(...)const;
+    void publish(...);
+    void record(...);
+    void setEnabled(...);
+};
+
+[cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingRecorder"), cpp_layout(216, 8), cpp_flags(no_copy, no_assign)]
+extern class TimingRecorder{
+    void clear(...);
+    b8 enabled(...)const;
+    void publishFrame(...);
+    void recordSample(...);
+    Expected<TimingScopeId> registerScope(...);
+    TimingScopeId scopeAt(...)const;
+    usize scopeCount(...)const;
+    Name scopeNameAt(...)const;
+    void setEnabled(...);
+    TimingStats stats(...)const;
+    TimingStats statsAt(...)const;
+};
+
+[cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingScopeId"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TimingScopeId{
+    u32 index;
+    u32 generation;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingSink"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class TimingSink{
+    b8 enabled(...)const;
+    void publishFrame(...);
+    void recordSample(...);
+    Expected<TimingScopeId> registerScope(...);
+};
+
+[cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingStats"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TimingStats{
+    f64 seconds;
+    f64 minSeconds;
+    f64 maxSeconds;
+    f64 lastSeconds;
+    u64 publishFrameIndex;
+    u64 firstSampleFrameIndex;
+    u64 lastSampleFrameIndex;
+    u32 sampleCount;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingView"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TimingView{
+    TimingScopeId scopeAt(...)const;
+    usize scopeCount(...)const;
+    Name scopeNameAt(...)const;
+    TimingStats stats(...)const;
+    TimingStats statsAt(...)const;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

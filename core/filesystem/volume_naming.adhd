@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_naming.h>"), cpp_name("::NWB::Core::Filesystem::MakeVolumeSegmentPath")]
+extern Path MakeVolumeSegmentPath(in Path a0, in StringView a1, in isize a2);
+
+[cpp_header("<core/filesystem/volume_naming.h>"), cpp_name("::NWB::Core::Filesystem::VolumeSegmentExists")]
+extern Expected<b8, ErrorCode> VolumeSegmentExists(in Path a0, in StringView a1, in isize a2 = {});
+
+[cpp_header("<core/filesystem/volume_naming.h>"), cpp_name("::NWB::Core::Filesystem::HashVolumeSegmentFileName")]
+extern u64 HashVolumeSegmentFileName(in StringView a0, in isize a1);
+
+[cpp_header("<core/filesystem/volume_naming.h>"), cpp_name("::NWB::Core::Filesystem::MakeVolumeSegmentFileName")]
+extern CompactString MakeVolumeSegmentFileName(in StringView a0, in isize a1);
+
+[cpp_header("<core/filesystem/volume_naming.h>"), cpp_name("::NWB::Core::Filesystem::ValidVolumeName")]
+extern b8 ValidVolumeName(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_naming.h>"), cpp_name("::NWB::Core::Filesystem::s_VolumeSegmentExtension")]
+extern const StringView s_VolumeSegmentExtension;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

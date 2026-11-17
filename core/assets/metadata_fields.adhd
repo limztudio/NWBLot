@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::MetadataStringField"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class MetadataStringField{
+    StringView text;
+    b8 present;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::CheckPairedSourceExtension")]
+extern b8 CheckPairedSourceExtension(in Path a0, in StringView a1, in StringView a2, in StringView a3, mut auto a4);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::CheckMetadataAssetMap")]
+extern b8 CheckMetadataAssetMap(in Path a0, in auto a1, in StringView a2);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::VisitMetadataAssetMap")]
+extern b8 VisitMetadataAssetMap(in Path a0, in auto a1, in StringView a2, in auto a3);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ValidateMetadataAssetFields")]
+extern b8 ValidateMetadataAssetFields(in Path a0, in auto a1, in StringView a2, in auto a3 = {});
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::AssignCookEntryVirtualPath")]
+extern b8 AssignCookEntryVirtualPath(in Name a0, in Path a1, in StringView a2, mut auto a3);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ReadMetadataStringField")]
+extern Expected<MetadataStringField> ReadMetadataStringField(in Path a0, in auto a1, in StringView a2, in StringView a3, in b8 a4);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ReadMetadataNameField")]
+extern Expected<Name> ReadMetadataNameField(in Path a0, in auto a1, in StringView a2, in StringView a3, in b8 a4);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ReadMetadataAssetRefField")]
+extern Expected<AssetRef<T>> ReadMetadataAssetRefField<T>(in Path a0, in auto a1, in StringView a2, in StringView a3, in b8 a4);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ReadMetadataFiniteF32Value")]
+extern Expected<f32> ReadMetadataFiniteF32Value(in Path a0, in auto a1, in StringView a2, in StringView a3);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ReadMetadataFiniteF32Field")]
+extern Expected<f32> ReadMetadataFiniteF32Field(in Path a0, in auto a1, in StringView a2, in StringView a3, in b8 a4);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ReadMetadataListField")]
+extern Expected<Span<MetascriptValue>> ReadMetadataListField(in Path a0, in auto a1, in StringView a2, in StringView a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

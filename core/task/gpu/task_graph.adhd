@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/task_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraph"), cpp_layout(1744, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuTaskGraph{
+    Expected<GpuTaskId> addClearBufferTask(...);
+    Expected<GpuTaskId> addClearTextureRectUIntTask(...);
+    Expected<GpuTaskId> addClearTextureTask(...);
+    Expected<GpuTaskId> addCopyBufferTask(...);
+    Expected<GpuTaskId> addCopyTextureTask(...);
+    Expected<GpuTaskId> addResolveTextureTask(...);
+    Expected<GpuTaskId> addTask(...);
+    Expected<GpuTaskId> addUploadBufferTask(...);
+    Expected<GpuTaskId> addUploadTextureTask(...);
+    b8 declarePresentEndpoint(...);
+    Expected<GpuGraphResourceVersionId> declareResourceVersion(...);
+    Expected<GpuGraphResourceId> importAccelStruct(...);
+    Expected<GpuGraphResourceId> importBuffer(...);
+    Expected<GpuGraphPipelineId> importComputePipeline(...);
+    Expected<GpuExternalCompletionId> importExternalCompletion(...);
+    Expected<GpuGraphPipelineId> importGraphicsPipeline(...);
+    Expected<GpuGraphResourceId> importHazardDomain(...);
+    Expected<GpuGraphPipelineId> importPipeline(...);
+    Expected<GpuGraphResourceId> importResource(...);
+    Expected<GpuGraphResourceSetId> importResourceSet(...);
+    Expected<GpuGraphResourceId> importTexture(...);
+    void reset(...);
+    b8 setNormalExecutionPrelude(...);
+    b8 tryReset(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

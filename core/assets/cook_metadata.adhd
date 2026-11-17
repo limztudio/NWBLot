@@ -1,0 +1,120 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetBunchExpandFailure::Enum")]
+extern enum AssetBunchExpandFailure : u8{
+    Unsupported,
+    Error
+};
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetMetadataParseResult::Enum")]
+extern enum AssetMetadataParseResult : u8{
+    Unsupported,
+    Parsed,
+    Error
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetBunchExpandContext"), cpp_layout(48, 8), cpp_flags(no_assign)]
+extern class AssetBunchExpandContext{
+    Path assetRoot;
+    StringView virtualRoot;
+    Path nwbFilePath;
+    MetascriptDocument doc;
+    ScratchArena scratchArena;
+};
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetDocumentMetadataParseContext"), cpp_layout(360, 8), cpp_flags(no_assign)]
+extern class AssetDocumentMetadataParseContext{
+    GlobalArena cookArena;
+    DiscoveredNwbFile discoveredNwbFile;
+    Name assetType;
+    MetascriptDocument doc;
+    ParsedAssetMetadata parsedMetadata;
+    ScratchArena scratchArena;
+};
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetPairedSidecarRule"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, borrow_view, brace_init)]
+extern class AssetPairedSidecarRule{
+    StringView sidecarExtension;
+};
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetValueMetadataParseContext"), cpp_layout(680, 8), cpp_flags(no_assign)]
+extern class AssetValueMetadataParseContext{
+    GlobalArena cookArena;
+    DiscoveredNwbFile discoveredNwbFile;
+    Name assetType;
+    Name virtualPath;
+    MetascriptValue value;
+    ParsedAssetMetadata parsedMetadata;
+    ScratchArena scratchArena;
+};
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParsedAssetMetadata"), cpp_layout(304, 8), cpp_flags(no_assign)]
+extern class ParsedAssetMetadata{
+    GlobalArena arena;
+    CookEntryRegistry entryRegistry;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ReadOptionalMetadataBoolField")]
+extern b8 ReadOptionalMetadataBoolField(in Path a0, in auto a1, in StringView a2, in StringView a3, mut auto a4);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ReadOptionalFiniteF32Field")]
+extern b8 ReadOptionalFiniteF32Field(in Path a0, in auto a1, in StringView a2, in StringView a3, mut auto a4);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ReadOptionalI32Field")]
+extern b8 ReadOptionalI32Field(in Path a0, in auto a1, in StringView a2, in StringView a3, mut auto a4);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseMetadataBoolField")]
+extern Expected<b8> ParseMetadataBoolField(in Path a0, in StringView a1, in auto a2, in StringView a3, in StringView a4 = {});
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedDocumentMetadataParsers")]
+extern AssetMetadataParseResult TryAutoCollectedDocumentMetadataParsers(mut auto a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedValueMetadataParsers")]
+extern AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(mut auto a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedAssetBunchExpanders")]
+extern Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure> TryAutoCollectedAssetBunchExpanders(in auto a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseAssetMetadata")]
+extern b8 ParseAssetMetadata(in auto a0, in Path a1, in Path a2, mut auto a3, mut auto a4, mut auto a5, mut auto a6);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterCompositeRootAssetType")]
+extern void RegisterCompositeRootAssetType(in Name a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::IsCompositeRootAssetType")]
+extern b8 IsCompositeRootAssetType(in Name a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneAssetType")]
+extern void RegisterNonStandaloneAssetType(in Name a0, in StringView a1 = {});
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneFirstTokenSuffix")]
+extern void RegisterNonStandaloneFirstTokenSuffix(in StringView a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::IsNonStandaloneAssetType")]
+extern b8 IsNonStandaloneAssetType(in Name a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::IsLikelyNonStandaloneFirstToken")]
+extern b8 IsLikelyNonStandaloneFirstToken(in StringView a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterAssetPairedSidecarRule")]
+extern void RegisterAssetPairedSidecarRule(in auto a0);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AddPlannedFileCount")]
+extern b8 AddPlannedFileCount(in u64 a0, mut u64 a1);
+
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseCookMetadataDocument")]
+extern Expected<T> ParseCookMetadataDocument<T>(in Path a0, in StringView a1, in Path a2, in auto a3, in StringView a4, in auto a5, mut auto a6);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

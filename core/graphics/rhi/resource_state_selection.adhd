@@ -1,0 +1,15 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/resource_state_selection.h>"), cpp_name("::NWB::Core::CommandListResourceSelection"), cpp_layout(1072, 8), cpp_flags(no_copy, no_assign)]
+extern class CommandListResourceSelection{
+    usize bufferCount(...)const;
+    usize size(...)const;
+    usize textureCount(...)const;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

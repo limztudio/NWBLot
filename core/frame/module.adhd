@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/frame/module.h>"), cpp_name("::NWB::Core::Frame"), cpp_layout(4840, 8), cpp_flags(no_copy, no_assign)]
+extern class Frame{
+    void cleanup(...);
+    mut IClipboardService clipboard(...);
+    mut CpuTaskScheduler cpuTasks(...);
+    b8 flushTelemetryUpload(...);
+    mut FrameGraphRegistry frameGraphRegistry(...)const;
+    mut GpuTaskScheduler gpuTasks(...);
+    mut GraphicsRuntime graphics(...)const;
+    b8 init(...);
+    mut InputDispatcher input(...)const;
+    b8 mainLoop(...);
+    mut Session perfSession(...)const;
+    mut GlobalArena projectObjectArena(...)const;
+    b8 quitRequested(...)const;
+    void requestQuit(...);
+    void setPerfCapture(...);
+    void setTelemetryCapture(...);
+    b8 showFrame(...);
+    b8 startup(...);
+    mut ITextInputService textInput(...);
+    b8 update(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,102 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorClass::Enum")]
+extern enum GpuDescriptorClass : u8{
+    SampledImage,
+    StorageImage,
+    SampledBuffer,
+    StorageBuffer,
+    UniformBuffer,
+    AccelStruct,
+    Sampler,
+    SampledImage2DArray,
+    SampledImage3D,
+    SampledImage2DArrayUint,
+    SampledImageCube,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle"), cpp_layout(4, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class GpuDescriptorHandle{
+    u32 value;
+    GpuDescriptorClass descriptorClass(...)const;
+    u32 slot(...)const;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapAbi"), cpp_layout(56, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuDescriptorHeapAbi{
+    u32 resourceSetIndex;
+    u32 samplerSetIndex;
+    u32 accelStructSetIndex;
+    u32 sampledImageBinding;
+    u32 storageImageBinding;
+    u32 sampledBufferBinding;
+    u32 storageBufferBinding;
+    u32 uniformBufferBinding;
+    u32 sampledImage2DArrayBinding;
+    u32 sampledImage3DBinding;
+    u32 sampledImage2DArrayUintBinding;
+    u32 sampledImageCubeBinding;
+    u32 samplerBinding;
+    u32 accelStructBinding;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapDesc"), cpp_layout(64, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuDescriptorHeapDesc{
+    u32 resourceCapacity;
+    u32 samplerCapacity;
+    GpuDescriptorHeapAbi bindlessHeapAbi;
+    GpuDescriptorHeapDesc setBindlessHeapAbi(...);
+};
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHeapLifecycleStatistics"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuDescriptorHeapLifecycleStatistics{
+    b8 initialized;
+    u32 resourceCapacity;
+    u32 samplerCapacity;
+    u32 accelStructCapacity;
+    usize resourceLiveSlotCount;
+    usize samplerLiveSlotCount;
+    usize accelStructLiveSlotCount;
+    usize pendingRetiredSlotCount;
+    usize acceptedHeapUseCount;
+    usize unsubmittedHeapUseCount;
+    usize abandonedHeapUseCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle::Invalid")]
+extern GpuDescriptorHandle GpuDescriptorHandleInvalid();
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle::Make")]
+extern GpuDescriptorHandle GpuDescriptorHandleMake(in auto a0, in isize a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle::s_ClassShift")]
+extern const u32 s_ClassShift;
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorClass::s_GpuDescriptorClassSampledImageBase")]
+extern const u8 s_GpuDescriptorClassSampledImageBase;
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::s_GpuDescriptorHandleByteSize")]
+extern const usize s_GpuDescriptorHandleByteSize;
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle::s_Invalid")]
+extern const u32 s_Invalid;
+[cpp_header("<core/graphics/rhi/gpu_descriptor_heap.h>"), cpp_name("::NWB::Core::GpuDescriptorHandle::s_SlotMask")]
+extern const u32 s_SlotMask;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

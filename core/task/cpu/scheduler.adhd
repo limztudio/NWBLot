@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScheduler"), cpp_layout(1120, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+extern class CpuTaskScheduler{
+    CpuAffinity currentWorkerAffinity(...)const;
+    usize currentWorkerIndex(...)const;
+    u64 domainIdentity(...)const;
+    void drain(...);
+    b8 isParallelEnabled(...)const;
+    void pumpMainThread(...);
+    CpuTaskProfileLabel registerProfileLabel(...);
+    void setProfiling(...);
+    CpuTaskSchedulerStatistics statistics(...)const;
+    void wait(...);
+    u32 workerThreadCount(...)const;
+};
+
+[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScope"), cpp_layout(40, 8), cpp_flags(no_copy, no_assign)]
+extern class CpuTaskScope{
+    void cancel(...);
+    void drain(...);
+    mut CpuTaskScheduler scheduler(...)const;
+    void wait(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

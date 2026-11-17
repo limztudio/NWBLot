@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class NameSymbolSidecars;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars::DefaultPath"), cpp_flags(scratch_arena)]
+extern Expected<Path> NameSymbolSidecarsDefaultPath();
+
+[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars::LoadDefault")]
+extern Expected<b8, DefaultFileLoadFailure> NameSymbolSidecarsLoadDefault();
+
+[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars::Write")]
+extern b8 NameSymbolSidecarsWrite(in Path a0, in StringView a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

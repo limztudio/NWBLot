@@ -1,0 +1,107 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::Enum")]
+extern enum ShaderType : u8{
+    VertexStage,
+    HullStage,
+    DomainStage,
+    GeometryStage,
+    PixelStage,
+    ComputeStage,
+    AmplificationStage,
+    MeshStage,
+    RayGenerationStage,
+    AnyHitStage,
+    ClosestHitStage,
+    MissStage,
+    IntersectionStage,
+    CallableStage,
+    Count,
+    Invalid
+};
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::Mask")]
+extern flag ShaderTypeMask : u16{
+    None,
+    Compute,
+    Vertex,
+    Hull,
+    Domain,
+    Geometry,
+    Pixel,
+    Amplification,
+    Mesh,
+    AllGraphics,
+    RayGeneration,
+    AnyHit,
+    ClosestHit,
+    Miss,
+    Intersection,
+    Callable,
+    AllRayTracing,
+    All
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderDesc"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class ShaderDesc{
+    Name debugName;
+    StringView entryName;
+    ShaderTypeMask shaderType;
+    ShaderDesc setDebugName(...);
+    ShaderDesc setEntryName(...);
+    ShaderDesc setShaderType(...);
+};
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class ShaderHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut Shader deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderLibraryHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class ShaderLibraryHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut ShaderLibrary deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderSpecialization"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class ShaderSpecialization{
+    u32 constantID;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::IsValid")]
+extern b8 IsShaderTypeValid(in auto a0);
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::ToEnum")]
+extern ShaderType ToEnum(in auto a0);
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::ToIndex")]
+extern usize ToIndex(in auto a0);
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::ToMask")]
+extern ShaderTypeMask ToMask(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderDesc::s_DefaultEntryName")]
+extern const StringView s_DefaultEntryName;
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderType::s_ShaderTypeVertexStageBase")]
+extern const u8 s_ShaderTypeVertexStageBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

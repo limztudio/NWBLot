@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileSeekOrigin::Enum")]
+extern enum FileSeekOrigin : u8{
+    Begin,
+    Current,
+    End
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileCursor"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FileCursor{
+    Name virtualPath;
+    u64 offset;
+};
+
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::IFilesystem"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IFilesystem{
+    void closeFile(...)const;
+    u64 fileCount(...)const;
+    b8 fileExists(...)const;
+    Expected<u64> fileSize(...)const;
+    b8 flush(...);
+    b8 mount(...);
+    b8 mounted(...)const;
+    Expected<FileCursor> openFile(...)const;
+    b8 removeFile(...);
+    void reserveFileCapacity(...);
+    b8 seekFile(...)const;
+    b8 unmount(...);
+    b8 writable(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::s_ByteElementSize")]
+extern const usize s_ByteElementSize;
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileSeekOrigin::s_FileSeekOriginBeginBase")]
+extern const u8 s_FileSeekOriginBeginBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

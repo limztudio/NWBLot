@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_AutoCodecFactoryQueueArena")]
+extern const Name s_AutoCodecFactoryQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_AutoRegistrationQueueArena")]
+extern const Name s_AutoRegistrationQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_BunchExpanderQueueArena")]
+extern const Name s_BunchExpanderQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_CompositeRootTypeQueueArena")]
+extern const Name s_CompositeRootTypeQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_CookDependencyQueueArena")]
+extern const Name s_CookDependencyQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_GatherMergeQueueArena")]
+extern const Name s_GatherMergeQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_MetadataParserQueueArena")]
+extern const Name s_MetadataParserQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_MetadataRegistrationTextArena")]
+extern const Name s_MetadataRegistrationTextArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_NonStandaloneTokenQueueArena")]
+extern const Name s_NonStandaloneTokenQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_NonStandaloneTokenSuffixQueueArena")]
+extern const Name s_NonStandaloneTokenSuffixQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_NonStandaloneTypeQueueArena")]
+extern const Name s_NonStandaloneTypeQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_PairedSidecarRuleQueueArena")]
+extern const Name s_PairedSidecarRuleQueueArena;
+[cpp_header("<core/assets/arena_names.h>"), cpp_name("::NWB::Core::Assets::AssetsArenaScope::s_RegisterCodecsScratch")]
+extern const Name s_RegisterCodecsScratch;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

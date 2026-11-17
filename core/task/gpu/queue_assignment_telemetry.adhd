@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentAcceptance::Enum")]
+extern enum GpuTaskQueueAssignmentAcceptance : u8{
+    NotAccepted,
+    First,
+    Unchanged,
+    Changed,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentTelemetryTracker"), cpp_layout(168, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuTaskGraphQueueAssignmentTelemetryTracker{
+    void reset(...);
+};
+
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentTelemetry"), cpp_layout(64, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskQueueAssignmentTelemetry{
+    GpuTaskQueueAssignment assignment;
+    GpuPhysicalQueueId acceptedQueue;
+    GpuPhysicalQueueId previousAcceptedQueue;
+    GpuTaskQueueAssignmentAcceptance acceptance;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

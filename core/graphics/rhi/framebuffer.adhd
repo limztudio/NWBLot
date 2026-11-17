@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferAttachment"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FramebufferAttachment{
+    TextureSubresourceSet subresources;
+    Format format;
+    b8 isReadOnly;
+    FramebufferAttachment setArraySlice(...);
+    FramebufferAttachment setFormat(...);
+    FramebufferAttachment setIsReadOnly(...);
+    FramebufferAttachment setMipLevel(...);
+    FramebufferAttachment setSubresources(...);
+    b8 valid(...)const;
+    FramebufferAttachment setTexture(...);
+};
+
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferDesc"), cpp_layout(328, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+extern class FramebufferDesc{
+    FramebufferAttachment depthAttachment;
+    FramebufferAttachment shadingRateAttachment;
+    FixedVector<FramebufferAttachment, 8> colorAttachments;
+    FramebufferDesc addColorAttachment(...);
+    FramebufferDesc setDepthAttachment(...);
+};
+
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class FramebufferHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut Framebuffer deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferInfo"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch, map_key)]
+extern class FramebufferInfo{
+    u32 sampleCount;
+    u32 sampleQuality;
+    Format depthFormat;
+    FixedVector<Format, 8> colorFormats;
+    FramebufferInfo addColorFormat(...);
+    FramebufferInfo setDepthFormat(...);
+};
+
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferInfoEx"), cpp_layout(48, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+extern class FramebufferInfoEx{
+    u32 width;
+    u32 height;
+    u32 arraySize;
+    FixedVector<Format, 8> colorFormats;
+    u32 sampleCount;
+    u32 sampleQuality;
+    Format depthFormat;
+    Viewport getViewport(...)const;
+    FramebufferInfoEx setArraySize(...);
+    FramebufferInfoEx setHeight(...);
+    FramebufferInfoEx setWidth(...);
+    FramebufferInfo addColorFormat(...);
+    FramebufferInfo setDepthFormat(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

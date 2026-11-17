@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/profiling.h>"), cpp_name("::NWB::Core::CpuTaskProfileKind::Enum")]
+extern enum CpuTaskProfileKind : u8{
+    QueueDelay,
+    Execution,
+    HandleJoin,
+    ScopeJoin,
+    SchedulerJoin,
+    WorkerIdle
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/profiling.h>"), cpp_name("::NWB::Core::CpuTaskProfileEvent"), cpp_layout(120, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CpuTaskProfileEvent{
+    CpuTaskHandle task;
+    Name label;
+    u64 durationNanoseconds;
+    u64 frameIndex;
+    u64 captureEpoch;
+    usize workerIndex;
+    CpuTaskProfileKind kind;
+    CpuAffinity affinity;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

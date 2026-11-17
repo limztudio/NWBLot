@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::PosixSignalName")]
+extern StringView PosixSignalName(in isize a0);
+
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::WindowsExceptionName")]
+extern StringView WindowsExceptionName(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_AndroidPlatformName")]
+extern const StringView s_AndroidPlatformName;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_GpuCrashReasonKind")]
+extern const StringView s_GpuCrashReasonKind;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_LinuxPlatformName")]
+extern const StringView s_LinuxPlatformName;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_ManualDumpReasonKind")]
+extern const StringView s_ManualDumpReasonKind;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_SignalReasonKind")]
+extern const StringView s_SignalReasonKind;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_TerminateReasonKind")]
+extern const StringView s_TerminateReasonKind;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_UnknownPlatformName")]
+extern const StringView s_UnknownPlatformName;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_UnknownReasonKind")]
+extern const StringView s_UnknownReasonKind;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionAccessViolationCode")]
+extern const u32 s_WindowsExceptionAccessViolationCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionArrayBoundsExceededCode")]
+extern const u32 s_WindowsExceptionArrayBoundsExceededCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionBreakpointCode")]
+extern const u32 s_WindowsExceptionBreakpointCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatDenormalOperandCode")]
+extern const u32 s_WindowsExceptionFloatDenormalOperandCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatDivideByZeroCode")]
+extern const u32 s_WindowsExceptionFloatDivideByZeroCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatInexactResultCode")]
+extern const u32 s_WindowsExceptionFloatInexactResultCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatInvalidOperationCode")]
+extern const u32 s_WindowsExceptionFloatInvalidOperationCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatOverflowCode")]
+extern const u32 s_WindowsExceptionFloatOverflowCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatStackCheckCode")]
+extern const u32 s_WindowsExceptionFloatStackCheckCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionFloatUnderflowCode")]
+extern const u32 s_WindowsExceptionFloatUnderflowCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionIllegalInstructionCode")]
+extern const u32 s_WindowsExceptionIllegalInstructionCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionIntegerDivideByZeroCode")]
+extern const u32 s_WindowsExceptionIntegerDivideByZeroCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionIntegerOverflowCode")]
+extern const u32 s_WindowsExceptionIntegerOverflowCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionReasonKind")]
+extern const StringView s_WindowsExceptionReasonKind;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsExceptionStackOverflowCode")]
+extern const u32 s_WindowsExceptionStackOverflowCode;
+[cpp_header("<core/crash/reason_names.h>"), cpp_name("::NWB::Core::Crash::s_WindowsPlatformName")]
+extern const StringView s_WindowsPlatformName;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

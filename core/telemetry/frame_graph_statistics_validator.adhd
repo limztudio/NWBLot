@@ -1,0 +1,58 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsAccumulator"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPacketSubmissionStatisticsAccumulator{
+    u64 nativeSubmissionCount;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    u64 acceptedFrontierSubmissionCount;
+    u64 recoverySubmissionCount;
+    f64 submissionSeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsAccumulator"), cpp_layout(320, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
+    FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
+    FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
+    FrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
+    u64 barrierCount;
+};
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class FrameGraphStatisticsValidator;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::AccumulatePacketSubmissionStatistics")]
+extern b8 FrameGraphStatisticsValidatorAccumulatePacketSubmissionStatistics(in auto a0, in auto a1, mut auto a2);
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::AccumulatePhysicalQueueRuntimeStatistics")]
+extern b8 FrameGraphStatisticsValidatorAccumulatePhysicalQueueRuntimeStatistics(in auto a0, in auto a1, mut auto a2);
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::PacketSubmissionDurationSumsMatch")]
+extern b8 FrameGraphStatisticsValidatorPacketSubmissionDurationSumsMatch(in auto a0, in auto a1, in isize a2);
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::PacketSubmissionStatisticsRecordLess")]
+extern b8 FrameGraphStatisticsValidatorPacketSubmissionStatisticsRecordLess(in auto a0, in auto a1);
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::PhysicalQueueRuntimeStatisticsRecordLess")]
+extern b8 FrameGraphStatisticsValidatorPhysicalQueueRuntimeStatisticsRecordLess(in auto a0, in auto a1);
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::ValidatePacketSubmissionStatisticsOwner")]
+extern b8 FrameGraphStatisticsValidatorValidatePacketSubmissionStatisticsOwner(in auto a0, in auto a1);
+
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator::ValidatePhysicalQueueRuntimeStatisticsOwner")]
+extern b8 FrameGraphStatisticsValidatorValidatePhysicalQueueRuntimeStatisticsOwner(in auto a0, in isize a1, in auto a2, in auto a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

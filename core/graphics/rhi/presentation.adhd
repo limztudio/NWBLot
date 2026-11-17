@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::BeginFrameStatus::Enum")]
+extern enum BeginFrameStatus : u8{
+    Acquired,
+    ResizeRequired,
+    Failed,
+    Count
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationReceiptStatus::Enum")]
+extern enum PresentationReceiptStatus : u8{
+    Pending,
+    Accepted,
+    Rejected
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::SwapChainTransitionKind::Enum")]
+extern enum SwapChainTransitionKind : u8{
+    Resize,
+    Destroy,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::AcquiredBackBuffer"), cpp_layout(40, 8), cpp_flags(self_defaulted, brace_init)]
+extern class AcquiredBackBuffer{
+    TextureHandle texture;
+    QueueSubmissionToken availabilityCompletion;
+    ResourceStates nativeInitialState;
+    u32 index;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::AcquiredPresentationFrame"), cpp_layout(56, 8), cpp_flags(self_defaulted, brace_init)]
+extern class AcquiredPresentationFrame{
+    AcquiredBackBuffer backBuffer;
+    FramebufferHandle framebuffer;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::BeginFrameResult"), cpp_layout(56, 8), cpp_flags(self_defaulted, brace_init)]
+extern class BeginFrameResult{
+    AcquiredBackBuffer backBuffer;
+    u32 suggestedWidth;
+    u32 suggestedHeight;
+    BeginFrameStatus status;
+    b8 acquired(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationFailure"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class PresentationFailure{
+    b8 presentationAccepted;
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationReceipt"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class PresentationReceipt{
+    QueueSubmissionToken availabilityCompletion;
+    ResourceStates nativeInitialState;
+    u32 index;
+    b8 accepted;
+    void record(...);
+    void reset(...);
+    PresentationReceiptStatus status(...)const;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::SwapChainTransitionTicket"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class SwapChainTransitionTicket{
+    u64 epoch;
+    SwapChainTransitionKind kind;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

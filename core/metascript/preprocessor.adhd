@@ -1,0 +1,38 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor"), cpp_layout(328, 8), cpp_flags(no_assign)]
+extern class MetascriptPreprocessor{
+    void defineObjectMacro(...);
+    Span<String> includedFiles(...)const;
+    b8 isOffsetInIncludedRange(...)const;
+    b8 process(...);
+    Span<String> resolvedIncludedFiles(...)const;
+    void undefineMacro(...);
+};
+
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorMacro"), cpp_layout(120, 8)]
+extern class MetascriptPreprocessorMacro{
+    String name;
+    String body;
+    b8 isFunctionLike;
+    b8 isVariadic;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor::AppendPreprocessorNumber")]
+extern usize MetascriptPreprocessorAppendPreprocessorNumber(in StringView a0, in isize a1, in b8 a2, mut String a3);
+
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor::FindRawStringClosing")]
+extern b8 MetascriptPreprocessorFindRawStringClosing(in StringView a0, in isize a1, in StringView a2, mut usize a3);
+
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor::TryParseRawStringOpening")]
+extern b8 MetascriptPreprocessorTryParseRawStringOpening(in StringView a0, in isize a1, mut auto a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::DefaultFileLoadFailure"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class DefaultFileLoadFailure{
+    ErrorCode code;
+    b8 loadedAny;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::ClearRuntimeSymbols")]
+extern void ClearRuntimeSymbols();
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::EntryCount")]
+extern usize EntryCount();
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::InstallRuntimeRegistry")]
+extern void InstallRuntimeRegistry();
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::LoadDefaultFile")]
+extern Expected<b8, DefaultFileLoadFailure> LoadDefaultFile();
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::LoadFromMemory")]
+extern b8 LoadFromMemory(in StringView a0, mut auto a1);
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::Serialize")]
+extern Expected<void> Serialize(mut String a0);
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::UninstallRuntimeRegistry")]
+extern void UninstallRuntimeRegistry();
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::WriteDefaultFile")]
+extern b8 WriteDefaultFile();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::s_FileHeader")]
+extern const StringView s_FileHeader;
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::s_MaxResolvedTextLength")]
+extern const usize s_MaxResolvedTextLength;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

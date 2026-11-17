@@ -1,0 +1,182 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindlessLayoutType::Enum")]
+extern enum BindlessLayoutType : u8{
+    Immutable,
+    MutableSrvUavCbv,
+    MutableSampler
+};
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::ResourceType::Enum")]
+extern enum ResourceType : u8{
+    None,
+    Texture_SRV,
+    Texture_UAV,
+    TypedBuffer_SRV,
+    TypedBuffer_UAV,
+    StructuredBuffer_SRV,
+    StructuredBuffer_UAV,
+    RawBuffer_SRV,
+    RawBuffer_UAV,
+    ConstantBuffer,
+    VolatileConstantBuffer,
+    Sampler,
+    RayTracingAccelStruct,
+    PushConstants,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutDesc"), cpp_layout(40, 8)]
+extern class BindingLayoutDesc{
+    Vector<BindingLayoutItem> bindings;
+    ShaderTypeMask visibility;
+    BindingLayoutDesc addItem(...);
+    BindingLayoutDesc setVisibility(...);
+};
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class BindingLayoutHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut BindingLayout deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class BindingLayoutItem{
+    u32 slot;
+    ResourceType type;
+    u8 reserved;
+    u16 size;
+    BindingLayoutItem setSize(...);
+    BindingLayoutItem setSlot(...);
+    BindingLayoutItem setType(...);
+};
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindlessLayoutDesc"), cpp_layout(152, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class BindlessLayoutDesc{
+    u32 maxCapacity;
+    u32 descriptorSetIndex;
+    ShaderTypeMask visibility;
+    BindlessLayoutType layoutType;
+    BindlessLayoutDesc addRegisterSpace(...);
+    BindlessLayoutDesc setDescriptorSetIndex(...);
+    BindlessLayoutDesc setLayoutType(...);
+    BindlessLayoutDesc setMaxCapacity(...);
+    BindlessLayoutDesc setVisibility(...);
+};
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch, map_key)]
+extern class DescriptorWriteItem{
+    u32 slot;
+    u32 arrayElement;
+    ResourceType type;
+    Format format;
+    u8 reserved;
+    DescriptorWriteItem setFormat(...);
+    DescriptorWriteItem setRange(...);
+    DescriptorWriteItem setSubresources(...);
+    DescriptorWriteItem setDimension(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::ConstantBuffer")]
+extern BindingLayoutItem BindingLayoutItemConstantBuffer(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::PushConstants")]
+extern BindingLayoutItem BindingLayoutItemPushConstants(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::RawBufferSrv")]
+extern BindingLayoutItem BindingLayoutItemRawBufferSrv(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::RawBufferUav")]
+extern BindingLayoutItem BindingLayoutItemRawBufferUav(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::RayTracingAccelStruct")]
+extern BindingLayoutItem BindingLayoutItemRayTracingAccelStruct(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::Sampler")]
+extern BindingLayoutItem BindingLayoutItemSampler(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::StructuredBufferSrv")]
+extern BindingLayoutItem BindingLayoutItemStructuredBufferSrv(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::StructuredBufferUav")]
+extern BindingLayoutItem BindingLayoutItemStructuredBufferUav(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::TextureSrv")]
+extern BindingLayoutItem BindingLayoutItemTextureSrv(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::TextureUav")]
+extern BindingLayoutItem BindingLayoutItemTextureUav(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::TypedBufferSrv")]
+extern BindingLayoutItem BindingLayoutItemTypedBufferSrv(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::TypedBufferUav")]
+extern BindingLayoutItem BindingLayoutItemTypedBufferUav(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::VolatileConstantBuffer")]
+extern BindingLayoutItem BindingLayoutItemVolatileConstantBuffer(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::None")]
+extern DescriptorWriteItem DescriptorWriteItemNone(in auto a0 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::PushConstants")]
+extern DescriptorWriteItem DescriptorWriteItemPushConstants(in isize a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::TextureSrv")]
+extern DescriptorWriteItem DescriptorWriteItemTextureSrv(in isize a0, mut auto a1, in auto a2 = {}, in auto a3 = {}, in auto a4 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::TextureUav")]
+extern DescriptorWriteItem DescriptorWriteItemTextureUav(in isize a0, mut auto a1, in auto a2 = {}, in auto a3 = {}, in auto a4 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::TypedBufferSrv")]
+extern DescriptorWriteItem DescriptorWriteItemTypedBufferSrv(in isize a0, mut auto a1, in auto a2 = {}, in auto a3 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::TypedBufferUav")]
+extern DescriptorWriteItem DescriptorWriteItemTypedBufferUav(in isize a0, mut auto a1, in auto a2 = {}, in auto a3 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::ConstantBuffer")]
+extern DescriptorWriteItem DescriptorWriteItemConstantBuffer(in isize a0, mut auto a1, in auto a2 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::Sampler")]
+extern DescriptorWriteItem DescriptorWriteItemSampler(in isize a0, mut auto a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::RayTracingAccelStruct")]
+extern DescriptorWriteItem DescriptorWriteItemRayTracingAccelStruct(in isize a0, mut auto a1);
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::StructuredBufferSrv")]
+extern DescriptorWriteItem DescriptorWriteItemStructuredBufferSrv(in isize a0, mut auto a1, in auto a2 = {}, in auto a3 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::StructuredBufferUav")]
+extern DescriptorWriteItem DescriptorWriteItemStructuredBufferUav(in isize a0, mut auto a1, in auto a2 = {}, in auto a3 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::RawBufferSrv")]
+extern DescriptorWriteItem DescriptorWriteItemRawBufferSrv(in isize a0, mut auto a1, in auto a2 = {});
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::RawBufferUav")]
+extern DescriptorWriteItem DescriptorWriteItemRawBufferUav(in isize a0, mut auto a1, in auto a2 = {});
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindlessLayoutType::s_BindlessLayoutTypeImmutableBase")]
+extern const u8 s_BindlessLayoutTypeImmutableBase;
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutItem::s_ByteSize")]
+extern const usize s_BindingLayoutItemByteSize;
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::s_ByteSize")]
+extern const usize s_DescriptorWriteItemByteSize;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,104 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskAdmissionError::Enum")]
+extern enum CpuTaskAdmissionError : u8{
+    InvalidFunction,
+    InvalidDependencies,
+    InvalidOptions,
+    Aborting,
+    ScopeCanceled,
+    ForeignDependency,
+    CapacityExhausted,
+    DependencyCycle
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskCost::Enum")]
+extern enum CpuTaskCost : u8{
+    Any,
+    Heavy,
+    Light
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskPriority::Enum")]
+extern enum CpuTaskPriority : u8{
+    Critical,
+    Normal,
+    Background
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskTarget::Enum")]
+extern enum CpuTaskTarget : u8{
+    Worker,
+    MainThread
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CpuTaskHandle{
+    u64 domainIdentity;
+    u32 index;
+    u32 generation;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskOptions"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CpuTaskOptions{
+    CpuTaskProfileLabel profileLabel;
+    CpuTaskCost cost;
+    CpuTaskPriority priority;
+    CpuTaskTarget target;
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskProfileLabel"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CpuTaskProfileLabel{
+    u64 value;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerConfig"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CpuTaskSchedulerConfig{
+    usize profileEventCapacity;
+    u32 workerCount;
+    u32 reservedThreadCount;
+    b8 heterogeneous;
+};
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerStatistics"), cpp_layout(112, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CpuTaskSchedulerStatistics{
+    u64 completedTasks;
+    u64 canceledTasks;
+    u64 performanceTasks;
+    u64 efficiencyTasks;
+    u64 unclassifiedTasks;
+    u64 cooperativeTasks;
+    usize outstandingTasks;
+    usize peakOutstandingTasks;
+    u32 performanceWorkers;
+    u32 efficiencyWorkers;
+    u32 unclassifiedWorkers;
+    u32 placementFailures;
+    u64 profileRecordedEvents;
+    u64 profileDroppedEvents;
+    usize profilePendingEvents;
+    b8 profileEnabled;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerConfig::s_AutomaticWorkerCount")]
+extern const u32 s_AutomaticWorkerCount;
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerConfig::s_DefaultProfileEventCapacity")]
+extern const usize s_DefaultProfileEventCapacity;
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskHandle::s_InvalidIndex")]
+extern const u32 s_InvalidIndex;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::EncodedTextLogPayloadHeader"), cpp_layout(16, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class EncodedTextLogPayloadHeader{
+    u32 magic;
+    u16 version;
+    u8 type;
+    u8 reserved;
+    u64 messageBytes;
+};
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::TextLogPayload"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TextLogPayload{
+    StringView messageUtf8;
+    LogType type;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::IsValidTextLogType")]
+extern b8 IsValidTextLogType(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedTextLogPayloadHeaderByteSize")]
+extern const usize s_EncodedTextLogPayloadHeaderByteSize;
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::s_TextLogPackedAlignBytes")]
+extern const usize s_TextLogPackedAlignBytes;
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::s_TextLogPayloadMagic")]
+extern const u32 s_TextLogPayloadMagic;
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::s_TextLogPayloadVersion")]
+extern const u16 s_TextLogPayloadVersion;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

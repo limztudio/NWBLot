@@ -1,0 +1,21 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_accumulator.h>"), cpp_name("::NWB::Core::GpuTimingAccumulator"), cpp_layout(232, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuTimingAccumulator{
+    b8 abandonQuery(...);
+    void confirmFrameReset(...);
+    b8 confirmQuery(...);
+    void discardFrameReset(...);
+    b8 discardQuery(...);
+    b8 prepareQueryForRecovery(...);
+    b8 quarantineQuery(...);
+    void requestQueries(...);
+    b8 setCaptureEnabled(...);
+    b8 validateQuerySubmission(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

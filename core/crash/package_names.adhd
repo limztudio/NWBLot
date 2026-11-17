@@ -1,0 +1,178 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_AftermathGpuDumpFileName")]
+extern const StringView s_AftermathGpuDumpFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_AndroidCollectionFileName")]
+extern const StringView s_AndroidCollectionFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_AndroidEmergencyRequestFileName")]
+extern const StringView s_AndroidEmergencyRequestFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_AndroidTombstoneFileName")]
+extern const StringView s_AndroidTombstoneFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArchiveEntryEndLine")]
+extern const StringView s_ArchiveEntryEndLine;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArchiveEntryEndText")]
+extern const StringView s_ArchiveEntryEndText;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArchiveFileHeaderPrefix")]
+extern const StringView s_ArchiveFileHeaderPrefix;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArchiveHeaderLine")]
+extern const StringView s_ArchiveHeaderLine;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArchiveHeaderText")]
+extern const StringView s_ArchiveHeaderText;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArtifactStrategyFileName")]
+extern const StringView s_ArtifactStrategyFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_BreadcrumbsFileName")]
+extern const StringView s_BreadcrumbsFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CallstackFileName")]
+extern const StringView s_CallstackFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CpuContextFileName")]
+extern const StringView s_CpuContextFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CrashIdPrefix")]
+extern const StringView s_CrashIdPrefix;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CrashUploadEndpoint")]
+extern const StringView s_CrashUploadEndpoint;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CrashUploadEndpointName")]
+extern const StringView s_CrashUploadEndpointName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_DefaultRootDirectoryName")]
+extern const StringView s_DefaultRootDirectoryName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_EmergencyFileName")]
+extern const StringView s_EmergencyFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_FailedDirectoryName")]
+extern const StringView s_FailedDirectoryName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_GpuCrashReportFileName")]
+extern const StringView s_GpuCrashReportFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_GpuDetectiveCaptureFileName")]
+extern const StringView s_GpuDetectiveCaptureFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_LinuxCoreFileName")]
+extern const StringView s_LinuxCoreFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_LinuxCorePatternFileName")]
+extern const StringView s_LinuxCorePatternFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_LinuxCorePatternPath")]
+extern const StringView s_LinuxCorePatternPath;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_LinuxCoreUsesPidFileName")]
+extern const StringView s_LinuxCoreUsesPidFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_LinuxCoreUsesPidPath")]
+extern const StringView s_LinuxCoreUsesPidPath;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_LinuxProcRootPath")]
+extern const StringView s_LinuxProcRootPath;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestAbiKey")]
+extern const StringView s_ManifestAbiKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestApplicationKey")]
+extern const StringView s_ManifestApplicationKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestArtifactStrategyKey")]
+extern const StringView s_ManifestArtifactStrategyKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestBuildIdKey")]
+extern const StringView s_ManifestBuildIdKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestCrashIdKey")]
+extern const StringView s_ManifestCrashIdKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestDumpDetailModeFullValue")]
+extern const StringView s_ManifestDumpDetailModeFullValue;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestDumpDetailModeKey")]
+extern const StringView s_ManifestDumpDetailModeKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestDumpDetailModeSmallValue")]
+extern const StringView s_ManifestDumpDetailModeSmallValue;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestEventKey")]
+extern const StringView s_ManifestEventKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestFaultAddressKey")]
+extern const StringView s_ManifestFaultAddressKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestFileName")]
+extern const StringView s_ManifestFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestFormatKey")]
+extern const StringView s_ManifestFormatKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestFormatValue")]
+extern const StringView s_ManifestFormatValue;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestFramePointerKey")]
+extern const StringView s_ManifestFramePointerKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestHandlerLifetimeClientIpcValue")]
+extern const StringView s_ManifestHandlerLifetimeClientIpcValue;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestHandlerLifetimeKey")]
+extern const StringView s_ManifestHandlerLifetimeKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestHasExceptionContextKey")]
+extern const StringView s_ManifestHasExceptionContextKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestInstructionPointerKey")]
+extern const StringView s_ManifestInstructionPointerKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestPlatformKey")]
+extern const StringView s_ManifestPlatformKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestProcessIdKey")]
+extern const StringView s_ManifestProcessIdKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestReasonCodeKey")]
+extern const StringView s_ManifestReasonCodeKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestReasonKindKey")]
+extern const StringView s_ManifestReasonKindKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestStackPointerKey")]
+extern const StringView s_ManifestStackPointerKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestThreadIdKey")]
+extern const StringView s_ManifestThreadIdKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestTriggerCategoryKey")]
+extern const StringView s_ManifestTriggerCategoryKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestTriggerExpressionKey")]
+extern const StringView s_ManifestTriggerExpressionKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestTriggerFileKey")]
+extern const StringView s_ManifestTriggerFileKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestTriggerLineKey")]
+extern const StringView s_ManifestTriggerLineKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestTriggerMessageKey")]
+extern const StringView s_ManifestTriggerMessageKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestVersionKey")]
+extern const StringView s_ManifestVersionKey;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_MetadataFileName")]
+extern const StringView s_MetadataFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_PendingDirectoryName")]
+extern const StringView s_PendingDirectoryName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcAuxvFileName")]
+extern const StringView s_ProcAuxvFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcAuxvName")]
+extern const StringView s_ProcAuxvName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcCmdlineFileName")]
+extern const StringView s_ProcCmdlineFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcCmdlineName")]
+extern const StringView s_ProcCmdlineName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcCoredumpFilterFileName")]
+extern const StringView s_ProcCoredumpFilterFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcCoredumpFilterName")]
+extern const StringView s_ProcCoredumpFilterName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcEnvironFileName")]
+extern const StringView s_ProcEnvironFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcEnvironName")]
+extern const StringView s_ProcEnvironName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcLimitsFileName")]
+extern const StringView s_ProcLimitsFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcLimitsName")]
+extern const StringView s_ProcLimitsName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcMapsFileName")]
+extern const StringView s_ProcMapsFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcMapsName")]
+extern const StringView s_ProcMapsName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcStatFileName")]
+extern const StringView s_ProcStatFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcStatName")]
+extern const StringView s_ProcStatName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcStatusFileName")]
+extern const StringView s_ProcStatusFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcStatusName")]
+extern const StringView s_ProcStatusName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcessDumpFileName")]
+extern const StringView s_ProcessDumpFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_SymbolicationFileName")]
+extern const StringView s_SymbolicationFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptFileName")]
+extern const StringView s_UploadAttemptFileName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptRetryInterruptedState")]
+extern const StringView s_UploadAttemptRetryInterruptedState;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptRetryPendingState")]
+extern const StringView s_UploadAttemptRetryPendingState;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptUnknownState")]
+extern const StringView s_UploadAttemptUnknownState;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptUploadedState")]
+extern const StringView s_UploadAttemptUploadedState;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptUploadingState")]
+extern const StringView s_UploadAttemptUploadingState;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadedDirectoryName")]
+extern const StringView s_UploadedDirectoryName;
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadingDirectoryName")]
+extern const StringView s_UploadingDirectoryName;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/cpu/profile_buffer.h>"), cpp_name("::NWB::Core::CpuTaskProfileBuffer"), cpp_layout(104, 8), cpp_flags(no_copy, no_assign)]
+extern class CpuTaskProfileBuffer{
+    usize capacity(...)const;
+    u64 dropped(...)const;
+    void ensureAllocatedLocked(...);
+    usize pending(...)const;
+    u64 recorded(...)const;
+    CpuTaskProfileLabel registerLabelLocked(...);
+    void resetLocked(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

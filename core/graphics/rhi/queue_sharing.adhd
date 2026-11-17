@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/queue_sharing.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::ForQueueClass")]
+extern ResourceQueueSharing ForQueueClass(in auto a0);
+
+[cpp_header("<core/graphics/rhi/queue_sharing.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::IncludesQueueClass")]
+extern b8 IncludesQueueClass(in auto a0, in auto a1);
+
+[cpp_header("<core/graphics/rhi/queue_sharing.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::QueueFamilyIndexListContains")]
+extern b8 QueueFamilyIndexListContains(in auto a0, in isize a1);
+
+[cpp_header("<core/graphics/rhi/queue_sharing.h>"), cpp_name("::NWB::Core::ResourceQueueAdmissionAdmitsQueue")]
+extern b8 ResourceQueueAdmissionAdmitsQueue(in auto a0, in auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

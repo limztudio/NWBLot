@@ -1,0 +1,105 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScopeSkipReason::Enum")]
+extern enum GpuTimingScopeSkipReason : u8{
+    CollectionInactive,
+    QueueTimestampsUnsupported,
+    ComparableTimestampsUnsupported,
+    ScopeNotPrepared,
+    QueryCapacityUnavailable,
+    RecordingPositionUnavailable,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingRecorderStatistics"), cpp_layout(160, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTimingRecorderStatistics{
+    u64 preparedScopeCount;
+    u64 requestedQueryCount;
+    u64 materializedQueryCount;
+    u64 queryMaterializationFailureCount;
+    u64 scopeAttemptCount;
+    u64 recordedScopeCount;
+    u64 acceptedScopeCount;
+    u64 publishedSampleCount;
+    u64 unpublishedSampleCount;
+    u64 discardedScopeCount;
+    u64 quarantinedScopeCount;
+    u64 beginFailureCount;
+    u64 sampleListenerFailureCount;
+    u16 deviceGeneration;
+    Array<u64, 6> skippedScopeCountByReason;
+    b8 queryCollectionEnabled;
+    b8 timingSinkEnabled;
+    b8 feedbackCollectionEnabled;
+    b8 collectionActive;
+    b8 comparableTimestampsSupported;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSample"), cpp_layout(128, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTimingSample{
+    u64 sourceFrameIndex;
+    f64 durationSeconds;
+    Name scopeName;
+    GpuTimingSampleAttribution attribution;
+    GpuComparableTimestampRange comparableRange;
+    GpuPhysicalQueueId physicalQueue;
+    b8 published;
+};
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleAttribution"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class GpuTimingSampleAttribution{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleListener"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuTimingSampleListener{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleSubscription"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class GpuTimingSampleSubscription{
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScope"), cpp_layout(136, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTimingScope{
+    Name scopeName;
+    u64 reservation;
+    TimerQueryRecordingToken timerQueryRecording;
+    usize submissionPublicationIndex;
+    u32 index;
+    u32 epoch;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScopeDefinition"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTimingScopeDefinition{
+    Name identity;
+    StringView markerLabel;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingScopeDefinition::FromText")]
+extern Expected<GpuTimingScopeDefinition, NameTextError> GpuTimingScopeDefinitionFromText(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::s_NoGpuTimingSampleAttribution")]
+extern const GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,342 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandQueue::Enum")]
+extern enum CommandQueue : u8{
+    Graphics,
+    Compute,
+    Transfer,
+    kCount
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuQueueCapability::Mask")]
+extern flag GpuQueueCapability : u8{
+    None,
+    Transfer,
+    Compute,
+    Graphics
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassLoadAction::Enum")]
+extern enum RenderPassLoadAction : u8{
+    Load,
+    Clear,
+    Discard,
+    Count
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassStoreAction::Enum")]
+extern enum RenderPassStoreAction : u8{
+    Store,
+    Discard,
+    Count
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandListResourceStateHandoff"), cpp_layout(136, 8), cpp_flags(no_copy, no_assign)]
+extern class CommandListResourceStateHandoff{
+    b8 buildResourceSubset(...);
+    b8 copyFrom(...);
+    u16 deviceGeneration(...)const;
+    b8 empty(...)const;
+    b8 exchangeSnapshot(...);
+    b8 hasPendingBufferReleases(...)const;
+    void reset(...);
+    b8 valid(...)const;
+    b8 validForDeviceGeneration(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandMarkerRecordingToken"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CommandMarkerRecordingToken{
+    u64 recordingLeaseSerial;
+    u64 nativeRecordingID;
+    u64 markerSerial;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::ComputeState"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class ComputeState{
+    ComputeState setPipeline(...);
+    ComputeState setIndirectParams(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DispatchIndirectArguments"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class DispatchIndirectArguments{
+    u32 groupsX;
+    u32 groupsY;
+    u32 groupsZ;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawArguments"), cpp_layout(20, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class DrawArguments{
+    u32 vertexCount;
+    u32 instanceCount;
+    u32 startIndexLocation;
+    u32 startVertexLocation;
+    u32 startInstanceLocation;
+    DrawArguments setInstanceCount(...);
+    DrawArguments setStartIndexLocation(...);
+    DrawArguments setStartInstanceLocation(...);
+    DrawArguments setStartVertexLocation(...);
+    DrawArguments setVertexCount(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawIndexedIndirectArguments"), cpp_layout(20, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class DrawIndexedIndirectArguments{
+    u32 indexCount;
+    u32 instanceCount;
+    u32 startIndexLocation;
+    i32 baseVertexLocation;
+    u32 startInstanceLocation;
+    DrawIndexedIndirectArguments setIndexCount(...);
+    DrawIndexedIndirectArguments setInstanceCount(...);
+    DrawIndexedIndirectArguments setStartIndexLocation(...);
+    DrawIndexedIndirectArguments setStartInstanceLocation(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawIndirectArguments"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class DrawIndirectArguments{
+    u32 vertexCount;
+    u32 instanceCount;
+    u32 startVertexLocation;
+    u32 startInstanceLocation;
+    DrawIndirectArguments setInstanceCount(...);
+    DrawIndirectArguments setStartInstanceLocation(...);
+    DrawIndirectArguments setStartVertexLocation(...);
+    DrawIndirectArguments setVertexCount(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::EventQueryHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class EventQueryHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut EventQuery deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuCommandArenaStatistics"), cpp_layout(96, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandArenaStatistics{
+    u64 workerArenaCount;
+    u64 commandPoolEpochCount;
+    u64 pendingCommandPoolEpochCount;
+    u64 currentCommandBufferCount;
+    u64 highWaterCommandBufferCount;
+    u64 reusableCommandBufferCount;
+    u64 leasedCommandBufferCount;
+    u64 pendingCommandBufferCount;
+    u64 growthEventCount;
+    u64 resetEventCount;
+    u64 nativeHandleStorageLowerBoundBytes;
+    GpuPhysicalQueueId queue;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuCommandArenaWorkerStatistics"), cpp_layout(96, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuCommandArenaWorkerStatistics{
+    u64 recordingWorkerDomain;
+    u64 commandPoolEpochCount;
+    u64 pendingCommandPoolEpochCount;
+    u64 currentCommandBufferCount;
+    u64 highWaterCommandBufferCount;
+    u64 reusableCommandBufferCount;
+    u64 leasedCommandBufferCount;
+    u64 pendingCommandBufferCount;
+    u64 growthEventCount;
+    u64 resetEventCount;
+    u64 nativeHandleStorageLowerBoundBytes;
+    GpuPhysicalQueueId queue;
+    u32 recordingWorkerIndex;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueId"), cpp_layout(4, 2), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class GpuPhysicalQueueId{
+    u16 index;
+    u16 deviceGeneration;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueInfo"), cpp_layout(20, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuPhysicalQueueInfo{
+    u32 familyIndex;
+    u32 queueIndex;
+    u32 timestampValidBits;
+    GpuPhysicalQueueId id;
+    CommandQueue queueClass;
+    GpuQueueCapability capabilities;
+    b8 dedicated;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueTopology"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuPhysicalQueueTopology{
+    usize queueCount;
+    Span<GpuPhysicalQueueInfo> queueSpan(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuQueueTimelineSnapshot"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuQueueTimelineSnapshot{
+    GpuPhysicalQueueId queue;
+    u64 submittedValue;
+    u64 completedValue;
+    u64 pendingSubmissionCount(...)const;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GraphicsState"), cpp_layout(1112, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GraphicsState{
+    ViewportState viewport;
+    VariableRateShadingState shadingRateState;
+    u8 dynamicStencilRefValue;
+    Color blendConstantColor;
+    IndexBufferBinding indexBuffer;
+    FixedVector<VertexBufferBinding, 16> vertexBuffers;
+    GraphicsState addVertexBuffer(...);
+    GraphicsState setBlendConstantColor(...);
+    GraphicsState setDynamicStencilRefValue(...);
+    GraphicsState setIndexBuffer(...);
+    GraphicsState setViewport(...);
+    GraphicsState setPipeline(...);
+    GraphicsState setFramebuffer(...);
+    GraphicsState setIndirectParams(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::IndexBufferBinding"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class IndexBufferBinding{
+    u32 offset;
+    Format format;
+    IndexBufferBinding setFormat(...);
+    IndexBufferBinding setOffset(...);
+    IndexBufferBinding setBuffer(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::MeshletState"), cpp_layout(704, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class MeshletState{
+    ViewportState viewport;
+    Color blendConstantColor;
+    u8 dynamicStencilRefValue;
+    MeshletState setBlendConstantColor(...);
+    MeshletState setDynamicStencilRefValue(...);
+    MeshletState setViewport(...);
+    MeshletState setPipeline(...);
+    MeshletState setFramebuffer(...);
+    MeshletState setIndirectParams(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::QueueSubmissionToken"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class QueueSubmissionToken{
+    u64 value;
+    u16 physicalQueueIndex;
+    u16 deviceGeneration;
+    CommandQueue queue;
+    b8 hasPhysicalQueueIdentity(...)const;
+    b8 matchesPhysicalQueue(...)const;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingDispatchRaysArguments"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RayTracingDispatchRaysArguments{
+    u32 width;
+    u32 height;
+    u32 depth;
+    RayTracingDispatchRaysArguments setDepth(...);
+    RayTracingDispatchRaysArguments setDimensions(...);
+    RayTracingDispatchRaysArguments setHeight(...);
+    RayTracingDispatchRaysArguments setWidth(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingShaderTableHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class RayTracingShaderTableHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut RayTracingShaderTable deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingState"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RayTracingState{
+    RayTracingState setShaderTable(...);
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassAttachmentActions"), cpp_layout(2, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class RenderPassAttachmentActions{
+    RenderPassLoadAction loadAction;
+    RenderPassStoreAction storeAction;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassParameters"), cpp_layout(156, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RenderPassParameters{
+    RenderPassAttachmentActions depthAttachmentActions;
+    RenderPassAttachmentActions stencilAttachmentActions;
+    f32 depthClearValue;
+    u8 stencilClearValue;
+    Array<Color, 8> colorClearValues;
+    Array<RenderPassAttachmentActions, 8> colorAttachmentActions;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class TimerQueryHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut TimerQuery deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryRecordingEndpoints"), cpp_layout(2, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TimerQueryRecordingEndpoints{
+    b8 recordsBegin;
+    b8 recordsEnd;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryRecordingToken"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TimerQueryRecordingToken{
+    u64 queryIncarnation;
+    u64 generation;
+    u64 resetAuthorizationGeneration;
+    GpuPhysicalQueueId physicalQueue;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryResult"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TimerQueryResult{
+    u64 beginTicks;
+    u64 endTicks;
+    f64 secondsPerTick;
+    GpuPhysicalQueueId physicalQueue;
+    u32 timestampValidBits;
+    b8 comparableAcrossSubmissions;
+    f64 durationSeconds(...)const;
+    u64 durationTicks(...)const;
+    b8 hasComparableRange(...)const;
+    u64 maskedBeginTicks(...)const;
+    u64 timestampMask(...)const;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::VertexBufferBinding"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+extern class VertexBufferBinding{
+    u64 offset;
+    u32 slot;
+    VertexBufferBinding setOffset(...);
+    VertexBufferBinding setSlot(...);
+    VertexBufferBinding setBuffer(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandQueue::s_CommandQueueGraphicsBase")]
+extern const u8 s_CommandQueueGraphicsBase;
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryResult::s_FullWidthBits")]
+extern const u32 s_FullWidthBits;
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuQueueCapability::s_GpuQueueCapabilityNoneBase")]
+extern const u8 s_GpuQueueCapabilityNoneBase;
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuQueueCapability::s_KnownCapabilityBits")]
+extern const u8 s_KnownCapabilityBits;
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::s_QueueClassCount")]
+extern const usize s_QueueClassCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

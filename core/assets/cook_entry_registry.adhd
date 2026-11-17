@@ -1,0 +1,69 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryParseContext"), cpp_layout(48, 8), cpp_flags(no_assign)]
+extern class CookEntryParseContext{
+    GlobalArena cookArena;
+    CpuTaskScheduler cpuScheduler;
+    ScratchArena scratchArena;
+    CookEntryPathHashSet seenVirtualPathHashes;
+    usize nwbFileIndex;
+    u32 nwbSubIndex;
+};
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryPathHashSet"), cpp_layout(104, 8), cpp_flags(self_defaulted, brace_init, non_thread_safe)]
+extern class CookEntryPathHashSet;
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryRegistry"), cpp_layout(152, 8), cpp_flags(no_copy, no_assign)]
+extern class CookEntryRegistry{
+    b8 has(...)const;
+    b8 parseDocument(...);
+    b8 parseValue(...);
+    b8 appendCachedEntry(...);
+    usize bucketCount(...)const;
+    b8 writeBucket(...);
+    u64 entryCount(...)const;
+};
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntrySourceLocation"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CookEntrySourceLocation{
+    usize nwbFileIndex;
+    u32 nwbSubIndex;
+};
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryWriteContext"), cpp_layout(24, 8), cpp_flags(no_assign)]
+extern class CookEntryWriteContext{
+    ICookedAssetWriter writer;
+    CookEntryPathHashSet seenVirtualPathHashes;
+    ScratchArena scratchArena;
+};
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookEntryBucket"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class ICookEntryBucket{
+    usize size(...)const;
+    b8 parseDocument(...);
+    b8 parseValue(...);
+    b8 appendCachedEntry(...);
+    b8 writeCookedAssets(...);
+};
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookedAssetWriter"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class ICookedAssetWriter{
+    b8 writeCookedAsset(...);
+    b8 writeCachedCookedAsset(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryRegistryDetail::RegisterParsedVirtualPath")]
+extern b8 RegisterParsedVirtualPath(in StringView a0, in Name a1, mut auto a2);
+
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryRegistryDetail::RegisterCookedVirtualPath")]
+extern b8 RegisterCookedVirtualPath(in StringView a0, in Name a1, mut auto a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

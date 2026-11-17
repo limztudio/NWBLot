@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::AttributeParser"), cpp_layout(8, 8), cpp_flags(small_value, binary_serializable, no_assign)]
+extern class MetascriptAttributeParser;
+
+[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::ParsedAttribute"), cpp_layout(56, 8)]
+extern class MetascriptParsedAttribute{
+    StringView name;
+    u32 line;
+    u32 column;
+};
+
+[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::ParsedAttributeArg"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class MetascriptParsedAttributeArg{
+    StringView text;
+    MetascriptTokenType kind;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

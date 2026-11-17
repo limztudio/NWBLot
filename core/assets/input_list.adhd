@@ -1,0 +1,13 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/input_list.h>"), cpp_name("::NWB::Core::Assets::EncodeAssetInputList")]
+extern Expected<String> EncodeAssetInputList(in auto a0, mut auto a1);
+
+[cpp_header("<core/assets/input_list.h>"), cpp_name("::NWB::Core::Assets::ReadAssetInputList")]
+extern b8 ReadAssetInputList(in Path a0, mut auto a1, mut auto a2, in auto a3 = {});
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

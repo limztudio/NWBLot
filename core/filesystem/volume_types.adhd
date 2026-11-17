@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeUsage::Enum")]
+extern enum VolumeUsage : u8{
+    RuntimeReadOnly,
+    RuntimeReadWrite,
+    CookWrite
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeBuildConfig"), cpp_layout(272, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class VolumeBuildConfig{
+    CompactString volumeName;
+    u64 segmentSize;
+    u64 metadataSize;
+};
+
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeMountDesc"), cpp_layout(328, 8)]
+extern class VolumeMountDesc{
+    CompactString volumeName;
+    Path mountDirectory;
+    u64 segmentSize;
+    u64 metadataSize;
+    usize maxSegments;
+    b8 createIfMissing;
+    VolumeUsage usage;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::ComputeVolumeMetadataRequirement")]
+extern Expected<u64> ComputeVolumeMetadataRequirement(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeUsage::s_VolumeUsageRuntimeReadOnlyBase")]
+extern const u8 s_VolumeUsageRuntimeReadOnlyBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

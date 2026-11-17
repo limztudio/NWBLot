@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::GpuComparableTimestampRange"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuComparableTimestampRange{
+    u64 beginTicks;
+    u64 endTicks;
+    f64 secondsPerTick;
+    GpuPhysicalQueueId physicalQueue;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetrics"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuPacketEnvelopeMetrics{
+    f64 secondsPerTick;
+    u64 queueOverlapTicks;
+};
+
+[cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::GpuQueuePacketEnvelopeMetrics"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuQueuePacketEnvelopeMetrics{
+    GpuPhysicalQueueId physicalQueue;
+    u64 internalIdleTicks;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::TryComputeGpuTimestampOverlap")]
+extern Expected<u64> TryComputeGpuTimestampOverlap(in auto a0, in auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

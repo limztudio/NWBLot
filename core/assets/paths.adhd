@@ -1,0 +1,44 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolvedAssetRoot"), cpp_layout(296, 8)]
+extern class ResolvedAssetRoot{
+    Path path;
+    CompactString virtualRoot;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::BuildDerivedAssetVirtualPath")]
+extern Expected<Name> BuildDerivedAssetVirtualPath(in Path a0, in StringView a1, in Path a2, mut auto a3);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::HasReservedAssetVirtualRoot")]
+extern b8 HasReservedAssetVirtualRoot(in StringView a0, mut auto a1);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolvePairedSourcePathFromMetadata")]
+extern Expected<String> ResolvePairedSourcePathFromMetadata(in Path a0, mut auto a1, mut auto a2);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolveVirtualAssetPath")]
+extern Expected<Path> ResolveVirtualAssetPath(in auto a0, in StringView a1, mut auto a2, mut auto a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::s_AssetsDirectoryName")]
+extern const StringView s_AssetsDirectoryName;
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::s_EngineVirtualRoot")]
+extern const StringView s_EngineVirtualRoot;
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::s_MetadataAssetVariable")]
+extern const StringView s_MetadataAssetVariable;
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::s_NwbExtension")]
+extern const StringView s_NwbExtension;
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::s_ProjectVirtualRoot")]
+extern const StringView s_ProjectVirtualRoot;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

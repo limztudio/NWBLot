@@ -1,0 +1,116 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DumpDetailMode::Enum")]
+extern enum CrashDumpDetailMode : u8{
+    Small,
+    Full
+};
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashDumpStatus::Enum")]
+extern enum CrashDumpStatus : u8{
+    NotInstalled,
+    RequestFailed,
+    RequestQueued,
+    RequestTimedOut,
+    PackageWriteFailed,
+    PackageWritten,
+    AttachmentWriteFailed
+};
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::GpuCrashDumpKind::Enum")]
+extern enum CrashGpuCrashDumpKind : u8{
+    None,
+    Aftermath,
+    RadeonGpuDetective
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashCapturePolicy"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CrashCapturePolicy{
+    b8 captureAssertions;
+    b8 captureFatalAssertions;
+    b8 captureLoggerErrors;
+    b8 captureLoggerFatals;
+    u32 maxDiagnosticDumpsPerProcess;
+    u32 maxDiagnosticDumpsPerSite;
+};
+
+[arena, cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashConfigT"), cpp_layout(184, 8), cpp_flags(self_defaulted, non_thread_safe, arena_first_ctor)]
+extern class CrashConfig{
+    Path spoolDirectory;
+    CrashSpoolRetentionConfig spoolRetention;
+    CrashCapturePolicy capturePolicy;
+    CrashDumpDetailMode dumpDetailMode;
+};
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashDumpResult"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CrashDumpResult{
+    CrashDumpStatus status;
+    b8 packageWritten(...)const;
+    b8 requestAccepted(...)const;
+};
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashSpoolRetentionConfig"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CrashSpoolRetentionConfig{
+    usize maxPendingPackages;
+    usize maxUploadedPackages;
+    usize maxFailedPackages;
+    usize maxUploadingPackages;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DefaultCrashSpoolDirectory"), cpp_flags(scratch_arena)]
+extern Path DefaultCrashSpoolDirectory();
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DefaultCrashHandlerExecutablePath"), cpp_flags(scratch_arena)]
+extern Path DefaultCrashHandlerExecutablePath();
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::InstallCrashHandler")]
+extern b8 InstallCrashHandler(in auto a0);
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::AddCrashBreadcrumb")]
+extern void AddCrashBreadcrumb(in StringView a0, in StringView a1);
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CaptureCrashDump")]
+extern CrashDumpResult CaptureCrashDump(in StringView a0 = {}, in StringView a1 = {});
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CaptureGpuCrashDump")]
+extern CrashDumpResult CaptureGpuCrashDump(in StringView a0, in StringView a1 = {}, in CrashGpuCrashDumpKind a2 = {});
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::SetCrashMetadata")]
+extern b8 SetCrashMetadata(in StringView a0, in StringView a1);
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::SetCrashUploadDestination")]
+extern b8 SetCrashUploadDestination(in StringView a0, in StringView a1);
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::UninstallCrashHandler")]
+extern void UninstallCrashHandler();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::s_DefaultMaxDiagnosticDumpsPerProcess")]
+extern const u32 s_DefaultMaxDiagnosticDumpsPerProcess;
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::s_DefaultMaxDiagnosticDumpsPerSite")]
+extern const u32 s_DefaultMaxDiagnosticDumpsPerSite;
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::s_DefaultMaxFailedCrashPackages")]
+extern const usize s_DefaultMaxFailedCrashPackages;
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::s_DefaultMaxPendingCrashPackages")]
+extern const usize s_DefaultMaxPendingCrashPackages;
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::s_DefaultMaxUploadedCrashPackages")]
+extern const usize s_DefaultMaxUploadedCrashPackages;
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::s_DefaultMaxUploadingCrashPackages")]
+extern const usize s_DefaultMaxUploadingCrashPackages;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

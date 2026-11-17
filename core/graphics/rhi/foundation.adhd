@@ -1,0 +1,41 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::GraphicsAllocator"), cpp_layout(8, 8), cpp_flags(binary_serializable, no_copy, no_assign)]
+extern class GraphicsAllocator{
+    mut GlobalArena getObjectArena(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_BackBufferHeight")]
+extern const u32 s_BackBufferHeight;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_BackBufferWidth")]
+extern const u32 s_BackBufferWidth;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_DepthClearValue")]
+extern const f32 s_DepthClearValue;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxBindingLayouts")]
+extern const u32 s_MaxBindingLayouts;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxBindlessRegisterSpaces")]
+extern const u32 s_MaxBindlessRegisterSpaces;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxFramesInFlight")]
+extern const u32 s_MaxFramesInFlight;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxPushConstantSize")]
+extern const u32 s_MaxPushConstantSize;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxRenderTargets")]
+extern const u32 s_MaxRenderTargets;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxVertexAttributes")]
+extern const u32 s_MaxVertexAttributes;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_MaxViewports")]
+extern const u32 s_MaxViewports;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_PushConstantSizeAlignment")]
+extern const u32 s_PushConstantSizeAlignment;
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::s_SwapChainBufferCount")]
+extern const u32 s_SwapChainBufferCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

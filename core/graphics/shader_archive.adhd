@@ -1,0 +1,44 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::Record"), cpp_layout(248, 8)]
+extern class Record{
+    Name shaderName;
+    String variantName;
+    Name stage;
+    u64 sourceChecksum;
+    u64 bytecodeChecksum;
+    NameHash virtualPathHash;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::BuildVirtualPathName")]
+extern Expected<Name> BuildVirtualPathName(in Name a0, in StringView a1, in Name a2);
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::FindVirtualPath")]
+extern Expected<Name> FindVirtualPath(in auto a0, in Name a1, in StringView a2, in Name a3);
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::SerializeIndex")]
+extern Expected<Vector<u8>> SerializeIndex(in auto a0, mut auto a1, mut auto a2);
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::DeserializeIndex"), cpp_flags(byte_view_arg1)]
+extern Expected<Vector<Record>> DeserializeIndex(mut auto a0, in auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::s_DefaultVariant")]
+extern const StringView s_DefaultVariant;
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::s_IndexVirtualPath")]
+extern const StringView s_IndexVirtualPath;
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::s_IndexVirtualPathName")]
+extern const Name s_IndexVirtualPathName;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

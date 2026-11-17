@@ -1,0 +1,32 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/ecs/world.h>"), cpp_name("::NWB::Core::ECS::World"), cpp_layout(488, 8), cpp_flags(no_copy, no_assign)]
+extern class World{
+    T addComponent<T>(...);
+    T addSystem<T>(...);
+    b8 alive(...)const;
+    void clear(...);
+    void clearMessages(...);
+    u64 componentMutationVersion(...)const;
+    void consumeMessages(...)const;
+    Entity createEntity(...);
+    void destroyEntity(...);
+    void emplaceMessage(...);
+    Entity entity(...);
+    usize entityCount(...)const;
+    T getComponent<T>(...)const;
+    b8 hasComponent(...)const;
+    usize messageCount(...)const;
+    void postMessage(...);
+    void removeComponent(...);
+    void swapMessageBuffers(...);
+    mut CpuTaskScheduler taskScheduler(...);
+    mut CpuTaskScope taskScope(...);
+    Expected<void, CpuTaskAdmissionError> tick(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

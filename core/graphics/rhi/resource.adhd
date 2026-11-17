@@ -1,0 +1,335 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::CpuAccessMode::Enum")]
+extern enum CpuAccessMode : u8{
+    None,
+    Read,
+    Write
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapType::Enum")]
+extern enum HeapType : u8{
+    DeviceLocal,
+    Upload,
+    Readback
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::Mask")]
+extern flag ResourceQueueSharing : u8{
+    Exclusive,
+    Graphics,
+    AsyncCompute,
+    Transfer,
+    GraphicsAndAsyncCompute,
+    GraphicsAndTransfer,
+    AsyncComputeAndTransfer,
+    GraphicsAsyncComputeAndTransfer
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceStates::Mask")]
+extern flag ResourceStates : u32{
+    Unknown,
+    Common,
+    ConstantBuffer,
+    VertexBuffer,
+    IndexBuffer,
+    IndirectArgument,
+    ShaderResource,
+    UnorderedAccess,
+    RenderTarget,
+    DepthWrite,
+    DepthRead,
+    StreamOut,
+    CopyDest,
+    CopySource,
+    ResolveDest,
+    ResolveSource,
+    Present,
+    AccelStructRead,
+    AccelStructWrite,
+    AccelStructBuildInput,
+    AccelStructBuildBlas,
+    ShadingRateSurface,
+    OpacityMicromapWrite,
+    OpacityMicromapBuildInput,
+    ConvertCoopVecMatrixInput,
+    ConvertCoopVecMatrixOutput
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureDimension::Enum")]
+extern enum TextureDimension : u8{
+    Unknown,
+    Texture1D,
+    Texture1DArray,
+    Texture2D,
+    Texture2DArray,
+    TextureCube,
+    TextureCubeArray,
+    Texture2DMS,
+    Texture2DMSArray,
+    Texture3D
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceMipResolve::Enum")]
+extern enum TextureSubresourceMipResolve : u8{
+    Range,
+    Single
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferDesc"), cpp_layout(104, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class BufferDesc{
+    Name debugName;
+    u64 byteSize;
+    u32 structStride;
+    u32 maxVersions;
+    ResourceStates initialState;
+    Format format;
+    ResourceQueueSharing queueSharing;
+    CpuAccessMode cpuAccess;
+    b8 canHaveUAVs;
+    b8 canHaveTypedViews;
+    b8 canHaveRawViews;
+    b8 isVertexBuffer;
+    b8 isIndexBuffer;
+    b8 isConstantBuffer;
+    b8 isDrawIndirectArgs;
+    b8 isAccelStructBuildInput;
+    b8 isAccelStructStorage;
+    b8 isShaderBindingTable;
+    b8 isVolatile;
+    b8 isVirtual;
+    b8 keepInitialState;
+    BufferDesc enableAutomaticStateTracking(...);
+    BufferDesc setByteSize(...);
+    BufferDesc setCanHaveRawViews(...);
+    BufferDesc setCanHaveUAVs(...);
+    BufferDesc setCpuAccess(...);
+    BufferDesc setDebugName(...);
+    BufferDesc setFormat(...);
+    BufferDesc setInitialState(...);
+    BufferDesc setIsAccelStructBuildInput(...);
+    BufferDesc setIsConstantBuffer(...);
+    BufferDesc setIsDrawIndirectArgs(...);
+    BufferDesc setIsIndexBuffer(...);
+    BufferDesc setIsVertexBuffer(...);
+    BufferDesc setKeepInitialState(...);
+    BufferDesc setQueueSharing(...);
+    BufferDesc setStructStride(...);
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class BufferHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut Buffer deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferRange"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class BufferRange{
+    u64 byteOffset;
+    u64 byteSize;
+    b8 contains(...)const;
+    u64 end(...)const;
+    b8 hasExtent(...)const;
+    BufferRange intersect(...)const;
+    b8 isEntireBuffer(...)const;
+    b8 overlaps(...)const;
+    BufferRange resolve(...)const;
+    BufferRange setByteSize(...);
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapDesc"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class HeapDesc{
+    u64 capacity;
+    Name debugName;
+    HeapType type;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class HeapHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut Heap deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::InputLayoutHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class InputLayoutHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut InputLayout deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::MemoryRequirements"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class MemoryRequirements{
+    u64 size;
+    u64 alignment;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueAdmissionSnapshot"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class ResourceQueueAdmissionSnapshot{
+    u32 queueFamilyIndexCount;
+    ResourceQueueSharing admittedQueueClasses;
+    b8 usesConcurrentSharing;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class StagingTextureHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut StagingTexture deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureMapping"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class StagingTextureMapping{
+    usize rowPitch;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureDesc"), cpp_layout(128, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TextureDesc{
+    Name name;
+    Color clearValue;
+    u32 width;
+    u32 height;
+    u32 depth;
+    u32 arraySize;
+    u32 mipLevels;
+    u32 sampleCount;
+    u32 sampleQuality;
+    ResourceStates initialState;
+    ResourceQueueSharing queueSharing;
+    Format format;
+    TextureDimension dimension;
+    b8 isShaderResource;
+    b8 isRenderTarget;
+    b8 isUAV;
+    b8 isTypeless;
+    b8 isShadingRateSurface;
+    b8 isVirtual;
+    b8 useClearValue;
+    b8 keepInitialState;
+    TextureDesc setArraySize(...);
+    TextureDesc setClearValue(...);
+    TextureDesc setDepth(...);
+    TextureDesc setDimension(...);
+    TextureDesc setFormat(...);
+    TextureDesc setHeight(...);
+    TextureDesc setInitialState(...);
+    TextureDesc setIsRenderTarget(...);
+    TextureDesc setIsUAV(...);
+    TextureDesc setKeepInitialState(...);
+    TextureDesc setMipLevels(...);
+    TextureDesc setName(...);
+    TextureDesc setQueueSharing(...);
+    TextureDesc setWidth(...);
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class TextureHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut RhiTexture deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSlice"), cpp_layout(32, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TextureSlice{
+    u32 x;
+    u32 y;
+    u32 z;
+    u32 width;
+    u32 height;
+    u32 depth;
+    u32 mipLevel;
+    u32 arraySlice;
+    TextureSlice resolve(...)const;
+    TextureSlice setArraySlice(...);
+    TextureSlice setDepth(...);
+    TextureSlice setHeight(...);
+    TextureSlice setMipLevel(...);
+    TextureSlice setOrigin(...);
+    TextureSlice setSize(...);
+    TextureSlice setWidth(...);
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class TextureSubresourceSet{
+    u32 baseMipLevel;
+    u32 numMipLevels;
+    u32 baseArraySlice;
+    u32 numArraySlices;
+    u64 arrayEnd(...)const;
+    b8 contains(...)const;
+    b8 hasExtent(...)const;
+    b8 isEntireTexture(...)const;
+    u64 mipEnd(...)const;
+    b8 overlaps(...)const;
+    TextureSubresourceSet resolve(...)const;
+    TextureSubresourceSet setMipLevels(...);
+};
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::VertexAttributeDesc"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class VertexAttributeDesc{
+    Name name;
+    u32 arraySize;
+    u32 bufferIndex;
+    u32 offset;
+    u32 elementStride;
+    Format format;
+    b8 isInstanced;
+    VertexAttributeDesc setArraySize(...);
+    VertexAttributeDesc setBufferIndex(...);
+    VertexAttributeDesc setElementStride(...);
+    VertexAttributeDesc setFormat(...);
+    VertexAttributeDesc setName(...);
+    VertexAttributeDesc setOffset(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceStates::HasUnorderedAccess")]
+extern b8 HasUnorderedAccess(in auto a0);
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::IsValid")]
+extern b8 IsResourceQueueSharingValid(in auto a0);
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet::RangeEnd")]
+extern u64 TextureSubresourceSetRangeEnd(in isize a0, in isize a1, in isize a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet::s_AllArraySlices")]
+extern const u32 s_AllArraySlices;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferRange::s_AllBytes")]
+extern const u64 s_AllBytes;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSlice::s_AllDimensions")]
+extern const u32 s_AllDimensions;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet::s_AllMipLevels")]
+extern const u32 s_AllMipLevels;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::s_AllSubresources")]
+extern const TextureSubresourceSet s_AllSubresources;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet::s_ByteSize")]
+extern const usize s_TextureSubresourceSetByteSize;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferRange::s_ByteSize")]
+extern const usize s_BufferRangeByteSize;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::s_EntireBuffer")]
+extern const BufferRange s_EntireBuffer;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::s_ResourceQueueSharingExclusiveBase")]
+extern const u8 s_ResourceQueueSharingExclusiveBase;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceStates::s_ResourceStatesUnknownBase")]
+extern const i32 s_ResourceStatesUnknownBase;
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceMipResolve::s_TextureSubresourceMipResolveRangeBase")]
+extern const u8 s_TextureSubresourceMipResolveRangeBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

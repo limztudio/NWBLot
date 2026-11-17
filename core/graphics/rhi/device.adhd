@@ -1,0 +1,160 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::Feature::Enum")]
+extern enum Feature : u8{
+    ConservativeRasterization,
+    ConstantBufferRanges,
+    DeferredCommandLists,
+    FastGeometryShader,
+    HeapDirectlyIndexed,
+    HlslExtensionUAV,
+    LinearSweptSpheres,
+    Meshlets,
+    RayQuery,
+    RayTracingAccelStruct,
+    RayTracingClusters,
+    RayTracingOpacityMicromap,
+    RayTracingPipeline,
+    ShaderExecutionReordering,
+    ShaderSpecializations,
+    SinglePassStereo,
+    Spheres,
+    VariableRateShading,
+    CooperativeVectorInferencing,
+    CooperativeVectorTraining,
+    Count
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::SwapChainOutputMode::Enum")]
+extern enum SwapChainOutputMode : u8{
+    SDR,
+    HDR10
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::AdapterInfo"), cpp_layout(88, 8)]
+extern class AdapterInfo{
+    String name;
+    u64 dedicatedVideoMemory;
+    u32 vendorID;
+    u32 deviceID;
+    b8 hasUUID;
+    b8 hasLUID;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::CommandListHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class CommandListHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut CommandList deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::CommandListParameters"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CommandListParameters{
+    CommandQueue queueType;
+    GpuPhysicalQueueId physicalQueue;
+    u64 recordingWorkerDomain;
+    u32 recordingWorkerIndex;
+    CommandListParameters setPhysicalQueue(...);
+    CommandListParameters setQueueType(...);
+    CommandListParameters setRecordingWorker(...);
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::DeviceCreationParameters"), cpp_layout(384, 8)]
+extern class DeviceCreationParameters{
+    Vector<String> requiredBackendInstanceExtensions;
+    Vector<String> requiredBackendLayers;
+    Vector<String> optionalBackendInstanceExtensions;
+    Vector<String> optionalBackendLayers;
+    u32 swapChainBufferCount;
+    u32 swapChainSampleCount;
+    u32 maxFramesInFlight;
+    i32 adapterIndex;
+    Format swapChainFormat;
+    HardwareRayTracingPolicy hardwareRayTracingPolicy;
+    b8 enableDebugRuntime;
+    b8 headlessDevice;
+    b8 enableGpuCrashDiagnostics;
+    b8 enableHDR10Output;
+    b8 enableSwapChainReadback;
+    b8 enableNativeMeshShaders;
+    b8 enableAsyncComputeLane;
+    b8 enableTransferQueue;
+    b8 enableSameClassMultiQueue;
+    b8 enableCrossFamilySameClassQueueRouting;
+    Vector<String> requiredBackendDeviceExtensions;
+    Vector<String> optionalBackendDeviceExtensions;
+    Vector<i32> ignoredValidationMessageIds;
+    GpuDescriptorHeapAbi bindlessHeapAbi;
+    Path pipelineCacheDirectory;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::DeviceHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class DeviceHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut Device deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionDesc"), cpp_layout(56, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class QueueSubmissionDesc{
+    usize waitTokenCount;
+    QueueSubmissionPreSubmitHook preSubmitHook;
+    b8 forceNativeSubmission;
+    QueueSubmissionDesc setPreSubmitHook(...);
+    QueueSubmissionDesc setWaitTokens(...);
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionNativeSignal"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class QueueSubmissionNativeSignal{
+    Object semaphore;
+    u64 value;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionPreSubmitHook"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class QueueSubmissionPreSubmitHook{
+    u64 identity;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionReceipt"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class QueueSubmissionReceipt{
+    QueueSubmissionToken token;
+    usize timelineWaitCount;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::SwapChainRuntimeState"), cpp_layout(12, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class SwapChainRuntimeState{
+    u32 backBufferWidth;
+    u32 backBufferHeight;
+    Format backBufferFormat;
+    SwapChainOutputMode outputMode;
+    b8 vsyncEnabled;
+    b8 swapChainReadbackAvailable;
+};
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::WaveLaneCountRange"), cpp_layout(4, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class WaveLaneCountRange{
+    u32 maxWaveLaneCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::AdapterInfo::s_LuidByteCount")]
+extern const usize s_LuidByteCount;
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::SwapChainOutputMode::s_SwapChainOutputModeSDRBase")]
+extern const u8 s_SwapChainOutputModeSDRBase;
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::AdapterInfo::s_UuidByteCount")]
+extern const usize s_UuidByteCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

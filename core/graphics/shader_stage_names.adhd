@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::ArchiveStageNameFromShaderType")]
+extern Name ArchiveStageNameFromShaderType(in auto a0);
+
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::ArchiveStageTextFromShaderType")]
+extern StringView ArchiveStageTextFromShaderType(in auto a0);
+
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::ShaderTypeFromArchiveStageName")]
+extern ShaderType ShaderTypeFromArchiveStageName(in Name a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_AmplificationStageName")]
+extern const Name s_AmplificationStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_AnyHitStageName")]
+extern const Name s_AnyHitStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_CallableStageName")]
+extern const Name s_CallableStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_ClosestHitStageName")]
+extern const Name s_ClosestHitStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_ComputeStageName")]
+extern const Name s_ComputeStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_DomainStageName")]
+extern const Name s_DomainStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_GeometryStageName")]
+extern const Name s_GeometryStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_HullStageName")]
+extern const Name s_HullStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_IntersectionStageName")]
+extern const Name s_IntersectionStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_MeshStageName")]
+extern const Name s_MeshStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_MissStageName")]
+extern const Name s_MissStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_PixelStageName")]
+extern const Name s_PixelStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_RayGenerationStageName")]
+extern const Name s_RayGenerationStageName;
+[cpp_header("<core/graphics/shader_stage_names.h>"), cpp_name("::NWB::Core::ShaderStageNames::s_VertexStageName")]
+extern const Name s_VertexStageName;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,20 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/text_input_service.h>"), cpp_name("::NWB::Core::QueuedTextInputService"), cpp_layout(208, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class QueuedTextInputService{
+    TextInputSessionToken activeSession(...)const;
+    Expected<TextInputSessionToken, TextInputAdmission> begin(...);
+    b8 end(...);
+    b8 isOwnerThread(...)const;
+    TextInputPollResult poll(...);
+    b8 setFocused(...);
+    u64 surroundingRevision(...)const;
+    TextInputAdmission updateCaret(...);
+    TextInputAdmission updateSurrounding(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

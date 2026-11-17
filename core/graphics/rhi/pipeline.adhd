@@ -1,0 +1,184 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::PrimitiveType::Enum")]
+extern enum PrimitiveType : u8{
+    PointList,
+    LineList,
+    LineStrip,
+    TriangleList,
+    TriangleStrip,
+    TriangleFan,
+    TriangleListWithAdjacency,
+    TriangleStripWithAdjacency,
+    PatchList
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::ShadingRateCombiner::Enum")]
+extern enum ShadingRateCombiner : u8{
+    Passthrough,
+    Override,
+    Min,
+    Max,
+    ApplyRelative
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::VariableShadingRate::Enum")]
+extern enum VariableShadingRate : u8{
+    e1x1,
+    e1x2,
+    e2x1,
+    e2x2,
+    e2x4,
+    e4x2,
+    e4x4
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::BindingLayoutVector"), cpp_layout(136, 8), cpp_flags(self_defaulted, brace_init)]
+extern class BindingLayoutVector;
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::ComputePipelineDesc"), cpp_layout(152, 8), cpp_flags(self_defaulted, brace_init)]
+extern class ComputePipelineDesc{
+    ShaderHandle computeShader;
+    FixedVector<BindingLayoutHandle, 8> bindingLayouts;
+    ComputePipelineDesc addBindingLayout(...);
+    ComputePipelineDesc setComputeShader(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::ComputePipelineHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class ComputePipelineHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut ComputePipeline deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::GraphicsPipelineDesc"), cpp_layout(352, 8), cpp_flags(self_defaulted, brace_init)]
+extern class GraphicsPipelineDesc{
+    InputLayoutHandle inputLayout;
+    ShaderHandle vertexShader;
+    ShaderHandle hullShader;
+    ShaderHandle domainShader;
+    ShaderHandle geometryShader;
+    ShaderHandle pixelShader;
+    RenderState renderState;
+    FixedVector<BindingLayoutHandle, 8> bindingLayouts;
+    VariableRateShadingState shadingRateState;
+    PrimitiveType primType;
+    u32 patchControlPoints;
+    GraphicsPipelineDesc addBindingLayout(...);
+    GraphicsPipelineDesc setInputLayout(...);
+    GraphicsPipelineDesc setPixelShader(...);
+    GraphicsPipelineDesc setRenderState(...);
+    GraphicsPipelineDesc setVertexShader(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::GraphicsPipelineHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class GraphicsPipelineHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut GraphicsPipeline deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::MeshletPipelineDesc"), cpp_layout(288, 8), cpp_flags(self_defaulted, brace_init)]
+extern class MeshletPipelineDesc{
+    FixedVector<BindingLayoutHandle, 8> bindingLayouts;
+    ShaderHandle amplificationShader;
+    ShaderHandle meshShader;
+    ShaderHandle pixelShader;
+    RenderState renderState;
+    PrimitiveType primType;
+    MeshletPipelineDesc addBindingLayout(...);
+    MeshletPipelineDesc setMeshShader(...);
+    MeshletPipelineDesc setPixelShader(...);
+    MeshletPipelineDesc setRenderState(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::MeshletPipelineHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class MeshletPipelineHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut MeshletPipeline deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RayTracingPipelineDesc"), cpp_layout(216, 8)]
+extern class RayTracingPipelineDesc{
+    Vector<RayTracingPipelineShaderDesc> shaders;
+    Vector<RayTracingPipelineHitGroupDesc> hitGroups;
+    FixedVector<BindingLayoutHandle, 8> globalBindingLayouts;
+    u32 maxPayloadSize;
+    u32 maxAttributeSize;
+    u32 maxRecursionDepth;
+    b8 allowOpacityMicromaps;
+    b8 allowClusterAccelerationStructures;
+    b8 allowSpheres;
+    b8 allowLinearSweptSpheres;
+    RayTracingPipelineDesc addBindingLayout(...);
+    RayTracingPipelineDesc addHitGroup(...);
+    RayTracingPipelineDesc addShader(...);
+    RayTracingPipelineDesc setMaxPayloadSize(...);
+    RayTracingPipelineDesc setMaxRecursionDepth(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RayTracingPipelineHandle"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+extern class RayTracingPipelineHandle{
+    b8 valid(...)const;
+    u32 reset(...);
+    mut RayTracingPipeline deref(...)const;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RayTracingPipelineHitGroupDesc"), cpp_layout(88, 8), cpp_flags(self_defaulted, brace_init)]
+extern class RayTracingPipelineHitGroupDesc{
+    ShaderHandle closestHitShader;
+    ShaderHandle anyHitShader;
+    ShaderHandle intersectionShader;
+    BindingLayoutHandle bindingLayout;
+    StringView exportName;
+    b8 isProceduralPrimitive;
+    RayTracingPipelineHitGroupDesc setBindingLayout(...);
+    RayTracingPipelineHitGroupDesc setClosestHitShader(...);
+    RayTracingPipelineHitGroupDesc setExportName(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RayTracingPipelineShaderDesc"), cpp_layout(48, 8), cpp_flags(self_defaulted, brace_init)]
+extern class RayTracingPipelineShaderDesc{
+    ShaderHandle shader;
+    BindingLayoutHandle bindingLayout;
+    StringView exportName;
+    RayTracingPipelineShaderDesc setBindingLayout(...);
+    RayTracingPipelineShaderDesc setExportName(...);
+    RayTracingPipelineShaderDesc setShader(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RenderState"), cpp_layout(100, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class RenderState{
+    RasterState rasterState;
+    BlendState blendState;
+    DepthStencilState depthStencilState;
+    SinglePassStereoState singlePassStereo;
+    RenderState setDepthStencilState(...);
+    RenderState setRasterState(...);
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::SinglePassStereoState"), cpp_layout(3, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class SinglePassStereoState{
+    u8 renderTargetIndexOffset;
+    b8 enabled;
+    b8 independentViewportMask;
+};
+
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::VariableRateShadingState"), cpp_layout(4, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class VariableRateShadingState{
+    VariableShadingRate shadingRate;
+    ShadingRateCombiner pipelinePrimitiveCombiner;
+    ShadingRateCombiner imageCombiner;
+    b8 enabled;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

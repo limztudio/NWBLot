@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch")]
+extern Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(in Path a0, in StringView a1, in Path a2, in auto a3, mut auto a4);
+
+[cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::ExpandCompositeAsset")]
+extern Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(in Path a0, in StringView a1, in Path a2, in auto a3, mut auto a4);
+
+[cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook")]
+extern Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure> ExpandAssetBunchForAssetCook(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

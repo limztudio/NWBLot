@@ -1,0 +1,620 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphCompileRuntimeStatistics"), cpp_layout(352, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphCompileRuntimeStatistics{
+    u64 taskCount;
+    u64 resourceCount;
+    u64 resourceUseCount;
+    u64 explicitDependencyCount;
+    u64 inferredDependencyCount;
+    u64 packetCount;
+    u64 packetDependencyCount;
+    u64 mergedTaskCount;
+    u64 transitionBarrierCount;
+    u64 uavBarrierCount;
+    u64 ownershipReleaseBarrierCount;
+    u64 ownershipAcquireBarrierCount;
+    u64 stateExportBarrierCount;
+    u64 logicalOwnershipTransferCount;
+    u64 logicalOwnershipTransferSignatureCount;
+    u64 repeatedOwnershipTransferSignatureCount;
+    u64 concurrentSharingCouldAvoidTransferCount;
+    u64 concurrentSharingAdviceResourceCount;
+    u64 logicalOwnershipTransferInternalCount;
+    u64 logicalOwnershipTransferExternalImportCount;
+    u64 logicalOwnershipTransferExternalExportCount;
+    u64 resourceSetCount;
+    u64 resourceSetMemberCount;
+    u64 directResourceUseCount;
+    u64 declaredResourceSetUseCount;
+    u64 expandedResourceSetMemberUseCount;
+    u64 payloadObjectCount;
+    u64 payloadObjectBytes;
+    u64 uploadBlobCount;
+    u64 uploadBlobBytes;
+    f64 declarationSeconds;
+    f64 analysisSeconds;
+    f64 validationSeconds;
+    f64 dependencyAnalysisSeconds;
+    f64 hazardAnalysisSeconds;
+    f64 topologicalOrderSeconds;
+    f64 queueAssignmentSeconds;
+    f64 planningSeconds;
+    f64 packetizationSeconds;
+    f64 resourceStatePlanningSeconds;
+    f64 packetDependencyPlanningSeconds;
+    f64 totalSeconds;
+    u64 resourceVersionCount;
+    u64 resourceVersionEdgeCount;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphCompiledTask"), cpp_layout(20, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphCompiledTask{
+    u32 nodeIndex;
+    u32 packetIndex;
+    u64 planGeneration;
+    u8 packetizationDecision;
+    Array<u8, 3> reserved;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphEdge"), cpp_layout(12, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class EncodedFrameGraphEdge{
+    u32 fromNodeIndex;
+    u32 toNodeIndex;
+    u8 kind;
+    u8 flags;
+    u16 reserved;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphNode"), cpp_layout(72, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphNode{
+    NameHash nameHash;
+    u32 labelOffset;
+    u8 kind;
+    u8 flags;
+    u16 reserved;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics"), cpp_layout(88, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPacketSubmissionStatistics{
+    u32 ownerNodeIndex;
+    u32 packetIndex;
+    u64 packetGeneration;
+    EncodedFrameGraphPhysicalQueueId queue;
+    u8 queueClass;
+    u8 joinsAcceptedQueueFrontier;
+    u8 recoverySubmission;
+    u8 reserved;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    f64 submissionSeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPayloadHeader"), cpp_layout(52, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPayloadHeader{
+    u32 magic;
+    u16 version;
+    u16 reserved;
+    u64 frameIndex;
+    u32 nodeCount;
+    u32 edgeCount;
+    u32 stringTableBytes;
+    u32 queueAssignmentCount;
+    u32 compiledTaskCount;
+    u32 runtimeStatisticsCount;
+    u32 physicalQueueRuntimeStatisticsCount;
+    u32 packetSubmissionStatisticsCount;
+    u8 packetSubmissionStatisticsPresent;
+    Array<u8, 3> reservedTail;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics"), cpp_layout(112, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics{
+    u64 taskCount;
+    u64 packetCount;
+    u64 mergedTaskCount;
+    u64 prologueBarrierCount;
+    u64 epilogueBarrierCount;
+    u64 ownershipReleaseBarrierCount;
+    u64 ownershipAcquireBarrierCount;
+    u64 incomingLogicalOwnershipTransferCount;
+    u64 outgoingLogicalOwnershipTransferCount;
+    u64 incomingLogicalOwnershipTransferSignatureCount;
+    u64 outgoingLogicalOwnershipTransferSignatureCount;
+    u64 incomingRepeatedOwnershipTransferSignatureCount;
+    u64 outgoingRepeatedOwnershipTransferSignatureCount;
+    u64 concurrentSharingAdviceResourceCount;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueId"), cpp_layout(4, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPhysicalQueueId{
+    u16 index;
+    u16 deviceGeneration;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics"), cpp_layout(80, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics{
+    u64 packetCount;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 barrierCount;
+    u64 workerRoutedPacketCount;
+    u64 parallelPacketCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    f64 recordingSeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics"), cpp_layout(328, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPhysicalQueueRuntimeStatistics{
+    u32 ownerNodeIndex;
+    EncodedFrameGraphPhysicalQueueId queue;
+    u8 queueClass;
+    Array<u8, 7> reserved;
+    EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics compile;
+    EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
+    EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics"), cpp_layout(120, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics{
+    u64 acceptedPacketCount;
+    u64 acceptedTaskCount;
+    u64 rejectedPacketCount;
+    u64 rejectedTaskCount;
+    u64 nativeSubmissionCount;
+    u64 rejectedSubmissionCount;
+    u64 nativeCommandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    u64 acceptedFrontierSubmissionCount;
+    f64 submissionSeconds;
+    u64 recoverySubmissionCount;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphQueueAssignment"), cpp_layout(52, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphQueueAssignment{
+    u32 nodeIndex;
+    EncodedFrameGraphPhysicalQueueId initialQueue;
+    EncodedFrameGraphPhysicalQueueId plannedQueue;
+    EncodedFrameGraphPhysicalQueueId acceptedQueue;
+    EncodedFrameGraphPhysicalQueueId previousAcceptedQueue;
+    i32 scoreOverlap;
+    i32 scoreQueueLoad;
+    i32 scoreIncomingCrossings;
+    i32 scoreOutgoingCrossings;
+    i32 scoreOwnershipTransfers;
+    i32 scoreTotal;
+    u8 queueClass;
+    u8 reason;
+    u8 modifiers;
+    u8 acceptance;
+    u8 dedicated;
+    Array<u8, 3> reserved;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphRecordingRuntimeStatistics"), cpp_layout(112, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphRecordingRuntimeStatistics{
+    u64 packetCount;
+    u64 taskCount;
+    u64 commandListCount;
+    u64 barrierCount;
+    u64 workerRoutedPacketCount;
+    u64 parallelPacketCount;
+    f64 commandListAcquisitionSeconds;
+    f64 graphBarrierRecordingSeconds;
+    f64 taskRecordSeconds;
+    f64 recordingSeconds;
+    f64 recordingElapsedSeconds;
+    f64 readyFrontierElapsedSeconds;
+    f64 readyFrontierWorkerBusySeconds;
+    f64 readyFrontierWorkerCapacitySeconds;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphRuntimeStatistics"), cpp_layout(616, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphRuntimeStatistics{
+    u32 nodeIndex;
+    u16 deviceGeneration;
+    u16 reserved;
+    u64 graphGeneration;
+    u64 planGeneration;
+    u64 recordingAttemptGeneration;
+    EncodedFrameGraphCompileRuntimeStatistics compile;
+    EncodedFrameGraphRecordingRuntimeStatistics recording;
+    EncodedFrameGraphSubmissionRuntimeStatistics submission;
+};
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::EncodedFrameGraphSubmissionRuntimeStatistics"), cpp_layout(120, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedFrameGraphSubmissionRuntimeStatistics{
+    u64 acceptedPacketCount;
+    u64 acceptedTaskCount;
+    u64 rejectedPacketCount;
+    u64 rejectedTaskCount;
+    u64 nativeSubmissionCount;
+    u64 rejectedSubmissionCount;
+    u64 nativeCommandListCount;
+    u64 plannedWaitTokenCount;
+    u64 sameQueueWaitElisionCount;
+    u64 timelineWaitCount;
+    u64 mergedTimelineWaitCount;
+    u64 inheritedTimelineWaitElisionCount;
+    u64 acceptedFrontierSubmissionCount;
+    f64 submissionSeconds;
+    u64 recoverySubmissionCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsAnalysisSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsAnalysisSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingCouldAvoidTransferCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingCouldAvoidTransferCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsDeclarationSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsDeclarationSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsDeclaredResourceSetUseCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsDeclaredResourceSetUseCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsDependencyAnalysisSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsDependencyAnalysisSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsDirectResourceUseCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsDirectResourceUseCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsExpandedResourceSetMemberUseCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsExpandedResourceSetMemberUseCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsExplicitDependencyCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsExplicitDependencyCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsHazardAnalysisSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsHazardAnalysisSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsInferredDependencyCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsInferredDependencyCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalExportCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalExportCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalImportCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalImportCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferInternalCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferInternalCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferSignatureCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferSignatureCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsMergedTaskCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsMergedTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPacketCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyPlanningSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyPlanningSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPacketizationSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketizationSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectBytesOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectBytesOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsPlanningSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsPlanningSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsQueueAssignmentSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsQueueAssignmentSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsRepeatedOwnershipTransferSignatureCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsRepeatedOwnershipTransferSignatureCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetMemberCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetMemberCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceStatePlanningSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceStatePlanningSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceUseCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceUseCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceVersionCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceVersionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsResourceVersionEdgeCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceVersionEdgeCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsStateExportBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsStateExportBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsTaskCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsTopologicalOrderSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsTopologicalOrderSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsTotalSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsTotalSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsTransitionBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsTransitionBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsUavBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsUavBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobBytesOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobBytesOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobCountOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsValidationSecondsOffset")]
+extern const usize s_EncodedFrameGraphCompileRuntimeStatisticsValidationSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphCompiledTaskByteSize")]
+extern const usize s_EncodedFrameGraphCompiledTaskByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphEdgeByteSize")]
+extern const usize s_EncodedFrameGraphEdgeByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphNodeByteSize")]
+extern const usize s_EncodedFrameGraphNodeByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsCommandListCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsCommandListCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsInheritedTimelineWaitElisionCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsInheritedTimelineWaitElisionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsJoinsAcceptedQueueFrontierOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsJoinsAcceptedQueueFrontierOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsMergedTimelineWaitCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsMergedTimelineWaitCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsOwnerNodeIndexOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsOwnerNodeIndexOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsPacketGenerationOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsPacketGenerationOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsPacketIndexOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsPacketIndexOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsPlannedWaitTokenCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsPlannedWaitTokenCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsQueueClassOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsQueueClassOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsQueueOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsQueueOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsRecoverySubmissionOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsRecoverySubmissionOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsReservedOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsReservedOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsSameQueueWaitElisionCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsSameQueueWaitElisionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsSubmissionSecondsOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsSubmissionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsTimelineWaitCountOffset")]
+extern const usize s_EncodedFrameGraphPacketSubmissionStatisticsTimelineWaitCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderByteSize")]
+extern const usize s_EncodedFrameGraphPayloadHeaderByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderCompiledTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderCompiledTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderEdgeCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderEdgeCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderFrameIndexOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderFrameIndexOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderMagicOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderMagicOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderNodeCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderNodeCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderPacketSubmissionStatisticsCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderPacketSubmissionStatisticsCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderPacketSubmissionStatisticsPresentOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderPacketSubmissionStatisticsPresentOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderPhysicalQueueRuntimeStatisticsCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderPhysicalQueueRuntimeStatisticsCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderQueueAssignmentCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderQueueAssignmentCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderReservedOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderReservedOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderReservedTailOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderReservedTailOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderRuntimeStatisticsCountOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderRuntimeStatisticsCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderStringTableBytesOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderStringTableBytesOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPayloadHeaderVersionOffset")]
+extern const usize s_EncodedFrameGraphPayloadHeaderVersionOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsEpilogueBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsEpilogueBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferSignatureCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferSignatureCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingRepeatedOwnershipTransferSignatureCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingRepeatedOwnershipTransferSignatureCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsMergedTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsMergedTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferSignatureCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferSignatureCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingRepeatedOwnershipTransferSignatureCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingRepeatedOwnershipTransferSignatureCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPacketCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPrologueBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPrologueBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueIdByteSize")]
+extern const usize s_EncodedFrameGraphPhysicalQueueIdByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsPacketCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsParallelPacketCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsParallelPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsRecordingSecondsOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsRecordingSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskRecordSecondsOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskRecordSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsCompileOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsCompileOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsNestedRecoverySubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsNestedRecoverySubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsNestedSubmissionSecondsOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsNestedSubmissionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsOwnerNodeIndexOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsOwnerNodeIndexOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueClassOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueClassOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsRecordingOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsRecordingOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsReservedOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsReservedOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsSubmissionOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsSubmissionOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedPacketCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsInheritedTimelineWaitElisionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsInheritedTimelineWaitElisionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeCommandListCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeCommandListCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeSubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeSubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRecoverySubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRecoverySubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedPacketCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedSubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedSubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedTaskCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSubmissionSecondsOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSubmissionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsTimelineWaitCountOffset")]
+extern const usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsTimelineWaitCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphQueueAssignmentByteSize")]
+extern const usize s_EncodedFrameGraphQueueAssignmentByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsBarrierCountOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsBarrierCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListCountOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsPacketCountOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsParallelPacketCountOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsParallelPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierElapsedSecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierElapsedSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerBusySecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerBusySecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerCapacitySecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerCapacitySecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingElapsedSecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingElapsedSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingSecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsTaskCountOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsTaskRecordSecondsOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsTaskRecordSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset")]
+extern const usize s_EncodedFrameGraphRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsCompileOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsCompileOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsDeviceGenerationOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsDeviceGenerationOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsGraphGenerationOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsGraphGenerationOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsNestedRecoverySubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsNestedRecoverySubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsNestedSubmissionSecondsOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsNestedSubmissionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsNodeIndexOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsNodeIndexOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsPlanGenerationOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsPlanGenerationOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsRecordingAttemptGenerationOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsRecordingAttemptGenerationOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsRecordingOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsRecordingOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsReservedOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsReservedOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsSubmissionOffset")]
+extern const usize s_EncodedFrameGraphRuntimeStatisticsSubmissionOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedPacketCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedTaskCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsByteSize")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsByteSize;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsInheritedTimelineWaitElisionCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsInheritedTimelineWaitElisionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeCommandListCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeCommandListCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeSubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeSubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsRecoverySubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRecoverySubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedPacketCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedPacketCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedSubmissionCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedSubmissionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedTaskCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedTaskCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsSubmissionSecondsOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsSubmissionSecondsOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsTimelineWaitCountOffset")]
+extern const usize s_EncodedFrameGraphSubmissionRuntimeStatisticsTimelineWaitCountOffset;
+[cpp_header("<core/telemetry/frame_graph_encoded.h>"), cpp_name("::NWB::Core::Telemetry::s_FrameGraphPackedAlignBytes")]
+extern const usize s_FrameGraphPackedAlignBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

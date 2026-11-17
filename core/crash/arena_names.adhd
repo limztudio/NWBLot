@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/arena_names.h>"), cpp_name("::NWB::Core::Crash::CrashArenaScope::s_DumpArena")]
+extern const Name s_DumpArena;
+[cpp_header("<core/crash/arena_names.h>"), cpp_name("::NWB::Core::Crash::CrashArenaScope::s_PlatformInstallationScratch")]
+extern const Name s_PlatformInstallationScratch;
+[cpp_header("<core/crash/arena_names.h>"), cpp_name("::NWB::Core::Crash::CrashArenaScope::s_UploadArena")]
+extern const Name s_UploadArena;
+[cpp_header("<core/crash/arena_names.h>"), cpp_name("::NWB::Core::Crash::CrashArenaScope::s_UploadScratch")]
+extern const Name s_UploadScratch;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

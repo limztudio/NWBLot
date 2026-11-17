@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::HasBuiltinEnumEntry")]
+extern b8 HasBuiltinEnumEntry(in StringView a0, in StringView a1);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsArenaFirstCtorType")]
+extern b8 IsArenaFirstCtorType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::OmitsArenaInCtorType")]
+extern b8 OmitsArenaInCtorType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsValidBuiltinVectorOrMatrixCtorArity")]
+extern b8 IsValidBuiltinVectorOrMatrixCtorArity(in StringView a0, in isize a1);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsBorrowViewType")]
+extern b8 IsBorrowViewType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsNonSerializableBuiltinType")]
+extern b8 IsNonSerializableBuiltinType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsSingleValueCtorBuiltinType")]
+extern b8 IsSingleValueCtorBuiltinType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::NeedsBraceDefaultFieldInit")]
+extern b8 NeedsBraceDefaultFieldInit(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsStringLikeType")]
+extern b8 IsStringLikeType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsOwningStringType")]
+extern b8 IsOwningStringType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::HasMutableStringElements")]
+extern b8 HasMutableStringElements(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsStringByteAccessorMethod")]
+extern b8 IsStringByteAccessorMethod(in StringView a0, in StringView a1);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsStringReceiverBorrowViewMethod")]
+extern b8 IsStringReceiverBorrowViewMethod(in StringView a0, in StringView a1);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsBuiltinStringViewBorrowFunction")]
+extern b8 IsBuiltinStringViewBorrowFunction(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsContainerOrWrapperValueAccessMethod")]
+extern b8 IsContainerOrWrapperValueAccessMethod(in StringView a0, in StringView a1, in b8 a2);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsNwbMapKeyType")]
+extern b8 IsNwbMapKeyType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::RequiresTCharAdaptation")]
+extern b8 RequiresTCharAdaptation(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsImplicitlyConvertibleBuiltinType")]
+extern b8 IsImplicitlyConvertibleBuiltinType(in StringView a0, in StringView a1);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::DoesImplicitConversionPropagateFirstTypeArg")]
+extern b8 DoesImplicitConversionPropagateFirstTypeArg(in StringView a0, in StringView a1);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsNonThreadSafeContainer")]
+extern b8 IsNonThreadSafeContainer(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsFixedArrayContainerType")]
+extern b8 IsFixedArrayContainerType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsOptionalContainerType")]
+extern b8 IsOptionalContainerType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsAtomicGenericType")]
+extern b8 IsAtomicGenericType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsAssetHandleType")]
+extern b8 IsAssetHandleType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsReflectedLinearContainerType")]
+extern b8 IsReflectedLinearContainerType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsReflectedMapContainerType")]
+extern b8 IsReflectedMapContainerType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsNonCopyableBaseInterfaceName")]
+extern b8 IsNonCopyableBaseInterfaceName(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsMoveOnlyTypeName")]
+extern b8 IsMoveOnlyTypeName(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::HasBuiltinSimdRegisterField")]
+extern b8 HasBuiltinSimdRegisterField(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsOverAlignedBuiltinType")]
+extern b8 IsOverAlignedBuiltinType(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

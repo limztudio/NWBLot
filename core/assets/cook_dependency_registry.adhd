@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyItemContext"), cpp_layout(704, 8), cpp_flags(no_assign)]
+extern class CookDependencyItemContext{
+    Path assetRoot;
+    StringView virtualRoot;
+    Path nwbFilePath;
+    Name assetType;
+    Name virtualPath;
+    MetascriptValue asset;
+    GlobalArena arena;
+    ScratchArena scratchArena;
+};
+
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyRegistry"), cpp_layout(912, 8), cpp_flags(no_copy, no_assign)]
+extern class CookDependencyRegistry{
+    b8 registerType(...);
+    b8 registerDefaultEntryAsset(...);
+    b8 matchesAssetType(...)const;
+    mut DefaultCookEntryAssetDescriptor defaultEntryAsset(...)const;
+    b8 extractDependencies(...)const;
+};
+
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::DefaultCookEntryAssetDescriptor"), cpp_layout(32, 8), cpp_flags(self_defaulted, borrow_view, brace_init)]
+extern class DefaultCookEntryAssetDescriptor{
+    Name virtualPath;
+    Name assetType;
+    StringView virtualPathText;
+};
+
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::ICookDependencyCollector"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class ICookDependencyCollector{
+    b8 addAssetDependency(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

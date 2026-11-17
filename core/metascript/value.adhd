@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::ValueType::Enum")]
+extern enum MetascriptValueType : u8{
+    Null,
+    Integer,
+    Double,
+    String,
+    Reference,
+    List,
+    Map
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value"), cpp_layout(24, 8)]
+extern class MetascriptValue{
+    mut GlobalArena arena(...)const;
+    f64 asDouble(...)const;
+    i64 asInteger(...)const;
+    StringView asReference(...)const;
+    StringView asString(...)const;
+    mut MetascriptValue field(...);
+    b8 forEachMapEntry(in Func<b8(in StringView, in MetascriptValue)> a0)const;
+    b8 hasField(...)const;
+    b8 isDouble(...)const;
+    b8 isInteger(...)const;
+    b8 isList(...)const;
+    b8 isMap(...)const;
+    b8 isNull(...)const;
+    b8 isNumeric(...)const;
+    b8 isReference(...)const;
+    b8 isString(...)const;
+    Span<MetascriptValue> listView(...)const;
+    void makeList(...);
+    void makeMap(...);
+    void setDouble(...);
+    void setInteger(...);
+    void setReference(...);
+    void setString(...);
+    f64 toDouble(...)const;
+    MetascriptValueType type(...)const;
+    b8 visitField(in StringView a0, in Func<void(in MetascriptValue)> a1)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value::Reference")]
+extern MetascriptValue MetascriptValueReference(in StringView a0, mut auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::ValueType::s_ValueTypeNullBase")]
+extern const u8 s_ValueTypeNullBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

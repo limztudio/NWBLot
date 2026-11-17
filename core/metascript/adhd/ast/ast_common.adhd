@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/ast/ast_common.h>"), cpp_name("::NWB::Core::Metascript::Adhd::HasAdhdExtension")]
+extern b8 HasAdhdExtension(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/ast/ast_common.h>"), cpp_name("::NWB::Core::Metascript::Adhd::StripAdhdExtension"), cpp_flags(borrow_view)]
+extern StringView StripAdhdExtension(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/ast/ast_common.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ExtractAdhdFileStem"), cpp_flags(borrow_view)]
+extern StringView ExtractAdhdFileStem(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

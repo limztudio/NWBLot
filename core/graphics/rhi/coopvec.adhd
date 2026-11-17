@@ -1,0 +1,83 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorDataType::Enum")]
+extern enum CooperativeVectorDataType : u8{
+    UInt8,
+    SInt8,
+    UInt8Packed,
+    SInt8Packed,
+    UInt16,
+    SInt16,
+    UInt32,
+    SInt32,
+    UInt64,
+    SInt64,
+    FloatE4M3,
+    FloatE5M2,
+    Float16,
+    BFloat16,
+    Float32,
+    Float64
+};
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatrixLayout::Enum")]
+extern enum CooperativeVectorMatrixLayout : u8{
+    RowMajor,
+    ColumnMajor,
+    InferencingOptimal,
+    TrainingOptimal
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorConvertMatrixLayoutDesc"), cpp_layout(88, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CooperativeVectorConvertMatrixLayoutDesc{
+    CooperativeVectorMatrixLayoutDesc src;
+    CooperativeVectorMatrixLayoutDesc dst;
+    u32 numRows;
+    u32 numColumns;
+};
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorDeviceFeatures"), cpp_layout(40, 8)]
+extern class CooperativeVectorDeviceFeatures{
+    Vector<CooperativeVectorMatMulFormatCombo> matMulFormats;
+    b8 trainingFloat16;
+    b8 trainingFloat32;
+};
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatMulFormatCombo"), cpp_layout(6, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CooperativeVectorMatMulFormatCombo{
+    CooperativeVectorDataType inputType;
+    CooperativeVectorDataType inputInterpretation;
+    CooperativeVectorDataType matrixInterpretation;
+    CooperativeVectorDataType biasInterpretation;
+    CooperativeVectorDataType outputType;
+    b8 transposeSupported;
+};
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::CooperativeVectorMatrixLayoutDesc"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class CooperativeVectorMatrixLayoutDesc{
+    u64 offset;
+    usize size;
+    usize stride;
+    CooperativeVectorDataType type;
+    CooperativeVectorMatrixLayout layout;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::GetCooperativeVectorDataTypeSize")]
+extern usize GetCooperativeVectorDataTypeSize(in auto a0);
+
+[cpp_header("<core/graphics/rhi/coopvec.h>"), cpp_name("::NWB::Core::GetCooperativeVectorOptimalMatrixStride")]
+extern Expected<usize> GetCooperativeVectorOptimalMatrixStride(in auto a0, in auto a1, in isize a2, in isize a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

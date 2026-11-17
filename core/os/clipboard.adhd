@@ -1,0 +1,91 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardAdmission::Enum")]
+extern enum ClipboardAdmission : u8{
+    WrongThread,
+    QueueFull
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardChannel::Enum")]
+extern enum ClipboardChannel : u8{
+    Clipboard,
+    PrimarySelection
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardOperation::Enum")]
+extern enum ClipboardOperation : u8{
+    ReadText,
+    WriteText
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardPollResult::Enum")]
+extern enum ClipboardPollResult : u8{
+    InvalidRequest,
+    Pending,
+    Completed,
+    WrongThread
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardStatus::Enum")]
+extern enum ClipboardStatus : u8{
+    Success,
+    Unsupported,
+    Unavailable,
+    InvalidText,
+    TooLarge,
+    NativeFailure
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCapabilities"), cpp_layout(2, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class ClipboardCapabilities{
+    b8 readText;
+    b8 writeText;
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion"), cpp_layout(64, 8)]
+extern class ClipboardCompletion{
+    String text;
+    ClipboardRequestToken token;
+    ClipboardOperation operation;
+    ClipboardChannel channel;
+    ClipboardStatus status;
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardRequestToken"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class ClipboardRequestToken{
+    u64 service;
+    u64 generation;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::IClipboardService"), cpp_layout(8, 8), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IClipboardService{
+    b8 cancel(...);
+    ClipboardCapabilities capabilities(...)const;
+    b8 isOwnerThread(...)const;
+    ClipboardPollResult poll(...);
+    b8 pump(...);
+    Expected<ClipboardRequestToken, ClipboardAdmission> requestReadText(...);
+    Expected<ClipboardRequestToken, ClipboardAdmission> requestWriteText(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::s_ClipboardChannelCount")]
+extern const usize s_ClipboardChannelCount;
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::s_ClipboardMaxOutstandingRequests")]
+extern const usize s_ClipboardMaxOutstandingRequests;
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::s_ClipboardMaxTextBytes")]
+extern const usize s_ClipboardMaxTextBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

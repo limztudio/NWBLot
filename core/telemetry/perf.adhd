@@ -1,0 +1,135 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfMemoryPayloadFlag::Mask")]
+extern enum PerfMemoryPayloadFlag : u16{
+    None,
+    HasDelta
+};
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfTimingSource::Enum")]
+extern enum PerfTimingSource : u8{
+    Unknown,
+    Cpu,
+    Gpu
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::EncodedPerfMemoryPayloadHeader"), cpp_layout(192, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedPerfMemoryPayloadHeader{
+    u32 magic;
+    u16 version;
+    u16 flags;
+    NameHash scopeHash;
+    u64 frameIndex;
+    u64 reservedBytes;
+    u64 usedBytes;
+    u64 peakUsedBytes;
+    u64 allocationCount;
+    u64 reallocationCount;
+    u64 deallocationCount;
+    u64 previousFrameIndex;
+    i64 deltaReservedBytes;
+    i64 deltaUsedBytes;
+    i64 deltaPeakUsedBytes;
+    i64 deltaAllocationCount;
+    i64 deltaReallocationCount;
+    i64 deltaDeallocationCount;
+    u32 scopeNameBytes;
+    u32 source;
+};
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::EncodedPerfTimingPayloadHeader"), cpp_layout(136, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class EncodedPerfTimingPayloadHeader{
+    u32 magic;
+    u16 version;
+    u8 source;
+    u8 reserved;
+    NameHash scopeHash;
+    f64 seconds;
+    f64 minSeconds;
+    f64 maxSeconds;
+    f64 lastSeconds;
+    u64 publishFrameIndex;
+    u64 firstSampleFrameIndex;
+    u64 lastSampleFrameIndex;
+    u32 sampleCount;
+    u32 scopeNameBytes;
+};
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfMemoryPayload"), cpp_layout(280, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class PerfMemoryPayload{
+    Name scopeName;
+    StringView scopeText;
+    MemorySnapshot snapshot;
+    MemoryDelta delta;
+};
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfSessionRecordResult"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class PerfSessionRecordResult{
+    u32 cpuTimingEvents;
+    u32 gpuTimingEvents;
+    u32 memoryEvents;
+    b8 succeeded;
+    u32 eventCount(...)const;
+    b8 ok(...)const;
+};
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfTimingPayload"), cpp_layout(152, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class PerfTimingPayload{
+    Name scopeName;
+    StringView scopeText;
+    TimingStats stats;
+    PerfTimingSource source;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::BuildPerfMemoryPayload")]
+extern b8 BuildPerfMemoryPayload(in Name a0, in StringView a1, in auto a2, in auto a3, mut auto a4);
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::BuildPerfTimingPayload")]
+extern b8 BuildPerfTimingPayload(in auto a0, in Name a1, in StringView a2, in auto a3, mut auto a4);
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::IsValidPerfTimingSource")]
+extern b8 IsValidPerfTimingSource(in auto a0);
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::RecordPerfMemory")]
+extern b8 RecordPerfMemory(mut auto a0, in Name a1, in StringView a2, in auto a3, in auto a4, in auto a5 = {});
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::RecordPerfSessionReport")]
+extern PerfSessionRecordResult RecordPerfSessionReport(mut auto a0, in auto a1, in auto a2 = {});
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::RecordPerfTiming")]
+extern b8 RecordPerfTiming(mut auto a0, in auto a1, in Name a2, in StringView a3, in auto a4, in auto a5 = {});
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedPerfMemoryPayloadHeaderByteSize")]
+extern const usize s_EncodedPerfMemoryPayloadHeaderByteSize;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_EncodedPerfTimingPayloadHeaderByteSize")]
+extern const usize s_EncodedPerfTimingPayloadHeaderByteSize;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfMemoryPayloadFlag::s_PerfMemoryPayloadFlagNoneBase")]
+extern const u32 s_PerfMemoryPayloadFlagNoneBase;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_PerfMemoryPayloadMagic")]
+extern const u32 s_PerfMemoryPayloadMagic;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_PerfMemoryPayloadVersion")]
+extern const u16 s_PerfMemoryPayloadVersion;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_PerfPackedAlignBytes")]
+extern const usize s_PerfPackedAlignBytes;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_PerfTimingPayloadMagic")]
+extern const u32 s_PerfTimingPayloadMagic;
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::s_PerfTimingPayloadVersion")]
+extern const u16 s_PerfTimingPayloadVersion;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

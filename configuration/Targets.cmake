@@ -10,6 +10,10 @@ if(NOT TARGET nwb_impl_adhd_headers)
     add_custom_target(nwb_impl_adhd_headers)
 endif()
 
+file(GLOB_RECURSE _nwb_core_prelude_adhd CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/core/*.adhd")
+set_property(GLOBAL PROPERTY _NWB_CORE_PRELUDE_ADHD_FILES ${_nwb_core_prelude_adhd})
+unset(_nwb_core_prelude_adhd)
+
 function(nwb_apply_internal_target_defaults target)
     nwb_apply_unity_build(${target})
     nwb_apply_codegen(${target})
@@ -172,6 +176,8 @@ function(nwb_target_adhd_sources target_name)
     set(namespace_map_file "${CMAKE_BINARY_DIR}/adhd_namespaces.txt")
     list(APPEND extra_args --namespace-map "${namespace_map_file}")
 
+    get_property(_core_prelude_adhd_files GLOBAL PROPERTY _NWB_CORE_PRELUDE_ADHD_FILES)
+
     set(gen_headers "")
     foreach(adhd_file IN LISTS adhd_sources)
         get_filename_component(adhd_abs "${adhd_file}" ABSOLUTE)
@@ -193,7 +199,7 @@ function(nwb_target_adhd_sources target_name)
             OUTPUT "${gen_h}" "${gen_cpp}"
             COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" --depfile "${gen_h}.d" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
             DEPFILE "${gen_h}.d"
-            DEPENDS nwb_adhd_compiler "${PROJECT_SOURCE_DIR}/core/metascript/adhd/export_core_prelude.adhd" "${adhd_abs}" "${namespace_map_file}"
+            DEPENDS nwb_adhd_compiler ${_core_prelude_adhd_files} "${adhd_abs}" "${namespace_map_file}"
             COMMENT "Compiling adhd source ${adhd_file}"
             VERBATIM
         )

@@ -1,0 +1,90 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemorySource::Enum")]
+extern enum MemorySource : u8{
+    ExplicitScope,
+    Arena,
+    HeapBacking
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryDelta"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class MemoryDelta{
+    u64 previousFrameIndex;
+    u64 currentFrameIndex;
+    i64 reservedBytes;
+    i64 usedBytes;
+    i64 peakUsedBytes;
+    i64 allocationCount;
+    i64 reallocationCount;
+    i64 deallocationCount;
+    b8 hasSamples;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryRecorder"), cpp_layout(336, 8), cpp_flags(no_copy, no_assign)]
+extern class MemoryRecorder{
+    void clear(...);
+    MemoryDelta delta(...)const;
+    MemoryDelta deltaAt(...)const;
+    void recordSnapshot(...);
+    Expected<MemoryScopeId> registerScope(...);
+    MemoryScopeId scopeAt(...)const;
+    usize scopeCount(...)const;
+    Name scopeNameAt(...)const;
+    void setEnabled(...);
+    MemorySnapshot snapshot(...)const;
+    MemorySnapshot snapshotAt(...)const;
+};
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryScopeId"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class MemoryScopeId{
+    u32 index;
+    u32 generation;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemorySnapshot"), cpp_layout(128, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class MemorySnapshot{
+    Name scopeName;
+    u64 frameIndex;
+    u64 reservedBytes;
+    u64 usedBytes;
+    u64 peakUsedBytes;
+    u64 allocationCount;
+    u64 reallocationCount;
+    u64 deallocationCount;
+    MemorySource source;
+    b8 valid(...)const;
+};
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MemoryView"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class MemoryView{
+    MemoryDelta delta(...)const;
+    MemoryDelta deltaAt(...)const;
+    MemoryScopeId scopeAt(...)const;
+    usize scopeCount(...)const;
+    Name scopeNameAt(...)const;
+    MemorySnapshot snapshot(...)const;
+    MemorySnapshot snapshotAt(...)const;
+    b8 valid(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::MakeMemorySnapshot")]
+extern MemorySnapshot MakeMemorySnapshot(in Name a0, in isize a1, in auto a2);
+
+[cpp_header("<core/perf/memory.h>"), cpp_name("::NWB::Core::Perf::Difference")]
+extern MemoryDelta Difference(in auto a0, in auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

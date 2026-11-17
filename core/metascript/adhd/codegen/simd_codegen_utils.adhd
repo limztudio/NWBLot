@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapSimdAssignToBinaryOp")]
+extern MetascriptTokenType MapSimdAssignToBinaryOp(in MetascriptTokenType a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdBinaryScalarOpSymbol")]
+extern StringView SimdBinaryScalarOpSymbol(in MetascriptTokenType a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsSimdIntLaneFallbackBinaryOp")]
+extern b8 IsSimdIntLaneFallbackBinaryOp(in MetascriptTokenType a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapSimdBitwiseBinaryIntrinsic")]
+extern StringView MapSimdBitwiseBinaryIntrinsic(in MetascriptTokenType a0, in b8 a1);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsRegisterPromotableSimdType")]
+extern b8 IsRegisterPromotableSimdType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsDoubleSimdType")]
+extern b8 IsDoubleSimdType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsIntSimdType")]
+extern b8 IsIntSimdType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsSignedIntSimdType")]
+extern b8 IsSignedIntSimdType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IntSimdLaneType")]
+extern StringView IntSimdLaneType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IntSimdRawWordType")]
+extern StringView IntSimdRawWordType(in b8 a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdLaneCallSuffix")]
+extern StringView SimdLaneCallSuffix(in isize a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdSplatIntrinsic")]
+extern StringView SimdSplatIntrinsic(in isize a0, in b8 a1);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdInPlaceLaneMaskConstant")]
+extern StringView SimdInPlaceLaneMaskConstant(in isize a0, in b8 a1);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdInPlaceSignFlipMaskConstant")]
+extern StringView SimdInPlaceSignFlipMaskConstant(in isize a0, in b8 a1);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdComponentMaskConstant")]
+extern StringView SimdComponentMaskConstant(in isize a0, in b8 a1);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdRegisterCppType")]
+extern StringView SimdRegisterCppType(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdLoadFunctionCpp")]
+extern StringView SimdLoadFunctionCpp(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SimdStoreFunctionCpp")]
+extern StringView SimdStoreFunctionCpp(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapBuiltinMathFunction")]
+extern StringView MapBuiltinMathFunction(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapSimdRegisterCall")]
+extern StringView MapSimdRegisterCall(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapSimdScalarReductionSuffix")]
+extern StringView MapSimdScalarReductionSuffix(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsSimdScalarReductionFunction")]
+extern b8 IsSimdScalarReductionFunction(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsSimdZeroPreservingCall")]
+extern b8 IsSimdZeroPreservingCall(in StringView a0);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapSimdUnaryFloatIntrinsic")]
+extern StringView MapSimdUnaryFloatIntrinsic(in StringView a0, in b8 a1);
+
+[cpp_header("<core/metascript/adhd/codegen/simd_codegen_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MapSwizzleCharToLane")]
+extern u32 MapSwizzleCharToLane(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

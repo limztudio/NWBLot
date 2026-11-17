@@ -1,0 +1,26 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class GpuTaskTimingDecision;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision::BenefitExceedsHysteresis")]
+extern b8 GpuTaskTimingDecisionBenefitExceedsHysteresis(in auto a0, in auto a1, in auto a2);
+
+[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision::CanSwitch")]
+extern b8 GpuTaskTimingDecisionCanSwitch(in auto a0, in auto a1, in auto a2, in auto a3, in auto a4, in isize a5, in auto a6);
+
+[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision::HistoryMeetsMinimumSamples")]
+extern b8 GpuTaskTimingDecisionHistoryMeetsMinimumSamples(in auto a0, in auto a1);
+
+[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision::SwitchDwellElapsed")]
+extern b8 GpuTaskTimingDecisionSwitchDwellElapsed(in auto a0, in isize a1, in auto a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

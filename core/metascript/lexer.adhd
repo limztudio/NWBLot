@@ -1,0 +1,96 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::TokenType::Enum")]
+extern enum MetascriptTokenType : u8{
+    Identifier,
+    IntegerLiteral,
+    DoubleLiteral,
+    FloatLiteral,
+    StringLiteral,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    PlusEqual,
+    MinusEqual,
+    StarEqual,
+    SlashEqual,
+    PercentEqual,
+    PlusPlus,
+    MinusMinus,
+    Arrow,
+    Equal,
+    EqualEqual,
+    BangEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Ampersand,
+    AmpersandEqual,
+    AmpersandAmpersand,
+    Pipe,
+    PipeEqual,
+    PipePipe,
+    Caret,
+    CaretEqual,
+    Tilde,
+    Bang,
+    Question,
+    LessLess,
+    LessLessEqual,
+    GreaterGreater,
+    GreaterGreaterEqual,
+    Semicolon,
+    Dot,
+    Comma,
+    Colon,
+    ColonColon,
+    Hash,
+    LeftBracket,
+    RightBracket,
+    LeftBrace,
+    RightBrace,
+    LeftParen,
+    RightParen,
+    EndOfFile,
+    Error
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Lexer"), cpp_layout(320, 8), cpp_flags(binary_serializable)]
+extern class MetascriptLexer{
+    b8 consumeBalancedBracesRaw(...);
+    MetascriptToken next(...);
+};
+
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class MetascriptToken{
+    StringView text;
+    MetascriptTokenType type;
+    u32 line;
+    u32 column;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::s_IncludePopMarker")]
+extern const StringView s_IncludePopMarker;
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::s_IncludePushMarker")]
+extern const StringView s_IncludePushMarker;
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::s_MaxSavedIncludeDepth")]
+extern const usize s_MaxSavedIncludeDepth;
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::TokenType::s_TokenTypeIdentifierBase")]
+extern const u8 s_TokenTypeIdentifierBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

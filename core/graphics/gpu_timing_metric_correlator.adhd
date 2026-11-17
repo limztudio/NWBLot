@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricQueueOutput"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuPacketEnvelopeMetricQueueOutput{
+    GpuPhysicalQueueId physicalQueue;
+    Name internalIdleScopeName;
+};
+
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricScope"), cpp_layout(72, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuPacketEnvelopeMetricScope{
+    Name scopeName;
+    GpuPhysicalQueueId physicalQueue;
+};
+
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuTimingMetricCorrelator"), cpp_layout(128, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuTimingMetricCorrelator{
+    void discardPendingRanges(...);
+    b8 hasOutputRole(...)const;
+    b8 prepareOverlapMetric(...);
+    b8 preparePacketEnvelopeMetrics(...);
+    void reset(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

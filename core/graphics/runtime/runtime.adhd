@@ -1,0 +1,67 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/runtime/runtime.h>"), cpp_name("::NWB::Core::GraphicsRuntime"), cpp_layout(1520, 8), cpp_flags(no_copy, no_assign)]
+extern class GraphicsRuntime{
+    AcquiredPresentationFrame acquiredPresentationFrame(...)const;
+    void addRenderPassToBack(...);
+    b8 backBufferResized(...);
+    Expected<SwapChainTransitionTicket> backBufferResizing(...);
+    b8 cancelFramePresentationSignal(...);
+    QueueSubmissionPreSubmitHook claimFramePresentationSignal(...);
+    void clearTaskGraphOutputLayerContributor(...);
+    void clearTaskGraphPresentationContributor(...);
+    b8 confirmFramePresentationSignal(...);
+    Expected<BufferHandle> createBuffer(...)const;
+    Expected<TextureHandle> createTexture(...)const;
+    b8 destroy(...);
+    void displayScaleChanged(...);
+    u32 getBackBufferCount(...)const;
+    Expected<usize> getCoopVecMatrixSize(...)const;
+    void getDPIScaleInfo(...)const;
+    u64 getFrameIndex(...)const;
+    Expected<AdapterInfo> getSelectedAdapterInfo(...)const;
+    u64 getSuccessfulPresentationCount(...)const;
+    void getWindowDimensions(...)const;
+    mut GpuTaskScheduler gpuTasks(...)const;
+    mut GpuTimingRecorder gpuTiming(...);
+    b8 init(...);
+    b8 isDeviceLost(...)const;
+    b8 isDeviceRecreationRequested(...)const;
+    b8 isHDR10OutputActive(...)const;
+    b8 isSwapChainReadbackAvailable(...)const;
+    b8 isVSyncEnabled(...)const;
+    PresentationReceipt lastPresentationReceipt(...)const;
+    void notifyPointerScaleChanged(...)const;
+    b8 prepareFramePreamble(...);
+    Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures(...)const;
+    b8 queryFeatureSupport(...)const;
+    u32 queryWaveLaneCount(...)const;
+    void removeRenderPass(...);
+    Expected<void, CpuTaskAdmissionError> render(...);
+    void requestDeviceRecreation(...)const;
+    b8 runFrame(...);
+    b8 setAsyncComputeLaneEnabled(...);
+    b8 setBindlessHeapAbi(...);
+    b8 setDebugRuntimeEnabled(...);
+    void setFrameSubmissionSuspended(...);
+    b8 setHDR10OutputEnabled(...);
+    b8 setHardwareRayTracingPolicy(...);
+    b8 setSwapChainReadbackEnabled(...);
+    b8 shouldRenderUnfocused(...)const;
+    mut GraphicsStandaloneService standaloneGraph(...)const;
+    b8 updateWindowState(...);
+    b8 waitForIdle(...);
+    mut Device getDevice(...);
+    FramebufferPtr getFramebuffer(...)const;
+    TexturePtr getBackBuffer(...)const;
+    void setWindowTitle(...);
+    void setTaskGraphPresentationContributor(...);
+    void setTaskGraphOutputLayerContributor(...);
+    Expected<Vector<AdapterInfo>> enumerateAdapters(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

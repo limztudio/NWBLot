@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_file_system.h>"), cpp_name("::NWB::Core::Filesystem::VolumeFileSystem"), cpp_layout(472, 8), cpp_flags(no_copy, no_assign)]
+extern class VolumeFileSystem{
+    b8 compact(...);
+    u64 fileCount(...)const;
+    b8 fileExists(...)const;
+    Expected<u64> fileSize(...)const;
+    b8 flush(...);
+    b8 mount(...);
+    b8 mounted(...)const;
+    b8 removeFile(...);
+    void reserveFileCapacity(...);
+    b8 seekFile(...)const;
+    usize segmentCount(...)const;
+    b8 unmount(...);
+    Expected<u64> wastedBytes(...)const;
+    b8 writable(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

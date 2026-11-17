@@ -1,0 +1,32 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocument"), cpp_layout(1, 1), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class NameSymbolDocument;
+
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocumentRecord"), cpp_layout(104, 8), cpp_flags(self_defaulted, brace_init)]
+extern class NameSymbolDocumentRecord{
+    NameHash hash;
+    String text;
+};
+
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocumentView"), cpp_layout(80, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class NameSymbolDocumentView{
+    NameHash hash;
+    StringView text;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocument::Append")]
+extern void NameSymbolDocumentAppend(in auto a0, mut String a1);
+
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocument::Decode")]
+extern Expected<NameSymbolDocumentRecord> NameSymbolDocumentDecode(in StringView a0, mut auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/parser_cursor.h>"), cpp_name("::NWB::Core::Metascript::ParserCursor"), cpp_layout(376, 8), cpp_flags(binary_serializable, no_assign)]
+extern class MetascriptParserCursor{
+    void advance(...);
+    mut GlobalArena arena(...)const;
+    b8 check(...)const;
+    b8 checkIdentifier(...)const;
+    b8 consumeBalancedBracesRaw(...);
+    MetascriptToken current(...)const;
+    void error(...);
+    void errorExpected(...);
+    b8 expect(...);
+    b8 failed(...)const;
+    b8 match(...);
+    b8 matchIdentifier(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

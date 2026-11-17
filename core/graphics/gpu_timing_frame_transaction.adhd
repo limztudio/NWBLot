@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/gpu_timing_frame_transaction.h>"), cpp_name("::NWB::Core::GpuTimingFrameTransaction"), cpp_layout(168, 8), cpp_flags(no_copy, no_assign)]
+extern class GpuTimingFrameTransaction{
+    b8 confirmBeginSubmission(...);
+    b8 confirmEndSubmission(...);
+    void discard(...);
+    b8 needsRetirement(...)const;
+    b8 prepareForRecovery(...);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

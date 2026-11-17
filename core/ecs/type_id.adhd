@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::ComponentTypeId"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class ComponentTypeId;
+
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::MessageTypeId"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class MessageTypeId;
+
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::SystemTypeId"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class SystemTypeId;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::ComponentType")]
+extern usize ComponentType<T>();
+
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::SystemType")]
+extern usize SystemType<T>();
+
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::MessageType")]
+extern usize MessageType<T>();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

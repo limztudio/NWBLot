@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::StagedDirectoryCleanupGuard"), cpp_layout(64, 8), cpp_flags(no_copy, no_assign)]
+extern class StagedDirectoryCleanupGuard{
+    void dismiss(...);
+};
+
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::VolumePublicationObserver"), cpp_layout(24, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class VolumePublicationObserver;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::CreateNewStagedDirectory")]
+extern b8 CreateNewStagedDirectory(in Path a0, in StringView a1, in StringView a2);
+
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::RemoveVolumeSegments")]
+extern b8 RemoveVolumeSegments(in Path a0, in StringView a1, mut auto a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::s_BackupDirectoryLabel")]
+extern const StringView s_BackupDirectoryLabel;
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::s_StageDirectoryLabel")]
+extern const StringView s_StageDirectoryLabel;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

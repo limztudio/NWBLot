@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/sha1.h>"), cpp_name("::Sha1Digest"), cpp_layout(20, 1), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+extern class Sha1Digest{
+    Array<u8, 20u> bytes;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/sha1.h>"), cpp_name("::AppendSha1Hex")]
+extern void AppendSha1Hex(in auto a0, mut String a1);
+
+[cpp_header("<global/sha1.h>"), cpp_name("::ComputeSha1"), cpp_flags(byte_view_arg0)]
+extern Sha1Digest ComputeSha1(in auto a0);
+
+[cpp_header("<global/sha1.h>"), cpp_name("::ComputeSha1Text")]
+extern Sha1Digest ComputeSha1Text(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/sha1.h>"), cpp_name("::Sha1Digest::s_ByteCount")]
+extern const u32 s_Sha1DigestByteCount;
+[cpp_header("<global/sha1.h>"), cpp_name("::Sha1Digest::s_HexTextLength")]
+extern const u32 s_Sha1DigestHexTextLength;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,124 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AppendCamelToSnakeCase")]
+extern void AppendCamelToSnakeCase(mut String a0, in StringView a1);
+
+[cpp_name("::AppendDepfileEscapedPath")]
+extern void AppendDepfileEscapedPath(in StringView a0, mut String a1);
+
+[cpp_name("::AppendPascalCaseIdentifierSegment")]
+extern void AppendPascalCaseIdentifierSegment(in StringView a0, mut String a1);
+
+[cpp_name("::AppendTextDiscardCrAndExpandLf")]
+extern void AppendTextDiscardCrAndExpandLf(mut String a0, in StringView a1);
+
+[cpp_name("::BoolToYesNoText")]
+extern StringView BoolToYesNoText(in b8 a0);
+
+[cpp_name("::CanonicalizeTextInPlace")]
+extern void CanonicalizeTextInPlace(mut String a0);
+
+[cpp_name("::CollapseCrLfInPlace")]
+extern void CollapseCrLfInPlace(mut String a0);
+
+[cpp_name("::ContainsAsciiIgnoreCase<char>")]
+extern b8 ContainsAsciiIgnoreCase(in StringView a0, in StringView a1);
+
+[cpp_name("::CountBareLineFeeds<char>")]
+extern usize CountBareLineFeeds(in StringView a0);
+
+[cpp_name("::EqualsAsciiIgnoreCase<char>")]
+extern b8 EqualsAsciiIgnoreCase(in StringView a0, in StringView a1);
+
+[cpp_name("::ErrorCodeMessage"), cpp_flags(scratch_arena)]
+extern String ErrorCodeMessage(in ErrorCode a0);
+
+[cpp_name("::ExtractLeadingIdentifier"), cpp_flags(borrow_view)]
+extern StringView ExtractLeadingIdentifier(in StringView a0);
+
+[cpp_name("::FitsFixedText")]
+extern b8 FitsFixedText(in StringView a0, in isize a1);
+
+[cpp_name("::HasEmbeddedNull")]
+extern b8 HasEmbeddedNull(in StringView a0);
+
+[cpp_name("::HasLineBreak<char>")]
+extern b8 HasLineBreak(in StringView a0);
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::HexDigitValue")]
+extern u32 HexDigitValue(in isize a0);
+
+[cpp_name("::IsAsciiAlpha")]
+extern b8 IsAsciiAlpha(in isize a0);
+
+[cpp_name("::IsAsciiAlphaNumeric")]
+extern b8 IsAsciiAlphaNumeric(in isize a0);
+
+[cpp_name("::IsAsciiDigit")]
+extern b8 IsAsciiDigit(in isize a0);
+
+[cpp_name("::IsAsciiIdentifier<char>")]
+extern b8 IsAsciiIdentifier(in StringView a0);
+
+[cpp_name("::IsAsciiIdentifierChar")]
+extern b8 IsAsciiIdentifierChar(in isize a0);
+
+[cpp_name("::IsAsciiIdentifierStart")]
+extern b8 IsAsciiIdentifierStart(in isize a0);
+
+[cpp_name("::IsAsciiLower")]
+extern b8 IsAsciiLower(in isize a0);
+
+[cpp_name("::IsAsciiPunctuation")]
+extern b8 IsAsciiPunctuation(in isize a0);
+
+[cpp_name("::IsAsciiUpper")]
+extern b8 IsAsciiUpper(in isize a0);
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::IsBinaryDigit")]
+extern b8 IsBinaryDigit(in isize a0);
+
+[cpp_name("::IsEscapedQuoteAt")]
+extern b8 IsEscapedQuoteAt(in StringView a0, in isize a1);
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::IsHexDigit")]
+extern b8 IsHexDigit(in isize a0);
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::IsOctalDigit")]
+extern b8 IsOctalDigit(in isize a0);
+
+[cpp_name("::IsRelativeSlashPathWithoutDotSegments")]
+extern b8 IsRelativeSlashPathWithoutDotSegments(in StringView a0);
+
+[cpp_name("::IsUnicodeWhitespace")]
+extern b8 IsUnicodeWhitespace(in isize a0);
+
+[cpp_name("::JoinWithSingleSlash"), cpp_flags(scratch_arena)]
+extern String JoinWithSingleSlash(in StringView a0, in StringView a1);
+
+[cpp_name("::ReadCommaOrSpaceDelimitedToken")]
+extern Expected<StringView> ReadCommaOrSpaceDelimitedToken(in StringView a0, mut usize a1);
+
+[cpp_name("::StripMatchingTrailingByte"), cpp_flags(borrow_view)]
+extern StringView StripMatchingTrailingByte(in StringView a0, in isize a1, in isize a2);
+
+[cpp_name("::ToAsciiLowerByte")]
+extern u8 ToAsciiLowerByte(in isize a0);
+
+[cpp_name("::ToAsciiLowerInPlace")]
+extern void ToAsciiLowerInPlace(mut String a0);
+
+[cpp_name("::TruncateView<char>"), cpp_flags(borrow_view)]
+extern StringView TruncateView(in StringView a0, in isize a1);
+
+[cpp_name("::UnquoteDoubleQuotedView<char>"), cpp_flags(borrow_view)]
+extern StringView UnquoteDoubleQuotedView(in StringView a0);
+
+[cpp_name("::UnquoteMatchingAsciiQuotes")]
+extern String UnquoteMatchingAsciiQuotes(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::DecodeUtf16SurrogatePair")]
+extern u32 DecodeUtf16SurrogatePair(in isize a0, in isize a1);
+
+[cpp_name("::IsUnicodeScalarValue")]
+extern b8 IsUnicodeScalarValue(in isize a0);
+
+[cpp_name("::IsUnicodeSurrogate")]
+extern b8 IsUnicodeSurrogate(in isize a0);
+
+[cpp_name("::IsUtf16HighSurrogate")]
+extern b8 IsUtf16HighSurrogate(in isize a0);
+
+[cpp_name("::IsUtf16LowSurrogate")]
+extern b8 IsUtf16LowSurrogate(in isize a0);
+
+[cpp_name("::IsUtf8Continuation")]
+extern b8 IsUtf8Continuation(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_UnicodeMaxCodePoint")]
+extern const u32 s_UnicodeMaxCodePoint;
+[cpp_name("::s_Utf8OneByteMaxExclusive")]
+extern const u8 s_Utf8OneByteMaxExclusive;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

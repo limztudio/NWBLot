@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::ContainedBy")]
+extern ContainmentType FrustumContainedBy(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9, in VectorSingle a10, in VectorSingle a11, in VectorSingle a12, in VectorSingle a13);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::ContainsBox")]
+extern ContainmentType FrustumContainsBox(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::ContainsFrustum")]
+extern ContainmentType FrustumContainsFrustum(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9, in f32 a10, in f32 a11, in f32 a12, in f32 a13, in f32 a14, in f32 a15);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::ContainsOrientedBox")]
+extern ContainmentType FrustumContainsOrientedBox(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9, in VectorSingle a10);
+
+[cpp_name("::FrustumTests::ContainsPoint")]
+extern ContainmentType FrustumContainsPoint(in VectorSingle a0, in VectorSingle a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorSingle a8);
+
+[cpp_name("::FrustumTests::ContainsSphere")]
+extern ContainmentType FrustumContainsSphere(in VectorSingle a0, in VectorSingle a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorSingle a8);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::ContainsTriangle")]
+extern ContainmentType FrustumContainsTriangle(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9, in VectorSingle a10);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::ContainedBy")]
+extern ContainmentType FrustumDoubleContainedBy(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9, in VectorDouble a10, in VectorDouble a11, in VectorDouble a12, in VectorDouble a13);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::ContainsBox")]
+extern ContainmentType FrustumDoubleContainsBox(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::ContainsFrustum")]
+extern ContainmentType FrustumDoubleContainsFrustum(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9, in f64 a10, in f64 a11, in f64 a12, in f64 a13, in f64 a14, in f64 a15);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::ContainsOrientedBox")]
+extern ContainmentType FrustumDoubleContainsOrientedBox(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9, in VectorDouble a10);
+
+[cpp_name("::FrustumDoubleTests::ContainsPoint")]
+extern ContainmentType FrustumDoubleContainsPoint(in VectorDouble a0, in VectorDouble a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorDouble a8);
+
+[cpp_name("::FrustumDoubleTests::ContainsSphere")]
+extern ContainmentType FrustumDoubleContainsSphere(in VectorDouble a0, in VectorDouble a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorDouble a8);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::ContainsTriangle")]
+extern ContainmentType FrustumDoubleContainsTriangle(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9, in VectorDouble a10);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::IntersectsBox")]
+extern b8 FrustumDoubleIntersectsBox(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::IntersectsFrustum")]
+extern b8 FrustumDoubleIntersectsFrustum(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9, in f64 a10, in f64 a11, in f64 a12, in f64 a13, in f64 a14, in f64 a15);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::IntersectsOrientedBox")]
+extern b8 FrustumDoubleIntersectsOrientedBox(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9, in VectorDouble a10);
+
+[cpp_name("::FrustumDoubleTests::IntersectsPlane")]
+extern PlaneIntersectionType FrustumDoubleIntersectsPlane(in VectorDouble a0, in VectorDouble a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorDouble a8);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::IntersectsRay")]
+extern Expected<f64> FrustumDoubleIntersectsRay(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in VectorDouble a8, in VectorDouble a9);
+
+[cpp_name("::FrustumDoubleTests::IntersectsSphere")]
+extern b8 FrustumDoubleIntersectsSphere(in VectorDouble a0, in VectorDouble a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorDouble a8);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::Transform")]
+extern void FrustumDoubleTransformMatrix(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in MatrixDouble a8, mut VectorDouble a9, mut VectorDouble a10, mut f64 a11, mut f64 a12, mut f64 a13, mut f64 a14, mut f64 a15, mut f64 a16);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumDoubleTests::Transform")]
+extern void FrustumDoubleTransformSrt(in VectorDouble a0, in VectorDouble a1, in f64 a2, in f64 a3, in f64 a4, in f64 a5, in f64 a6, in f64 a7, in f64 a8, in VectorDouble a9, in VectorDouble a10, mut VectorDouble a11, mut VectorDouble a12, mut f64 a13, mut f64 a14, mut f64 a15, mut f64 a16, mut f64 a17, mut f64 a18);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::IntersectsBox")]
+extern b8 FrustumIntersectsBox(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::IntersectsFrustum")]
+extern b8 FrustumIntersectsFrustum(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9, in f32 a10, in f32 a11, in f32 a12, in f32 a13, in f32 a14, in f32 a15);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::IntersectsOrientedBox")]
+extern b8 FrustumIntersectsOrientedBox(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9, in VectorSingle a10);
+
+[cpp_name("::FrustumTests::IntersectsPlane")]
+extern PlaneIntersectionType FrustumIntersectsPlane(in VectorSingle a0, in VectorSingle a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorSingle a8);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::IntersectsRay")]
+extern Expected<f32> FrustumIntersectsRay(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in VectorSingle a8, in VectorSingle a9);
+
+[cpp_name("::FrustumTests::IntersectsSphere")]
+extern b8 FrustumIntersectsSphere(in VectorSingle a0, in VectorSingle a1, in auto a2, in auto a3, in auto a4, in auto a5, in auto a6, in auto a7, in VectorSingle a8);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::Transform")]
+extern void FrustumTransformMatrix(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in MatrixSingle a8, mut VectorSingle a9, mut VectorSingle a10, mut f32 a11, mut f32 a12, mut f32 a13, mut f32 a14, mut f32 a15, mut f32 a16);
+
+[cpp_header("<global/simd/bounding_frustum_tests.h>"), cpp_name("::FrustumTests::Transform")]
+extern void FrustumTransformSrt(in VectorSingle a0, in VectorSingle a1, in f32 a2, in f32 a3, in f32 a4, in f32 a5, in f32 a6, in f32 a7, in f32 a8, in VectorSingle a9, in VectorSingle a10, mut VectorSingle a11, mut VectorSingle a12, mut f32 a13, mut f32 a14, mut f32 a15, mut f32 a16, mut f32 a17, mut f32 a18);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

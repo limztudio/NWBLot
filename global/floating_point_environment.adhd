@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::FloatingPointEnvironment"), cpp_layout(32, 8), cpp_flags(self_defaulted, brace_init)]
+extern class FloatingPointEnvironment;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::ClearFloatingPointExceptions")]
+extern Expected<void> ClearFloatingPointExceptions(in isize a0);
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::GetFloatingPointEnvironment")]
+extern Expected<FloatingPointEnvironment> GetFloatingPointEnvironment();
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::HoldFloatingPointExceptions")]
+extern Expected<FloatingPointEnvironment> HoldFloatingPointExceptions();
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::RaiseFloatingPointExceptions")]
+extern Expected<void> RaiseFloatingPointExceptions(in isize a0);
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::SetFloatingPointEnvironment")]
+extern Expected<void> SetFloatingPointEnvironment(in FloatingPointEnvironment a0);
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::SetFloatingPointRoundingMode")]
+extern Expected<void> SetFloatingPointRoundingMode(in isize a0);
+
+[cpp_header("<global/floating_point_environment.h>"), cpp_name("::TestFloatingPointExceptions")]
+extern i32 TestFloatingPointExceptions(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

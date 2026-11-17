@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/simd/color.h>"), cpp_name("::VectorLinearToSRGB")]
+extern VectorSingle VectorLinearToSRGB(in VectorSingle a0);
+
+[cpp_header("<global/simd/color.h>"), cpp_name("::VectorQuantizeSNorm")]
+extern VectorSingle VectorQuantizeSNorm(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_header("<global/simd/color.h>"), cpp_name("::VectorQuantizeUNorm")]
+extern VectorSingle VectorQuantizeUNorm(in VectorSingle a0, in VectorSingle a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

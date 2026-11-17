@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/process_execution.h>"), cpp_name("::ProcessExecutionFailure::Enum")]
+extern enum ProcessExecutionFailure : u8{
+    InvalidArguments,
+    OutputOpenFailed,
+    CreateFailed,
+    ExitQueryFailed,
+    CloseFailed,
+    Unsupported
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/process_execution.h>"), cpp_name("::ExecutableAvailableInPath"), cpp_flags(scratch_arena)]
+extern Expected<b8, ErrorCode> ExecutableAvailableInPath(in StringView a0, in StringView a1);
+
+[cpp_header("<global/process_execution.h>"), cpp_name("::RunProcessRedirectedToFile"), cpp_flags(scratch_arena)]
+extern Expected<i32, ProcessExecutionFailure> RunProcessRedirectedToFile(in auto a0, in StringView a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

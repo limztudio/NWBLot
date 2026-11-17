@@ -146,6 +146,7 @@ b8 DeclParser::tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDe
             case ExternTypeFlagKind::NonThreadSafe:      outClass.isNonThreadSafeContainer = true; break;
             case ExternTypeFlagKind::MapKey:             outClass.isNwbMapKey = true; break;
             case ExternTypeFlagKind::ArenaFirstCtor:     outClass.arenaCtorMode = 1u; break;
+            case ExternTypeFlagKind::ArenaOmitCtor:      outClass.arenaCtorMode = 2u; break;
             case ExternTypeFlagKind::NoCopy:
                 outClass.isCopyConstructible = false;
                 outClass.isMoveConstructible = false;

@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorCos")]
+extern VectorSingle VectorCos(in VectorSingle a0);
+
+[cpp_name("::VectorDoubleCos")]
+extern VectorDouble VectorDoubleCos(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleSin")]
+extern VectorDouble VectorDoubleSin(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleSinCos")]
+extern void VectorDoubleSinCos(mut VectorDouble a0, mut VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleTan")]
+extern VectorDouble VectorDoubleTan(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleTanH")]
+extern VectorDouble VectorDoubleTanH(in VectorDouble a0);
+
+[cpp_name("::VectorSin")]
+extern VectorSingle VectorSin(in VectorSingle a0);
+
+[cpp_name("::VectorSinCos")]
+extern void VectorSinCos(mut VectorSingle a0, mut VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorTan")]
+extern VectorSingle VectorTan(in VectorSingle a0);
+
+[cpp_name("::VectorTanH")]
+extern VectorSingle VectorTanH(in VectorSingle a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

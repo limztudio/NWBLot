@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/integer_rect.h>"), cpp_name("::IntegerRectBounds"), cpp_layout(32, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class IntegerRectBounds{
+    u64 xBegin;
+    u64 xEnd;
+    u64 yBegin;
+    u64 yEnd;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/integer_rect.h>"), cpp_name("::AppendIntegerRectRemainder")]
+extern void AppendIntegerRectRemainder(in auto a0, in auto a1, mut auto a2);
+
+[cpp_header("<global/integer_rect.h>"), cpp_name("::IntersectIntegerRectBounds")]
+extern Expected<IntegerRectBounds> IntersectIntegerRectBounds(in auto a0, in auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,133 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::Vector3MaxComponent")]
+extern VectorSingle Vector3MaxComponent(in VectorSingle a0);
+
+[cpp_name("::Vector4MaxComponent")]
+extern VectorSingle Vector4MaxComponent(in VectorSingle a0);
+
+[cpp_name("::VectorAbs")]
+extern VectorSingle VectorAbs(in VectorSingle a0);
+
+[cpp_name("::VectorAdd")]
+extern VectorSingle VectorAdd(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorAddInt")]
+extern VectorSingle VectorAddInt(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorClamp")]
+extern VectorSingle VectorClamp(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorDivide")]
+extern VectorSingle VectorDivide(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorDouble3MaxComponent")]
+extern VectorDouble VectorDouble3MaxComponent(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4MaxComponent")]
+extern VectorDouble VectorDouble4MaxComponent(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleAbs")]
+extern VectorDouble VectorDoubleAbs(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleAdd")]
+extern VectorDouble VectorDoubleAdd(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleAddInt")]
+extern VectorDouble VectorDoubleAddInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleClamp")]
+extern VectorDouble VectorDoubleClamp(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleDivide")]
+extern VectorDouble VectorDoubleDivide(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleMax")]
+extern VectorDouble VectorDoubleMax(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleMergeX")]
+extern VectorDouble VectorDoubleMergeX(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble a3);
+
+[cpp_name("::VectorDoubleMin")]
+extern VectorDouble VectorDoubleMin(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleMultiply")]
+extern VectorDouble VectorDoubleMultiply(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleMultiplyAdd")]
+extern VectorDouble VectorDoubleMultiplyAdd(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleMultiplyAddExpression")]
+extern VectorDouble VectorDoubleMultiplyAddExpression(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleMultiplySubtract")]
+extern VectorDouble VectorDoubleMultiplySubtract(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleNegate")]
+extern VectorDouble VectorDoubleNegate(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleNegativeMultiplySubtract")]
+extern VectorDouble VectorDoubleNegativeMultiplySubtract(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleSaturate")]
+extern VectorDouble VectorDoubleSaturate(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleScale")]
+extern VectorDouble VectorDoubleScale(in VectorDouble a0, in auto a1);
+
+[cpp_name("::VectorDoubleSubtract")]
+extern VectorDouble VectorDoubleSubtract(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleSum")]
+extern VectorDouble VectorDoubleSum(in VectorDouble a0);
+
+[cpp_name("::VectorMax")]
+extern VectorSingle VectorMax(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorMergeX")]
+extern VectorSingle VectorMergeX(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3);
+
+[cpp_name("::VectorMin")]
+extern VectorSingle VectorMin(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorMultiply")]
+extern VectorSingle VectorMultiply(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorMultiplyAdd")]
+extern VectorSingle VectorMultiplyAdd(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorMultiplyAddExpression")]
+extern VectorSingle VectorMultiplyAddExpression(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorMultiplySubtract")]
+extern VectorSingle VectorMultiplySubtract(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorMultiplyUInt32Wide")]
+extern VectorDouble VectorMultiplyUInt32Wide(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorNegate")]
+extern VectorSingle VectorNegate(in VectorSingle a0);
+
+[cpp_name("::VectorNegativeMultiplySubtract")]
+extern VectorSingle VectorNegativeMultiplySubtract(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorNegativeMultiplySubtractExpression")]
+extern VectorSingle VectorNegativeMultiplySubtractExpression(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorSaturate")]
+extern VectorSingle VectorSaturate(in VectorSingle a0);
+
+[cpp_name("::VectorScale")]
+extern VectorSingle VectorScale(in VectorSingle a0, in auto a1);
+
+[cpp_name("::VectorSubtract")]
+extern VectorSingle VectorSubtract(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorSum")]
+extern VectorSingle VectorSum(in VectorSingle a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

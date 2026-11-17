@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_SIMDMemoryCopyAlignment")]
+extern const usize s_SIMDMemoryCopyAlignment;
+[cpp_name("::s_SIMDMemoryCopyBatchBytes")]
+extern const usize s_SIMDMemoryCopyBatchBytes;
+[cpp_name("::s_SIMDMemoryCopyCrtThreshold")]
+extern const usize s_SIMDMemoryCopyCrtThreshold;
+[cpp_name("::s_SIMDMemoryCopyHalfWordBytes")]
+extern const usize s_SIMDMemoryCopyHalfWordBytes;
+[cpp_name("::s_SIMDMemoryCopyPacketBytes")]
+extern const usize s_SIMDMemoryCopyPacketBytes;
+[cpp_name("::s_SIMDMemoryCopyQuadWordBytes")]
+extern const usize s_SIMDMemoryCopyQuadWordBytes;
+[cpp_name("::s_SIMDMemoryCopyWideAlignment")]
+extern const usize s_SIMDMemoryCopyWideAlignment;
+[cpp_name("::s_SIMDMemoryCopyWideBatchBytes")]
+extern const usize s_SIMDMemoryCopyWideBatchBytes;
+[cpp_name("::s_SIMDMemoryCopyWidePacketBytes")]
+extern const usize s_SIMDMemoryCopyWidePacketBytes;
+[cpp_name("::s_SIMDMemoryCopyWordBytes")]
+extern const usize s_SIMDMemoryCopyWordBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -16,6 +16,7 @@ NWB_ADHD_EXPORT_FILE_CONVENTION(MaskScopeSuffix,          "::Mask")
 NWB_ADHD_EXPORT_FILE_CONVENTION(DefaultExternEnumSizeType,"u32")
 NWB_ADHD_EXPORT_FILE_CONVENTION(CppArenaTemplateScopeSep, "<::ArenaBase>::")
 NWB_ADHD_EXPORT_FILE_CONVENTION(GlobalIncludePrefix,      "<global/")
+NWB_ADHD_EXPORT_FILE_CONVENTION(GlobalExternPreludePath,  "core/metascript/adhd/export_global_prelude.adhd")
 
 NWB_ADHD_EXPORT_PREAMBLE_HEADER(NameLiteralOnly,   "<global/name.h>")
 NWB_ADHD_EXPORT_PREAMBLE_HEADER(ScalarLiteralOnly, "<global/type.h>")

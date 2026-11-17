@@ -1,0 +1,88 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::ComputeFnv32TextHash")]
+extern u32 ComputeFnv32TextHash(in StringView a0);
+
+[cpp_name("::ComputeFnv64AsciiLowerText")]
+extern u64 ComputeFnv64AsciiLowerText(in StringView a0);
+
+[cpp_name("::ComputeFnv64Text<char>")]
+extern u64 ComputeFnv64Text(in StringView a0);
+
+[cpp_name("::Fnv64AppendBool")]
+extern void Fnv64AppendBool(mut u64 a0, in b8 a1);
+
+[cpp_name("::Fnv64AppendBuffer")]
+extern void Fnv64AppendBuffer(mut u64 a0, in auto a1);
+
+[cpp_name("::Fnv64AppendValue")]
+extern void Fnv64AppendValue(mut u64 a0, in auto a1);
+
+[cpp_name("::HashCombine")]
+extern void HashCombine(mut usize a0, in auto a1);
+
+[cpp_name("::HashCombineHash")]
+extern void HashCombineHash(mut auto a0, in isize a1, in isize a2 = {});
+
+[cpp_name("::HashCombineValue")]
+extern usize HashCombineValue(in auto a0, in auto a1);
+
+[cpp_name("::HashValue")]
+extern usize HashValue(in auto a0);
+
+[cpp_name("::MixMurmur64Finalizer")]
+extern u64 MixMurmur64Finalizer(in isize a0);
+
+[cpp_name("::UpdateFnv32Byte")]
+extern u32 UpdateFnv32Byte(in isize a0, in isize a1);
+
+[cpp_name("::UpdateFnv64")]
+extern u64 UpdateFnv64(in isize a0, in auto a1);
+
+[cpp_name("::UpdateFnv64Byte")]
+extern u64 UpdateFnv64Byte(in isize a0, in isize a1);
+
+[cpp_name("::UpdateFnv64TextCanonical<char>")]
+extern u64 UpdateFnv64TextCanonical(in isize a0, in StringView a1);
+
+[cpp_name("::UpdateFnv64TextExact<char>")]
+extern u64 UpdateFnv64TextExact(in isize a0, in StringView a1);
+
+[cpp_name("::UpdateFnv64U32LittleEndian")]
+extern u64 UpdateFnv64U32(in isize a0, in isize a1);
+
+[cpp_name("::UpdateFnv64U32LittleEndian")]
+extern u64 UpdateFnv64U32LittleEndian(in isize a0, in isize a1);
+
+[cpp_name("::UpdateFnv64U64LittleEndian")]
+extern u64 UpdateFnv64U64(in isize a0, in isize a1);
+
+[cpp_name("::UpdateFnv64U64LittleEndian")]
+extern u64 UpdateFnv64U64LittleEndian(in isize a0, in isize a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_Fnv32OffsetBasis")]
+extern const u32 s_Fnv32OffsetBasis;
+[cpp_name("::s_Fnv32Prime")]
+extern const u32 s_Fnv32Prime;
+[cpp_name("::s_Fnv64OffsetBasis")]
+extern const u64 s_Fnv64OffsetBasis;
+[cpp_name("::s_Fnv64Prime")]
+extern const u64 s_Fnv64Prime;
+[cpp_name("::s_HashCombineGoldenRatio")]
+extern const usize s_HashCombineGoldenRatio;
+[cpp_name("::s_HashCombineGoldenRatio64")]
+extern const u64 s_HashCombineGoldenRatio64;
+[cpp_name("::s_HashCombineLeftShift")]
+extern const usize s_HashCombineLeftShift;
+[cpp_name("::s_HashCombineRightShift")]
+extern const usize s_HashCombineRightShift;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

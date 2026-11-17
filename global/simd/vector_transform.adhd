@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::Vector2Transform")]
+extern VectorSingle Vector2Transform(in VectorSingle a0, in MatrixSingle a1);
+
+[cpp_name("::Vector3Transform")]
+extern VectorSingle Vector3Transform(in VectorSingle a0, in MatrixSingle a1);
+
+[cpp_name("::Vector3TransformNormal")]
+extern VectorSingle Vector3TransformNormal(in VectorSingle a0, in MatrixSingle a1);
+
+[cpp_name("::Vector4Transform")]
+extern VectorSingle Vector4Transform(in VectorSingle a0, in MatrixSingle a1);
+
+[cpp_name("::VectorDouble2Transform")]
+extern VectorDouble VectorDouble2Transform(in VectorDouble a0, in MatrixDouble a1);
+
+[cpp_name("::VectorDouble3Transform")]
+extern VectorDouble VectorDouble3Transform(in VectorDouble a0, in MatrixDouble a1);
+
+[cpp_name("::VectorDouble3TransformCoord")]
+extern VectorDouble VectorDouble3TransformCoord(in VectorDouble a0, in MatrixDouble a1);
+
+[cpp_name("::VectorDouble3TransformNormal")]
+extern VectorDouble VectorDouble3TransformNormal(in VectorDouble a0, in MatrixDouble a1);
+
+[cpp_name("::VectorDouble4Transform")]
+extern VectorDouble VectorDouble4Transform(in VectorDouble a0, in MatrixDouble a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

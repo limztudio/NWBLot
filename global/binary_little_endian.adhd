@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AppendF32LittleEndian")]
+extern void AppendF32LittleEndian(mut auto a0, in f32 a1);
+
+[cpp_name("::AppendU32LittleEndian")]
+extern void AppendU32LittleEndian(mut auto a0, in isize a1);
+
+[cpp_name("::ReadF32LittleEndian")]
+extern Expected<f32> ReadF32LittleEndian(in auto a0, mut usize a1);
+
+[cpp_name("::ReadU32LittleEndian")]
+extern Expected<u32> ReadU32LittleEndian(in auto a0, mut usize a1);
+
+[cpp_name("::WriteF32LittleEndianAt")]
+extern void WriteF32LittleEndianAt(in f32 a0, in isize a1, mut FixedVector<u8, 8> a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

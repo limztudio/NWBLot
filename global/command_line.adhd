@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::IsConfirmNoText<char>")]
+extern b8 IsConfirmNoText(in StringView a0);
+
+[cpp_name("::IsConfirmYesText<char>")]
+extern b8 IsConfirmYesText(in StringView a0);
+
+[cpp_name("::NormalizeOptionText")]
+extern String NormalizeOptionText(in auto a0);
+
+[cpp_name("::ParseConfirmText<char>")]
+extern Expected<b8> ParseConfirmText(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

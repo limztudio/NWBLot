@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::BoundingDoubleFrustum"), cpp_layout(128, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class BoundingDoubleFrustum{
+    f64 bottomSlope;
+    f64 farPlane;
+    f64 leftSlope;
+    f64 nearPlane;
+    f64x4 orientation;
+    f64x4 origin;
+    f64 rightSlope;
+    f64 topSlope;
+
+    ContainmentType containedBy(...)const;
+    ContainmentType contains(...)const;
+    b8 intersects(...)const;
+    void transform(...)const;
+};
+
+[cpp_name("::BoundingFrustum"), cpp_layout(64, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class BoundingFrustum{
+    f32 bottomSlope;
+    f32 farPlane;
+    f32 leftSlope;
+    f32 nearPlane;
+    f32x4 orientation;
+    f32x4 origin;
+    f32 rightSlope;
+    f32 topSlope;
+
+    ContainmentType containedBy(...)const;
+    ContainmentType contains(...)const;
+    b8 intersects(...)const;
+    void transform(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::BoundingDoubleFrustum::CreateFromMatrix")]
+extern void BoundingDoubleFrustumCreateFromMatrix(mut auto a0, in MatrixDouble a1, in auto a2 = {});
+
+[cpp_name("::BoundingFrustum::CreateFromMatrix")]
+extern void BoundingFrustumCreateFromMatrix(mut auto a0, in MatrixSingle a1, in auto a2 = {});
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::BoundingDoubleFrustum::s_DoubleCornerCount")]
+extern const usize s_BoundingDoubleFrustumDoubleCornerCount;
+[cpp_name("::BoundingFrustum::s_CornerCount")]
+extern const usize s_BoundingFrustumCornerCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

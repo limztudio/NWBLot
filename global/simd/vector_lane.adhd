@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorDoubleComponentMask::s_DoubleXY")]
+extern const u32 s_DoubleXY;
+[cpp_name("::VectorDoubleComponentMask::s_DoubleXYZ")]
+extern const u32 s_DoubleXYZ;
+[cpp_name("::VectorDoubleComponentMask::s_DoubleXYZW")]
+extern const u32 s_DoubleXYZW;
+[cpp_name("::s_RoundHalfBias")]
+extern const f32 s_RoundHalfBias;
+[cpp_name("::VectorComponentMask::s_XY")]
+extern const u32 s_XY;
+[cpp_name("::VectorComponentMask::s_XYZ")]
+extern const u32 s_XYZ;
+[cpp_name("::VectorComponentMask::s_XYZW")]
+extern const u32 s_XYZW;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

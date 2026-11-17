@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::JoiningThread"), cpp_layout(16, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+extern class JoiningThread;
+
+[cpp_name("::Latch"), cpp_layout(4, 4), cpp_flags(binary_serializable, no_copy, no_assign)]
+extern class Latch;
+
+[cpp_name("::StopToken"), cpp_layout(8, 8), cpp_flags(self_defaulted, brace_init, equality_switch)]
+extern class StopToken;
+
+[cpp_name("::Thread"), cpp_layout(8, 8), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+extern class Thread;
+
+[cpp_name("::ThreadId"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+extern class ThreadId;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/thread.h>"), cpp_name("::CurrentThreadId")]
+extern u32 CurrentThreadId();
+
+[cpp_name("::QueryCurrentThreadId")]
+extern ThreadId QueryCurrentThreadId();
+
+[cpp_header("<global/thread.h>"), cpp_name("::SleepMS")]
+extern void SleepMS(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

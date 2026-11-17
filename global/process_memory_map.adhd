@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/process_memory_map.h>"), cpp_name("::LinuxProcessMemoryMapEntry"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class LinuxProcessMemoryMapEntry{
+    u64 begin;
+    u64 end;
+    u64 fileOffset;
+    StringView path;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/process_memory_map.h>"), cpp_name("::FindLinuxProcessMemoryMapForAddress")]
+extern Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(in auto a0, in isize a1);
+
+[cpp_header("<global/process_memory_map.h>"), cpp_name("::ParseLinuxProcessMemoryMapLine")]
+extern Expected<LinuxProcessMemoryMapEntry> ParseLinuxProcessMemoryMapLine(in StringView a0);
+
+[cpp_header("<global/process_memory_map.h>"), cpp_name("::ParseLinuxProcessMemoryMaps")]
+extern void ParseLinuxProcessMemoryMaps(in StringView a0, mut auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/cpu_topology.h>"), cpp_name("::CpuAffinity::Enum")]
+extern enum CpuAffinity : u8{
+    Any,
+    Performance,
+    Efficiency
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/cpu_topology.h>"), cpp_name("::CpuWorkerPlacement"), cpp_layout(16, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CpuWorkerPlacement{
+    CpuAffinity affinity;
+    u32 logicalProcessorIndex;
+    u32 performanceClass;
+    u32 processorGroup;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/cpu_topology.h>"), cpp_name("::QueryCpuCoreCount")]
+extern u32 QueryCpuCoreCount(in CpuAffinity a0);
+
+[cpp_header("<global/cpu_topology.h>"), cpp_name("::SetCurrentThreadCpuPlacement")]
+extern b8 SetCurrentThreadCpuPlacement(in CpuWorkerPlacement a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/cpu_topology.h>"), cpp_name("::CpuWorkerPlacement::s_InvalidProcessor")]
+extern const u32 s_InvalidProcessor;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

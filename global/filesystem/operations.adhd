@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AbsolutePath")]
+extern Expected<Path, ErrorCode> AbsolutePath(in Path a0);
+
+[cpp_name("::CanRepresentStreamSize")]
+extern b8 CanRepresentStreamSize(in isize a0);
+
+[cpp_name("::CreateDirectories")]
+extern Expected<b8, ErrorCode> CreateDirectories(in Path a0);
+
+[cpp_name("::EnsureDirectories")]
+extern Expected<void, ErrorCode> EnsureDirectories(in Path a0);
+
+[cpp_name("::FileExists")]
+extern Expected<b8, ErrorCode> FileExists(in Path a0);
+
+[cpp_name("::FileExistsNoFollow")]
+extern Expected<b8, ErrorCode> FileExistsNoFollow(in Path a0);
+
+[cpp_name("::GetCurrentPath"), cpp_flags(scratch_arena)]
+extern Expected<Path, ErrorCode> GetCurrentPath();
+
+[cpp_name("::IsDirectory")]
+extern Expected<b8, ErrorCode> IsDirectory(in Path a0);
+
+[cpp_name("::IsDirectoryNoFollow")]
+extern Expected<b8, ErrorCode> IsDirectoryNoFollow(in Path a0);
+
+[cpp_name("::IsMissingOrInvalidPathLookupError")]
+extern b8 IsMissingOrInvalidPathLookupError(in auto a0);
+
+[cpp_name("::IsMissingPathError")]
+extern b8 IsMissingPathError(in auto a0);
+
+[cpp_name("::IsRegularFile")]
+extern Expected<b8, ErrorCode> IsRegularFile(in Path a0);
+
+[cpp_name("::LastSystemError")]
+extern ErrorCode LastSystemError();
+
+[cpp_name("::LexicallyNormal")]
+extern Path LexicallyNormal(in Path a0);
+
+[cpp_name("::PathDepth")]
+extern usize PathDepth(in Path a0);
+
+[cpp_name("::PathHasDirectoryAncestor")]
+extern b8 PathHasDirectoryAncestor(in Path a0, in Path a1);
+
+[cpp_name("::ReadSymlink")]
+extern Expected<Path, ErrorCode> ReadSymlink(in Path a0);
+
+[cpp_name("::RemoveFile")]
+extern Expected<b8, ErrorCode> RemoveFile(in Path a0);
+
+[cpp_name("::RenamePath")]
+extern Expected<void, ErrorCode> RenamePath(in Path a0, in Path a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

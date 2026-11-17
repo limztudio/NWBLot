@@ -1,0 +1,73 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairFailureStage::Enum")]
+extern enum StagedFilePairFailureStage : u8{
+    None,
+    QueryOutput,
+    InspectOutput,
+    NonRegularOutput,
+    IncompleteExistingPair,
+    OutputAlreadyExists,
+    QueryWorkPath,
+    WorkPathAlreadyExists,
+    StagePrimary,
+    StageSecondary,
+    VerifyPrimary,
+    VerifySecondary,
+    PreserveExistingOutput,
+    FinalizeOutput
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairPaths"), cpp_layout(240, 8), cpp_flags(non_thread_safe, arena_first_ctor)]
+extern class StagedFilePairPaths{
+    Path primary;
+    Path primaryBackup;
+    Path primaryTemporary;
+    Path secondary;
+    Path secondaryBackup;
+    Path secondaryTemporary;
+};
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairResult"), cpp_layout(176, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class StagedFilePairResult{
+    ErrorCode error;
+    u32 failedIndex;
+    b8 failedWorkPath;
+    StagedFilePairFailureStage failureStage;
+
+    b8 succeeded(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::FailedStagedFilePairPath")]
+extern Path FailedStagedFilePairPath(in auto a0, in auto a1);
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StageAndPublishFilePair")]
+extern StagedFilePairResult StageAndPublishFilePair(in auto a0, in Span<u8> a1, in StringView a2, in b8 a3, in b8 a4, in b8 a5, in StringView a6);
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::ValidateStagedFilePairPaths")]
+extern StagedFilePairResult ValidateStagedFilePairPaths(in auto a0, in b8 a1, in b8 a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::s_StagedFileBackupSuffix")]
+extern const StringView s_StagedFileBackupSuffix;
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::s_StagedFilePairCount")]
+extern const u32 s_StagedFilePairCount;
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::s_StagedFileTemporarySuffix")]
+extern const StringView s_StagedFileTemporarySuffix;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

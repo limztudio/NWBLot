@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/process_capture.h>"), cpp_name("::ProcessCaptureFailureKind::Enum")]
+extern enum ProcessCaptureFailureKind : u8{
+    InvalidArguments,
+    PipeFailed,
+    SpawnFailed,
+    ClockFailed,
+    PipeFlagsFailed,
+    PollFailed,
+    ReadFailed,
+    TimedOut,
+    OutputTruncated,
+    ChildWaitFailed,
+    ChildExitedUnsuccessfully,
+    ChildTerminated
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/process_capture.h>"), cpp_name("::ProcessCaptureFailure"), cpp_layout(20, 4), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class ProcessCaptureFailure{
+    ErrorCondition completionError;
+    i32 exitCode;
+    ProcessCaptureFailureKind kind;
+    ErrorCondition nativeError;
+    b8 outputTruncated;
+    i32 terminationSignal;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

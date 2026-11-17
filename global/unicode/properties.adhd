@@ -1,0 +1,46 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/unicode/properties.h>"), cpp_name("::GraphemeBreak::Enum")]
+extern enum GraphemeBreak : u8{
+    Other,
+    CR,
+    LF,
+    Control,
+    Extend,
+    ZWJ,
+    Regional_Indicator,
+    Prepend,
+    SpacingMark,
+    L,
+    V,
+    T,
+    LV,
+    LVT
+};
+
+[cpp_header("<global/unicode/properties.h>"), cpp_name("::IndicConjunct::Enum")]
+extern enum IndicConjunct : u8{
+    None,
+    Consonant,
+    Extend,
+    Linker
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/unicode/properties.h>"), cpp_name("::IsExtendedPictographic")]
+extern b8 IsExtendedPictographic(in isize a0);
+
+[cpp_header("<global/unicode/properties.h>"), cpp_name("::LookupGraphemeBreak")]
+extern GraphemeBreak LookupGraphemeBreak(in isize a0);
+
+[cpp_header("<global/unicode/properties.h>"), cpp_name("::LookupIndicConjunct")]
+extern IndicConjunct LookupIndicConjunct(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

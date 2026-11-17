@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AppendHexByte")]
+extern void AppendHexByte(in isize a0, mut CompactString a1);
+
+[cpp_name("::AppendHexU32")]
+extern void AppendHexU32(in isize a0, mut CompactString a1);
+
+[cpp_name("::AppendHexU32UnsignedLiteral")]
+extern void AppendHexU32UnsignedLiteral(in isize a0, mut CompactString a1);
+
+[cpp_name("::AppendHexU64")]
+extern void AppendHexU64(in isize a0, mut CompactString a1);
+
+[cpp_name("::AppendUnsignedDecimal")]
+extern void AppendUnsignedDecimal(mut CompactString a0, in isize a1);
+
+[cpp_name("::ClassifyFloatGrammar")]
+extern u8 ClassifyFloatGrammar(in StringView a0);
+
+[cpp_name("::ClassifyIntegerGrammar")]
+extern u8 ClassifyIntegerGrammar(in StringView a0);
+
+[cpp_name("::FormatHex64A"), cpp_flags(scratch_arena)]
+extern String FormatHex64A(in isize a0);
+
+[cpp_name("::ParseDecimalPrefixU64<char>")]
+extern u64 ParseDecimalPrefixU64(in StringView a0);
+
+[cpp_name("::ParseF32FromChars")]
+extern Expected<f32> ParseF32(in StringView a0);
+
+[cpp_name("::ParseF32FromChars")]
+extern Expected<f32> ParseF32FromChars(in StringView a0);
+
+[cpp_name("::ParseF64FromChars")]
+extern Expected<f64> ParseF64(in StringView a0);
+
+[cpp_name("::ParseF64FromChars")]
+extern Expected<f64> ParseF64FromChars(in StringView a0);
+
+[cpp_name("::ParseFiniteF32ViaF64")]
+extern Expected<f32> ParseFiniteF32ViaF64(in StringView a0);
+
+[cpp_name("::ParseHexDigit")]
+extern Expected<u8> ParseHexDigit(in isize a0);
+
+[cpp_name("::ParseHexU64<char>")]
+extern Expected<u64> ParseHexU64(in StringView a0);
+
+[cpp_name("::ParseI64")]
+extern Expected<i64> ParseI64(in StringView a0);
+
+[cpp_name("::ParseU64")]
+extern Expected<u64> ParseU64(in StringView a0);
+
+[cpp_name("::ParseVariableHexU64<char>")]
+extern Expected<u64> ParseVariableHexU64(in StringView a0);
+
+[cpp_name("::SkipNumericSign")]
+extern usize SkipNumericSign(in StringView a0);
+
+[cpp_name("::TryFiniteF32FromF64")]
+extern Expected<f32> TryFiniteF32FromF64(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_DecimalTextBufferBytes")]
+extern const usize s_DecimalTextBufferBytes;
+[cpp_name("::s_HexDecimalDigitCount")]
+extern const usize s_HexDecimalDigitCount;
+[cpp_name("::s_HexNibbleBits")]
+extern const u32 s_HexNibbleBits;
+[cpp_name("::s_HexNibbleMask")]
+extern const u64 s_HexNibbleMask;
+[cpp_name("::s_HexPrefixLength")]
+extern const usize s_HexPrefixLength;
+[cpp_name("::s_HexU32DigitCount")]
+extern const usize s_HexU32DigitCount;
+[cpp_name("::s_HexU64DigitCount")]
+extern const usize s_HexU64DigitCount;
+[cpp_name("::s_NumericGrammarComplete")]
+extern const u8 s_NumericGrammarComplete;
+[cpp_name("::s_NumericGrammarIncomplete")]
+extern const u8 s_NumericGrammarIncomplete;
+[cpp_name("::s_NumericGrammarInvalid")]
+extern const u8 s_NumericGrammarInvalid;
+[cpp_name("::s_UsizeDecimalDigitCount")]
+extern const usize s_UsizeDecimalDigitCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

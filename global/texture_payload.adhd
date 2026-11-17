@@ -1,0 +1,214 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipChainLayoutFailure::Enum")]
+extern enum MipChainLayoutFailure : u8{
+    None,
+    InvalidMipChain,
+    MipCountMismatch,
+    BlockLayoutOverflow,
+    SliceCountInvalid,
+    SliceCountMismatch,
+    ByteSizeOverflow,
+    OffsetOverflow,
+    ResolutionMismatch,
+    BlockGridMismatch,
+    ByteRangeMismatch,
+    kCount
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureAlphaMode::Enum")]
+extern enum TextureAlphaMode : u8{
+    Opaque,
+    EmbeddedLdr,
+    ConstantUnorm8,
+    SeparateUastcLdr4x4
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureDimension::Enum")]
+extern enum TexturePayloadDimension : u8{
+    Texture2D,
+    TextureCube,
+    Texture3D
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TexturePayloadFormat::Enum")]
+extern enum TexturePayloadFormat : u8{
+    UastcLdr4x4,
+    UastcHdr4x4
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipChainLayoutError"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TextureMipChainLayoutError{
+    MipChainLayoutFailure failure;
+    u32 mipIndex;
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::MipLevelLayout"), cpp_layout(40, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TextureMipLevelLayout{
+    u32 blockCountX;
+    u32 blockCountY;
+    u32 height;
+    u64 offsetBytes;
+    u64 sizeBytes;
+    u32 sliceCount;
+    u32 width;
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::TextureMipPlaneBlockLayout"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TextureMipPlaneBlockLayout{
+    u32 blocksX;
+    u32 blocksY;
+    u64 planeByteCount;
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::HeaderBinary"), cpp_layout(44, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TexturePayloadHeaderBinary{
+    u32 alphaInfo;
+    u32 depth;
+    u32 dimension;
+    u32 height;
+    u32 magic;
+    u32 mipCount;
+    u64 payloadByteCount;
+    u32 payloadFormat;
+    u32 version;
+    u32 width;
+};
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::MipLevelBinary"), cpp_layout(40, 1), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TexturePayloadMipLevelBinary{
+    u32 blockCountX;
+    u32 blockCountY;
+    u32 height;
+    u64 offsetBytes;
+    u32 reserved;
+    u64 sizeBytes;
+    u32 sliceCount;
+    u32 width;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::AlphaModeText")]
+extern StringView AlphaModeText(in TextureAlphaMode a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::ComputeCompleteMipCount")]
+extern Expected<u32> ComputeCompleteMipCount(in TexturePayloadDimension a0, in isize a1, in isize a2, in isize a3);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::ComputeExpectedPayloadByteCount")]
+extern Expected<u64> ComputeExpectedPayloadByteCount(in isize a0, in auto a1);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::ComputeMipPlaneBlockLayout")]
+extern Expected<TextureMipPlaneBlockLayout> ComputeMipPlaneBlockLayout(in auto a0, in isize a1, in isize a2);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::ComputeMipSliceCount")]
+extern Expected<u32> ComputeMipSliceCount(in TexturePayloadDimension a0, in isize a1);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::DimensionText")]
+extern StringView DimensionText(in TexturePayloadDimension a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::IsHdrTexturePayloadFormat")]
+extern b8 IsHdrTexturePayloadFormat(in TexturePayloadFormat a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::IsValidTextureAlphaConstant")]
+extern b8 IsValidTextureAlphaConstant(in auto a0, in isize a1);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::IsValidTextureAlphaMode")]
+extern b8 IsValidTextureAlphaMode(in TextureAlphaMode a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::IsValidTextureAlphaTransport")]
+extern b8 IsValidTextureAlphaTransport(in auto a0, in auto a1);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::IsValidTextureDescriptor")]
+extern b8 IsValidTextureDescriptor(in TexturePayloadFormat a0, in TexturePayloadDimension a1, in isize a2, in isize a3, in isize a4, in TextureAlphaMode a5, in isize a6);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::IsValidTextureDimension")]
+extern b8 IsValidTextureDimension(in TexturePayloadDimension a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::IsValidTexturePayloadFormat")]
+extern b8 IsValidTexturePayloadFormat(in TexturePayloadFormat a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::IsValidTextureResolution")]
+extern b8 IsValidTextureResolution(in TexturePayloadDimension a0, in isize a1, in isize a2, in isize a3);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::NextMipExtent")]
+extern u32 NextMipExtent(in isize a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::PayloadFormatText")]
+extern StringView PayloadFormatText(in TexturePayloadFormat a0);
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::ValidateMipChainLayout")]
+extern Expected<u64, TextureMipChainLayoutError> ValidateMipChainLayout(in auto a0, in auto a1, in auto a2, in isize a3, in isize a4, in isize a5);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_AlphaInfoConstantMask")]
+extern const u32 s_AlphaInfoConstantMask;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_AlphaInfoConstantShift")]
+extern const u32 s_AlphaInfoConstantShift;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_AlphaInfoModeMask")]
+extern const u32 s_AlphaInfoModeMask;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_AlphaInfoReservedMask")]
+extern const u32 s_AlphaInfoReservedMask;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_ConstantUnorm8AlphaMode")]
+extern const StringView s_ConstantUnorm8AlphaMode;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_EmbeddedLdrAlphaMode")]
+extern const StringView s_EmbeddedLdrAlphaMode;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_HeaderBinaryByteSize")]
+extern const usize s_HeaderBinaryByteSize;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_MaxConstantAlphaUnorm8")]
+extern const u32 s_MaxConstantAlphaUnorm8;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_MipLevelBinaryByteSize")]
+extern const usize s_MipLevelBinaryByteSize;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_OpaqueAlphaMode")]
+extern const StringView s_OpaqueAlphaMode;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_OpaqueAlphaUnorm8")]
+extern const u32 s_OpaqueAlphaUnorm8;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_PackedAlignBytes")]
+extern const usize s_PackedAlignBytes;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_SeparateUastcLdr4x4AlphaMode")]
+extern const StringView s_SeparateUastcLdr4x4AlphaMode;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_Texture2DDimension")]
+extern const StringView s_Texture2DDimension;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_Texture3DDimension")]
+extern const StringView s_Texture3DDimension;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureAlphaMode::s_TextureAlphaModeOpaqueBase")]
+extern const u8 s_TextureAlphaModeOpaqueBase;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_TextureCubeDimension")]
+extern const StringView s_TextureCubeDimension;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_TextureCubeFaceCount")]
+extern const u32 s_TextureCubeFaceCount;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_TextureDataExtension")]
+extern const StringView s_TextureDataExtension;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureDimension::s_TextureDimensionTexture2DBase")]
+extern const u8 s_TextureDimensionTexture2DBase;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_TextureMagic")]
+extern const u32 s_TextureMagic;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TexturePayloadFormat::s_TexturePayloadFormatUastcLdr4x4Base")]
+extern const u8 s_TexturePayloadFormatUastcLdr4x4Base;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureBinaryPayload::s_TextureVersion")]
+extern const u32 s_TextureVersion;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_UastcBlockHeight")]
+extern const u32 s_UastcBlockHeight;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_UastcBlockWidth")]
+extern const u32 s_UastcBlockWidth;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_UastcBytesPerBlock")]
+extern const u32 s_UastcBytesPerBlock;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_UastcHdr4x4Format")]
+extern const StringView s_UastcHdr4x4Format;
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::s_UastcLdr4x4Format")]
+extern const StringView s_UastcLdr4x4Format;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

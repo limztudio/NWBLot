@@ -1,0 +1,58 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AlignmentOffsetPowerOfTwo")]
+extern usize AlignmentOffsetPowerOfTwo(in isize a0, in isize a1);
+
+[cpp_name("::BitCast")]
+extern T BitCast<T>(in auto a0);
+
+[cpp_name("::BitMask")]
+extern T BitMask<T>(in isize a0);
+
+[cpp_name("::BitWidthLowU32")]
+extern u32 BitWidthLowU32(in u32 a0, in u32 a1);
+
+[cpp_name("::ComputeSobol2U32")]
+extern u64 ComputeSobol2U32(in u32 a0);
+
+[cpp_name("::CountSetBits")]
+extern i32 CountSetBits(in isize a0);
+
+[cpp_name("::CountTrailingZeros")]
+extern i32 CountTrailingZeros(in isize a0);
+
+[cpp_name("::DifferentF64Bits")]
+extern b8 DifferentF64Bits(in f64 a0, in f64 a1);
+
+[cpp_name("::HasSingleSetBit")]
+extern b8 HasSingleSetBit(in isize a0);
+
+[cpp_name("::HighU32Word")]
+extern u32 HighU32Word(in isize a0);
+
+[cpp_name("::IsNewerSerialU32")]
+extern b8 IsNewerSerialU32(in isize a0, in isize a1);
+
+[cpp_name("::IsNotOlderSerialU32")]
+extern b8 IsNotOlderSerialU32(in isize a0, in isize a1);
+
+[cpp_name("::IsSerialU32InWindow")]
+extern b8 IsSerialU32InWindow(in isize a0, in isize a1, in isize a2);
+
+[cpp_name("::LowU32Word")]
+extern u32 LowU32Word(in isize a0);
+
+[cpp_header("<global/bit.h>"), cpp_name("::PackFourCharTag")]
+extern u32 PackFourCharTag(in isize a0, in isize a1, in isize a2, in isize a3);
+
+[cpp_name("::PackU32Words")]
+extern u64 PackU32Words(in isize a0, in isize a1);
+
+[cpp_name("::PackUnorderedU32Pair")]
+extern u64 PackUnorderedU32Pair(in isize a0, in isize a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

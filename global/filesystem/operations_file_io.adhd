@@ -1,0 +1,41 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::SizedFileCreateFailure"), cpp_layout(24, 8), cpp_flags(self_defaulted, brace_init)]
+extern class SizedFileCreateFailure{
+    ErrorCode code;
+    b8 created;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::CreateSizedFileExclusive")]
+extern Expected<void, SizedFileCreateFailure> CreateSizedFileExclusive(in Path a0, in isize a1);
+
+[cpp_name("::FileSize")]
+extern Expected<u64, ErrorCode> FileSize(in Path a0);
+
+[cpp_name("::ReadBinaryFile")]
+extern Expected<void, ErrorCode> ReadBinaryFile(in Path a0, mut auto a1);
+
+[cpp_name("::ReadTextFile")]
+extern Expected<void, ErrorCode> ReadTextFile(in Path a0, mut String a1);
+
+[cpp_name("::ResizeFile")]
+extern Expected<void, ErrorCode> ResizeFile(in Path a0, in isize a1);
+
+[cpp_name("::ResolveAbsolutePath"), cpp_flags(scratch_arena)]
+extern Expected<Path, ErrorCode> ResolveAbsolutePath(in Path a0, in auto a1);
+
+[cpp_name("::WriteBinaryFile")]
+extern b8 WriteBinaryFile(in Path a0, in auto a1);
+
+[cpp_name("::WriteTextFile")]
+extern b8 WriteTextFile(in Path a0, in StringView a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

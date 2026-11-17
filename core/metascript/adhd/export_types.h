@@ -32,16 +32,6 @@
 #define NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF
 #endif
 
-#ifndef NWB_ADHD_EXPORT_BUILTIN_ENUM
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader)
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY(adhdEnumName, entryName)
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
-#endif
-
 #ifndef NWB_ADHD_EXPORT_GENERIC_TYPE
 #define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor, requiredHeader)
 #define NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
@@ -191,16 +181,6 @@
 #ifdef NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
-#endif
-
-#ifdef NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM
 #endif
 
 #ifdef NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF

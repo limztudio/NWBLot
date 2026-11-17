@@ -1,0 +1,104 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::DecodedUtf8CodePoint"), cpp_layout(8, 4), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class DecodedUtf8CodePoint{
+    i32 byteCount;
+    u32 codePoint;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::Contains")]
+extern b8 ContainsText(in StringView a0, in StringView a1);
+
+[cpp_name("::DecodeUtf8CodePoint")]
+extern Expected<DecodedUtf8CodePoint> DecodeUtf8CodePoint(in StringView a0);
+
+[cpp_name("::DecodeUtf8Scalar")]
+extern Expected<DecodedUtf8CodePoint> DecodeUtf8Scalar(in StringView a0);
+
+[cpp_name("::FindLineKeyValue")]
+extern Expected<StringView> FindLineKeyValue(in StringView a0, in StringView a1);
+
+[cpp_name("::FindLineKeyValueU64")]
+extern Expected<u64> FindLineKeyValueU64(in StringView a0, in StringView a1);
+
+[cpp_name("::HasCrlfLineEndings<char>")]
+extern b8 HasCrlfLineEndings(in StringView a0);
+
+[cpp_name("::HasUtf8Bom")]
+extern b8 HasUtf8Bom(in auto a0);
+
+[cpp_name("::IsAsciiSpace")]
+extern b8 IsAsciiSpace(in isize a0);
+
+[cpp_name("::IsTextInputCodePoint")]
+extern b8 IsTextInputCodePoint(in isize a0);
+
+[cpp_name("::IsUtf8ScalarBoundary")]
+extern b8 IsUtf8ScalarBoundary(in StringView a0, in isize a1);
+
+[cpp_name("::NextLfByteLine")]
+extern Expected<StringView> NextLfByteLine(in auto a0, mut usize a1);
+
+[cpp_name("::NextTextLine<char>")]
+extern Expected<StringView> NextTextLine(in StringView a0, mut usize a1);
+
+[cpp_name("::NextTrimmedTextLine<char>")]
+extern Expected<StringView> NextTrimmedTextLine(in StringView a0, mut usize a1);
+
+[cpp_name("::NormalizeLineEndingsInPlace")]
+extern void NormalizeLineEndingsInPlace(mut String a0, in b8 a1);
+
+[cpp_name("::StartsWith<char>")]
+extern b8 StartsWith(in StringView a0, in StringView a1);
+
+[cpp_name("::StripUtf8Bom")]
+extern void StripUtf8Bom(mut String a0);
+
+[cpp_name("::TrimCopy")]
+extern String TrimCopy(in auto a0);
+
+[cpp_name("::TrimInPlace")]
+extern void TrimInPlace(mut String a0);
+
+[cpp_name("::TrimLeftView"), cpp_flags(borrow_view)]
+extern StringView TrimLeftView(in StringView a0);
+
+[cpp_name("::TrimView"), cpp_flags(borrow_view)]
+extern StringView TrimView(in StringView a0);
+
+[cpp_name("::TryDecodeUtf8CodePoint")]
+extern b8 TryDecodeUtf8CodePoint(in StringView a0, mut u32 a1, mut usize a2);
+
+[cpp_name("::TryDecodeUtf8Scalar")]
+extern b8 TryDecodeUtf8Scalar(in StringView a0, mut u32 a1, mut usize a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_UnicodeC1Last")]
+extern const u32 s_UnicodeC1Last;
+[cpp_name("::s_UnicodeCarriageReturn")]
+extern const u32 s_UnicodeCarriageReturn;
+[cpp_name("::s_UnicodeDelete")]
+extern const u32 s_UnicodeDelete;
+[cpp_name("::s_UnicodeLineFeed")]
+extern const u32 s_UnicodeLineFeed;
+[cpp_name("::s_UnicodeNextLine")]
+extern const u32 s_UnicodeNextLine;
+[cpp_name("::s_UnicodeSpace")]
+extern const u32 s_UnicodeSpace;
+[cpp_name("::s_UnicodeTab")]
+extern const u32 s_UnicodeTab;
+[cpp_name("::s_Utf8MaxSequenceBytes")]
+extern const usize s_Utf8MaxSequenceBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

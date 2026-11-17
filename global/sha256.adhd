@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest"), cpp_layout(32, 1), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+extern class Sha256Digest{
+    Array<u8, 32u> bytes;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/sha256.h>"), cpp_name("::ComputeSha256"), cpp_flags(byte_view_arg0)]
+extern Sha256Digest ComputeSha256(in auto a0);
+
+[cpp_header("<global/sha256.h>"), cpp_name("::ParseSha256")]
+extern Expected<Sha256Digest> ParseSha256(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest::s_ByteCount")]
+extern const u32 s_Sha256DigestByteCount;
+[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest::s_HexTextLength")]
+extern const u32 s_Sha256DigestHexTextLength;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

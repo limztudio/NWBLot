@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::BuildCanonicalSafeCacheName<char>"), cpp_flags(scratch_arena)]
+extern String BuildCanonicalSafeCacheName(in StringView a0);
+
+[cpp_name("::IsPathPrefixText<char>")]
+extern b8 IsPathPrefixText(in StringView a0, in StringView a1);
+
+[cpp_name("::IsSingleLinePathText<char>")]
+extern b8 IsSingleLinePathText(in StringView a0);
+
+[cpp_name("::PathHasListedExtension")]
+extern b8 PathHasListedExtension(in Path a0, in auto a1);
+
+[cpp_name("::PathToGenericString<char>"), cpp_flags(scratch_arena)]
+extern String PathToGenericString(in auto a0);
+
+[cpp_name("::PathToString<char>"), cpp_flags(scratch_arena)]
+extern String PathToString(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

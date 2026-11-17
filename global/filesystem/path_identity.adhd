@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, cpp_header("<global/filesystem/path_identity.h>"), cpp_name("::PathIdentity"), cpp_layout(16, 8), cpp_flags(borrow_view, non_thread_safe, arena_omit_ctor, no_assign)]
+extern class PathIdentity{
+    Expected<b8, ErrorCode> sameExisting(...)const;
+    Expected<b8, ErrorCode> sameOutput(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/filesystem/path_identity.h>"), cpp_name("::ResolveComparisonPath")]
+extern Expected<Path, ErrorCode> ResolveComparisonPath(in Path a0);
+
+[cpp_header("<global/filesystem/path_identity.h>"), cpp_name("::SameGenericPrefixText")]
+extern b8 SameGenericPrefixText(in StringView a0, in StringView a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

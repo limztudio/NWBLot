@@ -1,0 +1,48 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::LocalTime"), cpp_layout(56, 8), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class LocalTime;
+
+[cpp_name("::Timer"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init, equality_switch)]
+extern class Timer;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::ConsumeTimerDeltaSeconds")]
+extern T ConsumeTimerDeltaSeconds<T>(mut Timer a0);
+
+[cpp_name("::DurationInMS")]
+extern T DurationInMS<T>(in Timer a0, in Timer a1 = {});
+
+[cpp_name("::DurationInNS")]
+extern T DurationInNS<T>(in Timer a0, in Timer a1 = {});
+
+[cpp_name("::DurationInSeconds")]
+extern T DurationInSeconds<T>(in Timer a0, in Timer a1 = {});
+
+[cpp_name("::DurationInTimeDelta")]
+extern TimerDelta DurationInTimeDelta(in Timer a0, in Timer a1 = {});
+
+[cpp_name("::GetLocalTime")]
+extern Expected<LocalTime> GetLocalTime();
+
+[cpp_name("::TimerAddMS")]
+extern Timer TimerAddMS(in Timer a0, in isize a1);
+
+[cpp_name("::TimerNow")]
+extern Timer TimerNow();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_MillisecondsInSecond")]
+extern const u64 s_MillisecondsInSecond;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

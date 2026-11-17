@@ -1,0 +1,38 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::BeginDerivedNameHash")]
+extern Expected<NameHash> BeginDerivedNameHash(in Name a0);
+
+[cpp_name("::DeriveName<char>")]
+extern Expected<Name> DeriveName(in Name a0, in StringView a1);
+
+[cpp_name("::FinishDerivedNameHash")]
+extern Expected<Name> FinishDerivedNameHash(in NameHash a0);
+
+[cpp_name("::ParseNameText")]
+extern Expected<Name> ParseName(in StringView a0);
+
+[cpp_name("::ParseNameText")]
+extern Expected<Name> ParseNameText(in StringView a0);
+
+[cpp_name("::ToName<char>")]
+extern Expected<Optional<Name>, NameTextError> ToName(in StringView a0);
+
+[cpp_name("::UpdateDerivedNameHashDecimal")]
+extern b8 UpdateDerivedNameHashDecimal(mut NameHash a0, in isize a1);
+
+[cpp_name("::UpdateDerivedNameHashText<char>")]
+extern b8 UpdateDerivedNameHashText(mut NameHash a0, in StringView a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("s_NameNone")]
+extern const Name s_NameNone;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

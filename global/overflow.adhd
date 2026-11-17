@@ -1,0 +1,46 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AccumulateBoundedCount")]
+extern b8 AccumulateBoundedCount(in isize a0, in isize a1, mut u64 a2);
+
+[cpp_name("::AddOverflows")]
+extern b8 AddOverflows<T>(in auto a0, in auto a1);
+
+[cpp_name("::AddSaturating")]
+extern T AddSaturating<T>(in auto a0, in auto a1);
+
+[cpp_name("::AddSignedOffset")]
+extern Expected<u64> AddSignedOffset(in isize a0, in isize a1);
+
+[cpp_name("::ComputeStridedRangeByteSize")]
+extern Expected<u64> ComputeStridedRangeByteSize(in isize a0, in isize a1, in isize a2);
+
+[cpp_name("::DivideOverflows")]
+extern b8 DivideOverflows<T>(in auto a0, in auto a1);
+
+[cpp_name("::MultiplyOverflows")]
+extern b8 MultiplyOverflows<T>(in auto a0, in auto a1);
+
+[cpp_name("::MultiplySaturatingU64")]
+extern u64 MultiplySaturatingU64(in isize a0, in isize a1);
+
+[cpp_name("::NegateOverflows")]
+extern b8 NegateOverflows<T>(in auto a0);
+
+[cpp_name("::SignedDifference")]
+extern Expected<i64> SignedDifference(in isize a0, in isize a1);
+
+[cpp_name("::SubtractOverflows")]
+extern b8 SubtractOverflows<T>(in auto a0, in auto a1);
+
+[cpp_name("::TryMultiply")]
+extern Expected<T> TryMultiply<T>(in auto a0, in auto a1);
+
+[cpp_name("::UnsignedRangesOverlap")]
+extern b8 UnsignedRangesOverlap(in isize a0, in isize a1, in isize a2, in isize a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

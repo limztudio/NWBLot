@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::MatrixDeterminant")]
+extern VectorSingle MatrixDeterminant(in MatrixSingle a0);
+
+[cpp_name("::MatrixDoubleDeterminant")]
+extern VectorDouble MatrixDoubleDeterminant(in MatrixDouble a0);
+
+[cpp_name("::MatrixDoubleIsInfinite")]
+extern b8 MatrixDoubleIsInfinite(in MatrixDouble a0);
+
+[cpp_name("::MatrixDoubleIsNaN")]
+extern b8 MatrixDoubleIsNaN(in MatrixDouble a0);
+
+[cpp_name("::MatrixDoubleMultiply")]
+extern MatrixDouble MatrixDoubleMultiply(in MatrixDouble a0, in MatrixDouble a1);
+
+[cpp_name("::MatrixDoubleMultiplyTranspose")]
+extern MatrixDouble MatrixDoubleMultiplyTranspose(in MatrixDouble a0, in MatrixDouble a1);
+
+[cpp_name("::MatrixDoubleTranspose")]
+extern MatrixDouble MatrixDoubleTranspose(in MatrixDouble a0);
+
+[cpp_name("::MatrixIsInfinite")]
+extern b8 MatrixIsInfinite(in MatrixSingle a0);
+
+[cpp_name("::MatrixIsNaN")]
+extern b8 MatrixIsNaN(in MatrixSingle a0);
+
+[cpp_name("::MatrixMultiply")]
+extern MatrixSingle MatrixMultiply(in MatrixSingle a0, in MatrixSingle a1);
+
+[cpp_name("::MatrixMultiplyTranspose")]
+extern MatrixSingle MatrixMultiplyTranspose(in MatrixSingle a0, in MatrixSingle a1);
+
+[cpp_name("::MatrixTranspose")]
+extern MatrixSingle MatrixTranspose(in MatrixSingle a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

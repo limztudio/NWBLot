@@ -1,0 +1,86 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AabbTests::Bounds"), cpp_layout(32, 16), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class AabbBounds{
+    VectorSingle maxBounds;
+    VectorSingle minBounds;
+};
+
+[cpp_name("::AabbDoubleTests::Bounds"), cpp_layout(64, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class AabbDoubleBounds{
+    VectorDouble maxBounds;
+    VectorDouble minBounds;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::AabbTests::Center")]
+extern VectorSingle AabbCenter(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::AabbDoubleTests::Center")]
+extern VectorDouble AabbDoubleCenter(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::AabbDoubleTests::Expand")]
+extern void AabbDoubleExpand(in VectorDouble a0, mut VectorDouble a1, mut VectorDouble a2);
+
+[cpp_name("::AabbDoubleTests::ExpandTriangle")]
+extern void AabbDoubleExpandTriangle(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, mut VectorDouble a3, mut VectorDouble a4);
+
+[cpp_name("::AabbDoubleTests::Extents")]
+extern VectorDouble AabbDoubleExtents(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::AabbDoubleTests::Intersects")]
+extern b8 AabbDoubleIntersects(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble a3);
+
+[cpp_name("::AabbDoubleTests::Radius")]
+extern VectorDouble AabbDoubleRadius(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::AabbDoubleTests::Reset")]
+extern void AabbDoubleReset(mut VectorDouble a0, mut VectorDouble a1);
+
+[cpp_name("::AabbDoubleTests::SurfaceArea")]
+extern VectorDouble AabbDoubleSurfaceArea(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::AabbDoubleTests::Transform")]
+extern Expected<AabbDoubleBounds> AabbDoubleTransform(in MatrixDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::AabbDoubleTests::Valid")]
+extern b8 AabbDoubleValid(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::AabbTests::Expand")]
+extern void AabbExpand(in VectorSingle a0, mut VectorSingle a1, mut VectorSingle a2);
+
+[cpp_name("::AabbTests::ExpandTriangle")]
+extern void AabbExpandTriangle(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, mut VectorSingle a3, mut VectorSingle a4);
+
+[cpp_name("::AabbTests::Extents")]
+extern VectorSingle AabbExtents(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::AabbTests::Intersects")]
+extern b8 AabbIntersects(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3);
+
+[cpp_name("::AabbTests::Radius")]
+extern VectorSingle AabbRadius(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::AabbTests::Reset")]
+extern void AabbReset(mut VectorSingle a0, mut VectorSingle a1);
+
+[cpp_name("::AabbTests::SurfaceArea")]
+extern VectorSingle AabbSurfaceArea(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::AabbTests::Transform")]
+extern Expected<AabbBounds> AabbTransform(in MatrixSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::AabbTests::Valid")]
+extern b8 AabbValid(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::TryTransformAabb")]
+extern b8 TryTransformAabb(in MatrixSingle a0, in VectorSingle a1, in VectorSingle a2, mut VectorSingle a3, mut VectorSingle a4);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -34,20 +34,6 @@ inline constexpr BuiltinObjectTypeInfo s_BuiltinObjectTypes[] = {
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
 
-inline constexpr BuiltinEnumInfo s_BuiltinEnums[] = {
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader) \
-    BuiltinEnumInfo{ adhdName, cppTypeName, cppScopeName, requiredHeader, byteSize, byteAlign, isFlag },
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM
-};
-
-inline constexpr BuiltinEnumEntryInfo s_BuiltinEnumEntries[] = {
-#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY(adhdEnumName, entryName) \
-    BuiltinEnumEntryInfo{ adhdEnumName, entryName },
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
-};
-
 inline constexpr BuiltinGenericTypeInfo s_BuiltinGenericTypes[] = {
 #define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor, requiredHeader) \
     BuiltinGenericTypeInfo{ adhdName, cppExportName, requiredHeader, GenericParamKind::paramKind, InlineLayoutKind::inlineLayoutKind, ReflectedLinearKind::reflectedLinearKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor },
@@ -216,13 +202,6 @@ inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #undef NWB_ADHD_EXPORT_FUNCTION_EX
 #undef NWB_ADHD_EXPORT_FUNCTION5
 #undef NWB_ADHD_EXPORT_FUNCTION
-};
-
-inline constexpr BuiltinGlobalConstantInfo s_BuiltinGlobalConstants[] = {
-#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName, requiredHeader) \
-    BuiltinGlobalConstantInfo{ adhdName, cppExportName, adhdTypeName, requiredHeader },
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
 };
 
 inline constexpr BuiltinFunctionArgRule::Enum s_NumericScalarArgRules[] = {
@@ -639,12 +618,28 @@ private:
             return BuiltinFunctionArgRule::TextView;
         if(isMut && tname == "String")
             return BuiltinFunctionArgRule::MutString;
+        if(isMut && tname == "CompactString")
+            return BuiltinFunctionArgRule::MutTextBuffer;
+        if(isMut && tname == BuiltinTypeSemantics::UInt32ScalarTypeName())
+            return BuiltinFunctionArgRule::MutU32;
+        if(!isMut && tname == BuiltinTypeSemantics::UInt32ScalarTypeName())
+            return BuiltinFunctionArgRule::U32Scalar;
+        if(!isMut && tname == BuiltinTypeSemantics::Int64ScalarTypeName())
+            return BuiltinFunctionArgRule::I64Scalar;
         if(isMut && tname == BuiltinTypeSemantics::UInt64ScalarTypeName())
             return BuiltinFunctionArgRule::MutU64;
         if(!isMut && tname == BuiltinTypeSemantics::UInt64ScalarTypeName())
             return BuiltinFunctionArgRule::U64Scalar;
         if(isMut && tname == BuiltinTypeSemantics::UsizeScalarTypeName())
             return BuiltinFunctionArgRule::MutUsize;
+        if(isMut && tname == BuiltinTypeSemantics::Float32ScalarTypeName())
+            return BuiltinFunctionArgRule::MutF32Scalar;
+        if(!isMut && tname == BuiltinTypeSemantics::Float32ScalarTypeName())
+            return BuiltinFunctionArgRule::F32Scalar;
+        if(isMut && tname == BuiltinTypeSemantics::Float64ScalarTypeName())
+            return BuiltinFunctionArgRule::MutF64Scalar;
+        if(!isMut && tname == BuiltinTypeSemantics::Float64ScalarTypeName())
+            return BuiltinFunctionArgRule::F64Scalar;
         if(!isMut && tname == BuiltinTypeSemantics::BoolScalarTypeName())
             return BuiltinFunctionArgRule::BoolScalar;
         if(!isMut && tname == "isize")
@@ -653,8 +648,29 @@ private:
             return BuiltinFunctionArgRule::NameValue;
         if(!isMut && tname == BuiltinTypeSemantics::PathTypeName())
             return BuiltinFunctionArgRule::PathValue;
-        if(!isMut && tname == "Span" && type.templateArgs.size() == 1u && type.templateArgs[0].type && type.templateArgs[0].type->name == BuiltinTypeSemantics::ByteScalarTypeName())
-            return BuiltinFunctionArgRule::ReadableByteSequence;
+        if(tname == BuiltinTypeSemantics::VectorSingleTypeName())
+            return isMut ? BuiltinFunctionArgRule::MutVectorSingleArg : BuiltinFunctionArgRule::VectorSingleArg;
+        if(tname == BuiltinTypeSemantics::VectorDoubleTypeName())
+            return isMut ? BuiltinFunctionArgRule::MutVectorDoubleArg : BuiltinFunctionArgRule::VectorDoubleArg;
+        if(tname == "MatrixSingle")
+            return isMut ? BuiltinFunctionArgRule::MutMatrixSingleArg : BuiltinFunctionArgRule::MatrixSingleArg;
+        if(tname == "MatrixDouble")
+            return isMut ? BuiltinFunctionArgRule::MutMatrixDoubleArg : BuiltinFunctionArgRule::MatrixDoubleArg;
+        if(tname == "Span" && type.templateArgs.size() == 1u && type.templateArgs[0].type){
+            const MStringView elemName = type.templateArgs[0].type->name;
+            if(elemName == BuiltinTypeSemantics::ByteScalarTypeName())
+                return isMut ? BuiltinFunctionArgRule::MutableByteSequence : BuiltinFunctionArgRule::ReadableByteSequence;
+            if(isMut && elemName == BuiltinTypeSemantics::UInt32ScalarTypeName())
+                return BuiltinFunctionArgRule::MutableU32Sequence;
+            if(isMut && elemName == BuiltinTypeSemantics::UInt64ScalarTypeName())
+                return BuiltinFunctionArgRule::MutableU64Sequence;
+            if(!isMut && elemName == BuiltinTypeSemantics::UsizeScalarTypeName())
+                return BuiltinFunctionArgRule::UsizeSpan;
+        }
+        if(isMut && tname == "FixedVector" && type.templateArgs.size() == 2u && type.templateArgs[0].type && type.templateArgs[0].type->name == BuiltinTypeSemantics::ByteScalarTypeName())
+            return BuiltinFunctionArgRule::MutByteFixedVector;
+        if(isMut && tname == "Array" && type.templateArgs.size() == 2u && type.templateArgs[0].type && type.templateArgs[0].type->name == BuiltinTypeSemantics::UInt64ScalarTypeName() && type.templateArgs[1].constantOrTypeName() == "64")
+            return BuiltinFunctionArgRule::MutableU64Array64;
 
         MString key = buildPairKey(tname, isMut ? MStringView("1") : MStringView("0"));
         if(const auto it = m_exactRuleByKey.find(MStringView(key.data(), key.size())); it != m_exactRuleByKey.end())
@@ -910,11 +926,19 @@ private:
         Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
         MetaArena parseArena(MetascriptArenaScope::s_ParserScratch);
 
-        MString rawPreludeSource(parseArena);
-        const b8 loaded = tryReadProjectFile(ContractSemantics::s_CoreExternPreludePath, parseArena, rawPreludeSource);
-        FOUNDATION_ASSERT(loaded && !rawPreludeSource.empty());
-        if(!loaded || rawPreludeSource.empty())
+        MString rawGlobalSource(parseArena);
+        const b8 loadedGlobal = tryReadProjectFile(ContractSemantics::s_GlobalExternPreludePath, parseArena, rawGlobalSource);
+        MString rawCoreSource(parseArena);
+        const b8 loadedCore = tryReadProjectFile(ContractSemantics::s_CoreExternPreludePath, parseArena, rawCoreSource);
+        FOUNDATION_ASSERT(loadedGlobal && !rawGlobalSource.empty() && loadedCore && !rawCoreSource.empty());
+        if(!loadedGlobal || rawGlobalSource.empty() || !loadedCore || rawCoreSource.empty())
             return;
+
+        MString rawPreludeSource(parseArena);
+        rawPreludeSource.reserve(rawGlobalSource.size() + 2u + rawCoreSource.size());
+        rawPreludeSource.append(rawGlobalSource.data(), rawGlobalSource.size());
+        rawPreludeSource.append("\r\n", 2u);
+        rawPreludeSource.append(rawCoreSource.data(), rawCoreSource.size());
 
         MVector<ParseError> errors(parseArena);
         PreludeIncludeResolver includeResolver(*this);
@@ -992,16 +1016,10 @@ const BuiltinObjectTypeInfo* FindBuiltinObjectType(const MStringView name)noexce
 }
 
 const BuiltinEnumInfo* FindBuiltinEnum(const MStringView name)noexcept{
-    if(const BuiltinEnumInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinEnums, name))
-        return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findEnum(name);
 }
 
 b8 HasBuiltinEnumEntry(const MStringView enumName, const MStringView entryName)noexcept{
-    for(const BuiltinEnumEntryInfo& info : __hidden_adhd_type_utils::s_BuiltinEnumEntries){
-        if(info.adhdEnumName == enumName && info.entryName == entryName)
-            return true;
-    }
     return __hidden_adhd_type_utils::GetCoreExternRegistry().hasEnumEntry(enumName, entryName);
 }
 
@@ -1158,14 +1176,10 @@ const BuiltinFunctionInfo* FindBuiltinScopedFunction(const MStringView scopeType
 }
 
 const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView name)noexcept{
-    if(const BuiltinGlobalConstantInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, name))
-        return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findGlobalConstant(name);
 }
 
 const BuiltinGlobalConstantInfo* FindBuiltinScopedConstant(const MStringView scopeTypeName, const MStringView memberName)noexcept{
-    if(const BuiltinGlobalConstantInfo* info = __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, scopeTypeName, memberName, false))
-        return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findScopedConstant(scopeTypeName, memberName);
 }
 

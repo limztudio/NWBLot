@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, cpp_name("::ExecutablePaths"), cpp_layout(8, 8), cpp_flags(self_defaulted, arena_first_ctor, no_assign)]
+extern class ExecutablePaths{
+    Path defaultStorageDirectory(...)const;
+    Expected<Path, ErrorCode> directory(...)const;
+    Expected<Path, ErrorCode> name(...)const;
+    Expected<Path, ErrorCode> path(...)const;
+    Path storageDirectory(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,127 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::Vector4EqualInt")]
+extern b8 EqualF32x4Bits(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4Dot")]
+extern VectorSingle Vector4Dot(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4Equal")]
+extern b8 Vector4Equal(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4EqualInt")]
+extern b8 Vector4EqualInt(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4Greater")]
+extern b8 Vector4Greater(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4GreaterOrEqual")]
+extern b8 Vector4GreaterOrEqual(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4IsInfinite")]
+extern b8 Vector4IsInfinite(in VectorSingle a0);
+
+[cpp_name("::Vector4IsNaN")]
+extern b8 Vector4IsNaN(in VectorSingle a0);
+
+[cpp_name("::Vector4Length")]
+extern VectorSingle Vector4Length(in VectorSingle a0);
+
+[cpp_name("::Vector4LengthSq")]
+extern VectorSingle Vector4LengthSq(in VectorSingle a0);
+
+[cpp_name("::Vector4Less")]
+extern b8 Vector4Less(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4LessOrEqual")]
+extern b8 Vector4LessOrEqual(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4NearEqual")]
+extern b8 Vector4NearEqual(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::Vector4Normalize")]
+extern VectorSingle Vector4Normalize(in VectorSingle a0);
+
+[cpp_name("::Vector4NormalizeOr")]
+extern VectorSingle Vector4NormalizeOr(in VectorSingle a0, in VectorSingle a1, in f32 a2);
+
+[cpp_name("::Vector4NotEqualInt")]
+extern b8 Vector4NotEqualInt(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector4Refract")]
+extern VectorSingle Vector4Refract(in VectorSingle a0, in VectorSingle a1, in auto a2);
+
+[cpp_name("::Vector4RefractV")]
+extern VectorSingle Vector4RefractV(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorDouble4AngleBetweenNormals")]
+extern VectorDouble VectorDouble4AngleBetweenNormals(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4AngleBetweenNormalsEst")]
+extern VectorDouble VectorDouble4AngleBetweenNormalsEst(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4AngleBetweenVectors")]
+extern VectorDouble VectorDouble4AngleBetweenVectors(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4ClampLength")]
+extern VectorDouble VectorDouble4ClampLength(in VectorDouble a0, in auto a1, in auto a2);
+
+[cpp_name("::VectorDouble4ClampLengthV")]
+extern VectorDouble VectorDouble4ClampLengthV(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDouble4Dot")]
+extern VectorDouble VectorDouble4Dot(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4Equal")]
+extern b8 VectorDouble4Equal(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4EqualInt")]
+extern b8 VectorDouble4EqualInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4Greater")]
+extern b8 VectorDouble4Greater(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4GreaterOrEqual")]
+extern b8 VectorDouble4GreaterOrEqual(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4IsInfinite")]
+extern b8 VectorDouble4IsInfinite(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4IsNaN")]
+extern b8 VectorDouble4IsNaN(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4Length")]
+extern VectorDouble VectorDouble4Length(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4LengthSq")]
+extern VectorDouble VectorDouble4LengthSq(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4Less")]
+extern b8 VectorDouble4Less(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4LessOrEqual")]
+extern b8 VectorDouble4LessOrEqual(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4NearEqual")]
+extern b8 VectorDouble4NearEqual(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDouble4Normalize")]
+extern VectorDouble VectorDouble4Normalize(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4NormalizeOr")]
+extern VectorDouble VectorDouble4NormalizeOr(in VectorDouble a0, in VectorDouble a1, in f64 a2);
+
+[cpp_name("::VectorDouble4NotEqualInt")]
+extern b8 VectorDouble4NotEqualInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble4ReciprocalLength")]
+extern VectorDouble VectorDouble4ReciprocalLength(in VectorDouble a0);
+
+[cpp_name("::VectorDouble4ReciprocalLengthEst")]
+extern VectorDouble VectorDouble4ReciprocalLengthEst(in VectorDouble a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

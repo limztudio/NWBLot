@@ -10,7 +10,10 @@ if(NOT TARGET nwb_impl_adhd_headers)
     add_custom_target(nwb_impl_adhd_headers)
 endif()
 
-file(GLOB_RECURSE _nwb_core_prelude_adhd CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/core/*.adhd")
+file(GLOB_RECURSE _nwb_core_prelude_adhd CONFIGURE_DEPENDS LIST_DIRECTORIES false
+    "${PROJECT_SOURCE_DIR}/global/*.adhd"
+    "${PROJECT_SOURCE_DIR}/core/*.adhd"
+)
 set_property(GLOBAL PROPERTY _NWB_CORE_PRELUDE_ADHD_FILES ${_nwb_core_prelude_adhd})
 unset(_nwb_core_prelude_adhd)
 

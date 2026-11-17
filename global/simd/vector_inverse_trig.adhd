@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorACos")]
+extern VectorSingle VectorACos(in VectorSingle a0);
+
+[cpp_name("::VectorASin")]
+extern VectorSingle VectorASin(in VectorSingle a0);
+
+[cpp_name("::VectorATan")]
+extern VectorSingle VectorATan(in VectorSingle a0);
+
+[cpp_name("::VectorATan2")]
+extern VectorSingle VectorATan2(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorDoubleACos")]
+extern VectorDouble VectorDoubleACos(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleASin")]
+extern VectorDouble VectorDoubleASin(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleATan")]
+extern VectorDouble VectorDoubleATan(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleATan2")]
+extern VectorDouble VectorDoubleATan2(in VectorDouble a0, in VectorDouble a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

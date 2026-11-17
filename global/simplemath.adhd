@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::DivideCeilI64")]
+extern i64 DivideCeilI64(in i64 a0, in i64 a1);
+
+[cpp_name("::DivideFloorI64")]
+extern i64 DivideFloorI64(in i64 a0, in i64 a1);
+
+[cpp_name("::IsNaN")]
+extern b8 IsNaN(in auto a0);
+
+[cpp_name("::RoundF64ToF32Bound")]
+extern f32 RoundF64ToF32Bound(in f64 a0, in b8 a1);
+
+[cpp_name("::SignBit")]
+extern b8 SignBit(in auto a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

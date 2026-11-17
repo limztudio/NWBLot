@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/asset.adhd>
 #include <impl/ecs_mesh/runtime/mesh.adhd>
 #include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
 #include <impl/ecs_mesh/skinning/local_bounds.adhd>

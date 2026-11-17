@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorAndCInt")]
+extern VectorSingle VectorAndCInt(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorAndInt")]
+extern VectorSingle VectorAndInt(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorDoubleAndCInt")]
+extern VectorDouble VectorDoubleAndCInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleAndInt")]
+extern VectorDouble VectorDoubleAndInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleOrInt")]
+extern VectorDouble VectorDoubleOrInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleSelect")]
+extern VectorDouble VectorDoubleSelect(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDoubleSelectControl")]
+extern VectorDouble VectorDoubleSelectControl(in isize a0, in isize a1, in isize a2, in isize a3);
+
+[cpp_name("::VectorDoubleXorInt")]
+extern VectorDouble VectorDoubleXorInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorOrInt")]
+extern VectorSingle VectorOrInt(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorSelect")]
+extern VectorSingle VectorSelect(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorSelectControl")]
+extern VectorSingle VectorSelectControl(in isize a0, in isize a1, in isize a2, in isize a3);
+
+[cpp_name("::VectorXorInt")]
+extern VectorSingle VectorXorInt(in VectorSingle a0, in VectorSingle a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

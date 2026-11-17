@@ -1,0 +1,24 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/latin1_text.h>"), cpp_name("::Latin1TextError::Enum")]
+extern enum Latin1TextError : u8{
+    InvalidText,
+    TooLarge,
+    Unsupported
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/latin1_text.h>"), cpp_name("::DecodeLatin1Text")]
+extern Expected<void, Latin1TextError> DecodeLatin1Text(in StringView a0, in isize a1, mut String a2);
+
+[cpp_header("<global/latin1_text.h>"), cpp_name("::EncodeLatin1Text")]
+extern Expected<void, Latin1TextError> EncodeLatin1Text(in StringView a0, in isize a1, mut String a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

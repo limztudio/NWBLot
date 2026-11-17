@@ -1,0 +1,266 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::SIMDVectorConstF"), cpp_layout(16, 16), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class SIMDVectorConstF;
+
+[cpp_name("::SIMDVectorConstI"), cpp_layout(16, 16), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class SIMDVectorConstI;
+
+[cpp_name("::SIMDVectorDoubleConstF"), cpp_layout(32, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class SIMDVectorDoubleConstF;
+
+[cpp_name("::SIMDVectorDoubleConstI"), cpp_layout(32, 32), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class SIMDVectorDoubleConstI;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_1DIV2PI")]
+extern const f32 s_1DIV2PI;
+[cpp_name("::s_2PI")]
+extern const f32 s_2PI;
+[cpp_name("::s_3PIDIV4")]
+extern const f32 s_3PIDIV4;
+[cpp_name("::s_Double2PI")]
+extern const f64 s_Double2PI;
+[cpp_name("::s_DoublePI")]
+extern const f64 s_DoublePI;
+[cpp_name("::s_DoublePIDIV2")]
+extern const f64 s_DoublePIDIV2;
+[cpp_name("::s_DoublePIDIV4")]
+extern const f64 s_DoublePIDIV4;
+[cpp_name("::s_DoubleSELECT_0")]
+extern const u64 s_DoubleSELECT_0;
+[cpp_name("::s_DoubleSELECT_1")]
+extern const u64 s_DoubleSELECT_1;
+[cpp_name("::s_DoubleSIMDAbsMask")]
+extern const SIMDVectorDoubleConstI s_DoubleSIMDAbsMask;
+[cpp_name("::s_DoubleSIMDEpsilon")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDEpsilon;
+[cpp_name("::s_DoubleSIMDIdentityR0")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR0;
+[cpp_name("::s_DoubleSIMDIdentityR1")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR1;
+[cpp_name("::s_DoubleSIMDIdentityR2")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR2;
+[cpp_name("::s_DoubleSIMDIdentityR3")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDIdentityR3;
+[cpp_name("::s_DoubleSIMDInfinity")]
+extern const SIMDVectorDoubleConstI s_DoubleSIMDInfinity;
+[cpp_name("::s_DoubleSIMDNegativeOne")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDNegativeOne;
+[cpp_name("::s_DoubleSIMDOne")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDOne;
+[cpp_name("::s_DoubleSIMDOne3")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDOne3;
+[cpp_name("::s_DoubleSIMDOneHalf")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDOneHalf;
+[cpp_name("::s_DoubleSIMDQNaN")]
+extern const SIMDVectorDoubleConstI s_DoubleSIMDQNaN;
+[cpp_name("::s_DoubleSIMDZero")]
+extern const SIMDVectorDoubleConstF s_DoubleSIMDZero;
+[cpp_name("::s_F32AbsoluteBitMask")]
+extern const u32 s_F32AbsoluteBitMask;
+[cpp_name("::s_F32BitCount")]
+extern const u32 s_F32BitCount;
+[cpp_name("::s_F32ExponentBias")]
+extern const u32 s_F32ExponentBias;
+[cpp_name("::s_F32ExponentFieldMask")]
+extern const u32 s_F32ExponentFieldMask;
+[cpp_name("::s_F32FractionLimitBits")]
+extern const u32 s_F32FractionLimitBits;
+[cpp_name("::s_F32HalfBits")]
+extern const u32 s_F32HalfBits;
+[cpp_name("::s_F32ImplicitMantissaBit")]
+extern const u32 s_F32ImplicitMantissaBit;
+[cpp_name("::s_F32InfinityBits")]
+extern const u32 s_F32InfinityBits;
+[cpp_name("::s_F32IntegerExponent")]
+extern const u32 s_F32IntegerExponent;
+[cpp_name("::s_F32MantissaBitCount")]
+extern const u32 s_F32MantissaBitCount;
+[cpp_name("::s_F32MantissaBitMask")]
+extern const u32 s_F32MantissaBitMask;
+[cpp_name("::s_F32MinNormalBits")]
+extern const u32 s_F32MinNormalBits;
+[cpp_name("::s_F32NegativeOneBits")]
+extern const u32 s_F32NegativeOneBits;
+[cpp_name("::s_F32NoFractionThreshold")]
+extern const f32 s_F32NoFractionThreshold;
+[cpp_name("::s_F32OneBits")]
+extern const u32 s_F32OneBits;
+[cpp_name("::s_F32QuietBit")]
+extern const u32 s_F32QuietBit;
+[cpp_name("::s_F32QuietNaNBits")]
+extern const u32 s_F32QuietNaNBits;
+[cpp_name("::s_F32SignBitMask")]
+extern const u32 s_F32SignBitMask;
+[cpp_name("::s_F32SignBitShift")]
+extern const u32 s_F32SignBitShift;
+[cpp_name("::s_F64AbsoluteBitMask")]
+extern const u64 s_F64AbsoluteBitMask;
+[cpp_name("::s_F64Epsilon")]
+extern const f64 s_F64Epsilon;
+[cpp_name("::s_F64ExponentBias")]
+extern const i64 s_F64ExponentBias;
+[cpp_name("::s_F64ExponentFieldMask")]
+extern const u64 s_F64ExponentFieldMask;
+[cpp_name("::s_F64HalfBits")]
+extern const u64 s_F64HalfBits;
+[cpp_name("::s_F64IntegerExponent")]
+extern const u64 s_F64IntegerExponent;
+[cpp_name("::s_F64MantissaBitCount")]
+extern const u32 s_F64MantissaBitCount;
+[cpp_name("::s_F64MantissaBitMask")]
+extern const u64 s_F64MantissaBitMask;
+[cpp_name("::s_F64MinNormalBits")]
+extern const u64 s_F64MinNormalBits;
+[cpp_name("::s_F64OneBits")]
+extern const u64 s_F64OneBits;
+[cpp_name("::s_F64SignBitMask")]
+extern const u64 s_F64SignBitMask;
+[cpp_name("::s_F64SignBitShift")]
+extern const u32 s_F64SignBitShift;
+[cpp_name("::s_PI")]
+extern const f32 s_PI;
+[cpp_name("::s_PIDIV2")]
+extern const f32 s_PIDIV2;
+[cpp_name("::s_PIDIV4")]
+extern const f32 s_PIDIV4;
+[cpp_name("::s_SELECT_0")]
+extern const u32 s_SELECT_0;
+[cpp_name("::s_SELECT_1")]
+extern const u32 s_SELECT_1;
+[cpp_name("::s_SIMD253")]
+extern const SIMDVectorConstI s_SIMD253;
+[cpp_name("::s_SIMDATanCoefficients0")]
+extern const SIMDVectorConstF s_SIMDATanCoefficients0;
+[cpp_name("::s_SIMDATanCoefficients1")]
+extern const SIMDVectorConstF s_SIMDATanCoefficients1;
+[cpp_name("::s_SIMDAbsMask")]
+extern const SIMDVectorConstI s_SIMDAbsMask;
+[cpp_name("::s_SIMDArcCoefficients0")]
+extern const SIMDVectorConstF s_SIMDArcCoefficients0;
+[cpp_name("::s_SIMDArcCoefficients1")]
+extern const SIMDVectorConstF s_SIMDArcCoefficients1;
+[cpp_name("::s_SIMDAvxPermute2F128High0High1")]
+extern const i32 s_SIMDAvxPermute2F128High0High1;
+[cpp_name("::s_SIMDAvxPermute2F128HighHigh")]
+extern const i32 s_SIMDAvxPermute2F128HighHigh;
+[cpp_name("::s_SIMDAvxPermute2F128Low0Low1")]
+extern const i32 s_SIMDAvxPermute2F128Low0Low1;
+[cpp_name("::s_SIMDAvxPermute2F128LowLow")]
+extern const i32 s_SIMDAvxPermute2F128LowLow;
+[cpp_name("::s_SIMDAvxPermutePdAllHigh")]
+extern const i32 s_SIMDAvxPermutePdAllHigh;
+[cpp_name("::s_SIMDAvxPermutePdAllLow")]
+extern const i32 s_SIMDAvxPermutePdAllLow;
+[cpp_name("::s_SIMDBin128")]
+extern const SIMDVectorConstI s_SIMDBin128;
+[cpp_name("::s_SIMDCosCoefficients0")]
+extern const SIMDVectorConstF s_SIMDCosCoefficients0;
+[cpp_name("::s_SIMDCosCoefficients1")]
+extern const SIMDVectorConstF s_SIMDCosCoefficients1;
+[cpp_name("::s_SIMDExpEst1")]
+extern const SIMDVectorConstF s_SIMDExpEst1;
+[cpp_name("::s_SIMDExpEst2")]
+extern const SIMDVectorConstF s_SIMDExpEst2;
+[cpp_name("::s_SIMDExpEst3")]
+extern const SIMDVectorConstF s_SIMDExpEst3;
+[cpp_name("::s_SIMDExpEst4")]
+extern const SIMDVectorConstF s_SIMDExpEst4;
+[cpp_name("::s_SIMDExpEst5")]
+extern const SIMDVectorConstF s_SIMDExpEst5;
+[cpp_name("::s_SIMDExpEst6")]
+extern const SIMDVectorConstF s_SIMDExpEst6;
+[cpp_name("::s_SIMDExpEst7")]
+extern const SIMDVectorConstF s_SIMDExpEst7;
+[cpp_name("::s_SIMDExponentBias")]
+extern const SIMDVectorConstI s_SIMDExponentBias;
+[cpp_name("::s_SIMDHalfPi")]
+extern const SIMDVectorConstF s_SIMDHalfPi;
+[cpp_name("::s_SIMDIdentityR0")]
+extern const SIMDVectorConstF s_SIMDIdentityR0;
+[cpp_name("::s_SIMDIdentityR1")]
+extern const SIMDVectorConstF s_SIMDIdentityR1;
+[cpp_name("::s_SIMDIdentityR2")]
+extern const SIMDVectorConstF s_SIMDIdentityR2;
+[cpp_name("::s_SIMDIdentityR3")]
+extern const SIMDVectorConstF s_SIMDIdentityR3;
+[cpp_name("::s_SIMDInfinity")]
+extern const SIMDVectorConstI s_SIMDInfinity;
+[cpp_name("::s_SIMDInvLgE")]
+extern const SIMDVectorConstF s_SIMDInvLgE;
+[cpp_name("::s_SIMDLgE")]
+extern const SIMDVectorConstF s_SIMDLgE;
+[cpp_name("::s_SIMDLogEst0")]
+extern const SIMDVectorConstF s_SIMDLogEst0;
+[cpp_name("::s_SIMDLogEst1")]
+extern const SIMDVectorConstF s_SIMDLogEst1;
+[cpp_name("::s_SIMDLogEst2")]
+extern const SIMDVectorConstF s_SIMDLogEst2;
+[cpp_name("::s_SIMDLogEst3")]
+extern const SIMDVectorConstF s_SIMDLogEst3;
+[cpp_name("::s_SIMDLogEst4")]
+extern const SIMDVectorConstF s_SIMDLogEst4;
+[cpp_name("::s_SIMDLogEst5")]
+extern const SIMDVectorConstF s_SIMDLogEst5;
+[cpp_name("::s_SIMDLogEst6")]
+extern const SIMDVectorConstF s_SIMDLogEst6;
+[cpp_name("::s_SIMDLogEst7")]
+extern const SIMDVectorConstF s_SIMDLogEst7;
+[cpp_name("::s_SIMDMinNormal")]
+extern const SIMDVectorConstI s_SIMDMinNormal;
+[cpp_name("::s_SIMDMovemask2Low")]
+extern const i32 s_SIMDMovemask2Low;
+[cpp_name("::s_SIMDNegativeOne")]
+extern const SIMDVectorConstF s_SIMDNegativeOne;
+[cpp_name("::s_SIMDNoFraction")]
+extern const SIMDVectorConstF s_SIMDNoFraction;
+[cpp_name("::s_SIMDNumTrailing")]
+extern const SIMDVectorConstI s_SIMDNumTrailing;
+[cpp_name("::s_SIMDOne")]
+extern const SIMDVectorConstF s_SIMDOne;
+[cpp_name("::s_SIMDOne3")]
+extern const SIMDVectorConstF s_SIMDOne3;
+[cpp_name("::s_SIMDOneHalf")]
+extern const SIMDVectorConstF s_SIMDOneHalf;
+[cpp_name("::s_SIMDPi")]
+extern const SIMDVectorConstF s_SIMDPi;
+[cpp_name("::s_SIMDQNaN")]
+extern const SIMDVectorConstI s_SIMDQNaN;
+[cpp_name("::s_SIMDQNaNTest")]
+extern const SIMDVectorConstI s_SIMDQNaNTest;
+[cpp_name("::s_SIMDReciprocalTwoPi")]
+extern const SIMDVectorConstF s_SIMDReciprocalTwoPi;
+[cpp_name("::s_SIMDSinCoefficients0")]
+extern const SIMDVectorConstF s_SIMDSinCoefficients0;
+[cpp_name("::s_SIMDSinCoefficients1")]
+extern const SIMDVectorConstF s_SIMDSinCoefficients1;
+[cpp_name("::s_SIMDSse4Dot2BroadcastMask")]
+extern const i32 s_SIMDSse4Dot2BroadcastMask;
+[cpp_name("::s_SIMDSse4Dot2TransformMask")]
+extern const i32 s_SIMDSse4Dot2TransformMask;
+[cpp_name("::s_SIMDSse4Dot3BroadcastMask")]
+extern const i32 s_SIMDSse4Dot3BroadcastMask;
+[cpp_name("::s_SIMDSse4Dot4BroadcastMask")]
+extern const i32 s_SIMDSse4Dot4BroadcastMask;
+[cpp_name("::s_SIMDSse4InsertLaneWMask")]
+extern const i32 s_SIMDSse4InsertLaneWMask;
+[cpp_name("::s_SIMDSse4InsertLaneYMask")]
+extern const i32 s_SIMDSse4InsertLaneYMask;
+[cpp_name("::s_SIMDSse4InsertLaneZMask")]
+extern const i32 s_SIMDSse4InsertLaneZMask;
+[cpp_name("::s_SIMDSubnormalExponent")]
+extern const SIMDVectorConstI s_SIMDSubnormalExponent;
+[cpp_name("::s_SIMDTwoPi")]
+extern const SIMDVectorConstF s_SIMDTwoPi;
+[cpp_name("::s_SIMDZero")]
+extern const SIMDVectorConstF s_SIMDZero;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

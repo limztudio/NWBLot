@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::InterpolateFiniteRange")]
+extern Expected<f64> InterpolateFiniteRange(in f64 a0, in f64 a1, in f64 a2);
+
+[cpp_name("::NormalizeFiniteRange")]
+extern Expected<f64> NormalizeFiniteRange(in f64 a0, in f64 a1, in f64 a2);
+
+[cpp_name("::StepF64Bounded")]
+extern f64 StepF64Bounded(in f64 a0, in f64 a1, in f64 a2, in f64 a3, in b8 a4);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

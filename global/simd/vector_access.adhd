@@ -1,0 +1,127 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorDoubleGetByIndex")]
+extern f64 VectorDoubleGetByIndex(in VectorDouble a0, in isize a1);
+
+[cpp_name("::VectorDoubleGetIntByIndex")]
+extern u64 VectorDoubleGetIntByIndex(in VectorDouble a0, in isize a1);
+
+[cpp_name("::VectorDoubleGetIntW")]
+extern u64 VectorDoubleGetIntW(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetIntX")]
+extern u64 VectorDoubleGetIntX(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetIntY")]
+extern u64 VectorDoubleGetIntY(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetIntZ")]
+extern u64 VectorDoubleGetIntZ(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetW")]
+extern f64 VectorDoubleGetW(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetX")]
+extern f64 VectorDoubleGetX(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetY")]
+extern f64 VectorDoubleGetY(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleGetZ")]
+extern f64 VectorDoubleGetZ(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleSetByIndex")]
+extern VectorDouble VectorDoubleSetByIndex(in VectorDouble a0, in auto a1, in isize a2);
+
+[cpp_name("::VectorDoubleSetIntByIndex")]
+extern VectorDouble VectorDoubleSetIntByIndex(in VectorDouble a0, in isize a1, in isize a2);
+
+[cpp_name("::VectorDoubleSetIntW")]
+extern VectorDouble VectorDoubleSetIntW(in VectorDouble a0, in isize a1);
+
+[cpp_name("::VectorDoubleSetIntX")]
+extern VectorDouble VectorDoubleSetIntX(in VectorDouble a0, in isize a1);
+
+[cpp_name("::VectorDoubleSetIntY")]
+extern VectorDouble VectorDoubleSetIntY(in VectorDouble a0, in isize a1);
+
+[cpp_name("::VectorDoubleSetIntZ")]
+extern VectorDouble VectorDoubleSetIntZ(in VectorDouble a0, in isize a1);
+
+[cpp_name("::VectorDoubleSetW")]
+extern VectorDouble VectorDoubleSetW(in VectorDouble a0, in auto a1);
+
+[cpp_name("::VectorDoubleSetX")]
+extern VectorDouble VectorDoubleSetX(in VectorDouble a0, in auto a1);
+
+[cpp_name("::VectorDoubleSetY")]
+extern VectorDouble VectorDoubleSetY(in VectorDouble a0, in auto a1);
+
+[cpp_name("::VectorDoubleSetZ")]
+extern VectorDouble VectorDoubleSetZ(in VectorDouble a0, in auto a1);
+
+[cpp_name("::VectorGetByIndex")]
+extern f32 VectorGetByIndex(in VectorSingle a0, in isize a1);
+
+[cpp_name("::VectorGetIntByIndex")]
+extern u32 VectorGetIntByIndex(in VectorSingle a0, in isize a1);
+
+[cpp_name("::VectorGetIntW")]
+extern u32 VectorGetIntW(in VectorSingle a0);
+
+[cpp_name("::VectorGetIntX")]
+extern u32 VectorGetIntX(in VectorSingle a0);
+
+[cpp_name("::VectorGetIntY")]
+extern u32 VectorGetIntY(in VectorSingle a0);
+
+[cpp_name("::VectorGetIntZ")]
+extern u32 VectorGetIntZ(in VectorSingle a0);
+
+[cpp_name("::VectorGetW")]
+extern f32 VectorGetW(in VectorSingle a0);
+
+[cpp_name("::VectorGetX")]
+extern f32 VectorGetX(in VectorSingle a0);
+
+[cpp_name("::VectorGetY")]
+extern f32 VectorGetY(in VectorSingle a0);
+
+[cpp_name("::VectorGetZ")]
+extern f32 VectorGetZ(in VectorSingle a0);
+
+[cpp_name("::VectorSetByIndex")]
+extern VectorSingle VectorSetByIndex(in VectorSingle a0, in auto a1, in isize a2);
+
+[cpp_name("::VectorSetIntByIndex")]
+extern VectorSingle VectorSetIntByIndex(in VectorSingle a0, in isize a1, in isize a2);
+
+[cpp_name("::VectorSetIntW")]
+extern VectorSingle VectorSetIntW(in VectorSingle a0, in isize a1);
+
+[cpp_name("::VectorSetIntX")]
+extern VectorSingle VectorSetIntX(in VectorSingle a0, in isize a1);
+
+[cpp_name("::VectorSetIntY")]
+extern VectorSingle VectorSetIntY(in VectorSingle a0, in isize a1);
+
+[cpp_name("::VectorSetIntZ")]
+extern VectorSingle VectorSetIntZ(in VectorSingle a0, in isize a1);
+
+[cpp_name("::VectorSetW")]
+extern VectorSingle VectorSetW(in VectorSingle a0, in auto a1);
+
+[cpp_name("::VectorSetX")]
+extern VectorSingle VectorSetX(in VectorSingle a0, in auto a1);
+
+[cpp_name("::VectorSetY")]
+extern VectorSingle VectorSetY(in VectorSingle a0, in auto a1);
+
+[cpp_name("::VectorSetZ")]
+extern VectorSingle VectorSetZ(in VectorSingle a0, in auto a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

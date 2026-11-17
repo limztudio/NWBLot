@@ -1,0 +1,55 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::QuaternionConjugate")]
+extern VectorSingle QuaternionConjugate(in VectorSingle a0);
+
+[cpp_name("::QuaternionDoubleConjugate")]
+extern VectorDouble QuaternionDoubleConjugate(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleDot")]
+extern VectorDouble QuaternionDoubleDot(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::QuaternionDoubleExp")]
+extern VectorDouble QuaternionDoubleExp(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleInverse")]
+extern VectorDouble QuaternionDoubleInverse(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleIsInfinite")]
+extern b8 QuaternionDoubleIsInfinite(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleIsNaN")]
+extern b8 QuaternionDoubleIsNaN(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleLengthSq")]
+extern VectorDouble QuaternionDoubleLengthSq(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleLn")]
+extern VectorDouble QuaternionDoubleLn(in VectorDouble a0);
+
+[cpp_name("::QuaternionDoubleMultiply")]
+extern VectorDouble QuaternionDoubleMultiply(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::QuaternionDoubleNormalize")]
+extern VectorDouble QuaternionDoubleNormalize(in VectorDouble a0);
+
+[cpp_name("::QuaternionIsInfinite")]
+extern b8 QuaternionIsInfinite(in VectorSingle a0);
+
+[cpp_name("::QuaternionIsNaN")]
+extern b8 QuaternionIsNaN(in VectorSingle a0);
+
+[cpp_name("::QuaternionLengthSq")]
+extern VectorSingle QuaternionLengthSq(in VectorSingle a0);
+
+[cpp_name("::QuaternionMultiply")]
+extern VectorSingle QuaternionMultiply(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::QuaternionNormalize")]
+extern VectorSingle QuaternionNormalize(in VectorSingle a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

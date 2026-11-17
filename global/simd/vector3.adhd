@@ -1,0 +1,139 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::Vector3Cross")]
+extern VectorSingle Vector3Cross(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3Dot")]
+extern VectorSingle Vector3Dot(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3Equal")]
+extern b8 Vector3Equal(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3Greater")]
+extern b8 Vector3Greater(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3GreaterOrEqual")]
+extern b8 Vector3GreaterOrEqual(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3InverseRotate")]
+extern VectorSingle Vector3InverseRotate(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3IsFinite")]
+extern b8 Vector3IsFinite(in VectorSingle a0);
+
+[cpp_name("::Vector3IsInfinite")]
+extern b8 Vector3IsInfinite(in VectorSingle a0);
+
+[cpp_name("::Vector3IsNaN")]
+extern b8 Vector3IsNaN(in VectorSingle a0);
+
+[cpp_name("::Vector3Length")]
+extern VectorSingle Vector3Length(in VectorSingle a0);
+
+[cpp_name("::Vector3LengthSq")]
+extern VectorSingle Vector3LengthSq(in VectorSingle a0);
+
+[cpp_name("::Vector3LessOrEqual")]
+extern b8 Vector3LessOrEqual(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3Normalize")]
+extern VectorSingle Vector3Normalize(in VectorSingle a0);
+
+[cpp_name("::Vector3NormalizeOr")]
+extern VectorSingle Vector3NormalizeOr(in VectorSingle a0, in VectorSingle a1, in f32 a2);
+
+[cpp_name("::Vector3Refract")]
+extern VectorSingle Vector3Refract(in VectorSingle a0, in VectorSingle a1, in auto a2);
+
+[cpp_name("::Vector3RefractV")]
+extern VectorSingle Vector3RefractV(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::Vector3Rotate")]
+extern VectorSingle Vector3Rotate(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::Vector3TryNormalize")]
+extern Expected<VectorSingle> Vector3TryNormalize(in VectorSingle a0);
+
+[cpp_name("::VectorDouble3AngleBetweenNormals")]
+extern VectorDouble VectorDouble3AngleBetweenNormals(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3AngleBetweenNormalsEst")]
+extern VectorDouble VectorDouble3AngleBetweenNormalsEst(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3AngleBetweenVectors")]
+extern VectorDouble VectorDouble3AngleBetweenVectors(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3ClampLength")]
+extern VectorDouble VectorDouble3ClampLength(in VectorDouble a0, in auto a1, in auto a2);
+
+[cpp_name("::VectorDouble3ClampLengthV")]
+extern VectorDouble VectorDouble3ClampLengthV(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDouble3Cross")]
+extern VectorDouble VectorDouble3Cross(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3Dot")]
+extern VectorDouble VectorDouble3Dot(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3Equal")]
+extern b8 VectorDouble3Equal(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3EqualInt")]
+extern b8 VectorDouble3EqualInt(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3Greater")]
+extern b8 VectorDouble3Greater(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3GreaterOrEqual")]
+extern b8 VectorDouble3GreaterOrEqual(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3InverseRotate")]
+extern VectorDouble VectorDouble3InverseRotate(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3IsFinite")]
+extern b8 VectorDouble3IsFinite(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3IsInfinite")]
+extern b8 VectorDouble3IsInfinite(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3IsNaN")]
+extern b8 VectorDouble3IsNaN(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3Length")]
+extern VectorDouble VectorDouble3Length(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3LengthSq")]
+extern VectorDouble VectorDouble3LengthSq(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3LessOrEqual")]
+extern b8 VectorDouble3LessOrEqual(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3Normalize")]
+extern VectorDouble VectorDouble3Normalize(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3NormalizeOr")]
+extern VectorDouble VectorDouble3NormalizeOr(in VectorDouble a0, in VectorDouble a1, in f64 a2);
+
+[cpp_name("::VectorDouble3ReciprocalLength")]
+extern VectorDouble VectorDouble3ReciprocalLength(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3ReciprocalLengthEst")]
+extern VectorDouble VectorDouble3ReciprocalLengthEst(in VectorDouble a0);
+
+[cpp_name("::VectorDouble3Refract")]
+extern VectorDouble VectorDouble3Refract(in VectorDouble a0, in VectorDouble a1, in auto a2);
+
+[cpp_name("::VectorDouble3RefractV")]
+extern VectorDouble VectorDouble3RefractV(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorDouble3Rotate")]
+extern VectorDouble VectorDouble3Rotate(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDouble3TryNormalize")]
+extern Expected<VectorDouble> VectorDouble3TryNormalize(in VectorDouble a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

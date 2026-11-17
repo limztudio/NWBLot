@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::CanRepresentU64")]
+extern b8 CanRepresentU64<T>(in isize a0);
+
+[cpp_name("::FitsU32")]
+extern b8 FitsU32(in isize a0);
+
+[cpp_name("::SaturateI64ToI32")]
+extern i32 SaturateI64ToI32(in isize a0);
+
+[cpp_name("::SaturateU64ToI32")]
+extern i32 SaturateU64ToI32(in isize a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::s_BitsPerByte")]
+extern const usize s_BitsPerByte;
+[cpp_name("::s_BitsPerU64")]
+extern const usize s_BitsPerU64;
+[cpp_name("::s_MaxF32")]
+extern const f32 s_MaxF32;
+[cpp_name("::s_MaxI16")]
+extern const i16 s_MaxI16;
+[cpp_name("::s_MaxI32")]
+extern const i32 s_MaxI32;
+[cpp_name("::s_MaxU16")]
+extern const u16 s_MaxU16;
+[cpp_name("::s_MaxU32")]
+extern const u32 s_MaxU32;
+[cpp_name("::s_MinI16")]
+extern const i16 s_MinI16;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

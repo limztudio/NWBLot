@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, cpp_name("::DirectoryEntry"), cpp_layout(40, 8), cpp_flags(non_thread_safe, arena_omit_ctor)]
+extern class DirectoryEntry{
+    Expected<b8, ErrorCode> isRegularFile(...)const;
+    Path path(...)const;
+};
+
+[arena, cpp_name("::DirectoryIterator"), cpp_layout(32, 8), cpp_flags(non_thread_safe, arena_omit_ctor)]
+extern class DirectoryIterator;
+
+[arena, cpp_name("::RecursiveDirectoryIterator"), cpp_layout(32, 8), cpp_flags(non_thread_safe, arena_omit_ctor)]
+extern class RecursiveDirectoryIterator;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::DirectoryIterator<::ArenaBase>::Create")]
+extern Expected<DirectoryIterator, ErrorCode> DirectoryIteratorCreate(in Path a0);
+
+[cpp_name("::RecursiveDirectoryIterator<::ArenaBase>::Create")]
+extern Expected<RecursiveDirectoryIterator, ErrorCode> RecursiveDirectoryIteratorCreate(in Path a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::HasVisibleRectIntersection")]
+extern b8 HasVisibleRectIntersection(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::HasVisibleRectIntersection")]
+extern b8 HasVisibleRectIntersectionVec(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::InsetRectValue")]
+extern VectorSingle InsetRectValue(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::InsetRectValuePreservingExtent")]
+extern VectorSingle InsetRectValuePreservingExtent(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::InsetRectValuePreservingExtent")]
+extern VectorSingle InsetRectVec(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::IntersectRectBoundsValue")]
+extern VectorSingle IntersectRectBoundsValue(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::IntersectRectBoundsValue")]
+extern VectorSingle IntersectRectBoundsVec(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::IntersectRectValue")]
+extern VectorSingle IntersectRectValue(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::IntersectRectValuePreservingExtent")]
+extern VectorSingle IntersectRectValuePreservingExtent(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::IntersectRectValuePreservingExtent")]
+extern VectorSingle IntersectRectVec(in VectorSingle a0, in VectorSingle a1);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

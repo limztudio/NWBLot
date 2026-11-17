@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::FileRemovalFailure"), cpp_layout(24, 8), cpp_flags(self_defaulted, brace_init)]
+extern class FileRemovalFailure{
+    ErrorCode code;
+    u64 removedCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::EnsureEmptyDirectory")]
+extern Expected<void, ErrorCode> EnsureEmptyDirectory(in Path a0);
+
+[cpp_name("::MovePathToDirectory")]
+extern Expected<Path, ErrorCode> MovePathToDirectory(in Path a0, in Path a1);
+
+[cpp_name("::RemoveAll")]
+extern Expected<u64, FileRemovalFailure> RemoveAll(in Path a0);
+
+[cpp_name("::RemoveAllIfExists")]
+extern Expected<void, ErrorCode> RemoveAllIfExists(in Path a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorCeiling")]
+extern VectorSingle VectorCeiling(in VectorSingle a0);
+
+[cpp_name("::VectorDoubleCeiling")]
+extern VectorDouble VectorDoubleCeiling(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleFloor")]
+extern VectorDouble VectorDoubleFloor(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleMod")]
+extern VectorDouble VectorDoubleMod(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::VectorDoubleModAngles")]
+extern VectorDouble VectorDoubleModAngles(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleRound")]
+extern VectorDouble VectorDoubleRound(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleTruncate")]
+extern VectorDouble VectorDoubleTruncate(in VectorDouble a0);
+
+[cpp_name("::VectorFloor")]
+extern VectorSingle VectorFloor(in VectorSingle a0);
+
+[cpp_name("::VectorMod")]
+extern VectorSingle VectorMod(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::VectorModAngles")]
+extern VectorSingle VectorModAngles(in VectorSingle a0);
+
+[cpp_name("::VectorRound")]
+extern VectorSingle VectorRound(in VectorSingle a0);
+
+[cpp_name("::VectorTruncate")]
+extern VectorSingle VectorTruncate(in VectorSingle a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

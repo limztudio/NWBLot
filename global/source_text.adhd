@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/source_text.h>"), cpp_name("::AppendQuotedLiteral")]
+extern usize AppendQuotedLiteral(in StringView a0, in isize a1, mut String a2);
+
+[cpp_header("<global/source_text.h>"), cpp_name("::HasMatchingOuterParens")]
+extern b8 HasMatchingOuterParens(in StringView a0);
+
+[cpp_header("<global/source_text.h>"), cpp_name("::MaskCStyleSourceComments")]
+extern void MaskCStyleSourceComments(mut String a0);
+
+[cpp_header("<global/source_text.h>"), cpp_name("::ReadFirstIdentifierAfterCComments"), cpp_flags(borrow_view)]
+extern StringView ReadFirstIdentifierAfterCComments(in StringView a0);
+
+[cpp_header("<global/source_text.h>"), cpp_name("::SkipQuotedLiteral")]
+extern usize SkipQuotedLiteral(in StringView a0, in isize a1);
+
+[cpp_header("<global/source_text.h>"), cpp_name("::SpliceSourceLines")]
+extern void SpliceSourceLines(mut String a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

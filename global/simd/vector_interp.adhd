@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorDoubleLerp")]
+extern VectorDouble VectorDoubleLerp(in VectorDouble a0, in VectorDouble a1, in auto a2);
+
+[cpp_name("::VectorDoubleLerpV")]
+extern VectorDouble VectorDoubleLerpV(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::VectorLerp")]
+extern VectorSingle VectorLerp(in VectorSingle a0, in VectorSingle a1, in auto a2);
+
+[cpp_name("::VectorLerpV")]
+extern VectorSingle VectorLerpV(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::VectorWeightedSum")]
+extern VectorSingle VectorWeightedSum(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

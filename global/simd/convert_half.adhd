@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::ConvertFloatToHalf")]
+extern u16 ConvertFloatToHalf(in f32 a0);
+
+[cpp_name("::ConvertHalfToFloat")]
+extern f32 ConvertHalfToFloat(in isize a0);
+
+[cpp_name("::LoadHalf4U")]
+extern f32x4u LoadHalf4U(in auto a0);
+
+[cpp_name("::MakeHalf4U")]
+extern f16x4u MakeHalf4U(in auto a0, in auto a1, in auto a2, in auto a3);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

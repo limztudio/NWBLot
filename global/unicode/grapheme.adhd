@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/unicode/grapheme.h>"), cpp_name("::GraphemeBoundaryState"), cpp_layout(16, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class GraphemeBoundaryState{
+    b8 first;
+    b8 indicConsonantRun;
+    b8 indicLinker;
+    b8 pictographExtendRun;
+    GraphemeBreak previous;
+    b8 previousZwjAfterPictograph;
+    usize regionalRun;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/unicode/grapheme.h>"), cpp_name("::BuildGraphemeBoundaries"), cpp_flags(scratch_arena)]
+extern Expected<Vector<usize>> BuildGraphemeBoundaries(in StringView a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

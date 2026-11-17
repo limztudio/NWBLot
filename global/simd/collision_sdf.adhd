@@ -1,0 +1,55 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::SdfTests::Box")]
+extern VectorSingle SdfBox(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::SdfTests::BoxNormal")]
+extern VectorSingle SdfBoxNormal(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in auto a3);
+
+[cpp_name("::SdfTests::CapsuleY")]
+extern VectorSingle SdfCapsuleY(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::SdfTests::CapsuleYNormal")]
+extern VectorSingle SdfCapsuleYNormal(in VectorSingle a0, in VectorSingle a1, in auto a2);
+
+[cpp_name("::SdfDoubleTests::Box")]
+extern VectorDouble SdfDoubleBox(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::SdfDoubleTests::BoxNormal")]
+extern VectorDouble SdfDoubleBoxNormal(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in auto a3);
+
+[cpp_name("::SdfDoubleTests::CapsuleY")]
+extern VectorDouble SdfDoubleCapsuleY(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::SdfDoubleTests::CapsuleYNormal")]
+extern VectorDouble SdfDoubleCapsuleYNormal(in VectorDouble a0, in VectorDouble a1, in auto a2);
+
+[cpp_name("::SdfDoubleTests::Plane")]
+extern VectorDouble SdfDoublePlane(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::SdfDoubleTests::PlaneNormal")]
+extern VectorDouble SdfDoublePlaneNormal(in VectorDouble a0, in VectorDouble a1, in auto a2);
+
+[cpp_name("::SdfDoubleTests::Sphere")]
+extern VectorDouble SdfDoubleSphere(in VectorDouble a0, in VectorDouble a1);
+
+[cpp_name("::SdfDoubleTests::SphereNormal")]
+extern VectorDouble SdfDoubleSphereNormal(in VectorDouble a0, in VectorDouble a1, in auto a2);
+
+[cpp_name("::SdfTests::Plane")]
+extern VectorSingle SdfPlane(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::SdfTests::PlaneNormal")]
+extern VectorSingle SdfPlaneNormal(in VectorSingle a0, in VectorSingle a1, in auto a2);
+
+[cpp_name("::SdfTests::Sphere")]
+extern VectorSingle SdfSphere(in VectorSingle a0, in VectorSingle a1);
+
+[cpp_name("::SdfTests::SphereNormal")]
+extern VectorSingle SdfSphereNormal(in VectorSingle a0, in VectorSingle a1, in auto a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::DiagnosticEventRecord"), cpp_layout(96, 8), cpp_flags(self_defaulted, brace_init)]
+extern class DiagnosticEventRecord{
+    StringView category;
+    StringView event;
+    StringView expression;
+    StringView file;
+    u64 instructionPointer;
+    u32 line;
+    StringView message;
+    b8 terminatesProcess;
+};
+
+[cpp_name("::DiagnosticEventText"), cpp_layout(2048, 1), cpp_flags(self_defaulted, brace_init)]
+extern class DiagnosticEventText{
+    StringView c_str(...)const;
+    StringView view(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::CaptureDiagnosticEvent")]
+extern void CaptureDiagnosticEvent(in DiagnosticEventRecord a0);
+
+[cpp_name("::CaptureDiagnosticEvent")]
+extern void CaptureDiagnosticMessage(in StringView a0, in StringView a1);
+
+[cpp_name("::DiagnosticEventNameFromCategory")]
+extern StringView DiagnosticEventNameFromCategory(in StringView a0);
+
+[cpp_name("::DiagnosticEventNameFromRecord")]
+extern StringView DiagnosticEventNameFromRecord(in DiagnosticEventRecord a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::DiagnosticEventCategory::s_Assert")]
+extern const StringView s_DiagnosticCategoryAssert;
+[cpp_name("::DiagnosticEventCategory::s_FatalAssert")]
+extern const StringView s_DiagnosticCategoryFatalAssert;
+[cpp_name("::DiagnosticEventName::s_Assert")]
+extern const StringView s_DiagnosticEventAssert;
+[cpp_name("::DiagnosticEventName::s_Crash")]
+extern const StringView s_DiagnosticEventCrash;
+[cpp_name("::DiagnosticEventName::s_Error")]
+extern const StringView s_DiagnosticEventError;
+[cpp_name("::DiagnosticEventName::s_Fatal")]
+extern const StringView s_DiagnosticEventFatal;
+[cpp_name("::DiagnosticEventName::s_GpuCrash")]
+extern const StringView s_DiagnosticEventGpuCrash;
+[cpp_name("::DiagnosticEventName::s_ManualDump")]
+extern const StringView s_DiagnosticEventManualDump;
+[cpp_name("::DiagnosticEventName::s_Warning")]
+extern const StringView s_DiagnosticEventWarning;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

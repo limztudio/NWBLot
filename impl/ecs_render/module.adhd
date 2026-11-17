@@ -75,6 +75,9 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::NWB::Impl::ActiveSceneSubsystemsConstPtr"), cpp_layout(8, 8), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class ActiveSceneSubsystemsConstPtr;
+
 [arena, system("renderer")]
 class RendererSystem : IRenderPass, IFrameGraphContributor{
     private RendererFramePipelineOwner m_pipeline;

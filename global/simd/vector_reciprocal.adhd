@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::VectorDoubleReciprocal")]
+extern VectorDouble VectorDoubleReciprocal(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleReciprocalSqrt")]
+extern VectorDouble VectorDoubleReciprocalSqrt(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleReciprocalSqrtEst")]
+extern VectorDouble VectorDoubleReciprocalSqrtEst(in VectorDouble a0);
+
+[cpp_name("::VectorDoubleSqrt")]
+extern VectorDouble VectorDoubleSqrt(in VectorDouble a0);
+
+[cpp_name("::VectorReciprocal")]
+extern VectorSingle VectorReciprocal(in VectorSingle a0);
+
+[cpp_name("::VectorReciprocalSqrt")]
+extern VectorSingle VectorReciprocalSqrt(in VectorSingle a0);
+
+[cpp_name("::VectorSqrt")]
+extern VectorSingle VectorSqrt(in VectorSingle a0);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

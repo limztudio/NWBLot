@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::BuildTriangleAreaNormal64")]
+extern VectorDouble BuildTriangleAreaNormal64(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::TriangleTests::AreaNormal")]
+extern VectorSingle TriangleAreaNormal(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::TriangleAreaNormalLengthSquared")]
+extern VectorDouble TriangleAreaNormalLengthSquared(in VectorDouble a0);
+
+[cpp_name("::TriangleTests::ContainedBy")]
+extern ContainmentType TriangleContainedBy(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3, in VectorSingle a4, in VectorSingle a5, in VectorSingle a6, in VectorSingle a7, in VectorSingle a8);
+
+[cpp_name("::TriangleTests::ContainsPoint2D")]
+extern b8 TriangleContainsPoint2D(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3, in VectorSingle a4);
+
+[cpp_name("::TriangleDoubleTests::AreaNormal")]
+extern VectorDouble TriangleDoubleAreaNormal(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::TriangleDoubleTests::ContainedBy")]
+extern ContainmentType TriangleDoubleContainedBy(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble a3, in VectorDouble a4, in VectorDouble a5, in VectorDouble a6, in VectorDouble a7, in VectorDouble a8);
+
+[cpp_name("::TriangleDoubleTests::ContainsPoint2D")]
+extern b8 TriangleDoubleContainsPoint2D(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble a3, in VectorDouble a4);
+
+[cpp_name("::TriangleDoubleTests::EdgeCross2D")]
+extern VectorDouble TriangleDoubleEdgeCross2D(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::TriangleDoubleTests::Intersects")]
+extern Expected<f64> TriangleDoubleIntersects(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble a3, in auto a4 = {}, in auto a5 = {});
+
+[cpp_name("::TriangleDoubleTests::SignedArea2D")]
+extern VectorDouble TriangleDoubleSignedArea2D(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
+
+[cpp_name("::TriangleTests::EdgeCross2D")]
+extern VectorSingle TriangleEdgeCross2D(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+[cpp_name("::TriangleHasArea")]
+extern b8 TriangleHasArea(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in auto a3);
+
+[cpp_name("::TriangleTests::Intersects")]
+extern Expected<f32> TriangleIntersects(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3, in auto a4 = {}, in auto a5 = {});
+
+[cpp_name("::TriangleTests::SignedArea2D")]
+extern VectorSingle TriangleSignedArea2D(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

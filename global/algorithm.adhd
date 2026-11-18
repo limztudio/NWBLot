@@ -17,6 +17,9 @@ extern void AppendArenaElement<T>(mut Vector<T> values);
 [cpp_name("::SortSequence")]
 extern void SortSequence<T>(mut Vector<T> values, in auto compare);
 
+[cpp_name("::VisitMutableMappedValues")]
+extern void VisitMutableMappedValues<V>(mut auto values, in auto visitor);
+
 [cpp_name("::AlignU32PowerOfTwoChecked")]
 extern Expected<u32> AlignU32PowerOfTwoChecked(in isize a0, in isize a1);
 

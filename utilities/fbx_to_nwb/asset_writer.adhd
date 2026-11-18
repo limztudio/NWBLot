@@ -3,6 +3,8 @@
 
 
 #include <utilities/fbx_to_nwb/asset_writer_format.adhd>
+#include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd>
+#include <utilities/fbx_to_nwb/common.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,6 +73,252 @@ String BuildFbxSplitAssetName(in StringView virtualBase, in StringView suffix){
     name.assign(virtualBase);
     name.append(suffix);
     return name;
+}
+
+[cpp_unwind]
+b8 WriteNwbTextFile(in Path outputPath, in StringView assetKind, in StringView text){
+    const Path parentPath = outputPath.parentPath();
+    if(!parentPath.empty()){
+        const auto created = EnsureDirectories(parentPath);
+        if(!created.has_value()){
+            error("Failed to write NWB {}: failed to create output directory '{}': {}", assetKind, parentPath, ErrorCodeMessage(created.error()));
+            return false;
+        }
+    }
+    BinaryOutputStream file(outputPath);
+    if(!file.isOpen()){
+        error("Failed to write NWB {}: failed to open output file '{}'", assetKind, outputPath);
+        return false;
+    }
+    file.writeCrlfText(text);
+    if(!file.close()){
+        error("Failed to write NWB {}: failed while writing output file '{}'", assetKind, outputPath);
+        return false;
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 AppendSkeletonBodyToString(in StringView variableName, in Span<UfbxNode> joints, in Span<JointMatrix> bindPoseMatrices, mut String out){
+    out.append(variableName);
+    out.append(".joints = [\n");
+    Vector<String> jointNames;
+    jointNames.reserve(joints.size());
+    HashMap<usize, usize> jointLookup;
+    jointLookup.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const usize key = joints[jointIndex].identity();
+        if(jointLookup.contains(key)){
+            assert(false);
+            return false;
+        }
+        jointLookup.insert_or_assign(key, jointIndex);
+        jointNames.push_back(MakeSkeletonJointName(joints[jointIndex], jointIndex, jointNames));
+    }
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const UfbxNode parent = joints[jointIndex].parent();
+        const b8 hasParent = parent.valid() && jointLookup.contains(parent.identity());
+        StringView parentName = "";
+        if(hasParent)
+            parentName = jointNames[jointLookup[parent.identity()]];
+        const MatrixSingle bindPose = MatrixSingle(bindPoseMatrices[jointIndex]);
+        AppendSkeletonJointEntryText(jointNames[jointIndex], hasParent, parentName, Vec4(bindPose[0u]), Vec4(bindPose[1u]), Vec4(bindPose[2u]), out);
+    }
+    out.append(s_FormatListCloseText);
+    return true;
+}
+
+[cpp_unwind]
+void AppendSkinBodyToString(in StringView variableName, in StringView meshName, in StringView skeletonName, in Span<MeshSkinInfluence> influences, in Span<JointMatrix> inverseBindMatrices, in b8 quoteReferences, mut String out){
+    AppendSkinAssetHeaderAndInfluencesText(variableName, meshName, skeletonName, influences, quoteReferences, out);
+    for(in JointMatrix matrix : inverseBindMatrices){
+        out.append("    ");
+        const MatrixSingle rows = MatrixSingle(matrix);
+        AppendJointMatrixRowsText(Vec4(rows[0u]), Vec4(rows[1u]), Vec4(rows[2u]), "    ", out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(s_FormatListCloseText);
+}
+
+[cpp_unwind]
+b8 WriteMeshAsset(in Path outputPath, in SourceMeshStreams mesh){
+    if(!ValidatePlainMeshSourceSkin(CountSourceMeshStreams(mesh), mesh.vertexRefs, mesh.indices))
+        return false;
+
+    const String doc = BuildMeshAssetDocumentText(
+        mesh.positions,
+        mesh.normals,
+        mesh.tangents,
+        mesh.uv0,
+        mesh.colors,
+        mesh.vertexRefs,
+        mesh.indices
+    );
+    return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, doc);
+}
+
+[cpp_unwind]
+b8 WriteSkeletonAsset(in Path outputPath, in Span<UfbxNode> joints, in Span<JointMatrix> bindPoseMatrices){
+    String doc;
+    doc.reserve(256u + joints.size() * 192u);
+    doc.append("skeleton asset;\n\n");
+    if(!AppendSkeletonBodyToString(s_AssetVariableName, joints, bindPoseMatrices, doc))
+        return false;
+    return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, doc);
+}
+
+[cpp_unwind]
+b8 WriteSkinAsset(in Path outputPath, in StringView meshName, in StringView skeletonName, in Span<MeshSkinInfluence> influences, in Span<JointMatrix> inverseBindMatrices){
+    if(influences.empty()){
+        error("Failed to write NWB skin: no skin influences were produced");
+        return false;
+    }
+
+    String doc;
+    doc.reserve(256u + influences.size() * 72u + inverseBindMatrices.size() * 160u);
+    doc.append("skin asset;\n\n");
+    AppendSkinBodyToString(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, doc);
+    return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, doc);
+}
+
+[cpp_unwind]
+b8 WriteModelAsset(in Path outputPath, in StringView meshName, in Optional<StringView> skinName, in Optional<StringView> skeletonName){
+    const b8 hasSkeletonAndSkin = skinName.has_value() && skeletonName.has_value();
+    StringView skin = "";
+    StringView skeleton = "";
+    if(hasSkeletonAndSkin){
+        skin = skinName.value();
+        skeleton = skeletonName.value();
+    }
+    const String doc = BuildModelAssetDocumentText(
+        meshName,
+        hasSkeletonAndSkin,
+        skin,
+        skeleton
+    );
+    return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, doc);
+}
+
+[cpp_unwind]
+b8 WriteAssetBunch(in Path outputPath, in SourceMeshStreams mesh, in Optional<StringView> skinName, in Optional<StringView> skeletonName, in Span<UfbxNode> skeletonJoints, in Span<JointMatrix> skeletonBindPoseMatrices, in Span<MeshSkinInfluence> skinInfluences, in Span<JointMatrix> inverseBindMatrices){
+    String doc;
+    doc.reserve(1024u + mesh.vertexRefs.size() * 48u + mesh.indices.size() * 8u);
+    doc.append("mesh mesh;\n\n");
+    AppendMeshAssetBodyText(
+        mesh.positions,
+        mesh.normals,
+        mesh.tangents,
+        mesh.uv0,
+        mesh.colors,
+        mesh.vertexRefs,
+        mesh.indices,
+        s_MeshAssetTypeText,
+        "",
+        doc
+    );
+
+    const b8 skinnedBunch = IsSkinnedAssetBunch(skinName.has_value(), skeletonName.has_value(), !skinInfluences.empty());
+    if(skinnedBunch){
+        doc.append(s_AssetSectionSeparatorText);
+        doc.append("skeleton skeleton;\n\n");
+        if(!AppendSkeletonBodyToString(s_SkeletonAssetTypeText, skeletonJoints, skeletonBindPoseMatrices, doc))
+            return false;
+
+        doc.append(s_AssetSectionSeparatorText);
+        doc.append("skin skin;\n\n");
+        AppendSkinBodyToString(s_SkinAssetTypeText, s_MeshAssetTypeText, s_SkeletonAssetTypeText, skinInfluences, inverseBindMatrices, false, doc);
+    }
+
+    AppendAssetBunchModelAndFooterText(skinnedBunch, doc);
+    return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, doc);
+}
+
+[cpp_unwind]
+String BuildVirtualBasePath(in Path outputPath, in StringView virtualRoot){
+    Path noExtension = outputPath;
+    noExtension.replaceExtension();
+    const String path = PathToGenericString(noExtension);
+    const String filename = PathToGenericString(noExtension.filename());
+    return BuildFbxVirtualBasePath(path, filename, virtualRoot);
+}
+
+[cpp_unwind]
+b8 WriteNwbAsset(in Path outputPath, in SourceMeshStreams mesh, in StringView assetTypeText, in StringView virtualRoot, in b8 separateAssets, in Span<UfbxNode> skeletonJoints, in Span<JointMatrix> skeletonBindPoseMatrices, in Span<JointMatrix> inverseBindMatrices){
+
+    const auto assetTypeResult = ParseAssetTypeText(assetTypeText);
+    if(!assetTypeResult.has_value()){
+        const String errorText = OutputAssetTypeErrorText();
+        error("Failed to write NWB asset: {}", errorText);
+        return false;
+    }
+
+    const OutputAssetType assetType = assetTypeResult.value();
+    if(!ValidateFbxOutputMode(assetType, separateAssets, !mesh.skin.empty(), !skeletonJoints.empty(), !skeletonBindPoseMatrices.empty(), !inverseBindMatrices.empty()))
+        return false;
+
+    if(assetType == OutputAssetType::Mesh)
+        return WriteMeshAsset(outputPath, mesh);
+
+    const b8 skinnedModel = HasSkinnedModelStreams(!mesh.skin.empty(), !skeletonJoints.empty(), !inverseBindMatrices.empty());
+    const Path packageDirectory = outputPath.parentPath() / outputPath.stem();
+    const Path meshPath = packageDirectory / s_MeshSplitFileName;
+    const String virtualBase = BuildVirtualBasePath(outputPath, virtualRoot);
+    const String meshName = BuildFbxSplitAssetName(StringView(virtualBase), s_MeshNameSuffix);
+
+    if(assetType == OutputAssetType::Model){
+        if(skinnedModel){
+            const String skeletonName = BuildFbxSplitAssetName(StringView(virtualBase), s_SkeletonNameSuffix);
+            const String skinName = BuildFbxSplitAssetName(StringView(virtualBase), s_SkinNameSuffix);
+            return WriteModelAsset(outputPath, StringView(meshName), StringView(skinName), StringView(skeletonName));
+        }
+        return WriteModelAsset(outputPath, StringView(meshName), Optional<StringView>(), Optional<StringView>());
+    }
+
+    if(!skinnedModel){
+        if(assetType == OutputAssetType::Bunch && !separateAssets)
+            return WriteAssetBunch(outputPath, mesh, Optional<StringView>(), Optional<StringView>(), skeletonJoints, skeletonBindPoseMatrices, Span<MeshSkinInfluence>(), inverseBindMatrices);
+
+        if(!WriteMeshAsset(meshPath, mesh))
+            return false;
+        return WriteModelAsset(outputPath, StringView(meshName), Optional<StringView>(), Optional<StringView>());
+    }
+
+    if(!ValidateSplitSkinSourceCounts(mesh.skin.size(), skeletonJoints.size(), skeletonBindPoseMatrices.size(), inverseBindMatrices.size()))
+        return false;
+
+    auto skeletonResult = BuildSkeletonOutputData(skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices);
+    if(!skeletonResult.has_value())
+        return false;
+    in SkeletonOutputData skeletonOutput = skeletonResult.value();
+
+    auto alignedMesh = BuildPositionAlignedSkinnedMesh(mesh);
+    if(!alignedMesh.has_value())
+        return false;
+    in SourceMeshStreams splitMesh = alignedMesh.value().mesh;
+    mut Vector<MeshSkinInfluence> positionSkin = alignedMesh.value().skin;
+    for(mut MeshSkinInfluence influence : positionSkin){
+        if(!RemapSkinInfluence(skeletonOutput.oldToNewJointIndices, influence))
+            return false;
+    }
+
+    const Path skeletonPath = packageDirectory / s_SkeletonSplitFileName;
+    const Path skinPath = packageDirectory / s_SkinSplitFileName;
+    const String skeletonName = BuildFbxSplitAssetName(StringView(virtualBase), s_SkeletonNameSuffix);
+    const String skinName = BuildFbxSplitAssetName(StringView(virtualBase), s_SkinNameSuffix);
+
+    if(assetType == OutputAssetType::Skeleton)
+        return WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices);
+    if(assetType == OutputAssetType::Skin)
+        return WriteSkinAsset(outputPath, StringView(meshName), StringView(skeletonName), positionSkin, skeletonOutput.inverseBindMatrices);
+    if(assetType == OutputAssetType::Bunch && !separateAssets)
+        return WriteAssetBunch(outputPath, splitMesh, StringView(skinName), StringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, positionSkin, skeletonOutput.inverseBindMatrices);
+
+    return
+        WriteMeshAsset(meshPath, splitMesh)
+        && WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices)
+        && WriteSkinAsset(skinPath, StringView(meshName), StringView(skeletonName), positionSkin, skeletonOutput.inverseBindMatrices)
+        && WriteModelAsset(outputPath, StringView(meshName), StringView(skinName), StringView(skeletonName))
+    ;
 }
 
 

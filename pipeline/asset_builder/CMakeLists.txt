@@ -4,16 +4,15 @@ list(REMOVE_ITEM _nwb_pipeline_asset_builder_adhd_sources "${CMAKE_CURRENT_LIST_
 nwb_declare_static_library(nwb_pipeline_asset_builder)
 nwb_target_adhd_sources(nwb_pipeline_asset_builder NAMESPACE "NWB::Pipeline::AssetBuilder" SOURCES ${_nwb_pipeline_asset_builder_adhd_sources})
 unset(_nwb_pipeline_asset_builder_adhd_sources)
-target_link_libraries(nwb_pipeline_asset_builder PUBLIC nwb_assets_volume_cook nwb_cpu_task)
+target_link_libraries(nwb_pipeline_asset_builder PUBLIC nwb_pipeline_tools_common nwb_assets_volume_cook nwb_cpu_task)
 target_compile_definitions(nwb_pipeline_asset_builder PRIVATE NWB_COOK=1)
 
 nwb_declare_executable(nwb_asset_builder)
-target_sources(nwb_asset_builder PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/../main.cpp"
-)
 nwb_target_adhd_sources(nwb_asset_builder NAMESPACE "NWB::Pipeline" SOURCES "${CMAKE_CURRENT_LIST_DIR}/module.adhd")
 nwb_target_link_libraries_whole_archive(nwb_asset_builder nwb_assets_volume_cook nwb_assets_bunch_cook nwb_assets_texture_volume_entry nwb_assets_ui_skin_volume_entry nwb_assets_font_atlas_volume_entry nwb_assets_font_volume_entry
     nwb_assets_sampler_volume_entry nwb_assets_material_volume_entry nwb_assets_skeleton_volume_entry nwb_assets_mesh_volume_entries nwb_assets_model_volume_entry nwb_assets_graphics_volume_entry
     nwb_assets_scene_volume_entry nwb_assets_csg_volume_entry nwb_assets_graphics_cook)
-target_link_libraries(nwb_asset_builder PRIVATE nwb_pipeline_asset_builder nwb_pipeline_command_line nwb_logclient nwb::tbb)
-target_compile_definitions(nwb_asset_builder PRIVATE NWB_COOK=1 NWB_PIPELINE_TOOL_NAME="asset_builder" __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)
+target_link_libraries(nwb_asset_builder PRIVATE nwb_pipeline_asset_builder nwb_logclient nwb::tbb)
+target_compile_definitions(nwb_asset_builder PRIVATE NWB_COOK=1 __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)
+
+nwb_target_console_entry(nwb_asset_builder "pipeline/asset_builder/module.adhd.h" "NWB::Pipeline::Run" "asset_builder" "NWB::Pipeline::s_PipelineExitFatal")

@@ -18,5 +18,9 @@ extern class TangentFrameRebuildVertex{
 };
 
 
+[cpp_header("<core/mesh/tangent_frame_rebuild.h>"), cpp_name("::NWB::Core::Mesh::RebuildTangentFrames"), cpp_flags(scratch_arena)]
+extern Expected<TangentFrameRebuildResult> RebuildTangentFrames(in Span<u32> indices, mut Span<TangentFrameRebuildVertex> vertices, in f64 minimumTriangleAreaLengthSquared);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

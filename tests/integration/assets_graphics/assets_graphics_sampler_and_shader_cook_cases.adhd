@@ -649,7 +649,6 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    GraphicsScratchArena scratch = GraphicsScratchArena(s_GatherScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "gather_independent_shaders");
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
@@ -677,7 +676,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     SetGatherOutputPath(testArena, outputDirectory, options);
     options.configuration = "tests";
     EnableGraphicsGatherMerge(options);
-    ASSERT_TRUE(GatherGraphicsAssets(options, scratch));
+    ASSERT_TRUE(GatherGraphicsAssets(options));
 
     const Expected<ShaderArchiveRecordVector> recordsResult = LoadShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsResult.has_value());
@@ -699,7 +698,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     ASSERT_TRUE(originalChecksumResult.has_value());
     const u64 originalChecksum = originalChecksumResult.value();
     AppendGatherInputPath(testArena, conflictingBuilt, options);
-    EXPECT_FALSE(GatherGraphicsAssets(options, scratch));
+    EXPECT_FALSE(GatherGraphicsAssets(options));
     EXPECT_GT(logger.errorCount(), 0u);
     const Expected<ShaderArchiveRecordVector> recordsResult2 = LoadShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsResult2.has_value());

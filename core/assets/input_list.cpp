@@ -35,7 +35,8 @@ Expected<ScratchString> EncodeAssetInputList(const Span<const AssetString> input
 }
 
 
-b8 ReadAssetInputList(const Path& path, Alloc::ScratchArena& scratchArena, AssetVector<AssetString>& inputs, const b8 resolveRelativePaths){
+template<typename PathArena, typename Strings>
+static b8 ReadInputList(const ::Path<PathArena>& path, Alloc::ScratchArena& scratchArena, Strings& inputs, const b8 resolveRelativePaths){
     AString<Alloc::ScratchArena> text(scratchArena);
     if(!ReadTextFile(path, text) || HasEmbeddedNull(AStringView(text))){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetInputList: failed to read input list '{}'"), PathToString<tchar>(path));
@@ -43,7 +44,7 @@ b8 ReadAssetInputList(const Path& path, Alloc::ScratchArena& scratchArena, Asset
     }
     StripUtf8Bom(text);
 
-    AssetArena& arena = inputs.get_allocator().arena();
+    auto& arena = inputs.get_allocator().arena();
     usize cursor = 0u;
     while(cursor < text.size()){
         usize end = text.find('\n', cursor);
@@ -68,6 +69,15 @@ b8 ReadAssetInputList(const Path& path, Alloc::ScratchArena& scratchArena, Asset
         cursor = end + 1u;
     }
     return true;
+}
+
+b8 ReadAssetInputList(const Path& path, Alloc::ScratchArena& scratchArena, AssetVector<AssetString>& inputs, const b8 resolveRelativePaths){
+    return ReadInputList(path, scratchArena, inputs, resolveRelativePaths);
+}
+
+b8 ReadAssetInputList(const ::Path<::ArenaBase>& path, Vector<AString<::ArenaBase>, ::ArenaBase>& inputs, const b8 resolveRelativePaths){
+    Alloc::ScratchArena scratch(Name("assets/input_list"));
+    return ReadInputList(path, scratch, inputs, resolveRelativePaths);
 }
 
 

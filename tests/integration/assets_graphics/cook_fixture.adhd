@@ -506,29 +506,28 @@ template<typename BytesT>
 
 [[nodiscard]] FOUNDATION_INLINE b8 BuildAndGatherWithExplicitRepoRoot(TestArena& testArena, const Path& root, const Path& assetRoot, const Path& builtDir, const Path& outDir){
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(0u);
-    NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
     NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(testArena.arena, cookCpuTaskScheduler);
     buildOptions.repoRoot = root;
     buildOptions.outputDirectory = builtDir;
     if(!buildOptions.configuration.assign(s_TestsConfiguration) || !buildOptions.assetType.assign("graphics"))
         return false;
     buildOptions.assetRoots.emplace_back(assetRoot, NWB::Core::Assets::s_ProjectVirtualRoot);
-    if(!NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions, scratchArena))
+    if(!NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions))
         return false;
 
     NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(testArena.arena);
     gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDir));
     gatherOptions.outputDirectory = PathToString(testArena.arena, outDir);
     gatherOptions.configuration = s_TestsConfiguration.data();
-    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
+    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 GatherBuiltDirectoryToOutput(TestArena& testArena, const Path& builtDir, const Path& outDir, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE b8 GatherBuiltDirectoryToOutput(TestArena& testArena, const Path& builtDir, const Path& outDir){
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, builtDir));
     options.outputDirectory = PathToString(testArena.arena, outDir);
     options.configuration = s_TestsConfiguration.data();
-    return NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena);
+    return NWB::Pipeline::AssetGatherer::GatherAssets(options);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<SamplerAsset> LoadCookedSamplerAsset(const Path& outputDirectory, const Name assetName, const usize expectedVolumeFileCount, TestArena& testArena){
@@ -809,8 +808,8 @@ public:
     virtual void SetUp()override{
         m_root = AssetsGraphicsTestRepoRoot(m_testArena.arena) / "__build_obj" / "build_input_tests";
         ASSERT_TRUE(EnsureDirectories(m_root / s_AssetsDirectory / "empty"));
-        m_paths.repoRoot = m_root;
-        m_paths.assetRoots.emplace_back(m_root / s_AssetsDirectory, s_ProjectVirtualRoot);
+        m_catalog.setRepoRoot(m_root);
+        m_catalog.appendRoot(m_root / s_AssetsDirectory, s_ProjectVirtualRoot);
     }
 
     virtual void TearDown()override{
@@ -826,7 +825,7 @@ public:
         ASSERT_TRUE(stream);
         Core::Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
-        m_files.emplace_back(m_testArena.arena, m_root / s_AssetsDirectory, path, normalized, s_ProjectVirtualRoot);
+        m_catalog.files.emplace_back(m_testArena.arena, m_root / s_AssetsDirectory, path, normalized, s_ProjectVirtualRoot);
     }
 
     void addInput(const AStringView relativePath){
@@ -838,11 +837,11 @@ public:
     }
 
     [[nodiscard]] usize fileCount()const noexcept{
-        return m_files.size();
+        return m_catalog.files.size();
     }
 
     [[nodiscard]] Core::Assets::CookString filenameTextAt(const usize index){
-        return PathToString<char>(m_testArena.arena, m_files[index].filePath.filenameView());
+        return PathToString<char>(m_testArena.arena, m_catalog.files[index].filePath.filenameView());
     }
 
     [[nodiscard]] Core::Assets::CookVector<Core::Assets::CookString> makeCookSources(){
@@ -858,19 +857,18 @@ public:
     }
 
     b8 select(){
-        return Pipeline::AssetBuilder::SelectBuildInputs(m_options, m_paths, m_scratchArena, m_files);
+        return Pipeline::AssetBuilder::SelectBuildInputs(m_options, m_catalog);
     }
 
 
 public:
-    NWB::Core::Alloc::ScratchArena m_scratchArena{ Name(s_AssetCaseTestsAssetsBuildInputs) };
     NWB::Tests::TestArena<> m_testArena;
     NWB::Core::CpuTaskScheduler m_cpuScheduler{ 1u };
     NWB::Tests::CapturingLogger m_logger;
     NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
     NWB::Path m_root{ m_testArena.arena };
-    Core::Assets::ResolvedCookPaths m_paths{ m_testArena.arena };
-    Core::Assets::DiscoveredNwbFileVector m_files{ m_testArena.arena };
+    Core::Assets::AssetCookWorkspace m_workspace{ Name(s_AssetCaseTestsAssetsBuildInputs) };
+    Core::Assets::CookFileCatalog m_catalog{ m_workspace };
     Pipeline::AssetBuilder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 };
 
@@ -2496,12 +2494,8 @@ template<typename RootArenaT, typename SourceArenaT>
     return EncodeAssetInputList(inputs, scratch.scratchArena);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 GatherGraphicsAssets(const AssetGatherOptions& options, ScratchArena& scratchArena){
-    return GatherAssets(options, scratchArena);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 GatherGraphicsAssets(const AssetGatherOptions& options, GraphicsScratchArena& scratch){
-    return GatherAssets(options, scratch.scratchArena);
+[[nodiscard]] FOUNDATION_INLINE b8 GatherGraphicsAssets(const AssetGatherOptions& options){
+    return GatherAssets(options);
 }
 
 
@@ -3280,7 +3274,7 @@ b8 BuildPreparedGraphicsAssetRoots(
     if(!options.configuration.assign(s_TestsConfiguration) || !options.assetType.assign(s_GraphicsDirectory))
         return false;
 
-    return NWB::Pipeline::AssetBuilder::BuildAssets(options, scratchArena);
+    return NWB::Pipeline::AssetBuilder::BuildAssets(options);
 }
 
 b8 CookPreparedGraphicsAssetRoots(
@@ -3299,8 +3293,7 @@ b8 CookPreparedGraphicsAssetRoots(
     gatherOptions.outputDirectory = PathToString(testArena.arena, outputDirectory);
     gatherOptions.configuration = s_TestsConfiguration.data();
     gatherOptions.mergePayloads = &NWB::Core::Assets::InvokeAssetGatherMerge<&NWB::Impl::MergeGatheredGraphicsAsset>;
-    NWB::Core::Alloc::ScratchArena scratchArena(s_GatherScratchArena);
-    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
+    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
 }
 
 Expected<TestAString> ReadSmokeAssetMeta(TestArena& testArena, const AStringView assetDirectory, const AStringView assetFilename){

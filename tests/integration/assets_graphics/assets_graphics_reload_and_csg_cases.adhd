@@ -182,12 +182,12 @@ void VerifyBuildInputSelection_MissingRootTakesPriorityOverMissingOutput(mut Bui
 
 void VerifyBuildInputSelection_EmptyBuildDomainIsRejectedBeforeInputDiscovery(mut BuildInputSelection self){
     self.m_options.assetType.clear();
-    EXPECT_FALSE(BuildAssets(self.m_options, self.m_scratchArena));
+    EXPECT_FALSE(BuildAssets(self.m_options));
     EXPECT_TRUE(SawCapturedError(self.m_logger, "unsupported --asset-type ''"));
     EXPECT_EQ(self.m_logger.errorCount(), 1u);
 
     ASSERT_TRUE(self.m_options.assetType.assign(s_AssetVolumeName));
-    EXPECT_FALSE(BuildAssets(self.m_options, self.m_scratchArena));
+    EXPECT_FALSE(BuildAssets(self.m_options));
     EXPECT_TRUE(SawCapturedError(self.m_logger, "no asset roots specified"));
     EXPECT_EQ(self.m_logger.errorCount(), 2u);
 }
@@ -674,7 +674,7 @@ void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreO
 void VerifyGatherInputs_MissingOutputIsRejectedBeforeInputDiscovery(mut GatherInputs self){
     self.m_options.outputDirectory.clear();
     self.addRawInput("missing-gather-input");
-    EXPECT_FALSE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    EXPECT_FALSE(GatherGraphicsAssets(self.m_options));
     EXPECT_TRUE(SawCapturedError(self.m_logger, "output directory is empty"));
     EXPECT_FALSE(SawCapturedError(self.m_logger, "failed to inspect input"));
     EXPECT_EQ(self.m_logger.errorCount(), 1u);
@@ -711,7 +711,7 @@ void VerifyGatherInputs_IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls(mu
     ASSERT_FALSE(self.hasFatalFailure());
     self.duplicateFirstInput();
     self.enableTestMerge();
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 0u);
     self.verifyPayloads(64u, 257u, 7u);
     ASSERT_FALSE(self.hasFatalFailure());
@@ -720,10 +720,10 @@ void VerifyGatherInputs_IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls(mu
 void VerifyGatherInputs_ConflictingDuplicatesPreservePublishedVolume(mut GatherInputs self){
     self.writeInputs("a", 4u, 8u, 3u);
     ASSERT_FALSE(self.hasFatalFailure());
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
     self.writeInputs("b", 4u, 8u, 9u);
     ASSERT_FALSE(self.hasFatalFailure());
-    EXPECT_FALSE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    EXPECT_FALSE(GatherGraphicsAssets(self.m_options));
     EXPECT_GT(self.m_logger.errorCount(), 0u);
     self.verifyPayloads(4u, 8u, 3u);
     ASSERT_FALSE(self.hasFatalFailure());
@@ -732,7 +732,7 @@ void VerifyGatherInputs_ConflictingDuplicatesPreservePublishedVolume(mut GatherI
 void VerifyGatherInputs_DuplicateManifestPathsPreservePublishedVolume(mut GatherInputs self){
     self.writeInputs("a", 1u, 8u, 3u);
     ASSERT_FALSE(self.hasFatalFailure());
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
     const Expected<Name> name = GatherInputAssetName(0u);
     ASSERT_TRUE(name.has_value());
     EXPECT_FALSE(self.writeDuplicateEntryManifestVolume(name.value()));
@@ -750,14 +750,14 @@ void VerifyGatherInputs_MergedPayloadIdentitySurvivesLaterIdenticalDuplicate(mut
     ASSERT_FALSE(self.hasFatalFailure());
     // Equal payloads collapse while the distinct third payload is appended once.
     self.enableTestMerge();
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 1u);
     self.verifyPayloads(1u, 6u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());
     self.writeInputs("d", 1u, 6u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());
     self.resetMergeCallCount();
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options, self.m_scratchArena));
+    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 1u);
     self.verifyPayloads(1u, 6u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());

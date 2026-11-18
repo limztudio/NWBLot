@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/basis_encoder.h>"), cpp_name("::NWB::Core::BasisFloatImage"), cpp_flags(self_defaulted)]
+extern class BasisFloatImage{
+    u32 width()const;
+    u32 height()const;
+    void resize(in u32 width, in u32 height);
+    b8 load(in Path path);
+    b8 resampleFrom(in BasisFloatImage source, in StringView filter, in u32 channels);
+    VectorSingle pixel(in u32 x, in u32 y)const;
+    void setPixel(in u32 x, in u32 y, in VectorSingle color);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/basis_encoder.h>"), cpp_name("::NWB::Core::BasisSliceDescription"), cpp_flags(self_defaulted, brace_init)]
+extern class BasisSliceDescription{
+    u32 sourceIndex;
+    u32 mipIndex;
+    u32 width;
+    u32 height;
+    u32 blocksX;
+    u32 blocksY;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/basis_encoder.h>"), cpp_name("::NWB::Core::BasisMipEncoder"), cpp_flags(no_copy, no_assign)]
+extern class BasisMipEncoder{
+    void addPlane(in u32 width, in u32 height);
+    void setHdrPixel(in u32 plane, in u32 x, in u32 y, in VectorSingle color);
+    void setBytePixel(in u32 plane, in u32 x, in u32 y, in Array<u8, 4u> color);
+    b8 initialize();
+    i32 process();
+    b8 matchesFormat()const;
+    usize sliceCount()const;
+    usize imageCount()const;
+    BasisSliceDescription slice(in u32 index)const;
+    Span<u8> sliceBytes(in u32 index)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/basis_encoder.h>"), cpp_name("::NWB::Core::s_BasisMaxTextureDimension")]
+extern const u32 s_BasisMaxTextureDimension;
+
+[cpp_header("<core/graphics/basis_encoder.h>"), cpp_name("::NWB::Core::InitializeBasisEncoder")]
+extern b8 InitializeBasisEncoder();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

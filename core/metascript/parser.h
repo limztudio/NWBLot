@@ -86,6 +86,11 @@ public:
     b8 visitVariable(MStringView name, Visitor&& visitor)const{
         return Value::VisitOptionalValue(findVariable(name), visitor);
     }
+    [[nodiscard]] Optional<NotNull<const Value*>> borrowVariable(const MStringView name)const noexcept{
+        if(const Value* value = findVariable(name))
+            return MakeNotNull(value);
+        return {};
+    }
     [[nodiscard]] const Declaration* findDeclaration(MStringView name)const noexcept;
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
     [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }
@@ -131,6 +136,16 @@ private:
     DeclarationList m_declarations;
     StructMap m_structs;
     ErrorList m_errors;
+};
+
+class DocumentWorkspace final : NoCopy{
+public:
+    explicit DocumentWorkspace(const Name scope) : m_arena(scope), document(m_arena){}
+
+private:
+    MetaArena m_arena;
+public:
+    Document document;
 };
 
 

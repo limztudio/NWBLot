@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_UtilityArena = "utilities/tex_conv/utility";
-const Name s_ConversionScratchArena = "utilities/tex_conv/conversion";
 const StringView s_AlphaWhiteKeyword = "white";
 const StringView s_AlphaBlackKeyword = "black";
 const f32 s_AlphaWhiteConstant = 1.0f;

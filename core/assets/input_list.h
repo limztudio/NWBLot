@@ -18,6 +18,7 @@ NWB_ASSETS_BEGIN
 
 
 [[nodiscard]] b8 ReadAssetInputList(const Path& path, Alloc::ScratchArena& scratchArena, AssetVector<AssetString>& inputs, b8 resolveRelativePaths = false);
+[[nodiscard]] b8 ReadAssetInputList(const ::Path<::ArenaBase>& path, Vector<AString<::ArenaBase>, ::ArenaBase>& inputs, b8 resolveRelativePaths);
 [[nodiscard]] Expected<ScratchString> EncodeAssetInputList(Span<const AssetString> inputs, Alloc::ScratchArena& scratchArena);
 
 

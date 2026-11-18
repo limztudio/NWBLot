@@ -15,6 +15,9 @@ extern void AppendOwned<T>(mut Vector<T> destination, mut T source);
 [cpp_header("<core/alloc/adhd_arena.h>"), cpp_name("::AdhdAppendParsedValue")]
 extern b8 AppendParsedValue<T>(mut Vector<T> values, in Expected<T> parsed);
 
+[cpp_header("<core/alloc/adhd_arena.h>"), cpp_name("::AdhdTransferVector")]
+extern void TransferVector<T>(mut Vector<T> destination, mut Vector<T> source);
+
 [cpp_header("<core/alloc/adhd_arena.h>"), cpp_name("::AdhdMoveInto")]
 extern void MoveInto<T>(mut T destination, mut T source);
 

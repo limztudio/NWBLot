@@ -1,0 +1,83 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/tex_conv/texture_encoder.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 LoadImage(in Path path, mut BasisFloatImage image){
+    if(!image.load(path)){
+        error("tex_conv: failed to decode input image '{}'.", PathToGenericString(path));
+        return false;
+    }
+    if(image.width() == 0u || image.height() == 0u || image.width() > s_BasisMaxTextureDimension || image.height() > s_BasisMaxTextureDimension){
+        error("tex_conv: input image '{}' has an unsupported resolution.", PathToGenericString(path));
+        return false;
+    }
+    return true;
+}
+
+b8 PrepareLinearPlane(in BasisFloatImage mask, in TexConvAlphaSource alpha, in b8 hdr, in b8 srgb, mut BasisFloatImage plane){
+    const f32 maxRgb = ResolveMaxTexConvRgb(hdr);
+    for(u32 y = 0u; y < plane.height(); ++y){
+        for(u32 x = 0u; x < plane.width(); ++x){
+            const VectorSingle pixel = plane.pixel(x, y);
+            f32 maskAlpha = 0.0f;
+            if(alpha.mode == AlphaSourceMode::Image)
+                maskAlpha = mask.pixel(x, y).x;
+            const auto prepared = TryPrepareTexConvLinearPixel(VectorSingle(pixel, 0.0f), pixel.w, alpha.mode, alpha.constant, maskAlpha, maxRgb, srgb);
+            if(!prepared.has_value())
+                return false;
+            plane.setPixel(x, y, prepared.value());
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<PreparedTexture> PrepareTexture(in Span<Path> inputPaths, in TexturePayloadDimension dimension, in b8 srgb, in TexConvAlphaSource alpha){
+    const b8 cube = dimension == TexturePayloadDimension::TextureCube;
+    if(!ValidateTexConvInputImageCount(inputPaths.size(), IsValidTextureDimension(dimension), dimension == TexturePayloadDimension::Texture2D, cube, s_TextureCubeFaceCount))
+        return MakeUnexpected(Failure());
+    if(!IsValidAlphaSourceMode(alpha.mode)){
+        error("tex_conv: unsupported alpha source.");
+        return MakeUnexpected(Failure());
+    }
+    b8 hdr = false;
+    if(!ValidateTexConvInputPathsHdrConsistency(inputPaths, hdr))
+        return MakeUnexpected(Failure());
+
+    BasisFloatImage mask;
+    const b8 hasMask = alpha.mode == AlphaSourceMode::Image;
+    if(hasMask && !LoadImage(alpha.path, mask))
+        return MakeUnexpected(Failure());
+
+    PreparedTexture payload;
+    payload.dimension = dimension;
+    payload.depth = ResolveTexConvEncodeDepth(dimension == TexturePayloadDimension::Texture3D, inputPaths.size());
+    payload.format = cast<TexturePayloadFormat>(ResolveTexConvPayloadFormat(hdr));
+    TextureMipPlanes source;
+    source.planes.resize(inputPaths.size());
+    for(usize index = 0u; index < inputPaths.size(); ++index){
+        mut BasisFloatImage plane = source.planes[index];
+        if(!LoadImage(inputPaths[index], plane))
+            return MakeUnexpected(Failure());
+        if(!ValidateTexConvPlaneResolution(index == 0u, cube, hasMask, plane.width(), plane.height(), mask.width(), mask.height(), payload.width, payload.height))
+            return MakeUnexpected(Failure());
+        if(!PrepareLinearPlane(mask, alpha, hdr, !hdr && srgb, plane))
+            return MakeUnexpected(Failure());
+    }
+    if(!EncodeLinearTexture(source, payload))
+        return MakeUnexpected(Failure());
+    return payload;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

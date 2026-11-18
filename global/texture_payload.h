@@ -356,6 +356,21 @@ template<typename MipVectorT, typename MakeLevelFn>
     return levels;
 }
 
+template<typename MipVectorT>
+[[nodiscard]] inline b8 CollectMipChainLayout(
+    const TexturePayloadFormat::Enum format, const TextureDimension::Enum dimension,
+    const u32 width, const u32 height, const u32 depth, MipVectorT& output, MipChainLayoutError& error
+){
+    auto levels = BuildMipChainLayout(format, dimension, width, height, depth, MipVectorT(output.get_allocator()),
+        [](const MipLevelLayout& level){ return level; });
+    if(!levels){
+        error = levels.error();
+        return false;
+    }
+    output = Move(*levels);
+    return true;
+}
+
 template<typename MipT>
 [[nodiscard]] inline Expected<u64, MipChainLayoutError> ValidateMipChainLayout(
     const Span<const MipT> mipLevels,

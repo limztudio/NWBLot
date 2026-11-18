@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PipelineAssetRoot{
+    public Path path;
+    public CompactString virtualRoot;
+
+    public PipelineAssetRoot(){}
+    public PipelineAssetRoot(in Path path, in StringView virtualRoot){
+        this.path = path;
+        this.virtualRoot = CompactString(virtualRoot);
+    }
+}
+
+[cpp_unwind]
+Expected<Path> ResolvePipelineRepoRoot(in Path requested, in StringView tool){
+    Path root = requested;
+    if(root.empty())
+        root = Path(".");
+    const auto resolved = AbsolutePath(root);
+    if(!resolved.has_value()){
+        error("{}: failed to resolve repository root: {}", tool, ErrorCodeMessage(resolved.error()));
+        return MakeUnexpected(Failure());
+    }
+    return resolved.value().lexicallyNormal();
+}
+
+[cpp_unwind]
+Expected<Path> ResolvePipelineRepoRoot(in StringView requested, in StringView tool){
+    return ResolvePipelineRepoRoot(Path(requested), tool);
+}
+
+[cpp_unwind]
+Expected<Vector<PipelineAssetRoot>> ResolvePipelineRootSources(in Path repo, in Vector<String> sources, in b8 infer, in AssetRootDuplicatePolicy policy, in StringView tool, in StringView emptyError){
+    const auto roots = ResolveCookRootEntries<PipelineAssetRoot>(repo, sources, infer, policy, lambda[in tool](in StringView input, in b8 inspect) -> void{
+        if(inspect)
+            error("{}: failed to inspect input '{}'", tool, input);
+        else
+            error("{}: failed to resolve asset root from '{}'", tool, input);
+    });
+    if(!roots.has_value())
+        return MakeUnexpected(Failure());
+    if(roots.value().empty()){
+        error("{}: {}", tool, emptyError);
+        return MakeUnexpected(Failure());
+    }
+    return roots.value();
+}
+
+[cpp_unwind]
+Expected<Vector<PipelineAssetRoot>> ResolvePipelineAssetRoots(in Path repo, in Vector<String> inputs, in Vector<String> roots, in AssetRootDuplicatePolicy policy, in StringView tool, in StringView emptyError){
+    if(roots.empty())
+        return ResolvePipelineRootSources(repo, inputs, true, policy, tool, emptyError);
+    return ResolvePipelineRootSources(repo, roots, false, policy, tool, emptyError);
+}
+
+void LogCookInputSelectionFailure(in CookInputSelectionError failure, in StringView tool){
+    switch(failure.reason){
+        case CookInputSelectionFailure::ResolveInput:
+            error("{}: failed to resolve input '{}'", tool, failure.rawInput);
+            break;
+        case CookInputSelectionFailure::NotFileOrDirectory:
+            error("{}: input is not a file or directory '{}'", tool, failure.resolvedPath);
+            break;
+        case CookInputSelectionFailure::DirectoryOutsideAssetRoots:
+            error("{}: input directory is outside the asset roots '{}'", tool, failure.resolvedPath);
+            break;
+        default:
+            error("{}: input is not a .nwb asset within the asset roots '{}'", tool, failure.resolvedPath);
+            break;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

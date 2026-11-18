@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SourceMeshStreams{
+class MeshMetadataStreams{
     public Vector<f32x3u> positions;
     public Vector<f32x3u> normals;
     public Vector<f32x4u> tangents;
@@ -177,7 +177,7 @@ b8 ValidateSourceVertexRefStreams<VertexRef>(
 }
 
 [cpp_unwind]
-b8 ReadCommonSourceMeshStreams(in Path file, in MetascriptValue asset, mut SourceMeshStreams streams){
+b8 ReadCommonSourceMeshStreams(in Path file, in MetascriptValue asset, mut MeshMetadataStreams streams){
     return FillMeshMetadataFloatListField<f32x3u, 3u>(file, asset, s_MeshPositionsFieldNameView, streams.positions)
         && FillMeshMetadataFloatListField<f32x3u, 3u>(file, asset, s_MeshNormalsFieldNameView, streams.normals)
         && FillMeshMetadataFloatListField<f32x4u, 4u>(file, asset, s_MeshTangentsFieldNameView, streams.tangents)

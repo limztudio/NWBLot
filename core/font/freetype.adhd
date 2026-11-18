@@ -48,6 +48,10 @@ extern class FreeTypeFaceView{
     i64 faceCount()const;
     i64 glyphCount()const;
     u32 unitsPerEm()const;
+    i32 ascender()const;
+    i32 descender()const;
+    i32 height()const;
+    i64 glyphAdvanceX()const;
     b8 isSfnt()const;
     b8 isScalable()const;
     b8 hasMultipleMasters()const;
@@ -56,6 +60,7 @@ extern class FreeTypeFaceView{
     i32 setPixelSizes(in u32 width, in u32 height);
     i32 loadGlyph(in u32 glyph, in i32 flags);
     i32 renderNormal();
+    i32 renderSdf();
     b8 hasOutline()const;
     i32 outlinePointCount()const;
     FreeTypeOutlineBox outlineControlBox()const;
@@ -66,6 +71,7 @@ extern class FreeTypeFaceView{
 extern class FreeTypeFace{
     i32 createLibrary();
     void addDefaultModules();
+    i32 setUnsignedProperty(in String module, in String property, in u32 value);
     i32 open(in FontFileBytes bytes, in i64 index);
     mut FreeTypeFaceView view();
     FreeTypeFaceVisitResult visitMemoryFace(in Span<u8> bytes, in i64 index, in Func<64u, void(mut FreeTypeFaceView)> visitor);

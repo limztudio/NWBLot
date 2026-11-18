@@ -126,6 +126,9 @@ extern String UnquoteMatchingAsciiQuotes(in auto a0);
 [cpp_header("<global/text_utils.h>"), cpp_name("::TextSubviewOffset")]
 extern usize TextSubviewOffset(in StringView text, in StringView part);
 
+[cpp_header("<global/text_replacements.h>"), cpp_name("::ApplyTextReplacements")]
+extern void ApplyTextReplacements<T>(mut Vector<T> replacements, mut String source);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

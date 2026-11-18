@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/fbx_to_nwb/module.adhd>
+#include <utilities/fbx_to_nwb/source_types.adhd>
+#include <utilities/fbx_to_nwb/mesh_stream_operations.adhd>
+#include <utilities/fbx_to_nwb/skinned_asset_text_writer.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -10,6 +12,132 @@
 
 b8 HasSkeletonJointParentIndex(in u32 parentIndex){
     return parentIndex != s_MeshMissingStreamIndex;
+}
+
+[cpp_unwind]
+String MakeSkeletonJointName(in UfbxNode node, in usize fallbackIndex, in Span<String> usedNames){
+    const StringView name = node.name();
+    if(!name.empty())
+        return MakeUniqueFbxJointName(name, usedNames);
+    const String fallback = FormatFbxJointBaseName(name, fallbackIndex);
+    return MakeUniqueFbxJointName(fallback, usedNames);
+}
+
+[cpp_unwind]
+Expected<SkeletonOutputData> BuildSkeletonOutputData(in Span<UfbxNode> joints, in Span<JointMatrix> bindPoseMatrices, in Span<JointMatrix> inverseBindMatrices){
+    SkeletonOutputData outData;
+    if(!ValidateSkeletonOutputInputCounts(joints.size(), bindPoseMatrices.size(), inverseBindMatrices.size()))
+        return MakeUnexpected(Failure());
+
+    HashMap<usize, usize> sourceJointLookup;
+    sourceJointLookup.reserve(joints.size());
+    usize fallbackCount = 0u;
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const UfbxNode joint = joints[jointIndex];
+        if(!joint.valid()){
+            error("Failed to write NWB skeleton: skeleton joint {} is null", jointIndex);
+            return MakeUnexpected(Failure());
+        }
+        if(sourceJointLookup.contains(joint.identity())){
+            error("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}", jointIndex);
+            return MakeUnexpected(Failure());
+        }
+        sourceJointLookup.insert_or_assign(joint.identity(), jointIndex);
+        if(joint.name().empty())
+            ++fallbackCount;
+    }
+
+    Vector<String> fallbackNames;
+    fallbackNames.reserve(fallbackCount);
+    Vector<StringView> sortNames;
+    sortNames.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        StringView name = joints[jointIndex].name();
+        if(name.empty()){
+            fallbackNames.push_back(FormatFbxJointBaseName(name, jointIndex));
+            name = fallbackNames.back();
+        }
+        sortNames.push_back(name);
+    }
+
+    Vector<u32> parentIndices;
+    parentIndices.reserve(joints.size());
+    for(in UfbxNode joint : joints){
+        const UfbxNode parent = joint.parent();
+        u32 parentIndex = s_MeshMissingStreamIndex;
+        if(parent.valid() && sourceJointLookup.contains(parent.identity()))
+            parentIndex = cast<u32>(sourceJointLookup[parent.identity()]);
+        parentIndices.push_back(parentIndex);
+    }
+
+    Vector<u32> parentDepths;
+    Vector<usize> sortedJointIndices;
+    parentDepths.reserve(joints.size());
+    sortedJointIndices.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const auto depth = TryComputeSkeletonJointHierarchyDepth(parentIndices, jointIndex);
+        if(!depth.has_value())
+            return MakeUnexpected(Failure());
+        parentDepths.push_back(depth.value());
+        sortedJointIndices.push_back(jointIndex);
+    }
+    const Span<u32> depths = Span<u32>(parentDepths);
+    const Span<StringView> names = Span<StringView>(sortNames);
+    SortSequence<usize>(sortedJointIndices, lambda[in depths, in names](in usize lhs, in usize rhs) -> b8{
+        return IsBeforeFbxSkeletonJointSortKey(depths[lhs], depths[rhs], names[lhs], names[rhs], lhs, rhs);
+    });
+
+    outData.oldToNewJointIndices.resize(joints.size(), 0u);
+    outData.joints.reserve(joints.size());
+    outData.bindPoseMatrices.reserve(bindPoseMatrices.size());
+    outData.inverseBindMatrices.reserve(inverseBindMatrices.size());
+
+    for(in usize oldJointIndex : sortedJointIndices){
+        const u32 parentIndex = parentIndices[oldJointIndex];
+        if(!IsFiniteSkeletonJointMatrix(MatrixSingle(inverseBindMatrices[oldJointIndex]))){
+            error("Failed to write NWB skeleton: inverse bind matrix for joint '{}' is not finite", sortNames[oldJointIndex]);
+            return MakeUnexpected(Failure());
+        }
+
+        const b8 hasParent = HasSkeletonJointParentIndex(parentIndex);
+        MatrixSingle parentGlobalBindPose = MatrixSingle();
+        if(hasParent)
+            parentGlobalBindPose = MatrixSingle(bindPoseMatrices[parentIndex]);
+        const auto localBindPoseMatrix = TryBuildFbxLocalBindPoseMatrix(MatrixSingle(bindPoseMatrices[oldJointIndex]), hasParent, parentGlobalBindPose);
+        if(!localBindPoseMatrix.has_value()){
+            error("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'", sortNames[oldJointIndex]);
+            return MakeUnexpected(Failure());
+        }
+        const JointMatrix localBindPose = JointMatrix(localBindPoseMatrix.value());
+
+        outData.oldToNewJointIndices[oldJointIndex] = cast<u16>(outData.joints.size());
+        outData.joints.push_back(joints[oldJointIndex]);
+        outData.bindPoseMatrices.push_back(localBindPose);
+        outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
+    }
+
+    return outData;
+}
+
+[cpp_unwind]
+Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(in SourceMeshStreams sourceMesh){
+    if(!ValidateSkinnedModelSourceMeshRefs(CountSourceMeshStreams(sourceMesh), sourceMesh.vertexRefs, sourceMesh.indices))
+        return MakeUnexpected(Failure());
+
+    const auto aligned = BuildPositionAlignedSkinnedMeshStreams(sourceMesh.positions, sourceMesh.skin, sourceMesh.vertexRefs);
+    if(!aligned.has_value())
+        return MakeUnexpected(Failure());
+
+    PositionAlignedSkinnedMesh result;
+    result.mesh.normals = sourceMesh.normals;
+    result.mesh.tangents = sourceMesh.tangents;
+    result.mesh.uv0 = sourceMesh.uv0;
+    result.mesh.colors = sourceMesh.colors;
+    result.mesh.indices = sourceMesh.indices;
+    result.mesh.positions = aligned.value().positions;
+    result.mesh.vertexRefs = aligned.value().vertexRefs;
+    result.skin = aligned.value().positionSkin;
+    return result;
 }
 
 

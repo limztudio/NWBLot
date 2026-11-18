@@ -3,7 +3,7 @@ list(REMOVE_ITEM _nwb_fbx_to_nwb_lib_adhd "${CMAKE_CURRENT_LIST_DIR}/main.adhd")
 
 nwb_declare_static_library(nwb_fbx_to_nwb_lib)
 nwb_target_adhd_sources(nwb_fbx_to_nwb_lib NAMESPACE "NWB::FbxToNwb" SOURCES ${_nwb_fbx_to_nwb_lib_adhd})
-target_link_libraries(nwb_fbx_to_nwb_lib PUBLIC nwb_utilities_global nwb_assets_mesh nwb_mesh nwb_common nwb_alloc nwb_cpu_task nwb::ufbx PRIVATE nwb_assets_mesh_metadata nwb_metascript nwb::cli11_headers)
+target_link_libraries(nwb_fbx_to_nwb_lib PUBLIC nwb_utilities_global nwb_assets_mesh nwb_mesh nwb_common nwb_alloc nwb_cpu_task nwb::ufbx nwb_tool_cli PRIVATE nwb_assets_mesh_metadata nwb_metascript)
 target_compile_definitions(nwb_fbx_to_nwb_lib PUBLIC __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)
 unset(_nwb_fbx_to_nwb_lib_adhd)
 
@@ -13,3 +13,5 @@ target_link_libraries(nwb_fbx_to_nwb PUBLIC nwb_utilities_global PRIVATE nwb_fbx
 
 # Read shared generated headers from their owning target.
 target_include_directories(nwb_fbx_to_nwb BEFORE PRIVATE "$<TARGET_PROPERTY:nwb_fbx_to_nwb_lib,INTERFACE_INCLUDE_DIRECTORIES>")
+
+nwb_target_console_entry(nwb_fbx_to_nwb "utilities/fbx_to_nwb/main.adhd.h" "NWB::FbxToNwb::RunConsole" "fbx_to_nwb" "NWB::FbxToNwb::s_FbxToNwbEntryFailure")

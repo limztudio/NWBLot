@@ -3,6 +3,7 @@
 
 
 #include <utilities/fbx_to_nwb/mesh_stream_validation.adhd>
+#include <utilities/fbx_to_nwb/ufbx_sdk.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +20,7 @@ const StringView s_JointFallbackNamePrefix = "joint_";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VectorSingle LoadUfbxVector(in ufbx_vec3 value){
+VectorSingle LoadUfbxVector(in UfbxVec3 value){
     return VectorSingle(cast<f32>(value.x), cast<f32>(value.y), cast<f32>(value.z), 0.0f);
 }
 
@@ -83,7 +84,7 @@ MatrixDouble MakeUfbxMatrixDouble(
     );
 }
 
-MatrixDouble LoadUfbxMatrix(in ufbx_matrix matrix){
+MatrixDouble LoadUfbxMatrix(in UfbxMatrix matrix){
     return MakeUfbxMatrixDouble(
         cast<f64>(matrix.m00), cast<f64>(matrix.m01), cast<f64>(matrix.m02), cast<f64>(matrix.m03),
         cast<f64>(matrix.m10), cast<f64>(matrix.m11), cast<f64>(matrix.m12), cast<f64>(matrix.m13),

@@ -1,0 +1,108 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace_wrapper NWB_PIPELINE;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const i32 s_PipelineExitSuccess = 0;
+const i32 s_PipelineExitFailure = 1;
+const i32 s_PipelineExitFatal = -1;
+
+enum<u8> PipelineTool{
+    DependencyComputer,
+    AssetBuilder,
+    AssetGatherer
+}
+
+class PipelineOptions{
+    public Vector<String> inputs;
+    public Vector<String> assetRoots;
+    public String repoRoot;
+    public String outputPath;
+    public CompactString configuration;
+    public Optional<CompactString> assetType;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidPipelineText(in StringView text){
+    if(!text.empty() && !IsSingleLinePathText(text)){
+        error("Pipeline: paths must not contain nulls or newlines");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidPipelineInputs(in Vector<String> values){
+    for(in String text : values){
+        if(text.empty() || !ValidPipelineText(text)){
+            error("Pipeline: input path must not be empty");
+            return false;
+        }
+    }
+    return true;
+}
+
+[cpp_unwind]
+Optional<i32> ParsePipelineOptions(in ConsoleArguments arguments, in PipelineTool tool, mut PipelineOptions options){
+    String inputList;
+    String configuration;
+    String assetType;
+    ToolCli app("NWB asset pipeline");
+    app.addTexts("input,--input", options.inputs, "Input assets; accepts multiple paths and repeated options");
+    app.addText("--input-list", inputList, "UTF-8 newline-separated input paths");
+    StringView outputDescription = "Output directory";
+    if(tool == PipelineTool::DependencyComputer)
+        outputDescription = "Output dependency list file";
+    app.addText("-o,--output,--output-dir,--output-directory", options.outputPath, outputDescription).required();
+    if(tool != PipelineTool::AssetGatherer){
+        app.addText("--repo-root", options.repoRoot, "Repository root; defaults to the working directory");
+        app.addTexts("--asset-root", options.assetRoots, "Asset root directories used to resolve virtual paths");
+    }
+    if(tool == PipelineTool::AssetBuilder)
+        app.addText("--asset-type", assetType, "Asset build domain; graphics is currently supported");
+    if(tool != PipelineTool::DependencyComputer)
+        app.addText("--configuration", configuration, "Build configuration label");
+
+    const auto parsed = app.parse(arguments);
+    if(!parsed.ok()){
+        if(parsed.helpRequested()){
+            app.printHelp(false);
+            return Optional<i32>(s_PipelineExitSuccess);
+        }
+        error("Pipeline: failed to parse command line: {}", parsed.message());
+        app.printHelp(true);
+        return Optional<i32>(s_PipelineExitFailure);
+    }
+
+    const b8 implicitProject = tool == PipelineTool::DependencyComputer && !options.assetRoots.empty();
+    if(options.inputs.empty() && inputList.empty() && !implicitProject){
+        error("Pipeline: provide --input or --input-list");
+        return Optional<i32>(s_PipelineExitFailure);
+    }
+    if(!ValidPipelineInputs(options.inputs) || !ValidPipelineInputs(options.assetRoots) || !ValidPipelineText(options.repoRoot) || !ValidPipelineText(options.outputPath))
+        return Optional<i32>(s_PipelineExitFailure);
+    if(options.outputPath.empty()){
+        error("Pipeline: output path must not be empty");
+        return Optional<i32>(s_PipelineExitFailure);
+    }
+    if(tool == PipelineTool::AssetBuilder && app.count("--asset-type") != 0u)
+        options.assetType.emplace();
+    if(!options.configuration.assign(configuration) || (options.assetType.has_value() && !options.assetType.value().assign(assetType))){
+        error("Pipeline: configuration or asset type exceeds ACompactString capacity");
+        return Optional<i32>(s_PipelineExitFailure);
+    }
+    if(!inputList.empty() && (!ValidPipelineText(inputList) || !ReadAssetInputPaths(Path(inputList), options.inputs, tool == PipelineTool::AssetGatherer)))
+        return Optional<i32>(s_PipelineExitFailure);
+    return Optional<i32>();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

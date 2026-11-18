@@ -1,0 +1,156 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/sdf_raster.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AdmitBakeFontFace(mut FreeTypeFaceView face){
+    if(!IsAdmittedStaticScalableFontFace(face.faceCount(), face.glyphCount(), face.unitsPerEm(), face.isSfnt(), face.isScalable(), face.hasMultipleMasters())){
+        ReportNativeFontFailure(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
+        return false;
+    }
+    const i32 charmapError = face.selectUnicodeCharmap();
+    if(charmapError != 0){
+        ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtSelectCharmap, charmapError));
+        return false;
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 ConfigureBakeFontFace(in BakeOptions options, mut FreeTypeFace library, mut FreeTypeFaceView face, mut FontAtlasPayload payload){
+    if(!IsValidBakeFontFaceMetrics(face.glyphCount(), cast<u16>(face.unitsPerEm()))){
+        error("font_builder: unsupported glyph count or units per em");
+        return false;
+    }
+    const String module = ResolveBakeFreeTypeSdfModule(options.outline);
+    const String property = "spread";
+    const i32 spreadError = library.setUnsignedProperty(module, property, options.spread);
+    if(spreadError != 0){
+        error("font_builder: FreeType rejected SDF spread, error {}", spreadError);
+        return false;
+    }
+    const i32 sizeError = face.setPixelSizes(0u, options.ppem);
+    if(sizeError != 0){
+        error("font_builder: FreeType rejected bake size, error {}", sizeError);
+        return false;
+    }
+    const String stem = PathToString(options.output.stem());
+    const auto fontName = ParseName(stem);
+    if(!fontName.has_value()){
+        error("font_builder: output asset stem contains an embedded null");
+        return false;
+    }
+    payload.font = AssetRef<Font>(fontName.value());
+    payload.faceIndex = 0u;
+    payload.unitsPerEm = face.unitsPerEm();
+    payload.sourceGlyphCount = cast<u32>(face.glyphCount());
+    payload.bakePpem = options.ppem;
+    payload.spreadPixels = options.spread;
+    payload.guardTexels = 1u;
+    payload.rasterMode = ResolveBakeFontAtlasRasterMode(options.outline);
+    payload.ascenderUnits = cast<f32>(face.ascender());
+    payload.descenderUnits = cast<f32>(face.descender());
+    payload.lineGapUnits = ComputeBakeFontLineGapUnits(face.height(), face.ascender(), face.descender());
+    return true;
+}
+
+[cpp_unwind]
+b8 RasterizeBakeGlyphs(in BakeOptions options, mut FreeTypeFaceView face, mut RasterGlyphs glyphs){
+    const f32 designPerPixel = ComputeFontAtlasUnitsPerPixel(face.unitsPerEm(), options.ppem);
+    const u64 capacity = ComputeBakePixelCapacity(options.extent, options.maxGroups);
+    u64 rasterBytes = 0u;
+    const u32 count = cast<u32>(face.glyphCount());
+    glyphs.reserve(count);
+    for(u32 glyphId = 0u; glyphId < count; ++glyphId){
+        AppendArenaElement<RasterGlyph>(glyphs);
+        mut RasterGlyph glyph = glyphs.back();
+        glyph.record.glyphId = glyphId;
+        const i32 loadError = face.loadGlyph(glyphId, s_FreeTypeLoadNoScale | s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap);
+        if(loadError != 0){
+            error("font_builder: design metrics failed for glyph {}, FreeType error {}", glyphId, loadError);
+            return false;
+        }
+        glyph.record.advanceUnits = cast<f32>(face.glyphAdvanceX());
+        if(!face.hasOutline()){
+            error("font_builder: glyph {} is not a supported scalable outline", glyphId);
+            return false;
+        }
+        if(face.outlinePointCount() == 0)
+            continue;
+        i32 result = face.loadGlyph(glyphId, s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap);
+        if(result == 0 && !options.outline)
+            result = face.renderNormal();
+        if(result == 0)
+            result = face.renderSdf();
+        if(result != 0){
+            LogBakeSdfRenderFailure(options.outline, glyphId, result);
+            return false;
+        }
+        const auto bitmap = face.bitmap();
+        if(IsEmptyGlyphBitmap(bitmap.width, bitmap.rows))
+            continue;
+        usize byteCount = 0u;
+        if(!ValidateBakeGlyphBitmapFootprint(glyphId, bitmap.grayscale, bitmap.width, bitmap.rows, options.extent, options.maxGroups, capacity, rasterBytes, byteCount))
+            return false;
+        const usize pitch = ComputeAbsoluteGlyphBitmapPitch(bitmap.pitch);
+        if(bitmap.pixels.empty() || pitch < bitmap.width){
+            error("font_builder: invalid native bitmap for glyph {}", glyphId);
+            return false;
+        }
+        glyph.pixels.reserve(byteCount);
+        for(u32 y = 0u; y < bitmap.rows; ++y){
+            const usize offset = cast<usize>(ComputeGlyphBitmapSourceRow(bitmap.pitch, bitmap.rows, y)) * pitch;
+            const Span<u8> row = bitmap.pixels.subspan(offset, bitmap.width);
+            glyph.pixels.insert(glyph.pixels.end(), row.begin(), row.end());
+        }
+        PopulateBakeGlyphRecord(bitmap.width, bitmap.rows, bitmap.left, bitmap.top, designPerPixel, glyph.record);
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 BakeFontRasterizer::rasterize(in BakeOptions options, in Span<u8> sourceBytes, mut FontAtlasPayload payload){
+    mut RasterGlyphs glyphs = this.glyphs;
+    if(!ValidateFontSourceDirectory(sourceBytes, 0u)){
+        error("font_builder: source admission failed");
+        return false;
+    }
+    FreeTypeFace library(this.glyphs);
+    const i32 libraryError = library.createLibrary();
+    if(libraryError != 0){
+        ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtNewLibrary, libraryError));
+        error("font_builder: source admission failed");
+        return false;
+    }
+    library.addDefaultModules();
+    b8 rasterized = false;
+    in BakeOptions bakeOptions = options;
+    Func<64u, void(mut FreeTypeFaceView)> raster = lambda[in bakeOptions, mut library, mut glyphs, mut payload, mut rasterized](mut FreeTypeFaceView face) -> void{
+        if(!AdmitBakeFontFace(face)){
+            error("font_builder: source admission failed");
+            return;
+        }
+        if(ConfigureBakeFontFace(bakeOptions, library, face, payload))
+            rasterized = RasterizeBakeGlyphs(bakeOptions, face, glyphs);
+    };
+    const FreeTypeFaceVisitResult visit = library.visitMemoryFace(sourceBytes, 0, raster);
+    ReportFontCleanupFailure(s_FontOpFtDoneFace, visit.closeError);
+    ReportFontCleanupFailure(s_FontOpFtDoneLibrary, library.closeLibrary());
+    if(visit.openError != 0){
+        ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, visit.openError));
+        error("font_builder: source admission failed");
+        return false;
+    }
+    if(rasterized)
+        payload.fontSha256 = ComputeSha256(sourceBytes);
+    return rasterized;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

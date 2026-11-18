@@ -28,7 +28,7 @@ When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The
     - Wrong: `public u32 count() const{`, `public b8 evaluate() const override{`
 - **Canonical Top-to-Bottom Section Order**:
   1. `.adhd` `#include` directives (`#include <...>` or `#include "..."` for other `.adhd` files)
-  2. Declarations from a C++ SDK use its typed prelude. For code under `impl/`, include the owning `.adhd` file directly and write declarations, control flow, and implementations in ADHD. This also applies to shared types and cross-module calls.
+  2. Declarations from a C++ SDK use its typed prelude. For implementation, utility, and asset pipeline code under `impl/`, `utilities/`, and `pipeline/`, include the owning `.adhd` file directly and write declarations, control flow, and implementations in ADHD. The ADHD compiler and its command-line bootstrap use C++ so they can build before ADHD sources. This also applies to shared types and cross-module calls.
   3. File-scope `const` compile-time constants (`const u32 s_MaxItems = 64u;`) and `type` aliases (`type ItemId = u64;`)
   4. `enum<SizeType>` and `flag<SizeType>` declarations
   5. `interface` declarations

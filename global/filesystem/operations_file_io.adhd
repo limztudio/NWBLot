@@ -55,6 +55,7 @@ extern b8 WriteTextFile(in Path a0, in StringView a1);
 extern class BinaryOutputStream{
     b8 isOpen()const;
     void writeText(in StringView text);
+    void writeCrlfText(in StringView text);
     b8 close();
 };
 

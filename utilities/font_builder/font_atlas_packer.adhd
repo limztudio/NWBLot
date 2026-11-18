@@ -106,7 +106,10 @@ class FontAtlasPacker{
         in Span<u8> groupPixels,
         mut Vector<u8> outCompactPixels
     )const{
-        outCompactPixels.resize(cast<usize>(bounds.width) * cast<usize>(bounds.height) * cast<usize>(bounds.channelCount), 0u);
+        const usize size = cast<usize>(bounds.width) * cast<usize>(bounds.height) * cast<usize>(bounds.channelCount);
+        if(outCompactPixels.size() < size)
+            outCompactPixels.resize(size);
+        // Cropping toward the start lets the input and output share storage.
         for(u32 y = 0u; y < bounds.height; ++y){
             for(u32 x = 0u; x < bounds.width; ++x){
                 const usize source = (cast<usize>(bounds.firstY + y) * cast<usize>(groupWidth) + cast<usize>(bounds.firstX + x)) * cast<usize>(groupChannelCount);
@@ -115,6 +118,7 @@ class FontAtlasPacker{
                     outCompactPixels[destination + cast<usize>(channel)] = groupPixels[source + cast<usize>(channel)];
             }
         }
+        outCompactPixels.resize(size);
     }
 }
 

@@ -209,7 +209,7 @@ Expected<Skin> BuildSkinAsset(in SkinCookEntry entry){
 
 [cpp_unwind]
 b8 BuildSourceMeshStreams(in Path file, in MetascriptValue value, in b8 parallelEnabled, in u32 workers, mut MeshCookEntry entry){
-    SourceMeshStreams streams;
+    MeshMetadataStreams streams;
     if(!ReadCommonSourceMeshStreams(file, value, streams))
         return false;
     CopySourceMeshStreamsToCookStreams(

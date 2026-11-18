@@ -37,6 +37,12 @@ extern class StagedFilePairPaths{
 [cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::StagedFilePairResult"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class StagedFilePairResult{
     ErrorCode error;
+    Array<b8, s_StagedFilePairCount> backedUp;
+    Array<ErrorCode, s_StagedFilePairCount> temporaryErrors;
+    Array<ErrorCode, s_StagedFilePairCount> removalErrors;
+    Array<ErrorCode, s_StagedFilePairCount> restorationErrors;
+    Array<ErrorCode, s_StagedFilePairCount> backupCleanupErrors;
+    Array<b8, s_StagedFilePairCount> backupCleanupMissing;
     u32 failedIndex;
     b8 failedWorkPath;
     StagedFilePairFailureStage failureStage;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/fbx_to_nwb/module.adhd>
+#include <utilities/fbx_to_nwb/source_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,6 +14,109 @@ f64 ComputeFbxInverseScale(in f64 scale){
 
 b8 ReachedSkinInfluenceJointLimit(in u32 writtenInfluenceCount){
     return writtenInfluenceCount == cast<u32>(s_SkinInfluenceJointCount);
+}
+
+
+[cpp_unwind]
+Expected<Vector<u16>> BuildClusterJointMap(in MeshInstance instance, in ImportOptions options, in UfbxSkin skin, mut FbxSkinExportContext inOutContext){
+    Vector<u16> outClusterJoints;
+    const Expected<usize> reservedJointCountResult = ValidateFbxSkinClusterCount(skin.clusterCount(), inOutContext.joints.size());
+    if(!reservedJointCountResult.has_value())
+        return MakeUnexpected(Failure());
+
+    const usize reservedJointCount = reservedJointCountResult.value();
+    inOutContext.joints.reserve(reservedJointCount);
+    inOutContext.bindPoseMatrices.reserve(reservedJointCount);
+    inOutContext.inverseBindMatrices.reserve(reservedJointCount);
+    outClusterJoints.reserve(skin.clusterCount());
+    const f64 inverseScale = ComputeFbxInverseScale(options.scale);
+    UfbxMatrix meshFromOutput = UfbxMatrix();
+    meshFromOutput.m00 = inverseScale;
+    meshFromOutput.m11 = inverseScale;
+    meshFromOutput.m22 = inverseScale;
+    if(options.bakeTransforms){
+        const UfbxMatrix nodeMeshToWorldInverse = InvertUfbxMatrix(instance.node.geometryToWorld());
+        meshFromOutput = MultiplyUfbxMatrices(nodeMeshToWorldInverse, meshFromOutput);
+    }
+    for(usize clusterIndex = 0u; clusterIndex < skin.clusterCount(); ++clusterIndex){
+        const UfbxCluster cluster = skin.cluster(clusterIndex);
+        if(!cluster.valid()){
+            error("Failed to build mesh: skin deformer contains a null cluster");
+            return MakeUnexpected(Failure());
+        }
+
+        if(!cluster.bone().valid()){
+            error("Failed to build mesh: skin cluster is missing a bone node");
+            return MakeUnexpected(Failure());
+        }
+        const UfbxMatrix inverseBind = MultiplyUfbxMatrices(cluster.geometryToBone(), meshFromOutput);
+        const Expected<MatrixSingle> inverseBindValueResult = TryConvertFbxInverseBindMatrix(LoadUfbxMatrix(inverseBind), cast<f64>(UfbxDeterminant(inverseBind)));
+        if(!inverseBindValueResult.has_value())
+            return MakeUnexpected(Failure());
+        const MatrixSingle inverseBindValue = inverseBindValueResult.value();
+
+        const UfbxMatrix bindPose = InvertUfbxMatrix(inverseBind);
+        const Expected<MatrixSingle> bindPoseValueResult = TryConvertFbxBindPoseMatrix(LoadUfbxMatrix(bindPose));
+        if(!bindPoseValueResult.has_value())
+            return MakeUnexpected(Failure());
+        const MatrixSingle bindPoseValue = bindPoseValueResult.value();
+
+        const usize key = cluster.bone().identity();
+        if(inOutContext.jointLookup.contains(key)){
+            const u16 foundJoint = inOutContext.jointLookup[key];
+            const usize jointIndex = cast<usize>(foundJoint);
+            assert(jointIndex < inOutContext.inverseBindMatrices.size());
+            assert(jointIndex < inOutContext.bindPoseMatrices.size());
+            const MatrixSingle existingInverseBind = MatrixSingle(inOutContext.inverseBindMatrices[jointIndex]);
+            if(!NearlyEqualFbxJointMatrices(existingInverseBind, inverseBindValue)){
+                error("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices", ResolveFbxNodeDisplayName(cluster.bone().valid(), cluster.bone().name()));
+                return MakeUnexpected(Failure());
+            }
+            outClusterJoints.push_back(foundJoint);
+            continue;
+        }
+
+        if(!ValidateFbxNewSkeletonJointCapacity(inOutContext.joints.size()))
+            return MakeUnexpected(Failure());
+
+        JointMatrix storedInverseBind = JointMatrix(inverseBindValue);
+        JointMatrix storedBindPose = JointMatrix(bindPoseValue);
+        const u16 joint = cast<u16>(inOutContext.joints.size());
+        inOutContext.joints.push_back(cluster.bone());
+        inOutContext.bindPoseMatrices.push_back(storedBindPose);
+        inOutContext.inverseBindMatrices.push_back(storedInverseBind);
+        inOutContext.jointLookup.insert_or_assign(key, joint);
+        outClusterJoints.push_back(joint);
+    }
+
+    return outClusterJoints;
+}
+
+[cpp_unwind]
+Expected<MeshSkinInfluence> LoadInfluence(in UfbxSkin skin, in Span<u16> clusterJoints, in u32 logicalVertex){
+    MeshSkinInfluence result;
+    if(!ValidateFbxSkinLogicalVertex(logicalVertex, skin.vertexCount()))
+        return MakeUnexpected(Failure());
+
+    const UfbxSkinVertex skinVertex = skin.vertex(logicalVertex);
+    if(!ValidateFbxSkinVertexWeightRange(skinVertex.weight_begin, skinVertex.num_weights, skin.weightCount()))
+        return MakeUnexpected(Failure());
+
+    f64 weightSum = 0.0;
+    u32 writtenInfluenceCount = 0u;
+    for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
+        if(ReachedSkinInfluenceJointLimit(writtenInfluenceCount))
+            break;
+
+        const UfbxSkinWeight weight = skin.weight(skinVertex.weight_begin + weightOffset);
+        if(!TryAccumulateFbxSkinWeight(cast<f64>(weight.weight), weight.cluster_index, clusterJoints, writtenInfluenceCount, weightSum, result))
+            return MakeUnexpected(Failure());
+    }
+
+    if(!TryNormalizeFbxSkinInfluenceWeights(weightSum, result))
+        return MakeUnexpected(Failure());
+
+    return result;
 }
 
 

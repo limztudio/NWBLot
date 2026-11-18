@@ -12,6 +12,7 @@ extern class MetascriptDocument{
     b8 forEachDeclaration(in Func<64u, b8(in StringView, in StringView)> visitor)const;
     b8 hasErrors(...)const;
     b8 hasVariable(...)const;
+    Optional<in MetascriptValue> borrowVariable(in StringView name)const;
     b8 parse(...);
     b8 visitVariable(in StringView a0, in Func<b8(mut MetascriptValue)> a1)const;
 };
@@ -21,6 +22,11 @@ extern class MetascriptParseError{
     u32 line;
     u32 column;
     String message;
+};
+
+[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::DocumentWorkspace"), cpp_flags(no_copy, no_assign)]
+extern class MetascriptDocumentWorkspace{
+    MetascriptDocument document;
 };
 
 

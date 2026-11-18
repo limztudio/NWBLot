@@ -14,3 +14,7 @@ target_sources(nwb_common PRIVATE
 )
 target_link_libraries(nwb_common PUBLIC nwb_alloc nwb::tbb)
 
+
+nwb_declare_static_library(nwb_tool_cli)
+target_sources(nwb_tool_cli PRIVATE "${CMAKE_CURRENT_LIST_DIR}/cli/tool_cli.cpp")
+target_link_libraries(nwb_tool_cli PUBLIC nwb_common nwb::cli11_headers)

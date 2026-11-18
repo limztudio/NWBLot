@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <utilities/fbx_to_nwb/source_types.adhd>
 #include <utilities/fbx_to_nwb/mesh_stream_operations.adhd>
 
 
@@ -405,6 +406,21 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeSkinnedCanonicalMeshStreams(
         indexCount
     );
     return out;
+}
+
+void ApplyCanonicalizedStreams(in CanonicalizeMeshStreamsResult canonical, mut SourceMeshStreams mesh){
+    if(canonical.compactedPositions)
+        mesh.positions = canonical.positions;
+    if(canonical.compactedNormals)
+        mesh.normals = canonical.normals;
+    if(canonical.compactedTangents)
+        mesh.tangents = canonical.tangents;
+    if(canonical.compactedUv0)
+        mesh.uv0 = canonical.uv0;
+    if(canonical.compactedColors)
+        mesh.colors = canonical.colors;
+    if(canonical.compactedSkin)
+        mesh.skin = canonical.skin;
 }
 
 

@@ -64,7 +64,6 @@ const Name s_MaterialScratchArena = s_IntegrationAssetsGraphicsMaterial;
 const Name s_ShaderScratchArena = s_IntegrationAssetsGraphicsShader;
 const Name s_CodecScratchArena = s_IntegrationAssetsGraphicsCodec;
 const Name s_BuildScratchArena = s_IntegrationAssetsGraphicsBuild;
-const Name s_GatherScratchArena = s_IntegrationAssetsGraphicsGather;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

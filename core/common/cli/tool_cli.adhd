@@ -1,0 +1,51 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ConsoleArguments")]
+extern class ConsoleArguments;
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::TryConsoleCommand")]
+extern Expected<i32> TryConsoleCommand(in ConsoleArguments arguments, in Func<64u, i32(in ConsoleArguments)> command);
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ConsoleWrite")]
+extern void ConsoleWrite(in StringView text);
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ConsoleReadLine")]
+extern b8 ConsoleReadLine(mut String line);
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ToolCliOption")]
+extern class ToolCliOption{
+    void required();
+    void expected(in i32 count);
+    void expectedRange(in i32 minimum, in i32 maximum);
+    usize count()const;
+};
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ToolCliParseResult")]
+extern class ToolCliParseResult{
+    b8 ok()const;
+    b8 helpRequested()const;
+    StringView message()const;
+    i32 exitToConsole()const;
+    i32 exitLogged()const;
+};
+
+[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ToolCli"), cpp_flags(no_copy, no_assign)]
+extern class ToolCli{
+    void setHelpFlag(in StringView names, in StringView description);
+    ToolCliOption addText(in StringView names, mut String value, in StringView description);
+    ToolCliOption addTexts(in StringView names, mut Vector<String> value, in StringView description);
+    ToolCliOption addFlag(in StringView names, mut b8 value, in StringView description);
+    ToolCliOption addF32(in StringView names, mut f32 value, in StringView description);
+    ToolCliOption addF64(in StringView names, mut f64 value, in StringView description);
+    ToolCliOption addU32(in StringView names, mut u32 value, in StringView description);
+    ToolCliParseResult parse(in ConsoleArguments arguments);
+    i32 validationExit(in StringView name, in StringView message)const;
+    usize count(in StringView name)const;
+    void printHelp(in b8 toError)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

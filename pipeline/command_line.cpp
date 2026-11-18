@@ -16,6 +16,8 @@
 
 NWB_PIPELINE_BEGIN
 
+namespace CompilerBootstrap{
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,52 +61,38 @@ static b8 AssignInputs(const Span<const AInteropString> values, Core::Assets::As
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
-    : m_tool(inTool)
-    , m_app(s_PipelineAppDescription.data())
+PipelineCommandLine::PipelineCommandLine(PipelineTool::Enum)
+    : m_app(s_PipelineAppDescription.data())
 {
     m_app.add_option(s_PipelineInputOption.data(), m_inputs, "Input assets; accepts multiple paths and repeated options");
     m_app.add_option(s_PipelineInputListOption.data(), m_inputList, "UTF-8 newline-separated input paths");
-    m_app.add_option(s_PipelineOutputOption.data(), m_outputPath, m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
-    if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::DependencyComputer){
-        m_app.add_option(s_PipelineRepoRootOption.data(), m_repoRoot, "Repository root; defaults to the working directory");
-        m_app.add_option(s_PipelineAssetRootOption.data(), m_assetRoots, "Asset root directories used to resolve virtual paths");
-    }
-    if(m_tool == PipelineTool::AssetBuilder)
-        m_app.add_option(s_PipelineAssetTypeOption.data(), m_assetType, "Asset build domain; graphics is currently supported");
-    if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::AssetGatherer)
-        m_app.add_option(s_PipelineConfigurationOption.data(), m_configuration, "Build configuration label");
-    if(m_tool == PipelineTool::AdhdCompiler){
-        m_app.add_option(s_PipelineIncludeDirOption.data(), m_includeDirectories, "Include search directories");
-        m_app.add_option(s_PipelineDepfileOption.data(), m_depfilePath, "Output Makefile-style dependency file");
-        m_app.add_option(s_PipelineNamespaceOption.data(), m_customNamespace, "Generated C++ enclosing namespace");
-        m_app.add_option(s_PipelineNamespaceMapOption.data(), m_namespaceMapPath, "Optional tab-delimited map of source paths to C++ namespaces");
-        m_app.add_option(s_PipelineCppHeaderOption.data(), m_cppHeaders, "Pre-imported C++ header paths");
-        m_app.add_option(s_PipelineCppIncludeDirOption.data(), m_cppIncludeDirectories, "C++ header include search directories");
-        m_app.add_option(s_PipelineCppDefineOption.data(), m_cppDefines, "C++ preprocessor macro definitions for imported headers");
-        m_app.add_option(s_PipelineCppArgOption.data(), m_cppCompilerArgs, "Additional Clang compiler arguments for imported headers");
-        m_app.add_option(s_PipelineEmitCppExternsOption.data(), m_emitCppExternsPath, "Output file path for generated C++ extern ADHD declarations");
-    }
+    m_app.add_option(s_PipelineOutputOption.data(), m_outputPath, "Output directory")->required();
+    m_app.add_option(s_PipelineIncludeDirOption.data(), m_includeDirectories, "Include search directories");
+    m_app.add_option(s_PipelineDepfileOption.data(), m_depfilePath, "Output Makefile-style dependency file");
+    m_app.add_option(s_PipelineNamespaceOption.data(), m_customNamespace, "Generated C++ enclosing namespace");
+    m_app.add_option(s_PipelineNamespaceMapOption.data(), m_namespaceMapPath, "Optional tab-delimited map of source paths to C++ namespaces");
+    m_app.add_option(s_PipelineCppHeaderOption.data(), m_cppHeaders, "Pre-imported C++ header paths");
+    m_app.add_option(s_PipelineCppIncludeDirOption.data(), m_cppIncludeDirectories, "C++ header include search directories");
+    m_app.add_option(s_PipelineCppDefineOption.data(), m_cppDefines, "C++ preprocessor macro definitions for imported headers");
+    m_app.add_option(s_PipelineCppArgOption.data(), m_cppCompilerArgs, "Additional Clang compiler arguments for imported headers");
+    m_app.add_option(s_PipelineEmitCppExternsOption.data(), m_emitCppExternsPath, "Output file path for generated C++ extern ADHD declarations");
 }
 
 Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     PipelineOptions options(arena);
     CommandLineParseApp(m_app, argc, argv);
 
-    const b8 allowImplicitProjectInput = m_tool == PipelineTool::DependencyComputer && !m_assetRoots.empty();
-    if(m_inputs.empty() && m_inputList.empty() && !allowImplicitProjectInput){
+    if(m_inputs.empty() && m_inputList.empty()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: provide --input or --input-list"));
         return MakeUnexpected(Failure{});
     }
     if(
         !__hidden_pipeline_command_line::AssignInputs(m_inputs, options.inputs)
-        || !__hidden_pipeline_command_line::AssignInputs(m_assetRoots, options.assetRoots)
         || !__hidden_pipeline_command_line::AssignInputs(m_includeDirectories, options.includeDirectories)
         || !__hidden_pipeline_command_line::AssignInputs(m_cppHeaders, options.cppHeaders)
         || !__hidden_pipeline_command_line::AssignInputs(m_cppIncludeDirectories, options.cppIncludeDirectories)
         || !__hidden_pipeline_command_line::AssignInputs(m_cppDefines, options.cppDefines)
         || !__hidden_pipeline_command_line::AssignInputs(m_cppCompilerArgs, options.cppCompilerArgs)
-        || !__hidden_pipeline_command_line::AssignText(m_repoRoot, options.repoRoot)
         || !__hidden_pipeline_command_line::AssignText(m_outputPath, options.outputPath)
         || !__hidden_pipeline_command_line::AssignText(m_depfilePath, options.depfilePath)
         || !__hidden_pipeline_command_line::AssignText(m_customNamespace, options.customNamespace)
@@ -116,19 +104,13 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: output path must not be empty"));
         return MakeUnexpected(Failure{});
     }
-    if(m_tool == PipelineTool::AssetBuilder && m_app.count(s_PipelineAssetTypeOption.data()) != 0u)
-        options.assetType.emplace();
-    if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size())) || (options.assetType && !options.assetType->assign(AStringView(m_assetType.data(), m_assetType.size())))){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
-        return MakeUnexpected(Failure{});
-    }
     if(!m_inputList.empty()){
         const AStringView listText(m_inputList.data(), m_inputList.size());
         if(!IsSingleLinePathText(listText)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Pipeline: paths must not contain nulls or newlines"));
             return MakeUnexpected(Failure{});
         }
-        if(!Core::Assets::ReadAssetInputList(Path(arena, listText), scratchArena, options.inputs, m_tool == PipelineTool::AssetGatherer))
+        if(!Core::Assets::ReadAssetInputList(Path(arena, listText), scratchArena, options.inputs, false))
             return MakeUnexpected(Failure{});
     }
     return options;
@@ -147,6 +129,8 @@ int PipelineCommandLine::exit(const CLI::ParseError& error)const{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+};
 
 NWB_PIPELINE_END
 

@@ -8,9 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena, modular]
+class BakeFontRasterizer{
+    public RasterGlyphs glyphs;
+
+    [cpp_unwind] public b8 rasterize(in BakeOptions options, in Span<u8> sourceBytes, mut FontAtlasPayload payload);
+}
+
+
 usize ComputeAbsoluteGlyphBitmapPitch(in i32 pitch){
     if(pitch < 0)
-        return cast<usize>(-pitch);
+        return cast<usize>(-cast<i64>(pitch));
     return cast<usize>(pitch);
 }
 

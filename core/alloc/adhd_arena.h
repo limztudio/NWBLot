@@ -392,6 +392,17 @@ template<typename T, typename Sequence, typename Error>
     return true;
 }
 
+// Retain the destination arena. Matching vector allocators can transfer their storage.
+template<typename T, typename DestinationArena, typename SourceArena>
+inline void AdhdTransferVector(Vector<T, DestinationArena>& destination, Vector<T, SourceArena>& source){
+    if constexpr(IsSame_V<DestinationArena, SourceArena>){
+        if(&destination == &source)
+            return;
+    }
+    AdhdAssign(destination, Move(source));
+    source.clear();
+}
+
 template<typename T>
     requires (!IsCopyConstructible_V<T> && IsAssignable_V<T&, T&&>)
 FOUNDATION_INLINE void AdhdMoveInto(T& destination, T& source){

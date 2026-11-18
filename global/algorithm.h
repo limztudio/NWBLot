@@ -121,6 +121,13 @@ constexpr void SortSequence(Sequence& values, Compare&& compare){
     Sort(values.begin(), values.end(), Forward<Compare>(compare));
 }
 
+template<typename V, typename Map, typename Visitor>
+    requires(IsSame_V<V, typename Map::mapped_type>)
+constexpr void VisitMutableMappedValues(Map& values, Visitor&& visitor){
+    for(auto it = values.begin(); it != values.end(); ++it)
+        visitor(it.value());
+}
+
 template<typename ForwardIt>
 [[nodiscard]] constexpr ForwardIt Unique(ForwardIt first, ForwardIt last){
     return std::unique(first, last);

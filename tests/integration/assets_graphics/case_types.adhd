@@ -133,7 +133,6 @@ const Name s_IntegrationAssetsGraphicsMaterial = "tests/integration/assets_graph
 const Name s_IntegrationAssetsGraphicsShader = "tests/integration/assets_graphics/shader";
 const Name s_IntegrationAssetsGraphicsCodec = "tests/integration/assets_graphics/codec";
 const Name s_IntegrationAssetsGraphicsBuild = "tests/integration/assets_graphics/build";
-const Name s_IntegrationAssetsGraphicsGather = "tests/integration/assets_graphics/gather";
 const Name s_ProjectTestsScratchPayload = "project/tests/scratch_payload";
 const Name s_ProjectEntitiesLensRenderer = "project/entities/lens/renderer";
 const Name s_ProjectSamplersFirstSampler = "project/samplers/first_sampler";

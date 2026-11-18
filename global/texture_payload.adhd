@@ -100,6 +100,9 @@ extern class TexturePayloadMipLevelBinary{
 [cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::AlphaModeText")]
 extern StringView AlphaModeText(in TextureAlphaMode a0);
 
+[cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::CollectMipChainLayout")]
+extern b8 CollectMipChainLayout(in TexturePayloadFormat format, in TexturePayloadDimension dimension, in u32 width, in u32 height, in u32 depth, mut Vector<TextureMipLevelLayout> output, mut TextureMipChainLayoutError error);
+
 [cpp_header("<global/texture_payload.h>"), cpp_name("::TextureFormat::ComputeCompleteMipCount")]
 extern Expected<u32> ComputeCompleteMipCount(in TexturePayloadDimension a0, in isize a1, in isize a2, in isize a3);
 

@@ -14,4 +14,6 @@ nwb_target_adhd_sources(nwb_font_builder NAMESPACE "NWB::FontBuilderUtility" SOU
     "${CMAKE_CURRENT_LIST_DIR}/main.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/command_line.adhd"
 )
-target_link_libraries(nwb_font_builder PRIVATE nwb_font_builder_bake nwb_common nwb_alloc nwb_logclient nwb::cli11_headers)
+target_link_libraries(nwb_font_builder PRIVATE nwb_font_builder_bake nwb_common nwb_alloc nwb_logclient)
+
+nwb_target_console_entry(nwb_font_builder "utilities/font_builder/main.adhd.h" "NWB::FontBuilderUtility::RunConsole" "font_builder" "NWB::FontBuilderUtility::s_FontBuilderEntryFailure")

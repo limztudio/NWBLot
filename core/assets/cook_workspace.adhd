@@ -1,0 +1,54 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetCookWorkspace"), cpp_flags(no_copy, no_assign)]
+extern class AssetCookWorkspace;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetRootDuplicatePolicy::Enum")]
+extern enum AssetRootDuplicatePolicy : u8{
+    ExactText,
+    HostFilesystem
+};
+
+[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookInputSelectionFailure::Enum")]
+extern enum CookInputSelectionFailure : u8{
+    None,
+    ResolveInput,
+    NotFileOrDirectory,
+    DirectoryOutsideAssetRoots,
+    NoMatchingAsset
+};
+
+[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookInputSelectionError")]
+extern class CookInputSelectionError{
+    StringView rawInput;
+    Path resolvedPath;
+    CookInputSelectionFailure reason;
+};
+
+[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::ResolveCookRootEntries"), cpp_flags(scratch_arena)]
+extern Expected<Vector<T>> ResolveCookRootEntries<T>(in Path repo, in Vector<String> inputs, in b8 infer, in AssetRootDuplicatePolicy policy, in Func<64u, void(in StringView, in b8)> onError);
+
+[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookFileCatalog"), cpp_flags(no_copy, no_assign)]
+extern class CookFileCatalog{
+    CookResolvedPaths paths;
+    Vector<DiscoveredNwbFile> files;
+    void setRepoRoot(in Path repo);
+    void setOutputDirectory(in Path directory);
+    void setCacheDirectory(in Path directory);
+    void appendRoot(in Path path, in StringView name);
+    b8 discover(in StringView extension);
+    b8 select(in Vector<String> inputs, mut Vector<u8> selected, mut Vector<usize> order, in Func<64u, void(in CookInputSelectionError)> onError)const;
+    b8 selectMask(in Vector<String> inputs, mut Vector<u8> selected, in Func<64u, void(in CookInputSelectionError)> onError)const;
+    void replace(mut CookFileCatalog source);
+    void compact(in Span<u8> selected);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

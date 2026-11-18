@@ -1,0 +1,250 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/source_types.adhd>
+#include <utilities/fbx_to_nwb/mesh_refresh.adhd>
+#include <utilities/fbx_to_nwb/mesh_stream_canonicalizer.adhd>
+#include <impl/assets_mesh/source_metadata.adhd>
+#include <impl/assets_mesh/skin_cook.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshTextReplacement{
+    public usize begin = 0u;
+    public usize end = 0u;
+    public String text;
+}
+
+b8 ValidateRefreshMeshFields(in Path file, in StringView variable, in MetascriptValue asset){
+    if(!asset.isMap()){
+        error("{} meta '{}': '{}' is not a map", s_MeshMetaKindText, file, variable);
+        return false;
+    }
+    return asset.forEachMapEntry(lambda[in file, in variable](in StringView field, in MetascriptValue value) -> b8{
+        if(IsAllowedMeshAssetField(field))
+            return true;
+        error("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh", s_MeshMetaKindText, file, variable, field);
+        return false;
+    });
+}
+
+Expected<SourceMeshStreams> ParseRefreshMesh(in Path file, in StringView variable, in MetascriptValue asset){
+    SourceMeshStreams mesh;
+    if(!ValidateRefreshMeshFields(file, variable, asset)
+        || !FillMeshMetadataFloatListField<Vec3, 3u>(file, asset, s_MeshPositionsFieldNameView, mesh.positions)
+        || !FillMeshMetadataFloatListField<Vec3, 3u>(file, asset, s_MeshNormalsFieldNameView, mesh.normals)
+        || !FillMeshMetadataFloatListField<Vec4, 4u>(file, asset, s_MeshTangentsFieldNameView, mesh.tangents)
+        || !FillMeshMetadataFloatListField<Vec2, 2u>(file, asset, s_MeshUv0FieldNameView, mesh.uv0)
+        || !FillMeshMetadataFloatListField<Vec4, 4u>(file, asset, s_MeshColorsFieldNameView, mesh.colors)
+        || !ParseSourceVertexRefsInto<SourceVertexRef>(file, asset, mesh.vertexRefs) || !ParseMeshSourceIndices(file, asset, mesh.indices)
+        || !ValidateSourceVertexRefStreams<SourceVertexRef>(file, mesh.vertexRefs, mesh.positions.size(), mesh.normals.size(), mesh.tangents.size(), mesh.uv0.size(), mesh.colors.size()))
+        return MakeUnexpected(Failure());
+    if(!ValidatePlainRefreshMeshNoSkin(mesh.vertexRefs)){
+        error("{} meta '{}': plain mesh vertex_ref cannot contain a skin index", s_MeshMetaKindText, file);
+        return MakeUnexpected(Failure());
+    }
+    if(!ValidateSourceMeshIndices(file, mesh.indices, mesh.vertexRefs.size()))
+        return MakeUnexpected(Failure());
+    return mesh;
+}
+
+b8 IsRefreshAssignment(in MetascriptTokenType type){
+    return type == MetascriptTokenType::Equal || type == MetascriptTokenType::PlusEqual || type == MetascriptTokenType::MinusEqual || type == MetascriptTokenType::StarEqual || type == MetascriptTokenType::SlashEqual;
+}
+
+Expected<AssignmentRange> FindListAssignmentRange(in StringView source, in StringView variableName, in StringView fieldName){
+    AssignmentRange range;
+    MetascriptLexer lexer(source);
+    MetascriptToken token = lexer.next();
+    b8 statementBegin = true;
+    b8 found = false;
+    while(token.type != MetascriptTokenType::EndOfFile){
+        if(token.type == MetascriptTokenType::Error)
+            return MakeUnexpected(Failure());
+        if(statementBegin && token.type == MetascriptTokenType::Identifier && token.text == variableName){
+            token = lexer.next();
+            if(token.type == MetascriptTokenType::Dot){
+                token = lexer.next();
+                if(token.type == MetascriptTokenType::Identifier && token.text == fieldName){
+                    token = lexer.next();
+                    if(IsRefreshAssignment(token.type)){
+                        // Rewriting needs one direct literal list even when parsing permits compound assignments.
+                        if(found || token.type != MetascriptTokenType::Equal)
+                            return MakeUnexpected(Failure());
+                        found = true;
+                        token = lexer.next();
+                        if(token.type != MetascriptTokenType::LeftBracket)
+                            return MakeUnexpected(Failure());
+                        range.begin = TextSubviewOffset(source, token.text);
+                        usize depth = 1u;
+                        while(depth != 0u){
+                            token = lexer.next();
+                            if(token.type == MetascriptTokenType::Error || token.type == MetascriptTokenType::EndOfFile)
+                                return MakeUnexpected(Failure());
+                            if(token.type == MetascriptTokenType::LeftBracket)
+                                ++depth;
+                            else if(token.type == MetascriptTokenType::RightBracket)
+                                --depth;
+                        }
+                        range.end = TextSubviewOffset(source, token.text) + token.text.size();
+                        token = lexer.next();
+                        if(token.type != MetascriptTokenType::Semicolon)
+                            return MakeUnexpected(Failure());
+                    }
+                }
+            }
+        }
+        statementBegin = token.type == MetascriptTokenType::Semicolon;
+        token = lexer.next();
+    }
+    if(!found)
+        return MakeUnexpected(Failure());
+    return range;
+}
+
+b8 AddMeshReplacement(in StringView source, in StringView variableName, in StringView field, in String text, mut Vector<MeshTextReplacement> replacements){
+    const auto range = FindListAssignmentRange(source, variableName, field);
+    if(!range.has_value()){
+        error("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'", variableName, field);
+        return false;
+    }
+    AppendArenaElement<MeshTextReplacement>(replacements);
+    mut MeshTextReplacement replacement = replacements.back();
+    replacement.begin = range.value().begin;
+    replacement.end = range.value().end;
+    replacement.text = text;
+    return true;
+}
+
+b8 AppendMeshReplacements(in StringView source, in StringView variable, in SourceMeshStreamCounts before, in SourceMeshStreams after, mut Vector<MeshTextReplacement> replacements){
+    if(DidMeshStreamCountChange(before.positions, after.positions.size()) && !AddMeshReplacement(source, variable, s_MeshPositionsFieldNameView, FormatMeshRefreshVec3List(after.positions), replacements))
+        return false;
+    if(DidMeshStreamCountChange(before.normals, after.normals.size()) && !AddMeshReplacement(source, variable, s_MeshNormalsFieldNameView, FormatMeshRefreshVec3List(after.normals), replacements))
+        return false;
+    if(DidMeshStreamCountChange(before.tangents, after.tangents.size()) && !AddMeshReplacement(source, variable, s_MeshTangentsFieldNameView, FormatMeshRefreshVec4List(after.tangents), replacements))
+        return false;
+    if(DidMeshStreamCountChange(before.uv0, after.uv0.size()) && !AddMeshReplacement(source, variable, s_MeshUv0FieldNameView, FormatMeshRefreshVec2List(after.uv0), replacements))
+        return false;
+    if(DidMeshStreamCountChange(before.colors, after.colors.size()) && !AddMeshReplacement(source, variable, s_MeshColorsFieldNameView, FormatMeshRefreshVec4List(after.colors), replacements))
+        return false;
+    if(DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after)) && !AddMeshReplacement(source, variable, s_MeshVertexRefsFieldNameView, FormatMeshRefreshVertexRefList(after.vertexRefs), replacements))
+        return false;
+    return !DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size()) || AddMeshReplacement(source, variable, s_MeshIndicesFieldNameView, FormatMeshRefreshIndexList(after.indices), replacements);
+}
+
+Expected<Optional<StringView>> FindMeshSkin(in MetascriptDocument document, in StringView meshName){
+    Optional<StringView> found;
+    const Optional<in MetascriptDocument> owner(document);
+    if(!document.forEachDeclaration(lambda[in owner, in meshName, mut found](in StringView typeName, in StringView variable) -> b8{
+        if(typeName != s_SkinAssetTypeText)
+            return true;
+        const auto skin = owner.value().borrowVariable(variable);
+        if(!skin.has_value() || !skin.value().isMap())
+            return true;
+        const auto field = skin.value().borrowField(s_MeshAssetTypeText);
+        if(!field.has_value() || !field.value().isReference() || field.value().asReference() != meshName)
+            return true;
+        if(found.has_value()){
+            error("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets", meshName);
+            return false;
+        }
+        found = variable;
+        return true;
+    }))
+        return MakeUnexpected(Failure());
+    return found;
+}
+
+Expected<CanonicalizeMeshStreamsResult> CanonicalizeRefreshMesh(in Path path, in MetascriptDocument document, in StringView variable, mut SourceMeshStreams mesh){
+    const auto linked = FindMeshSkin(document, variable);
+    if(!linked.has_value())
+        return MakeUnexpected(Failure());
+    if(linked.value().has_value()){
+        const StringView skinName = linked.value().value();
+        const auto skin = document.borrowVariable(skinName);
+        Vector<MeshSkinInfluence> influences;
+        if(!skin.has_value() || !ParseSkinInfluenceMetadataInto(path, skin.value(), s_MeshMetaKindText, skinName, false, influences))
+            return MakeUnexpected(Failure());
+        return CanonicalizeSkinnedCanonicalMeshStreams(influences, mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.indices.size(), mesh.vertexRefs);
+    }
+    return CanonicalizeCanonicalMeshStreams(mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.skin, mesh.indices.size(), mesh.vertexRefs);
+}
+
+class MeshRefreshDocument : NoCopy{
+    private in Path file;
+    private in MetascriptDocument document;
+    private StringView source;
+    public Vector<MeshTextReplacement> replacements;
+    public SourceMeshCanonicalizeReport report;
+    public b8 sawMesh = false;
+
+    public MeshRefreshDocument(in Path file, in MetascriptDocument document, in StringView source){
+        this.file = file;
+        this.document = document;
+        this.source = source;
+    }
+
+    public b8 refreshDeclaration(in StringView typeName, in StringView variable){
+        if(!IsMeshRefreshDeclarationType(typeName))
+            return true;
+        this.sawMesh = true;
+        const auto value = this.document.borrowVariable(variable);
+        if(!value.has_value()){
+            error("Failed to refresh NWB mesh: missing mesh variable '{}'", variable);
+            return false;
+        }
+        auto mesh = ParseRefreshMesh(this.file, variable, value.value());
+        if(!mesh.has_value())
+            return false;
+        const auto canonical = CanonicalizeRefreshMesh(this.file, this.document, variable, mesh.value());
+        if(!canonical.has_value())
+            return false;
+        ApplyCanonicalizedStreams(canonical.value(), mesh.value());
+        if(!AppendMeshReplacements(this.source, variable, canonical.value().report.before, mesh.value(), this.replacements))
+            return false;
+        AccumulateReport(canonical.value().report, this.report);
+        return true;
+    }
+}
+
+Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(in Path inputPath, in Path outputPath){
+    String source;
+    const auto read = ReadTextFile(inputPath, source);
+    if(!read.has_value()){
+        error("Failed to refresh NWB mesh: failed to read '{}': {}", inputPath, ErrorCodeMessage(read.error()));
+        return MakeUnexpected(Failure());
+    }
+    StripUtf8Bom(source);
+    const b8 useCrlf = HasCrlfLineEndings(source);
+    MetascriptDocumentWorkspace workspace(s_UtilityScratch);
+    if(!workspace.document.parse(StringView(source))){
+        for(in MetascriptParseError failure : workspace.document.errors())
+            error("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}", inputPath, failure.line, failure.column, failure.message);
+        return MakeUnexpected(Failure());
+    }
+    const auto capacity = TryComputeMeshRefreshReplacementCapacity(workspace.document.declarationCount());
+    if(!capacity.has_value())
+        return MakeUnexpected(Failure());
+    MeshRefreshDocument refresh(inputPath, workspace.document, source);
+    refresh.replacements.reserve(capacity.value());
+    if(!workspace.document.forEachDeclaration(lambda[mut refresh](in StringView typeName, in StringView variable) -> b8{ return refresh.refreshDeclaration(typeName, variable); }))
+        return MakeUnexpected(Failure());
+    if(!refresh.sawMesh){
+        error("Failed to refresh NWB mesh: '{}' contains no mesh declarations", inputPath);
+        return MakeUnexpected(Failure());
+    }
+    ApplyTextReplacements<MeshTextReplacement>(refresh.replacements, source);
+    NormalizeLineEndingsInPlace(source, useCrlf);
+    if(!WriteTextFile(outputPath, source)){
+        error("Failed to refresh NWB mesh: failed to write output file '{}'", outputPath);
+        return MakeUnexpected(Failure());
+    }
+    return refresh.report;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

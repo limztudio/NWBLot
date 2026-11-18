@@ -1,0 +1,340 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/scene.adhd>
+#include <utilities/fbx_to_nwb/mesh_build.adhd>
+#include <utilities/fbx_to_nwb/asset_writer.adhd>
+#include <utilities/fbx_to_nwb/refresh.adhd>
+#include <utilities/fbx_to_nwb/import_prompts.adhd>
+#include <utilities/fbx_to_nwb/nwb_refresh_command.adhd>
+#include <utilities/fbx_to_nwb/command_line.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+Expected<String> PromptString(in StringView label, in StringView defaultValue, mut b8 prompted){
+    prompted = true;
+    ConsoleWrite(label);
+    if(!defaultValue.empty()){
+        ConsoleWrite(" [");
+        ConsoleWrite(defaultValue);
+        ConsoleWrite("]");
+    }
+    ConsoleWrite(": ");
+    String line;
+    if(ConsoleReadLine(line))
+        TrimInPlace(line);
+    if(line.empty())
+        line = defaultValue;
+    if(line.empty())
+        return MakeUnexpected(Failure());
+    return line;
+}
+
+[cpp_unwind]
+b8 PromptOption(in StringView label, mut String value, mut b8 prompted){
+    const auto result = PromptString(label, value, prompted);
+    if(!result.has_value())
+        return false;
+    value = result.value();
+    return true;
+}
+
+[cpp_unwind]
+b8 PromptBool(in StringView label, in b8 defaultValue, mut b8 prompted){
+    prompted = true;
+    String line;
+    while(true){
+        ConsoleWrite(label);
+        ConsoleWrite(SelectPromptBoolSuffix(defaultValue));
+        line.clear();
+        if(!ConsoleReadLine(line) || TrimView(line).empty())
+            return defaultValue;
+        const auto parsed = ParseFbxConfirmText(line);
+        if(parsed.has_value())
+            return parsed.value();
+        ConsoleWrite("Please answer y or n.\n");
+    }
+}
+
+[cpp_unwind]
+f64 PromptDouble(in StringView label, in f64 defaultValue, mut b8 prompted){
+    prompted = true;
+    const String prompt = StringFormat("{} [{:.6g}]: ", label, defaultValue);
+    String line;
+    while(true){
+        ConsoleWrite(prompt);
+        line.clear();
+        if(!ConsoleReadLine(line))
+            return defaultValue;
+        const StringView trimmed = TrimView(line);
+        if(trimmed.empty())
+            return defaultValue;
+        const auto parsed = ParseF64FromChars(trimmed);
+        if(parsed.has_value() && IsValidFbxImportScale(parsed.value()))
+            return parsed.value();
+        ConsoleWrite("Please enter a positive finite number.\n");
+    }
+}
+
+[cpp_unwind]
+b8 ValidateOutputOverwrite(in Path outputPath, in ImportOptions options, mut b8 prompted){
+    const auto exists = FileExistsNoFollow(outputPath);
+    if(!exists.has_value()){
+        warning("Failed to query output path: {}", ErrorCodeMessage(exists.error()));
+        return false;
+    }
+    if(!exists.value() || options.forceOverwrite)
+        return true;
+    if(options.acceptDefaults){
+        warning("Output already exists. Pass --force to overwrite: {}", outputPath);
+        return false;
+    }
+    return PromptBool("Output already exists. Overwrite it?", false, prompted);
+}
+
+[cpp_unwind]
+b8 ConfigurePromptsBeforeLoad(in OptionPresence presence, mut ImportOptions options, mut b8 prompted){
+    if(options.inputPath.empty() && (options.acceptDefaults || !PromptOption("Input FBX or NWB path", options.inputPath, prompted))){
+        warning("Input FBX or NWB path is required.");
+        return false;
+    }
+    options.inputPath.assign(UnquoteFbxInputText(options.inputPath));
+    if(ShouldPromptPreserveSpace(presence.preserveSpace, options.acceptDefaults, options.listMeshes))
+        options.preserveSpace = !PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, prompted);
+    return true;
+}
+
+[cpp_unwind]
+b8 ConfigurePromptsAfterLoad(in OptionPresence presence, in Span<MeshInstance> instances, mut ImportOptions options, mut b8 prompted){
+    if(!presence.assetType && !options.acceptDefaults && !PromptOption(FormatAssetTypePromptLabel(), options.assetType, prompted))
+        return false;
+    if(!presence.mesh && !options.acceptDefaults){
+        PrintMeshInstances(instances);
+        if(!PromptOption("Mesh selector (all, first, index, node name, or mesh name)", options.meshSelector, prompted))
+            return false;
+    }
+    if(!presence.output && !options.acceptDefaults){
+        const String defaultPath = PathToGenericString(DefaultFbxOutputPath(options.inputPath));
+        const auto output = PromptString(s_OutputPathPromptLabel, defaultPath, prompted);
+        if(!output.has_value())
+            return false;
+        options.outputPath = output.value();
+    }
+    if(options.outputPath.empty())
+        options.outputPath = PathToGenericString(DefaultFbxOutputPath(options.inputPath));
+    options.outputPath.assign(UnquoteFbxInputText(options.outputPath));
+    if(!presence.normalMode && !options.acceptDefaults && !PromptOption(FormatNormalModePromptLabel(), options.normalMode, prompted))
+        return false;
+    if(!presence.scale && !options.acceptDefaults)
+        options.scale = PromptDouble("Additional uniform scale", options.scale, prompted);
+    if(!presence.local && !options.acceptDefaults)
+        options.bakeTransforms = PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, prompted);
+    if(!presence.ignoreColors && !options.acceptDefaults)
+        options.importColors = PromptBool("Import FBX vertex colors when present?", options.importColors, prompted);
+    if(!presence.defaultColor && !options.acceptDefaults && !PromptOption("Default RGBA color for vertices without FBX color", options.defaultColorText, prompted))
+        return false;
+    if(!presence.flipWinding && !options.acceptDefaults)
+        options.flipWinding = PromptBool("Flip triangle winding?", options.flipWinding, prompted);
+    return true;
+}
+
+Expected<b8> SelectedMeshesUseSkinning(in Span<MeshInstance> instances, in Span<usize> selection){
+    FbxMeshSkinningSummary summary;
+    for(in usize index : selection){
+        if(index >= instances.size()){
+            warning("Selected mesh index is out of range");
+            return MakeUnexpected(Failure());
+        }
+        in MeshInstance instance = instances[index];
+        summary.observe(instance.mesh.valid() && instance.mesh.skinCount() != 0u);
+    }
+    return summary.resolve();
+}
+
+[cpp_unwind]
+i32 RunNwbRefreshCommand(in ToolCli app, in OptionPresence presence, mut ImportOptions options, mut b8 prompted){
+    if(options.listMeshes)
+        return app.validationExit(s_FbxToNwbListMeshesFlag, "Only valid for FBX input.");
+    if(ShouldPromptRefreshOutputPath(presence.output, options.acceptDefaults)){
+        const auto output = PromptString(s_OutputPathPromptLabel, options.inputPath, prompted);
+        if(!output.has_value())
+            return s_FbxToNwbExitFailure;
+        options.outputPath = output.value();
+    }
+    if(options.outputPath.empty())
+        options.outputPath = options.inputPath;
+    options.outputPath.assign(UnquoteFbxInputText(options.outputPath));
+    const Path outputPath(options.outputPath);
+    if(outputPath.empty())
+        return app.validationExit(s_FbxToNwbOutputOption, s_OutputPathEmptyText);
+    if(!ValidateOutputOverwrite(outputPath, options, prompted))
+        return s_FbxToNwbExitFailure;
+    const Path inputPath(options.inputPath);
+    const auto report = RefreshNwbMeshAsset(inputPath, outputPath);
+    if(!report.has_value())
+        return s_FbxToNwbExitFailure;
+    [essential] info("{}", FormatNwbRefreshReport(PathToGenericString(outputPath), PathToGenericString(inputPath), report.value()));
+    return s_FbxToNwbExitSuccess;
+}
+
+[cpp_unwind]
+i32 ImportFbx(in ToolCli app, in OptionPresence presence, mut ImportOptions options, mut b8 prompted){
+    auto scene = LoadScene(options);
+    if(!scene.has_value())
+        return s_FbxToNwbExitFailure;
+    if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
+        options.includeHidden = PromptBool("Include hidden mesh nodes?", options.includeHidden, prompted);
+    const auto instances = CollectMeshInstances(scene.value(), options.includeHidden);
+    if(options.listMeshes){
+        PrintMeshInstances(instances);
+        return s_FbxToNwbExitSuccess;
+    }
+    if(instances.empty()){
+        if(options.includeHidden)
+            warning("No mesh instances found in FBX.");
+        else
+            warning("No mesh instances found in FBX (use --include-hidden to include hidden nodes).");
+        return s_FbxToNwbExitFailure;
+    }
+    if(!ConfigurePromptsAfterLoad(presence, instances, options, prompted))
+        return s_FbxToNwbExitFailure;
+
+    const auto assetType = ParseAssetTypeText(options.assetType);
+    if(!assetType.has_value())
+        return app.validationExit(s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText());
+    options.assetType = OutputAssetTypeText(assetType.value());
+    const auto normalMode = ParseNormalModeText(options.normalMode);
+    if(!normalMode.has_value())
+        return app.validationExit(s_FbxToNwbNormalModeOption, NormalModeErrorText());
+    options.normalMode = NormalModeText(normalMode.value());
+    const auto color = ParseFbxColorText(options.defaultColorText);
+    if(!color.has_value())
+        return app.validationExit(s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.");
+    const auto selection = SelectMeshInstances(instances, options.meshSelector);
+    if(!selection.has_value())
+        return app.validationExit(s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.");
+    if(options.separateAssets && assetType.value() != OutputAssetType::Bunch)
+        return app.validationExit(s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.");
+
+    b8 wantsSkinning = false;
+    if(AssetTypeCanUseSkinning(assetType.value())){
+        const auto selected = SelectedMeshesUseSkinning(instances, selection.value());
+        if(!selected.has_value())
+            return s_FbxToNwbExitFailure;
+        wantsSkinning = selected.value();
+    }
+    if(AssetTypeRequiresSkinning(assetType.value()) && !wantsSkinning)
+        return app.validationExit(s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.");
+
+    const Path outputPath(options.outputPath);
+    if(outputPath.empty())
+        return app.validationExit(s_FbxToNwbOutputOption, s_OutputPathEmptyText);
+    if(!ValidateOutputOverwrite(outputPath, options, prompted))
+        return s_FbxToNwbExitFailure;
+    if(options.separateAssets){
+        const Path directory = outputPath.parentPath() / outputPath.stem();
+        if(!ValidateOutputOverwrite(directory / s_MeshSplitFileName, options, prompted))
+            return s_FbxToNwbExitFailure;
+        if(wantsSkinning && (!ValidateOutputOverwrite(directory / s_SkeletonSplitFileName, options, prompted)
+            || !ValidateOutputOverwrite(directory / s_SkinSplitFileName, options, prompted)))
+            return s_FbxToNwbExitFailure;
+    }
+    const auto built = BuildMesh(instances, selection.value(), options, wantsSkinning, color.value());
+    if(!built.has_value())
+        return s_FbxToNwbExitFailure;
+    in MeshBuildResult result = built.value();
+    in SourceMeshStreams mesh = result.mesh;
+    if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets,
+        result.skeletonJoints, result.skeletonBindPoseMatrices, result.inverseBindMatrices))
+        return s_FbxToNwbExitFailure;
+    [essential] info("{}", FormatFbxWriteCompletionReport(
+        PathToGenericString(outputPath), mesh.positions.size(), mesh.normals.size(), mesh.vertexRefs.size(), mesh.indices.size(),
+        options.assetType, assetType.value(), options.separateAssets, options.normalMode, result.sawVertexColors,
+        result.sawVertexUvs, result.skeletonJoints.size(), result.tangentReport
+    ));
+    return s_FbxToNwbExitSuccess;
+}
+
+[cpp_unwind]
+i32 RunFbxCommand(in ConsoleArguments arguments, mut b8 prompted){
+    ImportOptions options;
+    OptionPresence presence;
+    ToolCli app(s_FbxToNwbAppName);
+    app.setHelpFlag(s_FbxToNwbHelpFlag, "Show help");
+    b8 local = false;
+    b8 ignoreColors = false;
+    app.addText(s_FbxToNwbInputOption, options.inputPath, "Input FBX file path");
+    const auto outputOption = app.addText(s_FbxToNwbOutputOption, options.outputPath, "Output NWB asset metadata path");
+    const String assetTypeDescription = StringFormat("Output asset type: {}", OutputAssetTypeOptionsText());
+    const auto assetTypeOption = app.addText(s_FbxToNwbAssetTypeOption, options.assetType, assetTypeDescription);
+    app.addText(s_FbxToNwbVirtualRootOption, options.virtualRoot, "Virtual asset root used when output path is outside an assets directory");
+    const auto meshOption = app.addText(s_FbxToNwbMeshOption, options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
+    const auto normalModeOption = app.addText(s_FbxToNwbNormalModeOption, options.normalMode, "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals");
+    const auto scaleOption = app.addF64(s_FbxToNwbScaleOption, options.scale, "Additional uniform scale applied after import");
+    app.addF64(s_FbxToNwbTriangleAreaEpsilonOption, options.triangleAreaLengthSquaredEpsilon, "Minimum squared triangle cross-product length kept during import");
+    const auto defaultColorOption = app.addText(s_FbxToNwbDefaultColorOption, options.defaultColorText, "Default RGBA color, for example 1,1,1,1");
+    const auto preserveSpaceOption = app.addFlag(s_FbxToNwbPreserveSpaceFlag, options.preserveSpace, "Keep the FBX source axes and units");
+    const auto includeHiddenOption = app.addFlag(s_FbxToNwbIncludeHiddenFlag, options.includeHidden, "Include hidden FBX mesh nodes");
+    const auto localOption = app.addFlag(s_FbxToNwbLocalFlag, local, "Do not bake node transforms into mesh");
+    const auto ignoreColorsOption = app.addFlag(s_FbxToNwbIgnoreColorsFlag, ignoreColors, "Use the default color instead of FBX vertex colors");
+    const auto flipWindingOption = app.addFlag(s_FbxToNwbFlipWindingFlag, options.flipWinding, "Swap the second and third index of every triangle");
+    app.addFlag(s_FbxToNwbSeparateAssetsFlag, options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    app.addFlag(s_FbxToNwbRefreshNwbFlag, options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
+    app.addFlag(s_FbxToNwbForceFlag, options.forceOverwrite, "Overwrite an existing output file");
+    app.addFlag(s_FbxToNwbYesFlag, options.acceptDefaults, "Use defaults for any import options that were not supplied");
+    app.addFlag(s_FbxToNwbListMeshesFlag, options.listMeshes, "List importable mesh instances and exit");
+    const auto parsed = app.parse(arguments);
+    if(!parsed.ok())
+        return parsed.exitLogged();
+    options.bakeTransforms = !local;
+    options.importColors = !ignoreColors;
+    presence.output = outputOption.count() > s_CliOptionPresentCount;
+    presence.assetType = assetTypeOption.count() > s_CliOptionPresentCount;
+    presence.mesh = meshOption.count() > s_CliOptionPresentCount;
+    presence.normalMode = normalModeOption.count() > s_CliOptionPresentCount;
+    presence.scale = scaleOption.count() > s_CliOptionPresentCount;
+    presence.defaultColor = defaultColorOption.count() > s_CliOptionPresentCount;
+    presence.preserveSpace = preserveSpaceOption.count() > s_CliOptionPresentCount;
+    presence.includeHidden = includeHiddenOption.count() > s_CliOptionPresentCount;
+    presence.local = localOption.count() > s_CliOptionPresentCount;
+    presence.ignoreColors = ignoreColorsOption.count() > s_CliOptionPresentCount;
+    presence.flipWinding = flipWindingOption.count() > s_CliOptionPresentCount;
+    if(!ConfigurePromptsBeforeLoad(presence, options, prompted))
+        return app.validationExit(s_FbxToNwbInputOption, "Input FBX or NWB path is required.");
+    if(!IsValidFbxImportScale(options.scale))
+        return app.validationExit(s_FbxToNwbScaleOption, "Must be a positive finite number.");
+    if(!IsValidFbxTriangleAreaEpsilon(options.triangleAreaLengthSquaredEpsilon))
+        return app.validationExit(s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.");
+    const Path inputPath(options.inputPath);
+    const auto regular = IsRegularFile(inputPath);
+    if(!regular.has_value() && !IsMissingPathError(regular.error())){
+        warning("Failed to query input FBX path: {}", ErrorCodeMessage(regular.error()));
+        return s_FbxToNwbExitFailure;
+    }
+    if(!regular.has_value() || !regular.value())
+        return app.validationExit(s_FbxToNwbInputOption, "Input path must name an existing regular file.");
+    if(IsNwbRefreshInputPath(options.refreshNwb, options.inputPath))
+        return RunNwbRefreshCommand(app, presence, options, prompted);
+    return ImportFbx(app, presence, options, prompted);
+}
+
+
+[cpp_unwind]
+i32 Run(in ConsoleArguments arguments, mut b8 prompted){
+    Func<64u, i32(in ConsoleArguments)> command = lambda[mut prompted](in ConsoleArguments args) -> i32{
+        return RunFbxCommand(args, prompted);
+    };
+    const auto result = TryConsoleCommand(arguments, command);
+    if(result.has_value())
+        return result.value();
+    error("FBX conversion terminated with an unexpected exception");
+    return s_FbxToNwbEntryFailure;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

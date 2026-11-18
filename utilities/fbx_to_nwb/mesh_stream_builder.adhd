@@ -1,0 +1,195 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/skin.adhd>
+#include <utilities/fbx_to_nwb/source_mesh_streams.adhd>
+#include <utilities/fbx_to_nwb/mesh_stream_operations.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SkinInfluenceKey{
+    public MeshSkinInfluence value;
+    public b8 operator==(in SkinInfluenceKey rhs)const{ return EqualMeshSkinInfluence(this.value, rhs.value); }
+    public usize hash()const{ return HashMeshSkinInfluence(this.value); }
+}
+
+class SourceMeshBuildContext{
+    public mut SourceMeshStreams mesh;
+    public HashMap<Vec3, u32> positions;
+    public HashMap<Vec3, u32> normals;
+    public HashMap<Vec4, u32> tangents;
+    public HashMap<Vec2, u32> uv0;
+    public HashMap<Vec4, u32> colors;
+    public HashMap<SkinInfluenceKey, u32> skin;
+    public HashMap<SourceVertexRef, u32> vertexRefs;
+    public SourceMeshBuildContext(mut SourceMeshStreams mesh){
+        this.mesh = mesh;
+    }
+}
+
+[cpp_unwind]
+Expected<u32> InternSourceKey<T, K>(in T value, in K key, in StringView streamName, mut Vector<T> stream, mut HashMap<K, u32> lookup){
+    if(lookup.contains(key))
+        return lookup[key];
+    if(!HasSourceMeshStreamValueCapacity(stream.size())){
+        error("Failed to build mesh: {} stream has too many unique values", streamName);
+        return MakeUnexpected(Failure());
+    }
+    const u32 index = cast<u32>(stream.size());
+    stream.push_back(value);
+    lookup.insert_or_assign(key, index);
+    return index;
+}
+
+[cpp_unwind]
+Expected<u32> InternSourceValue<T>(in T value, in StringView streamName, mut Vector<T> stream, mut HashMap<T, u32> lookup){
+    return InternSourceKey<T, T>(value, value, streamName, stream, lookup);
+}
+
+[cpp_unwind]
+void ReserveSourceMeshBuildContext(in usize estimatedTriangleCorners, in b8 wantsSkinning, mut SourceMeshBuildContext inOutContext){
+    inOutContext.positions.reserve(estimatedTriangleCorners);
+    inOutContext.normals.reserve(estimatedTriangleCorners);
+    inOutContext.tangents.reserve(estimatedTriangleCorners);
+    inOutContext.uv0.reserve(estimatedTriangleCorners);
+    inOutContext.colors.reserve(estimatedTriangleCorners);
+    if(wantsSkinning)
+        inOutContext.skin.reserve(estimatedTriangleCorners);
+    inOutContext.vertexRefs.reserve(estimatedTriangleCorners);
+}
+
+[cpp_unwind]
+void DropSourceMeshTangents(mut SourceMeshStreams inOutMesh){
+    inOutMesh.tangents.clear();
+    inOutMesh.vertexRefs = CompactSourceVertexRefsWithoutTangents(inOutMesh.vertexRefs, inOutMesh.indices);
+}
+
+[cpp_unwind]
+Expected<TangentFrameRebuildResult> RebuildFbxTangents(in Span<u32> indices, mut Span<TangentFrameRebuildVertex> vertices, in f64 epsilon){
+    return RebuildTangentFrames(indices, vertices, epsilon);
+}
+
+[cpp_unwind]
+Expected<SourceTangentReport> GenerateSourceMeshTangents(in b8 usedDefaultUvs, in f64 triangleAreaLengthSquaredEpsilon, mut SourceMeshStreams inOutMesh){
+
+    SourceTangentReport outTangentReport;
+    assert(!inOutMesh.vertexRefs.empty());
+    assert(!inOutMesh.indices.empty());
+    assert((inOutMesh.indices.size() % s_MeshletTriangleIndexCount) == 0u);
+
+    Vector<TangentFrameRebuildVertex> rebuildVertices;
+    rebuildVertices.reserve(inOutMesh.vertexRefs.size());
+    for(in SourceVertexRef ref : inOutMesh.vertexRefs){
+        assert(ref.position < inOutMesh.positions.size());
+        assert(ref.normal < inOutMesh.normals.size());
+        assert(ref.uv0 < inOutMesh.uv0.size());
+
+        const Vec3 position = inOutMesh.positions[ref.position];
+        const Vec3 normal = inOutMesh.normals[ref.normal];
+        rebuildVertices.push_back(TangentFrameRebuildVertex(f32x4(position.x, position.y, position.z, 0.0f), f32x4(normal.x, normal.y, normal.z, 0.0f), f32x4(1.0f, 0.0f, 0.0f, 1.0f), inOutMesh.uv0[ref.uv0]));
+    }
+
+    Vector<u32> rebuildIndices;
+    rebuildIndices.reserve(inOutMesh.indices.size());
+    for(usize indexBase = 0u; indexBase < inOutMesh.indices.size(); indexBase += s_MeshletTriangleIndexCount){
+        const u32 i0 = inOutMesh.indices[indexBase + 0u];
+        const u32 i1 = inOutMesh.indices[indexBase + 1u];
+        const u32 i2 = inOutMesh.indices[indexBase + 2u];
+        assert(i0 < rebuildVertices.size());
+        assert(i1 < rebuildVertices.size());
+        assert(i2 < rebuildVertices.size());
+        if(IsDegenerateSourceTriangleIndices(i0, i1, i2))
+            continue;
+
+        const VectorSingle p0 = VectorSingle(rebuildVertices[i0].position);
+        const VectorSingle p1 = VectorSingle(rebuildVertices[i1].position);
+        const VectorSingle p2 = VectorSingle(rebuildVertices[i2].position);
+        const VectorDouble areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
+        const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal).x;
+        if(!HasUsableSourceTriangleArea(areaLengthSquared, triangleAreaLengthSquaredEpsilon))
+            continue;
+
+        rebuildIndices.push_back(i0);
+        rebuildIndices.push_back(i1);
+        rebuildIndices.push_back(i2);
+    }
+    if(rebuildIndices.empty()){
+        error("Failed to build mesh: mesh has no valid triangles for tangent generation");
+        return MakeUnexpected(Failure());
+    }
+
+    const auto rebuildResult = RebuildFbxTangents(rebuildIndices, rebuildVertices, triangleAreaLengthSquaredEpsilon);
+    if(!rebuildResult.has_value()){
+        error("Failed to build mesh: failed to generate source tangent stream");
+        return MakeUnexpected(Failure());
+    }
+
+    HashMap<Vec4, u32> tangentLookup;
+    tangentLookup.reserve(inOutMesh.vertexRefs.size());
+    inOutMesh.tangents.clear();
+    for(usize vertexRefIndex = 0u; vertexRefIndex < inOutMesh.vertexRefs.size(); ++vertexRefIndex){
+        mut SourceVertexRef ref = inOutMesh.vertexRefs[vertexRefIndex];
+        in Vec3 storedNormal = inOutMesh.normals[ref.normal];
+        const VectorSingle storedTangent = VectorSingle(rebuildVertices[vertexRefIndex].tangent);
+        const VectorSingle normal = FrameNormalizeDirection(VectorSingle(storedNormal), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        const VectorSingle tangent = FrameResolveTangent(normal, VectorSingle(storedTangent.xyz, 0.0f), FrameFallbackTangent(normal));
+        if(!FrameValidDirection(tangent)){
+            error("Failed to build mesh: failed to resolve generated source tangent");
+            return MakeUnexpected(Failure());
+        }
+
+        const Vec4 generatedTangent = Vec4(VectorSingle(tangent.xyz, FrameTangentHandedness(storedTangent, VectorSingle(1.0f)).w));
+        const auto tangentIndex = InternSourceValue<Vec4>(generatedTangent, s_VertexRefTangentName, inOutMesh.tangents, tangentLookup);
+        if(!tangentIndex.has_value())
+            return MakeUnexpected(tangentIndex.error());
+        ref.tangent = tangentIndex.value();
+    }
+    outTangentReport.degenerateUvTriangleCount = rebuildResult.value().degenerateUvTriangleCount;
+    outTangentReport.fallbackTangentVertexCount = rebuildResult.value().fallbackTangentVertexCount;
+    outTangentReport.mode = ResolveGeneratedSourceTangentMode(usedDefaultUvs, rebuildResult.value().degenerateUvTriangleCount, rebuildResult.value().fallbackTangentVertexCount);
+    return outTangentReport;
+}
+
+[cpp_unwind]
+Expected<u32> InternSourceCorner(in SourceTriangleCorner corner, in b8 wantsSkinning, mut SourceMeshBuildContext inOutContext){
+    SourceVertexRef ref;
+    const auto positionIndex = InternSourceValue<Vec3>(corner.position, s_VertexRefPositionName, inOutContext.mesh.positions, inOutContext.positions);
+    if(!positionIndex.has_value())
+        return MakeUnexpected(positionIndex.error());
+    ref.position = positionIndex.value();
+    const auto normalIndex = InternSourceValue<Vec3>(corner.normal, s_VertexRefNormalName, inOutContext.mesh.normals, inOutContext.normals);
+    if(!normalIndex.has_value())
+        return MakeUnexpected(normalIndex.error());
+    ref.normal = normalIndex.value();
+    if(corner.hasTangent){
+        const auto tangentIndex = InternSourceValue<Vec4>(corner.tangent, s_VertexRefTangentName, inOutContext.mesh.tangents, inOutContext.tangents);
+        if(!tangentIndex.has_value())
+            return MakeUnexpected(tangentIndex.error());
+        ref.tangent = tangentIndex.value();
+    }
+    const auto uv0Index = InternSourceValue<Vec2>(corner.uv0, s_MeshUv0FieldNameView, inOutContext.mesh.uv0, inOutContext.uv0);
+    if(!uv0Index.has_value())
+        return MakeUnexpected(uv0Index.error());
+    ref.uv0 = uv0Index.value();
+    const auto colorIndex = InternSourceValue<Vec4>(corner.color, s_VertexRefColorName, inOutContext.mesh.colors, inOutContext.colors);
+    if(!colorIndex.has_value())
+        return MakeUnexpected(colorIndex.error());
+    ref.color = colorIndex.value();
+    if(wantsSkinning){
+        SkinInfluenceKey key;
+        key.value = corner.skin;
+        const auto skinIndex = InternSourceKey<MeshSkinInfluence, SkinInfluenceKey>(corner.skin, key, s_SkinAssetTypeText, inOutContext.mesh.skin, inOutContext.skin);
+        if(!skinIndex.has_value())
+            return MakeUnexpected(skinIndex.error());
+        ref.skin = skinIndex.value();
+    }
+
+    return InternSourceValue<SourceVertexRef>(ref, s_SourceVertexRefLabel, inOutContext.mesh.vertexRefs, inOutContext.vertexRefs);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

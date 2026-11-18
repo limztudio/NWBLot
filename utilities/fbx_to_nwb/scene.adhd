@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/fbx_to_nwb/types.adhd>
+#include <utilities/fbx_to_nwb/source_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,6 +40,133 @@ void AppendFbxMeshInstanceLine(
     if(!visible)
         outReport.append(" hidden");
     outReport.append(s_ReportLineEndText);
+}
+
+
+[cpp_unwind]
+Expected<UfbxDocument> LoadScene(in ImportOptions options){
+    UfbxDocument outScene;
+    UfbxLoadOptions loadOptions;
+    loadOptions.load_external_files = true;
+    loadOptions.ignore_missing_external_files = true;
+    loadOptions.generate_missing_normals = true;
+    loadOptions.normalize_normals = true;
+    loadOptions.clean_skin_weights = true;
+    loadOptions.evaluate_skinning = true;
+    loadOptions.evaluate_caches = true;
+    loadOptions.geometry_transform_handling = UfbxGeometryTransformHandling::UFBX_GEOMETRY_TRANSFORM_HANDLING_PRESERVE;
+
+    if(!options.preserveSpace){
+        loadOptions.target_axes.right = UfbxAxis::UFBX_COORDINATE_AXIS_POSITIVE_X;
+        loadOptions.target_axes.up = UfbxAxis::UFBX_COORDINATE_AXIS_POSITIVE_Y;
+        loadOptions.target_axes.front = UfbxAxis::UFBX_COORDINATE_AXIS_POSITIVE_Z;
+        loadOptions.target_unit_meters = s_TargetUnitMeters;
+    }
+
+    const Path path(options.inputPath);
+    const String pathText = PathToGenericString(path);
+    UfbxError loadError;
+    if(!outScene.load(pathText, loadOptions, loadError)){
+        Array<u8, s_UfbxErrorBufferSize> buffer;
+        String message;
+        FormatUfbxError(loadError, buffer, message);
+        error("Failed to load FBX: {}", message);
+        return MakeUnexpected(Failure());
+    }
+    return outScene;
+}
+
+[cpp_unwind]
+Vector<MeshInstance> CollectMeshInstances(in UfbxDocument scene, in b8 includeHidden){
+    Vector<MeshInstance> instances;
+    instances.reserve(scene.nodeCount());
+    for(usize i = 0u; i < scene.nodeCount(); ++i){
+        const UfbxNode node = scene.node(i);
+        const UfbxMesh mesh = UfbxNodeMesh(node);
+        if(!ShouldCollectMeshNode(node.valid(), mesh.valid(), includeHidden, node.visible()))
+            continue;
+        MeshInstance instance;
+        instance.node = node;
+        instance.mesh = mesh;
+        instance.index = instances.size();
+        instances.push_back(instance);
+    }
+    return instances;
+}
+
+[cpp_unwind]
+void PrintMeshInstances(in Span<MeshInstance> instances){
+    if(instances.empty()){
+        [essential] info("No mesh instances found.\n");
+        return;
+    }
+
+    String report;
+    report.reserve(32u + instances.size() * 64u);
+    report.append("Mesh instances:\n");
+    for(in MeshInstance instance : instances){
+        AppendFbxMeshInstanceLine(
+            instance.index,
+            instance.node.valid(),
+            instance.node.name(),
+            instance.mesh.name(),
+            instance.mesh.triangleCount(),
+            instance.node.visible(),
+            report
+        );
+    }
+    [essential] info("{}", report);
+}
+
+[cpp_unwind]
+Expected<Vector<usize>> SelectMeshInstances(in Span<MeshInstance> instances, in StringView selector){
+    Vector<usize> outSelection;
+    outSelection.reserve(ComputeMeshSelectionInitialCapacity(instances.size()));
+
+    const StringView normalized = TrimView(selector);
+    if(normalized.empty() || EqualsAsciiIgnoreCase(normalized, s_DefaultMeshSelectorText)){
+        for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
+            outSelection.push_back(instanceIndex);
+        return outSelection;
+    }
+    if(EqualsAsciiIgnoreCase(normalized, s_FirstMeshSelectorText)){
+        if(instances.empty()){
+            warning("Invalid mesh selector '{}': no mesh instances are available", selector);
+            return MakeUnexpected(Failure());
+        }
+        outSelection.push_back(0u);
+        return outSelection;
+    }
+
+    const auto parsedIndex = TryParseMeshIndexSelector(normalized);
+    if(parsedIndex.has_value()){
+        if(parsedIndex.value() >= instances.size()){
+            warning("Invalid mesh selector '{}': mesh index is out of range", selector);
+            return MakeUnexpected(Failure());
+        }
+        outSelection.push_back(parsedIndex.value());
+        return outSelection;
+    }
+
+    Vector<usize> partialSelection;
+    for(in MeshInstance instance : instances){
+        if(EqualsAsciiIgnoreCase(instance.node.name(), normalized) || EqualsAsciiIgnoreCase(instance.mesh.name(), normalized)){
+            outSelection.push_back(instance.index);
+        }
+        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(instance.node.name(), normalized) || ContainsAsciiIgnoreCase(instance.mesh.name(), normalized))){
+            if(partialSelection.empty())
+                partialSelection.reserve(instances.size());
+            partialSelection.push_back(instance.index);
+        }
+    }
+    if(!outSelection.empty())
+        return outSelection;
+    if(!partialSelection.empty()){
+        return partialSelection;
+    }
+
+    warning("Invalid mesh selector '{}': did not match any node or mesh", selector);
+    return MakeUnexpected(Failure());
 }
 
 

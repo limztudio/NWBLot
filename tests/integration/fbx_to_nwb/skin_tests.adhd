@@ -6,6 +6,10 @@
 #include <tests/common/test_context.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include "skin_name_cases.adhd"
+#include <utilities/fbx_to_nwb/skin.adhd>
+#include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd>
+#include <utilities/fbx_to_nwb/import_prompts.adhd>
+#include <utilities/fbx_to_nwb/mesh_refresh_parse.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,11 +21,6 @@ native{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <utilities/fbx_to_nwb/skin.adhd.h>
-#include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd.h>
-#include <utilities/fbx_to_nwb/import_prompts.adhd.h>
-#include <utilities/fbx_to_nwb/mesh_stream_types.adhd.h>
 
 #include <global/simdmath.h>
 
@@ -64,7 +63,6 @@ using FbxToNwb::IsValidFbxImportScale;
 using FbxToNwb::IsValidFbxTriangleAreaEpsilon;
 using FbxToNwb::s_MaxMeshReplacementCount;
 using FbxToNwb::s_MaxSkeletonJointCount;
-using ExportContext = FbxToNwb::FbxSkinDetail::ExportContext;
 using Impl::s_MeshMissingStreamIndex;
 using Impl::s_MeshletTriangleIndexCount;
 inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
@@ -237,7 +235,7 @@ void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
     options.scale = 1.0;
     MeshInstance instance = MeshInstance();
     for(u32 testCase = 0u; testCase < 3u; ++testCase){
-        ExportContext context(scratch.scratchArena);
+        FbxSkinExportContext context;
         b8 built = true;
         native(in instance, in options, in testCase, mut scratch, mut context, mut built){
             auto& scratchArena = scratch.scratchArena;
@@ -264,7 +262,7 @@ void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
             ufbx_skin_deformer skin{};
             skin.clusters.data = clusters;
             skin.clusters.count = 1u;
-            built = NWB::FbxToNwb::FbxSkinDetail::BuildClusterJointMap(instance, options, skin, scratchArena, context).has_value();
+            built = NWB::FbxToNwb::BuildClusterJointMap(scratchArena, instance, options, NWB::Core::Mesh::Ufbx::Skin{ &skin }, context).has_value();
         }
         EXPECT_FALSE(built);
         EXPECT_TRUE(context.joints.empty());
@@ -283,18 +281,18 @@ void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
     native(mut accepted){
         ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
         ufbx_node root{};
-        ufbx_node* joints[] = { &root };
+        const NWB::Core::Mesh::Ufbx::Node joints[] = { { &root } };
         NWB::FbxToNwb::JointMatrix bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
         NWB::FbxToNwb::JointMatrix inverse = bind;
-        using NWB::FbxToNwb::AssetWriterSkeletonDetail::BuildSkeletonOutputData;
+        using NWB::FbxToNwb::BuildSkeletonOutputData;
 
-        accepted[0u] = BuildSkeletonOutputData(joints, {}, { &inverse, 1u }, scratchArena).has_value();
-        accepted[1u] = BuildSkeletonOutputData(joints, { &bind, 1u }, {}, scratchArena).has_value();
+        accepted[0u] = BuildSkeletonOutputData(scratchArena, joints, {}, { &inverse, 1u }).has_value();
+        accepted[1u] = BuildSkeletonOutputData(scratchArena, joints, { &bind, 1u }, {}).has_value();
         bind._11 = Limit<f32>::s_Infinity;
-        accepted[2u] = BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena).has_value();
+        accepted[2u] = BuildSkeletonOutputData(scratchArena, joints, { &bind, 1u }, { &inverse, 1u }).has_value();
         bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
         inverse._11 = Limit<f32>::s_QuietNaN;
-        accepted[3u] = BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena).has_value();
+        accepted[3u] = BuildSkeletonOutputData(scratchArena, joints, { &bind, 1u }, { &inverse, 1u }).has_value();
     }
     for(usize index = 0u; index < accepted.size(); ++index)
         EXPECT_FALSE(accepted[index]);
@@ -311,16 +309,16 @@ void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
         constexpr AStringView longText = "zzzz a named joint longer than inline string storage";
         longName.name = { longText.data(), longText.size() };
         alpha.name = { "Alpha", 5u };
-        ufbx_node* joints[] = { &longName, &firstFallback, &alpha, &secondFallback };
+        const NWB::Core::Mesh::Ufbx::Node joints[] = { { &longName }, { &firstFallback }, { &alpha }, { &secondFallback } };
         const NWB::FbxToNwb::JointMatrix identity = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
         const NWB::FbxToNwb::JointMatrix matrices[] = { identity, identity, identity, identity };
-        const auto result = NWB::FbxToNwb::AssetWriterSkeletonDetail::BuildSkeletonOutputData(joints, matrices, matrices, scratchArena);
+        const auto result = NWB::FbxToNwb::BuildSkeletonOutputData(scratchArena, joints, matrices, matrices);
         ASSERT_TRUE(result.has_value());
         ASSERT_EQ(result->joints.size(), 4u);
-        EXPECT_EQ(result->joints[0u], &alpha);
-        EXPECT_EQ(result->joints[1u], &firstFallback);
-        EXPECT_EQ(result->joints[2u], &secondFallback);
-        EXPECT_EQ(result->joints[3u], &longName);
+        EXPECT_EQ(result->joints[0u].ptr, &alpha);
+        EXPECT_EQ(result->joints[1u].ptr, &firstFallback);
+        EXPECT_EQ(result->joints[2u].ptr, &secondFallback);
+        EXPECT_EQ(result->joints[3u].ptr, &longName);
     }
 }
 
@@ -328,16 +326,16 @@ void VerifyFbxSkin_FallbackNamesOnlyCollideWithPublishedNames(){
     native{
         ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
         using namespace NWB::FbxToNwb;
-        UtilityScratchVector<AString<::ArenaBase>> names(scratchArena);
+        ::Vector<AString<::ArenaBase>, ::ArenaBase> names(scratchArena);
         names.reserve(4u);
         ufbx_node unnamed{};
         ufbx_node named{};
         named.name = { "joint_2", 7u };
-        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&unnamed, 0u, names, scratchArena));
-        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&named, 1u, names, scratchArena));
-        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&unnamed, 2u, names, scratchArena));
+        names.push_back(MakeSkeletonJointName(scratchArena, NWB::Core::Mesh::Ufbx::Node{ &unnamed }, 0u, names));
+        names.push_back(MakeSkeletonJointName(scratchArena, NWB::Core::Mesh::Ufbx::Node{ &named }, 1u, names));
+        names.push_back(MakeSkeletonJointName(scratchArena, NWB::Core::Mesh::Ufbx::Node{ &unnamed }, 2u, names));
         named.name = { "joint_0", 7u };
-        names.push_back(AssetWriterSkeletonDetail::MakeSkeletonJointName(&named, 3u, names, scratchArena));
+        names.push_back(MakeSkeletonJointName(scratchArena, NWB::Core::Mesh::Ufbx::Node{ &named }, 3u, names));
         EXPECT_EQ(AStringView(names[0u]), "joint_0");
         EXPECT_EQ(AStringView(names[1u]), "joint_2");
         EXPECT_EQ(AStringView(names[2u]), "joint_2_1");

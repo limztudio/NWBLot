@@ -11,11 +11,14 @@
 #include <core/assets/auto_registration.adhd>
 #include <core/assets/binary_payload_io.adhd>
 #include <core/assets/bunch/cook.adhd>
+#include <core/assets/bunch/dependency_workspace.adhd>
 #include <core/assets/cook_dependency_registry.adhd>
 #include <core/assets/cook_entry_registry.adhd>
 #include <core/assets/cook_metadata.adhd>
 #include <core/assets/cook_paths.adhd>
+#include <core/assets/cook_workspace.adhd>
 #include <core/assets/volume/volume_prepare_registry.adhd>
+#include <core/assets/volume/cook_workspace.adhd>
 #include <core/assets/expanded_metadata.adhd>
 #include <core/assets/family_cook_registration.adhd>
 #include <core/assets/gather_merge_registry.adhd>
@@ -30,6 +33,7 @@
 #include <core/assets/reserved_asset_ref_parser.adhd>
 #include <core/assets/volume/arena_names.adhd>
 
+#include <core/common/cli/tool_cli.adhd>
 #include <core/common/arena_names.adhd>
 #include <core/common/frame_data.adhd>
 #include <core/common/logger_registration.adhd>
@@ -66,6 +70,7 @@
 #include <core/frame/arena_names.adhd>
 #include <core/frame/module.adhd>
 
+#include <core/graphics/basis_encoder.adhd>
 #include <core/graphics/basis_transcoder.adhd>
 #include <core/graphics/backend_selection/backend.adhd>
 #include <core/graphics/backend_selection/raster_types.adhd>

@@ -59,6 +59,10 @@ public:
     [[nodiscard]] i64 faceCount()const noexcept{ return m_face->num_faces; }
     [[nodiscard]] i64 glyphCount()const noexcept{ return m_face->num_glyphs; }
     [[nodiscard]] u32 unitsPerEm()const noexcept{ return m_face->units_per_EM; }
+    [[nodiscard]] i32 ascender()const noexcept{ return m_face->ascender; }
+    [[nodiscard]] i32 descender()const noexcept{ return m_face->descender; }
+    [[nodiscard]] i32 height()const noexcept{ return m_face->height; }
+    [[nodiscard]] i64 glyphAdvanceX()const noexcept{ return m_face->glyph->advance.x; }
     [[nodiscard]] b8 isSfnt()const noexcept{ return FT_IS_SFNT(m_face) != 0; }
     [[nodiscard]] b8 isScalable()const noexcept{ return FT_IS_SCALABLE(m_face) != 0; }
     [[nodiscard]] b8 hasMultipleMasters()const noexcept{ return FT_HAS_MULTIPLE_MASTERS(m_face) != 0; }
@@ -68,6 +72,7 @@ public:
     [[nodiscard]] i32 setPixelSizes(const u32 width, const u32 height)noexcept{ return FT_Set_Pixel_Sizes(m_face, width, height); }
     [[nodiscard]] i32 loadGlyph(const u32 glyph, const i32 flags)noexcept{ return FT_Load_Glyph(m_face, glyph, flags); }
     [[nodiscard]] i32 renderNormal()noexcept{ return FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL); }
+    [[nodiscard]] i32 renderSdf()noexcept{ return FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_SDF); }
     [[nodiscard]] b8 hasOutline()const noexcept{ return m_face->glyph->format == FT_GLYPH_FORMAT_OUTLINE; }
     [[nodiscard]] i32 outlinePointCount()const noexcept{ return m_face->glyph->outline.n_points; }
     [[nodiscard]] FT_BBox outlineControlBox()const noexcept{
@@ -120,9 +125,9 @@ public:
         m_memory.free = &Release;
         m_memory.realloc = &Reallocate;
     }
-    template<typename ArenaT>
-    FreeTypeFace([[maybe_unused]] ::ArenaBase& callerArena, const Vector<u8, ArenaT>& source)noexcept
-        : FreeTypeFace(source.get_allocator().arena())
+    template<typename T, typename ArenaT>
+    FreeTypeFace([[maybe_unused]] ::ArenaBase& callerArena, const Vector<T, ArenaT>& owner)noexcept
+        : FreeTypeFace(owner.get_allocator().arena())
     {}
     ~FreeTypeFace()noexcept{
         if(closeFace() != 0)
@@ -141,6 +146,10 @@ public:
         return FT_New_Library(&m_memory, &m_library);
     }
     void addDefaultModules()noexcept{ FT_Add_Default_Modules(m_library); }
+    template<typename ModuleArena, typename PropertyArena>
+    [[nodiscard]] i32 setUnsignedProperty(const ::AString<ModuleArena>& module, const ::AString<PropertyArena>& property, const u32 value)noexcept{
+        return FT_Property_Set(m_library, module.c_str(), property.c_str(), &value);
+    }
     [[nodiscard]] i32 open(const FontFileBytes& source, const i64 index)noexcept{
         if(m_view.m_face)
             return FT_Err_Invalid_Argument;

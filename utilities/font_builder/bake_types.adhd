@@ -3,6 +3,7 @@
 
 
 #include <utilities/font_builder/global.adhd>
+#include <impl/assets_font_atlas/model.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,25 @@ const StringView s_OverwriteOptionFlag = "--overwrite";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BakeOptions{
+    public Path source;
+    public Path output;
+    public u32 ppem = s_FontAtlasDefaultBakePpem;
+    public u32 spread = s_FontAtlasDefaultSpreadPixels;
+    public u32 extent = s_DefaultBakeExtent;
+    public u32 maxGroups = s_FontAtlasMaxGroupCount;
+    public b8 outline = false;
+    public b8 overwrite = false;
+}
+
+class RasterGlyph{
+    public FontAtlasGlyph record;
+    public Vector<u8> pixels;
+}
+
+type RasterGlyphs = Vector<RasterGlyph>;
 
 
 u64 ComputeBakePixelCapacity(in u32 extent, in u32 maxGroups){

@@ -60,7 +60,7 @@ Expected<usize> TryComputeTriangleIndexScratchCapacity(in usize maxFaceTriangles
     return maxFaceTriangles * cast<usize>(s_MeshletTriangleIndexCount);
 }
 
-b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut ScratchU32Vector inOutTriangleIndices){
+b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut Vector<u32> inOutTriangleIndices){
     const Expected<usize> triangleIndexCapacity = TryComputeTriangleIndexScratchCapacity(maxFaceTriangles);
     if(!triangleIndexCapacity.has_value())
         return false;

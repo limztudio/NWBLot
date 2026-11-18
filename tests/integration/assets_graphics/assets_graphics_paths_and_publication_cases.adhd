@@ -66,8 +66,8 @@ void PrepareFixturePathWorkload(in usize directoryCount, in StringView directory
     PrepareAssetPathWorkload(directoryCount, directoryToken, tokenRepeats, fixture);
 }
 
-b8 GatherBuiltToOutputHelper(mut TestArena testArena, in GraphicsTestPath builtDir, in GraphicsTestPath outDir, mut GraphicsScratchArena scratch){
-    return GatherBuiltDirectoryToOutput(testArena, builtDir, outDir, scratch.scratchArena);
+b8 GatherBuiltToOutputHelper(mut TestArena testArena, in GraphicsTestPath builtDir, in GraphicsTestPath outDir){
+    return GatherBuiltDirectoryToOutput(testArena, builtDir, outDir);
 }
 
 Expected<SamplerAsset> LoadCookedSamplerHelper(in GraphicsTestPath outputDirectory, in Name assetName, in usize expectedVolumeFileCount, mut TestArena testArena){
@@ -463,8 +463,7 @@ void VerifyAssetsGraphics_SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBu
     ASSERT_EQ(GraphicsPathUtf8ByteCount(builtDirectory), 200u);
     ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, builtDirectory, assetRoot, 2u));
 
-    GraphicsScratchArena scratch = GraphicsScratchArena(s_GatherScratchArena);
-    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, builtDirectory, outputDirectory, scratch));
+    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, builtDirectory, outputDirectory));
 
     Array<Name, 2> virtualPaths = Array<Name, 2>();
     virtualPaths[0u] = Name(s_FirstSamplerPath);
@@ -541,7 +540,7 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
         EXPECT_EQ(retainedArtifactBytes, originalArtifactBytes[index]);
     }
 
-    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, publishedDirectory, prepared.outputDirectory, scratch));
+    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, publishedDirectory, prepared.outputDirectory));
     Array<Name, 2> virtualPaths = Array<Name, 2>();
     virtualPaths[0u] = firstPath;
     virtualPaths[1u] = secondPath;

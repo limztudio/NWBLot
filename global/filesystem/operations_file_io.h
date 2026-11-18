@@ -6,6 +6,7 @@
 
 
 #include "operations.h"
+#include "crlf_output_stream.h"
 #include "../atomic.h"
 #include "../diagnostics.h"
 #include "../numeric_text.h"
@@ -258,6 +259,7 @@ public:
         if(!text.empty())
             m_stream.write(text.data(), static_cast<StreamSize>(text.size()));
     }
+    void writeCrlfText(const AStringView text){ CrlfOutputFileStream(m_stream) << text; }
     [[nodiscard]] b8 close(){ m_stream.close(); return m_stream.good(); }
 
 private:

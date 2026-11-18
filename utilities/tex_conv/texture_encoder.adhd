@@ -1,0 +1,222 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/tex_conv/module.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(cast<u8>(TexConvDimension::Texture2D) == cast<u8>(TexturePayloadDimension::Texture2D));
+static_assert(cast<u8>(TexConvDimension::TextureCube) == cast<u8>(TexturePayloadDimension::TextureCube));
+static_assert(cast<u8>(TexConvDimension::Texture3D) == cast<u8>(TexturePayloadDimension::Texture3D));
+static_assert(cast<u8>(TexConvPayloadFormat::UastcLdr4x4) == cast<u8>(TexturePayloadFormat::UastcLdr4x4));
+static_assert(cast<u8>(TexConvPayloadFormat::UastcHdr4x4) == cast<u8>(TexturePayloadFormat::UastcHdr4x4));
+static_assert(cast<u8>(TexConvAlphaMode::Opaque) == cast<u8>(TextureAlphaMode::Opaque));
+static_assert(cast<u8>(TexConvAlphaMode::EmbeddedLdr) == cast<u8>(TextureAlphaMode::EmbeddedLdr));
+static_assert(cast<u8>(TexConvAlphaMode::ConstantUnorm8) == cast<u8>(TextureAlphaMode::ConstantUnorm8));
+static_assert(cast<u8>(TexConvAlphaMode::SeparateUastcLdr4x4) == cast<u8>(TextureAlphaMode::SeparateUastcLdr4x4));
+static_assert(cast<u8>(MipChainLayoutFailure::InvalidMipChain) == 1u);
+static_assert(cast<u8>(MipChainLayoutFailure::BlockLayoutOverflow) == 3u);
+static_assert(cast<u8>(MipChainLayoutFailure::SliceCountInvalid) == 4u);
+static_assert(cast<u8>(MipChainLayoutFailure::ByteSizeOverflow) == 6u);
+static_assert(cast<u8>(StagedFilePairFailureStage::QueryOutput) == 1u);
+static_assert(cast<u8>(StagedFilePairFailureStage::InspectOutput) == 2u);
+static_assert(cast<u8>(StagedFilePairFailureStage::NonRegularOutput) == 3u);
+static_assert(cast<u8>(StagedFilePairFailureStage::OutputAlreadyExists) == 5u);
+static_assert(cast<u8>(StagedFilePairFailureStage::QueryWorkPath) == 6u);
+static_assert(cast<u8>(StagedFilePairFailureStage::WorkPathAlreadyExists) == 7u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PreparedTexture{
+    public Vector<u8> bytes;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 1u;
+    public u32 mipCount = 0u;
+    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
+    public TexturePayloadFormat format = TexturePayloadFormat::UastcLdr4x4;
+    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
+    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+}
+
+class TextureMipPlanes{
+    public Vector<BasisFloatImage> planes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 GenerateNextMip(in TextureMipPlanes source, in TexturePayloadDimension dimension, mut TextureMipPlanes target){
+    if(source.planes.empty())
+        return false;
+    const u32 width = NextMipExtent(source.planes.front().width());
+    const u32 height = NextMipExtent(source.planes.front().height());
+    Vector<BasisFloatImage> filtered;
+    filtered.resize(source.planes.size());
+    for(usize index = 0u; index < source.planes.size(); ++index){
+        filtered[index].resize(width, height);
+        if(!filtered[index].resampleFrom(source.planes[index], s_MipFilter, s_ColorChannelCount)){
+            error("tex_conv: failed to filter linear mip planes.");
+            return false;
+        }
+    }
+    if(dimension != TexturePayloadDimension::Texture3D || filtered.size() == 1u){
+        TransferVector<BasisFloatImage>(target.planes, filtered);
+        return true;
+    }
+
+    const u32 sourceDepth = cast<u32>(filtered.size());
+    const VectorSingle inverseDepth = ComputeVolumeMipInverseDepth(sourceDepth);
+    const u32 targetDepth = ComputeVolumeMipTargetDepth(sourceDepth);
+    target.planes.resize(targetDepth);
+    for(u32 z = 0u; z < targetDepth; ++z){
+        const VolumeMipZSlabRange slab = ComputeVolumeMipZSlabRange(z, sourceDepth, targetDepth);
+        target.planes[z].resize(width, height);
+        for(u32 y = 0u; y < height; ++y){
+            for(u32 x = 0u; x < width; ++x){
+                VectorSingle sum = VectorSingle(0.0f);
+                for(u32 sourceZ = slab.first; sourceZ < slab.end; ++sourceZ)
+                    sum = AccumulateVolumeMipZSlabTexel(slab, sourceZ, targetDepth, filtered[sourceZ].pixel(x, y), sum);
+                target.planes[z].setPixel(x, y, sum * inverseDepth);
+            }
+        }
+    }
+    return true;
+}
+
+Expected<TexConvAlphaTransport> DeriveAlphaTransport(in Vector<TextureMipPlanes> mips, in TexturePayloadFormat format){
+    TexConvAlphaAccumulator accumulator(s_OpaqueAlphaUnorm8);
+    for(in TextureMipPlanes mip : mips){
+        for(in BasisFloatImage plane : mip.planes){
+            for(u32 y = 0u; y < plane.height(); ++y){
+                for(u32 x = 0u; x < plane.width(); ++x){
+                    const auto alpha = TryQuantizeTexConvMipAlpha(plane.pixel(x, y));
+                    if(!alpha.has_value())
+                        return MakeUnexpected(Failure());
+                    accumulator.observe(alpha.value(), s_OpaqueAlphaUnorm8);
+                }
+            }
+        }
+    }
+    return TryResolveTexConvAlphaTransport(accumulator.found, accumulator.opaque, format == TexturePayloadFormat::UastcLdr4x4,
+        accumulator.constant, accumulator.firstAlpha, s_OpaqueAlphaUnorm8);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AppendEncodedMip(in BasisMipEncoder encoder, in TextureMipLevelLayout mip, mut Vector<u8> bytes){
+    if(!encoder.matchesFormat() || encoder.sliceCount() != mip.sliceCount || encoder.sliceCount() != encoder.imageCount())
+        return false;
+    Vector<usize> slices;
+    slices.resize(mip.sliceCount, s_InvalidSlice);
+    const u64 planeByteCount = ComputeTexConvMipPlaneByteCount(mip.sizeBytes, mip.sliceCount);
+    for(u32 index = 0u; index < mip.sliceCount; ++index){
+        const auto desc = encoder.slice(index);
+        if(!IsValidTexConvEncodedSliceDesc(desc.sourceIndex, desc.mipIndex, desc.width, desc.height, desc.blocksX, desc.blocksY,
+            encoder.sliceBytes(index).size(), mip.sliceCount, mip.width, mip.height, mip.blockCountX, mip.blockCountY, planeByteCount,
+            SelectTexConvSliceEntry(desc.sourceIndex, mip.sliceCount, slices)))
+            return false;
+        slices[desc.sourceIndex] = index;
+    }
+    assert(mip.sizeBytes <= usize.max && bytes.size() <= usize.max - cast<usize>(mip.sizeBytes));
+    for(in usize index : slices){
+        assert(index != s_InvalidSlice);
+        const Span<u8> blocks = encoder.sliceBytes(cast<u32>(index));
+        bytes.insert(bytes.end(), blocks.begin(), blocks.end());
+    }
+    return true;
+}
+
+b8 EncodeMip(in TextureMipPlanes mip, in TexturePayloadDimension dimension, in TexturePayloadFormat format, in b8 alphaOnly,
+    in TextureMipLevelLayout layout, mut Vector<u8> bytes){
+    const b8 hdr = ResolveTexConvMipHdrMode(alphaOnly, IsHdrTexturePayloadFormat(format));
+    BasisMipEncoder encoder(s_EncoderWorkerCount, hdr, dimension);
+    for(u32 index = 0u; index < mip.planes.size(); ++index){
+        in BasisFloatImage plane = mip.planes[index];
+        encoder.addPlane(layout.width, layout.height);
+        for(u32 y = 0u; y < layout.height; ++y){
+            for(u32 x = 0u; x < layout.width; ++x){
+                const VectorSingle pixel = plane.pixel(x, y);
+                if(hdr)
+                    encoder.setHdrPixel(index, x, y, VectorSingle(pixel, 1.0f));
+                else
+                    encoder.setBytePixel(index, x, y, QuantizeTexConvUnormBytes(pixel, alphaOnly, s_OpaqueAlphaUnorm8));
+            }
+        }
+    }
+    if(!encoder.initialize()){
+        error("tex_conv: Basis Universal failed to initialize a linear mip encoder.");
+        return false;
+    }
+    const i32 code = encoder.process();
+    if(code != 0){
+        error("tex_conv: Basis Universal failed to encode a linear mip, error {}.", code);
+        return false;
+    }
+    if(!AppendEncodedMip(encoder, layout, bytes)){
+        error("tex_conv: Basis Universal returned an invalid mip layout.");
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 EncodeLinearTexture(mut TextureMipPlanes base, mut PreparedTexture payload){
+    Vector<TextureMipLevelLayout> levels;
+    TextureMipChainLayoutError layoutError;
+    if(!CollectMipChainLayout(payload.format, payload.dimension, payload.width, payload.height, payload.depth, levels, layoutError)){
+        LogTexConvMipChainFailure(cast<u8>(layoutError.failure), layoutError.mipIndex);
+        return false;
+    }
+    Vector<TextureMipPlanes> mips;
+    mips.reserve(levels.size());
+    AppendArenaElement<TextureMipPlanes>(mips);
+    TransferVector<BasisFloatImage>(mips.front().planes, base.planes);
+    for(usize level = 1u; level < levels.size(); ++level){
+        AppendArenaElement<TextureMipPlanes>(mips);
+        if(!GenerateNextMip(mips[level - 1u], payload.dimension, mips[level]))
+            return false;
+    }
+    const auto alpha = DeriveAlphaTransport(mips, payload.format);
+    if(!alpha.has_value())
+        return false;
+    if(!InitializeBasisEncoder()){
+        error("tex_conv: failed to initialize Basis Universal.");
+        return false;
+    }
+    payload.alphaMode = cast<TextureAlphaMode>(alpha.value().mode);
+    payload.alphaConstantUnorm8 = alpha.value().constantUnorm8;
+    payload.mipCount = cast<u32>(levels.size());
+    const b8 separateAlpha = payload.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4;
+    const auto size = TryComputeTexConvPayloadByteCount(levels.back().offsetBytes + levels.back().sizeBytes, separateAlpha);
+    if(!size.has_value())
+        return false;
+    payload.bytes.reserve(size.value());
+    for(usize level = 0u; level < levels.size(); ++level){
+        if(!EncodeMip(mips[level], payload.dimension, payload.format, false, levels[level], payload.bytes))
+            return false;
+    }
+    if(separateAlpha){
+        for(usize level = 0u; level < levels.size(); ++level){
+            if(!EncodeMip(mips[level], payload.dimension, payload.format, true, levels[level], payload.bytes))
+                return false;
+        }
+    }
+    assert(payload.bytes.size() == size.value());
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

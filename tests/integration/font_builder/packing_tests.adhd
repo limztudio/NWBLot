@@ -177,7 +177,7 @@ void VerifyFontAtlasPacking_TightRectanglesAndAllChannelCountsPreserveGuardedPix
             glyph.pixels.resize(28u * 29u, cast<u8>((index + 1u) * 17u));
         }
         FontAtlasPayload payload(testArena.arena);
-        ASSERT_TRUE(PackGlyphs(options, glyphs, testArena.scratchArena, payload));
+        ASSERT_TRUE(PackGlyphs(options, glyphs, payload));
         ASSERT_EQ(payload.groups.size(), 2u);
         EXPECT_EQ(payload.groups[0u].channelCount, 4u);
         EXPECT_EQ(payload.groups[1u].channelCount, tailChannels);
@@ -225,7 +225,7 @@ void VerifyFontAtlasPacking_RejectsCapacityWithoutDroppingGlyphs(){
         glyph.pixels.resize(28u * 28u, 128u);
     }
     FontAtlasPayload payload(testArena.arena);
-    EXPECT_FALSE(PackGlyphs(options, glyphs, testArena.scratchArena, payload));
+    EXPECT_FALSE(PackGlyphs(options, glyphs, payload));
 }
 
 void VerifyFontAtlasPositioning_LegacyPairsStayBoundedAndSorted(){

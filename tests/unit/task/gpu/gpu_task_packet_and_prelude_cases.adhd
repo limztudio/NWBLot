@@ -1492,10 +1492,10 @@ void VerifyGpuPacket_NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots(){
 void VerifyGpuPacket_CopyBufferTaskRequiresTypedBufferImports(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> sourceResult = AddBufferMetadata(graph, s_GpuCaseTaskGraphBuiltInBufferCopySource, "Built-In Buffer Copy Source");
+    const Expected<GpuGraphResourceId> sourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphBuiltInBufferCopySource, "Built-In Buffer Copy Source");
     ASSERT_TRUE(sourceResult.has_value());
     const GpuGraphResourceId source = sourceResult.value();
-    const Expected<GpuGraphResourceId> destinationResult = AddBufferMetadata(graph, s_GpuCaseTaskGraphBuiltInBufferCopyDestination, "Built-In Buffer Copy Destination");
+    const Expected<GpuGraphResourceId> destinationResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphBuiltInBufferCopyDestination, "Built-In Buffer Copy Destination");
     ASSERT_TRUE(destinationResult.has_value());
     const GpuGraphResourceId destination = destinationResult.value();
     ASSERT_TRUE(source.valid());
@@ -1845,11 +1845,11 @@ void VerifyGpuPacket_DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCross
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> textureResult = AddTextureMetadata(graph, s_GpuCaseTaskGraphOwnershipScoreTexture, "Ownership Score Texture");
+    const Expected<GpuGraphResourceId> textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphOwnershipScoreTexture, "Ownership Score Texture");
     ASSERT_TRUE(textureResult.has_value());
     const GpuGraphResourceId texture = textureResult.value();
     ASSERT_TRUE(texture.valid());
-    const Expected<GpuGraphResourceId> secondTextureResult = AddTextureMetadata(graph, s_GpuCaseTaskGraphOwnershipScoreSecondTexture, "Ownership Score Second Texture");
+    const Expected<GpuGraphResourceId> secondTextureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphOwnershipScoreSecondTexture, "Ownership Score Second Texture");
     ASSERT_TRUE(secondTextureResult.has_value());
     const GpuGraphResourceId secondTexture = secondTextureResult.value();
     ASSERT_TRUE(secondTexture.valid());

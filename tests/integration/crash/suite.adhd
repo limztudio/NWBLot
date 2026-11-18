@@ -14,7 +14,6 @@
 
 
 const u32 s_PackageReadyTimeoutMS = 3000u;
-const StringView s_SpoolDirectory = "spool";
 const StringView s_ApplicationVersion = "1";
 const StringView s_Crash001 = "crash-001";
 const StringView s_Crash002 = "crash-002";
@@ -45,7 +44,7 @@ b8 CreatePackageDirectory(in StringView testGroup, in StringView bucketName, in 
 
 void CopyCrashPath<const usize N>(in Path source, mut Array<CrashChar, N> destination){
     const String text = PathToString(source);
-    SetCrashText(destination, StringView(text));
+    CopyFixedBuffer(destination, StringView(text));
 }
 
 void FillPackageRequest(in Path spoolDirectory, in StringView crashId, mut CrashRequest request){
@@ -54,11 +53,11 @@ void FillPackageRequest(in Path spoolDirectory, in StringView crashId, mut Crash
     request.reasonKind = cast<u32>(RequestReason::ManualDump);
     request.processId = CurrentProcessId();
     request.threadId = CurrentThreadId();
-    SetCrashText(request.crashId, crashId);
-    SetCrashText(request.applicationName, s_CrashTests);
-    SetCrashText(request.versionText, s_ApplicationVersion);
-    SetCrashText(request.buildId, s_Test);
-    SetCrashText(request.abi, CurrentAbiName());
+    CopyFixedBuffer(request.crashId, crashId);
+    CopyFixedBuffer(request.applicationName, s_CrashTests);
+    CopyFixedBuffer(request.versionText, s_ApplicationVersion);
+    CopyFixedBuffer(request.buildId, s_Test);
+    CopyFixedBuffer(request.abi, CurrentAbiName());
     CopyCrashPath(spoolDirectory, request.spoolDirectory);
 }
 
@@ -131,8 +130,8 @@ class CrashDiagnosticObserver{
         if(record.category != this.category)
             return;
         ++this.count;
-        SetCrashText(this.message, record.message);
-        SetCrashText(this.operation, record.expression);
+        CopyFixedBuffer(this.message, record.message);
+        CopyFixedBuffer(this.operation, record.expression);
         if(this.checkMutex){
             mut CrashRuntimeState state = TestCrashState();
             if(state.mutex.try_lock()){
@@ -198,24 +197,24 @@ void VerifyCrashArchiveUpload_ResultOwnsBytesAfterWorkingScratchExpires(mut Cras
 void VerifyCrashArchiveUpload_UnsupportedProtocolPreservesFailureAndPendingRetry(mut CrashArchiveUpload self){
     const StringView crashId = "crash-unsupported-protocol";
     const Path spoolDirectory = self.m_root / "spool";
-    const Path pending = spoolDirectory / s_PendingBucket / crashId;
+    const Path pending = spoolDirectory / s_PendingDirectoryName / crashId;
     ASSERT_TRUE(EnsureDirectories(pending).has_value());
     ASSERT_TRUE(WriteTextFile(pending / "marker.txt", "package"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
     CopyCrashPath(spoolDirectory, snapshot.spoolDirectory);
-    SetCrashText(snapshot.logServerUrl, "nwb-unsupported://local");
+    CopyFixedBuffer(snapshot.logServerUrl, "nwb-unsupported://local");
     UninstallCrashHandler();
     {
         CrashDiagnosticObserver observed("crash_package_upload", false);
         CrashDiagnosticSubscription<CrashDiagnosticObserver> registration(observed);
         EXPECT_FALSE(FlushTestCrashReports(self.m_arena, snapshot));
         EXPECT_EQ(observed.count, 1u);
-        EXPECT_EQ(CrashText(observed.operation), "perform_upload");
-        EXPECT_TRUE(Contains(CrashText(observed.message), "curl code="));
+        EXPECT_EQ(FixedBufferView(observed.operation), "perform_upload");
+        EXPECT_TRUE(Contains(FixedBufferView(observed.message), "curl code="));
     }
     ExpectIsDirectory(pending, true);
-    ExpectIsDirectory(spoolDirectory / s_UploadingBucket / crashId, false);
-    EXPECT_TRUE(TextFileContains(pending / s_UploadAttemptFileName, s_RetryPendingState));
+    ExpectIsDirectory(spoolDirectory / s_UploadingDirectoryName / crashId, false);
+    EXPECT_TRUE(TextFileContains(pending / s_UploadAttemptFileName, s_UploadAttemptRetryPendingState));
 }
 
 void RejectUnterminatedCrashText<const usize N>(mut CrashRequest request, mut Array<CrashChar, N> text){
@@ -227,7 +226,7 @@ void RejectUnterminatedCrashText<const usize N>(mut CrashRequest request, mut Ar
 
 void VerifyCrash_RequestAdmissionRejectsCorruptCountsAndUnterminatedText(){
     CrashRequest request = CrashRequest();
-    SetCrashText(request.crashId, "crash-1-1");
+    CopyFixedBuffer(request.crashId, "crash-1-1");
     ASSERT_TRUE(IsCurrentCrashRequest(request));
 
     request.metadataCount = s_CrashMaxMetadata + 1u;
@@ -258,17 +257,17 @@ void VerifyCrash_RequestAdmissionRejectsCorruptCountsAndUnterminatedText(){
     RejectUnterminatedCrashText(request, request.breadcrumbs[0u].category);
     RejectUnterminatedCrashText(request, request.breadcrumbs[0u].message);
     EXPECT_TRUE(IsCurrentCrashRequest(request));
-    SetCrashText(request.crashId, "../outside");
+    CopyFixedBuffer(request.crashId, "../outside");
     EXPECT_FALSE(IsCurrentCrashRequest(request));
-    SetCrashText(request.crashId, "..\\outside");
+    CopyFixedBuffer(request.crashId, "..\\outside");
     EXPECT_FALSE(IsCurrentCrashRequest(request));
 }
 
 void VerifyCrash_AckAdmissionRequiresBoundedTerminatedIdentity(){
     CrashRequest request = CrashRequest();
     CrashAck ack = CrashAck();
-    SetCrashText(request.crashId, "crash-1-1");
-    SetCrashText(ack.crashId, "crash-1-1");
+    CopyFixedBuffer(request.crashId, "crash-1-1");
+    CopyFixedBuffer(ack.crashId, "crash-1-1");
     EXPECT_TRUE(CrashAckMatchesRequest(ack, request));
     ack.packageWritten = 2u;
     EXPECT_FALSE(CrashAckMatchesRequest(ack, request));
@@ -297,7 +296,7 @@ void VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(){
     RemoveTestArtifacts(group);
     const Path spool = SpoolDirectory(group);
     String crashIdText = String();
-    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(installArena);
     config.applicationName = s_CrashTests;
@@ -318,7 +317,7 @@ void VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(){
     EXPECT_EQ(result.status, CrashDumpStatus::PackageWritten);
     crashIdText = TestCrashId(CurrentProcessId(), 1u);
 
-    const Path packageDirectory = PackageDirectory(group, s_PendingBucket, crashIdText);
+    const Path packageDirectory = PackageDirectory(group, s_PendingDirectoryName, crashIdText);
     ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
     ExpectIsRegularFile(packageDirectory / s_CallstackFileName, true);
     // Frame #1 proves unwinding walked past the leaf frame without frame pointers.
@@ -335,7 +334,7 @@ void VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage(){
     RemoveTestArtifacts(group);
     const Path spool = SpoolDirectory(group);
     String crashIdText = String();
-    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(installArena);
     config.applicationName = s_CrashTests;
@@ -356,7 +355,7 @@ void VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage(){
     EXPECT_EQ(result.status, CrashDumpStatus::PackageWritten);
     crashIdText = TestCrashId(CurrentProcessId(), 1u);
 
-    const Path packageDirectory = PackageDirectory(group, s_PendingBucket, crashIdText);
+    const Path packageDirectory = PackageDirectory(group, s_PendingDirectoryName, crashIdText);
     ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
     ExpectIsRegularFile(packageDirectory / s_GpuCrashReportFileName, true);
     ExpectPathExists(packageDirectory / s_GpuDetectiveCaptureFileName, false);
@@ -379,7 +378,7 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
     const i32 child = ForkTestChild();
     ASSERT_GE(child, 0);
     if(child == 0){
-        PersistentStorage installArena(s_SignalChildInstallArena, CrashStorageAlignedSize(64u * 1024u));
+        PersistentStorage installArena(s_SignalChildInstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
         TestValueSlot<PersistentCrashConfig> slot;
         mut PersistentCrashConfig config = slot.constructIn(installArena);
         config.applicationName = s_CrashTests;
@@ -401,7 +400,7 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
 
     if(childSpawned){
         EXPECT_TRUE(signaledBySegv);
-        const Path packageDirectory = PackageDirectory(group, s_PendingBucket, crashIdText);
+        const Path packageDirectory = PackageDirectory(group, s_PendingDirectoryName, crashIdText);
         const u32 missingPackageReadyTimeoutMs = 1000u;
         ExpectDirectoryReady(packageDirectory, missingPackageReadyTimeoutMs);
         ExpectIsRegularFile(packageDirectory / s_ManifestFileName, true);

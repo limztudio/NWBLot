@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/integration/asset_fixture_paths.adhd>
 #include <impl/assets_font/asset.adhd>
 #include <impl/assets_font/sfnt_directory.adhd>
 #include <impl/assets_font_atlas/asset.adhd>
@@ -20,20 +21,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("NWB_REPO_ROOT")]
-extern const StringView s_RepoRoot;
-
 const f32 s_InfinityF32 = BitCast<f32>(0x7f800000u);
 const f64 s_InfinityF64 = BitCast<f64>(0x7ff0000000000000ul);
 const f64 s_QuietNaNF64 = BitCast<f64>(0x7ff8000000000000ul);
-
-Vector<u8> CopyAtlasBytes(in Span<u8> source){
-    Vector<u8> result;
-    result.reserve(source.size());
-    for(in u8 byte : source)
-        result.push_back(byte);
-    return result;
-}
 
 const StringView s_BodyFontPath = "project/fonts/body";
 const StringView s_BodyFontAtlasPath = "project/fonts/body_atlas";
@@ -182,26 +172,22 @@ b8 HasValueField(in MetascriptValue value, in StringView field){
     return value.hasField(field);
 }
 
-Path BundledFontRoot(){
-    return Path(s_RepoRoot) / "impl" / "assets" / "ui" / "fonts" / "default";
-}
-
 Path ScratchRoot(in StringView subDir){
-    return Path(s_RepoRoot) / "__artifacts" / "font_metadata_tests" / subDir;
+    return Path(s_CookTestRepoRoot) / "__artifacts" / "font_metadata_tests" / subDir;
 }
 
 b8 PrepareFiles(in Path directory){
     if(!EnsureDirectories(directory).has_value())
         return false;
     Vector<u8> bytes;
-    if(!ReadBinaryFile(BundledFontRoot() / s_LatinFontFilename, bytes).has_value())
+    if(!ReadBinaryFile(BundledFontFixtureDirectory(s_CookTestRepoRoot) / s_LatinFontFilename, bytes).has_value())
         return false;
     return WriteBinaryFile(directory / s_LatinFontFilename, bytes);
 }
 
 b8 LoadMetadata(mut MetascriptDocument document){
     String text = "";
-    if(!ReadTextFile(BundledFontRoot() / s_LatinMetadataFilename, text).has_value())
+    if(!ReadTextFile(BundledFontFixtureDirectory(s_CookTestRepoRoot) / s_LatinMetadataFilename, text).has_value())
         return false;
     return document.parse(text);
 }
@@ -321,7 +307,7 @@ void VerifyAssetsFontAtlas_FontIdentityPreservesUpperHashLanesAndRejectsOldVersi
 
     FontAtlas atlas(Name(s_BodyFontAtlasPath));
     atlas.setPayload(payload);
-    Vector<u8> obsolete = CopyAtlasBytes(binary);
+    Vector<u8> obsolete = CopyFontFixtureBytes(binary);
     WriteLittleU32At(obsolete, 4u, 2u);
     EXPECT_FALSE(atlas.loadBinary(obsolete));
     EXPECT_EQ(atlas.payload().font.name().hash(), identity);
@@ -355,24 +341,24 @@ void VerifyAssetsFontAtlas_MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas(){
     for(usize index = 0u; index < corruptAtlasOffsets.size(); ++index){
         const usize offset = corruptAtlasOffsets[index];
         const ScopedTestTrace trace(offset);
-        Vector<u8> invalid = CopyAtlasBytes(valid);
+        Vector<u8> invalid = CopyFontFixtureBytes(valid);
         WriteLittleU32At(invalid, offset, u32.max);
         EXPECT_FALSE(atlas.loadBinary(invalid));
         EXPECT_EQ(atlas.payload().fontSha256, payload.fontSha256);
         EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
     }
-    Vector<u8> legacy = CopyAtlasBytes(valid);
+    Vector<u8> legacy = CopyFontFixtureBytes(valid);
     WriteLittleU32At(legacy, 4u, 2u);
     EXPECT_FALSE(atlas.loadBinary(legacy));
     EXPECT_EQ(atlas.payload().font.name(), payload.font.name());
-    Vector<u8> changed = CopyAtlasBytes(valid);
+    Vector<u8> changed = CopyFontFixtureBytes(valid);
     changed.back() ^= 1u;
     EXPECT_FALSE(atlas.loadBinary(changed));
     EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
-    Vector<u8> truncated = CopyAtlasBytes(valid);
+    Vector<u8> truncated = CopyFontFixtureBytes(valid);
     truncated.pop_back();
     EXPECT_FALSE(atlas.loadBinary(truncated));
-    Vector<u8> trailing = CopyAtlasBytes(valid);
+    Vector<u8> trailing = CopyFontFixtureBytes(valid);
     trailing.push_back(0u);
     EXPECT_FALSE(atlas.loadBinary(trailing));
 }
@@ -452,7 +438,7 @@ void VerifyAssetsFontAtlas_UnsupportedVersionsAndCompactGroupHeadersAreRejected(
         const usize offset = invalidFields[index].m_offset;
         const u32 value = invalidFields[index].m_value;
         const ScopedTestTrace trace(offset);
-        Vector<u8> invalid = CopyAtlasBytes(binary);
+        Vector<u8> invalid = CopyFontFixtureBytes(binary);
         WriteLittleU32At(invalid, offset, value);
         EXPECT_FALSE(CanDeserializePayload(invalid));
     }
@@ -473,7 +459,7 @@ void VerifyAssetsFontAtlas_CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutp
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     Vector<u8> binary;
     binary.assign(3u, 42u);
-    const Vector<u8> expected = CopyAtlasBytes(binary);
+    const Vector<u8> expected = CopyFontFixtureBytes(binary);
     FontAtlas unnamed;
     unnamed.setPayload(MakePayload());
     EXPECT_FALSE(SerializeFontAtlasAsset(unnamed, binary));
@@ -617,10 +603,10 @@ void VerifyAssetsFontAtlas_OriginalSourcePositioningSetAndBytesMustMatchTheShapi
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     Font font(Name(s_BodyFontPath));
     FontAtlasPayload payload = MakePayload();
-    const Path sourcePath = BundledFontRoot() / s_LatinFontFilename;
+    const Path sourcePath = BundledFontFixtureDirectory(s_CookTestRepoRoot) / s_LatinFontFilename;
     const Expected<Vector<u8>, StringView> bytesResult = ReadBundledFontBytes(sourcePath);
     ASSERT_TRUE(bytesResult.has_value());
-    Vector<u8> loadedFontBytes = CopyAtlasBytes(bytesResult.value());
+    Vector<u8> loadedFontBytes = CopyFontFixtureBytes(bytesResult.value());
     font.setFontBytes(loadedFontBytes);
     ASSERT_TRUE(font.validatePayload());
     payload.fontSha256 = ComputeSha256(font.fontBytes());
@@ -955,18 +941,18 @@ void VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAre
     ASSERT_TRUE(ReadBinaryFile(fontPath, originalFont).has_value());
     ASSERT_FALSE(originalFont.empty());
 
-    Vector<u8> truncated = CopyAtlasBytes(originalFont);
+    Vector<u8> truncated = CopyFontFixtureBytes(originalFont);
     truncated.pop_back();
     ASSERT_TRUE(WriteBinaryFile(fontPath, truncated));
     EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, face).has_value());
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
-    Vector<u8> corrupted = CopyAtlasBytes(originalFont);
+    Vector<u8> corrupted = CopyFontFixtureBytes(originalFont);
     corrupted.back() ^= 1u;
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
-    corrupted = CopyAtlasBytes(originalFont);
+    corrupted = CopyFontFixtureBytes(originalFont);
     ASSERT_GT(corrupted.size(), 24u);
     // The SFNT digest follows the six u32 prepared-source header fields.
     corrupted[24u] ^= 1u;
@@ -975,7 +961,7 @@ void VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAre
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
     Vector<u8> otherFont;
-    ASSERT_TRUE(ReadBinaryFile(BundledFontRoot() / "korean.font", otherFont).has_value());
+    ASSERT_TRUE(ReadBinaryFile(BundledFontFixtureDirectory(s_CookTestRepoRoot) / "korean.font", otherFont).has_value());
     ASSERT_TRUE(WriteBinaryFile(fontPath, otherFont));
     const Expected<FontCookEntry> replacementFontParseResult = ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, face);
     ASSERT_TRUE(replacementFontParseResult.has_value());

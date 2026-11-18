@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADOW_SLOT_COUNT")]
+extern const u32 s_ShaderSceneShadowSlotCount;
+
 const u32 s_SceneShadowSlotCount = 8u;
 const u32 s_ShadowReceiverFactorHalf = cast<u32>(ShadowReceiverResolution::Half);
 const u32 s_ShadowReceiverFactorQuarter = cast<u32>(ShadowReceiverResolution::Quarter);

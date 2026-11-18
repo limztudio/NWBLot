@@ -126,85 +126,15 @@ class UiWindowSmokeScene : IUiSmokeScene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView UiTextAreaSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "bounds";
-    case 1u:
-        return "content";
-    case 2u:
-        return "clip";
-    case 3u:
-        return "caret";
-    case 4u:
-        return "reset";
-    case 5u:
-        return "long";
-    case 6u:
-        return "readonly";
-    case 7u:
-        return "enabled";
-    case 8u:
-        return "viewport";
-    case 9u:
-        return "clipboard";
-    case 10u:
-        return "outside";
-    case 11u:
-        return "x_track";
-    case 12u:
-        return "x_thumb";
-    case 13u:
-        return "y_track";
-    case 14u:
-        return "y_thumb";
-    case 15u:
-        return "corner";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 16u> s_UiTextAreaSmokeRectNames(
+    "bounds", "content", "clip", "caret", "reset", "long", "readonly", "enabled", "viewport", "clipboard", "outside", "x_track", "x_thumb", "y_track", "y_thumb",
+    "corner"
+);
 
-StringView UiTextureImageSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "before";
-    case 1u:
-        return "after";
-    case 2u:
-        return "default_tile";
-    case 3u:
-        return "alternate_tile";
-    case 4u:
-        return "tinted";
-    case 5u:
-        return "zero_alpha";
-    case 6u:
-        return "frozen";
-    case 7u:
-        return "external";
-    case 8u:
-        return "external_clip";
-    case 9u:
-        return "default_atlas";
-    case 10u:
-        return "alternate_atlas";
-    case 11u:
-        return "skin_fill";
-    case 12u:
-        return "parent_image";
-    case 13u:
-        return "child_image";
-    case 14u:
-        return "parent";
-    case 15u:
-        return "child";
-    case 16u:
-        return "builder_image";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 17u> s_UiTextureImageSmokeRectNames(
+    "before", "after", "default_tile", "alternate_tile", "tinted", "zero_alpha", "frozen", "external", "external_clip", "default_atlas", "alternate_atlas",
+    "skin_fill", "parent_image", "child_image", "parent", "child", "builder_image"
+);
 
 void CancelSmokeClipboardTokenOnExit(mut IClipboardService clipRef, in ClipboardRequestToken token){
     if(token.valid() && !clipRef.cancel(token))
@@ -643,7 +573,7 @@ b8 UiTextAreaSmokeScene::observeState(mut UiPaintContext context){
     current.values[23u] = cast<u64>(this.m_model.canUndo());
     current.values[24u] = cast<u64>(this.m_model.canRedo());
 
-    const b8 changed = !SameSmokeU64Span(current.values, this.m_snapshot.values)
+    const b8 changed = current.values != this.m_snapshot.values
         || current.selectionCount != this.m_snapshot.selectionCount
         || current.scroll.x != this.m_snapshot.scroll.x
         || current.scroll.y != this.m_snapshot.scroll.y
@@ -655,52 +585,15 @@ b8 UiTextAreaSmokeScene::observeState(mut UiPaintContext context){
         || !SameSmokeRectSpan(current.rectangles, this.m_snapshot.rectangles)
         || !SameSmokeRectSpan(current.selections, this.m_snapshot.selections);
     const DisplayMetrics previous = this.m_snapshot.display;
-    const b8 displayChanged = context.display.logicalWidth != previous.logicalWidth
-        || context.display.logicalHeight != previous.logicalHeight
-        || context.display.pixelScaleX != previous.pixelScaleX
-        || context.display.pixelScaleY != previous.pixelScaleY;
+    const b8 displayChanged = !SameSmokeDisplay(context.display, previous);
     if(this.m_snapshot.sequence != 0u && !changed && !displayChanged)
         return true;
     current.sequence = this.m_snapshot.sequence + 1u;
     this.m_snapshot = current;
     if(displayChanged){
-        [essential] info(
-            "UiTextAreaSmoke: display logical={}x{} scale={}x{}"
-            , current.display.logicalWidth
-            , current.display.logicalHeight
-            , current.display.pixelScaleX
-            , current.display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiTextAreaSmokeTag, current.display);
     }
-    [essential] info(
-        "UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , current.sequence
-        , current.values[0u]
-        , current.values[1u]
-        , current.values[2u]
-        , current.values[3u]
-        , current.values[4u]
-        , current.values[5u]
-        , current.values[6u]
-        , current.values[7u]
-        , current.values[8u]
-        , current.values[9u]
-        , current.values[10u]
-        , current.values[11u]
-        , current.values[12u]
-        , current.values[13u]
-        , current.values[14u]
-        , current.values[15u]
-        , current.values[16u]
-        , current.values[17u]
-        , current.values[18u]
-        , current.values[19u]
-        , current.values[20u]
-        , current.values[21u]
-        , current.values[22u]
-        , current.values[23u]
-        , current.values[24u]
-    );
+    LogSmokeValues(s_UiTextAreaSmokeTag, current.sequence, current.values);
     [essential] info(
         "UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}"
         , current.sequence
@@ -713,8 +606,7 @@ b8 UiTextAreaSmokeScene::observeState(mut UiPaintContext context){
         , current.maximum.x
         , current.maximum.y
     );
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(s_UiTextAreaSmokeTag, current.sequence, UiTextAreaSmokeRectName(index), current.rectangles[index]);
+    LogSmokeRectangles(s_UiTextAreaSmokeTag, current.sequence, s_UiTextAreaSmokeRectNames, current.rectangles);
     for(u32 index = 0u; index < current.selectionCount; ++index){
         const Rect rectangle = current.selections[index];
         [essential] info(
@@ -1051,40 +943,15 @@ void UiTextureImageSmokeScene::observeState(mut UiPaintContext context){
     u32 sameIdentity = 0u;
     ReadSmokeTextureGenerations(this.m_default, this.m_alternate, this.m_replacement, current.generations, sameIdentity);
 
-    const b8 stateChanged = !SameSmokeU64Span(current.values, this.m_snapshot.values)
-        || !SameSmokeU64Span(current.generations, this.m_snapshot.generations);
+    const b8 stateChanged = current.values != this.m_snapshot.values
+        || current.generations != this.m_snapshot.generations;
     const PassiveSmokeSnapshotUpdate update = PublishPassiveSmokeSnapshot(stateChanged, current, this.m_snapshot);
     if(!update.published)
         return;
     if(update.displayChanged){
-        [essential] info(
-            "UiTextureImageSmoke: display logical={}x{} scale={}x{}"
-            , current.display.logicalWidth
-            , current.display.logicalHeight
-            , current.display.pixelScaleX
-            , current.display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiTextureImageSmokeTag, current.display);
     }
-    [essential] info(
-        "UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , current.sequence
-        , current.values[0u]
-        , current.values[1u]
-        , current.values[2u]
-        , current.values[3u]
-        , current.values[4u]
-        , current.values[5u]
-        , current.values[6u]
-        , current.values[7u]
-        , current.values[8u]
-        , current.values[9u]
-        , current.values[10u]
-        , current.values[11u]
-        , current.values[12u]
-        , current.values[13u]
-        , current.values[14u]
-        , current.values[15u]
-    );
+    LogSmokeValues(s_UiTextureImageSmokeTag, current.sequence, current.values);
     [essential] info(
         "UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}"
         , current.sequence
@@ -1093,8 +960,7 @@ void UiTextureImageSmokeScene::observeState(mut UiPaintContext context){
         , current.generations[2u]
         , sameIdentity
     );
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(s_UiTextureImageSmokeTag, current.sequence, UiTextureImageSmokeRectName(index), current.rectangles[index]);
+    LogSmokeRectangles(s_UiTextureImageSmokeTag, current.sequence, s_UiTextureImageSmokeRectNames, current.rectangles);
 }
 
 void UiTextureImageSmokeScene::paintMarkers(mut UiPaintContext context)const{

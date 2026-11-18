@@ -12,7 +12,7 @@ extern b8 IsPathPrefixText(in StringView a0, in StringView a1);
 extern b8 IsSingleLinePathText(in StringView a0);
 
 [cpp_name("::PathHasListedExtension")]
-extern b8 PathHasListedExtension(in Path a0, in auto a1);
+extern b8 PathHasListedExtension(in auto path, in auto extensions);
 
 [cpp_header("<global/filesystem/utility.h>"), cpp_name("::AppendOwnedPath")]
 extern void AppendOwnedPath(mut auto paths, in Path path);

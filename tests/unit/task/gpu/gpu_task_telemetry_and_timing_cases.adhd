@@ -21,49 +21,20 @@ Optional<GpuPhysicalQueueInfo> FindTimingFeedbackQueueValue(
     in GpuTaskQueueScoringData scoring, in GpuTaskGraphTaskView task, in GpuPhysicalQueueInfo incumbent,
     in GpuTaskTimingAssignmentKey key, in GpuTaskTimingHistorySnapshot snapshot, in GpuTaskTimingFeedbackPolicy policy, in u64 frameIndex
 ){
-    const Optional<in GpuPhysicalQueueInfo> found = BorrowTimingFeedbackQueue(declarations, analysis, assignments, assignmentIndices, topology, reachability,
-        scoring, task, incumbent, key, snapshot, policy, frameIndex);
-    if(found.has_value()){
-        in GpuPhysicalQueueInfo value = found.value();
-        return value;
-    }
-    return Optional<GpuPhysicalQueueInfo>();
+    return CopyGpuSnapshotValue<GpuPhysicalQueueInfo>(BorrowTimingFeedbackQueue(declarations, analysis, assignments, assignmentIndices, topology, reachability,
+        scoring, task, incumbent, key, snapshot, policy, frameIndex));
 }
 
 Optional<GpuTaskTimingHistory> FindStoreTimingHistoryValue(in GpuTaskTimingHistoryStore source, in GpuTaskTimingKey key, in GpuPhysicalQueueId queue){
-    const Optional<in GpuTaskTimingHistory> found = BorrowStoreTimingHistory(source, key, queue);
-    if(found.has_value()){
-        in GpuTaskTimingHistory value = found.value();
-        return value;
-    }
-    return Optional<GpuTaskTimingHistory>();
-}
-
-Optional<GpuTaskTimingAssignmentState> FindStoreTimingAssignmentValue(in GpuTaskTimingHistoryStore source, in GpuTaskTimingAssignmentKey key){
-    const Optional<in GpuTaskTimingAssignmentState> found = BorrowStoreTimingAssignment(source, key);
-    if(found.has_value()){
-        in GpuTaskTimingAssignmentState value = found.value();
-        return value;
-    }
-    return Optional<GpuTaskTimingAssignmentState>();
+    return CopyGpuSnapshotValue<GpuTaskTimingHistory>(BorrowStoreTimingHistory(source, key, queue));
 }
 
 Optional<GpuTaskTimingHistory> FindSnapshotTimingHistoryValue(in GpuTaskTimingHistorySnapshot source, in GpuTaskTimingKey key, in GpuPhysicalQueueId queue){
-    const Optional<in GpuTaskTimingHistory> found = BorrowSnapshotTimingHistory(source, key, queue);
-    if(found.has_value()){
-        in GpuTaskTimingHistory value = found.value();
-        return value;
-    }
-    return Optional<GpuTaskTimingHistory>();
+    return CopyGpuSnapshotValue<GpuTaskTimingHistory>(BorrowSnapshotTimingHistory(source, key, queue));
 }
 
 Optional<GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(in GpuTaskTimingHistorySnapshot source, in GpuTaskTimingAssignmentKey key){
-    const Optional<in GpuTaskTimingAssignmentState> found = BorrowSnapshotTimingAssignment(source, key);
-    if(found.has_value()){
-        in GpuTaskTimingAssignmentState value = found.value();
-        return value;
-    }
-    return Optional<GpuTaskTimingAssignmentState>();
+    return CopyGpuSnapshotValue<GpuTaskTimingAssignmentState>(BorrowSnapshotTimingAssignment(source, key));
 }
 
 
@@ -117,7 +88,7 @@ void GpuTelemetryCheckEdges(in usize taskCount, in GpuTelemetryScenario scenario
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuGraphResourceId resource = GpuGraphResourceId();
     if(scenario != GpuTelemetryScenario::Explicit){
-        const Expected<GpuGraphResourceId> resourceTaskAdmission = AddBufferMetadata(graph, s_GpuCaseTelemetryScalingResource, "Telemetry Buffer");
+        const Expected<GpuGraphResourceId> resourceTaskAdmission = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTelemetryScalingResource, "Telemetry Buffer");
         ASSERT_TRUE(resourceTaskAdmission.has_value());
         resource = resourceTaskAdmission.value();
         ASSERT_TRUE(resource.valid());

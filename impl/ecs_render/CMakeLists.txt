@@ -16,6 +16,7 @@ set(_nwb_ecs_render_component_adhd_sources
     "${CMAKE_CURRENT_LIST_DIR}/csg/types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/csg/work_region.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_bindless_slots_builder.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/gbuffer_layout.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/graph_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/import_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/presentation_settings.adhd"

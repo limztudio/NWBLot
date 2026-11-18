@@ -15,10 +15,10 @@ extern class ClipboardTextAccumulator{
 
 
 [cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::DecodeClipboardLatin1")]
-extern ClipboardStatus DecodeClipboardLatin1(in StringView a0, mut String a1);
+extern ClipboardStatus DecodeClipboardLatin1(in StringView text, mut GlobalString output);
 
 [cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::EncodeClipboardLatin1")]
-extern ClipboardStatus EncodeClipboardLatin1(in StringView a0, mut String a1);
+extern ClipboardStatus EncodeClipboardLatin1(in StringView text, mut GlobalString output);
 
 [cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::ValidateClipboardUtf8Text")]
 extern ClipboardStatus ValidateClipboardUtf8Text(in StringView a0);

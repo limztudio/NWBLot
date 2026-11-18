@@ -19,8 +19,8 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     ASSERT_TRUE(EnsureDirectories(caseDirectory).has_value());
     const Path blocked = caseDirectory / "blocked";
     ASSERT_TRUE(WriteTextFile(blocked, "This file cannot be a parent directory.\n"));
-    const Path spoolDirectory = blocked / s_SpoolDirectory;
-    const Path pendingDirectory = spoolDirectory / s_PendingBucket;
+    const Path spoolDirectory = blocked / s_SpoolDirectoryName;
+    const Path pendingDirectory = spoolDirectory / s_PendingDirectoryName;
     UninstallCrashHandler();
 
     const auto failure = EnsureDirectories(pendingDirectory);
@@ -29,7 +29,7 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     const String expectedCode = StringFormat("code={}", failure.error().value());
     CrashDiagnosticObserver observed("crash_native_lifecycle", true);
     CrashDiagnosticSubscription<CrashDiagnosticObserver> registration(observed);
-    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(installArena);
     config.applicationName = "bad-spool-admission";
@@ -41,9 +41,9 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     EXPECT_FALSE(state.platformRestorePending);
     EXPECT_EQ(observed.count, 1u);
     EXPECT_EQ(observed.unlocked, 1u);
-    EXPECT_EQ(CrashText(observed.operation), "prepare_spool");
-    EXPECT_TRUE(Contains(CrashText(observed.message), StringView(expectedCategory)));
-    EXPECT_TRUE(Contains(CrashText(observed.message), StringView(expectedCode)));
+    EXPECT_EQ(FixedBufferView(observed.operation), "prepare_spool");
+    EXPECT_TRUE(Contains(FixedBufferView(observed.message), StringView(expectedCategory)));
+    EXPECT_TRUE(Contains(FixedBufferView(observed.message), StringView(expectedCode)));
     UninstallCrashHandler();
     RemoveTestArtifacts(group);
 }
@@ -51,7 +51,7 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
 void VerifyExecutableAdmission(in Path spoolDirectory, in StringView executable){
     CrashDiagnosticObserver observed("crash_native_lifecycle", true);
     CrashDiagnosticSubscription<CrashDiagnosticObserver> registration(observed);
-    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(installArena);
 
@@ -74,7 +74,7 @@ void VerifyExecutableAdmission(in Path spoolDirectory, in StringView executable)
     EXPECT_EQ(after.value(), before.value());
     EXPECT_EQ(observed.count, 5u);
     EXPECT_EQ(observed.unlocked, observed.count);
-    EXPECT_TRUE(Contains(CrashText(observed.message), "code="));
+    EXPECT_TRUE(Contains(FixedBufferView(observed.message), "code="));
 }
 
 void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(){
@@ -111,9 +111,9 @@ void VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishe
     EXPECT_FALSE(SetCrashMetadata(key, embedded));
     const CrashRequest request = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
     for(u32 i = 0u; i < request.metadataCount; ++i){
-        if(CrashText(request.metadata[i].key) == key){
+        if(FixedBufferView(request.metadata[i].key) == key){
             found = true;
-            EXPECT_EQ(CrashText(request.metadata[i].value), "original");
+            EXPECT_EQ(FixedBufferView(request.metadata[i].value), "original");
         }
     }
     EXPECT_TRUE(found);
@@ -130,18 +130,18 @@ void VerifyCrash_SnapshotKeepsPublishedMetadataDuringInterruptedWriter(){
     mut CrashRuntimeState state = TestCrashState();
     const FutexGuard guard = AcquireFutex(state.mutex);
     for(mut CrashMetadata metadata : state.metadata){
-        if(metadata.used == 0u || CrashText(metadata.key) != key)
+        if(metadata.used == 0u || FixedBufferView(metadata.key) != key)
             continue;
         const CrashMetadata original = metadata;
-        SetCrashText(metadata.value, "unpublished_partial_value");
+        CopyFixedBuffer(metadata.value, "unpublished_partial_value");
         request = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
         metadata = original;
         exercisedWriter = true;
         break;
     }
     for(u32 i = 0u; i < request.metadataCount; ++i){
-        if(CrashText(request.metadata[i].key) == key){
-            EXPECT_EQ(CrashText(request.metadata[i].value), published);
+        if(FixedBufferView(request.metadata[i].key) == key){
+            EXPECT_EQ(FixedBufferView(request.metadata[i].value), published);
             found = true;
         }
     }
@@ -159,8 +159,8 @@ void VerifyCrash_ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbReco
     const StringView secondText = second;
     ASSERT_TRUE(SetCrashMetadata(key, firstText));
     TestAtomic<u32> failures(0u);
-    TestLatch start(2);
-    TestThread writer(lambda[mut start, in firstText, in secondText, in key, in category, mut failures]() -> void{
+    Latch start(2);
+    JoiningThread writer(lambda[mut start, in firstText, in secondText, in key, in category, mut failures]() -> void{
         start.arrive_and_wait();
         for(usize i = 0u; i < iterations; ++i){
             StringView text = secondText;
@@ -177,9 +177,9 @@ void VerifyCrash_ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbReco
         b8 found = false;
         for(u32 i = 0u; i < request.metadataCount; ++i){
             in CrashMetadata metadata = request.metadata[i];
-            if(CrashText(metadata.key) != key)
+            if(FixedBufferView(metadata.key) != key)
                 continue;
-            const StringView value = CrashText(metadata.value);
+            const StringView value = FixedBufferView(metadata.value);
             if(value != firstText && value != secondText)
                 failures.fetch_add(1u, MemoryOrder::relaxed);
             found = true;
@@ -188,9 +188,9 @@ void VerifyCrash_ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbReco
             failures.fetch_add(1u, MemoryOrder::relaxed);
         for(u32 i = 0u; i < request.breadcrumbCount; ++i){
             in CrashBreadcrumb breadcrumb = request.breadcrumbs[i];
-            if(CrashText(breadcrumb.category) != category)
+            if(FixedBufferView(breadcrumb.category) != category)
                 continue;
-            const StringView message = CrashText(breadcrumb.message);
+            const StringView message = FixedBufferView(breadcrumb.message);
             if(message != firstText && message != secondText)
                 failures.fetch_add(1u, MemoryOrder::relaxed);
         }
@@ -221,16 +221,16 @@ void VerifyCrash_CrashSpoolRetentionPrunesOldestPackages(){
     const StringView group = "crash_spool_retention_test";
     RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash003));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, "bad package name"));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadedBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadedBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_FailedBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_FailedBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash003));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, "bad package name"));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadedDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadedDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_FailedDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_FailedDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingDirectoryName, s_Crash002));
 
     CrashSpoolRetentionConfig retention = CrashSpoolRetentionConfig();
     retention.maxPendingPackages = 2u;
@@ -239,16 +239,16 @@ void VerifyCrash_CrashSpoolRetentionPrunesOldestPackages(){
     retention.maxUploadingPackages = 1u;
     EXPECT_TRUE(RetainTestCrashPackages(testArena, SpoolDirectory(group), retention, "").has_value());
 
-    ExpectPathExists(PackageDirectory(group, s_PendingBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash002), true);
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash003), true);
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, "bad package name"), true);
-    ExpectPathExists(PackageDirectory(group, s_UploadedBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(group, s_UploadedBucket, s_Crash002), true);
-    ExpectPathExists(PackageDirectory(group, s_FailedBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(group, s_FailedBucket, s_Crash002), true);
-    ExpectPathExists(PackageDirectory(group, s_UploadingBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(group, s_UploadingBucket, s_Crash002), true);
+    ExpectPathExists(PackageDirectory(group, s_PendingDirectoryName, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, s_Crash002), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, s_Crash003), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, "bad package name"), true);
+    ExpectPathExists(PackageDirectory(group, s_UploadedDirectoryName, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_UploadedDirectoryName, s_Crash002), true);
+    ExpectPathExists(PackageDirectory(group, s_FailedDirectoryName, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_FailedDirectoryName, s_Crash002), true);
+    ExpectPathExists(PackageDirectory(group, s_UploadingDirectoryName, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_UploadingDirectoryName, s_Crash002), true);
 
     RemoveTestArtifacts(group);
 }
@@ -258,8 +258,8 @@ void VerifyCrash_CrashSpoolRetentionZeroDisablesPruning(){
     const StringView group = "crash_spool_retention_zero_test";
     RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash002));
 
     CrashSpoolRetentionConfig retention = CrashSpoolRetentionConfig();
     retention.maxPendingPackages = 0u;
@@ -268,8 +268,8 @@ void VerifyCrash_CrashSpoolRetentionZeroDisablesPruning(){
     retention.maxUploadingPackages = 0u;
     EXPECT_TRUE(RetainTestCrashPackages(testArena, SpoolDirectory(group), retention, "").has_value());
 
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash001), true);
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash002), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, s_Crash001), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, s_Crash002), true);
 
     RemoveTestArtifacts(group);
 }
@@ -279,9 +279,9 @@ void VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage(){
     const StringView group = "crash_spool_retention_protect_test";
     RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash003));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingDirectoryName, s_Crash003));
 
     CrashSpoolRetentionConfig retention = CrashSpoolRetentionConfig();
     retention.maxPendingPackages = 1u;
@@ -290,9 +290,9 @@ void VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage(){
     retention.maxUploadingPackages = 0u;
     EXPECT_TRUE(RetainTestCrashPackages(testArena, SpoolDirectory(group), retention, "crash-001").has_value());
 
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash001), true);
-    ExpectPathExists(PackageDirectory(group, s_PendingBucket, s_Crash002), false);
-    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash003), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, s_Crash001), true);
+    ExpectPathExists(PackageDirectory(group, s_PendingDirectoryName, s_Crash002), false);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingDirectoryName, s_Crash003), true);
 
     RemoveTestArtifacts(group);
 }
@@ -303,18 +303,18 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     const StringView crashId = "crash-recovery-blocked";
     RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingBucket, crashId));
-    const Path blockedBucket = BucketDirectory(group, s_PendingBucket);
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingDirectoryName, crashId));
+    const Path blockedBucket = BucketDirectory(group, s_PendingDirectoryName);
     const Path spoolPath = SpoolDirectory(group);
     EXPECT_TRUE(WriteTextFile(blockedBucket, "blocked"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
     CopyCrashPath(spoolPath, snapshot.spoolDirectory);
-    SetCrashText(snapshot.logServerUrl, "http://127.0.0.1:1");
+    CopyFixedBuffer(snapshot.logServerUrl, "http://127.0.0.1:1");
 
     EXPECT_FALSE(FlushTestCrashReports(testArena, snapshot));
-    ExpectIsDirectory(PackageDirectory(group, s_UploadingBucket, crashId), true);
+    ExpectIsDirectory(PackageDirectory(group, s_UploadingDirectoryName, crashId), true);
     ExpectIsRegularFile(blockedBucket, true);
-    EXPECT_TRUE(TextFileContains(PackageDirectory(group, s_UploadingBucket, crashId) / s_UploadAttemptFileName, s_RetryInterruptedState));
+    EXPECT_TRUE(TextFileContains(PackageDirectory(group, s_UploadingDirectoryName, crashId) / s_UploadAttemptFileName, s_UploadAttemptRetryInterruptedState));
 
     RemoveTestArtifacts(group);
 }

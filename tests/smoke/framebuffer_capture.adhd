@@ -150,16 +150,14 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
         if(!acceptedToken.valid())
             return;
         if(!acceptedToken.hasPhysicalQueueIdentity()){
-            this.markFailed("accepted readback submission has no physical queue identity");
-            this.requestTerminalQuit();
+            this.failCaptureAndQuit("accepted readback submission has no physical queue identity");
             return;
         }
 
         mut GraphicsRuntime graphics = this.getGraphics();
         mut Device device = graphics.getDevice();
         if(acceptedToken.deviceGeneration != device.getDeviceGeneration()){
-            this.markFailed("accepted readback submission belongs to a stale graphics device");
-            this.requestTerminalQuit();
+            this.failCaptureAndQuit("accepted readback submission belongs to a stale graphics device");
             return;
         }
         GpuPhysicalQueueId physicalQueue = GpuPhysicalQueueId();
@@ -167,45 +165,27 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
         physicalQueue.deviceGeneration = acceptedToken.deviceGeneration;
         const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
         if(!completedValue.has_value()){
-            this.markFailed("failed to query readback submission completion");
-            this.requestTerminalQuit();
+            this.failCaptureAndQuit("failed to query readback submission completion");
             return;
         }
         if(completedValue.value() < acceptedToken.value)
             return;
         if(!this.m_readback.valid()){
-            this.markFailed("accepted readback submission lost its staging texture");
-            this.requestTerminalQuit();
+            this.failCaptureAndQuit("accepted readback submission lost its staging texture");
             return;
         }
 
         const auto mapping = device.mapStagingTexture(this.m_readback.deref(), TextureSlice(), CpuAccessMode::Read);
         if(!mapping.has_value()){
-            this.markFailed("failed to map the completed readback staging texture");
-            this.requestTerminalQuit();
+            this.failCaptureAndQuit("failed to map the completed readback staging texture");
             return;
         }
 
-        usize requiredSourceBytes = 0u;
-        b8 validSourceSpan = true;
-        if(this.m_captureDescription.width > 0u && this.m_captureDescription.height > 0u){
-            const auto lastRowOffset = TryMultiply<usize>(cast<usize>(this.m_captureDescription.height - 1u), mapping.value().rowPitch);
-            const auto rowBytes = TryMultiply<usize>(cast<usize>(this.m_captureDescription.width), s_BitmapSourceBytesPerPixel);
-            if(!lastRowOffset.has_value() || !rowBytes.has_value() || AddOverflows<usize>(lastRowOffset.value(), rowBytes.value()))
-                validSourceSpan = false;
-            else
-                requiredSourceBytes = lastRowOffset.value() + rowBytes.value();
-        }
-        b8 captureWritten = false;
         const Span<u8> mapped = mapping.value().readBytes();
-        if(validSourceSpan && !mapped.empty() && requiredSourceBytes <= mapped.size()){
-            const Span<u8> sourceSpan = mapped.first(requiredSourceBytes);
-            captureWritten = BitmapCaptureWriter(this.m_captureDescription).write(this.m_outputPath, sourceSpan, mapping.value().rowPitch);
-        }
+        const b8 captureWritten = !mapped.empty() && BitmapCaptureWriter(this.m_captureDescription).write(this.m_outputPath, mapped, mapping.value().rowPitch);
         device.unmapStagingTexture(this.m_readback.deref());
         if(!captureWritten){
-            this.markFailed("failed to write the framebuffer capture atomically");
-            this.requestTerminalQuit();
+            this.failCaptureAndQuit("failed to write the framebuffer capture atomically");
             return;
         }
 
@@ -403,6 +383,11 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
         error("FramebufferCapture: {}", reason);
     }
 
+    private void failCaptureAndQuit(in StringView reason){
+        this.markFailed(reason);
+        this.requestTerminalQuit();
+    }
+
     private void requestTerminalQuit(){
         if(this.m_quitRequested)
             return;
@@ -454,14 +439,11 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
         mut GraphicsRuntime graphics = this.getGraphics();
         mut Device device = graphics.getDevice();
         auto readbackResult = device.createStagingTexture(description, CpuAccessMode::Read);
-        if(readbackResult.has_value())
-            this.m_readback = readbackResult.value();
-        else
-            this.m_readback.reset();
         if(!readbackResult.has_value()){
             this.markFailed("failed to allocate the matching framebuffer readback staging texture");
             return false;
         }
+        this.m_readback = readbackResult.value();
         return true;
     }
 
@@ -539,6 +521,16 @@ const u64 s_FramebufferCaptureMaxFrameCount = 4294967295u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<u32> ReadSmokeCaptureFrameCount(in u32 defaultFrameCount){
+    const auto frameCount = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+    if(!frameCount.has_value())
+        return defaultFrameCount;
+    const auto value = ParseU64(StringView(frameCount.value()));
+    if(!value.has_value() || value.value() == 0u || value.value() > s_FramebufferCaptureMaxFrameCount)
+        return MakeUnexpected(Failure());
+    return cast<u32>(value.value());
+}
+
 class SmokeCaptureSeries{
     public Vector<String> paths;
     public UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
@@ -550,49 +542,15 @@ class SmokeCaptureFactory{
     }
 
     public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount, in FramebufferCaptureOptions options){
-        const Expected<String> outputPath = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-        if(!outputPath.has_value())
-            return UniquePtr<FramebufferCapture>();
-
-        u32 captureFrameCount = defaultFrameCount;
-        const Expected<String> frameCountText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-        if(frameCountText.has_value()){
-            const Expected<u64> parsedFrameCount = ParseU64(StringView(frameCountText.value()));
-            if(!parsedFrameCount.has_value() || parsedFrameCount.value() == 0u || parsedFrameCount.value() > s_FramebufferCaptureMaxFrameCount){
-                error("{}: capture frame count must be a positive u32", projectName);
-                return MakeUnexpected(Failure());
-            }
-            captureFrameCount = cast<u32>(parsedFrameCount.value());
-        }
-
-        const StringView pathView = StringView(outputPath.value());
-        UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
-        if(!StartNewSmokeFramebufferCapture(pathView, captureFrameCount, this.m_context, options, capture))
+        UniquePtr<FramebufferCapture> capture;
+        if(!ConfigureSmokeFramebufferCapture(this.m_context, projectName, defaultFrameCount, options, capture))
             return MakeUnexpected(Failure());
         return capture;
     }
 
-    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount){
-        return this.configure(projectName, defaultFrameCount, FramebufferCaptureOptions());
-    }
-
     public Expected<SmokeCaptureSeries> prepareSeries(in StringView outputPath, in u32 sampleCount, in FramebufferCaptureOptions options){
-        if(sampleCount == 0u)
-            return MakeUnexpected(Failure());
-
-        SmokeCaptureSeries result = SmokeCaptureSeries();
-        result.paths.reserve(sampleCount);
-        for(u32 sample = 0u; sample < sampleCount; ++sample){
-            String samplePath = String();
-            if(sample + 1u == sampleCount)
-                samplePath = String(outputPath);
-            else
-                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
-            result.paths.push_back(samplePath);
-        }
-
-        const StringView firstPath = StringView(result.paths[0u]);
-        if(!StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, result.capture))
+        SmokeCaptureSeries result;
+        if(!this.prepareSeriesInto(outputPath, sampleCount, options, result.paths, result.capture))
             return MakeUnexpected(Failure());
         return result;
     }
@@ -636,18 +594,12 @@ b8 ConfigureSmokeFramebufferCapture(
     if(!outputPath.has_value())
         return true;
 
-    u32 captureFrameCount = defaultFrameCount;
-    const Expected<String> frameCountText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-    if(frameCountText.has_value()){
-        const Expected<u64> parsedFrameCount = ParseU64(StringView(frameCountText.value()));
-        if(!parsedFrameCount.has_value() || parsedFrameCount.value() == 0u || parsedFrameCount.value() > s_FramebufferCaptureMaxFrameCount){
-            error("{}: capture frame count must be a positive u32", projectName);
-            return false;
-        }
-        captureFrameCount = cast<u32>(parsedFrameCount.value());
+    const auto frameCount = ReadSmokeCaptureFrameCount(defaultFrameCount);
+    if(!frameCount.has_value()){
+        error("{}: capture frame count must be a positive u32", projectName);
+        return false;
     }
-
-    return StartNewSmokeFramebufferCapture(StringView(outputPath.value()), captureFrameCount, context, options, outCapture);
+    return StartNewSmokeFramebufferCapture(StringView(outputPath.value()), frameCount.value(), context, options, outCapture);
 }
 
 b8 ConfigureSmokeFramebufferCapture(

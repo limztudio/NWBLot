@@ -260,7 +260,7 @@ class GraphicsVolumeWriter{
         const String variant = BuildCanonicalShaderVariantName(defines);
         const u64 sourceChecksum = ComputeShaderSourceChecksum(entry, variant, prepared.dependencyChecksum, fingerprint);
         String hex;
-        AppendHexU64Text(sourceChecksum, hex);
+        AppendHexU64(sourceChecksum, hex);
         const Path cache = BuildShaderVariantBytecodeCachePath(context.preparation.resolvedPaths.cacheDirectory, context.preparation.configurationSafeName, hex);
         if(!ReadOrCompileShaderVariant(prepared, variant, defines, cache, this.bytecode))
             return false;

@@ -117,11 +117,7 @@ class ReflectionParametersUploadTask{
         this.m_hardwarePreparationReady = hardwarePreparationReady;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Transfer;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const b8 hardwareReady = this.m_hardwarePreparationReady;
@@ -173,11 +169,7 @@ class ReflectionDispatchTask{
         this.hardwareDispatchLogged = inputs.hardwareDispatchLogged;
         this.fallbackDispatchLogged = inputs.fallbackDispatchLogged;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         in ReflectionFrameSnapshot resources = this.resources;

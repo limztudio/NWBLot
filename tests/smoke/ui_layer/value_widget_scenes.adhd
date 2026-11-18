@@ -170,196 +170,23 @@ f64 UiProgressSmokeFraction(in usize index){
     }
 }
 
-StringView UiProgressSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "before";
-    case 1u:
-        return "after";
-    case 2u:
-        return "zero";
-    case 3u:
-        return "quarter";
-    case 4u:
-        return "full";
-    case 5u:
-        return "below";
-    case 6u:
-        return "above";
-    case 7u:
-        return "tiny";
-    case 8u:
-        return "frozen";
-    case 9u:
-        return "external";
-    case 10u:
-        return "external_clip";
-    case 11u:
-        return "parent_progress";
-    case 12u:
-        return "child_progress";
-    case 13u:
-        return "parent";
-    case 14u:
-        return "child";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 15u> s_UiProgressSmokeRectNames(
+    "before", "after", "zero", "quarter", "full", "below", "above", "tiny", "frozen", "external", "external_clip", "parent_progress", "child_progress", "parent",
+    "child"
+);
 
-StringView UiRadioGroupSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "before";
-    case 1u:
-        return "group";
-    case 2u:
-        return "after";
-    case 3u:
-        return "open";
-    case 4u:
-        return "disabled_group";
-    case 5u:
-        return "parent";
-    case 6u:
-        return "popup_group";
-    case 7u:
-        return "popup_close";
-    case 8u:
-        return "row10";
-    case 9u:
-        return "indicator10";
-    case 10u:
-        return "mark10";
-    case 11u:
-        return "row20";
-    case 12u:
-        return "indicator20";
-    case 13u:
-        return "mark20";
-    case 14u:
-        return "row30";
-    case 15u:
-        return "indicator30";
-    case 16u:
-        return "mark30";
-    case 17u:
-        return "row40";
-    case 18u:
-        return "indicator40";
-    case 19u:
-        return "mark40";
-    case 20u:
-        return "row50";
-    case 21u:
-        return "indicator50";
-    case 22u:
-        return "mark50";
-    case 23u:
-        return "disabled_row30";
-    case 24u:
-        return "disabled_indicator30";
-    case 25u:
-        return "disabled_mark30";
-    case 26u:
-        return "popup_row10";
-    case 27u:
-        return "popup_indicator10";
-    case 28u:
-        return "popup_mark10";
-    case 29u:
-        return "popup_row20";
-    case 30u:
-        return "popup_indicator20";
-    case 31u:
-        return "popup_mark20";
-    case 32u:
-        return "popup_row30";
-    case 33u:
-        return "popup_indicator30";
-    case 34u:
-        return "popup_mark30";
-    case 35u:
-        return "popup_row40";
-    case 36u:
-        return "popup_indicator40";
-    case 37u:
-        return "popup_mark40";
-    case 38u:
-        return "popup_row50";
-    case 39u:
-        return "popup_indicator50";
-    case 40u:
-        return "popup_mark50";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 41u> s_UiRadioGroupSmokeRectNames(
+    "before", "group", "after", "open", "disabled_group", "parent", "popup_group", "popup_close", "row10", "indicator10", "mark10", "row20", "indicator20",
+    "mark20", "row30", "indicator30", "mark30", "row40", "indicator40", "mark40", "row50", "indicator50", "mark50", "disabled_row30", "disabled_indicator30",
+    "disabled_mark30", "popup_row10", "popup_indicator10", "popup_mark10", "popup_row20", "popup_indicator20", "popup_mark20", "popup_row30", "popup_indicator30",
+    "popup_mark30", "popup_row40", "popup_indicator40", "popup_mark40", "popup_row50", "popup_indicator50", "popup_mark50"
+);
 
-StringView UiSliderSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "before";
-    case 1u:
-        return "after";
-    case 2u:
-        return "open";
-    case 3u:
-        return "parent";
-    case 4u:
-        return "popup_close";
-    case 5u:
-        return "main_bounds";
-    case 6u:
-        return "main_clip";
-    case 7u:
-        return "main_travel";
-    case 8u:
-        return "main_track";
-    case 9u:
-        return "main_center";
-    case 10u:
-        return "main_thumb";
-    case 11u:
-        return "disabled_bounds";
-    case 12u:
-        return "disabled_clip";
-    case 13u:
-        return "disabled_travel";
-    case 14u:
-        return "disabled_track";
-    case 15u:
-        return "disabled_center";
-    case 16u:
-        return "disabled_thumb";
-    case 17u:
-        return "constant_bounds";
-    case 18u:
-        return "constant_clip";
-    case 19u:
-        return "constant_travel";
-    case 20u:
-        return "constant_track";
-    case 21u:
-        return "constant_center";
-    case 22u:
-        return "constant_thumb";
-    case 23u:
-        return "popup_bounds";
-    case 24u:
-        return "popup_clip";
-    case 25u:
-        return "popup_travel";
-    case 26u:
-        return "popup_track";
-    case 27u:
-        return "popup_center";
-    case 28u:
-        return "popup_thumb";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 29u> s_UiSliderSmokeRectNames(
+    "before", "after", "open", "parent", "popup_close", "main_bounds", "main_clip", "main_travel", "main_track", "main_center", "main_thumb", "disabled_bounds",
+    "disabled_clip", "disabled_travel", "disabled_track", "disabled_center", "disabled_thumb", "constant_bounds", "constant_clip", "constant_travel",
+    "constant_track", "constant_center", "constant_thumb", "popup_bounds", "popup_clip", "popup_travel", "popup_track", "popup_center", "popup_thumb"
+);
 
 void CopySmokeRadioGroupChoices(mut UiRadioGroupSnapshot snapshot, in RadioGroupPlacement placement, in u32 offset){
     for(u32 index = 0u; index < placement.count; ++index){
@@ -629,36 +456,16 @@ void UiProgressSmokeScene::observeState(mut UiPaintContext context){
     current.values[5u] = cast<u64>(this.m_child.isOpen());
     current.values[6u] = context.ui.input().popupCount();
     current.values[7u] = cast<u64>(observation.passiveTargets);
-    const b8 stateChanged = !SameSmokeU64Span(current.values, this.m_snapshot.values)
-        || !SameSmokeU64Span(current.bits, this.m_snapshot.bits);
+    const b8 stateChanged = current.values != this.m_snapshot.values
+        || current.bits != this.m_snapshot.bits;
     const PassiveSmokeSnapshotUpdate update = PublishPassiveSmokeSnapshot(stateChanged, current, this.m_snapshot);
     if(!update.published)
         return;
     if(update.displayChanged){
-        [essential] info(
-            "UiProgressSmoke: display logical={}x{} scale={}x{}"
-            , current.display.logicalWidth
-            , current.display.logicalHeight
-            , current.display.pixelScaleX
-            , current.display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiProgressSmokeTag, current.display);
     }
-    [essential] info(
-        "UiProgressSmoke: state sequence={} values={},{},{},{},{},{},{},{} bits={},{}"
-        , current.sequence
-        , current.values[0u]
-        , current.values[1u]
-        , current.values[2u]
-        , current.values[3u]
-        , current.values[4u]
-        , current.values[5u]
-        , current.values[6u]
-        , current.values[7u]
-        , current.bits[0u]
-        , current.bits[1u]
-    );
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(s_UiProgressSmokeTag, current.sequence, UiProgressSmokeRectName(index), current.rectangles[index]);
+    [essential] info("{}: state sequence={} values={} bits={}", s_UiProgressSmokeTag, current.sequence, FormatSmokeValues(current.values), FormatSmokeValues(current.bits));
+    LogSmokeRectangles(s_UiProgressSmokeTag, current.sequence, s_UiProgressSmokeRectNames, current.rectangles);
 }
 
 void UiProgressSmokeScene::paintMarkers(mut UiPaintContext context)const{
@@ -820,7 +627,7 @@ void UiRadioGroupSmokeScene::observeState(mut UiPaintContext context){
     current.values[21u] = this.m_source.rowCount();
 
     const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
-        !SameSmokeU64Span(current.values, this.m_snapshot.values),
+        current.values != this.m_snapshot.values,
         current.display,
         this.m_snapshot.display,
         current.rectangles,
@@ -832,42 +639,10 @@ void UiRadioGroupSmokeScene::observeState(mut UiPaintContext context){
     current.sequence = this.m_snapshot.sequence + 1u;
     this.m_snapshot = current;
     if(update.displayChanged){
-        [essential] info(
-            "UiRadioGroupSmoke: display logical={}x{} scale={}x{}"
-            , current.display.logicalWidth
-            , current.display.logicalHeight
-            , current.display.pixelScaleX
-            , current.display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiRadioGroupSmokeTag, current.display);
     }
-    [essential] info(
-        "UiRadioGroupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , current.sequence
-        , current.values[0u]
-        , current.values[1u]
-        , current.values[2u]
-        , current.values[3u]
-        , current.values[4u]
-        , current.values[5u]
-        , current.values[6u]
-        , current.values[7u]
-        , current.values[8u]
-        , current.values[9u]
-        , current.values[10u]
-        , current.values[11u]
-        , current.values[12u]
-        , current.values[13u]
-        , current.values[14u]
-        , current.values[15u]
-        , current.values[16u]
-        , current.values[17u]
-        , current.values[18u]
-        , current.values[19u]
-        , current.values[20u]
-        , current.values[21u]
-    );
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(s_UiRadioGroupSmokeTag, current.sequence, UiRadioGroupSmokeRectName(index), current.rectangles[index]);
+    LogSmokeValues(s_UiRadioGroupSmokeTag, current.sequence, current.values);
+    LogSmokeRectangles(s_UiRadioGroupSmokeTag, current.sequence, s_UiRadioGroupSmokeRectNames, current.rectangles);
 }
 
 void UiRadioGroupSmokeScene::paintMarkers(mut UiPaintContext context)const{
@@ -977,12 +752,7 @@ Rect UiSearchComboSmokeScene::cursorRow()const{
     if(!this.m_state.combo().isOpen())
         return Rect();
     const Expected<u64> index = this.m_source.filtered().indexOf(this.m_state.combo().listState().cursorKey());
-    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
-        return Rect();
-    const Expected<Rect> rectangle = SmokeListRowBounds(placement, index.value());
-    if(!rectangle.has_value())
-        return Rect();
-    return rectangle.value();
+    return SmokePlacedListRow(placement, index);
 }
 
 void UiSearchComboSmokeScene::observeState(mut TextService text){
@@ -994,7 +764,7 @@ void UiSearchComboSmokeScene::observeState(mut TextService text){
     if(
         this.m_sequence != 0u
         && !this.m_displayChanged
-        && SameSmokeU64Span(current, this.m_lastValues)
+        && current == this.m_lastValues
         && placement.offset == this.m_lastPlacement.offset
         && placement.contentHeight == this.m_lastPlacement.contentHeight
         && SameSmokeRect(placement.bounds, this.m_lastPlacement.bounds)
@@ -1011,32 +781,7 @@ void UiSearchComboSmokeScene::observeState(mut TextService text){
     this.m_lastBounds = bounds;
     this.m_lastQueryBounds = editor.bounds;
     this.m_displayChanged = false;
-    [essential] info(
-        "UiSearchComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_sequence
-        , current[0u]
-        , current[1u]
-        , current[2u]
-        , current[3u]
-        , current[4u]
-        , current[5u]
-        , current[6u]
-        , current[7u]
-        , current[8u]
-        , current[9u]
-        , current[10u]
-        , current[11u]
-        , current[12u]
-        , current[13u]
-        , current[14u]
-        , current[15u]
-        , current[16u]
-        , current[17u]
-        , current[18u]
-        , current[19u]
-        , current[20u]
-        , current[21u]
-    );
+    LogSmokeValues(s_UiSearchComboSmokeTag, this.m_sequence, current);
     LogSmokeRect(s_UiSearchComboSmokeTag, this.m_sequence, "trigger", bounds);
     LogSmokeRect(s_UiSearchComboSmokeTag, this.m_sequence, "popup", popup.bounds);
     LogSmokeRect(s_UiSearchComboSmokeTag, this.m_sequence, "list", placement.bounds);
@@ -1233,8 +978,8 @@ void UiSliderSmokeScene::observeState(mut UiPaintContext context){
     current.bits[2u] = bit_cast<u64>(this.m_constant.value());
     current.bits[3u] = bit_cast<u64>(this.m_popupSlider.value());
 
-    const b8 stateChanged = !SameSmokeU64Span(current.values, this.m_snapshot.values)
-        || !SameSmokeU64Span(current.bits, this.m_snapshot.bits);
+    const b8 stateChanged = current.values != this.m_snapshot.values
+        || current.bits != this.m_snapshot.bits;
     const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
         stateChanged,
         current.display,
@@ -1248,40 +993,10 @@ void UiSliderSmokeScene::observeState(mut UiPaintContext context){
     current.sequence = this.m_snapshot.sequence + 1u;
     this.m_snapshot = current;
     if(update.displayChanged){
-        [essential] info(
-            "UiSliderSmoke: display logical={}x{} scale={}x{}"
-            , current.display.logicalWidth
-            , current.display.logicalHeight
-            , current.display.pixelScaleX
-            , current.display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiSliderSmokeTag, current.display);
     }
-    [essential] info(
-        "UiSliderSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{} bits={},{},{},{}"
-        , current.sequence
-        , current.values[0u]
-        , current.values[1u]
-        , current.values[2u]
-        , current.values[3u]
-        , current.values[4u]
-        , current.values[5u]
-        , current.values[6u]
-        , current.values[7u]
-        , current.values[8u]
-        , current.values[9u]
-        , current.values[10u]
-        , current.values[11u]
-        , current.values[12u]
-        , current.values[13u]
-        , current.values[14u]
-        , current.values[15u]
-        , current.bits[0u]
-        , current.bits[1u]
-        , current.bits[2u]
-        , current.bits[3u]
-    );
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(s_UiSliderSmokeTag, current.sequence, UiSliderSmokeRectName(index), current.rectangles[index]);
+    [essential] info("{}: state sequence={} values={} bits={}", s_UiSliderSmokeTag, current.sequence, FormatSmokeValues(current.values), FormatSmokeValues(current.bits));
+    LogSmokeRectangles(s_UiSliderSmokeTag, current.sequence, s_UiSliderSmokeRectNames, current.rectangles);
 }
 
 void UiSliderSmokeScene::paintMarkers(mut UiPaintContext context)const{

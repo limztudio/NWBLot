@@ -9,12 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GpuResVersionProducerUses{
-    public GpuTaskResourceUse resourceUse = GpuTaskResourceUse();
-    public GpuTaskResourceVersionUse versionUse = GpuTaskResourceVersionUse();
-}
-
-class GpuResVersionConsumerUses{
+class GpuResVersionUses{
     public GpuTaskResourceUse resourceUse = GpuTaskResourceUse();
     public GpuTaskResourceVersionUse versionUse = GpuTaskResourceVersionUse();
 }
@@ -30,12 +25,7 @@ GpuTaskResourceRange GpuResVersionBufferRange(in u64 byteOffset, in u64 byteSize
 }
 
 Expected<GpuGraphResourceId> GpuResVersionAddBuffer(mut GpuTaskGraph graph, in Name identity){
-    GpuGraphResourceDesc desc = GpuGraphResourceDesc();
-    desc.setIdentity(identity);
-    desc.setMarkerLabel("Resource Version Buffer");
-    desc.setType(GpuGraphResourceType::Buffer);
-    desc.setInitialState(ResourceStates::Common);
-    return graph.importResource(desc);
+    return AddResourceMetadata(graph, GpuGraphResourceType::Buffer, identity, "Resource Version Buffer");
 }
 
 Expected<GpuGraphResourceVersionId> GpuResVersionAddVersionRange(
@@ -80,33 +70,33 @@ GpuTaskResourceVersionUse GpuResVersionUse(in GpuGraphResourceVersionId version,
     return use;
 }
 
-GpuResVersionProducerUses GpuResVersionMakeProducerUsesRange(
+GpuResVersionUses GpuResVersionMakeProducerUsesRange(
     in GpuGraphResourceId resource,
     in GpuGraphResourceVersionId version,
     in GpuTaskResourceRange range
 ){
-    GpuResVersionProducerUses out = GpuResVersionProducerUses();
+    GpuResVersionUses out = GpuResVersionUses();
     out.resourceUse = GpuResVersionResourceUse(resource, range, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write);
     out.versionUse = GpuResVersionUse(version, GpuTaskResourceVersionRole::Produce);
     return out;
 }
 
-GpuResVersionProducerUses GpuResVersionMakeProducerUses(in GpuGraphResourceId resource, in GpuGraphResourceVersionId version){
+GpuResVersionUses GpuResVersionMakeProducerUses(in GpuGraphResourceId resource, in GpuGraphResourceVersionId version){
     return GpuResVersionMakeProducerUsesRange(resource, version, GpuResVersionBufferRange(0u, 64u));
 }
 
-GpuResVersionConsumerUses GpuResVersionMakeConsumerUsesRange(
+GpuResVersionUses GpuResVersionMakeConsumerUsesRange(
     in GpuGraphResourceId resource,
     in GpuGraphResourceVersionId version,
     in GpuTaskResourceRange range
 ){
-    GpuResVersionConsumerUses out = GpuResVersionConsumerUses();
+    GpuResVersionUses out = GpuResVersionUses();
     out.resourceUse = GpuResVersionResourceUse(resource, range, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read);
     out.versionUse = GpuResVersionUse(version, GpuTaskResourceVersionRole::Consume);
     return out;
 }
 
-GpuResVersionConsumerUses GpuResVersionMakeConsumerUses(in GpuGraphResourceId resource, in GpuGraphResourceVersionId version){
+GpuResVersionUses GpuResVersionMakeConsumerUses(in GpuGraphResourceId resource, in GpuGraphResourceVersionId version){
     return GpuResVersionMakeConsumerUsesRange(resource, version, GpuResVersionBufferRange(0u, 64u));
 }
 

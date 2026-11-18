@@ -57,7 +57,7 @@ class ShadowSurfaceSourceBuilder{
         inOutSource.append(s_ShadowSurfaceFunctionMacro);
         inOutSource.append("() ");
         inOutSource.append(s_ShadowSurfaceModelPrefix);
-        AppendDecimalU32(id, inOutSource);
+        AppendUnsignedDecimal(inOutSource, cast<usize>(id));
         inOutSource.append("(const NwbMeshSurfaceInputs nwbShadowSurfaceInputs)\n");
         inOutSource.append(s_GeneratedIncludeDirective);
         inOutSource.append(surfaceSource);
@@ -76,10 +76,10 @@ class ShadowSurfaceSourceBuilder{
             if(surfaceById[id].empty())
                 continue;
             inOutSource.append(s_GeneratedSwitchCaseLabel);
-            AppendDecimalU32(cast<u32>(id), inOutSource);
+            AppendUnsignedDecimal(inOutSource, cast<usize>(id));
             inOutSource.append(s_GeneratedSwitchCaseReturn);
             inOutSource.append(s_ShadowSurfaceModelPrefix);
-            AppendDecimalU32(cast<u32>(id), inOutSource);
+            AppendUnsignedDecimal(inOutSource, cast<usize>(id));
             inOutSource.append("(in);\n");
         }
         inOutSource.append(s_ShadowSurfaceUnknownFallbackSource);
@@ -178,7 +178,7 @@ class ShadowSurfaceSourceBuilder{
     public String buildBindNamespace(in u32 bindNamespaceId)const{
         String bindNamespace = "";
         bindNamespace.append(s_ShadowSurfaceBindNamespacePrefix);
-        AppendDecimalU32(bindNamespaceId, bindNamespace);
+        AppendUnsignedDecimal(bindNamespace, cast<usize>(bindNamespaceId));
         return bindNamespace;
     }
 

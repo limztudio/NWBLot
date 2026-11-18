@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/input_service_fixture.adhd>
 #include <utilities/cli/tool_cli.adhd>
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/edit/model.adhd>
@@ -22,14 +23,7 @@ class BenchmarkTextInput : QueuedTextInputService{
     [cpp_base(QueuedTextInputService, storage)]
     public BenchmarkTextInput(mut HeapStorage storage){}
 
-    public TextInputCapabilities capabilities()const override{
-        TextInputCapabilities result();
-        result.commit = true;
-        result.preedit = true;
-        result.surrounding = true;
-        result.deleteSurrounding = true;
-        return result;
-    }
+    public TextInputCapabilities capabilities()const override{ return FullTestTextInputCapabilities(); }
 }
 
 class BenchmarkClipboard : QueuedClipboardService{
@@ -46,7 +40,13 @@ class BenchmarkClipboard : QueuedClipboardService{
     }
 }
 
-b8 AdoptBuiltTextLayout(mut TextLayoutBuilder builder, in ShapeRequest request, mut EditBoxView view){
+b8 PrepareBenchmarkTextLayout(in usize characterCount, in u8 character, mut EditModel model, mut EditBoxView view, mut TextLayoutBuilder builder){
+    String text;
+    text.assign(characterCount, character);
+    if(!model.setText(text) || !model.setSelection(0u, 0u) || !view.snapshot(model))
+        return false;
+    ShapeRequest request;
+    request.text = view.displayText();
     auto layout = builder.layout(request);
     return layout.has_value() && view.adoptLayout(layout.value());
 }
@@ -276,15 +276,7 @@ class PublicationCase : IUiBenchmarkCase{
     }
 
     public b8 setup(){
-        String text = "";
-        text.reserve(this.m_stops - 1u);
-        for(usize index = 0u; index + 1u < this.m_stops; ++index)
-            text.push_back('a');
-        if(!this.m_model.setText(text) || !this.m_model.setSelection(0u, 0u) || !this.m_view.snapshot(this.m_model))
-            return false;
-        ShapeRequest request = ShapeRequest();
-        request.text = this.m_view.displayText();
-        if(!AdoptBuiltTextLayout(this.m_layoutBuilder, request, this.m_view))
+        if(!PrepareBenchmarkTextLayout(this.m_stops - 1u, 'a', this.m_model, this.m_view, this.m_layoutBuilder))
             return false;
         const Expected<EditBoxPlacement> placement = this.m_view.arrange(Rect(10.0f, 20.0f, 320.0f, 30.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 200.0f), Point(), 1.0f, false);
         if(!placement.has_value() || this.m_view.caretStops().size() != this.m_stops)
@@ -363,15 +355,7 @@ class EmptySelectionCase : IUiBenchmarkCase{
 
     public b8 setup(){
         ConfigureBenchmarkSkinAtlas(this.m_skin);
-        String text = "";
-        text.reserve(this.m_lines - 1u);
-        for(usize index = 0u; index + 1u < this.m_lines; ++index)
-            text.push_back('\n');
-        if(!this.m_model.setText(text) || !this.m_model.setSelection(0u, 0u) || !this.m_view.snapshot(this.m_model))
-            return false;
-        ShapeRequest request = ShapeRequest();
-        request.text = this.m_view.displayText();
-        if(!AdoptBuiltTextLayout(this.m_layoutBuilder, request, this.m_view))
+        if(!PrepareBenchmarkTextLayout(this.m_lines - 1u, '\n', this.m_model, this.m_view, this.m_layoutBuilder))
             return false;
         const Expected<EditBoxPlacement> placement = this.m_view.arrange(Rect(10.0f, 10.0f, 300.0f, 100.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 200.0f), Point(), 1.0f, false);
         if(!placement.has_value() || this.m_view.layout().lines().size() != this.m_lines || !this.m_view.layout().glyphs().empty())

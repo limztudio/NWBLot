@@ -12,9 +12,6 @@ extern class OwnerRecordRef{
 [cpp_header("<tests/unit/global/global_owner_access.h>"), cpp_name("::NWB::Tests::GlobalCases::FirstOwnerRecord")]
 extern OwnerRecordRef FirstOwnerRecord();
 
-[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
-extern usize PoolAllocationSize(in usize size);
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

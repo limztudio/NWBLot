@@ -16,10 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT")]
-extern const u32 s_ShaderSceneShadingFloatCount;
-
-static_assert(s_DeferredSceneShadingGpuByteCount == size_of<f32>() * s_ShaderSceneShadingFloatCount, "RendererDeferredState scene shading cache size drifted");
 static_assert(s_DeferredLightGpuByteCount == size_of<f32>() * s_ShaderSceneLightRecordFloatCount * s_SceneMaxLights, "RendererDeferredState light cache size drifted");
 
 

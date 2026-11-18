@@ -2,20 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/thread.h>"), cpp_name("::JoiningThread"), cpp_flags(no_copy, no_assign)]
-extern class TestThread{
-    void join();
-    b8 request_stop();
-};
-
-[cpp_header("<global/thread.h>"), cpp_name("::Latch"), cpp_flags(no_copy, no_assign)]
-extern class TestLatch{
-    void count_down();
-    void wait()const;
-    void arrive_and_wait();
-};
-
-
 [cpp_header("<global/atomic.h>"), cpp_name("::Atomic"), cpp_flags(no_copy, no_assign)]
 extern class TestAtomic<T>{
     T load(in MemoryOrder order)const;

@@ -231,48 +231,6 @@ const AStringView s_UiTextAreaKoreanLanguage = "ko";
 const AStringView s_UiTextAreaReenteredKey = "reentered";
 
 
-class UiTextAreaScrollModelRecord{
-    public String text;
-    public u64 revision;
-    public u64 external;
-    public u64 selection;
-    public u64 composition;
-    public usize anchor;
-    public usize caret;
-    public b8 undo;
-    public b8 redo;
-
-    public UiTextAreaScrollModelRecord(in EditModel model){
-        const StringView view = model.text();
-        if(!view.empty())
-            this.text.assign(view.data(), view.size());
-        this.revision = model.revision();
-        this.external = model.externalRevision();
-        this.selection = model.selectionGeneration();
-        this.composition = model.compositionGeneration();
-        this.anchor = model.anchor();
-        this.caret = model.caret();
-        this.undo = model.canUndo();
-        this.redo = model.canRedo();
-    }
-
-    public StringView textView()const{
-        return StringView(this.text.data(), this.text.size());
-    }
-
-    public void expect(in EditModel model)const{
-        EXPECT_EQ(model.text(), StringView(this.text.data(), this.text.size()));
-        EXPECT_EQ(model.revision(), this.revision);
-        EXPECT_EQ(model.externalRevision(), this.external);
-        EXPECT_EQ(model.selectionGeneration(), this.selection);
-        EXPECT_EQ(model.compositionGeneration(), this.composition);
-        EXPECT_EQ(model.anchor(), this.anchor);
-        EXPECT_EQ(model.caret(), this.caret);
-        EXPECT_EQ(model.canUndo(), this.undo);
-        EXPECT_EQ(model.canRedo(), this.redo);
-    }
-}
-
 ShapeRequest MakeUiTextAreaFontSizeShapeRequest(in f32 fontSize){
     ShapeRequest request = ShapeRequest();
     request.fontSize = fontSize;
@@ -476,7 +434,7 @@ void VerifyUiTextAreaInputScrollTests_InvalidWheelLinesRejectTheCandidateBeforeB
     for(in f32 wheelLines : invalid){
         ASSERT_TRUE(self.frameArea(generation, MakeUiTextAreaScrollOptions()));
         ++generation;
-        const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+        const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
         const Point scroll = self.m_state.scroll();
         const EditBoxPlacement placement = self.m_state.placement();
         const EditNavigationSnapshot navigation = self.m_state.navigation().snapshot();
@@ -520,7 +478,7 @@ void VerifyUiTextAreaInputScrollTests_InvalidWheelLinesRejectTheCandidateBeforeB
 
 void VerifyUiTextAreaInputScrollTests_CopiedVerticalWheelAppliesOnlyAtFinalPaintAndPreservesTheModel(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll());
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const u64 revision = self.m_state.revision();
     const EditNavigationSnapshot navigation = self.m_state.navigation().snapshot();
     const auto hostTarget = self.tryTarget(self.id("area", "panel"));
@@ -547,7 +505,7 @@ void VerifyUiTextAreaInputScrollTests_CopiedVerticalWheelAppliesOnlyAtFinalPaint
 
 void VerifyUiTextAreaInputScrollTests_LargeWheelDeltasClampBothEndpointsWithoutChangingSelectionOrHistory(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll());
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const ScrollViewportPlacement bars = self.m_state.scrollbars();
     ASSERT_GT(bars.horizontal.maximum, 0.0);
     ASSERT_GT(bars.vertical.maximum, 0.0);
@@ -566,7 +524,7 @@ void VerifyUiTextAreaInputScrollTests_ReadOnlyWheelAndThumbScrollingLeaveUndoAnd
     TextAreaOptions options = MakeUiTextAreaScrollOptions();
     options.readOnly = true;
     ASSERT_TRUE(self.prepareScroll(options));
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     ASSERT_TRUE(self.wheel(1.0, -1.0));
     ASSERT_TRUE(self.frameArea(2u, options));
     EXPECT_GT(self.m_state.scroll().x, 0.0f);
@@ -590,7 +548,7 @@ void VerifyUiTextAreaInputScrollTests_DisabledEditorUsesTheContainingPanelBarrie
     TextAreaOptions options = MakeUiTextAreaScrollOptions();
     options.enabled = false;
     ASSERT_TRUE(self.prepareScroll(options));
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const auto foundHost = self.tryTarget(self.id("area", "panel"));
     ASSERT_TRUE(foundHost.has_value());
     const HitTarget host = foundHost.value();
@@ -633,7 +591,7 @@ void VerifyUiTextAreaInputScrollTests_WheelViewportPersistsUntilAnAcceptedIdenti
 
 void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndTheBaselineAcrossRepaints(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll(MakeUiTextAreaScrollOptions(), Point(30.0f, 50.0f)));
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const auto foundThumb = self.tryTarget(self.part("scroll.y.thumb"));
     ASSERT_TRUE(foundThumb.has_value());
     const HitTarget thumb = foundThumb.value();
@@ -677,7 +635,7 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
 
 void VerifyUiTextAreaInputScrollTests_CompletedHorizontalThumbDragKeepsOutsideReleaseAndClampsItsEndpoint(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll());
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const auto foundThumb = self.tryTarget(self.part("scroll.x.thumb"));
     ASSERT_TRUE(foundThumb.has_value());
     const HitTarget thumb = foundThumb.value();
@@ -698,7 +656,7 @@ void VerifyUiTextAreaInputScrollTests_CompletedHorizontalThumbDragKeepsOutsideRe
 
 void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewport(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll(MakeUiTextAreaScrollOptions(), Point(0.0f, 100.0f)));
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const f64 page = self.m_state.scrollbars().vertical.viewportExtent;
     const auto foundAfter = self.tryTarget(self.part("scroll.y.after"));
     ASSERT_TRUE(foundAfter.has_value());
@@ -716,7 +674,7 @@ void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewpo
 
 void VerifyUiTextAreaInputScrollTests_LaterCoalescedThumbUpdateRunsAfterAnInterveningWheelAction(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll());
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const auto foundThumb = self.tryTarget(self.part("scroll.y.thumb"));
     ASSERT_TRUE(foundThumb.has_value());
     const HitTarget thumb = foundThumb.value();
@@ -748,7 +706,7 @@ void VerifyUiTextAreaInputScrollTests_PopupWheelUsesTheAcceptedPopupScopeAndDefe
     const PopupToken token = host.popup;
     ASSERT_TRUE(token.valid());
     const f64 step = host.scrollStep;
-    const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     ASSERT_TRUE(self.wheel(0.0, -1.0));
     ASSERT_EQ(self.m_context.input().controlActions().size(), 1u);
     EXPECT_EQ(self.m_context.input().controlActions()[0u].popup, token);

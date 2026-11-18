@@ -20,6 +20,20 @@ VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
     return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+VectorSingle MeshletFaceNormal(in Span<f32x4> positions, in Span<u8> primitiveIndices, in Span<MeshletLocalVertexRef> localVertexRefs, in MeshletDesc meshlet, in u32 primitiveIndex){
+    const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
+    const u8 localVertex0 = primitiveIndices[primitiveOffset + 0u];
+    const u8 localVertex1 = primitiveIndices[primitiveOffset + 1u];
+    const u8 localVertex2 = primitiveIndices[primitiveOffset + 2u];
+    const MeshletLocalVertexRef ref0 = localVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex0)];
+    const MeshletLocalVertexRef ref1 = localVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex1)];
+    const MeshletLocalVertexRef ref2 = localVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex2)];
+    const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
+    const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
+    const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
+    return Cross((p1 - p0).xyz, (p2 - p0).xyz);
+}
+
 MeshletBounds BuildMeshletBounds(
     in Span<f32x3u> meshPositions,
     in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
@@ -56,17 +70,7 @@ MeshletBounds BuildMeshletBounds(
     VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
     u32 validFaceNormalCount = 0u;
     for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-        const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
-        const u8 localVertex0 = meshletPrimitiveIndices[primitiveOffset + 0u];
-        const u8 localVertex1 = meshletPrimitiveIndices[primitiveOffset + 1u];
-        const u8 localVertex2 = meshletPrimitiveIndices[primitiveOffset + 2u];
-        const MeshletLocalVertexRef ref0 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex0)];
-        const MeshletLocalVertexRef ref1 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex1)];
-        const MeshletLocalVertexRef ref2 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex2)];
-        const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
-        const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
-        const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
-        const VectorSingle faceNormal = Cross((p1 - p0).xyz, (p2 - p0).xyz);
+        const VectorSingle faceNormal = MeshletFaceNormal(Span<f32x4>(positions), meshletPrimitiveIndices, meshletLocalVertexRefs, meshlet, primitiveIndex);
         if(IsValidMeshletDirection3(faceNormal)){
             areaWeightedNormal = areaWeightedNormal + faceNormal;
             ++validFaceNormalCount;
@@ -78,17 +82,7 @@ MeshletBounds BuildMeshletBounds(
     if(validFaceNormalCount == primitiveCount && IsValidMeshletDirection3(coneAxis)){
         coneCutoff = 1.0f;
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
-            const u8 localVertex0 = meshletPrimitiveIndices[primitiveOffset + 0u];
-            const u8 localVertex1 = meshletPrimitiveIndices[primitiveOffset + 1u];
-            const u8 localVertex2 = meshletPrimitiveIndices[primitiveOffset + 2u];
-            const MeshletLocalVertexRef ref0 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex0)];
-            const MeshletLocalVertexRef ref1 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex1)];
-            const MeshletLocalVertexRef ref2 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex2)];
-            const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
-            const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
-            const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
-            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(Cross((p1 - p0).xyz, (p2 - p0).xyz));
+            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(MeshletFaceNormal(Span<f32x4>(positions), meshletPrimitiveIndices, meshletLocalVertexRefs, meshlet, primitiveIndex));
             if(IsValidMeshletDirection3(faceNormal)){
                 const VectorSingle current(coneCutoff);
                 const VectorSingle candidate = Vector3Dot(coneAxis, faceNormal);

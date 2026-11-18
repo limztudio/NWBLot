@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "vulkan_types.adhd"
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/common/value_storage.adhd>
@@ -15,17 +16,11 @@
 [cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkOffset2D")]
 extern class VkOffset2D{ i32 x; i32 y; };
 
-[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkExtent2D")]
-extern class VkViewportExtent2D{ u32 width; u32 height; };
-
 [cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkRect2D")]
-extern class VkRect2D{ VkOffset2D offset; VkViewportExtent2D extent; };
+extern class VkRect2D{ VkOffset2D offset; VkExtent2D extent; };
 
 [cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanViewportPolicy::BuildImplicitScissor")]
 extern Expected<VkRect2D> BuildImplicitScissor(in Viewport viewport);
-
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::IsValid")]
-extern b8 IsValidResourceQueueSharing(in ResourceQueueSharing value);
 
 [cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::TryAggregateGpuPacketEnvelopeMetrics")]
 extern Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(in Span<GpuComparableTimestampRange> ranges, mut ScratchStorage scratch, mut ScratchStorageVector<GpuQueuePacketEnvelopeMetrics> metrics);
@@ -35,7 +30,7 @@ type GpuTimingSinkSampleVector = ScratchStorageVector<GpuTimingSinkSample>;
 type GpuQueuePacketEnvelopeMetricsVector = ScratchStorageVector<GpuQueuePacketEnvelopeMetrics>;
 
 static_assert(TestNothrowDestructible<GpuTimingMeasure>(), "GPU timing measures stored in Optional must unwind without throwing");
-static_assert(!IsValidResourceQueueSharing(cast<ResourceQueueSharing>(1u << 7u)));
+static_assert(!IsResourceQueueSharingValid(cast<ResourceQueueSharing>(1u << 7u)));
 
 class RegistrationSentinel{}
 
@@ -137,7 +132,7 @@ class GpuTimingSubscriptionCapture{
 
 Expected<Name> DeriveIndexedScopeName(in Name prefix, in usize scopeIndex){
     String suffix;
-    AppendUnsignedU64Text(suffix, scopeIndex);
+    AppendUnsignedU64Text(suffix, cast<u64>(scopeIndex));
     return DeriveName(prefix, suffix);
 }
 
@@ -150,13 +145,6 @@ type ResourceQueueSharingMask = ResourceQueueSharing;
 
 const u64 s_F64InfinityBits = 0x7ff0000000000000u;
 const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
-
-GpuPhysicalQueueId MakePhysicalQueue(in u16 index, in u16 deviceGeneration){
-    GpuPhysicalQueueId queue = GpuPhysicalQueueId();
-    queue.index = index;
-    queue.deviceGeneration = deviceGeneration;
-    return queue;
-}
 
 GpuComparableTimestampRange MakeComparableRange(in u64 beginTicks, in u64 endTicks, in f64 secondsPerTick, in GpuPhysicalQueueId queue){
     GpuComparableTimestampRange range = GpuComparableTimestampRange();
@@ -209,7 +197,7 @@ void RecordAndPublishTimestampRange(in Name scopeName, in u64 frameIndex, in Gpu
 
 void ExpectEnvelopeMetricsRejected(in Span<GpuComparableTimestampRange> ranges, mut PacketMetricsScratchContext context){
     GpuQueuePacketEnvelopeMetrics stale = GpuQueuePacketEnvelopeMetrics();
-    stale.physicalQueue = MakePhysicalQueue(4u, 8u);
+    stale.physicalQueue = GpuPhysicalQueueId(4u, 8u);
     stale.internalIdleTicks = 13u;
     context.queueMetrics.push_back(stale);
     EXPECT_FALSE(AggregateEnvelopeMetrics(ranges, context).has_value());
@@ -227,12 +215,12 @@ void VerifyGpuTimingPacketEnvelopeMetrics_CorrelatesLargeOutOfOrderFrame(){
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
         const Expected<Name> scopeNameResult = DeriveIndexedScopeName(s_GpuTimingCaseLargeEnvelope, scopeIndex);
         ASSERT_TRUE(scopeNameResult.has_value());
-        scopes.push_back(MakeEnvelopeScope(scopeNameResult.value(), MakePhysicalQueue(cast<u16>(scopeIndex % 2u), 7u)));
+        scopes.push_back(MakeEnvelopeScope(scopeNameResult.value(), GpuPhysicalQueueId(cast<u16>(scopeIndex % 2u), 7u)));
     }
     const Name overlapScope = s_GpuTimingNameTestsTimingLargeEnvelopeOverlap;
     Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
-    outputs[0u] = MakeEnvelopeOutput(MakePhysicalQueue(0u, 7u), s_GpuTimingCaseLargeIdle0);
-    outputs[1u] = MakeEnvelopeOutput(MakePhysicalQueue(1u, 7u), s_GpuTimingCaseLargeIdle1);
+    outputs[0u] = MakeEnvelopeOutput(GpuPhysicalQueueId(0u, 7u), s_GpuTimingCaseLargeIdle0);
+    outputs[1u] = MakeEnvelopeOutput(GpuPhysicalQueueId(1u, 7u), s_GpuTimingCaseLargeIdle1);
     const b8 prepared = context.correlator.preparePacketEnvelopeMetrics(frameIndex, scopes, overlapScope, outputs);
     ASSERT_TRUE(prepared);
 
@@ -270,8 +258,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_CorrelatesLargeOutOfOrderFrame(){
 void VerifyGpuTimingPacketEnvelopeMetrics_ReplacesDuplicateRangesWithoutCompletingMissingScopes(){
     CorrelatorContext context = CorrelatorContext();
     context.timing.setEnabled(true);
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 9u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 9u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 9u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 9u);
     const Name overlapScope = s_GpuTimingNameTestsTimingDuplicateEnvelopeOverlap;
     Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
     scopes[0u] = MakeEnvelopeScope(s_GpuTimingCaseDuplicateEnvelopeFirst, firstQueue);
@@ -315,8 +303,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PreservesPartialFramesAcrossGrowthReje
     const usize frameCount = 8u;
     CorrelatorContext context = CorrelatorContext();
     context.timing.setEnabled(true);
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 9u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 9u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 9u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 9u);
     const Name overlapScope = s_GpuTimingNameTestsTimingGrowingEnvelopeOverlap;
     Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
     scopes[0u] = MakeEnvelopeScope(s_GpuTimingCaseGrowingEnvelopeFirst, firstQueue);
@@ -374,8 +362,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PreservesPartialFramesAcrossGrowthReje
 void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegistrationThrows(){
     ThrowOnceCorrelatorContext context = ThrowOnceCorrelatorContext();
     context.timing.setEnabled(true);
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 13u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 13u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 13u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 13u);
     const Name overlapScope = s_GpuTimingNameTestsTimingThrowingEnvelopeOverlap;
     Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
     scopes[0u] = MakeEnvelopeScope(s_GpuTimingCaseThrowingEnvelopeFirst, firstQueue);
@@ -405,14 +393,14 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegis
 void VerifyGpuPacketEnvelopeMetrics_UnionsSameQueueRangesAndOrdersEveryQueue(){
     PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsUnion);
     Array<GpuComparableTimestampRange, 8> ranges = Array<GpuComparableTimestampRange, 8>();
-    ranges[0u] = MakeComparableRange(40u, 50u, 0.25, MakePhysicalQueue(2u, 7u));
-    ranges[1u] = MakeComparableRange(100u, 100u, 0.25, MakePhysicalQueue(1u, 7u));
-    ranges[2u] = MakeComparableRange(8u, 20u, 0.25, MakePhysicalQueue(2u, 7u));
-    ranges[3u] = MakeComparableRange(5u, 15u, 0.25, MakePhysicalQueue(0u, 7u));
-    ranges[4u] = MakeComparableRange(0u, 10u, 0.25, MakePhysicalQueue(2u, 7u));
-    ranges[5u] = MakeComparableRange(20u, 30u, 0.25, MakePhysicalQueue(2u, 7u));
-    ranges[6u] = MakeComparableRange(42u, 45u, 0.25, MakePhysicalQueue(2u, 7u));
-    ranges[7u] = MakeComparableRange(0u, 10u, 0.25, MakePhysicalQueue(2u, 7u));
+    ranges[0u] = MakeComparableRange(40u, 50u, 0.25, GpuPhysicalQueueId(2u, 7u));
+    ranges[1u] = MakeComparableRange(100u, 100u, 0.25, GpuPhysicalQueueId(1u, 7u));
+    ranges[2u] = MakeComparableRange(8u, 20u, 0.25, GpuPhysicalQueueId(2u, 7u));
+    ranges[3u] = MakeComparableRange(5u, 15u, 0.25, GpuPhysicalQueueId(0u, 7u));
+    ranges[4u] = MakeComparableRange(0u, 10u, 0.25, GpuPhysicalQueueId(2u, 7u));
+    ranges[5u] = MakeComparableRange(20u, 30u, 0.25, GpuPhysicalQueueId(2u, 7u));
+    ranges[6u] = MakeComparableRange(42u, 45u, 0.25, GpuPhysicalQueueId(2u, 7u));
+    ranges[7u] = MakeComparableRange(0u, 10u, 0.25, GpuPhysicalQueueId(2u, 7u));
     const Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(ranges, context);
     ASSERT_TRUE(metrics.has_value());
     EXPECT_DOUBLE_EQ(metrics.value().secondsPerTick, 0.25);
@@ -429,9 +417,9 @@ void VerifyGpuPacketEnvelopeMetrics_UnionsSameQueueRangesAndOrdersEveryQueue(){
 void VerifyGpuPacketEnvelopeMetrics_CountsConcurrentQueueUnionOnceAtTripleOverlap(){
     PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsTriple);
     Array<GpuComparableTimestampRange, 3> ranges = Array<GpuComparableTimestampRange, 3>();
-    ranges[0u] = MakeComparableRange(0u, 100u, 1.0, MakePhysicalQueue(0u, 2u));
-    ranges[1u] = MakeComparableRange(10u, 90u, 1.0, MakePhysicalQueue(1u, 2u));
-    ranges[2u] = MakeComparableRange(20u, 80u, 1.0, MakePhysicalQueue(2u, 2u));
+    ranges[0u] = MakeComparableRange(0u, 100u, 1.0, GpuPhysicalQueueId(0u, 2u));
+    ranges[1u] = MakeComparableRange(10u, 90u, 1.0, GpuPhysicalQueueId(1u, 2u));
+    ranges[2u] = MakeComparableRange(20u, 80u, 1.0, GpuPhysicalQueueId(2u, 2u));
     const Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(ranges, context);
     ASSERT_TRUE(metrics.has_value());
     EXPECT_EQ(metrics.value().queueOverlapTicks, 80u);
@@ -444,9 +432,9 @@ void VerifyGpuPacketEnvelopeMetrics_CountsConcurrentQueueUnionOnceAtTripleOverla
 void VerifyGpuPacketEnvelopeMetrics_PreservesLargeAndNearLimitTickPrecision(){
     PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsPrecision);
     Array<GpuComparableTimestampRange, 3> largeRanges = Array<GpuComparableTimestampRange, 3>();
-    largeRanges[0u] = MakeComparableRange(s_GpuTimingLargeTick, s_GpuTimingLargeTick + 20u, 0.5, MakePhysicalQueue(5u, 9u));
-    largeRanges[1u] = MakeComparableRange(s_GpuTimingLargeTick + 30u, s_GpuTimingLargeTick + 40u, 0.5, MakePhysicalQueue(5u, 9u));
-    largeRanges[2u] = MakeComparableRange(s_GpuTimingLargeTick + 5u, s_GpuTimingLargeTick + 35u, 0.5, MakePhysicalQueue(6u, 9u));
+    largeRanges[0u] = MakeComparableRange(s_GpuTimingLargeTick, s_GpuTimingLargeTick + 20u, 0.5, GpuPhysicalQueueId(5u, 9u));
+    largeRanges[1u] = MakeComparableRange(s_GpuTimingLargeTick + 30u, s_GpuTimingLargeTick + 40u, 0.5, GpuPhysicalQueueId(5u, 9u));
+    largeRanges[2u] = MakeComparableRange(s_GpuTimingLargeTick + 5u, s_GpuTimingLargeTick + 35u, 0.5, GpuPhysicalQueueId(6u, 9u));
     Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(largeRanges, context);
     ASSERT_TRUE(metrics.has_value());
     EXPECT_EQ(metrics.value().queueOverlapTicks, 20u);
@@ -454,8 +442,8 @@ void VerifyGpuPacketEnvelopeMetrics_PreservesLargeAndNearLimitTickPrecision(){
     EXPECT_EQ(context.queueMetrics[0u].internalIdleTicks, 10u);
 
     Array<GpuComparableTimestampRange, 2> nearLimitRanges = Array<GpuComparableTimestampRange, 2>();
-    nearLimitRanges[0u] = MakeComparableRange(u64.max - 20u, u64.max - 10u, 1.0, MakePhysicalQueue(1u, 4u));
-    nearLimitRanges[1u] = MakeComparableRange(u64.max - 15u, u64.max - 5u, 1.0, MakePhysicalQueue(2u, 4u));
+    nearLimitRanges[0u] = MakeComparableRange(u64.max - 20u, u64.max - 10u, 1.0, GpuPhysicalQueueId(1u, 4u));
+    nearLimitRanges[1u] = MakeComparableRange(u64.max - 15u, u64.max - 5u, 1.0, GpuPhysicalQueueId(2u, 4u));
     metrics = AggregateEnvelopeMetrics(nearLimitRanges, context);
     ASSERT_TRUE(metrics.has_value());
     EXPECT_EQ(metrics.value().queueOverlapTicks, 5u);
@@ -464,16 +452,16 @@ void VerifyGpuPacketEnvelopeMetrics_PreservesLargeAndNearLimitTickPrecision(){
 void VerifyGpuPacketEnvelopeMetrics_AcceptsCompleteZeroOverlapInputs(){
     PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsZero);
     Array<GpuComparableTimestampRange, 2> touchingRanges = Array<GpuComparableTimestampRange, 2>();
-    touchingRanges[0u] = MakeComparableRange(0u, 10u, 1.0, MakePhysicalQueue(0u, 6u));
-    touchingRanges[1u] = MakeComparableRange(10u, 20u, 1.0, MakePhysicalQueue(1u, 6u));
+    touchingRanges[0u] = MakeComparableRange(0u, 10u, 1.0, GpuPhysicalQueueId(0u, 6u));
+    touchingRanges[1u] = MakeComparableRange(10u, 20u, 1.0, GpuPhysicalQueueId(1u, 6u));
     Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(touchingRanges, context);
     ASSERT_TRUE(metrics.has_value());
     EXPECT_EQ(metrics.value().queueOverlapTicks, 0u);
     ASSERT_EQ(context.queueMetrics.size(), 2u);
 
     Array<GpuComparableTimestampRange, 2> zeroLengthRanges = Array<GpuComparableTimestampRange, 2>();
-    zeroLengthRanges[0u] = MakeComparableRange(25u, 25u, 1.0, MakePhysicalQueue(3u, 6u));
-    zeroLengthRanges[1u] = MakeComparableRange(75u, 75u, 1.0, MakePhysicalQueue(1u, 6u));
+    zeroLengthRanges[0u] = MakeComparableRange(25u, 25u, 1.0, GpuPhysicalQueueId(3u, 6u));
+    zeroLengthRanges[1u] = MakeComparableRange(75u, 75u, 1.0, GpuPhysicalQueueId(1u, 6u));
     metrics = AggregateEnvelopeMetrics(zeroLengthRanges, context);
     ASSERT_TRUE(metrics.has_value());
     EXPECT_EQ(metrics.value().queueOverlapTicks, 0u);
@@ -487,8 +475,8 @@ void VerifyGpuPacketEnvelopeMetrics_AcceptsCompleteZeroOverlapInputs(){
 void VerifyGpuPacketEnvelopeMetrics_RejectsInvalidOrIncomparableInputAndClearsOutputs(){
     PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsRejection);
     Array<GpuComparableTimestampRange, 2> validRanges = Array<GpuComparableTimestampRange, 2>();
-    validRanges[0u] = MakeComparableRange(0u, 10u, 1.0, MakePhysicalQueue(0u, 3u));
-    validRanges[1u] = MakeComparableRange(5u, 15u, 1.0, MakePhysicalQueue(1u, 3u));
+    validRanges[0u] = MakeComparableRange(0u, 10u, 1.0, GpuPhysicalQueueId(0u, 3u));
+    validRanges[1u] = MakeComparableRange(5u, 15u, 1.0, GpuPhysicalQueueId(1u, 3u));
 
     const Span<GpuComparableTimestampRange> emptySpan = Span<GpuComparableTimestampRange>();
     ExpectEnvelopeMetricsRejected(emptySpan, context);
@@ -630,7 +618,7 @@ void VerifyGpuTimingSampleAttribution_IssuesUniqueProcessIdentitiesAcrossRecorde
 }
 
 void VerifyTimerQueryResult_MasksHighBitsAndWrapsPartialWidth(){
-    const TimerQueryResult result = MakeTimerQueryResult(0x1fau, 0x105u, 0.5, MakePhysicalQueue(1u, 3u), 8u, true);
+    const TimerQueryResult result = MakeTimerQueryResult(0x1fau, 0x105u, 0.5, GpuPhysicalQueueId(1u, 3u), 8u, true);
     ASSERT_TRUE(result.valid());
     EXPECT_EQ(result.timestampMask(), 0xffu);
     EXPECT_EQ(result.maskedBeginTicks(), 0xfau);
@@ -640,7 +628,7 @@ void VerifyTimerQueryResult_MasksHighBitsAndWrapsPartialWidth(){
 }
 
 void VerifyTimerQueryResult_WrapsFullWidthWithoutShiftingBySixtyFour(){
-    const TimerQueryResult result = MakeTimerQueryResult(u64.max - 3u, 5u, 1.0, MakePhysicalQueue(1u, 3u), 64u, true);
+    const TimerQueryResult result = MakeTimerQueryResult(u64.max - 3u, 5u, 1.0, GpuPhysicalQueueId(1u, 3u), 64u, true);
     ASSERT_TRUE(result.valid());
     EXPECT_EQ(result.durationTicks(), 9u);
     EXPECT_DOUBLE_EQ(result.durationSeconds(), 9.0);
@@ -649,7 +637,7 @@ void VerifyTimerQueryResult_WrapsFullWidthWithoutShiftingBySixtyFour(){
 
 void VerifyTimerQueryResult_RetainsNearFullWidthDurationWithoutPublishingAbsoluteRange(){
     const u64 highBit = cast<u64>(1u) << 63u;
-    const TimerQueryResult result = MakeTimerQueryResult(highBit - 3u, 2u, 0.5, MakePhysicalQueue(1u, 3u), 63u, true);
+    const TimerQueryResult result = MakeTimerQueryResult(highBit - 3u, 2u, 0.5, GpuPhysicalQueueId(1u, 3u), 63u, true);
     ASSERT_TRUE(result.valid());
     EXPECT_EQ(result.durationTicks(), 5u);
     EXPECT_DOUBLE_EQ(result.durationSeconds(), 2.5);
@@ -657,7 +645,7 @@ void VerifyTimerQueryResult_RetainsNearFullWidthDurationWithoutPublishingAbsolut
 }
 
 void VerifyTimerQueryResult_ComparableRangeRequiresCapabilityAndPhysicalQueue(){
-    TimerQueryResult result = MakeTimerQueryResult(10u, 20u, 1.0, MakePhysicalQueue(1u, 3u), 64u, false);
+    TimerQueryResult result = MakeTimerQueryResult(10u, 20u, 1.0, GpuPhysicalQueueId(1u, 3u), 64u, false);
     ASSERT_TRUE(result.valid());
     EXPECT_FALSE(result.hasComparableRange());
 
@@ -665,7 +653,7 @@ void VerifyTimerQueryResult_ComparableRangeRequiresCapabilityAndPhysicalQueue(){
     result.physicalQueue = GpuPhysicalQueueId();
     EXPECT_FALSE(result.hasComparableRange());
 
-    result.physicalQueue = MakePhysicalQueue(1u, 3u);
+    result.physicalQueue = GpuPhysicalQueueId(1u, 3u);
     EXPECT_TRUE(result.hasComparableRange());
 }
 
@@ -687,8 +675,8 @@ void VerifyTimerQueryResult_RejectsUnknownOrOutOfRangeWidths(){
 }
 
 void VerifyGpuComparableTimestampRange_IntersectsRawTicksBeforeFloatingPointConversion(){
-    const GpuComparableTimestampRange first = MakeComparableRange(s_GpuTimingLargeTick, s_GpuTimingLargeTick + 5u, 0.25, MakePhysicalQueue(0u, 7u));
-    const GpuComparableTimestampRange second = MakeComparableRange(s_GpuTimingLargeTick + 4u, s_GpuTimingLargeTick + 8u, 0.25, MakePhysicalQueue(3u, 7u));
+    const GpuComparableTimestampRange first = MakeComparableRange(s_GpuTimingLargeTick, s_GpuTimingLargeTick + 5u, 0.25, GpuPhysicalQueueId(0u, 7u));
+    const GpuComparableTimestampRange second = MakeComparableRange(s_GpuTimingLargeTick + 4u, s_GpuTimingLargeTick + 8u, 0.25, GpuPhysicalQueueId(3u, 7u));
 
     const Expected<u64> overlapTicks = TryComputeGpuTimestampOverlap(first, second);
     ASSERT_TRUE(overlapTicks.has_value());
@@ -754,8 +742,8 @@ void VerifyGpuTimingOverlapRegistration_ReversedDuplicatePublishesOneSample(){
     const Name firstScope = s_GpuTimingNameTestsTimingOverlapSampleFirst;
     const Name secondScope = s_GpuTimingNameTestsTimingOverlapSampleSecond;
     const Name outputScope = s_GpuTimingNameTestsTimingOverlapSampleOutput;
-    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 20u, 0.25, MakePhysicalQueue(0u, 3u));
-    const GpuComparableTimestampRange secondRange = MakeComparableRange(18u, 30u, 0.25, MakePhysicalQueue(1u, 3u));
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 20u, 0.25, GpuPhysicalQueueId(0u, 3u));
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(18u, 30u, 0.25, GpuPhysicalQueueId(1u, 3u));
     GpuTimingSinkSampleVector performanceSamples = GpuTimingSinkSampleVector(context.scratchArena);
 
     ASSERT_TRUE(context.correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
@@ -790,8 +778,8 @@ void VerifyGpuTimingOverlapRegistration_CatchUpBatchBoundsSourceFramesAndPreserv
     const Name firstScope = s_GpuTimingNameTestsTimingOverlapCatchUpFirst;
     const Name secondScope = s_GpuTimingNameTestsTimingOverlapCatchUpSecond;
     const Name outputScope = s_GpuTimingNameTestsTimingOverlapCatchUpOutput;
-    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 30u, 0.25, MakePhysicalQueue(0u, 3u));
-    const GpuComparableTimestampRange newerRange = MakeComparableRange(18u, 34u, 0.25, MakePhysicalQueue(1u, 3u));
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 30u, 0.25, GpuPhysicalQueueId(0u, 3u));
+    const GpuComparableTimestampRange newerRange = MakeComparableRange(18u, 34u, 0.25, GpuPhysicalQueueId(1u, 3u));
     GpuComparableTimestampRange olderRange = newerRange;
     olderRange.beginTicks = 26u;
     GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
@@ -828,8 +816,8 @@ void VerifyGpuTimingOverlapRegistration_DiscardPreservesRegistrationAndResetClea
     const Name resetFirstScope = s_GpuTimingNameTestsTimingOverlapLifecycleResetFirst;
     const Name resetSecondScope = s_GpuTimingNameTestsTimingOverlapLifecycleResetSecond;
     const Name outputScope = s_GpuTimingNameTestsTimingOverlapLifecycleOutput;
-    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 20u, 0.25, MakePhysicalQueue(0u, 3u));
-    const GpuComparableTimestampRange secondRange = MakeComparableRange(18u, 30u, 0.25, MakePhysicalQueue(1u, 3u));
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 20u, 0.25, GpuPhysicalQueueId(0u, 3u));
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(18u, 30u, 0.25, GpuPhysicalQueueId(1u, 3u));
 
     ASSERT_TRUE(context.correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
     RecordAndPublishTimestampRange(firstScope, 51u, firstRange, context);
@@ -873,8 +861,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PublishesCompleteOutOfOrderEnvelopeByP
     const Name overlapScope = s_GpuTimingNameTestsTimingEnvelopeQueueOverlap;
     const Name firstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeQueue0InternalIdle;
     const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeQueue1InternalIdle;
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 7u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 7u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 7u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 7u);
     Array<GpuPacketEnvelopeMetricScope, 3> scopes = Array<GpuPacketEnvelopeMetricScope, 3>();
     scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
     scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
@@ -924,8 +912,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_RejectsOutputRoleAndPhysicalQueueColli
     const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleQueue1Idle;
     const Name alternateFirstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue0Idle;
     const Name alternateSecondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue1Idle;
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 9u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 9u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 9u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 9u);
     Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
     scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
     scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
@@ -961,8 +949,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_RetainsSuccessfulOutputRolesWhenSinkRe
     const Name firstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeFailureQueue0Idle;
     const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeFailureQueue1Idle;
     const Name alternateSecondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeFailureAlternateQueue1Idle;
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 13u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 13u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 13u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 13u);
     Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
     scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
     scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
@@ -991,8 +979,8 @@ void VerifyGpuTimingPacketEnvelopeMetrics_IsolatesFramesRejectsWrongQueuesPrunes
     const Name resetFirstOutputScope = s_GpuTimingNameTestsTimingEnvelopeIsolationResetFirstOutput;
     const Name resetSecondInputScope = s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondInput;
     const Name resetSecondOutputScope = s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondOutput;
-    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 11u);
-    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 11u);
+    const GpuPhysicalQueueId firstQueue = GpuPhysicalQueueId(0u, 11u);
+    const GpuPhysicalQueueId secondQueue = GpuPhysicalQueueId(1u, 11u);
     Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
     scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
     scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
@@ -1084,7 +1072,7 @@ void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
     for(u32 rawValue = maxValidValue; rawValue <= maxByteValue; ++rawValue){
         ScopedTestTrace trace(rawValue);
         const ResourceQueueSharingMask sharing = cast<ResourceQueueSharingMask>(cast<u8>(rawValue));
-        EXPECT_EQ(IsValidResourceQueueSharing(sharing), rawValue <= maxValidValue);
+        EXPECT_EQ(IsResourceQueueSharingValid(sharing), rawValue <= maxValidValue);
     }
 }
 

@@ -258,7 +258,7 @@ the same fixture and toolchain before launching either arm:
 3. Save each arm's compiled source bytes and a manifest with a nonempty
    `revision` string and `files` object mapping relative paths to SHA256 hashes.
    Include the exact renderer patch and the compiled fixture files
-   `tests/smoke/refraction_project.adhd` and
+   `tests/smoke/refraction_scenes_and_runtime.adhd` and
    `tests/smoke/avboit_timing_render_pass.adhd`. Restore the tiled sources with
    `git apply -R tests/smoke/refraction_direct_reference.patch` after freezing the
    reference. Keep compilation and cooking separate from measured acquisition.
@@ -269,12 +269,13 @@ experimental patch against the current renderer. Git attributes keep the referen
 patch in LF format for application on Windows. The manifest records the compiled
 source state, including the reference differences. Source manifests
 are checked against saved file bytes. The runner also requires identical
-compiled density fixture hashes, distinct executable/runtime directories, and
+compiled density fixture hashes from the same source generation, distinct executable/runtime directories, and
 stable executable/dependency, packed-volume, logserver, and optional name-symbol
 identities before and after each trial. Mutable pipeline caches are recorded
 separately. A frozen source directory should contain the ordinary repository
 paths below its `source/` directory so fixture identity admission can resolve
-those paths unambiguously.
+those paths unambiguously. Historical arms use the matched pair
+`tests/smoke/refraction_project.cpp` and `tests/smoke/avboit_timing_render_pass.cpp`.
 
 For a scheduling-only comparison, retain a frozen unmerged tiled arm as the
 baseline, freeze a separately built tiled candidate with the proposed scheduling

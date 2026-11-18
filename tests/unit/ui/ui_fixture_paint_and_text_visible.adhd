@@ -21,7 +21,7 @@ Expected<SharedGlyphPage> MakeTestGlyphPage(in SharedPool pool, in u64 identity,
     if(generation > 1u)
         pixels[32u] = 192u;
     GlyphPageBinding binding;
-    binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+    binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
     binding.fontGeneration = 9u;
     binding.atlasIdentity = identity;
     binding.generation = generation;
@@ -39,7 +39,7 @@ Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(in SharedPool pool, in u64 ide
     pixels[2u] = interior;
     pixels[3u] = 192u;
     SdfAtlasPageBinding binding;
-    binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+    binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
     binding.fontGeneration = 9u;
     binding.atlasIdentity = identity;
     binding.generation = generation;
@@ -76,7 +76,7 @@ class PaintTextFixture{
         GlyphPagePixels pixels;
         pixels.resize(4u, 128u);
         GlyphPageBinding binding;
-        binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+        binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
         binding.fontGeneration = 9u;
         binding.atlasIdentity = identity;
         binding.generation = generation;
@@ -91,7 +91,7 @@ class PaintTextFixture{
         SdfAtlasPixels pixels;
         pixels.resize(4u * 4u * 4u, 128u);
         SdfAtlasPageBinding binding;
-        binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+        binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
         binding.fontGeneration = 9u;
         binding.atlasIdentity = 22u;
         binding.generation = 1u;
@@ -160,7 +160,7 @@ class TextVisibleFixture{
     }
     public b8 loadFont(in StringView filename, mut Font font){ return LoadBundledFixtureFont(filename, font); }
     public b8 installCoverageFonts(){
-        const Array<FontSource, 2u> sources(FontSource(MakeUiFontAssetRef(s_TestLatinFontPath), this.m_latin, 1u), FontSource(MakeUiFontAssetRef(s_TestKoreanFontPath), this.m_korean, 1u));
+        const Array<FontSource, 2u> sources(FontSource(MakeUiFixtureAssetRef<Font>(s_TestLatinFontPath), this.m_latin, 1u), FontSource(MakeUiFixtureAssetRef<Font>(s_TestKoreanFontPath), this.m_korean, 1u));
         return this.m_text.setFonts(sources);
     }
     public b8 adoptLayout<TError>(mut Expected<TextLayout, TError> result){
@@ -250,17 +250,17 @@ void ExpectUiSameImagePaintSnapshots(in DrawSnapshot actual, in DrawSnapshot exp
 }
 
 void BeginPaintImageFixture(in PaintImageFixture self, mut PaintBuilder builder, in u64 generation){
-    builder.begin(DisplayMetrics(200.0f, 100.0f, 1.25f, 1.5f), generation, 3u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    builder.begin(DisplayMetrics(200.0f, 100.0f, 1.25f, 1.5f), generation, 3u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
     builder.reserve(16u);
 }
 
 void BeginPaintTextFixture(mut PaintTextFixture self, in u64 generation){
-    self.m_builder.begin(DisplayMetrics(100.0f, 80.0f, 1.5f, 2.0f), generation, 3u, MakeUiSkinAssetRef(s_PaintTextSkinPath), self.m_skin);
+    self.m_builder.begin(DisplayMetrics(100.0f, 80.0f, 1.5f, 2.0f), generation, 3u, MakeUiFixtureAssetRef<UiSkin>(s_PaintTextSkinPath), self.m_skin);
     self.m_builder.reserve(16u);
 }
 
 void BeginTextVisibleFixturePaint(mut TextVisibleFixture self, in u64 generation, in DisplayMetrics display){
-    self.m_paint.begin(display, generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    self.m_paint.begin(display, generation, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
 }
 
 

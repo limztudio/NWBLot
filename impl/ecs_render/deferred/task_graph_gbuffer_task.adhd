@@ -46,11 +46,7 @@ class GbufferGraphTask{
         this.meshViewSetupReady = meshReady;
         this.sceneShadingSetupReady = shadingReady;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Graphics | GpuQueueCapability::Compute;
-        return requirements;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics | GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
     public void discarded(){

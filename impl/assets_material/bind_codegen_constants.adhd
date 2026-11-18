@@ -121,21 +121,6 @@ class MaterialBindTypedLayoutParameterLookupEntry{
     public u32 constantByteOffset = 0u;
 }
 
-void AppendDecimalU32(in u32 value, mut String inOutText){
-    if(value == 0u){
-        inOutText.push_back('0');
-        return;
-    }
-    FixedVector<u8, 10u> digits;
-    u32 remaining = value;
-    while(remaining > 0u){
-        digits.push_back(cast<u8>(remaining % 10u));
-        remaining = remaining / 10u;
-    }
-    for(usize index = digits.size(); index > 0u; --index)
-        inOutText.push_back(cast<i8>(48u + cast<u32>(digits[index - 1u])));
-}
-
 void AppendHexU32UnsignedLiteralText(in u32 value, mut String inOutText){
     inOutText.append("0x");
     for(u32 nibbleIndex = 0u; nibbleIndex < 8u; ++nibbleIndex){
@@ -178,7 +163,7 @@ StringView MaterialBindInterfaceHashSymbol(in u32 lane){
 }
 
 void AppendU32Slang(in u32 value, mut String inOutText){
-    AppendDecimalU32(value, inOutText);
+    AppendUnsignedDecimal(inOutText, cast<usize>(value));
     inOutText.push_back('u');
 }
 

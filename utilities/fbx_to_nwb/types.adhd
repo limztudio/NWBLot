@@ -80,10 +80,7 @@ const usize s_MaxMeshReplacementCount = 8u;
 const StringView s_ListOpenText = "[\n";
 const StringView s_ListCloseText = "]";
 const StringView s_ListItemIndentText = "    ";
-const StringView s_ListItemSuffixText = ",\n";
-const StringView s_RowOpenText = "    [";
 const StringView s_RowItemSeparatorText = ", ";
-const StringView s_RowSuffixText = "],\n";
 
 const StringView s_MeshSplitFileName = "mesh.nwb";
 const StringView s_SkeletonSplitFileName = "skeleton.nwb";

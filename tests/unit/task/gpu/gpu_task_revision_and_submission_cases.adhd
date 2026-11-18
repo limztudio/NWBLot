@@ -10,19 +10,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::ClearCallbackInvocation")]
-extern void ClearHookInvocation(mut QueueSubmissionPreSubmitHook hook);
-
 [cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::CallbackUsesObserver")]
 extern b8 HookUsesObserver(in QueueSubmissionPreSubmitHook hook, in borrow auto observer);
 
 
 type GpuSubmissionTimingBindingVector = HeapStorageVector<GpuTaskGraphTaskTimingTicket>;
 type GpuSubmissionHookBindingVector = HeapStorageVector<GpuTaskGraphTaskSubmissionHook>;
-
-Expected<GpuUploadBlobId> CopyGpuSubmissionUploadBytes(mut GpuTaskGraph graph, in Span<u8> bytes, in usize alignment){
-    return graph.copyAlignedUploadBytes(BinaryViewFromBytes(bytes), alignment);
-}
 
 Expected<GpuUploadBlobId> CopyGpuSubmissionUploadU64Pair(mut GpuTaskGraph graph, in u64 first, in u64 second){
     const Array<u64, 2> words(first, second);
@@ -35,20 +28,10 @@ b8 CopyGpuSubmissionNullUpload(mut GpuTaskGraph graph, in usize byteCount, in us
     return graph.copyAlignedUploadBytes(bytes, alignment).has_value();
 }
 
-b8 SubmissionBytesEqual(in Span<u8> lhs, in Span<u8> rhs){
-    if(lhs.size() != rhs.size())
-        return false;
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(lhs[i] != rhs[i])
-            return false;
-    }
-    return true;
-}
-
 b8 MatchesGpuSubmissionUploadU64Pair(in GpuTaskGraphDeclarationReadView declarations, in GpuUploadBlobId uploadId, in u64 first, in u64 second){
     const auto storedBytes = declarations.uploadBlobData(uploadId);
     const Array<u64, 2> words(first, second);
-    return storedBytes.has_value() && SubmissionBytesEqual(storedBytes.value().span(), PodArrayBytes<u64>(Span<u64>(words)));
+    return storedBytes.has_value() && BytesMatch(storedBytes.value().span(), PodArrayBytes<u64>(Span<u64>(words)));
 }
 
 class GpuSubmissionHookObserver{
@@ -119,7 +102,7 @@ class GpuSubmissionBindingFixture{
     }
     public GpuTaskGraphTaskSubmissionHook makeNullInvokeHookBinding(in usize taskIndex, in u64 identity){
         GpuTaskGraphTaskSubmissionHook binding = this.makeHookBinding(taskIndex, identity);
-        ClearHookInvocation(binding.hook);
+        ClearCallbackInvocation(binding.hook);
         return binding;
     }
     public b8 packetTicketMatches(in GpuSubmissionPacketTickets tickets, in usize packetIndex, in usize fixtureIndex)const{
@@ -143,7 +126,7 @@ Optional<QueueSubmissionPreSubmitHook> CollectSubmissionPacketHook(in GpuSubmiss
 }
 
 b8 TokensBytewiseEqual(in Span<QueueSubmissionToken> lhs, in Span<QueueSubmissionToken> rhs){
-    return SubmissionBytesEqual(PodArrayBytes<QueueSubmissionToken>(lhs), PodArrayBytes<QueueSubmissionToken>(rhs));
+    return BytesMatch(PodArrayBytes<QueueSubmissionToken>(lhs), PodArrayBytes<QueueSubmissionToken>(rhs));
 }
 
 [ordered]
@@ -254,7 +237,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 
     previousRevision = GpuTaskGraphDeclarationReadView(graph).declarationRevision();
-    const Expected<GpuGraphResourceId> resourceResult = AddBufferMetadata(graph, s_DeclarationCaseDeclarationRevisionResource, "Declaration Revision Resource");
+    const Expected<GpuGraphResourceId> resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_DeclarationCaseDeclarationRevisionResource, "Declaration Revision Resource");
     ASSERT_TRUE(resourceResult.has_value());
     const GpuGraphResourceId resource = resourceResult.value();
     ASSERT_TRUE(resource.valid());
@@ -305,7 +288,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     uploadBytes[2u] = 0x5cu;
     uploadBytes[3u] = 0x8eu;
     previousRevision = GpuTaskGraphDeclarationReadView(graph).declarationRevision();
-    const Expected<GpuUploadBlobId> uploadResult = CopyGpuSubmissionUploadBytes(graph, uploadBytes, 4u);
+    const Expected<GpuUploadBlobId> uploadResult = CopyGpuUploadBytes(graph, uploadBytes, 4u);
     ASSERT_TRUE(uploadResult.has_value());
     const GpuUploadBlobId upload = uploadResult.value();
     ASSERT_TRUE(upload.valid());
@@ -360,7 +343,7 @@ void VerifyGpuSubmission_FailedAndIdempotentDeclarationsPreserveCompilerSnapshot
     Array<u8, 1> uploadBytes = Array<u8, 1>();
     uploadBytes[0u] = 0x17u;
     {
-        const Expected<GpuUploadBlobId> gpuTaskAdmission = CopyGpuSubmissionUploadBytes(graph, uploadBytes, 1u);
+        const Expected<GpuUploadBlobId> gpuTaskAdmission = CopyGpuUploadBytes(graph, uploadBytes, 1u);
         ASSERT_TRUE(gpuTaskAdmission.has_value());
         ASSERT_TRUE(gpuTaskAdmission.value().valid());
     }
@@ -851,7 +834,7 @@ void VerifyGpuSubmission_FansInTerminalTextureStateFragmentsForBroadCrossQueueCo
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> textureResult = AddTextureMetadata(graph, s_GpuCaseTaskGraphFragmentFanInTexture, "Fragment Fan-In Texture");
+    const Expected<GpuGraphResourceId> textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphFragmentFanInTexture, "Fragment Fan-In Texture");
     ASSERT_TRUE(textureResult.has_value());
     const GpuGraphResourceId texture = textureResult.value();
     ASSERT_TRUE(texture.valid());
@@ -1621,7 +1604,7 @@ void VerifyGpuSubmission_InvalidGenerationIdentityAndCapacityNeverPublishAUsable
 void VerifyGpuSubmission_FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyRequest(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskUseFirst, "First Use Buffer");
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseFirst, "First Use Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -1647,10 +1630,10 @@ void VerifyGpuSubmission_FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmp
 void VerifyGpuSubmission_PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnknownStateCoverage(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskUsePartial, "Partial Use Buffer");
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUsePartial, "Partial Use Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
-    const Expected<GpuGraphResourceId> otherResult = AddBufferMetadata(graph, s_GpuCaseTaskUseOther, "Other Use Buffer");
+    const Expected<GpuGraphResourceId> otherResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseOther, "Other Use Buffer");
     ASSERT_TRUE(otherResult.has_value());
     const GpuGraphResourceId other = otherResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -1679,7 +1662,7 @@ void VerifyGpuSubmission_PartialAndDisjointEarlierUsesRetainSubtractionOrderAndU
 void VerifyGpuSubmission_CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInvalidPrefixStillFails(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskUseCovered, "Covered Buffer");
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseCovered, "Covered Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -1705,7 +1688,7 @@ void VerifyGpuSubmission_CompleteCoverageStopsBeforeLaterInvalidRangeButSelected
 void VerifyGpuSubmission_SymbolicBufferTailSurvivesFinitePreviousUse(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskUseSymbolic, "Symbolic Buffer");
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseSymbolic, "Symbolic Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -1728,7 +1711,7 @@ void VerifyGpuSubmission_SymbolicBufferTailSurvivesFinitePreviousUse(){
 void VerifyGpuSubmission_TextureRectangleKeepsMipThenSliceRemainderOrder(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> textureResult = AddTextureMetadata(graph, s_GpuCaseTaskUseRectangle, "Texture Rectangle");
+    const Expected<GpuGraphResourceId> textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskUseRectangle, "Texture Rectangle");
     ASSERT_TRUE(textureResult.has_value());
     const GpuGraphResourceId texture = textureResult.value();
     ASSERT_TRUE(texture.valid());
@@ -1759,10 +1742,10 @@ void VerifyGpuSubmission_CompiledResourceSetExpansionPreservesEveryInitialByteRa
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> aResult = AddBufferMetadata(graph, s_GpuCaseTaskUseExpandedA, "Expanded A", ResourceStates::Common);
+    const Expected<GpuGraphResourceId> aResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseExpandedA, "Expanded A", ResourceStates::Common);
     ASSERT_TRUE(aResult.has_value());
     const GpuGraphResourceId resA = aResult.value();
-    const Expected<GpuGraphResourceId> bResult = AddBufferMetadata(graph, s_GpuCaseTaskUseExpandedB, "Expanded B", ResourceStates::Common);
+    const Expected<GpuGraphResourceId> bResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseExpandedB, "Expanded B", ResourceStates::Common);
     ASSERT_TRUE(bResult.has_value());
     const GpuGraphResourceId resB = bResult.value();
     ASSERT_TRUE(resA.valid());
@@ -1858,7 +1841,7 @@ void VerifyGpuSubmission_RepeatedAccelerationStructureUsesKeepOneInitialTransiti
     const Expected<GpuGraphResourceId> accelerationResult = graph.importResource(accelDesc);
     ASSERT_TRUE(accelerationResult.has_value());
     const GpuGraphResourceId acceleration = accelerationResult.value();
-    const Expected<GpuGraphResourceId> otherResult = AddBufferMetadata(graph, s_GpuCaseTaskUseAccelerationOther, "Unrelated Buffer", ResourceStates::Common);
+    const Expected<GpuGraphResourceId> otherResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskUseAccelerationOther, "Unrelated Buffer", ResourceStates::Common);
     ASSERT_TRUE(otherResult.has_value());
     const GpuGraphResourceId other = otherResult.value();
     ASSERT_TRUE(acceleration.valid());

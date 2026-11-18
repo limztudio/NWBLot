@@ -128,22 +128,34 @@ class UiSearchComboRange{
 }
 
 
+interface ISmokeEnabledRows{
+    u64 rowCount()const;
+    b8 enabled(in u64 index)const;
+}
+
 // Arithmetic row lookup keeps the fixture independent of total row count and allocates labels on demand.
-class UiListSmokeSourceState{
-    private u64 m_revision = 1u;
+class UiNumberedSmokeRows : ISmokeEnabledRows{
+    private u64 m_generation = 1u;
+    private b8 m_empty = false;
+    private u64 m_revision;
     private u64 m_removed = 0u;
     private u32 m_labelReads = 0u;
     private b8 m_reversed = false;
 
+    public UiNumberedSmokeRows(){ this.m_revision = 1u; }
+    public UiNumberedSmokeRows(in u64 initialRevision){ this.m_revision = initialRevision; }
+
     public u64 instanceGeneration()const{
-        return 1u;
+        return this.m_generation;
     }
 
     public u64 revision()const{
         return this.m_revision;
     }
 
-    public u64 rowCount()const{
+    public u64 rowCount()const override{
+        if(this.m_empty)
+            return 0u;
         if(this.m_removed == 0u)
             return 100000u;
         return 99999u;
@@ -157,17 +169,21 @@ class UiListSmokeSourceState{
     }
 
     public Expected<u64> indexOf(in u64 keyValue)const{
+        if(this.m_empty)
+            return MakeUnexpected(Failure());
         return FindArithmeticFixtureRowIndex(this.rowCount(), this.m_removed, this.m_reversed, keyValue);
     }
 
     public Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
 
     public u64 readRowKey(in u64 index){
+        if(this.m_empty)
+            return 0u;
         ++this.m_labelReads;
         return this.key(index);
     }
 
-    public b8 enabled(in u64 index)const{
+    public b8 enabled(in u64 index)const override{
         return index < this.rowCount() && this.key(index) != 5u;
     }
 
@@ -187,6 +203,13 @@ class UiListSmokeSourceState{
         this.m_labelReads = 0u;
     }
 
+    public void toggleEmpty(){
+        this.m_empty = !this.m_empty;
+        ++this.m_revision;
+    }
+
+    public void replace(){ ++this.m_generation; }
+
     public b8 reversed()const{
         return this.m_reversed;
     }
@@ -201,92 +224,8 @@ class UiListSmokeSourceState{
 }
 
 
-// Wrapper changing source lifetime and emptiness without storing the 100000 arithmetic rows.
-class UiComboSmokeSourceState{
-    private UiListSmokeSourceState m_rows = UiListSmokeSourceState();
-    private u64 m_generation = 1u;
-    private u64 m_revision = 1u;
-    private b8 m_empty = false;
-
-    public u64 instanceGeneration()const{
-        return this.m_generation;
-    }
-
-    public u64 revision()const{
-        return this.m_revision + this.m_rows.revision();
-    }
-
-    public u64 rowCount()const{
-        if(this.m_empty)
-            return 0u;
-        return this.m_rows.rowCount();
-    }
-
-    public u64 key(in u64 index)const{
-        if(this.m_empty)
-            return 0u;
-        return this.m_rows.key(index);
-    }
-
-    public Expected<u64> indexOf(in u64 keyValue)const{
-        if(this.m_empty)
-            return MakeUnexpected(Failure());
-        return this.m_rows.indexOf(keyValue);
-    }
-
-    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const{
-        if(this.m_empty)
-            return MakeUnexpected(Failure());
-        return this.m_rows.findEnabled(start, reverse);
-    }
-
-    public u64 readRowKey(in u64 index){
-        if(this.m_empty)
-            return 0u;
-        return this.m_rows.readRowKey(index);
-    }
-
-    public b8 enabled(in u64 index)const{
-        return !this.m_empty && this.m_rows.enabled(index);
-    }
-
-    public void reverse(){
-        this.m_rows.reverse();
-    }
-
-    public void remove(in u64 keyValue){
-        this.m_rows.remove(keyValue);
-    }
-
-    public void beginFrame(){
-        this.m_rows.beginFrame();
-    }
-
-    public void toggleEmpty(){
-        this.m_empty = !this.m_empty;
-        ++this.m_revision;
-    }
-
-    public void replace(){
-        ++this.m_generation;
-    }
-
-    public b8 reversed()const{
-        return this.m_rows.reversed();
-    }
-
-    public u64 removedKey()const{
-        return this.m_rows.removedKey();
-    }
-
-    public u32 labelReads()const{
-        return this.m_rows.labelReads();
-    }
-}
-
-
 // Fixed five-key combo source state with a filtered view.
-class UiNestedPopupSmokeSourceState{
+class UiNestedPopupSmokeSourceState : ISmokeEnabledRows{
     private String m_query = "";
     private Array<u64, 5u> m_indices;
     private u64 m_count = 0u;
@@ -303,7 +242,7 @@ class UiNestedPopupSmokeSourceState{
         return 1u;
     }
 
-    public u64 rowCount()const{
+    public u64 rowCount()const override{
         return 5u;
     }
 
@@ -322,7 +261,7 @@ class UiNestedPopupSmokeSourceState{
     public Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
     public StringView readText(in u64 index);
 
-    public b8 enabled(in u64 index)const{
+    public b8 enabled(in u64 index)const override{
         return index < this.rowCount() && this.key(index) != 3u;
     }
 
@@ -389,7 +328,7 @@ class UiNestedPopupSmokeSourceState{
 }
 
 
-class UiPopupToolsSmokeSourceState{
+class UiPopupToolsSmokeSourceState : ISmokeEnabledRows{
     private u64 m_generation = 1u;
     private u64 m_revision = 1u;
     private u32 m_labelReads = 0u;
@@ -403,7 +342,7 @@ class UiPopupToolsSmokeSourceState{
         return this.m_revision;
     }
 
-    public u64 rowCount()const{
+    public u64 rowCount()const override{
         return 5u;
     }
 
@@ -420,7 +359,7 @@ class UiPopupToolsSmokeSourceState{
     public Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
     public StringView readText(in u64 index);
 
-    public b8 enabled(in u64 index)const{
+    public b8 enabled(in u64 index)const override{
         return index < this.rowCount() && this.key(index) != 3u;
     }
 
@@ -566,7 +505,7 @@ class UiRadioGroupSmokeSourceState{
 
 
 class UiSearchComboSmokeSourceState{
-    private UiListSmokeSourceState m_rows = UiListSmokeSourceState();
+    private UiNumberedSmokeRows m_rows = UiNumberedSmokeRows();
     private String m_query = "";
     private Array<UiSearchComboRange, 6u> m_ranges;
     private usize m_rangeCount = 0u;
@@ -720,26 +659,6 @@ b8 SameSmokeRect(in Rect left, in Rect right){
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
 }
 
-b8 SameSmokeU32Span(in Span<u32> left, in Span<u32> right){
-    if(left.size() != right.size())
-        return false;
-    for(usize index = 0u; index < left.size(); ++index){
-        if(left[index] != right[index])
-            return false;
-    }
-    return true;
-}
-
-b8 SameSmokeU64Span(in Span<u64> left, in Span<u64> right){
-    if(left.size() != right.size())
-        return false;
-    for(usize index = 0u; index < left.size(); ++index){
-        if(left[index] != right[index])
-            return false;
-    }
-    return true;
-}
-
 b8 SameSmokeRectSpan(in Span<Rect> left, in Span<Rect> right){
     if(left.size() != right.size())
         return false;
@@ -839,15 +758,19 @@ Expected<u64> ResolveAdjacentSmokeRowCandidate(in u64 rowCount, in u64 start, in
     return start + 1u;
 }
 
-Expected<u64> UiListSmokeSourceState::findEnabled(in u64 start, in b8 reverse)const{
-    if(start >= this.rowCount())
+Expected<u64> FindEnabledSmokeRow(in ISmokeEnabledRows rows, in u64 start, in b8 reverse){
+    if(start >= rows.rowCount())
         return MakeUnexpected(Failure());
-    if(this.enabled(start))
+    if(rows.enabled(start))
         return start;
-    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.rowCount(), start, reverse);
-    if(adjacent.has_value() && this.enabled(adjacent.value()))
+    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(rows.rowCount(), start, reverse);
+    if(adjacent.has_value() && rows.enabled(adjacent.value()))
         return adjacent.value();
     return MakeUnexpected(Failure());
+}
+
+Expected<u64> UiNumberedSmokeRows::findEnabled(in u64 start, in b8 reverse)const{
+    return FindEnabledSmokeRow(this, start, reverse);
 }
 
 UiNestedPopupSmokeSourceState::UiNestedPopupSmokeSourceState(){
@@ -856,14 +779,7 @@ UiNestedPopupSmokeSourceState::UiNestedPopupSmokeSourceState(){
 }
 
 Expected<u64> UiNestedPopupSmokeSourceState::findEnabled(in u64 start, in b8 reverse)const{
-    if(start >= this.rowCount())
-        return MakeUnexpected(Failure());
-    if(this.enabled(start))
-        return start;
-    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.rowCount(), start, reverse);
-    if(adjacent.has_value() && this.enabled(adjacent.value()))
-        return adjacent.value();
-    return MakeUnexpected(Failure());
+    return FindEnabledSmokeRow(this, start, reverse);
 }
 
 StringView UiNestedPopupSmokeSourceState::readText(in u64 index){
@@ -890,14 +806,7 @@ b8 UiNestedPopupSmokeSourceState::filter(in StringView query){
 }
 
 Expected<u64> UiPopupToolsSmokeSourceState::findEnabled(in u64 start, in b8 reverse)const{
-    if(start >= this.rowCount())
-        return MakeUnexpected(Failure());
-    if(this.enabled(start))
-        return start;
-    const Expected<u64> adjacent = ResolveAdjacentSmokeRowCandidate(this.rowCount(), start, reverse);
-    if(adjacent.has_value() && this.enabled(adjacent.value()))
-        return adjacent.value();
-    return MakeUnexpected(Failure());
+    return FindEnabledSmokeRow(this, start, reverse);
 }
 
 StringView UiPopupToolsSmokeSourceState::readText(in u64 index){

@@ -431,7 +431,7 @@ GpuTimingScopeDefinition MaterialPassGpuTimingScope(in MaterialPipelinePass pass
     }
 }
 
-void RendererMaterialSystem::recordPreparedMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
+void RendererMaterialSystem::renderPreparedAvboitMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
         in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources,
         in MeshFrameBindingSnapshot frameBindings, in usize instanceCount, in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned,
         in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
@@ -516,23 +516,6 @@ void RendererMaterialSystem::recordPreparedMaterialPass(mut CommandList commands
 
         recordPreparedDraws();
     }
-}
-
-void RendererMaterialSystem::renderPreparedAvboitMaterialPass(mut CommandList commandList, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-    in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings, in usize instanceCount,
-    in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned, in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned, in b8 emulationOutputReused){
-    this.recordPreparedMaterialPass(commandList, framebuffer, pass, avboitTargets, drawItems, csgFrameData, csgResources,
-        frameBindings, instanceCount, materialTypedByteCount, materialFrameStatesGraphOwned, materialGeometryStatesGraphOwned, emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned,
-            emulationOutputReused, Optional<mut Optional<GpuTimingMeasure>>());
-}
-
-void RendererMaterialSystem::renderPreparedAvboitMaterialPass(mut CommandList commandList, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-    in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings, in usize instanceCount,
-    in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned, in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
-    in b8 emulationOutputReused, mut Optional<GpuTimingMeasure> emulationOutputTiming){
-    this.recordPreparedMaterialPass(commandList, framebuffer, pass, avboitTargets, drawItems, csgFrameData, csgResources,
-        frameBindings, instanceCount, materialTypedByteCount, materialFrameStatesGraphOwned, materialGeometryStatesGraphOwned, emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned,
-            emulationOutputReused, Optional<mut Optional<GpuTimingMeasure>>(emulationOutputTiming));
 }
 
 b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState){

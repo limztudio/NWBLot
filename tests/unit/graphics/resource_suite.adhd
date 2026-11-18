@@ -107,13 +107,6 @@ extern class StandaloneGraphWorkspacePool{
 [cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease"), cpp_flags(no_copy, no_assign)]
 extern class StandaloneGraphWorkspaceLease;
 
-[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashMarkerTracker"), cpp_flags(no_copy, no_assign)]
-extern class GpuCrashMarkerTracker{
-    usize pushEvent(in StringView label);
-    void resetEventStack();
-    void popEvent();
-};
-
 [cpp_header("<core/graphics/vulkan/blas_opacity_micromap_policy.h>"), cpp_name("::VkMicromapUsageEXT"), cpp_flags(self_defaulted)]
 extern class VkMicromapUsage;
 
@@ -289,7 +282,7 @@ b8 IsConcurrentTextureImageConsistent(in TextureDesc desc, in VkImageCreateInfo 
 }
 
 void InsertCrashMarkers(mut GpuCrashTracker tracker, mut HeapStorage arena, in Span<StringView> names,
-    mut TestLatch start, mut TestLatch midpoint, mut TestAtomic<b8> invalid, mut TestAtomic<u32> writers){
+    mut Latch start, mut Latch midpoint, mut TestAtomic<b8> invalid, mut TestAtomic<u32> writers){
     {
         GpuCrashMarkerTracker local(tracker, arena);
         start.arrive_and_wait();
@@ -327,14 +320,14 @@ b8 RunConcurrentCrashMarkerGrowthCheck(mut GpuCrashTracker tracker, mut HeapStor
         "Concurrent writer B marker 10", "Concurrent writer B marker 11",
         "Concurrent writer B marker 12", "Concurrent writer B marker 13",
         "Concurrent writer B marker 14", "Concurrent writer B marker 15");
-    TestLatch start(3u);
-    TestLatch midpoint(3u);
+    Latch start(3u);
+    Latch midpoint(3u);
     TestAtomic<u32> writers(2u);
     TestAtomic<b8> invalid(false);
-    TestThread first(lambda[mut tracker, mut arena, in firstNames, mut start, mut midpoint, mut invalid, mut writers]() -> void{
+    JoiningThread first(lambda[mut tracker, mut arena, in firstNames, mut start, mut midpoint, mut invalid, mut writers]() -> void{
         InsertCrashMarkers(tracker, arena, firstNames, start, midpoint, invalid, writers);
     });
-    TestThread second(lambda[mut tracker, mut arena, in secondNames, mut start, mut midpoint, mut invalid, mut writers]() -> void{
+    JoiningThread second(lambda[mut tracker, mut arena, in secondNames, mut start, mut midpoint, mut invalid, mut writers]() -> void{
         InsertCrashMarkers(tracker, arena, secondNames, start, midpoint, invalid, writers);
     });
     start.arrive_and_wait();

@@ -3,24 +3,12 @@
 
 
 #include "benchmark_support.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <utilities/cli/tool_cli.adhd>
-
 #include <tests/common/posix_child.adhd>
 #include <tests/common/test_helpers.adhd>
 
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDoubleDetail::MinMaxIntersects")]
 extern b8 GeometryMinMaxIntersects(in VectorDouble minA, in VectorDouble maxA, in VectorDouble minB, in VectorDouble maxB);
 
-[cpp_header("<global/simd/collision_triangle.h>"), cpp_name("::TriangleDoubleTests::Intersects")]
-extern b8 GeometryProduction(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble b0, in VectorDouble b1, in VectorDouble b2);
-
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::ConsumeChecksum")]
-extern void ConsumeGeometryChecksum(in u64 value);
 
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasPosixFpTraps")]
 extern const b8 s_HasGeometryTraps;
@@ -426,7 +414,7 @@ GeometryIntersection SelectGeometryImplementation(in u32 implementation){
     case 2u: return GeometryZeroAxis;
     case 3u: return GeometryAbsHoisted;
     default: return lambda[](in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble b0, in VectorDouble b1, in VectorDouble b2) -> b8{
-        return GeometryProduction(a0, a1, a2, b0, b1, b2);
+        return DoubleTrianglesIntersect(a0, a1, a2, b0, b1, b2);
     };
     }
 }
@@ -445,7 +433,7 @@ u64 RunGeometryBatchKernel(in u32 implId, in Span<TrianglePair> pairs, in u32 pa
                 ++result;
         }
     }
-    ConsumeGeometryChecksum(result);
+    ConsumeBenchmarkChecksum(result);
     return result;
 }
 
@@ -504,16 +492,9 @@ b8 CheckExceptionEquivalence(in TrianglePair pair){
     const i32 hoistedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const b8 production = GeometryProduction(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]));
+    const b8 production = DoubleTrianglesIntersect(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]));
     const i32 productionFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     return original == reference && reference == hoisted && hoisted == production && originalFlags == referenceFlags && referenceFlags == hoistedFlags && hoistedFlags == productionFlags;
-}
-
-u64 NextGeometryVerifySeed(mut u64 state){
-    state ^= state << 13u;
-    state ^= state >> 7u;
-    state ^= state << 17u;
-    return state;
 }
 
 b8 CheckTrianglePairPermutationsKernel(in TrianglePair pair, in b8 expected){
@@ -557,7 +538,7 @@ b8 ValidateGeometryContainmentAndTrapsKernel(in TrianglePair fixture0, in Triang
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             Array<f64, 3> coordinates;
             for(mut f64 coordinate : coordinates)
-                coordinate = cast<f64>(cast<i64>(NextGeometryVerifySeed(state) % 2000000001u) - 1000000000);
+                coordinate = cast<f64>(cast<i64>(NextSeed(state) % 2000000001u) - 1000000000);
             pair.first[vertex] = f64x4(VectorDoubleScale(VectorDoubleSet(coordinates[0], coordinates[1], coordinates[2], 0.0), 0.25));
         }
         const VectorDouble contained = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(VectorDouble(pair.first[0]), 2.0), VectorDouble(pair.first[1])), VectorDouble(pair.first[2])), 0.25);
@@ -566,7 +547,7 @@ b8 ValidateGeometryContainmentAndTrapsKernel(in TrianglePair fixture0, in Triang
         if(
             !GeometryBaseline(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), contained, contained, contained)
             || !GeometryZeroAxis(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), contained, contained, contained)
-            || !GeometryProduction(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), contained, contained, contained)
+            || !DoubleTrianglesIntersect(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), contained, contained, contained)
             || !GeometryAbsHoisted(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), contained, contained, contained)
         ){
             valid = false;
@@ -575,7 +556,7 @@ b8 ValidateGeometryContainmentAndTrapsKernel(in TrianglePair fixture0, in Triang
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             Array<f64, 3> coordinates;
             for(mut f64 coordinate : coordinates)
-                coordinate = cast<f64>(cast<i64>(NextGeometryVerifySeed(state) % 2000001u) - 1000000);
+                coordinate = cast<f64>(cast<i64>(NextSeed(state) % 2000001u) - 1000000);
             pair.first[vertex] = f64x4(VectorDoubleSet(coordinates[0], coordinates[1], coordinates[2], 0.0));
         }
         const VectorDouble containedSingle = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(VectorDouble(pair.first[0]), 2.0), VectorDouble(pair.first[1])), VectorDouble(pair.first[2])), 0.25);
@@ -586,7 +567,7 @@ b8 ValidateGeometryContainmentAndTrapsKernel(in TrianglePair fixture0, in Triang
         if(
             !GeometryBaseline(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]))
             || !GeometryZeroAxis(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]))
-            || !GeometryProduction(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]))
+            || !DoubleTrianglesIntersect(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]))
             || !GeometryAbsHoisted(VectorDouble(pair.first[0]), VectorDouble(pair.first[1]), VectorDouble(pair.first[2]), VectorDouble(pair.second[0]), VectorDouble(pair.second[1]), VectorDouble(pair.second[2]))
         ){
             valid = false;
@@ -617,7 +598,7 @@ b8 ValidateGeometryContainmentAndTrapsKernel(in TrianglePair fixture0, in Triang
                     valid = false;
                 }
                 else{
-                    const b8 production = GeometryProduction(VectorDouble(signaling.first[0]), VectorDouble(signaling.first[1]), VectorDouble(signaling.first[2]), VectorDouble(signaling.second[0]), VectorDouble(signaling.second[1]), VectorDouble(signaling.second[2]));
+                    const b8 production = DoubleTrianglesIntersect(VectorDouble(signaling.first[0]), VectorDouble(signaling.first[1]), VectorDouble(signaling.first[2]), VectorDouble(signaling.second[0]), VectorDouble(signaling.second[1]), VectorDouble(signaling.second[2]));
                     const i32 productionExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
                         valid = false;
@@ -895,19 +876,6 @@ i32 RunGeometryBenchmarkCli(in Span<StringView> args){
     return RunGeometryBenchmark(mode == s_ValidateMode, mode == s_AbsoluteMode, mode == s_GuardMode);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 RunGeometryBenchmarkCliEntry(in ConsoleArguments arguments){
-    if(arguments.count <= 0)
-        return 2;
-    Array<StringView, 4> args;
-    const usize count = Min(cast<usize>(arguments.count), args.size());
-    for(usize index = 0u; index < count; ++index)
-        args[index] = arguments.text(cast<i32>(index));
-    return RunGeometryBenchmarkCli(Span<StringView>(args).first(count));
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

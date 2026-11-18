@@ -22,17 +22,16 @@ const u16 s_BitmapBitsPerPixel = 24u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WriteBitmapU16LE(in u16 value, in usize offset, mut Vector<u8> destination){
-    const u32 wide = cast<u32>(value);
-    destination[offset] = cast<u8>(wide & s_BitmapByteMask);
-    destination[offset + 1u] = cast<u8>((wide >> s_BitmapByte1Shift) & s_BitmapByteMask);
+b8 ContainsSmokeImageRows(in usize byteCount, in usize rowPitch, in usize rowBytes, in u32 height){
+    if(rowPitch < rowBytes)
+        return false;
+    const auto required = ComputeStridedRangeByteSize(height, rowPitch, rowBytes);
+    return required.has_value() && required.value() <= byteCount;
 }
 
-void WriteBitmapU32LE(in u32 value, in usize offset, mut Vector<u8> destination){
-    destination[offset] = cast<u8>(value & s_BitmapByteMask);
-    destination[offset + 1u] = cast<u8>((value >> s_BitmapByte1Shift) & s_BitmapByteMask);
-    destination[offset + 2u] = cast<u8>((value >> s_BitmapByte2Shift) & s_BitmapByteMask);
-    destination[offset + 3u] = cast<u8>((value >> s_BitmapByte3Shift) & s_BitmapByteMask);
+void WriteBitmapIntegerLE<UInt>(in UInt value, in usize offset, mut Vector<u8> destination){
+    for(usize index = 0u; index < size_of<UInt>(); ++index)
+        destination[offset + index] = cast<u8>(cast<u64>(value) >> (index * s_BitsPerByte));
 }
 
 b8 IsBitmapBgraFormat(in Format format){
@@ -63,22 +62,14 @@ class BitmapCaptureWriter{
         const u64 bitmapRowBytes64 = cast<u64>(width) * cast<u64>(s_BitmapBytesPerPixel);
         if(sourceRowBytes64 > s_BitmapMaxU32Bytes || bitmapRowBytes64 > s_BitmapMaxU32Bytes - 3u)
             return false;
-        if(cast<u64>(sourceRowPitch) < sourceRowBytes64)
-            return false;
 
         const u64 bitmapRowPitch64 = (bitmapRowBytes64 + 3u) & ~cast<u64>(3u);
         const u64 bitmapPixelBytes64 = bitmapRowPitch64 * cast<u64>(height);
         if(bitmapPixelBytes64 > s_BitmapMaxU32Bytes - cast<u64>(s_BitmapPixelOffset))
             return false;
 
-        if(height > 0u){
-            const u64 lastRowIndex = cast<u64>(height - 1u);
-            const u64 availableBytes = cast<u64>(sourceBytes.size());
-            if(availableBytes < sourceRowBytes64)
-                return false;
-            if(sourceRowPitch > 0u && lastRowIndex > (availableBytes - sourceRowBytes64) / cast<u64>(sourceRowPitch))
-                return false;
-        }
+        if(!ContainsSmokeImageRows(sourceBytes.size(), sourceRowPitch, cast<usize>(sourceRowBytes64), height))
+            return false;
 
         const usize bitmapRowPitch = cast<usize>(bitmapRowPitch64);
         const usize bitmapPixelBytes = cast<usize>(bitmapPixelBytes64);
@@ -88,14 +79,14 @@ class BitmapCaptureWriter{
         bitmapBytes.resize(bitmapFileBytes);
         bitmapBytes[0u] = s_BitmapMagicB;
         bitmapBytes[1u] = s_BitmapMagicM;
-        WriteBitmapU32LE(cast<u32>(bitmapFileBytes), 2u, bitmapBytes);
-        WriteBitmapU32LE(cast<u32>(s_BitmapPixelOffset), 10u, bitmapBytes);
-        WriteBitmapU32LE(cast<u32>(s_BitmapInfoHeaderSize), s_BitmapFileHeaderSize, bitmapBytes);
-        WriteBitmapU32LE(width, 18u, bitmapBytes);
-        WriteBitmapU32LE(height, 22u, bitmapBytes);
-        WriteBitmapU16LE(s_BitmapPlanes, 26u, bitmapBytes);
-        WriteBitmapU16LE(s_BitmapBitsPerPixel, 28u, bitmapBytes);
-        WriteBitmapU32LE(cast<u32>(bitmapPixelBytes), 34u, bitmapBytes);
+        WriteBitmapIntegerLE<u32>(cast<u32>(bitmapFileBytes), 2u, bitmapBytes);
+        WriteBitmapIntegerLE<u32>(cast<u32>(s_BitmapPixelOffset), 10u, bitmapBytes);
+        WriteBitmapIntegerLE<u32>(cast<u32>(s_BitmapInfoHeaderSize), s_BitmapFileHeaderSize, bitmapBytes);
+        WriteBitmapIntegerLE<u32>(width, 18u, bitmapBytes);
+        WriteBitmapIntegerLE<u32>(height, 22u, bitmapBytes);
+        WriteBitmapIntegerLE<u16>(s_BitmapPlanes, 26u, bitmapBytes);
+        WriteBitmapIntegerLE<u16>(s_BitmapBitsPerPixel, 28u, bitmapBytes);
+        WriteBitmapIntegerLE<u32>(cast<u32>(bitmapPixelBytes), 34u, bitmapBytes);
 
         const b8 sourceIsBgra = IsBitmapBgraFormat(this.m_format);
         for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){

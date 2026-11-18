@@ -99,11 +99,10 @@ using WideOverflowBuffer = Array<wchar, WCompactString::s_MaxLength + 2u>;
 using NarrowChar = char;
 using WideChar = wchar;
 using WideCompact = WCompactString;
-using WideView = WStringView;
 inline constexpr usize s_WideLimit = WCompactString::s_MaxLength;
-inline constexpr WideView s_UnchangedWide = L"unchanged";
-inline constexpr WideView s_MixedWideLines = L"a\r\nb\n\rc";
-inline constexpr WideView s_ExpandedWideLines = L"a\r\nb\r\n\rc";
+inline constexpr WStringView s_UnchangedWide = L"unchanged";
+inline constexpr WStringView s_MixedWideLines = L"a\r\nb\n\rc";
+inline constexpr WStringView s_ExpandedWideLines = L"a\r\nb\r\n\rc";
 inline constexpr const char* s_AbsentText = nullptr;
 static_assert(sizeof(usize) == sizeof(u32) || sizeof(usize) == sizeof(u64));
 
@@ -113,12 +112,12 @@ template<typename T>
 }
 
 template<usize Count>
-[[nodiscard]] inline WideView WidePrefix(const Array<wchar, Count>& data, usize length)noexcept{
+[[nodiscard]] inline WStringView WidePrefix(const Array<wchar, Count>& data, usize length)noexcept{
     return { data.data(), length };
 }
 
 template<usize Count>
-[[nodiscard]] inline usize ExpandWideLines(WideView text, Array<wchar, Count>& destination)noexcept{
+[[nodiscard]] inline usize ExpandWideLines(WStringView text, Array<wchar, Count>& destination)noexcept{
     return ::CopyWithCrBeforeBareLf(text, destination.data());
 }
 
@@ -126,15 +125,6 @@ template<typename Edits, typename Text>
 inline void ApplyEdits(Edits& edits, Text& text){
     using Item = RemoveReference_T<decltype(edits[0])>;
     ::ApplyTextReplacements(Span<Item>(edits.data(), edits.size()), text);
-}
-
-template<typename Dest>
-inline void UpperFallback(AStringView input, const char* fallback, Dest& dst)noexcept(noexcept(::AppendAsciiUpperIdentifier(input, fallback, dst))){
-    ::AppendAsciiUpperIdentifier(input, fallback, dst);
-}
-template<typename Dest>
-inline void PascalFallback(AStringView input, const char* fallback, Dest& dst)noexcept(noexcept(::AppendUnderscoreSeparatedPascalIdentifier(input, fallback, dst))){
-    ::AppendUnderscoreSeparatedPascalIdentifier(input, fallback, dst);
 }
 
 template<typename T, typename Arg>

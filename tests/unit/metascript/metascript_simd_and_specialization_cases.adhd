@@ -9,26 +9,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TransitiveSplitResolver : CompilerIncludeResolver{
+class TransitiveSplitResolver : MetascriptIIncludeResolver{
     public u32 popCount = 0u;
-    public b8 resolveInclude(in StringView includePath, in b8 isSystem, mut CompilerStorage rArena, mut MString outResolvedKey, mut MString outContent)override{
+    public b8 resolveInclude(in StringView includePath, in b8 isSystem, mut GlobalAllocator rArena, mut GlobalString outResolvedKey, mut GlobalString outContent)override{
         if(includePath == "visitor_decl.adhd"){
-            outResolvedKey = MString("/abs/visitor_decl.adhd", rArena);
-            outContent = MString("b8 ForeignVisit(in MetascriptValue value){return value.isNull();}", rArena);
+            outResolvedKey = GlobalString("/abs/visitor_decl.adhd", rArena);
+            outContent = GlobalString("b8 ForeignVisit(in MetascriptValue value){return value.isNull();}", rArena);
             return true;
         }
         if(includePath == "split_decl.adhd"){
-            outResolvedKey = MString("/abs/split_decl.adhd", rArena);
+            outResolvedKey = GlobalString("/abs/split_decl.adhd", rArena);
             const StringView s_DeclCode =
                 "#include \"sub/leaf.adhd\"\r\ni32 ComputeCrossFile(in i32 x);\r\nclass CrossBox<T> {\r\n    public T m_item;\r\n    public T fetch()const;\r\n}\r\n";
-            outContent = MString(s_DeclCode, rArena);
+            outContent = GlobalString(s_DeclCode, rArena);
             return true;
         }
         if(includePath == "sub/leaf.adhd"){
-            outResolvedKey = MString("/abs/sub/leaf.adhd", rArena);
+            outResolvedKey = GlobalString("/abs/sub/leaf.adhd", rArena);
             const StringView s_LeafCode =
                 "const i32 s_LeafBias = 7;\r\n";
-            outContent = MString(s_LeafCode, rArena);
+            outContent = GlobalString(s_LeafCode, rArena);
             return true;
         }
         return false;

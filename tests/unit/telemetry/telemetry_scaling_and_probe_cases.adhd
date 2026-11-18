@@ -758,8 +758,8 @@ void VerifyFrameGraphReport_GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjace
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     in TelemetryReport report = reportResult.value();
     ASSERT_EQ(report.summary.parseFailureCount, 0u);
@@ -809,11 +809,11 @@ void VerifyFrameGraphReport_RestartsOwnerRangesForEveryCaptureAndReportRebuild()
     AddReportOwner(second, 2u, 7u);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
 
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
-    const Expected<TelemetryReport> reportResult3 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    const Expected<TelemetryReport> reportResult3 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult3.has_value());
     in TelemetryReport report3 = reportResult3.value();
     ASSERT_EQ(report3.summary.frameGraphFrameCount, 2u);
@@ -824,7 +824,7 @@ void VerifyFrameGraphReport_RestartsOwnerRangesForEveryCaptureAndReportRebuild()
 
     recorder.clear();
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
-    const Expected<TelemetryReport> reportResult4 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    const Expected<TelemetryReport> reportResult4 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult4.has_value());
     in TelemetryReport report4 = reportResult4.value();
     ASSERT_EQ(report4.summary.frameGraphFrameCount, 1u);
@@ -841,7 +841,7 @@ void VerifyFrameGraphReport_RejectsMalformedOwnerTablesBeforeReportingAndRetains
     TelemetryBytes original = TelemetryBytes(testArena.arena);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, original));
     EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
@@ -884,7 +884,7 @@ void VerifyFrameGraphReport_RejectsMalformedOwnerTablesBeforeReportingAndRetains
     ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, malformed, 3u));
     ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, original, 4u));
 
-    const Expected<TelemetryReport> reportResult5 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    const Expected<TelemetryReport> reportResult5 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult5.has_value());
     in TelemetryReport report = reportResult5.value();
     EXPECT_EQ(report.summary.eventCount, 4u);
@@ -991,7 +991,7 @@ void VerifyTelemetry_FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords()
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
     ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
-    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
+    EXPECT_FALSE(ParseFrameGraphPrefix(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
 void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){

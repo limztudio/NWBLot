@@ -86,7 +86,7 @@ void VerifyGpuCmdIr_RejectsForeignGraphAndPlanGenerationsWithoutChangingCaptured
     GpuCommandIrCapture capture = GpuCommandIrCapture(testArena.arena);
     const GpuTaskId task = MakeGpuTaskId(17u, 4u);
     const GpuSubmissionPacketId packet = GpuCmdIr_MakePacketId(23u, 2u);
-    const GpuPhysicalQueueId queue = MakeGpuPhysicalQueueId(1u, 3u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(1u, 3u);
     const GpuGraphResourceId source = MakeGpuResourceId(17u, 5u);
     const GpuGraphResourceId destination = MakeGpuResourceId(17u, 6u);
 
@@ -119,7 +119,7 @@ void VerifyGpuCmdIr_RejectsNonEmptyCaptureFromDifferentRecordingAttempt(){
     GpuCommandIrCapture capture = GpuCommandIrCapture(testArena.arena);
     const GpuTaskId task = MakeGpuTaskId(17u, 4u);
     const GpuSubmissionPacketId packet = GpuCmdIr_MakePacketId(23u, 2u);
-    const GpuPhysicalQueueId queue = MakeGpuPhysicalQueueId(1u, 3u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(1u, 3u);
     const GpuGraphResourceId source = MakeGpuResourceId(17u, 5u);
     const GpuGraphResourceId destination = MakeGpuResourceId(17u, 6u);
 
@@ -156,7 +156,7 @@ void VerifyGpuCmdIr_RejectsDegenerateRectUIntClearAndEarlierStreamVersions(){
 
     GraphicsBytes downgradedRectBytes = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(bytes, downgradedRectBytes);
-    WriteCommandIrU16(s_GpuCmdIrHdrVersionOffset, cast<u16>(s_GpuCommandIrStreamVersion - 1u), downgradedRectBytes);
+    WriteCommandIrWord<u16>(s_GpuCmdIrHdrVersionOffset, cast<u16>(s_GpuCommandIrStreamVersion - 1u), downgradedRectBytes);
     GpuCommandIrStreamReader downgradedRectReader = GpuCommandIrStreamReader(MakeGraphicsByteView(downgradedRectBytes));
     const auto terminal1 = downgradedRectReader.nextBuiltinTask();
     ASSERT_FALSE(terminal1.has_value());
@@ -169,36 +169,11 @@ void VerifyGpuCmdIr_RollbackPreservesExactMixedRecordPrefixAtRecordBoundaries(){
     GpuCommandIrCapture capture = GpuCommandIrCapture(testArena.arena);
     const GpuTaskId task = MakeGpuTaskId(17u, 4u);
     const GpuSubmissionPacketId packet = GpuCmdIr_MakePacketId(17u, 2u);
-    const GpuPhysicalQueueId queue = MakeGpuPhysicalQueueId(1u, 3u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(1u, 3u);
     const GpuGraphResourceId source = MakeGpuResourceId(17u, 5u);
     const GpuGraphResourceId destination = MakeGpuResourceId(17u, 6u);
 
-    TextureSlice sourceSlice = TextureSlice();
-    sourceSlice.setOrigin(1u, 2u, 3u);
-    sourceSlice.setSize(4u, 5u, 6u);
-    sourceSlice.setMipLevel(7u);
-    sourceSlice.setArraySlice(8u);
-    TextureSlice destinationSlice = TextureSlice();
-    destinationSlice.setOrigin(9u, 10u, 11u);
-    destinationSlice.setSize(12u, 13u, 14u);
-    destinationSlice.setMipLevel(15u);
-    destinationSlice.setArraySlice(16u);
-    GpuClearTextureTaskDesc clearTexture = GpuClearTextureTaskDesc();
-    clearTexture.destination = destination;
-    clearTexture.subresources = TextureSubresourceSet(2u, 3u, 4u, 5u);
-    clearTexture.valueType = GpuClearTextureTaskValueType::DepthStencil;
-    clearTexture.floatValue = Color(0.25f, 0.5f, 0.75f, 1.0f);
-    clearTexture.uintValue = UIntColor(2u, 3u, 5u, 7u);
-    clearTexture.intValue = IntColor(-2, -3, -5, -7);
-    clearTexture.depthValue = 0.125f;
-    clearTexture.stencilValue = 19u;
-    clearTexture.clearDepth = true;
-    clearTexture.clearStencil = true;
-
-    ASSERT_TRUE(capture.captureCopyBuffer(task, packet, queue, source, 16u, destination, 32u, 64u));
-    ASSERT_TRUE(capture.captureCopyTexture(task, packet, queue, source, sourceSlice, destination, destinationSlice));
-    ASSERT_TRUE(capture.captureClearBuffer(task, packet, queue, destination, 0xdecafbadu));
-    ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
+    ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture, task, packet, queue, source, destination));
 
     const BinaryByteView bytes = capture.commandBytes();
     const usize copyTextureEnd = s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrCopyBufferRecordBytes + s_GpuCmdIrCopyTextureRecordBytes;
@@ -246,7 +221,7 @@ void VerifyGpuCmdIr_RetainedOwnerAnchorOutlivesIndependentCaptureArena(){
 void VerifyGpuCmdIr_DrawWithoutHeapBindingRejectsWholePacket(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto colorResult = AddTextureMetadata(graph, s_GpuCaseCommandIrRasterColor, "Raster Color", ResourceStates::RenderTarget);
+    const auto colorResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseCommandIrRasterColor, "Raster Color", ResourceStates::RenderTarget);
     ASSERT_TRUE(colorResult.has_value());
     const GpuGraphResourceId color = colorResult.value();
     const auto pipelineResult = AddPipelineMetadata(graph, s_GpuCaseCommandIrRasterPipeline, "Raster Pipeline", GpuGraphPipelineType::Graphics);
@@ -455,12 +430,12 @@ void VerifyGpuCmdIr_RejectsLateOutOfBlobPushAndEarlierVersion(){
     GraphicsBytes malformed = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(capture.commandBytes(), malformed);
     const usize secondRecord = s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrSetGraphicsStateRecordBytes;
-    WriteCommandIrU64(secondRecord + s_GpuCmdIrPushBlobOffsetOffset, u64.max, malformed);
+    WriteCommandIrWord<u64>(secondRecord + s_GpuCmdIrPushBlobOffsetOffset, u64.max, malformed);
     const GpuCommandIrStreamValidationResult invalid = ValidateGpuCommandIrStream(MakeGraphicsByteView(malformed));
     EXPECT_EQ(invalid.error, GpuCommandIrStreamValidationError::InvalidBlobRange);
     EXPECT_EQ(invalid.recordIndex, 1u);
 
-    WriteCommandIrU16(s_GpuCmdIrHdrVersionOffset, 4u, malformed);
+    WriteCommandIrWord<u16>(s_GpuCmdIrHdrVersionOffset, 4u, malformed);
     const GpuCommandIrStreamValidationResult oldVersion = ValidateGpuCommandIrStream(MakeGraphicsByteView(malformed));
     EXPECT_EQ(oldVersion.error, GpuCommandIrStreamValidationError::UnsupportedVersion);
 }
@@ -473,7 +448,7 @@ void VerifyGpuCmdIr_RejectsCorruptedViewportBeforeExposingRasterRecord(){
     GraphicsBytes malformed = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(capture.commandBytes(), malformed);
     const usize maxXOffset = s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrGfxViewportMaxXOffset;
-    WriteCommandIrF32(maxXOffset, 0.0f, malformed);
+    WriteCommandIrWord<f32>(maxXOffset, 0.0f, malformed);
     GpuCommandIrStreamReader reader = GpuCommandIrStreamReader(MakeGraphicsByteView(malformed));
 
     const auto terminal1 = reader.next();
@@ -544,45 +519,45 @@ void VerifyGpuCmdIr_RejectsMalformedHeadersBeforeReadingRecords(){
     GraphicsBytes corruptedBytes = GraphicsBytes(testArena.arena);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_GpuCmdIrHdrMagicOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u32>(s_GpuCmdIrHdrMagicOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::InvalidMagic);
 
     for(u16 version = 0u; version < s_GpuCommandIrStreamVersion; ++version){
         CopyCommandIrBytes(validBytes, corruptedBytes);
-        WriteCommandIrU16(s_GpuCmdIrHdrVersionOffset, version, corruptedBytes);
+        WriteCommandIrWord<u16>(s_GpuCmdIrHdrVersionOffset, version, corruptedBytes);
         GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::UnsupportedVersion);
     }
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU16(s_GpuCmdIrHdrVersionOffset, cast<u16>(s_GpuCommandIrStreamVersion + 1u), corruptedBytes);
+    WriteCommandIrWord<u16>(s_GpuCmdIrHdrVersionOffset, cast<u16>(s_GpuCommandIrStreamVersion + 1u), corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::UnsupportedVersion);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU16(s_GpuCmdIrHdrVersionOffset, u16.max, corruptedBytes);
+    WriteCommandIrWord<u16>(s_GpuCmdIrHdrVersionOffset, u16.max, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::UnsupportedVersion);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU16(s_GpuCmdIrHdrReservedOffset, 1u, corruptedBytes);
+    WriteCommandIrWord<u16>(s_GpuCmdIrHdrReservedOffset, 1u, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::InvalidHeaderReserved);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU64(s_GpuCmdIrHdrCommandBytesOffset, cast<u64>(corruptedBytes.size()), corruptedBytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrCommandBytesOffset, cast<u64>(corruptedBytes.size()), corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::PayloadSizeMismatch);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU64(s_GpuCmdIrHdrGraphGenOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrGraphGenOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::InvalidGraphGeneration);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU64(s_GpuCmdIrHdrPlanGenOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrPlanGenOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::InvalidPlanGeneration);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_GpuCmdIrHdrRecordCountOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u32>(s_GpuCmdIrHdrRecordCountOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::InvalidGraphGeneration);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_GpuCmdIrHdrRecordCountOffset, 64u, corruptedBytes);
+    WriteCommandIrWord<u32>(s_GpuCmdIrHdrRecordCountOffset, 64u, corruptedBytes);
     GpuCmdIr_AssertHeaderError(corruptedBytes, GpuCommandIrStreamValidationError::InvalidRecordCount);
 }
 
@@ -619,78 +594,78 @@ void VerifyGpuCmdIr_RejectsMalformedRecordsWithoutProducingPartialValues(){
     GraphicsBytes corruptedBytes = GraphicsBytes(testArena.arena);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU16(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecByteSizeOffset, 3u, corruptedBytes);
+    WriteCommandIrWord<u16>(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecByteSizeOffset, 3u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::InvalidRecordSize);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU16(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecByteSizeOffset, u16.max, corruptedBytes);
+    WriteCommandIrWord<u16>(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecByteSizeOffset, u16.max, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::InvalidRecordSize);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecOpcodeOffset, cast<u8>(GpuCommandIrWireOpcode::SetGraphicsState), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecOpcodeOffset, cast<u8>(GpuCommandIrWireOpcode::SetGraphicsState), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::UnsupportedOpcode);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecOpcodeOffset, cast<u8>(GpuCommandIrWireOpcode::Count), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecOpcodeOffset, cast<u8>(GpuCommandIrWireOpcode::Count), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::UnsupportedOpcode);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU64(s_CommandIrCopyBufferOffset + s_GpuCmdIrCopyBufDataSizeOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u64>(s_CommandIrCopyBufferOffset + s_GpuCmdIrCopyBufDataSizeOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 0u, s_CommandIrCopyBufferOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_CommandIrCopyBufferOffset + s_GpuCmdIrCopyBufSrcResOffset, u32.max, corruptedBytes);
+    WriteCommandIrWord<u32>(s_CommandIrCopyBufferOffset + s_GpuCmdIrCopyBufSrcResOffset, u32.max, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 0u, s_CommandIrCopyBufferOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU16(s_CommandIrCopyBufferOffset + s_GpuCmdIrCopyBufQueueGenOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u16>(s_CommandIrCopyBufferOffset + s_GpuCmdIrCopyBufQueueGenOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 0u, s_CommandIrCopyBufferOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_CommandIrCopyTextureOffset + s_GpuCmdIrCopyTexDstResOffset, u32.max, corruptedBytes);
+    WriteCommandIrWord<u32>(s_CommandIrCopyTextureOffset + s_GpuCmdIrCopyTexDstResOffset, u32.max, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_CommandIrClearBufferOffset + s_GpuCmdIrClearBufDstResOffset, u32.max, corruptedBytes);
+    WriteCommandIrWord<u32>(s_CommandIrClearBufferOffset + s_GpuCmdIrClearBufDstResOffset, u32.max, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 2u, s_CommandIrClearBufferOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexNumMipsOffset, 0u, corruptedBytes);
+    WriteCommandIrWord<u32>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexNumMipsOffset, 0u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexValueTypeOffset, cast<u8>(GpuClearTextureTaskValueType::Count), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexValueTypeOffset, cast<u8>(GpuClearTextureTaskValueType::Count), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexFlagsOffset, 4u, corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexFlagsOffset, 4u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexFlagsOffset, cast<u8>(GpuCommandIrClearTextureFlag::None), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexFlagsOffset, cast<u8>(GpuCommandIrClearTextureFlag::None), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexValueTypeOffset, cast<u8>(GpuClearTextureTaskValueType::Float), corruptedBytes);
-    WriteCommandIrU8(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexFlagsOffset, cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexValueTypeOffset, cast<u8>(GpuClearTextureTaskValueType::Float), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexFlagsOffset, cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU8(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexReservedOffset, 1u, corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexReservedOffset, 1u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_GpuCmdIrHdrRecordCountOffset, 3u, corruptedBytes);
+    WriteCommandIrWord<u32>(s_GpuCmdIrHdrRecordCountOffset, 3u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::TrailingPayload);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrU32(s_GpuCmdIrHdrRecordCountOffset, 5u, corruptedBytes);
+    WriteCommandIrWord<u32>(s_GpuCmdIrHdrRecordCountOffset, 5u, corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 4u, validBytes.size(), GpuCommandIrStreamValidationError::TruncatedRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
     corruptedBytes.resize(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecordHeaderBytes);
-    WriteCommandIrU32(s_GpuCmdIrHdrRecordCountOffset, 2u, corruptedBytes);
-    WriteCommandIrU64(s_GpuCmdIrHdrCommandBytesOffset, cast<u64>(corruptedBytes.size() - s_GpuCmdIrStreamHeaderBytes), corruptedBytes);
+    WriteCommandIrWord<u32>(s_GpuCmdIrHdrRecordCountOffset, 2u, corruptedBytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrCommandBytesOffset, cast<u64>(corruptedBytes.size() - s_GpuCmdIrStreamHeaderBytes), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::TruncatedRecord);
 }
 
@@ -714,10 +689,10 @@ void VerifyGpuCmdIr_RequiresExactPhysicalQueueBeyondBroadQueueClass(){
 void VerifyGpuCmdIr_PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLowering(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto sourceResult = AddBufferMetadata(graph, s_GpuCaseCommandIrReplaySource, "Replay Source");
+    const auto sourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseCommandIrReplaySource, "Replay Source");
     ASSERT_TRUE(sourceResult.has_value());
     const GpuGraphResourceId source = sourceResult.value();
-    const auto destinationResult = AddBufferMetadata(graph, s_GpuCaseCommandIrReplayDestination, "Replay Destination");
+    const auto destinationResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseCommandIrReplayDestination, "Replay Destination");
     ASSERT_TRUE(destinationResult.has_value());
     const GpuGraphResourceId destination = destinationResult.value();
     ASSERT_TRUE(source.valid());
@@ -802,7 +777,7 @@ void VerifyGpuCmdIr_PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLoweri
 
     GraphicsBytes malformedOther = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(otherRasterCapture.commandBytes(), malformedOther);
-    WriteCommandIrU16(s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrRecByteSizeOffset, 0u, malformedOther);
+    WriteCommandIrWord<u16>(s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrRecByteSizeOffset, 0u, malformedOther);
     const GpuCommandIrReplayResult invalidOther = PreflightGpuCommandIrPacket(MakeGraphicsByteView(malformedOther), declarations, compiledPlan, packet);
     EXPECT_EQ(invalidOther.error, GpuCommandIrReplayError::InvalidStream);
 
@@ -819,7 +794,7 @@ void VerifyGpuCmdIr_PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLoweri
     ASSERT_TRUE(wrongQueueCapture.captureCopyBuffer(
         task,
         packet,
-        MakeGpuPhysicalQueueId(cast<u16>(queue.index + 1u), queue.deviceGeneration),
+        GpuPhysicalQueueId(cast<u16>(queue.index + 1u), queue.deviceGeneration),
         source,
         0u,
         destination,
@@ -1194,7 +1169,7 @@ void VerifyGpuCmdIr_LateBadBlobOffsetRejectsWithoutOverwritingTheFailingRecord()
     const usize secondUploadOffset = s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrUploadBufferRecordBytes;
     GraphicsBytes bytes = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(capture.commandBytes(), bytes);
-    WriteCommandIrU64(secondUploadOffset + s_GpuCmdIrUploadTexBlobOffsetOffset, u64.max, bytes);
+    WriteCommandIrWord<u64>(secondUploadOffset + s_GpuCmdIrUploadTexBlobOffsetOffset, u64.max, bytes);
     const BinaryByteView malformed = MakeGraphicsByteView(bytes);
     const GpuCommandIrStreamValidationResult validation = ValidateGpuCommandIrStream(malformed);
     EXPECT_TRUE(validation.failed());
@@ -1231,14 +1206,14 @@ void VerifyGpuCmdIr_BlobSizeOverflowAndTruncationRejectTheSecondRecord(){
     const usize secondUploadOffset = s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrUploadBufferRecordBytes;
     GraphicsBytes bytes = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(capture.commandBytes(), bytes);
-    WriteCommandIrU64(secondUploadOffset + s_GpuCmdIrUploadTexBlobSizeOffset, u64.max, bytes);
+    WriteCommandIrWord<u64>(secondUploadOffset + s_GpuCmdIrUploadTexBlobSizeOffset, u64.max, bytes);
     GpuCommandIrStreamValidationResult validation = ValidateGpuCommandIrStream(MakeGraphicsByteView(bytes));
     EXPECT_EQ(validation.error, GpuCommandIrStreamValidationError::InvalidBlobRange);
     EXPECT_EQ(validation.recordIndex, 1u);
 
     CopyCommandIrBytes(capture.commandBytes(), bytes);
     bytes.resize(bytes.size() - 1u);
-    WriteCommandIrU64(s_GpuCmdIrHdrBlobBytesOffset, cast<u64>(bufferBytes.size() + textureBytes.size() - 1u), bytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrBlobBytesOffset, cast<u64>(bufferBytes.size() + textureBytes.size() - 1u), bytes);
     validation = ValidateGpuCommandIrStream(MakeGraphicsByteView(bytes));
     EXPECT_EQ(validation.error, GpuCommandIrStreamValidationError::InvalidBlobRange);
     EXPECT_EQ(validation.recordIndex, 1u);
@@ -1267,8 +1242,8 @@ void VerifyGpuCmdIr_TruncatedLateRecordDoesNotPublishPartialOutput(){
     CopyCommandIrBytes(capture.commandBytes(), bytes);
     const usize secondOffset = s_GpuCmdIrStreamHeaderBytes + s_GpuCmdIrClearBufferRecordBytes;
     bytes.resize(secondOffset + s_GpuCmdIrRecordHeaderBytes);
-    WriteCommandIrU64(s_GpuCmdIrHdrCommandBytesOffset, cast<u64>(s_GpuCmdIrClearBufferRecordBytes + s_GpuCmdIrRecordHeaderBytes), bytes);
-    WriteCommandIrU64(s_GpuCmdIrHdrBlobBytesOffset, 0u, bytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrCommandBytesOffset, cast<u64>(s_GpuCmdIrClearBufferRecordBytes + s_GpuCmdIrRecordHeaderBytes), bytes);
+    WriteCommandIrWord<u64>(s_GpuCmdIrHdrBlobBytesOffset, 0u, bytes);
     const BinaryByteView malformed = MakeGraphicsByteView(bytes);
     const GpuCommandIrStreamValidationResult validation = ValidateGpuCommandIrStream(malformed);
     EXPECT_EQ(validation.error, GpuCommandIrStreamValidationError::TruncatedRecord);
@@ -1298,7 +1273,7 @@ void VerifyGpuCmdIr_EarlierWireVersionRejectsBeforeAnyRecordOrBlobIsExposed(){
 
     GraphicsBytes bytes = GraphicsBytes(testArena.arena);
     CopyCommandIrBytes(capture.commandBytes(), bytes);
-    WriteCommandIrU16(s_GpuCmdIrPrefixVersionOffset, cast<u16>(s_GpuCommandIrStreamVersion - 1u), bytes);
+    WriteCommandIrWord<u16>(s_GpuCmdIrPrefixVersionOffset, cast<u16>(s_GpuCommandIrStreamVersion - 1u), bytes);
     const BinaryByteView oldVersion = MakeGraphicsByteView(bytes);
     const GpuCommandIrStreamValidationResult validation = ValidateGpuCommandIrStream(oldVersion);
     EXPECT_EQ(validation.error, GpuCommandIrStreamValidationError::UnsupportedVersion);

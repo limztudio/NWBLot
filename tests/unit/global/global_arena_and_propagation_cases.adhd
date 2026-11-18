@@ -593,7 +593,7 @@ void VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText(){
     {
         Array<NarrowChar, 4u> truncatedText;
         strcpyStatus = CopyBounded(truncatedText, "abcdef");
-        truncatedCopy.assign(ReadFixedText(truncatedText));
+        truncatedCopy.assign(FixedBufferView(truncatedText));
         Array<NarrowChar, 4u> unterminated = Array<NarrowChar, 4u>('a', 'b', 'c', 'd');
         strcatStatus = AppendBounded(unterminated, "e");
         finalByte = cast<u8>(unterminated[3u]);

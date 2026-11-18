@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::ParseOptionText")]
+extern Expected<T> ParseOptionText<T>(in StringView value, in Span<T> options, in auto optionText);
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::AppendAsciiUpperIdentifier")]
+extern void AppendAsciiUpperIdentifier(in StringView text, in auto fallback, mut auto output);
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::AppendUnderscoreSeparatedPascalIdentifier")]
+extern void AppendUnderscoreSeparatedPascalIdentifier(in StringView text, in auto fallback, mut auto output);
+
 [cpp_name("::AppendCamelToSnakeCase")]
 extern void AppendCamelToSnakeCase(mut String a0, in StringView a1);
 

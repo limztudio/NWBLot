@@ -51,16 +51,7 @@ Optional<GpuTaskQueueAssignmentTelemetry> GpuDecl_FindTrackedTelemetry(
     in GpuTaskGraphQueueAssignmentTelemetryTracker tracker,
     in GpuTaskId task
 ){
-    const Optional<in GpuTaskQueueAssignmentTelemetry> found = BorrowTrackedQueueTelemetry(tracker, task);
-    if(found.has_value()){
-        in GpuTaskQueueAssignmentTelemetry value = found.value();
-        return value;
-    }
-    return Optional<GpuTaskQueueAssignmentTelemetry>();
-}
-
-Expected<GpuUploadBlobId> GpuDecl_CopyUploadSpan(mut GpuTaskGraph graph, in Span<u8> bytes, in usize alignment){
-    return graph.copyAlignedUploadBytes(BinaryViewFromBytes(bytes), alignment);
+    return CopyGpuSnapshotValue<GpuTaskQueueAssignmentTelemetry>(BorrowTrackedQueueTelemetry(tracker, task));
 }
 
 Expected<GpuTaskId> GpuDecl_AddSetTask(in Name identity, in StringView label, in Span<GpuTaskResourceSetUse> sets, mut GpuTaskGraph graph){
@@ -137,9 +128,7 @@ void GpuDecl_CheckSingleLaneStateChangeScratch(mut usize scratchPeak, in usize t
     ResourceQueueSharingMask sharing = ResourceQueueSharing::Exclusive;
     if(concurrentSharing)
         sharing = ResourceQueueSharing::GraphicsAndAsyncCompute;
-    const auto resourceResult = AddBufferMetadata(
-        graph,
-        s_ConcurrentReadStateSingleLaneReadStateResource,
+    const auto resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_ConcurrentReadStateSingleLaneReadStateResource,
         "Single Lane Read State Resource",
         ResourceStates::Common,
         sharing
@@ -264,9 +253,7 @@ void VerifyGpuDecl_KeepsConcurrentReadersIndependentAfterStateEstablishingProduc
 void VerifyGpuDecl_KeepsCompatibleTextureReadMasksIndependentWithoutChangingSemanticStates(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto resourceResult = AddTextureMetadata(
-        graph,
-        s_ConcurrentReadStateCompatibleReadResource,
+    const auto resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_ConcurrentReadStateCompatibleReadResource,
         "Compatible Read Resource",
         ResourceStates::Common,
         ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -458,9 +445,7 @@ void VerifyGpuDecl_JoinsConcurrentReadersBeforeTaskInternalReadStateChange(){
 void VerifyGpuDecl_PreservesReaderJoinAcrossPartialTaskInternalStateEpoch(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto resourceResult = AddBufferMetadata(
-        graph,
-        s_ConcurrentReadStatePartialReadEpochResource,
+    const auto resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_ConcurrentReadStatePartialReadEpochResource,
         "Partial Read Epoch Resource",
         ResourceStates::Common,
         ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -526,9 +511,7 @@ void VerifyGpuDecl_PreservesReaderJoinAcrossPartialTaskInternalStateEpoch(){
 void VerifyGpuDecl_PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierStateSource(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto resourceResult = AddBufferMetadata(
-        graph,
-        s_ConcurrentReadStateReadExplicitDependencyResource,
+    const auto resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_ConcurrentReadStateReadExplicitDependencyResource,
         "Read Explicit Dependency Resource",
         ResourceStates::Common,
         ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -576,9 +559,7 @@ void VerifyGpuDecl_PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierSta
 void VerifyGpuDecl_KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto resourceResult = AddBufferMetadata(
-        graph,
-        s_ConcurrentReadStateReadPacketTailResource,
+    const auto resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_ConcurrentReadStateReadPacketTailResource,
         "Read Packet Tail Resource",
         ResourceStates::Common,
         ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -894,9 +875,9 @@ void VerifyGpuDecl_OwnsUploadBlobsAndInvalidatesThemOnReset(){
     missing.byteCount = sourceBytes.size();
     EXPECT_FALSE(graph.copyAlignedUploadBytes(missing, align_of<u8>()).has_value());
     const Span<u8> emptyBytes = Span<u8>();
-    EXPECT_FALSE(GpuDecl_CopyUploadSpan(graph, emptyBytes, 1u).has_value());
-    EXPECT_FALSE(GpuDecl_CopyUploadSpan(graph, sourceBytes, 3u).has_value());
-    const Expected<GpuUploadBlobId> blobResult = GpuDecl_CopyUploadSpan(graph, sourceBytes, 4u);
+    EXPECT_FALSE(CopyGpuUploadBytes(graph, emptyBytes, 1u).has_value());
+    EXPECT_FALSE(CopyGpuUploadBytes(graph, sourceBytes, 3u).has_value());
+    const Expected<GpuUploadBlobId> blobResult = CopyGpuUploadBytes(graph, sourceBytes, 4u);
     ASSERT_TRUE(blobResult.has_value());
     const GpuUploadBlobId blob = blobResult.value();
     ASSERT_TRUE(blob.valid());
@@ -920,7 +901,7 @@ void VerifyGpuDecl_OwnsUploadBlobsAndInvalidatesThemOnReset(){
         EXPECT_FALSE(declarations.uploadBlobData(blob).has_value());
     }
 
-    const auto replacementResult = GpuDecl_CopyUploadSpan(graph, sourceBytes, 4u);
+    const auto replacementResult = CopyGpuUploadBytes(graph, sourceBytes, 4u);
     ASSERT_TRUE(replacementResult.has_value());
     const GpuUploadBlobId replacement = replacementResult.value();
     ASSERT_TRUE(replacement.valid());
@@ -937,10 +918,10 @@ void VerifyGpuDecl_UploadBlobPreservesRequestedAlignmentAcrossGrowth(){
     source[1u] = 0x80u;
     source[2u] = 0xffu;
 
-    const auto first = GpuDecl_CopyUploadSpan(graph, source, alignment);
+    const auto first = CopyGpuUploadBytes(graph, source, alignment);
     ASSERT_TRUE(first.has_value());
     for(usize index = 0u; index < 32u; ++index)
-        ASSERT_TRUE(GpuDecl_CopyUploadSpan(graph, source, alignment).has_value());
+        ASSERT_TRUE(CopyGpuUploadBytes(graph, source, alignment).has_value());
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
     const auto bytes = declarations.uploadBlobData(first.value());
     ASSERT_TRUE(bytes.has_value());
@@ -1287,13 +1268,13 @@ void VerifyGpuDecl_ExpandsImmutableResourceSetsIntoConcreteHazards(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto textureAResult = AddTextureMetadata(graph, s_GpuCaseTaskGraphResourceSetTextureA, "Resource Set Texture A");
+    const auto textureAResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphResourceSetTextureA, "Resource Set Texture A");
     ASSERT_TRUE(textureAResult.has_value());
     const GpuGraphResourceId textureA = textureAResult.value();
-    const auto textureBResult = AddTextureMetadata(graph, s_GpuCaseTaskGraphResourceSetTextureB, "Resource Set Texture B");
+    const auto textureBResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphResourceSetTextureB, "Resource Set Texture B");
     ASSERT_TRUE(textureBResult.has_value());
     const GpuGraphResourceId textureB = textureBResult.value();
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskGraphResourceSetBuffer, "Resource Set Buffer");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphResourceSetBuffer, "Resource Set Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(textureA.valid());

@@ -148,21 +148,17 @@ Expected<GpuTaskId> DeclareDepthWarpBatch(in DepthWarpProbeBatchTask payload, mu
         }
         if(index == 4u)
             access = GpuTaskResourceAccess::Write;
-        GpuGraphResourceDesc desc;
-        desc.setIdentity(buffers[index].deref().getCreationDescription().debugName).setMarkerLabel(labels[index]).setType(GpuGraphResourceType::Buffer)
-            .setInitialState(state).setExternalFinalState(state);
-        const auto imported = graph.importBuffer(buffers[index], desc);
-        if(!imported.has_value()){
+        const ProbeBufferImport buffer(buffers[index], labels[index], state, access);
+        const auto use = buffer.importUse(graph);
+        if(!use.has_value()){
             error("AvboitDepthWarpProbe: graph buffer import failed at index {}", index);
             return MakeUnexpected(Failure());
         }
-        if(!imported.value().valid()){
+        if(!use.value().resource.valid()){
             error("AvboitDepthWarpProbe: invalid graph resource at index {}", index);
             return MakeUnexpected(Failure());
         }
-        uses[index].resource = imported.value();
-        uses[index].requiredState = state;
-        uses[index].access = access;
+        uses[index] = use.value();
     }
     GpuTaskDesc desc;
     desc.setIdentity(s_SmokeNameAvboitDepthWarpProbe).setMarkerLabel("AVBOIT depth warp boundary probe").setResourceUses(uses);
@@ -178,14 +174,6 @@ Expected<GpuTaskId> DeclareDepthWarpBatch(in DepthWarpProbeBatchTask payload, mu
 class DepthWarpUnfocusedPass : IRenderPass{
     public DepthWarpUnfocusedPass(mut GraphicsRuntime graphics){}
     public b8 shouldRenderUnfocused()override{ return true; }
-}
-
-Expected<BufferHandle> CreateDepthWarpProbeBuffer(in Name name, in u32 words, in b8 readback, mut GraphicsRuntime graphics){
-    BufferDesc desc;
-    desc.setDebugName(name).setByteSize(words * size_of<u32>()).setStructStride(size_of<u32>()).setCanHaveUAVs(!readback).enableAutomaticStateTracking(ResourceStates::CopyDest);
-    if(readback)
-        desc.setCpuAccess(CpuAccessMode::Read);
-    return graphics.createBuffer(desc);
 }
 
 b8 InitializeDepthWarpProbeProject(
@@ -229,10 +217,10 @@ b8 InitializeDepthWarpProbeProject(
         return false;
     }
     const b8 pipelineReady = CreateHeapComputePipeline(device, outShader, outPushLayout, false, outPipeline);
-    const auto coverage = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeCoverage, s_AvboitCoverageWords, false, graphics);
-    const auto warp = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeWarp, s_AvboitDepthWarpWarpWords, false, graphics);
-    const auto control = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeControl, s_AvboitDepthWarpControlWords, false, graphics);
-    const auto readback = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeReadback, s_AvboitDepthWarpBatchSize * s_AvboitDepthWarpResultWords, true, graphics);
+    const auto coverage = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeCoverage, s_AvboitCoverageWords, false, false, false);
+    const auto warp = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeWarp, s_AvboitDepthWarpWarpWords, false, false, false);
+    const auto control = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeControl, s_AvboitDepthWarpControlWords, false, false, false);
+    const auto readback = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeReadback, s_AvboitDepthWarpBatchSize * s_AvboitDepthWarpResultWords, false, false, true);
     if(!pipelineReady || !coverage.has_value() || !warp.has_value() || !control.has_value() || !readback.has_value()){
         error("AvboitDepthWarpProbe: pipeline or buffer creation failed");
         return false;

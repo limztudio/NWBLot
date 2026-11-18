@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/integration/asset_fixture_paths.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/memory.adhd>
 #include <tests/common/value_storage.adhd>
@@ -12,9 +13,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_name("NWB_REPO_ROOT")]
-extern const StringView s_RepoRoot;
 
 const u32 s_DrawModeSprite = cast<u32>(UiSkinDrawMode::Sprite);
 const u32 s_DrawModeNineSlice = cast<u32>(UiSkinDrawMode::NineSlice);
@@ -449,7 +447,7 @@ void VerifyAssetsUiSkinRegionIndex_OversizedInvalidSkinRemainsInspectableWithout
 void VerifyAssetsUiSkinToolkitContract_RejectsMissingBasePartsButAcceptsDeclaredStateFallbacks(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    const Path assetRoot = Path(s_RepoRoot) / s_EngineDirectory / s_AssetsDirectory;
+    const Path assetRoot = Path(s_CookTestRepoRoot) / s_EngineDirectory / s_AssetsDirectory;
     const Path atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
     UiSkin source;
     b8 complete = false;
@@ -508,7 +506,7 @@ void VerifyAssetsUiSkinToolkitContract_CookOptInRejectsIncompleteMetadataWhileGe
     String genericMetadata = "";
     const Path assetRoot = Path("C:/ui_skin_contract_tests/assets");
     const Path atlasPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-    const Path defaultAtlasPath = Path(s_RepoRoot) / s_EngineDirectory / s_AssetsDirectory / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
+    const Path defaultAtlasPath = Path(s_CookTestRepoRoot) / s_EngineDirectory / s_AssetsDirectory / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
     ASSERT_TRUE(ReadTextFile(defaultAtlasPath, genericMetadata).has_value());
     const StringView contractField = "asset.toolkit_contract = \"widgets\";";
     const usize contractOffset = genericMetadata.find(contractField);

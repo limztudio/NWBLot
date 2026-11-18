@@ -310,7 +310,7 @@ void GpuRoutingRunCrossFamilySameClassCase(
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(graph, resourceIdentity, s_GpuRoutingCrossFamilyBufferLabel);
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, resourceIdentity, s_GpuRoutingCrossFamilyBufferLabel);
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -573,9 +573,7 @@ void VerifyGpuRouting_ReportsOwnershipRangesWithoutReleaseAcquireDuplicates(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> textureResult = AddTextureMetadata(
-        graph,
-        s_GpuCaseTaskGraphMultiRangeOwnershipTexture,
+    const Expected<GpuGraphResourceId> textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphMultiRangeOwnershipTexture,
         "Multi-Range Ownership Texture",
         ResourceStates::Common,
         ResourceQueueSharing::Exclusive
@@ -1317,7 +1315,7 @@ void VerifyGpuRouting_RoutesOptedInWorkAcrossSameClassPhysicalQueues(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskGraphSameClassBuffer, "Same Class Buffer");
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphSameClassBuffer, "Same Class Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -1562,9 +1560,7 @@ void VerifyGpuRouting_RoutesCrossFamilySameClassConcurrentGraphicsResourceWithou
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(
-        graph,
-        s_GpuCaseTaskGraphCrossFamilySameClassConcurrentBuffer,
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphCrossFamilySameClassConcurrentBuffer,
         "Cross Family Same Class Concurrent Buffer",
         ResourceStates::Common,
         ResourceQueueSharing::Graphics

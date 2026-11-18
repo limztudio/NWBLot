@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_HASH_CELL_COUNT")]
+extern const u32 s_ShaderSurfelHashCellCount;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CELL_SIZE")]
+extern const f32 s_ShaderSurfelCellSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_DEFAULT_RADIUS")]
+extern const f32 s_ShaderSurfelDefaultRadius;
+
 const Name s_FrameGraphNameRenderSurfelGiCounterReadbackComplete = "render.surfel_gi.counter_readback_complete";
 
 const Name s_SurfelGraphIrradianceHalf = "render.surfel_gi.irradiance_half";

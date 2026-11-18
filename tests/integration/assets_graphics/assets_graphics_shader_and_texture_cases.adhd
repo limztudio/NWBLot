@@ -65,7 +65,7 @@ b8 TryParseTextureMetadata(in StringView metadata, in StringView caseName, mut T
         return false;
     const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, caseName), s_AssetsDirectory);
     const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_TexturesDirectory, s_CheckerMetadataFilename);
-    return ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch).has_value();
+    return ParseTextureCookMetadata(assetRoot, "project", metadataPath, document).has_value();
 }
 
 void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes(){
@@ -81,8 +81,8 @@ void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnpla
     const GraphicsTestPath sourcePath = JoinGraphicsPath(root, "source.slang");
     const GraphicsTestPath trackedInclude = JoinGraphicsPath(root, "tracked.slangi");
     const StringView validSource = "/*\n#include \"missing_block.slangi\"\n*/\n// #include \"missing_line.slangi\"\n#include \\\r\n\"tracked.slangi\"\n";
-    ASSERT_TRUE(WriteTextFile(sourcePath, validSource));
-    ASSERT_TRUE(WriteTextFile(trackedInclude, "static const uint trackedValue = 1u;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(sourcePath, validSource));
+    ASSERT_TRUE(WriteGraphicsFixtureText(trackedInclude, "static const uint trackedValue = 1u;\n"));
 
     ShaderCookPathVector includeDirectories(testArena.arena);
     ShaderCookPathVector dependencies(testArena.arena);
@@ -92,7 +92,7 @@ void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnpla
 
     const Expected<u64> beforeChecksum = ComputeSingleAliasShaderDependencyChecksum(dependencies, includeDirectories, root, "source", scratch);
     ASSERT_TRUE(beforeChecksum.has_value());
-    ASSERT_TRUE(WriteTextFile(trackedInclude, "static const uint trackedValue = 2u;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(trackedInclude, "static const uint trackedValue = 2u;\n"));
     const Expected<u64> afterChecksum = ComputeSingleAliasShaderDependencyChecksum(dependencies, includeDirectories, root, "source", scratch);
     ASSERT_TRUE(afterChecksum.has_value());
     EXPECT_NE(beforeChecksum.value(), afterChecksum.value());
@@ -105,12 +105,12 @@ void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnpla
     unplannedIncludes.push_back("#import \"tracked.slangi\"\n");
     for(in StringView source : unplannedIncludes){
         const ScopedTestTrace trace(source);
-        ASSERT_TRUE(WriteTextFile(sourcePath, source));
+        ASSERT_TRUE(WriteGraphicsFixtureText(sourcePath, source));
         EXPECT_FALSE(GatherShaderDependencies(sourcePath, includeDirectories, scratch, dependencies));
     }
     const u32 failureErrors = logger.errorCount();
     EXPECT_GT(failureErrors, 0u);
-    ASSERT_TRUE(WriteTextFile(sourcePath, validSource));
+    ASSERT_TRUE(WriteGraphicsFixtureText(sourcePath, validSource));
     EXPECT_TRUE(GatherShaderDependencies(sourcePath, includeDirectories, scratch, dependencies));
     EXPECT_EQ(logger.errorCount(), failureErrors);
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
@@ -128,8 +128,8 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
     const GraphicsTestPath secondGeneratedRoot = JoinGraphicsPath2(root, "second", s_MaterialBindIncludesDirectory);
     const GraphicsTestPath firstGeneratedInclude = JoinGraphicsPath3(firstGeneratedRoot, "project", "material_interfaces", "test_surface.bind");
     const GraphicsTestPath secondGeneratedInclude = JoinGraphicsPath3(secondGeneratedRoot, "project", "material_interfaces", "test_surface.bind");
-    EXPECT_TRUE(WriteTextFile(firstGeneratedInclude, "generated include\n"));
-    EXPECT_TRUE(WriteTextFile(secondGeneratedInclude, "generated include\n"));
+    EXPECT_TRUE(WriteGraphicsFixtureText(firstGeneratedInclude, "generated include\n"));
+    EXPECT_TRUE(WriteGraphicsFixtureText(secondGeneratedInclude, "generated include\n"));
 
     ShaderCookPathVector includeDirectories(testArena.arena);
     ShaderCookPathVector firstDependencies(testArena.arena);
@@ -143,14 +143,14 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
     ASSERT_TRUE(secondChecksum.has_value());
     EXPECT_EQ(firstChecksum.value(), secondChecksum.value());
 
-    EXPECT_TRUE(WriteTextFile(secondGeneratedInclude, "changed generated include\n"));
+    EXPECT_TRUE(WriteGraphicsFixtureText(secondGeneratedInclude, "changed generated include\n"));
     const Expected<u64> changedChecksum = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, includeDirectories, secondGeneratedRoot, s_MaterialBindIncludesDirectory, scratch);
     ASSERT_TRUE(changedChecksum.has_value());
     EXPECT_NE(firstChecksum.value(), changedChecksum.value());
 
     if(AssetsGraphicsTestConfigurationName() == "fin"){
         const GraphicsTestPath unaliasedDependency = JoinGraphicsPath2(root, "outside", "unaliased.slangi");
-        EXPECT_TRUE(WriteTextFile(unaliasedDependency, "outside alias root\n"));
+        EXPECT_TRUE(WriteGraphicsFixtureText(unaliasedDependency, "outside alias root\n"));
         ShaderCookPathVector unaliasedDependencies(testArena.arena);
         unaliasedDependencies.push_back(unaliasedDependency);
 
@@ -173,9 +173,9 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWith
     const GraphicsTestPath firstRoot = JoinGraphicsPath(root, "first");
     const GraphicsTestPath secondRoot = JoinGraphicsPath(root, "second");
     const GraphicsTestPath sourcePath = JoinGraphicsPath(root, "source.slang");
-    ASSERT_TRUE(WriteTextFile(sourcePath, "#include <choice.slangi>\nstatic const uint selectedValue = NWB_TEST_SELECTED;\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(firstRoot, "choice.slangi"), "#ifndef NWB_TEST_FIRST\n#define NWB_TEST_FIRST\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 1\n#endif\n#include \"../second/choice.slangi\"\n#endif\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(secondRoot, "choice.slangi"), "#ifndef NWB_TEST_SECOND\n#define NWB_TEST_SECOND\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 2\n#endif\n#include \"../first/choice.slangi\"\n#endif\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(sourcePath, "#include <choice.slangi>\nstatic const uint selectedValue = NWB_TEST_SELECTED;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(firstRoot, "choice.slangi"), "#ifndef NWB_TEST_FIRST\n#define NWB_TEST_FIRST\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 1\n#endif\n#include \"../second/choice.slangi\"\n#endif\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(secondRoot, "choice.slangi"), "#ifndef NWB_TEST_SECOND\n#define NWB_TEST_SECOND\n#ifndef NWB_TEST_SELECTED\n#define NWB_TEST_SELECTED 2\n#endif\n#include \"../first/choice.slangi\"\n#endif\n"));
 
     ShaderCookPathVector firstDirectories(testArena.arena);
     ShaderCookPathVector secondDirectories(testArena.arena);
@@ -235,8 +235,8 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcros
     const GraphicsTestPath secondRoot = JoinGraphicsPath(root, "second");
     const GraphicsTestPath upperPath = JoinGraphicsPath(firstRoot, "Case.slangi");
     const GraphicsTestPath lowerPath = JoinGraphicsPath(secondRoot, "case.slangi");
-    ASSERT_TRUE(WriteTextFile(upperPath, "same dependency bytes\n"));
-    ASSERT_TRUE(WriteTextFile(lowerPath, "same dependency bytes\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(upperPath, "same dependency bytes\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(lowerPath, "same dependency bytes\n"));
 
     ShaderCookPathVector noDirectories(testArena.arena);
     ShaderCookPathVector upperDependencies(testArena.arena);
@@ -267,8 +267,8 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     const GraphicsTestPath upperPath = JoinGraphicsPath(root, "Case.slangi");
     const GraphicsTestPath lowerPath = JoinGraphicsPath(root, "case.slangi");
     const StringView upperExpected = "static const uint upperValue = 1;\n";
-    ASSERT_TRUE(WriteTextFile(upperPath, upperExpected));
-    ASSERT_TRUE(WriteTextFile(lowerPath, "static const uint lowerValue = 2;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(upperPath, upperExpected));
+    ASSERT_TRUE(WriteGraphicsFixtureText(lowerPath, "static const uint lowerValue = 2;\n"));
 
     b8 caseDistinct = false;
     ASSERT_TRUE(ReadTextFileMatches(upperPath, upperExpected, scratch, caseDistinct));
@@ -278,7 +278,7 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
         return;
     }
 
-    ASSERT_TRUE(WriteTextFile(sourcePath, "#include \"Case.slangi\"\n#include \"case.slangi\"\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(sourcePath, "#include \"Case.slangi\"\n#include \"case.slangi\"\n"));
     ShaderCookPathVector noDirectories(testArena.arena);
     ShaderCookPathVector dependencies(testArena.arena);
     ASSERT_TRUE(GatherShaderDependencies(sourcePath, noDirectories, scratch, dependencies));
@@ -288,7 +288,7 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
 
     const Expected<u64> firstKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratch);
     ASSERT_TRUE(firstKey.has_value());
-    ASSERT_TRUE(WriteTextFile(lowerPath, "static const uint lowerValue = 3;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(lowerPath, "static const uint lowerValue = 3;\n"));
     const Expected<u64> changedKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratch);
     ASSERT_TRUE(changedKey.has_value());
     EXPECT_NE(firstKey.value(), changedKey.value());
@@ -309,8 +309,8 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
     const GraphicsTestPath assetRoot = JoinGraphicsPath(root, "assets");
     const GraphicsTestPath includeMetaPath = JoinGraphicsPath2(assetRoot, "shaders", "default_variant_include.nwb");
     const GraphicsTestPath includeSourcePath = JoinGraphicsPath2(assetRoot, "shaders", "default_variant_include.slangi");
-    EXPECT_TRUE(WriteTextFile(includeMetaPath, "include asset;\n\nasset.default_variant = \"NWB_FEATURE=0\";\nasset.defines = {\n    \"NWB_FEATURE\": [\"0\", \"1\"],\n};\n"));
-    EXPECT_TRUE(WriteTextFile(includeSourcePath, ""));
+    EXPECT_TRUE(WriteGraphicsFixtureText(includeMetaPath, "include asset;\n\nasset.default_variant = \"NWB_FEATURE=0\";\nasset.defines = {\n    \"NWB_FEATURE\": [\"0\", \"1\"],\n};\n"));
+    EXPECT_TRUE(WriteGraphicsFixtureText(includeSourcePath, ""));
 
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     EXPECT_FALSE(CanParseIncludeEntryFile(includeMetaPath, testArena, scratch));
@@ -329,7 +329,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
     const GraphicsTestPath root = rootResult.value();
 
     const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "[numthreads(1, 1, 1)] void main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "[numthreads(1, 1, 1)] void main(){}\n"));
     const StringView validMetadata = "compute_shader asset;\nasset.entry_point = \"main\";\n";
 
     Vector<StringView> retiredMetadata = Vector<StringView>();
@@ -341,11 +341,11 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
 
     for(in StringView metadata : retiredMetadata){
         const ScopedTestTrace trace(metadata);
-        ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
+        ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, validMetadata));
         ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
-        ASSERT_TRUE(WriteTextFile(metadataPath, metadata));
+        ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, metadata));
         EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
-        ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
+        ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, validMetadata));
         EXPECT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     }
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
@@ -362,7 +362,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
     const GraphicsTestPath root = rootResult.value();
 
     const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
 
     Vector<ShaderRayQueryMetadataCase> cases = Vector<ShaderRayQueryMetadataCase>();
     cases.reserve(13u);
@@ -385,7 +385,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
         TestAString metadata = TestAString();
         metadata.append("compute_shader asset;\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.m_fields);
-        ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
+        ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, StringView(metadata)));
         EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch), testCase.m_accepted);
     }
 
@@ -398,10 +398,10 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
         TestAString metadata = TestAString();
         metadata.append(shaderAssetType);
         metadata.append(" asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n");
-        ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
+        ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, StringView(metadata)));
         EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     }
-    ASSERT_TRUE(WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
     ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
@@ -418,8 +418,8 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
 
     const GraphicsTestPath shaderPath = JoinGraphicsPath(root, "shader.nwb");
     const GraphicsTestPath includePath = JoinGraphicsPath(root, "include.nwb");
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "include.slangi"), "static const uint sourceValue = 1u;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "include.slangi"), "static const uint sourceValue = 1u;\n"));
 
     const StringView shaderDeclaration = "compute_shader asset;\nasset.entry_point = \"main\";\n";
     const StringView realDefines = "asset.defines = { \"PROJECT_QUALITY\": [\"0\", \"1\"] };\n";
@@ -449,7 +449,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
         const ScopedTestTrace traceTransport(transportName);
         for(in StringView retiredValue : retiredValues){
             const ScopedTestTrace traceRetired(retiredValue);
-            ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(validShaderMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(shaderPath, StringView(validShaderMetadata)));
             {
                 Expected<ShaderCookShaderEntry> metadataResult5 = ParseTestShaderEntryFile(shaderPath, testArena, scratch);
                 ASSERT_TRUE(metadataResult5.has_value());
@@ -464,7 +464,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             obsoleteShaderMetadata.append("\": [\"");
             obsoleteShaderMetadata.append(retiredValue);
             obsoleteShaderMetadata.append("\"] };\n");
-            ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(obsoleteShaderMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(shaderPath, StringView(obsoleteShaderMetadata)));
             EXPECT_FALSE(CanParseShaderEntryFile(shaderPath, testArena, scratch));
             EXPECT_FALSE(shaderEntry.defineValues.empty());
 
@@ -472,9 +472,9 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             expectedDiagnostic.append("define '");
             expectedDiagnostic.append(transportName);
             expectedDiagnostic.append("' is an engine transport feature");
-            EXPECT_TRUE(SawCapturedError(logger, ViewTestString(expectedDiagnostic)));
+            EXPECT_TRUE(SawCapturedError(logger, StringView(expectedDiagnostic)));
 
-            ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(validShaderMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(shaderPath, StringView(validShaderMetadata)));
             {
                 Expected<ShaderCookShaderEntry> metadataResult4 = ParseTestShaderEntryFile(shaderPath, testArena, scratch);
                 ASSERT_TRUE(metadataResult4.has_value());
@@ -486,9 +486,9 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             TestAString invalidSignature = TestAString();
             invalidSignature.append(transportName);
             invalidSignature.append("=1;PROJECT_QUALITY=1");
-            EXPECT_FALSE(ValidateShaderEntryVariantSignature("project/shader", ViewTestString(invalidSignature), shaderEntry, scratch));
+            EXPECT_FALSE(ValidateShaderEntryVariantSignature("project/shader", StringView(invalidSignature), shaderEntry, scratch));
 
-            ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(validIncludeMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(includePath, StringView(validIncludeMetadata)));
             {
                 Expected<ShaderCookIncludeEntry> metadataResult3 = ParseTestIncludeEntryFile(includePath, testArena, scratch);
                 ASSERT_TRUE(metadataResult3.has_value());
@@ -502,11 +502,11 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             obsoleteIncludeMetadata.append("\": [\"");
             obsoleteIncludeMetadata.append(retiredValue);
             obsoleteIncludeMetadata.append("\"] };\n");
-            ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(obsoleteIncludeMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(includePath, StringView(obsoleteIncludeMetadata)));
             EXPECT_FALSE(CanParseIncludeEntryFile(includePath, testArena, scratch));
             EXPECT_FALSE(includeEntry.defineValues.empty());
 
-            ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(validIncludeMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(includePath, StringView(validIncludeMetadata)));
             {
                 Expected<ShaderCookIncludeEntry> metadataResult2 = ParseTestIncludeEntryFile(includePath, testArena, scratch);
                 ASSERT_TRUE(metadataResult2.has_value());
@@ -528,8 +528,8 @@ void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
     const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
-    ASSERT_TRUE(WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
     EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "must be an ASCII shader identifier"));
     EXPECT_FALSE(SawCapturedError(logger, "values must be a list of strings"));
@@ -546,8 +546,8 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
 
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "include.slangi"), "static const uint sourceValue = 1u;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "include.slangi"), "static const uint sourceValue = 1u;\n"));
 
     Vector<StringView> invalidDefinesList = Vector<StringView>();
     invalidDefinesList.reserve(6u);
@@ -582,7 +582,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
 
         for(in StringView invalidDefines : invalidDefinesList){
             const ScopedTestTrace traceDefines(invalidDefines);
-            ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(validMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, StringView(validMetadata)));
             if(isInclude){
                 Expected<ShaderCookIncludeEntry> parsedValid = ParseTestIncludeEntryFile(metadataPath, testArena, scratch);
                 ASSERT_TRUE(parsedValid.has_value());
@@ -601,7 +601,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
             invalidMetadata.append("asset.defines = { ");
             invalidMetadata.append(invalidDefines);
             invalidMetadata.append(" };\n");
-            ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(invalidMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, StringView(invalidMetadata)));
             if(isInclude){
                 EXPECT_FALSE(CanParseIncludeEntryFile(metadataPath, testArena, scratch));
                 EXPECT_FALSE(includeEntry.defineValues.empty());
@@ -611,7 +611,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
                 EXPECT_FALSE(shaderEntry.defineValues.empty());
             }
 
-            ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(validMetadata)));
+            ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, StringView(validMetadata)));
             if(isInclude){
                 Expected<ShaderCookIncludeEntry> parsedRecovered = ParseTestIncludeEntryFile(metadataPath, testArena, scratch);
                 ASSERT_TRUE(parsedRecovered.has_value());
@@ -676,17 +676,17 @@ void VerifySkeletonPayload_CodecRejectsEveryTruncatedTablePrefixWithoutReplacing
 
     SkeletonAssetCodec codec = SkeletonAssetCodec();
     AssetBytes binary = MakeSkeletonInputsBytes(inputs);
-    ASSERT_TRUE(SerializeSkeletonAsset(codec, inputs.skeleton, binary));
-    ASSERT_TRUE(LoadSkeletonInputsBinary(inputs, binary));
+    ASSERT_TRUE(codec.serialize(inputs.skeleton, GraphicsCodecBytes(binary)));
+    ASSERT_TRUE(inputs.skeleton.loadBinary(binary));
 
     for(usize prefix = 0u; prefix < binary.size(); ++prefix){
         const ScopedTestTrace trace(prefix);
         AssetBytes malformed = MakeSkeletonInputsBytes(inputs);
         CopyAssetBytes(binary, malformed);
         malformed.resize(prefix);
-        EXPECT_FALSE(LoadSkeletonInputsBinary(inputs, malformed));
+        EXPECT_FALSE(inputs.skeleton.loadBinary(malformed));
         AssetBytes retained = MakeSkeletonInputsBytes(inputs);
-        ASSERT_TRUE(SerializeSkeletonAsset(codec, inputs.skeleton, retained));
+        ASSERT_TRUE(codec.serialize(inputs.skeleton, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, binary);
     }
     EXPECT_EQ(logger.errorCount(), binary.size());
@@ -732,25 +732,25 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixA
     const AssetBytes validBinary = BuildPartialBlockTextureBytes(testArena);
     TestValueSlot<TextureAsset> textureStorage;
     mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesMipTableAdmission));
-    ASSERT_TRUE(LoadTextureAssetBinary(texture, validBinary));
+    ASSERT_TRUE(texture.loadBinary(validBinary));
     TextureAssetCodec codec = TextureAssetCodec();
 
     for(usize availableBytes = 0u; availableBytes < validBinary.size(); ++availableBytes){
         const ScopedTestTrace trace(availableBytes);
         const AssetBytes truncated = CopyAssetBytesPrefix(validBinary, availableBytes, testArena);
-        EXPECT_FALSE(LoadTextureAssetBinary(texture, truncated));
+        EXPECT_FALSE(texture.loadBinary(truncated));
         AssetBytes retained = MakeAssetBytes(testArena);
-        ASSERT_TRUE(SerializeTextureAsset(codec, texture, retained));
+        ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, validBinary);
     }
 
     AssetBytes oversized = CopyAssetBytesPrefix(validBinary, s_TestTextureHeaderBytes, testArena);
     ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderMipCountOffset, u32.max, oversized));
-    EXPECT_FALSE(LoadTextureAssetBinary(texture, oversized));
+    EXPECT_FALSE(texture.loadBinary(oversized));
     AssetBytes retained = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeTextureAsset(codec, texture, retained));
+    ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(retained)));
     EXPECT_EQ(retained, validBinary);
-    EXPECT_TRUE(LoadTextureAssetBinary(texture, validBinary));
+    EXPECT_TRUE(texture.loadBinary(validBinary));
 }
 
 void VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPublishedPayload(){
@@ -761,7 +761,7 @@ void VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplac
     const AssetBytes original = BuildPartialBlockTextureBytes(testArena);
     TestValueSlot<TextureAsset> textureStorage;
     mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesPayloadFormatAdmission));
-    ASSERT_TRUE(LoadTextureAssetBinary(texture, original));
+    ASSERT_TRUE(texture.loadBinary(original));
     TextureAssetCodec codec = TextureAssetCodec();
 
     Vector<u32> invalidFormats = Vector<u32>();
@@ -780,12 +780,12 @@ void VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplac
         CopyAssetBytes(original, malformed);
         ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderPayloadFormatOffset, payloadFormat, malformed));
         EXPECT_FALSE(CanDeserializeTextureAsset(codec, texture.virtualPath(), malformed, testArena));
-        EXPECT_FALSE(LoadTextureAssetBinary(texture, malformed));
+        EXPECT_FALSE(texture.loadBinary(malformed));
         AssetBytes retained = MakeAssetBytes(testArena);
-        ASSERT_TRUE(SerializeTextureAsset(codec, texture, retained));
+        ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, original);
     }
-    EXPECT_TRUE(LoadTextureAssetBinary(texture, original));
+    EXPECT_TRUE(texture.loadBinary(original));
 }
 
 void VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutReplacingPublishedPayload(){
@@ -801,7 +801,7 @@ void VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWitho
 
     TestValueSlot<TextureAsset> textureStorage;
     mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesConstantAlphaAdmission));
-    ASSERT_TRUE(LoadTextureAssetBinary(texture, original));
+    ASSERT_TRUE(texture.loadBinary(original));
     TextureAssetCodec codec = TextureAssetCodec();
 
     AssetBytes malformed = MakeAssetBytes(testArena);
@@ -809,13 +809,13 @@ void VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWitho
     const u32 opaqueConstantInfo = cast<u32>(TextureAlphaMode::ConstantUnorm8) | (cast<u32>(s_OpaqueAlphaUnorm8) << s_AlphaInfoConstantShift);
     ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderAlphaInfoOffset, opaqueConstantInfo, malformed));
     EXPECT_FALSE(CanDeserializeTextureAsset(codec, texture.virtualPath(), malformed, testArena));
-    EXPECT_FALSE(LoadTextureAssetBinary(texture, malformed));
+    EXPECT_FALSE(texture.loadBinary(malformed));
     EXPECT_TRUE(SawCapturedError(logger, "constant alpha must be below opaque alpha"));
 
     AssetBytes retained = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeTextureAsset(codec, texture, retained));
+    ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(retained)));
     EXPECT_EQ(retained, original);
-    EXPECT_TRUE(LoadTextureAssetBinary(texture, original));
+    EXPECT_TRUE(texture.loadBinary(original));
 }
 
 void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads(){
@@ -826,7 +826,7 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExac
     const AssetBytes validBinary = BuildPartialBlockTextureBytes(testArena);
     TestValueSlot<TextureAsset> textureStorage;
     mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesMipRecordAdmission));
-    ASSERT_TRUE(LoadTextureAssetBinary(texture, validBinary));
+    ASSERT_TRUE(texture.loadBinary(validBinary));
     TextureAssetCodec codec = TextureAssetCodec();
 
     Vector<MipRecordCorruptionCase> corruptions = Vector<MipRecordCorruptionCase>();
@@ -843,19 +843,19 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExac
         AssetBytes malformed = MakeAssetBytes(testArena);
         CopyAssetBytes(validBinary, malformed);
         ASSERT_TRUE(OverwriteU32InAssetBytes(s_TestTextureHeaderBytes + corruption.m_fieldOffset, corruption.m_value, malformed));
-        EXPECT_FALSE(LoadTextureAssetBinary(texture, malformed));
+        EXPECT_FALSE(texture.loadBinary(malformed));
         AssetBytes retained = MakeAssetBytes(testArena);
-        ASSERT_TRUE(SerializeTextureAsset(codec, texture, retained));
+        ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, validBinary);
     }
 
     AssetBytes trailing = MakeAssetBytes(testArena);
     CopyAssetBytes(validBinary, trailing);
     trailing.push_back(0u);
-    EXPECT_FALSE(LoadTextureAssetBinary(texture, trailing));
+    EXPECT_FALSE(texture.loadBinary(trailing));
 
     AssetBytes encoded = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeTextureAsset(codec, texture, encoded));
+    ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(encoded)));
     ASSERT_EQ(encoded.size(), validBinary.size());
     EXPECT_TRUE(AssetByteRangeEquals(encoded, 0u, validBinary));
 }
@@ -888,7 +888,7 @@ void VerifyAssetsGraphics_TextureCodecRejectsUnsupportedBinaryVersions(){
     SetStandardTestTexturePayload(testArena, TextureAlphaMode::EmbeddedLdr, s_OpaqueAlphaUnorm8, texture);
     TextureAssetCodec codec = TextureAssetCodec();
     AssetBytes binary = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeTextureAsset(codec, texture, binary));
+    ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(binary)));
 
     Vector<u32> versions = Vector<u32>();
     versions.reserve(5u);
@@ -932,15 +932,15 @@ void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodin
     const GraphicsTestPath root = rootResult.value();
     const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_TexturesDirectory, s_CheckerMetadataFilename);
-    ASSERT_TRUE(WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteTestBinaryFile(JoinGraphicsPath2(assetRoot, s_TexturesDirectory, "checker.tex"), original));
+    ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, s_TextureTestMetadata));
+    ASSERT_TRUE(GraphicsWriteBinaryFile(JoinGraphicsPath2(assetRoot, s_TexturesDirectory, "checker.tex"), original));
 
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse(s_TextureTestMetadata));
 
     TextureCookEntry entry(testArena.arena);
     {
-        Expected<TextureCookEntry> parsedEntry = ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch);
+        Expected<TextureCookEntry> parsedEntry = ParseTextureCookMetadata(assetRoot, "project", metadataPath, document);
         ASSERT_TRUE(parsedEntry.has_value());
         entry = parsedEntry.value();
     }
@@ -949,7 +949,7 @@ void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodin
     TestValueSlot<TextureAsset> textureStorage;
     mut TextureAsset texture = textureStorage.constructIn(testArena);
     {
-        Expected<TextureAsset> builtTexture = BuildTestTextureAsset(entry, testArena);
+        Expected<TextureAsset> builtTexture = BuildTextureAsset(entry);
         ASSERT_TRUE(builtTexture.has_value());
         texture = builtTexture.value();
     }
@@ -959,7 +959,7 @@ void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodin
 
     TextureAssetCodec codec = TextureAssetCodec();
     AssetBytes packaged = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeTextureAsset(codec, texture, packaged));
+    ASSERT_TRUE(codec.serialize(texture, GraphicsCodecBytes(packaged)));
     const usize rawOffset = s_TestTextureHeaderBytes + texture.mipLevels().size() * s_TextureMipRecordBinaryBytes;
     ASSERT_EQ(packaged.size(), rawOffset + original.size());
     EXPECT_TRUE(AssetByteRangeEquals(packaged, rawOffset, original));
@@ -981,25 +981,25 @@ void VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBy
     for(usize prefix = 0u; prefix < original.size(); ++prefix){
         const ScopedTestTrace trace(prefix);
         AssignAssetBytesPrefix(original, prefix, entry.payloadBytes);
-        EXPECT_FALSE(BuildTestTextureAsset(entry, testArena).has_value());
+        EXPECT_FALSE(BuildTextureAsset(entry).has_value());
     }
 
     CopyAssetBytes(original, entry.payloadBytes);
     entry.payloadBytes.push_back(0u);
-    EXPECT_FALSE(BuildTestTextureAsset(entry, testArena).has_value());
+    EXPECT_FALSE(BuildTextureAsset(entry).has_value());
 
     CopyAssetBytes(original, entry.payloadBytes);
     AppendAssetBytes(original, entry.payloadBytes);
-    EXPECT_FALSE(BuildTestTextureAsset(entry, testArena).has_value());
+    EXPECT_FALSE(BuildTextureAsset(entry).has_value());
 
     const Expected<AssetBytes> framedRuntimeBinary = MakeTestTextureRuntimeBinary(testArena);
     ASSERT_TRUE(framedRuntimeBinary.has_value());
     CopyAssetBytes(framedRuntimeBinary.value(), entry.payloadBytes);
-    EXPECT_FALSE(BuildTestTextureAsset(entry, testArena).has_value());
+    EXPECT_FALSE(BuildTextureAsset(entry).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "raw texture byte count does not match the declared mip and alpha layout"));
 
     CopyAssetBytes(original, entry.payloadBytes);
-    EXPECT_TRUE(BuildTestTextureAsset(entry, testArena).has_value());
+    EXPECT_TRUE(BuildTextureAsset(entry).has_value());
 }
 
 void VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations(){
@@ -1023,7 +1023,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetaini
         entry.height = layout.m_height;
         entry.depth = layout.m_depth;
         const usize allocatedBytes = TestArenaUsedBytes(testArena);
-        EXPECT_FALSE(BuildTestTextureAsset(entry, testArena).has_value());
+        EXPECT_FALSE(BuildTextureAsset(entry).has_value());
         EXPECT_EQ(TestArenaUsedBytes(testArena), allocatedBytes);
         EXPECT_TRUE(SawCapturedError(logger, layout.m_diagnostic));
         EXPECT_FALSE(SawCapturedError(logger, "raw texture byte count does not match"));
@@ -1041,12 +1041,12 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSel
     const GraphicsTestPath root = rootResult.value();
     const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_TexturesDirectory, s_CheckerMetadataFilename);
-    ASSERT_TRUE(WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteTestBinaryFile(JoinGraphicsPath2(assetRoot, s_TexturesDirectory, "another.tex"), MakeTestTextureUastcPayload(testArena)));
+    ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, s_TextureTestMetadata));
+    ASSERT_TRUE(GraphicsWriteBinaryFile(JoinGraphicsPath2(assetRoot, s_TexturesDirectory, "another.tex"), MakeTestTextureUastcPayload(testArena)));
 
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse(s_TextureTestMetadata));
-    EXPECT_FALSE(ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch).has_value());
+    EXPECT_FALSE(ParseTextureCookMetadata(assetRoot, "project", metadataPath, document).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "failed to read raw texture sidecar"));
     EXPECT_TRUE(SawCapturedError(logger, "checker.tex"));
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
@@ -1062,7 +1062,7 @@ void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFor
     ASSERT_TRUE(prepared.has_value());
     TestValueSlot<TextureAsset> textureStorage;
     mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesLinearDecode));
-    ASSERT_TRUE(LoadTextureAssetBinary(texture, prepared.value()));
+    ASSERT_TRUE(texture.loadBinary(prepared.value()));
     TextureMipDecoder decoder = TextureMipDecoder();
 
     Vector<FormatEnum> formats = Vector<FormatEnum>();

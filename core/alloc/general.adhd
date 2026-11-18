@@ -2,9 +2,40 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
-extern usize PersistentArenaStructureAlignedSize(in isize a0, in auto a1 = {});
+[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
+extern usize PersistentArenaStructureAlignedSize(in isize bytes, in auto alignment = {});
 
+
+[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::Alloc::GlobalArena"), cpp_flags(no_copy, no_assign)]
+extern class GlobalAllocator{
+    ArenaMemoryStats memoryStats()const;
+};
+
+[cpp_header("<core/alloc/module.h>"), cpp_name("::AString<::NWB::Core::Alloc::GlobalArena>")]
+extern class GlobalString{
+    void append(...);
+    void assign(...);
+    void reserve(in usize capacity);
+    void resize(...);
+    void clear();
+    usize size()const;
+    b8 empty()const;
+    void push_back(in u8 byte);
+    u8 operator[](in usize index)const;
+    usize find(...)const;
+};
+
+[cpp_header("<core/alloc/module.h>"), cpp_name("::NWB::Path")]
+extern class GlobalPath{
+    GlobalPath(in auto first, ...);
+    GlobalPath operator/(in auto child)const;
+    GlobalPath parentPath()const;
+    GlobalPath lexicallyNormal()const;
+    PlatformStringView native()const;
+    PlatformStringView filenameView()const;
+    b8 empty()const;
+    b8 isAbsolute()const;
+};
 
 [cpp_header("<core/alloc/adhd_arena.h>"), cpp_name("::AdhdGetOrCreateTextRecord")]
 extern mut T GetOrCreateTextRecord<T>(mut HashMap<String, T> map, in StringView key);

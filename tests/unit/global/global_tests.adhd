@@ -371,7 +371,7 @@ void VerifyGlobal_TriviallyCopyableVectorPreservesOverlappingSourceRanges(){
     {
         const Span<u32> source = values;
         const U32VectorView middle(source.subspan(1u, 2u));
-        AppendVectorView(values, middle);
+        AppendTriviallyCopyableVector(values, middle);
     }
 
     EXPECT_EQ(values.size(), 6u);
@@ -385,7 +385,7 @@ void VerifyGlobal_TriviallyCopyableVectorPreservesOverlappingSourceRanges(){
     {
         const Span<u32> source = values;
         const U32VectorView middle(source.subspan(1u, 3u));
-        AssignVectorView(values, middle);
+        AssignTriviallyCopyableVector(values, middle);
     }
 
     EXPECT_EQ(values.size(), 3u);
@@ -639,7 +639,7 @@ void VerifyGlobal_DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters(
 
     DiagnosticEventText wide = DiagnosticEventText();
     DiagnosticEventText nullFormatted = DiagnosticEventText();
-    wide = FormatWideDiagnostic(s_WideFormat.substr(0u, 8u), 42u);
+    wide = FormatWideDiagnostic(s_WideFormat.substr(cast<usize>(0u), cast<usize>(8u)), 42u);
     nullFormatted = FormatNullableDiagnostic(s_NullFormat, 42u);
     EXPECT_EQ(wide.view(), expected);
     EXPECT_EQ(nullFormatted.view(), StringView());
@@ -672,9 +672,9 @@ void VerifyGlobal_DiagnosticEventHookRejectsReentryAndHonorsBoundedText(){
     {
         mut DiagnosticCapture capture = TestProcessValue<DiagnosticCapture>();
         capture = DiagnosticCapture();
-        SetCaseDiagnosticHook(RecordTestDiagnostic);
-        CaptureDiagnosticAt(StringView("unit.trailing").substr(0u, 4u), StringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
-        ClearCaseDiagnosticHook(RecordTestDiagnostic);
+        SetDiagnosticEventCallback(RecordTestDiagnostic);
+        CaptureDiagnosticMessage(StringView("unit.trailing").substr(0u, 4u), StringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
+        ClearDiagnosticEventCallback(RecordTestDiagnostic);
         CaptureDiagnosticMessage(unitCategory, "ignored");
         captureCount = capture.count;
         capturedName = capture.name.view();

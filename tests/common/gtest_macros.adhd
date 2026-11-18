@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<gtest/gtest.h>"), cpp_name("::testing::ExitedWithCode")]
+extern class ExitedWithCode;
+
 [cpp_header("<gtest/gtest.h>"), cpp_name("::testing::Test::HasFatalFailure")]
 extern b8 HasFatalTestFailure();
 

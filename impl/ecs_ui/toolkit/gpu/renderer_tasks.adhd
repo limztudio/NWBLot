@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/gpu/frame.adhd>
+#include <impl/ecs_ui/toolkit/gpu/scissor.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +110,7 @@ b8 CaptureRasterState(
     in GpuTaskRecordContext context,
     in GpuCommandIrOwnerAnchor descriptorOwner,
     in Viewport viewport,
-    in RhiRect scissor,
+    in GpuScissorRect scissor,
     mut GpuDescriptorHeap heap,
     mut GpuCommandIrCapture capture
 ){
@@ -191,15 +192,15 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
         return false;
     GpuPaintPushConstants push = initialPush.value();
     const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
-    RhiRect boundScissor = RhiRect();
+    GpuScissorRect boundScissor = GpuScissorRect();
     b8 hasRasterState = false;
     b8 hasDraw = false;
     for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
         const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
         if(!resolvedScissor.has_value() || draw.indexCount == 0u)
             continue;
-        in RhiRect scissor = resolvedScissor.value();
-        if(!hasRasterState || scissor != boundScissor){
+        in GpuScissorRect scissor = resolvedScissor.value();
+        if(!hasRasterState || !SameGpuScissorRect(scissor, boundScissor)){
             if(!CaptureRasterState(payload, context, descriptorOwner.value(), viewport, scissor, heap, capture))
                 return false;
             boundScissor = scissor;
@@ -258,11 +259,11 @@ b8 RecordOutputCommandIr(in GpuOutputTask payload, in GpuTaskRecordContext conte
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Optional<RhiRect> ResolveGpuScissorRect(in GpuRasterGeometry geometry, in DrawCommand draw){
+Optional<GpuScissorRect> ResolveGpuScissorRect(in GpuRasterGeometry geometry, in DrawCommand draw){
     const auto bounds = TryComputeGpuScissorBounds(geometry, draw);
     if(!bounds.has_value())
-        return Optional<RhiRect>();
-    return Optional<RhiRect>(RhiRect(bounds.value().x, bounds.value().y, bounds.value().z, bounds.value().w));
+        return Optional<GpuScissorRect>();
+    return Optional<GpuScissorRect>(GpuScissorRect(bounds.value().x, bounds.value().y, bounds.value().z, bounds.value().w));
 }
 
 b8 ResolvePaintPushConstants(in GpuFrameData frame, in DrawCommand draw, mut GpuPaintPushConstants push){
@@ -337,14 +338,14 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
     GpuPaintPushConstants push = initialPush.value();
     mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
     const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
-    RhiRect boundScissor = RhiRect();
+    GpuScissorRect boundScissor = GpuScissorRect();
     b8 heapBound = false;
     for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
         const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
         if(!resolvedScissor.has_value())
             continue;
-        in RhiRect scissor = resolvedScissor.value();
-        if(!heapBound || scissor != boundScissor){
+        in GpuScissorRect scissor = resolvedScissor.value();
+        if(!heapBound || !SameGpuScissorRect(scissor, boundScissor)){
             ViewportState view;
             view.addViewport(viewport).addScissorRect(scissor);
             VertexBufferBinding vertices;

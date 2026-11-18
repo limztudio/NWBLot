@@ -8,25 +8,29 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView SelectOptionListSeparator(in b8 isLast){
-    if(isLast)
-        return s_OptionLastSeparatorText;
-    return s_OptionSeparatorText;
+const Array<OutputAssetType, 5u> s_OutputAssetTypes = Array<OutputAssetType, 5u>(
+    OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin
+);
+const Array<NormalMode, 3u> s_NormalModes = Array<NormalMode, 3u>(NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendFbxOptions<Option, ToText>(mut String out, in Span<Option> values, in ToText toText){
+    for(usize i = 0u; i < values.size(); ++i){
+        if(i > 0u){
+            if(i + 1u == values.size())
+                out.append(s_OptionLastSeparatorText);
+            else
+                out.append(s_OptionSeparatorText);
+        }
+        out.append(toText(values[i]));
+    }
 }
 
 void AppendOutputAssetTypeOptionsText(mut String out){
-    Array<OutputAssetType, 5u> values;
-    values[0u] = OutputAssetType::Bunch;
-    values[1u] = OutputAssetType::Mesh;
-    values[2u] = OutputAssetType::Model;
-    values[3u] = OutputAssetType::Skeleton;
-    values[4u] = OutputAssetType::Skin;
-
-    for(usize i = 0u; i < values.size(); ++i){
-        if(i > 0u)
-            out.append(SelectOptionListSeparator(i + 1u == values.size()));
-        out.append(OutputAssetTypeText(values[i]));
-    }
+    AppendFbxOptions(out, Span<OutputAssetType>(s_OutputAssetTypes), OutputAssetTypeText);
 }
 
 String OutputAssetTypeOptionsText(){
@@ -45,31 +49,11 @@ String OutputAssetTypeErrorText(){
 }
 
 Expected<OutputAssetType> ParseAssetTypeText(in StringView value){
-    const StringView trimmed = TrimView(value);
-    Array<OutputAssetType, 5u> values;
-    values[0u] = OutputAssetType::Bunch;
-    values[1u] = OutputAssetType::Mesh;
-    values[2u] = OutputAssetType::Model;
-    values[3u] = OutputAssetType::Skeleton;
-    values[4u] = OutputAssetType::Skin;
-    for(usize i = 0u; i < values.size(); ++i){
-        if(EqualsAsciiIgnoreCase(trimmed, OutputAssetTypeText(values[i])))
-            return values[i];
-    }
-    return MakeUnexpected(Failure());
+    return ParseOptionText<OutputAssetType>(value, Span<OutputAssetType>(s_OutputAssetTypes), OutputAssetTypeText);
 }
 
 void AppendNormalModeOptionsText(mut String out){
-    Array<NormalMode, 3u> values;
-    values[0u] = NormalMode::Imported;
-    values[1u] = NormalMode::Smooth;
-    values[2u] = NormalMode::Regenerate;
-
-    for(usize i = 0u; i < values.size(); ++i){
-        if(i > 0u)
-            out.append(SelectOptionListSeparator(i + 1u == values.size()));
-        out.append(NormalModeText(values[i]));
-    }
+    AppendFbxOptions(out, Span<NormalMode>(s_NormalModes), NormalModeText);
 }
 
 String NormalModeErrorText(){
@@ -81,16 +65,7 @@ String NormalModeErrorText(){
 }
 
 Expected<NormalMode> ParseNormalModeText(in StringView value){
-    const StringView trimmed = TrimView(value);
-    Array<NormalMode, 3u> values;
-    values[0u] = NormalMode::Imported;
-    values[1u] = NormalMode::Smooth;
-    values[2u] = NormalMode::Regenerate;
-    for(usize i = 0u; i < values.size(); ++i){
-        if(EqualsAsciiIgnoreCase(trimmed, NormalModeText(values[i])))
-            return values[i];
-    }
-    return MakeUnexpected(Failure());
+    return ParseOptionText<NormalMode>(value, Span<NormalMode>(s_NormalModes), NormalModeText);
 }
 
 Expected<StringView> NextFbxColorComponentToken(in StringView text, mut usize inOutCursor){
@@ -106,35 +81,19 @@ Expected<StringView> NextFbxColorComponentToken(in StringView text, mut usize in
 
 Expected<Vec4> ParseFbxColorText(in StringView text){
     usize cursor = 0u;
-    const Expected<StringView> rToken = NextFbxColorComponentToken(text, cursor);
-    if(!rToken.has_value())
-        return MakeUnexpected(Failure());
-    const Expected<StringView> gToken = NextFbxColorComponentToken(text, cursor);
-    if(!gToken.has_value())
-        return MakeUnexpected(Failure());
-    const Expected<StringView> bToken = NextFbxColorComponentToken(text, cursor);
-    if(!bToken.has_value())
-        return MakeUnexpected(Failure());
-    const Expected<StringView> aToken = NextFbxColorComponentToken(text, cursor);
-    if(!aToken.has_value())
-        return MakeUnexpected(Failure());
+    Array<f32, 4u> components;
+    for(usize index = 0u; index < components.size(); ++index){
+        const auto token = NextFbxColorComponentToken(text, cursor);
+        if(!token.has_value())
+            return MakeUnexpected(Failure());
+        const auto value = ParseF32(token.value());
+        if(!value.has_value())
+            return MakeUnexpected(Failure());
+        components[index] = value.value();
+    }
     if(NextFbxColorComponentToken(text, cursor).has_value())
         return MakeUnexpected(Failure());
-
-    const Expected<f32> red = ParseF32(rToken.value());
-    if(!red.has_value())
-        return MakeUnexpected(Failure());
-    const Expected<f32> green = ParseF32(gToken.value());
-    if(!green.has_value())
-        return MakeUnexpected(Failure());
-    const Expected<f32> blue = ParseF32(bToken.value());
-    if(!blue.has_value())
-        return MakeUnexpected(Failure());
-    const Expected<f32> alpha = ParseF32(aToken.value());
-    if(!alpha.has_value())
-        return MakeUnexpected(Failure());
-
-    return TryMakeFiniteColorVec4(red.value(), green.value(), blue.value(), alpha.value());
+    return TryMakeFiniteColorVec4(components[0u], components[1u], components[2u], components[3u]);
 }
 
 Path DefaultFbxOutputPath(in StringView inputPath){

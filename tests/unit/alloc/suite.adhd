@@ -116,7 +116,7 @@ void VerifyArenaAlignedReallocation_GlobalArenaReallocationPreservesAlignment(){
 }
 
 void VerifyArenaAlignedReallocation_PersistentArenaReallocationPreservesAlignment(){
-    PersistentStorage testArena(s_TestArena, PersistentStructureAlignedSize(16u * 1024u));
+    PersistentStorage testArena(s_TestArena, PersistentArenaStructureAlignedSize(16u * 1024u));
     VerifyAlignedReallocation(testArena);
 }
 
@@ -127,9 +127,9 @@ void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccount
     Array<AllocatorWorkerResult, 4> results = Array<AllocatorWorkerResult, 4>();
 
     {
-        Array<Optional<TestThread>, 4u> workers;
-        TestLatch workersReady(threadCount);
-        TestLatch start(1u);
+        Array<Optional<JoiningThread>, 4u> workers;
+        Latch workersReady(threadCount);
+        Latch start(1u);
 
         for(usize threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
             workers[threadIndex].emplace(lambda[mut results, mut workersReady, mut start, in threadIndex, in iterationsPerThread, in allocationBytes]() -> void{
@@ -165,7 +165,7 @@ void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccount
 
         workersReady.wait();
         start.count_down();
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
     }
 
@@ -186,18 +186,18 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentAllocationCrossThreadFreeAn
     const usize iterationsPerThread = 4096u;
     const usize handoffAlignment = 256u;
     const usize handoffBytes = 256u;
-    const usize poolBytes = PersistentStructureAlignedSize(512u * 1024u);
+    const usize poolBytes = PersistentArenaStructureAlignedSize(512u * 1024u);
     PersistentStorage testArena(s_PersistentArenaSharedCrossThreadChurn, poolBytes);
     Array<PersistentArenaWorkerResult, 4> results = Array<PersistentArenaWorkerResult, 4>();
     ArenaMemoryStats live = ArenaMemoryStats();
 
     {
         Array<RawAllocation, 4> handoffs;
-        Array<Optional<TestThread>, 4u> workers;
-        TestLatch workersReady(threadCount);
-        TestLatch start(1u);
-        TestLatch handoffsReady(threadCount);
-        TestLatch releaseHandoffs(1u);
+        Array<Optional<JoiningThread>, 4u> workers;
+        Latch workersReady(threadCount);
+        Latch start(1u);
+        Latch handoffsReady(threadCount);
+        Latch releaseHandoffs(1u);
 
         for(usize threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
             workers[threadIndex].emplace(lambda[mut testArena, mut handoffs, mut results, mut workersReady, mut start, mut handoffsReady, mut releaseHandoffs, in threadIndex, in threadCount, in iterationsPerThread, in handoffAlignment, in handoffBytes]() -> void{
@@ -261,7 +261,7 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentAllocationCrossThreadFreeAn
         handoffsReady.wait();
         live = testArena.memoryStats();
         releaseHandoffs.count_down();
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
     }
 
@@ -293,14 +293,14 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloa
     const usize initialBytes = 113u;
     const usize replacementBytes = 389u;
     const usize replacementAlignment = 256u;
-    const usize poolBytes = PersistentStructureAlignedSize(512u * 1024u);
+    const usize poolBytes = PersistentArenaStructureAlignedSize(512u * 1024u);
     PersistentStorage testArena(s_PersistentArenaSharedReallocationChurn, poolBytes);
     Array<PersistentArenaWorkerResult, 4> results = Array<PersistentArenaWorkerResult, 4>();
 
     {
-        Array<Optional<TestThread>, 4u> workers;
-        TestLatch workersReady(threadCount);
-        TestLatch start(1u);
+        Array<Optional<JoiningThread>, 4u> workers;
+        Latch workersReady(threadCount);
+        Latch start(1u);
 
         for(usize threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
             workers[threadIndex].emplace(lambda[mut testArena, mut results, mut workersReady, mut start, in threadIndex, in iterationsPerThread, in initialBytes, in replacementBytes, in replacementAlignment]() -> void{
@@ -345,7 +345,7 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloa
 
         workersReady.wait();
         start.count_down();
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
     }
 
@@ -365,7 +365,7 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloa
 }
 
 void VerifyPersistentArenaTests_StructureAlignedSizeFitsExactPayloadAndReusesTheFixedPool(){
-    PersistentStorage testArena(s_AllocCasePersistentArenaExactPayload, PersistentStructureAlignedSize(s_AllocCasePersistentArenaHighAlignment));
+    PersistentStorage testArena(s_AllocCasePersistentArenaExactPayload, PersistentArenaStructureAlignedSize(s_AllocCasePersistentArenaHighAlignment));
     const ArenaMemoryStats initial = testArena.memoryStats();
 
     {
@@ -393,7 +393,7 @@ void VerifyPersistentArenaTests_StructureAlignedSizeFitsExactPayloadAndReusesThe
 }
 
 void VerifyPersistentArenaTests_StructureAlignedSizeFitsAnExactOverAlignedPayload(){
-    PersistentStorage testArena(s_AllocCasePersistentArenaExactOveralignedPayload, PersistentStructureAlignedSize(1u, s_AllocCasePersistentArenaHighAlignment));
+    PersistentStorage testArena(s_AllocCasePersistentArenaExactOveralignedPayload, PersistentArenaStructureAlignedSize(1u, s_AllocCasePersistentArenaHighAlignment));
 
     {
         RawAllocation allocation = AllocateBytes(testArena, s_AllocCasePersistentArenaHighAlignment, 1u);
@@ -413,8 +413,8 @@ void VerifyPersistentArenaTests_StructureAlignedSizeFitsMultipleExactTypedArrayB
     {
         const usize slotRecordBytes = slotCount * size_of<PersistentArenaSlotRecord>();
         const usize nextSerialBytes = queueCount * size_of<u64>();
-        poolBytes = PersistentStructureAlignedSize(slotRecordBytes, align_of<PersistentArenaSlotRecord>())
-            + PersistentStructureAlignedSize(nextSerialBytes, align_of<u64>());
+        poolBytes = PersistentArenaStructureAlignedSize(slotRecordBytes, align_of<PersistentArenaSlotRecord>())
+            + PersistentArenaStructureAlignedSize(nextSerialBytes, align_of<u64>());
     }
 
     PersistentStorage testArena(s_AllocCasePersistentArenaFixedArrayBackings, poolBytes);
@@ -434,7 +434,7 @@ void VerifyPersistentArenaTests_ReusesAdjacentFreeBlocksForGrowthAndCoalescing()
     const usize blockBytes = 1024u;
     const usize grownBytes = 1024u;
     const usize combinedBytes = 1536u;
-    PersistentStorage testArena(s_AllocCasePersistentArenaCoalescing, PersistentStructureAlignedSize(s_AllocCasePersistentArenaHighAlignment));
+    PersistentStorage testArena(s_AllocCasePersistentArenaCoalescing, PersistentArenaStructureAlignedSize(s_AllocCasePersistentArenaHighAlignment));
 
     {
         RawAllocation growth = AllocateBytes(testArena, 1u, growthBytes);
@@ -471,7 +471,7 @@ void VerifyPersistentArenaTests_ReusesAdjacentFreeBlocksForGrowthAndCoalescing()
 void VerifyPersistentArenaTests_ReallocationGrowsAcrossMultipleDeferredAdjacentBlocks(){
     const usize blockBytes = 512u;
     const usize grownBytes = 1600u;
-    PersistentStorage testArena(s_AllocCasePersistentArenaDeferredReallocationGrowth, 3u * PersistentStructureAlignedSize(blockBytes));
+    PersistentStorage testArena(s_AllocCasePersistentArenaDeferredReallocationGrowth, 3u * PersistentArenaStructureAlignedSize(blockBytes));
 
     {
         RawAllocation first = AllocateBytes(testArena, 1u, blockBytes);
@@ -501,7 +501,7 @@ void VerifyPersistentArenaTests_ReallocationGrowsAcrossMultipleDeferredAdjacentB
 
 void VerifyPersistentArenaTests_FailedAlignedReallocationRetainsPayloadAndStats(){
     const usize initialBytes = 1024u;
-    PersistentStorage testArena(s_AllocCasePersistentArenaFailedReallocation, PersistentStructureAlignedSize(2048u));
+    PersistentStorage testArena(s_AllocCasePersistentArenaFailedReallocation, PersistentArenaStructureAlignedSize(2048u));
 
     {
         RawAllocation initial = AllocateBytes(testArena, 1u, initialBytes);
@@ -525,7 +525,7 @@ void VerifyPersistentArenaTests_FailedAlignedReallocationRetainsPayloadAndStats(
 void VerifyPersistentArenaTests_ReallocationMaintainsRequestedAlignmentAcrossShrinkAndGrowth(){
     const usize initialBytes = 512u;
     const usize grownBytes = 1024u;
-    PersistentStorage testArena(s_AllocCasePersistentArenaReallocationAlignment, PersistentStructureAlignedSize(4096u, s_AllocCasePersistentArenaHighAlignment));
+    PersistentStorage testArena(s_AllocCasePersistentArenaReallocationAlignment, PersistentArenaStructureAlignedSize(4096u, s_AllocCasePersistentArenaHighAlignment));
 
     {
         RawAllocation initial = AllocateBytes(testArena, 1u, initialBytes);
@@ -548,7 +548,7 @@ void VerifyPersistentArenaTests_ReallocationMaintainsRequestedAlignmentAcrossShr
 }
 
 void VerifyPersistentArenaTests_ReallocationRetainsAHighAlignedBlockForLowerAlignment(){
-    PersistentStorage testArena(s_AllocCasePersistentArenaReallocationLowerAlignment, PersistentStructureAlignedSize(1u, s_AllocCasePersistentArenaHighAlignment));
+    PersistentStorage testArena(s_AllocCasePersistentArenaReallocationLowerAlignment, PersistentArenaStructureAlignedSize(1u, s_AllocCasePersistentArenaHighAlignment));
 
     {
         RawAllocation allocation = AllocateBytes(testArena, s_AllocCasePersistentArenaHighAlignment, 1u);
@@ -565,7 +565,7 @@ void VerifyPersistentArenaTests_ReallocationRetainsAHighAlignedBlockForLowerAlig
 }
 
 void VerifyPersistentArenaTests_NullAndZeroReallocationFollowAllocationAccounting(){
-    PersistentStorage testArena(s_AllocCasePersistentArenaNullZeroReallocation, PersistentStructureAlignedSize(s_AllocCaseSmallArenaPayloadBytes));
+    PersistentStorage testArena(s_AllocCasePersistentArenaNullZeroReallocation, PersistentArenaStructureAlignedSize(s_AllocCaseSmallArenaPayloadBytes));
     const ArenaMemoryStats before = testArena.memoryStats();
     ArenaMemoryStats allocated = ArenaMemoryStats();
 
@@ -592,7 +592,7 @@ void VerifyPersistentArenaTests_NullAndZeroReallocationFollowAllocationAccountin
 }
 
 void VerifyPersistentArenaTests_CAllocatorAdapterRetainsMaxAlignmentAndPrefix(){
-    PersistentStorage testArena(s_AllocCasePersistentArenaCAllocator, PersistentStructureAlignedSize(s_AllocCaseSmallArenaPayloadBytes));
+    PersistentStorage testArena(s_AllocCasePersistentArenaCAllocator, PersistentArenaStructureAlignedSize(s_AllocCaseSmallArenaPayloadBytes));
 
     {
         RawAllocation zeroAllocation = AllocateCBytes(testArena, 0u);
@@ -663,7 +663,7 @@ void VerifyScratchArenaReuse_ColdAlignmentBucketsAllocateOnceAndReleaseAllBackin
             valid &= allocations[index].address() % alignment == 0u;
             allocations[index][0u] = cast<u8>(index + 1u);
             allocations[index][bytes - 1u] = cast<u8>(index + 19u);
-            expectedReserved += AlignedAllocationSize(alignment, 257u);
+            expectedReserved += Alignment(alignment, 257u);
         }
         live = HeapBackingMemoryStats();
         valid &= testArena.memoryStats().reservedBytes == expectedReserved;

@@ -120,19 +120,19 @@ b8 AddMeshReplacement(in StringView source, in StringView variableName, in Strin
 }
 
 b8 AppendMeshReplacements(in StringView source, in StringView variable, in SourceMeshStreamCounts before, in SourceMeshStreams after, mut Vector<MeshTextReplacement> replacements){
-    if(DidMeshStreamCountChange(before.positions, after.positions.size()) && !AddMeshReplacement(source, variable, s_MeshPositionsFieldNameView, FormatMeshRefreshVec3List(after.positions), replacements))
+    if(before.positions != after.positions.size() && !AddMeshReplacement(source, variable, s_MeshPositionsFieldNameView, FormatMeshRefreshList<Vec3>(after.positions, 40u), replacements))
         return false;
-    if(DidMeshStreamCountChange(before.normals, after.normals.size()) && !AddMeshReplacement(source, variable, s_MeshNormalsFieldNameView, FormatMeshRefreshVec3List(after.normals), replacements))
+    if(before.normals != after.normals.size() && !AddMeshReplacement(source, variable, s_MeshNormalsFieldNameView, FormatMeshRefreshList<Vec3>(after.normals, 40u), replacements))
         return false;
-    if(DidMeshStreamCountChange(before.tangents, after.tangents.size()) && !AddMeshReplacement(source, variable, s_MeshTangentsFieldNameView, FormatMeshRefreshVec4List(after.tangents), replacements))
+    if(before.tangents != after.tangents.size() && !AddMeshReplacement(source, variable, s_MeshTangentsFieldNameView, FormatMeshRefreshList<Vec4>(after.tangents, 52u), replacements))
         return false;
-    if(DidMeshStreamCountChange(before.uv0, after.uv0.size()) && !AddMeshReplacement(source, variable, s_MeshUv0FieldNameView, FormatMeshRefreshVec2List(after.uv0), replacements))
+    if(before.uv0 != after.uv0.size() && !AddMeshReplacement(source, variable, s_MeshUv0FieldNameView, FormatMeshRefreshList<Vec2>(after.uv0, 28u), replacements))
         return false;
-    if(DidMeshStreamCountChange(before.colors, after.colors.size()) && !AddMeshReplacement(source, variable, s_MeshColorsFieldNameView, FormatMeshRefreshVec4List(after.colors), replacements))
+    if(before.colors != after.colors.size() && !AddMeshReplacement(source, variable, s_MeshColorsFieldNameView, FormatMeshRefreshList<Vec4>(after.colors, 52u), replacements))
         return false;
-    if(DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after)) && !AddMeshReplacement(source, variable, s_MeshVertexRefsFieldNameView, FormatMeshRefreshVertexRefList(after.vertexRefs), replacements))
+    if(DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after)) && !AddMeshReplacement(source, variable, s_MeshVertexRefsFieldNameView, FormatMeshRefreshList<SourceVertexRef>(after.vertexRefs, 36u), replacements))
         return false;
-    return !DidMeshStreamCountChange(before.vertexRefs, after.vertexRefs.size()) || AddMeshReplacement(source, variable, s_MeshIndicesFieldNameView, FormatMeshRefreshIndexList(after.indices), replacements);
+    return before.vertexRefs == after.vertexRefs.size() || AddMeshReplacement(source, variable, s_MeshIndicesFieldNameView, FormatMeshRefreshIndexList(after.indices), replacements);
 }
 
 Expected<Optional<StringView>> FindMeshSkin(in MetascriptDocument document, in StringView meshName){
@@ -168,9 +168,9 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeRefreshMesh(in Path path, in
         Vector<MeshSkinInfluence> influences;
         if(!skin.has_value() || !ParseSkinInfluenceMetadataInto(path, skin.value(), s_MeshMetaKindText, skinName, false, influences))
             return MakeUnexpected(Failure());
-        return CanonicalizeSkinnedCanonicalMeshStreams(influences, mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.indices.size(), mesh.vertexRefs);
+        return CanonicalizeMeshStreams(mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, influences, mesh.indices.size(), mesh.vertexRefs, PositionSkinRemap::PreserveIndices);
     }
-    return CanonicalizeCanonicalMeshStreams(mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.skin, mesh.indices.size(), mesh.vertexRefs);
+    return CanonicalizeMeshStreams(mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.skin, mesh.indices.size(), mesh.vertexRefs, PositionSkinRemap::Deduplicate);
 }
 
 class MeshRefreshDocument : NoCopy{

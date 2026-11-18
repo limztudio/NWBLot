@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 b8 TryInvalidCrashConfiguration(in Path spool, in usize index, in StringView url, in StringView segment, in StringView embedded){
-    PersistentStorage storage(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage storage(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(storage);
     config.applicationName = s_CrashTests;
@@ -48,11 +48,11 @@ void VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool()
 b8 BlockNextPackage(in StringView group){
     const u64 sequence = TestCrashState().crashSequence.load(MemoryOrder::relaxed);
     const String id = TestCrashId(CurrentProcessId(), sequence);
-    return WriteTextFile(PackageDirectory(group, s_PendingBucket, id), "block package directory");
+    return WriteTextFile(PackageDirectory(group, s_PendingDirectoryName, id), "block package directory");
 }
 
 b8 InstallWindowsTestHandler(in Path spool, in StringView build, in StringView version){
-    PersistentStorage storage(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage storage(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(storage);
     config.applicationName = s_CrashTests;
@@ -82,7 +82,7 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
         const String id = TestCrashId(CurrentProcessId(), sequence);
         ASSERT_TRUE(CaptureGpuCrashDump("report", payload, kinds[index]).packageWritten());
         Vector<u8> data;
-        ASSERT_TRUE(ReadBinaryFile(PackageDirectory(group, s_PendingBucket, id) / names[index], data).has_value());
+        ASSERT_TRUE(ReadBinaryFile(PackageDirectory(group, s_PendingDirectoryName, id) / names[index], data).has_value());
         ASSERT_EQ(data.size(), binary.size());
         for(usize byte = 0u; byte < binary.size(); ++byte)
             EXPECT_EQ(data[byte], binary[byte]);
@@ -96,8 +96,8 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
     EXPECT_FALSE(SetCrashUploadDestination("new", StringView(longToken)));
     EXPECT_FALSE(SetCrashUploadDestination(StringView("a\0b", 3u), "new"));
     const CrashRequest snapshot = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
-    EXPECT_EQ(CrashText(snapshot.logServerUrl), "http://localhost");
-    EXPECT_EQ(CrashText(snapshot.crashUploadToken), "token");
+    EXPECT_EQ(FixedBufferView(snapshot.logServerUrl), "http://localhost");
+    EXPECT_EQ(FixedBufferView(snapshot.crashUploadToken), "token");
     ASSERT_TRUE(BlockNextPackage(group));
     const CrashDumpResult attachmentFailure = CaptureGpuCrashDump("gpu report", "", CrashGpuCrashDumpKind::None);
     EXPECT_EQ(attachmentFailure.status, CrashDumpStatus::AttachmentWriteFailed);
@@ -127,7 +127,7 @@ void VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(){
     SuspendedThread suspended(handle);
     ASSERT_EQ(suspended.previous(), 0u);
     CrashDumpResult first;
-    TestThread writer(lambda[mut first]() -> void{
+    JoiningThread writer(lambda[mut first]() -> void{
         first = CaptureCrashDump("first", "held in transport");
     });
     in CrashRuntimeState state = TestCrashState();
@@ -195,11 +195,11 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
         EXPECT_EQ(RequestHandler(request, 1u), WinTransportStatus::TimedOut);
         ASSERT_NE(suspended.resume(), 0xffffffffu);
         ASSERT_EQ(WaitForHandled(s_ManualCrashDumpWaitMilliseconds), s_WinWaitSignaled);
-        id = CrashText(request.crashId);
+        id = FixedBufferView(request.crashId);
         Vector<u8> dump;
-        ASSERT_TRUE(ReadBinaryFile(spool / s_PendingBucket / StringView(id) / s_ProcessDumpFileName, dump).has_value());
+        ASSERT_TRUE(ReadBinaryFile(spool / s_PendingDirectoryName / StringView(id) / s_ProcessDumpFileName, dump).has_value());
         Span<u8> bytes(dump);
-        const WinDumpStream stream = ReadDumpStream(dump, s_WinExceptionStream);
+        const WinDumpStream stream = ReadDumpStream(dump, s_ExceptionStream);
         ASSERT_TRUE(stream.found);
         ASSERT_NE(stream.address, 0u);
         ASSERT_GE(stream.size, size_of<WinDumpException>());
@@ -221,7 +221,7 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
         EXPECT_EQ(ProgramCounter(context.value()), capturedIp);
         EXPECT_TRUE(CaptureCrashDump("after_timeout", "handler remains reusable").packageWritten());
     }
-    const Path directory = PackageDirectory(group, s_PendingBucket, id);
+    const Path directory = PackageDirectory(group, s_PendingDirectoryName, id);
     EXPECT_TRUE(TextFileContains(directory / "symbolication.txt", "minidump captured;"));
     EXPECT_TRUE(TextFileContains(directory / s_ManifestFileName, "\"has_exception_context\": true"));
     RemoveTestArtifacts(group);

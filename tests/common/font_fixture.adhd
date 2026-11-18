@@ -8,6 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Path BundledFontFixtureDirectory(in StringView repositoryRoot){
+    return Path(repositoryRoot) / "impl" / "assets" / "ui" / "fonts" / "default";
+}
+
+Vector<u8> CopyFontFixtureBytes(in Span<u8> source){
+    Vector<u8> bytes;
+    AssignTriviallyCopyableVector(bytes, source);
+    return bytes;
+}
+
 Expected<Vector<u8>, StringView> ReadBundledFontBytes(in Path fontPath){
     const auto prepared = ReadPreparedFontSource(fontPath, false);
     if(!prepared.has_value())

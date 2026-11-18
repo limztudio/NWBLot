@@ -43,26 +43,6 @@ String MakeUniqueFbxJointName(in StringView baseName, in Span<String> usedNames)
     return name;
 }
 
-void AppendSkinInfluenceJointsText(in MeshSkinInfluence skin, mut String out){
-    out.append("[");
-    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
-        if(i != 0u)
-            out.append(", ");
-        AppendUnsignedU64Text(out, cast<u64>(skin.joint[i]));
-    }
-    out.append("]");
-}
-
-void AppendSkinInfluenceWeightsText(in MeshSkinInfluence skin, mut String out){
-    out.append("[");
-    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
-        if(i != 0u)
-            out.append(", ");
-        AppendCleanFloatText(skin.weight[i], out);
-    }
-    out.append("]");
-}
-
 void AppendJointMatrixRowsText(
     in Vec4 row0,
     in Vec4 row1,
@@ -71,18 +51,8 @@ void AppendJointMatrixRowsText(
     mut String out
 ){
     out.append(s_ListOpenText);
-    out.append(indent);
-    out.append("    ");
-    AppendVec4Text(row0, out);
-    out.append(s_EntrySuffixText);
-    out.append(indent);
-    out.append("    ");
-    AppendVec4Text(row1, out);
-    out.append(s_EntrySuffixText);
-    out.append(indent);
-    out.append("    ");
-    AppendVec4Text(row2, out);
-    out.append(s_EntrySuffixText);
+    const Array<Vec4, 3u> rows(row0, row1, row2);
+    AppendMeshRows<Vec4>(rows, indent, out);
     out.append(indent);
     out.append("]");
 }
@@ -132,9 +102,9 @@ void AppendSkinAssetHeaderAndInfluencesText(
     out.append(".influences = [\n");
     for(in MeshSkinInfluence influence : influences){
         out.append("    { \"joints\": ");
-        AppendSkinInfluenceJointsText(influence, out);
+        AppendMeshTuple<u16>(influence.joint, out);
         out.append(", \"weights\": ");
-        AppendSkinInfluenceWeightsText(influence, out);
+        AppendMeshValueText(influence.weight, out);
         out.append(" },\n");
     }
     out.append(s_ListCloseSectionText);

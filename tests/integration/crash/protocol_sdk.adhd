@@ -126,12 +126,6 @@ extern b8 IsCurrentCrashRequest(in CrashRequest request);
 [cpp_header("<core/crash/protocol.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::CrashProtocol::CrashAckMatchesRequest")]
 extern b8 CrashAckMatchesRequest(in CrashAck ack, in CrashRequest request);
 
-[cpp_header("<global/fixed_buffer.h>"), cpp_name("::FixedBufferView")]
-extern StringView CrashText(in auto text);
-
-[cpp_header("<global/fixed_buffer.h>"), cpp_name("::CopyFixedBuffer")]
-extern void SetCrashText(mut auto destination, in StringView text);
-
 
 [cpp_header("<core/crash/internal.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::ManualDumpContextStorage"), cpp_flags(no_copy, no_assign)]
 extern class ManualContext;
@@ -148,8 +142,6 @@ extern const u32 s_CrashHandlerWaitMilliseconds;
 [cpp_header("<core/crash/internal.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::s_GpuCrashCategory")]
 extern const StringView s_CrashGpuCategory;
 
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CrashIdPrefix")]
-extern const StringView s_CrashIdPrefix;
 
 [cpp_header("<csignal>"), cpp_name("SIGSEGV")]
 extern const i32 s_TestSegvSignal;
@@ -172,34 +164,6 @@ extern b8 FlushTestCrashReports(mut HeapStorage heap, in CrashUploadSnapshot sna
 extern Expected<void, ErrorCode> RetainTestCrashPackages(mut ScratchStorage scratch, in Path spool, in CrashSpoolRetentionConfig config, in StringView protectedName);
 
 
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_PendingDirectoryName")]
-extern const StringView s_PendingBucket;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadedDirectoryName")]
-extern const StringView s_UploadedBucket;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_FailedDirectoryName")]
-extern const StringView s_FailedBucket;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadingDirectoryName")]
-extern const StringView s_UploadingBucket;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ArchiveHeaderText")]
-extern const StringView s_ArchiveHeaderText;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptFileName")]
-extern const StringView s_UploadAttemptFileName;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptRetryPendingState")]
-extern const StringView s_RetryPendingState;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_UploadAttemptRetryInterruptedState")]
-extern const StringView s_RetryInterruptedState;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ManifestFileName")]
-extern const StringView s_ManifestFileName;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_CallstackFileName")]
-extern const StringView s_CallstackFileName;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcMapsFileName")]
-extern const StringView s_ProcMapsFileName;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_GpuCrashReportFileName")]
-extern const StringView s_GpuCrashReportFileName;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_GpuDetectiveCaptureFileName")]
-extern const StringView s_GpuDetectiveCaptureFileName;
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_AftermathGpuDumpFileName")]
-extern const StringView s_AftermathGpuDumpFileName;
 [cpp_header("<tests/integration/crash/protocol_sdk.h>"), cpp_name("::NWB::Tests::CrashProtocolSdk::PlatformKind")]
 extern u32 CurrentCrashPlatformKind();
 [cpp_header("<core/crash/protocol.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::PlatformKind::Windows")]

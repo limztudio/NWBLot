@@ -424,25 +424,11 @@ Expected<UiFixtureSkinPaintSample> SampleUiSkinRegionPaint(in UiSkinRegion regio
     return candidate;
 }
 
-UiSkinAssetRef MakeUiSkinAssetRef(in StringView path){
-    const Expected<Name> parsed = ParseName(path);
-    if(parsed.has_value())
-        return UiSkinAssetRef(parsed.value());
-    return UiSkinAssetRef();
-}
-
-UiTextureAssetRef MakeUiTextureAssetRef(in StringView path){
-    const Expected<Name> parsed = ParseName(path);
-    if(parsed.has_value())
-        return UiTextureAssetRef(parsed.value());
-    return UiTextureAssetRef();
-}
-
-UiFontAssetRef MakeUiFontAssetRef(in StringView path){
-    const Expected<Name> parsed = ParseName(path);
-    if(parsed.has_value())
-        return UiFontAssetRef(parsed.value());
-    return UiFontAssetRef();
+AssetRef<T> MakeUiFixtureAssetRef<T>(in StringView path){
+    const Expected<Name> name = ParseName(path);
+    if(name.has_value())
+        return AssetRef<T>(name.value());
+    return AssetRef<T>();
 }
 
 usize CountUiSkinRegionQuads(in UiSkinRegion region, in u32 atlasWidthPx, in DrawSnapshot snapshot){

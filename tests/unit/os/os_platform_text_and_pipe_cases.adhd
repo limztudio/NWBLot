@@ -600,12 +600,12 @@ void VerifyWaylandTextInputState_DelayedSerialWithTheCurrentWireRevisionStillAdm
 }
 
 void VerifyWaylandTextInputState_NegativeCaretEdgesRoundOutwardWithoutWideningExactEdges(){
-    const TextInputRect exact = WaylandTextInputRectForPixels(MakeTextInputRect(-6, -8, 2, 4), 2);
+    const TextInputRect exact = WaylandTextInputRectForPixels(TextInputRect(-6, -8, 2, 4), 2);
     EXPECT_EQ(exact.x, -3);
     EXPECT_EQ(exact.y, -4);
     EXPECT_EQ(exact.width, 1);
     EXPECT_EQ(exact.height, 2);
-    const TextInputRect crossed = WaylandTextInputRectForPixels(MakeTextInputRect(-3, -3, 4, 4), 2);
+    const TextInputRect crossed = WaylandTextInputRectForPixels(TextInputRect(-3, -3, 4, 4), 2);
     EXPECT_EQ(crossed.x, -2);
     EXPECT_EQ(crossed.y, -2);
     EXPECT_EQ(crossed.width, 3);
@@ -613,12 +613,12 @@ void VerifyWaylandTextInputState_NegativeCaretEdgesRoundOutwardWithoutWideningEx
 }
 
 void VerifyWaylandTextInputState_PositiveOddPixelEdgesRoundOutwardAndZeroScaleUsesPixelBounds(){
-    const TextInputRect scaled = WaylandTextInputRectForPixels(MakeTextInputRect(3, 5, 4, 4), 2);
+    const TextInputRect scaled = WaylandTextInputRectForPixels(TextInputRect(3, 5, 4, 4), 2);
     EXPECT_EQ(scaled.x, 1);
     EXPECT_EQ(scaled.y, 2);
     EXPECT_EQ(scaled.width, 3);
     EXPECT_EQ(scaled.height, 3);
-    const TextInputRect unit = WaylandTextInputRectForPixels(MakeTextInputRect(-7, 5, 2, 3), 0);
+    const TextInputRect unit = WaylandTextInputRectForPixels(TextInputRect(-7, 5, 2, 3), 0);
     EXPECT_EQ(unit.x, -7);
     EXPECT_EQ(unit.y, 5);
     EXPECT_EQ(unit.width, 2);

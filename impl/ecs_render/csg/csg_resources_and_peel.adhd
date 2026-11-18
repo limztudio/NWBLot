@@ -103,15 +103,6 @@ b8 HasValidCsgIntervalPeelTargetState(
     ;
 }
 
-FramebufferInfo BuildCsgFramebufferInfo(in FramebufferInfoEx infoEx){
-    FramebufferInfo framebufferInfo;
-    framebufferInfo.sampleCount = infoEx.sampleCount;
-    framebufferInfo.sampleQuality = infoEx.sampleQuality;
-    framebufferInfo.depthFormat = infoEx.depthFormat;
-    framebufferInfo.colorFormats = infoEx.colorFormats;
-    return framebufferInfo;
-}
-
 b8 CreateIntervalCapFillPipeline(
     in ShaderHandle vertexShader,
     in ShaderHandle pixelShader,
@@ -346,7 +337,7 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(mut DeferredFrameTargets ta
         this.m_shaderSystem.deferredCompositeVertexShader(),
         this.m_csgState.m_intervalCapFillPixelShader,
         this.m_csgState.m_clipBindingLayout,
-        BuildCsgFramebufferInfo(targets.framebuffer.deref().getFramebufferInfo()),
+        FramebufferInfo(targets.framebuffer.deref().getFramebufferInfo()),
         device,
         this.m_csgState.m_intervalCapFillPipeline
     )){
@@ -398,7 +389,7 @@ b8 RendererCsgSystem::prepareRefractionIntervalCapResources(in DeferredFrameTarg
         this.m_shaderSystem.deferredCompositeVertexShader(),
         this.m_csgState.m_refractionCapFillPixelShader,
         this.m_csgState.m_clipBindingLayout,
-        BuildCsgFramebufferInfo(targets.avboit.refractionFramebuffer.deref().getFramebufferInfo()),
+        FramebufferInfo(targets.avboit.refractionFramebuffer.deref().getFramebufferInfo()),
         this.m_graphics.getDevice(),
         this.m_csgState.m_refractionCapFillPipeline
     )){

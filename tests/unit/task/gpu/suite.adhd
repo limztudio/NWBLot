@@ -29,9 +29,7 @@ class ExternalFinalReadPair{
 
 
 Expected<TransferOwnershipPair> AddTransferOwnershipPair(mut GpuTaskGraph graph, in ResourceQueueSharingMask queueSharing){
-    const Expected<GpuGraphResourceId> textureResult = AddTextureMetadata(
-        graph,
-        Name(s_GpuCaseTaskGraphTransferOwnershipTexture),
+    const Expected<GpuGraphResourceId> textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, Name(s_GpuCaseTaskGraphTransferOwnershipTexture),
         "Transfer Ownership Texture",
         ResourceStates::Common,
         queueSharing
@@ -177,13 +175,6 @@ GpuGraphResourceId MakeGpuResourceId(in u64 generation, in u32 index){
     GpuGraphResourceId id = GpuGraphResourceId();
     id.generation = generation;
     id.index = index;
-    return id;
-}
-
-GpuPhysicalQueueId MakeGpuPhysicalQueueId(in u16 index, in u16 deviceGeneration){
-    GpuPhysicalQueueId id = GpuPhysicalQueueId();
-    id.index = index;
-    id.deviceGeneration = deviceGeneration;
     return id;
 }
 

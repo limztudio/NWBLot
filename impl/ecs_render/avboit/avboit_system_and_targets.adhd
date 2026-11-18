@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/types.adhd>
 #include <impl/assets_graphics/transparent_subsystem.adhd>
 #include <impl/ecs_render/avboit/avboit_raster_configuration.adhd>
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
@@ -29,9 +30,6 @@ extern const u32 s_ShaderAvboitAccumForegroundColorLocation;
 
 [cpp_header("<impl/assets/graphics/avboit/binding_slots.h>"), cpp_name("NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION")]
 extern const u32 s_ShaderAvboitAccumForegroundExtinctionLocation;
-
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT")]
-extern const Format s_ShaderAvboitTransmittanceCoreFormat;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

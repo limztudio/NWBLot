@@ -27,9 +27,6 @@ extern const usize s_SharedLightSpaceViewMapOffset;
 [cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET")]
 extern const usize s_SharedLightSpaceViewOriginOffset;
 
-[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADOW_SLOT_COUNT")]
-extern const usize s_SharedSceneShadowSlotCount;
-
 static_assert(align_of<LightSpaceViewGpu>() >= 16u);
 static_assert(size_of<LightSpaceViewGpu>() == s_SharedLightSpaceViewBytes);
 static_assert(offset_of<LightSpaceViewGpu>(originOrDirection) == s_SharedLightSpaceViewOriginOffset);
@@ -48,7 +45,7 @@ static_assert(offset_of<LightSpaceShadowPush>(receiverViewSlot) == 100u);
 static_assert(offset_of<LightSpaceShadowPush>(receiverCsgSampleStateSlot) == 104u);
 
 // Resource handles freeze one allocation generation. Graph tasks must copy the caster span into their arena.
-const usize s_LightSpaceFramebufferCount = s_SharedSceneShadowSlotCount * s_PointLightViewCount;
+const usize s_LightSpaceFramebufferCount = s_SceneShadowSlotCount * s_PointLightViewCount;
 
 class LightSpaceShadowSnapshot{
     public LightSpacePlan plan;

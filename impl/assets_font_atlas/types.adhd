@@ -207,13 +207,7 @@ b8 IsFontAtlasDigestNonZero(in Span<u8> digestBytes){
 
 b8 DoesFontAtlasDigestMatchBytes(in Span<u8> dataBytes, in Span<u8> expectedSha256Bytes){
     const Array<u8, 32> computed = ComputeFontSha256Bytes(dataBytes);
-    if(expectedSha256Bytes.size() != computed.size())
-        return false;
-    for(usize index = 0u; index < computed.size(); ++index){
-        if(computed[index] != expectedSha256Bytes[index])
-            return false;
-    }
-    return true;
+    return BytesMatch(Span<u8>(computed), expectedSha256Bytes);
 }
 
 

@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/type.h>"), cpp_name("::WStringView")]
+extern class WideStringView{
+    WideStringView substr(in usize offset, in usize length)const;
+};
+
 [cpp_name("::ErrorCode"), cpp_flags(self_defaulted, small_value, binary_serializable, equality_switch)]
 extern class ErrorCode{
     i32 value(...)const;

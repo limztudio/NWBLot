@@ -249,8 +249,8 @@ void VerifyGlobalSync_FutexPreservesEveryIncrementUnderContention(){
     const u32 incrementsPerThread = 8192u;
     u32 value = 0u;
     Futex mutex;
-    TestLatch startGate(threadCount + 1u);
-    Array<Optional<TestThread>, 4u> workers;
+    Latch startGate(threadCount + 1u);
+    Array<Optional<JoiningThread>, 4u> workers;
     for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
         workers[threadIndex].emplace(lambda[mut mutex, mut startGate, mut value, in incrementsPerThread]() -> void{
             startGate.arrive_and_wait();
@@ -261,7 +261,7 @@ void VerifyGlobalSync_FutexPreservesEveryIncrementUnderContention(){
         });
     }
     startGate.arrive_and_wait();
-    for(mut Optional<TestThread> worker : workers)
+    for(mut Optional<JoiningThread> worker : workers)
         worker.value().join();
     EXPECT_EQ(value, threadCount * incrementsPerThread);
 }
@@ -329,14 +329,14 @@ void VerifyGlobal_FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice(
     String clearedText = "nonempty";
     const StringView source = "abcdef";
     Array<NarrowChar, 5u> text;
-    CopyTestBuffer(text, source.substr(0u, 3u));
-    copiedThree.assign(ReadFixedText(text));
+    CopyFixedBuffer(text, source.substr(0u, 3u));
+    copiedThree.assign(FixedBufferView(text));
     AppendTestBuffer(text, source.substr(3u, 2u));
-    appendedTwo.assign(ReadFixedText(text));
-    CopyTestBuffer(text, source);
-    copiedFull.assign(ReadFixedText(text));
-    CopyTestBuffer(text, StringView());
-    clearedText.assign(ReadFixedText(text));
+    appendedTwo.assign(FixedBufferView(text));
+    CopyFixedBuffer(text, source);
+    copiedFull.assign(FixedBufferView(text));
+    CopyFixedBuffer(text, StringView());
+    clearedText.assign(FixedBufferView(text));
     EXPECT_EQ(StringView(copiedThree), StringView("abc"));
     EXPECT_EQ(StringView(appendedTwo), StringView("abcd"));
     EXPECT_EQ(StringView(copiedFull), StringView("abcd"));
@@ -453,11 +453,11 @@ void VerifyGlobal_CallAndOptionTextRejectInvalidBoundaries(){
             return "other";
         return "mixed";
     };
-    const Expected<u32> parsed = ParseOptionText(StringView("  MiXeD\t"), Span<u32>(choices), optionText);
+    const Expected<u32> parsed = ParseOptionText<u32>(StringView("  MiXeD\t"), Span<u32>(choices), optionText);
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed.value(), 0u);
-    EXPECT_FALSE(ParseOptionText(StringView("missing"), Span<u32>(choices), optionText).has_value());
-    EXPECT_FALSE(ParseOptionText(StringView("mixed"), Span<u32>(), optionText).has_value());
+    EXPECT_FALSE(ParseOptionText<u32>(StringView("missing"), Span<u32>(choices), optionText).has_value());
+    EXPECT_FALSE(ParseOptionText<u32>(StringView("mixed"), Span<u32>(), optionText).has_value());
 }
 
 void VerifyGlobal_TextReplacementsAndIdentifiersPreserveInputBoundaries(){
@@ -478,12 +478,12 @@ void VerifyGlobal_TextReplacementsAndIdentifiersPreserveInputBoundaries(){
     EXPECT_NO_THROW(ApplyEdits(proxies, proxyText));
     AppendAsciiUpperIdentifier(StringView("a-\0\x80\x62", 5u), "VALUE", upperIdentifier);
     PointerFallbackProbe upper;
-    RequireNothrowExpression(ProbeUpperIdentifier(StringView(), "VALUE", upper));
-    ProbeUpperIdentifier(StringView(), "VALUE", upper);
+    RequireNothrowExpression(AppendAsciiUpperIdentifier(StringView(), "VALUE", upper));
+    AppendAsciiUpperIdentifier(StringView(), "VALUE", upper);
     upperSelected = upper.selected;
     PointerFallbackProbe pascalProbe;
-    RequireNothrowExpression(ProbePascalIdentifier(StringView(), "Value", pascalProbe));
-    ProbePascalIdentifier(StringView(), "Value", pascalProbe);
+    RequireNothrowExpression(AppendUnderscoreSeparatedPascalIdentifier(StringView(), "Value", pascalProbe));
+    AppendUnderscoreSeparatedPascalIdentifier(StringView(), "Value", pascalProbe);
     pascalSelected = pascalProbe.selected;
 
     EXPECT_EQ(StringView(editableText), StringView("<adXYZ>"));
@@ -562,7 +562,7 @@ void VerifyGlobal_SourceAndNewlineTextPreserveBoundaries(){
     Array<WideChar, 16u> expanded;
     const usize length = ExpandWideLines(s_MixedWideLines, expanded);
     EXPECT_EQ(WidePrefix(expanded, length), s_ExpandedWideLines);
-    EXPECT_EQ(CountUtf8Scalars(StringView("a\xC3\xA9", 3u)), 2u);
+    EXPECT_EQ(CountUtf8ScalarsAssumingValid(StringView("a\xC3\xA9", 3u)), 2u);
 }
 
 void VerifyGlobal_UnsignedTextAndBytesAgreeAtMaximum(){

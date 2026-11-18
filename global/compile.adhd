@@ -5,6 +5,9 @@
 [cpp_header("<global/compile.h>"), cpp_name("FOUNDATION_OCCUR_ASSERT")]
 extern const b8 s_RuntimeAssertionsEnabled;
 
+[cpp_header("<global/compile.h>"), cpp_name("FOUNDATION_OCCUR_WARNING")]
+extern const b8 s_RuntimeWarningsEnabled;
+
 [cpp_name("::CanEnableDebugRuntime")]
 extern b8 CanEnableDebugRuntime();
 

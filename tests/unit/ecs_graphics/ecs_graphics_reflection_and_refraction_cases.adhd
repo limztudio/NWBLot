@@ -118,104 +118,17 @@ class ReflectionStatsDestructorLeaseTask{ public ReflectionStatisticsReservation
     public ReflectionStatsDestructorLeaseTask(in ReflectionStatisticsControlHandle control, in ReflectionStatistics metadata){ this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(control, metadata); } }
 
 [ordered]
-class ReflectionStatsContext{
-    public StatisticsTestControl<ReflectionStatisticsState> inner;
+class RayTracingGraphTestContext<StateT>{
+    public StatisticsTestControl<StateT> inner;
     public GpuTaskGraph graph;
-    public ReflectionStatsContext(){
-        this.inner = StatisticsTestControl<ReflectionStatisticsState>();
+
+    public RayTracingGraphTestContext(){
+        this.inner = StatisticsTestControl<StateT>();
         this.graph = GpuTaskGraph(this.inner.arena);
     }
-    public b8 valid()const{ return this.inner.control.valid(); }
-    public StatisticsReservationKey reserve(in ReflectionStatistics metadata){ return this.inner.control.deref().reserve(metadata); }
-    public void discard(in StatisticsReservationKey key){ this.inner.control.deref().discard(key); }
-    public void accept(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady){
-        this.inner.control.deref().accept(key, token, hardwareReady);
-    }
-    public void complete(in StatisticsReservationKey key, in QueueSubmissionToken token, in Span<u32> counters){
-        this.inner.control.deref().complete(key, token, counters);
-    }
-    public void completeEmpty(in StatisticsReservationKey key, in QueueSubmissionToken token){
-        this.complete(key, token, Span<u32>());
-    }
-    public void reset(in u16 generation){ this.inner.control.deref().reset(generation); }
-    public Expected<ReflectionStatistics> tryGetLatestStatistics(){ return this.inner.control.deref().tryGetLatestStatistics(); }
-    public ReflectionPendingEntry pending(in u32 slot){ return this.inner.control.deref().pending(slot); }
-    public ReflectionStatisticsReservation makeReservation(in ReflectionStatistics metadata){
-        return StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(this.inner.control, metadata);
-    }
-    public void acceptWithFeedback(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady, in ReflectionFeedbackOutcome feedback){
-        ReflectionStatisticsOutcome outcome;
-        outcome.feedback = feedback;
-        this.inner.control.deref().accept(key, token, hardwareReady, outcome);
-    }
-    public Expected<GpuTaskId> addLeaseTask(in GpuTaskDesc desc, in ReflectionStatistics metadata){
-        ReflectionStatisticsLeaseTask task(this.inner.control, metadata);
-        return this.graph.addPayloadTask(desc, task);
-    }
-    public Expected<GpuTaskId> addDestructorLeaseTask(in GpuTaskDesc desc, in ReflectionStatistics metadata){
-        ReflectionStatsDestructorLeaseTask task(this.inner.control, metadata);
-        return this.graph.addPayloadTask(desc, task);
-    }
-}
 
-[ordered]
-class RefractionStatsContext{
-    public StatisticsTestControl<RefractionStatisticsState> inner;
-    public b8 valid()const{ return this.inner.control.valid(); }
-    public StatisticsReservationKey reserve(in RefractionStatistics metadata){ return this.inner.control.deref().reserve(metadata); }
-    public void discard(in StatisticsReservationKey key){ this.inner.control.deref().discard(key); }
-    public void accept(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady){
-        this.inner.control.deref().accept(key, token, hardwareReady);
-    }
-    public void complete(in StatisticsReservationKey key, in QueueSubmissionToken token, in Span<u32> counters){
-        this.inner.control.deref().complete(key, token, counters);
-    }
-    public void completeEmpty(in StatisticsReservationKey key, in QueueSubmissionToken token){
-        this.complete(key, token, Span<u32>());
-    }
-    public void reset(in u16 generation){ this.inner.control.deref().reset(generation); }
-    public Expected<RefractionStatistics> tryGetLatestStatistics(){ return this.inner.control.deref().tryGetLatestStatistics(); }
-    public ReflectionPendingEntry pending(in u32 slot){ return this.inner.control.deref().pending(slot); }
-}
-
-[ordered]
-class ReflectionFeedbackControlContext{
-    public StatisticsTestControl<ReflectionFeedbackState> inner;
-    public GpuTaskGraph graph;
-    public ReflectionFeedbackControlContext(){
-        this.inner = StatisticsTestControl<ReflectionFeedbackState>();
-        this.graph = GpuTaskGraph(this.inner.arena);
-    }
-    public b8 valid()const{ return this.inner.control.valid(); }
-    public ReflectionFeedbackPlan plan(in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in b8 enabled, in u64 graphicsFrame){
-        return this.inner.control.deref().plan(stamp, settings, enabled, graphicsFrame);
-    }
-    public b8 reserve(in ReflectionFeedbackPlan plan){ return this.inner.control.deref().reserve(plan); }
-    public void discard(in ReflectionFeedbackPlan plan){ this.inner.control.deref().discard(plan); }
-    public ReflectionFeedbackReservation makeReservation(in ReflectionFeedbackPlan plan){ return ReflectionFeedbackReservation(this.inner.control, plan); }
-    public Expected<GpuTaskId> addLeaseTask(in GpuTaskDesc desc, in ReflectionFeedbackPlan plan){
-        ReflectionFeedbackLeaseTask task(this.inner.control, plan);
-        return this.graph.addPayloadTask(desc, task);
-    }
-}
-
-[ordered]
-class ReflectionHistoryControlContext{
-    public StatisticsTestControl<ReflectionHistoryState> inner;
-    public GpuTaskGraph graph;
-    public ReflectionHistoryControlContext(){
-        this.inner = StatisticsTestControl<ReflectionHistoryState>();
-        this.graph = GpuTaskGraph(this.inner.arena);
-    }
-    public b8 valid()const{ return this.inner.control.valid(); }
-    public ReflectionHistoryPlan plan(in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in u64 graphicsFrame){
-        return this.inner.control.deref().plan(stamp, settings, graphicsFrame);
-    }
-    public b8 reserve(in ReflectionHistoryPlan plan){ return this.inner.control.deref().reserve(plan); }
-    public void discard(in ReflectionHistoryPlan plan){ this.inner.control.deref().discard(plan); }
-    public ReflectionHistoryReservation makeReservation(in ReflectionHistoryPlan plan){ return ReflectionHistoryReservation(this.inner.control, plan); }
-    public Expected<GpuTaskId> addLeaseTask(in GpuTaskDesc desc, in ReflectionHistoryPlan plan){
-        ReflectionHistoryLeaseTask task(this.inner.control, plan);
+    public Expected<GpuTaskId> addLeaseTask<TaskT, MetadataT>(in GpuTaskDesc desc, in MetadataT metadata){
+        TaskT task(this.inner.control, metadata);
         return this.graph.addPayloadTask(desc, task);
     }
 }
@@ -538,27 +451,29 @@ void VerifyReflectionFeedback_ResourceGenerationBlocksOldCallbacksWithoutDiscard
 }
 
 void VerifyReflectionFeedback_RejectedGraphAndResetReleaseTheMoveOnlyReservation(){
-    ReflectionFeedbackControlContext context = ReflectionFeedbackControlContext();
-    ASSERT_TRUE(context.valid());
-    const ReflectionFeedbackPlan rejected = context.plan(Stamp(), ReflectionSettings(), true, 1u);
-    EXPECT_FALSE(context.addLeaseTask(GpuTaskDesc(), rejected).has_value());
+    RayTracingGraphTestContext<ReflectionFeedbackState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionFeedbackState state = context.inner.control.deref();
+    const ReflectionFeedbackPlan rejected = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+    EXPECT_FALSE(context.addLeaseTask<ReflectionFeedbackLeaseTask, ReflectionFeedbackPlan>(GpuTaskDesc(), rejected).has_value());
     GpuTaskDesc desc = GpuTaskDesc();
     desc.setIdentity(s_EcsCaseTestsFeedbackLease).setMarkerLabel("Feedback Lease");
-    const ReflectionFeedbackPlan pending = context.plan(Stamp(), ReflectionSettings(), true, 2u);
-    const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask(desc, pending);
+    const ReflectionFeedbackPlan pending = state.plan(Stamp(), ReflectionSettings(), true, 2u);
+    const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask<ReflectionFeedbackLeaseTask, ReflectionFeedbackPlan>(desc, pending);
     ASSERT_TRUE(gpuTaskAdmission.has_value());
     ASSERT_TRUE(gpuTaskAdmission.value().valid());
     context.graph.reset();
-    const ReflectionFeedbackPlan retry = context.plan(Stamp(), ReflectionSettings(), true, 3u);
-    ASSERT_TRUE(context.reserve(retry));
+    const ReflectionFeedbackPlan retry = state.plan(Stamp(), ReflectionSettings(), true, 3u);
+    ASSERT_TRUE(state.reserve(retry));
     EXPECT_EQ(retry.probeIndex, 0u);
-    context.discard(retry);
+    state.discard(retry);
 }
 
 void VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction(){
-    ReflectionFeedbackControlContext context = ReflectionFeedbackControlContext();
-    ASSERT_TRUE(context.valid());
-    const ReflectionFeedbackPlan first = context.plan(Stamp(), ReflectionSettings(), true, 1u);
+    RayTracingGraphTestContext<ReflectionFeedbackState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionFeedbackState state = context.inner.control.deref();
+    const ReflectionFeedbackPlan first = state.plan(Stamp(), ReflectionSettings(), true, 1u);
     b8 originalInitiallyValid = false;
     b8 originalValidAfterMove = true;
     b8 movedValidBeforeAccept = false;
@@ -581,16 +496,16 @@ void VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetains
     EXPECT_TRUE(movedValidBeforeAccept);
     EXPECT_FALSE(movedValidAfterAccept);
 
-    const ReflectionFeedbackPlan retry = context.plan(Stamp(), ReflectionSettings(), true, 2u);
+    const ReflectionFeedbackPlan retry = state.plan(Stamp(), ReflectionSettings(), true, 2u);
     EXPECT_EQ(retry.probeIndex, 1u);
     {
-        ReflectionFeedbackReservation accepted = context.makeReservation(retry);
+        ReflectionFeedbackReservation accepted = ReflectionFeedbackReservation(context.inner.control, retry);
         ASSERT_TRUE(accepted.valid());
         accepted.accept(QueueSubmissionToken(), true);
     }
-    const ReflectionFeedbackPlan quarantined = context.plan(Stamp(), ReflectionSettings(), true, 3u);
+    const ReflectionFeedbackPlan quarantined = state.plan(Stamp(), ReflectionSettings(), true, 3u);
     EXPECT_TRUE(quarantined.quarantined);
-    const ReflectionFeedbackReservation blocked = context.makeReservation(quarantined);
+    const ReflectionFeedbackReservation blocked = ReflectionFeedbackReservation(context.inner.control, quarantined);
     EXPECT_FALSE(blocked.valid());
 }
 
@@ -610,13 +525,14 @@ void VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues(
 }
 
 void VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling(){
-    ReflectionHistoryControlContext context = ReflectionHistoryControlContext();
-    ASSERT_TRUE(context.valid());
+    RayTracingGraphTestContext<ReflectionHistoryState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionHistoryState state = context.inner.control.deref();
     ReflectionSettings settings = ReflectionSettings();
     settings.temporalMaxSamples = 1u;
     u64 epoch = 0u;
     for(u32 index = 0u; index < 4u; ++index){
-        const ReflectionHistoryPlan plan = context.plan(Stamp(), settings, 100u + index);
+        const ReflectionHistoryPlan plan = state.plan(Stamp(), settings, 100u + index);
         const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(plan, true);
         EXPECT_TRUE(outcome.eligible);
         EXPECT_EQ(outcome.reused, index != 0u);
@@ -627,10 +543,10 @@ void VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcce
         if(index == 0u)
             epoch = outcome.epoch;
         EXPECT_EQ(outcome.epoch, epoch);
-        ReflectionHistoryReservation reservation = context.makeReservation(plan);
+        ReflectionHistoryReservation reservation = ReflectionHistoryReservation(context.inner.control, plan);
         ASSERT_TRUE(reservation.valid());
         reservation.accept(Token(plan.sequence), true);
-        const ReflectionHistoryPlan next = context.plan(Stamp(), settings, 101u + index);
+        const ReflectionHistoryPlan next = state.plan(Stamp(), settings, 101u + index);
         EXPECT_EQ(next.acceptedSequence, plan.sequence);
         EXPECT_EQ(next.previousBank, plan.currentBank);
         EXPECT_EQ(next.previousSampleCount, 1u);
@@ -639,25 +555,26 @@ void VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcce
 }
 
 void VerifyReflectionHistory_DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry(){
-    ReflectionHistoryControlContext context = ReflectionHistoryControlContext();
-    ASSERT_TRUE(context.valid());
+    RayTracingGraphTestContext<ReflectionHistoryState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionHistoryState state = context.inner.control.deref();
     const ReflectionSettings settings = ReflectionSettings();
-    const ReflectionHistoryPlan first = context.plan(Stamp(), settings, 10u);
-    ReflectionHistoryReservation initial = context.makeReservation(first);
+    const ReflectionHistoryPlan first = state.plan(Stamp(), settings, 10u);
+    ReflectionHistoryReservation initial = ReflectionHistoryReservation(context.inner.control, first);
     ASSERT_TRUE(initial.valid());
     initial.accept(Token(first.sequence), true);
 
-    const ReflectionHistoryPlan rejected = context.plan(Stamp(), settings, 11u);
+    const ReflectionHistoryPlan rejected = state.plan(Stamp(), settings, 11u);
     ASSERT_TRUE(rejected.reused);
     const ReflectionHistoryOutcome lateReset = ResolveReflectionHistoryOutcome(rejected, false);
     EXPECT_EQ(lateReset.resetReason, ReflectionHistoryResetReason::HardwareChanged);
     EXPECT_FALSE(lateReset.reused);
     EXPECT_EQ(lateReset.sampleIndex, 0u);
     EXPECT_EQ(lateReset.sampleCount, 1u);
-    ReflectionHistoryReservation abandoned = context.makeReservation(rejected);
+    ReflectionHistoryReservation abandoned = ReflectionHistoryReservation(context.inner.control, rejected);
     ASSERT_TRUE(abandoned.valid());
     abandoned.discard();
-    const ReflectionHistoryPlan retry = context.plan(Stamp(), settings, 12u);
+    const ReflectionHistoryPlan retry = state.plan(Stamp(), settings, 12u);
     EXPECT_EQ(retry.acceptedSequence, first.sequence);
     EXPECT_EQ(retry.epoch, rejected.epoch);
     EXPECT_EQ(retry.currentBank, rejected.currentBank);
@@ -667,10 +584,10 @@ void VerifyReflectionHistory_DiscardedLateHardwareResetKeepsHistoryUntilAnAccept
     EXPECT_FALSE(restoredReady.reset);
     EXPECT_EQ(restoredReady.sampleIndex, 1u);
 
-    ReflectionHistoryReservation accepted = context.makeReservation(retry);
+    ReflectionHistoryReservation accepted = ReflectionHistoryReservation(context.inner.control, retry);
     ASSERT_TRUE(accepted.valid());
     accepted.accept(Token(retry.sequence), false);
-    const ReflectionHistoryPlan next = context.plan(Stamp(), settings, 13u);
+    const ReflectionHistoryPlan next = state.plan(Stamp(), settings, 13u);
     const ReflectionHistoryOutcome stable = ResolveReflectionHistoryOutcome(next, false);
     EXPECT_EQ(next.acceptedSequence, retry.sequence);
     EXPECT_EQ(next.previousBank, retry.currentBank);
@@ -823,19 +740,20 @@ void VerifyReflectionHistory_ResourceGenerationRejectsOldAcceptanceAndResetsEpoc
 }
 
 void VerifyReflectionHistory_GraphRejectionAndResetReleaseUnacceptedLease(){
-    ReflectionHistoryControlContext context = ReflectionHistoryControlContext();
-    ASSERT_TRUE(context.valid());
-    const ReflectionHistoryPlan rejected = context.plan(Stamp(), ReflectionSettings(), 1u);
-    EXPECT_FALSE(context.addLeaseTask(GpuTaskDesc(), rejected).has_value());
+    RayTracingGraphTestContext<ReflectionHistoryState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionHistoryState state = context.inner.control.deref();
+    const ReflectionHistoryPlan rejected = state.plan(Stamp(), ReflectionSettings(), 1u);
+    EXPECT_FALSE(context.addLeaseTask<ReflectionHistoryLeaseTask, ReflectionHistoryPlan>(GpuTaskDesc(), rejected).has_value());
     GpuTaskDesc desc = GpuTaskDesc();
     desc.setIdentity(s_EcsCaseTestsHistoryLease).setMarkerLabel("History Lease");
-    const ReflectionHistoryPlan pending = context.plan(Stamp(), ReflectionSettings(), 2u);
-    const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask(desc, pending);
+    const ReflectionHistoryPlan pending = state.plan(Stamp(), ReflectionSettings(), 2u);
+    const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask<ReflectionHistoryLeaseTask, ReflectionHistoryPlan>(desc, pending);
     ASSERT_TRUE(gpuTaskAdmission.has_value());
     ASSERT_TRUE(gpuTaskAdmission.value().valid());
     context.graph.reset();
-    const ReflectionHistoryPlan retry = context.plan(Stamp(), ReflectionSettings(), 3u);
-    EXPECT_TRUE(context.reserve(retry));
+    const ReflectionHistoryPlan retry = state.plan(Stamp(), ReflectionSettings(), 3u);
+    EXPECT_TRUE(state.reserve(retry));
     EXPECT_EQ(retry.sampleIndex, 0u);
 }
 
@@ -956,31 +874,33 @@ void VerifyReflectionSettings_ReflectionHardwareWorkRequiresAnEnabledRouteAndPos
 }
 
 void VerifyReflectionStatistics_RingSkipsWhenThreeReservationsAreOutstanding(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey first = context.reserve(MakeReflectionStatisticsMetadata());
-    const StatisticsReservationKey second = context.reserve(MakeReflectionStatisticsMetadata());
-    const StatisticsReservationKey third = context.reserve(MakeReflectionStatisticsMetadata());
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey first = state.reserve(MakeReflectionStatisticsMetadata());
+    const StatisticsReservationKey second = state.reserve(MakeReflectionStatisticsMetadata());
+    const StatisticsReservationKey third = state.reserve(MakeReflectionStatisticsMetadata());
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
     EXPECT_NE(first.slot, second.slot);
     EXPECT_NE(second.slot, third.slot);
-    EXPECT_FALSE(context.reserve(MakeReflectionStatisticsMetadata()).valid());
+    EXPECT_FALSE(state.reserve(MakeReflectionStatisticsMetadata()).valid());
 }
 
 void VerifyReflectionStatistics_DiscardedReservationCanBeReusedWithoutStaleCallbackMutation(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey previous = context.reserve(MakeReflectionStatisticsMetadata());
-    context.discard(previous);
-    const StatisticsReservationKey current = context.reserve(MakeReflectionStatisticsMetadataAt(10u));
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey previous = state.reserve(MakeReflectionStatisticsMetadata());
+    state.discard(previous);
+    const StatisticsReservationKey current = state.reserve(MakeReflectionStatisticsMetadataAt(10u));
     ASSERT_EQ(previous.slot, current.slot);
     ASSERT_GT(current.sequence, previous.sequence);
-    context.discard(previous);
-    context.accept(previous, Token(), true);
-    context.accept(current, Token(21u), false);
-    const ReflectionPendingEntry pending = context.pending(current.slot);
+    state.discard(previous);
+    state.accept(previous, Token(), true);
+    state.accept(current, Token(21u), false);
+    const ReflectionPendingEntry pending = state.pending(current.slot);
     ASSERT_TRUE(pending.has_value());
     EXPECT_EQ(pending.value().key.sequence, current.sequence);
     EXPECT_EQ(pending.value().token.value, 21u);
@@ -992,19 +912,20 @@ void VerifyReflectionStatistics_PublishesFrozenMetadataAndNonzeroCountersOnlyAtC
     variants[1u] = true;
     const ReflectionCounterArray counters = MakeSampleReflectionCounters();
     for(in b8 csgHardwareEnabled : variants){
-        ReflectionStatsContext context = ReflectionStatsContext();
-        ASSERT_TRUE(context.valid());
+        RayTracingGraphTestContext<ReflectionStatisticsState> context;
+        ASSERT_TRUE(context.inner.control.valid());
+        mut ReflectionStatisticsState state = context.inner.control.deref();
         ReflectionStatistics metadata = MakeReflectionStatisticsMetadata();
         metadata.csgHardwareEnabled = csgHardwareEnabled;
-        const StatisticsReservationKey key = context.reserve(metadata);
+        const StatisticsReservationKey key = state.reserve(metadata);
         metadata.frameIndex = 500u;
         metadata.width = 1u;
         metadata.csgHardwareEnabled = !csgHardwareEnabled;
-        context.accept(key, Token(), true);
-        context.discard(key);
-        EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
-        context.complete(key, Token(), counters);
-        const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+        state.accept(key, Token(), true);
+        state.discard(key);
+        EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
+        state.complete(key, Token(), counters);
+        const Expected<ReflectionStatistics> statistics = state.tryGetLatestStatistics();
         ASSERT_TRUE(statistics.has_value());
 
         EXPECT_EQ(statistics.value().frameIndex, 9u);
@@ -1020,116 +941,125 @@ void VerifyReflectionStatistics_PublishesFrozenMetadataAndNonzeroCountersOnlyAtC
 }
 
 void VerifyReflectionStatistics_FeedbackEpochSurvivesAcceptedInputMutation(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
     ReflectionStatistics metadata = MakeReflectionStatisticsMetadata();
     metadata.feedbackRequested = true;
     metadata.feedbackSequence = 12u;
     metadata.schedulingCounterValid = true;
-    const StatisticsReservationKey key = context.reserve(metadata);
+    const StatisticsReservationKey key = state.reserve(metadata);
     ReflectionFeedbackOutcome feedback = ReflectionFeedbackOutcome();
     feedback.epoch = 4u;
     feedback.startGraphicsFrame = 90u;
     feedback.probeIndex = 7u;
     feedback.eligible = true;
     feedback.reused = true;
-    context.acceptWithFeedback(key, Token(), true, feedback);
+    ReflectionStatisticsOutcome outcome;
+    outcome.feedback = feedback;
+    state.accept(key, Token(), true, outcome);
     feedback.epoch = 999u;
     const ReflectionCounterArray counters = ReflectionCounterArray();
-    context.complete(key, Token(), counters);
-    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    state.complete(key, Token(), counters);
+    const Expected<ReflectionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().feedbackEpoch, 4u);
 }
 
 void VerifyReflectionStatistics_OlderCompletionsCannotReplaceNewerPublishedWork(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey older = context.reserve(MakeReflectionStatisticsMetadataAt(10u));
-    const StatisticsReservationKey newer = context.reserve(MakeReflectionStatisticsMetadataAt(11u));
-    context.accept(older, Token(20u), true);
-    context.accept(newer, Token(21u), false);
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey older = state.reserve(MakeReflectionStatisticsMetadataAt(10u));
+    const StatisticsReservationKey newer = state.reserve(MakeReflectionStatisticsMetadataAt(11u));
+    state.accept(older, Token(20u), true);
+    state.accept(newer, Token(21u), false);
     const ReflectionCounterArray counters = ReflectionCounterArray();
-    context.complete(newer, Token(21u), counters);
-    context.complete(older, Token(20u), counters);
-    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    state.complete(newer, Token(21u), counters);
+    state.complete(older, Token(20u), counters);
+    const Expected<ReflectionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().sequence, newer.sequence);
     EXPECT_EQ(statistics.value().frameIndex, 11u);
     EXPECT_FALSE(statistics.value().hardwareReady);
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, older.slot);
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, older.slot);
 }
 
 void VerifyReflectionStatistics_CompletionRequiresExactAcceptedPhysicalToken(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey key = context.reserve(MakeReflectionStatisticsMetadata());
-    context.accept(key, Token(), true);
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey key = state.reserve(MakeReflectionStatisticsMetadata());
+    state.accept(key, Token(), true);
     const ReflectionCounterArray counters = ReflectionCounterArray();
     QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
-    context.complete(key, wrong, counters);
+    state.complete(key, wrong, counters);
     wrong = Token();
     wrong.deviceGeneration = 8u;
-    context.complete(key, wrong, counters);
-    context.complete(key, Token(19u), counters);
-    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
-    context.complete(key, Token(), counters);
-    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    state.complete(key, wrong, counters);
+    state.complete(key, Token(19u), counters);
+    EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
+    state.complete(key, Token(), counters);
+    const Expected<ReflectionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
 }
 
 void VerifyReflectionStatistics_ResetRejectsOldCallbacksAndClearsPublication(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey previous = context.reserve(MakeReflectionStatisticsMetadata());
-    context.accept(previous, Token(), true);
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey previous = state.reserve(MakeReflectionStatisticsMetadata());
+    state.accept(previous, Token(), true);
     const ReflectionCounterArray counters = ReflectionCounterArray();
-    context.complete(previous, Token(), counters);
-    context.reset(8u);
-    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
-    const StatisticsReservationKey current = context.reserve(MakeReflectionStatisticsMetadataAt(12u));
+    state.complete(previous, Token(), counters);
+    state.reset(8u);
+    EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
+    const StatisticsReservationKey current = state.reserve(MakeReflectionStatisticsMetadataAt(12u));
     EXPECT_GT(current.generation, previous.generation);
-    context.accept(previous, Token(), true);
-    context.discard(previous);
-    context.complete(previous, Token(), counters);
+    state.accept(previous, Token(), true);
+    state.discard(previous);
+    state.complete(previous, Token(), counters);
     QueueSubmissionToken next = Token(1u);
     next.deviceGeneration = 8u;
-    context.accept(current, next, false);
-    context.complete(current, next, counters);
-    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    state.accept(current, next, false);
+    state.complete(current, next, counters);
+    const Expected<ReflectionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().frameIndex, 12u);
     EXPECT_EQ(statistics.value().acceptedToken.deviceGeneration, 8u);
 }
 
 void VerifyReflectionStatistics_FailedMappingRetiresSlotWithoutPublishingZeros(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey key = context.reserve(MakeReflectionStatisticsMetadata());
-    context.accept(key, Token(), true);
-    context.completeEmpty(key, Token());
-    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey key = state.reserve(MakeReflectionStatisticsMetadata());
+    state.accept(key, Token(), true);
+    state.complete(key, Token(), Span<u32>());
+    EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
 }
 
 void VerifyReflectionStatistics_InvalidAcceptedTokenQuarantinesSlotUntilReset(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey key = context.reserve(MakeReflectionStatisticsMetadata());
-    context.accept(key, QueueSubmissionToken(), true);
-    context.discard(key);
-    EXPECT_FALSE(context.pending(key.slot).has_value());
-    EXPECT_FALSE(context.pending(s_StatisticsReadbackSlotCount).has_value());
-    EXPECT_FALSE(context.pending(u32.max).has_value());
-    EXPECT_NE(context.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
-    context.reset(7u);
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    const StatisticsReservationKey key = state.reserve(MakeReflectionStatisticsMetadata());
+    state.accept(key, QueueSubmissionToken(), true);
+    state.discard(key);
+    EXPECT_FALSE(state.pending(key.slot).has_value());
+    EXPECT_FALSE(state.pending(s_StatisticsReadbackSlotCount).has_value());
+    EXPECT_FALSE(state.pending(u32.max).has_value());
+    EXPECT_NE(state.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
+    state.reset(7u);
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
 }
 
 void VerifyReflectionStatistics_MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
     {
         ReflectionStatisticsReservation first(context.inner.control, MakeReflectionStatisticsMetadata());
         const u32 firstSlot = first.slotIndex();
@@ -1142,120 +1072,126 @@ void VerifyReflectionStatistics_MovingLeaseTransfersOwnershipAndReclaimsAssignme
         TestMoveAssign<ReflectionStatisticsReservation>(third, second);
         EXPECT_FALSE(second.valid());
         EXPECT_EQ(third.slotIndex(), firstSlot);
-        EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, replacedSlot);
+        EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, replacedSlot);
     }
 }
 
 void VerifyReflectionStatistics_AcceptedLeaseRemainsInFlightAfterPayloadDestruction(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
     u32 index = 0u;
     {
-        ReflectionStatisticsReservation lease = context.makeReservation(MakeReflectionStatisticsMetadata());
+        ReflectionStatisticsReservation lease(context.inner.control, MakeReflectionStatisticsMetadata());
         index = lease.slotIndex();
         lease.acceptReservation(Token(), true);
     }
-    EXPECT_NE(context.reserve(MakeReflectionStatisticsMetadata()).slot, index);
-    const ReflectionPendingEntry pending = context.pending(index);
+    EXPECT_NE(state.reserve(MakeReflectionStatisticsMetadata()).slot, index);
+    const ReflectionPendingEntry pending = state.pending(index);
     ASSERT_TRUE(pending.has_value());
     const ReflectionCounterArray counters = ReflectionCounterArray();
-    context.complete(pending.value().key, pending.value().token, counters);
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, index);
+    state.complete(pending.value().key, pending.value().token, counters);
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, index);
 }
 
 void VerifyReflectionStatistics_RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
-    EXPECT_FALSE(context.addLeaseTask(GpuTaskDesc(), MakeReflectionStatisticsMetadata()).has_value());
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
-    context.reset(1u);
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
+    EXPECT_FALSE(context.addLeaseTask<ReflectionStatisticsLeaseTask, ReflectionStatistics>(GpuTaskDesc(), MakeReflectionStatisticsMetadata()).has_value());
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
+    state.reset(1u);
     {
-        const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask(MakeReflectionStatisticsTaskDesc(), MakeReflectionStatisticsMetadata());
+        const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask<ReflectionStatisticsLeaseTask, ReflectionStatistics>(MakeReflectionStatisticsTaskDesc(), MakeReflectionStatisticsMetadata());
         ASSERT_TRUE(gpuTaskAdmission.has_value());
         ASSERT_TRUE(gpuTaskAdmission.value().valid());
     }
     context.graph.reset();
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
 }
 
 void VerifyReflectionStatistics_PayloadDestructionReclaimsLeaseWithoutDiscardCallback(){
-    ReflectionStatsContext context = ReflectionStatsContext();
-    ASSERT_TRUE(context.valid());
+    RayTracingGraphTestContext<ReflectionStatisticsState> context;
+    ASSERT_TRUE(context.inner.control.valid());
+    mut ReflectionStatisticsState state = context.inner.control.deref();
     {
-        const Expected<GpuTaskId> gpuTaskAdmission = context.addDestructorLeaseTask(MakeReflectionStatisticsTaskDesc(), MakeReflectionStatisticsMetadata());
+        const Expected<GpuTaskId> gpuTaskAdmission = context.addLeaseTask<ReflectionStatsDestructorLeaseTask, ReflectionStatistics>(MakeReflectionStatisticsTaskDesc(), MakeReflectionStatisticsMetadata());
         ASSERT_TRUE(gpuTaskAdmission.has_value());
         ASSERT_TRUE(gpuTaskAdmission.value().valid());
     }
     context.graph.reset();
-    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
+    EXPECT_EQ(state.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
 }
 
 void VerifyRefractionStatistics_RingSaturationDoesNotRecycleOutstandingGpuWork(){
-    RefractionStatsContext context = RefractionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey first = context.reserve(MakeRefractionStatisticsMetadata());
-    const StatisticsReservationKey second = context.reserve(MakeRefractionStatisticsMetadata());
-    const StatisticsReservationKey third = context.reserve(MakeRefractionStatisticsMetadata());
+    StatisticsTestControl<RefractionStatisticsState> context;
+    ASSERT_TRUE(context.control.valid());
+    mut RefractionStatisticsState state = context.control.deref();
+    const StatisticsReservationKey first = state.reserve(MakeRefractionStatisticsMetadata());
+    const StatisticsReservationKey second = state.reserve(MakeRefractionStatisticsMetadata());
+    const StatisticsReservationKey third = state.reserve(MakeRefractionStatisticsMetadata());
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
     EXPECT_NE(first.slot, second.slot);
     EXPECT_NE(first.slot, third.slot);
     EXPECT_NE(second.slot, third.slot);
-    context.accept(first, Token(), true);
-    context.discard(first);
-    EXPECT_FALSE(context.reserve(MakeRefractionStatisticsMetadata()).valid());
-    context.discard(second);
-    const StatisticsReservationKey reused = context.reserve(MakeRefractionStatisticsMetadataAt(10u));
+    state.accept(first, Token(), true);
+    state.discard(first);
+    EXPECT_FALSE(state.reserve(MakeRefractionStatisticsMetadata()).valid());
+    state.discard(second);
+    const StatisticsReservationKey reused = state.reserve(MakeRefractionStatisticsMetadataAt(10u));
     EXPECT_EQ(reused.slot, second.slot);
     EXPECT_GT(reused.sequence, second.sequence);
-    EXPECT_FALSE(context.reserve(MakeRefractionStatisticsMetadata()).valid());
+    EXPECT_FALSE(state.reserve(MakeRefractionStatisticsMetadata()).valid());
 }
 
 void VerifyRefractionStatistics_CompletionRequiresExactAcceptedPhysicalToken(){
-    RefractionStatsContext context = RefractionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey key = context.reserve(MakeRefractionStatisticsMetadata());
-    context.accept(key, Token(), true);
+    StatisticsTestControl<RefractionStatisticsState> context;
+    ASSERT_TRUE(context.control.valid());
+    mut RefractionStatisticsState state = context.control.deref();
+    const StatisticsReservationKey key = state.reserve(MakeRefractionStatisticsMetadata());
+    state.accept(key, Token(), true);
     const RefractionCounterArray counters = RefractionCounterArray();
     QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
-    context.complete(key, wrong, counters);
+    state.complete(key, wrong, counters);
     wrong = Token();
     wrong.deviceGeneration = 8u;
-    context.complete(key, wrong, counters);
+    state.complete(key, wrong, counters);
     wrong = Token();
     wrong.queue = CommandQueue::Compute;
-    context.complete(key, wrong, counters);
-    context.complete(key, Token(19u), counters);
-    context.complete(key, QueueSubmissionToken(), counters);
-    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
-    EXPECT_TRUE(context.pending(key.slot).has_value());
-    context.complete(key, Token(), counters);
-    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    state.complete(key, wrong, counters);
+    state.complete(key, Token(19u), counters);
+    state.complete(key, QueueSubmissionToken(), counters);
+    EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
+    EXPECT_TRUE(state.pending(key.slot).has_value());
+    state.complete(key, Token(), counters);
+    const Expected<RefractionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().acceptedToken.value, Token().value);
     EXPECT_EQ(statistics.value().acceptedToken.physicalQueueIndex, 0u);
-    EXPECT_FALSE(context.pending(key.slot).has_value());
+    EXPECT_FALSE(state.pending(key.slot).has_value());
 }
 
 void VerifyRefractionStatistics_OlderCompletionsCannotReplaceFrozenNewerPublication(){
-    RefractionStatsContext context = RefractionStatsContext();
-    ASSERT_TRUE(context.valid());
+    StatisticsTestControl<RefractionStatisticsState> context;
+    ASSERT_TRUE(context.control.valid());
+    mut RefractionStatisticsState state = context.control.deref();
     RefractionStatistics metadata = MakeRefractionStatisticsMetadataAt(10u);
-    const StatisticsReservationKey older = context.reserve(metadata);
+    const StatisticsReservationKey older = state.reserve(metadata);
     metadata.frameIndex = 11u;
     metadata.graphicsFrameIndex = 111u;
-    const StatisticsReservationKey newer = context.reserve(metadata);
+    const StatisticsReservationKey newer = state.reserve(metadata);
     metadata.frameIndex = 999u;
     metadata.width = 1u;
-    context.accept(older, Token(20u), true);
-    context.accept(newer, Token(21u), false);
+    state.accept(older, Token(20u), true);
+    state.accept(newer, Token(21u), false);
     const RefractionCounterArray counters = MakeSampleRefractionCounters();
-    context.complete(newer, Token(21u), counters);
+    state.complete(newer, Token(21u), counters);
     const RefractionCounterArray olderCounters = RefractionCounterArray();
-    context.complete(older, Token(20u), olderCounters);
-    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    state.complete(older, Token(20u), olderCounters);
+    const Expected<RefractionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().sequence, newer.sequence);
     EXPECT_EQ(statistics.value().frameIndex, 11u);
@@ -1272,32 +1208,33 @@ void VerifyRefractionStatistics_OlderCompletionsCannotReplaceFrozenNewerPublicat
     EXPECT_EQ(statistics.value().queryBudgetUnits, 107u);
     EXPECT_EQ(statistics.value().overflowFlags, 1u);
     ExpectRefractionDiagnosticCountersMatch(statistics.value(), counters);
-    EXPECT_EQ(context.reserve(MakeRefractionStatisticsMetadata()).slot, older.slot);
+    EXPECT_EQ(state.reserve(MakeRefractionStatisticsMetadata()).slot, older.slot);
 }
 
 void VerifyRefractionStatistics_DeviceResetRejectsStaleAcceptanceAndCompletion(){
-    RefractionStatsContext context = RefractionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey previous = context.reserve(MakeRefractionStatisticsMetadata());
-    context.accept(previous, Token(), true);
+    StatisticsTestControl<RefractionStatisticsState> context;
+    ASSERT_TRUE(context.control.valid());
+    mut RefractionStatisticsState state = context.control.deref();
+    const StatisticsReservationKey previous = state.reserve(MakeRefractionStatisticsMetadata());
+    state.accept(previous, Token(), true);
     const RefractionCounterArray counters = RefractionCounterArray();
-    context.complete(previous, Token(), counters);
-    context.reset(0u);
-    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
-    EXPECT_FALSE(context.reserve(MakeRefractionStatisticsMetadata()).valid());
-    context.reset(8u);
-    const StatisticsReservationKey current = context.reserve(MakeRefractionStatisticsMetadataAt(12u));
+    state.complete(previous, Token(), counters);
+    state.reset(0u);
+    EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
+    EXPECT_FALSE(state.reserve(MakeRefractionStatisticsMetadata()).valid());
+    state.reset(8u);
+    const StatisticsReservationKey current = state.reserve(MakeRefractionStatisticsMetadataAt(12u));
     ASSERT_TRUE(current.valid());
     EXPECT_GT(current.generation, previous.generation);
-    context.accept(previous, Token(), true);
-    context.discard(previous);
-    context.complete(previous, Token(), counters);
-    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    state.accept(previous, Token(), true);
+    state.discard(previous);
+    state.complete(previous, Token(), counters);
+    EXPECT_FALSE(state.tryGetLatestStatistics().has_value());
     QueueSubmissionToken next = Token(1u);
     next.deviceGeneration = 8u;
-    context.accept(current, next, true);
-    context.complete(current, next, counters);
-    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    state.accept(current, next, true);
+    state.complete(current, next, counters);
+    const Expected<RefractionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().frameIndex, 12u);
     EXPECT_EQ(statistics.value().acceptedToken.deviceGeneration, 8u);
@@ -1306,19 +1243,20 @@ void VerifyRefractionStatistics_DeviceResetRejectsStaleAcceptanceAndCompletion()
 }
 
 void VerifyRefractionStatistics_FailedMappingRetiresSlotWithoutReplacingPublication(){
-    RefractionStatsContext context = RefractionStatsContext();
-    ASSERT_TRUE(context.valid());
-    const StatisticsReservationKey first = context.reserve(MakeRefractionStatisticsMetadata());
-    context.accept(first, Token(), true);
+    StatisticsTestControl<RefractionStatisticsState> context;
+    ASSERT_TRUE(context.control.valid());
+    mut RefractionStatisticsState state = context.control.deref();
+    const StatisticsReservationKey first = state.reserve(MakeRefractionStatisticsMetadata());
+    state.accept(first, Token(), true);
     const RefractionCounterArray counters = RefractionCounterArray();
-    context.complete(first, Token(), counters);
-    const StatisticsReservationKey failed = context.reserve(MakeRefractionStatisticsMetadataAt(10u));
-    context.accept(failed, Token(21u), true);
-    context.completeEmpty(failed, Token(21u));
-    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    state.complete(first, Token(), counters);
+    const StatisticsReservationKey failed = state.reserve(MakeRefractionStatisticsMetadataAt(10u));
+    state.accept(failed, Token(21u), true);
+    state.complete(failed, Token(21u), Span<u32>());
+    const Expected<RefractionStatistics> statistics = state.tryGetLatestStatistics();
     ASSERT_TRUE(statistics.has_value());
     EXPECT_EQ(statistics.value().sequence, first.sequence);
-    EXPECT_EQ(context.reserve(MakeRefractionStatisticsMetadata()).slot, failed.slot);
+    EXPECT_EQ(state.reserve(MakeRefractionStatisticsMetadata()).slot, failed.slot);
 }
 
 void VerifyRenderableMeshResolution_StaticAttachmentWithoutAssetIsUnavailable(){

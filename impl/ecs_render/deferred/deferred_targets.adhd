@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/gbuffer_layout.adhd>
 #include <impl/ecs_render/csg/format_private.adhd>
 #include <impl/ecs_render/csg/types.adhd>
 #include <impl/ecs_render/deferred/deferred_system.adhd>
@@ -298,20 +299,6 @@ extern const Format s_ShaderCsgRemovedIntervalDataCoreFormat;
 [cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT")]
 extern const Format s_ShaderCsgRemovedIntervalCountCoreFormat;
 
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_BASE_COLOR_LOCATION")]
-extern const u32 s_ShaderMeshGbufferBaseColorLocation;
-
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_NORMAL_LOCATION")]
-extern const u32 s_ShaderMeshGbufferNormalLocation;
-
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION")]
-extern const u32 s_ShaderMeshGbufferWorldPositionLocation;
-
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION")]
-extern const u32 s_ShaderMeshGbufferSpecularRoughnessLocation;
-
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_TARGET_COUNT")]
-extern const u32 s_ShaderMeshGbufferTargetCount;
 
 static_assert(s_CsgCapNormalCoreFormat == s_ShaderCsgCapNormalCoreFormat);
 static_assert(s_CsgIntervalDepthCoreFormat == s_ShaderCsgIntervalDepthCoreFormat);

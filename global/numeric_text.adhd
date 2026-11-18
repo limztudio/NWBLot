@@ -3,19 +3,19 @@
 
 
 [cpp_name("::AppendHexByte")]
-extern void AppendHexByte(in isize a0, mut CompactString a1);
+extern void AppendHexByte(in u8 value, mut auto output);
 
 [cpp_name("::AppendHexU32")]
-extern void AppendHexU32(in isize a0, mut CompactString a1);
+extern void AppendHexU32(in u32 value, mut auto output);
 
 [cpp_name("::AppendHexU32UnsignedLiteral")]
-extern void AppendHexU32UnsignedLiteral(in isize a0, mut CompactString a1);
+extern void AppendHexU32UnsignedLiteral(in u32 value, mut auto output);
 
 [cpp_name("::AppendHexU64")]
-extern void AppendHexU64(in isize a0, mut CompactString a1);
+extern void AppendHexU64(in u64 value, mut auto output);
 
 [cpp_name("::AppendUnsignedDecimal")]
-extern void AppendUnsignedDecimal(mut CompactString a0, in isize a1);
+extern void AppendUnsignedDecimal(mut auto output, in usize value);
 
 [cpp_name("::ClassifyFloatGrammar")]
 extern u8 ClassifyFloatGrammar(in StringView a0);
@@ -98,9 +98,6 @@ extern const u8 s_NumericGrammarInvalid;
 [cpp_name("::s_UsizeDecimalDigitCount")]
 extern const usize s_UsizeDecimalDigitCount;
 
-
-[cpp_header("<global/numeric_text.h>"), cpp_name("::AppendHexU64")]
-extern void AppendHexU64Text(in u64 value, mut String output);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

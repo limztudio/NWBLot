@@ -2,11 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::FixedBufferView")]
+extern StringView FixedBufferView(in auto buffer);
+
+[cpp_name("::CopyFixedBuffer")]
+extern void CopyFixedBuffer(mut auto buffer, in StringView text);
+
 [cpp_name("::AppendUnsignedU64Bytes")]
-extern void AppendUnsignedU64Bytes(mut auto a0, in isize a1);
+extern void AppendUnsignedU64Bytes(mut auto output, in u64 value);
 
 [cpp_name("::AppendUnsignedU64Text")]
-extern void AppendUnsignedU64Text(mut auto a0, in isize a1);
+extern void AppendUnsignedU64Text(mut auto output, in u64 value);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -175,7 +175,7 @@ void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndE
     EXPECT_FALSE(output.empty());
     for(u32 mask = 1u; mask < 8u; ++mask){
         ScopedTestTrace trace(mask);
-        ASSERT_EXIT(VerifyRedirectedFileWithClosedDescriptors(mask, StringView(output)), ContractExitCode(0), "");
+        ASSERT_EXIT(VerifyRedirectedFileWithClosedDescriptors(mask, StringView(output)), ExitedWithCode(0), "");
     }
     ASSERT_TRUE(RemoveAllIfExists(root).has_value());
 }
@@ -183,7 +183,7 @@ void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndE
 void VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors(){
     for(u32 mask = 1u; mask < 8u; ++mask){
         ScopedTestTrace trace(mask);
-        ASSERT_EXIT(VerifyCapturedOutputWithClosedDescriptors(mask), ContractExitCode(0), "");
+        ASSERT_EXIT(VerifyCapturedOutputWithClosedDescriptors(mask), ExitedWithCode(0), "");
     }
 }
 

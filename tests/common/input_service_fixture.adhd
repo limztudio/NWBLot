@@ -1,0 +1,17 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TextInputCapabilities FullTestTextInputCapabilities(){
+    return TextInputCapabilities(true, true, true, true);
+}
+
+ClipboardCapabilities TestClipboardTextCapabilities(in ClipboardChannel channel){
+    if(channel == ClipboardChannel::Clipboard)
+        return ClipboardCapabilities(true, true);
+    return ClipboardCapabilities();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

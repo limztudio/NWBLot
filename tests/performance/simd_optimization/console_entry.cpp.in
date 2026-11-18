@@ -3,14 +3,14 @@
 
 
 #include <tests/performance/simd_optimization/@benchmark_source@.adhd.h>
-#include <utilities/cli/tool_cli.h>
+#include <tests/performance/simd_optimization/benchmark_cli.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 int main(int argc, char** argv){
-    return SimdOptimizationBenchmark::@benchmark_function@(::NWB::Utilities::ConsoleArguments{ argc, argv });
+    return SimdOptimizationBenchmark::RunBenchmarkCli<@argument_capacity@>(::NWB::Utilities::ConsoleArguments{ argc, argv }, SimdOptimizationBenchmark::@benchmark_function@);
 }
 
 

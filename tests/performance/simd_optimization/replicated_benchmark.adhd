@@ -9,22 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/cli/tool_cli.adhd>
-
 [cpp_header("<global/simdmath.h>"), cpp_name("::SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon")]
 extern const f64 s_ReplicatedQuaternionEpsilon;
-
-[cpp_header("<global/simdmath.h>"), cpp_name("::s_F64Epsilon")]
-extern const f64 s_ReplicatedMachineEpsilon;
 
 [cpp_header("<global/simdmath.h>"), cpp_name("::SIMDVectorDoubleDetail::SinCosReplicated")]
 extern void ComputeReplicatedSinCos(mut VectorDouble sine, mut VectorDouble cosine, in VectorDouble value);
 
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasSse2")]
 extern const b8 s_BenchmarkHasSse2;
-
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
-extern const b8 s_BenchmarkUsesSsePairs;
 
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::SseReplicatedReciprocalSqrt")]
 extern VectorDouble BenchmarkReplicatedReciprocalSqrt(in VectorDouble value);
@@ -93,7 +85,7 @@ VectorDouble ReplicatedKernelQuaternionExp<const b8 Candidate>(in VectorDouble v
         VectorDoubleSinCos(sine, cosine, theta);
     const VectorDouble scale = VectorDoubleDivide(sine, theta);
     VectorDouble result = VectorDoubleMultiply(value, scale);
-    result = VectorDoubleSelect(result, value, VectorDoubleNearEqual(theta, VectorDoubleZero(), VectorDouble(s_ReplicatedMachineEpsilon)));
+    result = VectorDoubleSelect(result, value, VectorDoubleNearEqual(theta, VectorDoubleZero(), VectorDouble(s_F64Epsilon)));
     return VectorDoubleSelect(cosine, result, VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u)));
 }
 
@@ -580,19 +572,6 @@ i32 RunReplicatedBenchmarkCli(in Span<StringView> args){
     return 2;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 RunReplicatedBenchmarkCliEntry(in ConsoleArguments arguments){
-    if(arguments.count <= 0)
-        return 2;
-    Array<StringView, 8> args;
-    const usize count = Min(cast<usize>(arguments.count), args.size());
-    for(usize index = 0u; index < count; ++index)
-        args[index] = arguments.text(cast<i32>(index));
-    return RunReplicatedBenchmarkCli(Span<StringView>(args).first(count));
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

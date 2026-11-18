@@ -91,7 +91,7 @@ void VerifyGlobal_DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedE
         ASSERT_TRUE(WriteTextFile(root / "a", "retained"));
         ASSERT_TRUE(WriteTextFile(root / "b", "retained"));
         const ErrorCode expectedError = MakeErrorCode(ErrorCondition::permission_denied);
-        const auto retained = RetainWithPredicate(root, 1u, lambda[in expectedError](in Path path) -> Expected<b8, ErrorCode>{ return MakeUnexpected(expectedError); });
+        const auto retained = ApplyDirectoryRetention(root, 1u, lambda[in expectedError](in Path path) -> Expected<b8, ErrorCode>{ return MakeUnexpected(expectedError); });
         retentionFailedWithExpectedError = !retained.has_value() && retained.error() == expectedError;
         firstExists = FileExists(root / "a");
         secondExists = FileExists(root / "b");
@@ -117,7 +117,7 @@ void VerifyGlobal_FileWriteSizeRejectionPreservesExistingOutput(){
         const Path outputPath = root / "output.bin";
         ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
         ASSERT_TRUE(WriteTextFile(outputPath, "retained"));
-        oversizedWriteAccepted = WriteOversizedFile(outputPath, OversizedBinarySource());
+        oversizedWriteAccepted = WriteBinaryFile(outputPath, OversizedBinarySource());
         readBackOk = ReadTextFile(outputPath, retainedText).has_value();
         removedRoot = RemoveAllIfExists(root).has_value();
     }
@@ -319,8 +319,8 @@ void VerifyGlobal_PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWit
         ;
 
         const Array<StringView, 2u> extensions = Array<StringView, 2u>(".nwb", ".slang");
-        multiDotListed = MeasuredHasExtension(multiDotPath, extensions);
-        hiddenListed = MeasuredHasExtension(hiddenPath, extensions);
+        multiDotListed = PathHasListedExtension(multiDotPath, extensions);
+        hiddenListed = PathHasListedExtension(hiddenPath, extensions);
         afterViewsUsedBytes = storage.memoryStats().usedBytes;
 
         MeasuredPath aliased = storage.makeValue<MeasuredPath>("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext");

@@ -381,7 +381,7 @@ void VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces(){
         const auto removed = RemoveFile(path);
         ASSERT_TRUE(removed.has_value() && removed.value());
         TestAtomic<b8> start(false);
-        Array<Optional<TestThread>, 2u> workers;
+        Array<Optional<JoiningThread>, 2u> workers;
         for(usize index = 0u; index < workers.size(); ++index){
             workers[index].emplace(lambda[in index, in pathText, in bytes, mut start, mut identicalRaceResults]() -> void{
                 const Path workerPath = Path(StringView(pathText));
@@ -397,7 +397,7 @@ void VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces(){
             });
         }
         start.store(true, MemoryOrder::release);
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
         verifiedIdenticalRaceBytes = VerifyBinaryFileBytes(path, Span<u8>(bytes));
         const auto cleanup = RemoveFile(path);
@@ -421,7 +421,7 @@ void VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces(){
             });
         }
         start.store(true, MemoryOrder::release);
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
         Span<u8> winner = different;
         if(conflictRaceResults[0u] == 1u)

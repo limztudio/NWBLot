@@ -2,11 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/types.adhd>
 #include <impl/ecs_render/avboit/avboit_pass_and_geometry_reuse.adhd>
 #include <impl/ecs_render/refraction/rt_refraction.adhd>
 #include <impl/assets_graphics/refractive_subsystem.adhd>
 #include <impl/assets_graphics/transparent_subsystem.adhd>
 #include <impl/assets_scene/asset.adhd>
+#include "bitmap_capture_writer.adhd"
 #include "gpu_probe_resources.adhd"
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
@@ -149,8 +151,6 @@ b8 VerifyAvboitIntegrationSliceValues(
 extern const u32 s_IntegrationProbeActiveSlicesIndex;
 [cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE")]
 extern const u32 s_IntegrationProbeExtinctionScaleIndex;
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT")]
-extern const Format s_IntegrationProbeTransmittanceFormat;
 [cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_TILE_COUNTER_OFFSET")]
 extern const u32 s_RefractionProbeShaderCounterOffset;
 [cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS")]
@@ -164,6 +164,19 @@ static_assert(s_RefractionProbeShaderGuardWords == s_RefractionTileProbeGuardWor
 
 class GpuProbeProgress{
     public StringView stage = "probe initialization";
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(mut GpuTaskGraph graph, in Name probeName, in StringView label,
+    in Span<GpuTaskResourceUse> uses, in TaskT payload, mut GpuProbeProgress progress){
+    progress.stage = "task declaration";
+    GpuTaskDesc desc;
+    desc.setIdentity(probeName).setMarkerLabel(label).setResourceUses(uses);
+    TaskT recorded = payload;
+    const auto task = graph.addPayloadTask(desc, recorded);
+    if(task.has_value())
+        progress.stage = "scheduling or initial-state recording admission";
+    return task;
 }
 
 type IntegrationProbeExtinctionWords = Array<u32, s_AvboitIntegrationProbeWordCount>;
@@ -241,22 +254,15 @@ class AvboitIntegrationProbeTask{
 Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask payload, mut GpuTaskGraph graph){
     const Name probeName = s_SmokeNameAvboitIntegrationProbe;
     payload.progress.stage = "buffer imports";
-    const Array<BufferHandle, 4u> buffers(payload.extinction, payload.overflow, payload.control, payload.slots);
-    const Array<StringView, 4u> labels("Integration probe extinction", "Integration probe overflow", "Integration probe control", "Integration probe heap slots");
-    const Array<ResourceStates, 4u> states(ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::ConstantBuffer);
-    const Array<GpuTaskResourceAccess, 4u> access(GpuTaskResourceAccess::ReadWrite, GpuTaskResourceAccess::ReadWrite, GpuTaskResourceAccess::ReadWrite, GpuTaskResourceAccess::Read);
+    const Array<ProbeBufferImport, 4u> buffers(
+        ProbeBufferImport(payload.extinction, "Integration probe extinction", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
+        ProbeBufferImport(payload.overflow, "Integration probe overflow", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
+        ProbeBufferImport(payload.control, "Integration probe control", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
+        ProbeBufferImport(payload.slots, "Integration probe heap slots", ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read)
+    );
     Array<GpuTaskResourceUse, 6u> uses;
-    for(usize i = 0u; i < buffers.size(); ++i){
-        GpuGraphResourceDesc desc;
-        desc.setIdentity(buffers[i].deref().getCreationDescription().debugName).setMarkerLabel(labels[i]).setType(GpuGraphResourceType::Buffer)
-            .setInitialState(states[i]).setExternalFinalState(states[i]);
-        const auto imported = graph.importBuffer(buffers[i], desc);
-        if(!imported.has_value())
-            return MakeUnexpected(Failure());
-        uses[i].resource = imported.value();
-        uses[i].requiredState = states[i];
-        uses[i].access = access[i];
-    }
+    if(!ImportProbeBufferUses(graph, buffers, uses))
+        return MakeUnexpected(Failure());
     payload.progress.stage = "volume and staging imports";
     const ResourceStates initial = payload.volumeInitialState;
     GpuGraphResourceDesc textureDesc;
@@ -275,14 +281,7 @@ Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask 
     uses[5u].resource = readback.value();
     uses[5u].requiredState = ResourceStates::Unknown;
     uses[5u].access = GpuTaskResourceAccess::Write;
-    payload.progress.stage = "task declaration";
-    GpuTaskDesc desc;
-    desc.setIdentity(probeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses);
-    AvboitIntegrationProbeTask recorded = payload;
-    const auto task = graph.addPayloadTask(desc, recorded);
-    if(task.has_value())
-        payload.progress.stage = "scheduling or initial-state recording admission";
-    return task;
+    return DeclareTrackedProbeTask(graph, probeName, "AVBOIT sparse integration boundary probe", uses, payload, payload.progress);
 }
 
 class RefractionTileProbeTask{
@@ -429,22 +428,17 @@ class RefractionTileProbeTask{
 Expected<GpuTaskId> DeclareRefractionTileProbe(in RefractionTileProbeTask payload, mut GpuTaskGraph graph){
     const Name probeName = s_SmokeNameRefractionTileProbe;
     payload.progress.stage = "graph imports";
-    const Array<BufferHandle, 6u> buffers(payload.queue, payload.arguments, payload.visits, payload.slots, payload.readback, payload.reversedQueue);
-    const Array<StringView, 6u> labels("Refraction probe tile queue", "Refraction probe indirect arguments", "Refraction probe visit counters", "Refraction probe heap selectors", "Refraction probe readback", "Refraction probe reversed dense tile list");
-    const Array<ResourceStates, 6u> states(ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::ConstantBuffer, ResourceStates::CopyDest, ResourceStates::ShaderResource);
-    const Array<GpuTaskResourceAccess, 6u> access(GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Read, GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Read);
+    const Array<ProbeBufferImport, 6u> buffers(
+        ProbeBufferImport(payload.queue, "Refraction probe tile queue", ResourceStates::CopyDest, GpuTaskResourceAccess::Write),
+        ProbeBufferImport(payload.arguments, "Refraction probe indirect arguments", ResourceStates::CopyDest, GpuTaskResourceAccess::Write),
+        ProbeBufferImport(payload.visits, "Refraction probe visit counters", ResourceStates::CopyDest, GpuTaskResourceAccess::Write),
+        ProbeBufferImport(payload.slots, "Refraction probe heap selectors", ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read),
+        ProbeBufferImport(payload.readback, "Refraction probe readback", ResourceStates::CopyDest, GpuTaskResourceAccess::Write),
+        ProbeBufferImport(payload.reversedQueue, "Refraction probe reversed dense tile list", ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+    );
     Array<GpuTaskResourceUse, 7u> uses;
-    for(usize i = 0u; i < buffers.size(); ++i){
-        GpuGraphResourceDesc desc;
-        desc.setIdentity(buffers[i].deref().getCreationDescription().debugName).setMarkerLabel(labels[i]).setType(GpuGraphResourceType::Buffer)
-            .setInitialState(states[i]).setExternalFinalState(states[i]);
-        const auto imported = graph.importBuffer(buffers[i], desc);
-        if(!imported.has_value())
-            return MakeUnexpected(Failure());
-        uses[i].resource = imported.value();
-        uses[i].requiredState = states[i];
-        uses[i].access = access[i];
-    }
+    if(!ImportProbeBufferUses(graph, buffers, uses))
+        return MakeUnexpected(Failure());
     ResourceStates initial = ResourceStates::Unknown;
     if(payload.phase != 0u)
         initial = ResourceStates::CopyDest;
@@ -456,23 +450,7 @@ Expected<GpuTaskId> DeclareRefractionTileProbe(in RefractionTileProbeTask payloa
     uses[6u].resource = depth.value();
     uses[6u].requiredState = ResourceStates::CopyDest;
     uses[6u].access = GpuTaskResourceAccess::Write;
-    payload.progress.stage = "task declaration";
-    GpuTaskDesc desc;
-    desc.setIdentity(probeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses);
-    RefractionTileProbeTask recorded = payload;
-    const auto task = graph.addPayloadTask(desc, recorded);
-    if(task.has_value())
-        payload.progress.stage = "scheduling or initial-state recording admission";
-    return task;
-}
-
-Expected<BufferHandle> CreateTileProbeBuffer(mut GraphicsRuntime graphics, in Name name, in u64 bytes, in b8 raw, in b8 indirect, in b8 readback){
-    BufferDesc desc;
-    desc.setDebugName(name).setByteSize(bytes).setStructStride(size_of<u32>()).setCanHaveUAVs(!readback)
-        .setCanHaveRawViews(raw && !readback).setIsDrawIndirectArgs(indirect).enableAutomaticStateTracking(ResourceStates::CopyDest);
-    if(readback)
-        desc.setCpuAccess(CpuAccessMode::Read);
-    return graphics.createBuffer(desc);
+    return DeclareTrackedProbeTask(graph, probeName, "Refraction tile queue boundary probe", uses, payload, payload.progress);
 }
 
 Expected<BufferHandle> CreateProbeSlots(mut GraphicsRuntime graphics, in Name name, in DeferredBindlessResourceSlots slots, mut GpuDescriptorHandle descriptor){
@@ -497,7 +475,7 @@ Expected<BufferHandle> CreateProbeSlots(mut GraphicsRuntime graphics, in Name na
 b8 CompareIntegrationSlice(in StagingTextureMapping mapping, in AvboitIntegrationPhaseState phaseState, in u32 phase, in u32 slice, mut Array<u32, s_AvboitIntegrationProbePixelCount> extinctionFixed){
     const Span<u8> bytes = mapping.readBytes();
     const usize rowBytes = s_AvboitIntegrationProbeWidth * size_of<u16>();
-    if(mapping.rowPitch < rowBytes || bytes.size() < rowBytes || s_AvboitIntegrationProbeHeight - 1u > (bytes.size() - rowBytes) / mapping.rowPitch)
+    if(!ContainsSmokeImageRows(bytes.size(), mapping.rowPitch, rowBytes, s_AvboitIntegrationProbeHeight))
         return false;
     Array<f32, s_AvboitIntegrationProbePixelCount> observedPixels;
     Array<f32, s_AvboitIntegrationProbePixelCount> expectedPixels;
@@ -523,15 +501,15 @@ b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut Proje
     if(!transparent.has_value() || !transparent.value().avboitIntegrateCs.valid()
         || !LoadGpuProbePipeline(context, transparent.value().avboitIntegrateCs.name(), s_DefaultVariant, probeName, "AvboitIntegrationProbe", size_of<RendererAvboitPushConstants>(), pipeline))
         return false;
-    const auto extinction = CreateTileProbeBuffer(graphics, s_SmokeNameAvboitIntegrationExtinction, s_AvboitIntegrationProbeWordCount * size_of<u32>(), false, false, false);
-    const auto overflow = CreateTileProbeBuffer(graphics, s_SmokeNameAvboitIntegrationOverflow, s_AvboitIntegrationProbePixelCount * size_of<u32>(), false, false, false);
-    const auto control = CreateTileProbeBuffer(graphics, s_SmokeNameAvboitIntegrationControl, s_AvboitProbeControlWordCount * size_of<u32>(), false, false, false);
+    const auto extinction = CreateGpuProbeWordBuffer(graphics, s_SmokeNameAvboitIntegrationExtinction, s_AvboitIntegrationProbeWordCount, false, false, false);
+    const auto overflow = CreateGpuProbeWordBuffer(graphics, s_SmokeNameAvboitIntegrationOverflow, s_AvboitIntegrationProbePixelCount, false, false, false);
+    const auto control = CreateGpuProbeWordBuffer(graphics, s_SmokeNameAvboitIntegrationControl, s_AvboitProbeControlWordCount, false, false, false);
     TextureDesc textureDesc;
     textureDesc.setWidth(s_AvboitIntegrationProbeWidth)
         .setHeight(s_AvboitIntegrationProbeHeight)
         .setDepth(s_AvboitIntegrationProbeSliceCount)
         .setDimension(TextureDimension::Texture3D)
-        .setFormat(s_IntegrationProbeTransmittanceFormat)
+        .setFormat(s_ShaderAvboitTransmittanceCoreFormat)
         .setIsUAV(true)
         .setName(probeName)
         .setInitialState(ResourceStates::CopyDest)
@@ -845,10 +823,10 @@ b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectR
     reversedSetup.setData<u32>(Span<u32>(reversedTiles));
     reversedSetup.queue = CommandQueue::Graphics;
     const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
-    const auto queue = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeQueue, s_RefractionTileProbeQueueWords * size_of<u32>(), true, false, false);
-    const auto arguments = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeArguments, s_RefractionTileProbeArgumentWords * size_of<u32>(), true, true, false);
-    const auto visits = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeVisits, s_RefractionTileProbeVisitWords * size_of<u32>(), true, false, false);
-    const auto readback = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeReadback, s_RefractionTileProbeReadbackWords * size_of<u32>(), true, false, true);
+    const auto queue = CreateGpuProbeWordBuffer(graphics, s_SmokeNameRefractionTileProbeQueue, s_RefractionTileProbeQueueWords, true, false, false);
+    const auto arguments = CreateGpuProbeWordBuffer(graphics, s_SmokeNameRefractionTileProbeArguments, s_RefractionTileProbeArgumentWords, true, true, false);
+    const auto visits = CreateGpuProbeWordBuffer(graphics, s_SmokeNameRefractionTileProbeVisits, s_RefractionTileProbeVisitWords, true, false, false);
+    const auto readback = CreateGpuProbeWordBuffer(graphics, s_SmokeNameRefractionTileProbeReadback, s_RefractionTileProbeReadbackWords, true, false, true);
     TextureDesc depthDesc;
     depthDesc.setWidth(s_RefractionTileProbeWidth).setHeight(s_RefractionTileProbeHeight).setFormat(Format::R32_FLOAT).setName(probeName).setInitialState(ResourceStates::CopyDest).setKeepInitialState(true);
     const auto depth = graphics.createTexture(depthDesc);

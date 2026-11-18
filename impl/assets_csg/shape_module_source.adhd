@@ -48,7 +48,7 @@ class CsgShapeModuleSource{
         inOutSource.append(s_CsgDefineDirective);
         inOutSource.append(s_CsgEvalShapeIdDefineName);
         inOutSource.push_back(' ');
-        this.appendDecimal(shapeTypeId, inOutSource);
+        AppendUnsignedDecimal(inOutSource, cast<usize>(shapeTypeId));
         inOutSource.append(s_CsgUnsignedLiteralLineEnd);
         inOutSource.append(s_CsgIncludeDirective);
         inOutSource.append(evalInclude);
@@ -56,21 +56,6 @@ class CsgShapeModuleSource{
         inOutSource.append(s_CsgUndefDirective);
         inOutSource.append(s_CsgEvalShapeIdDefineName);
         inOutSource.append(s_CsgUndefDirectiveEnd);
-    }
-
-    private void appendDecimal(in u32 value, mut String inOutText)const{
-        if(value == 0u){
-            inOutText.push_back('0');
-            return;
-        }
-        FixedVector<u8, 10u> digits;
-        u32 remaining = value;
-        while(remaining > 0u){
-            digits.push_back(cast<u8>(remaining % 10u));
-            remaining = remaining / 10u;
-        }
-        for(usize index = digits.size(); index > 0u; --index)
-            inOutText.push_back(cast<i8>(48u + cast<u32>(digits[index - 1u])));
     }
 }
 

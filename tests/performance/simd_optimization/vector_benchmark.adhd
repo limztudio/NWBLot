@@ -9,8 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/cli/tool_cli.adhd>
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::DoubleRow")]
 extern VectorDouble BenchmarkDoubleRow(in MatrixDouble matrix, in usize index);
 
@@ -151,16 +149,16 @@ b8 CompareVectorFactoryPairImpl<const u32 KindIndex>(in u64 angleBits, mut b8 ou
     const f64 angle = bit_cast<f64>(angleBits);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     const MatrixDouble expected = VectorKernelEvaluateFactory<KindIndex, false>(angle);
     outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outExpectedErrno = CurrentMathErrno();
+    outExpectedErrno = ReadPowerError();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     const MatrixDouble actual = VectorKernelEvaluateFactory<KindIndex, true>(angle);
     outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outActualErrno = CurrentMathErrno();
+    outActualErrno = ReadPowerError();
     b8 equal = true;
     for(usize row = 0u; row < 4u; ++row){
         for(usize lane = 0u; lane < 4u; ++lane)
@@ -182,16 +180,16 @@ b8 CompareQuaternionAxisPair(in VectorDouble axis, in u64 angleBits, mut b8 outM
     const f64 angle = bit_cast<f64>(angleBits);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     const VectorDouble expected = VectorKernelEvaluateQuaternionAxis<false>(axis, angle);
     outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outExpectedErrno = CurrentMathErrno();
+    outExpectedErrno = ReadPowerError();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     const VectorDouble actual = VectorKernelEvaluateQuaternionAxis<true>(axis, angle);
     outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outActualErrno = CurrentMathErrno();
+    outActualErrno = ReadPowerError();
     b8 equal = true;
     for(usize lane = 0u; lane < 4u; ++lane)
         equal = equal && (VectorDoubleGetIntByIndex(expected, lane) == VectorDoubleGetIntByIndex(actual, lane));
@@ -456,19 +454,6 @@ i32 RunVectorBenchmarkCli(in Span<StringView> args){
     return 2;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 RunVectorBenchmarkCliEntry(in ConsoleArguments arguments){
-    if(arguments.count <= 0)
-        return 2;
-    Array<StringView, 8> args;
-    const usize count = Min(cast<usize>(arguments.count), args.size());
-    for(usize index = 0u; index < count; ++index)
-        args[index] = arguments.text(cast<i32>(index));
-    return RunVectorBenchmarkCli(Span<StringView>(args).first(count));
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -114,10 +114,10 @@ void VerifyGpuHazardOwner_HazardTrackingPreservesResourceAndSurvivingWriterOrder
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferAResult = AddBufferMetadata(graph, s_GpuCaseHazardTrackingA, "A");
+    const auto bufferAResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseHazardTrackingA, "A");
     ASSERT_TRUE(bufferAResult.has_value());
     const GpuGraphResourceId bufferA = bufferAResult.value();
-    const auto bufferBResult = AddBufferMetadata(graph, s_GpuCaseHazardTrackingB, "B");
+    const auto bufferBResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseHazardTrackingB, "B");
     ASSERT_TRUE(bufferBResult.has_value());
     const GpuGraphResourceId bufferB = bufferBResult.value();
     ASSERT_TRUE(bufferA.valid());
@@ -184,7 +184,7 @@ void VerifyGpuHazardOwner_HazardTrackingRetiresOnlyCoveredReadersAndPreservesApp
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseHazardTrackingReaders, "Readers");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseHazardTrackingReaders, "Readers");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -237,7 +237,7 @@ void VerifyGpuHazardOwner_HazardTrackingPreservesSameTaskAccessAndResetSemantics
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     for(usize iteration = 0u; iteration < 2u; ++iteration){
-        const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseHazardTrackingSameTask, "Same Task");
+        const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseHazardTrackingSameTask, "Same Task");
         ASSERT_TRUE(bufferResult.has_value());
         const GpuGraphResourceId buffer = bufferResult.value();
         ASSERT_TRUE(buffer.valid());
@@ -645,7 +645,7 @@ void VerifyGpuHazardOwner_ValidatesInitialExclusiveOwnerBeforeFirstUse(){
             graph,
             s_GpuInitialOwnerStale,
             "Initial Owner Stale",
-            MakeGpuPhysicalQueueId(queues[0u].id.index, cast<u16>(queues[0u].id.deviceGeneration + 1u)),
+            GpuPhysicalQueueId(queues[0u].id.index, cast<u16>(queues[0u].id.deviceGeneration + 1u)),
             ResourceQueueSharing::Exclusive
         );
         ASSERT_TRUE(resourceResult.has_value());
@@ -960,7 +960,7 @@ void VerifyGpuHazardOwner_RejectsMetadataResourceUsesBeforeNativeRecording(){
     GpuHazardOwner_ExpectMissingTypedImport(testArena, topology, s_GpuCaseTaskGraphNativeMetadataAccelStruct, "Native Metadata Accel Struct", GpuGraphResourceType::AccelStruct, ResourceStates::AccelStructRead);
 
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto unusedTextureResult = AddTextureMetadata(graph, s_GpuCaseTaskGraphNativeUnusedMetadataTexture, "Native Unused Metadata Texture");
+    const auto unusedTextureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_GpuCaseTaskGraphNativeUnusedMetadataTexture, "Native Unused Metadata Texture");
     ASSERT_TRUE(unusedTextureResult.has_value());
     const GpuGraphResourceId unusedTexture = unusedTextureResult.value();
     const auto hazardDomainResult = AddHazardDomain(graph, s_GpuCaseTaskGraphNativeHazardDomain, "Native Hazard Domain");
@@ -1060,9 +1060,7 @@ void GpuHazardOwner_CheckOwnershipStatistics(in usize resourceCount){
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
         const auto identityNameResult = IndexedName(s_GpuCaseOwnershipStatisticsResource, resourceIndex);
         ASSERT_TRUE(identityNameResult.has_value());
-        const auto resourceResult = AddTextureMetadata(
-            graph,
-            identityNameResult.value(),
+        const auto resourceResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, identityNameResult.value(),
             "Ownership Statistics Texture",
             ResourceStates::Common,
             ResourceQueueSharing::Exclusive
@@ -1124,8 +1122,8 @@ void GpuHazardOwner_CheckOwnershipStatistics(in usize resourceCount){
         EXPECT_EQ(idle.incomingLogicalOwnershipTransferCount, 0u);
         EXPECT_EQ(idle.outgoingLogicalOwnershipTransferSignatureCount, 0u);
         EXPECT_EQ(idle.concurrentSharingAdviceResourceCount, 0u);
-        EXPECT_FALSE(plan.physicalQueueCompileStatistics(MakeGpuPhysicalQueueId(0u, 2u)).valid());
-        EXPECT_FALSE(plan.physicalQueueCompileStatistics(MakeGpuPhysicalQueueId(17u, 1u)).valid());
+        EXPECT_FALSE(plan.physicalQueueCompileStatistics(GpuPhysicalQueueId(0u, 2u)).valid());
+        EXPECT_FALSE(plan.physicalQueueCompileStatistics(GpuPhysicalQueueId(17u, 1u)).valid());
 
         Array<GpuTaskGraphPhysicalQueueCompileStatistics, 2> activeStats = Array<GpuTaskGraphPhysicalQueueCompileStatistics, 2>();
         activeStats[0u] = graphics;
@@ -1550,7 +1548,7 @@ void VerifyGpuHazardOwner_PlansSchedulingPacketDependenciesInStableIncomingOrder
 void VerifyGpuHazardOwner_DerivesRecordingReadyFrontiersFromStateSeedProducers(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseTaskGraphRecordingFrontierStateSeedBuffer, "Recording Frontier State Seed Buffer");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphRecordingFrontierStateSeedBuffer, "Recording Frontier State Seed Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());

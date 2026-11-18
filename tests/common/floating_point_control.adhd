@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadPowerError")]
+extern i32 ReadPowerError();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WritePowerError")]
+extern void WritePowerError(in i32 value);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadRawStatus")]
+extern u64 ReadRawStatus();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteRawStatus")]
+extern void WriteRawStatus(in u64 value);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ClearNativeStatus")]
+extern void ClearNativeStatus();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadNativeStatus")]
+extern u32 ReadNativeStatus();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadMxcsr")]
+extern u32 ReadMxcsr();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteMxcsr")]
+extern void WriteMxcsr(in u32 value);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasPowerStatus")]
+extern const b8 s_HasPowerStatus;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasMxcsr")]
+extern const b8 s_HasMxcsr;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_DenormalSave")]
+extern const u32 s_DenormalSave;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_DenormalFlush")]
+extern const u32 s_DenormalFlush;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_SeedPowerError")]
+extern const i32 s_SeedPowerError;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadRawControl")]
+extern u64 ReadRawControl();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteRawControl")]
+extern void WriteRawControl(in u64 value);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ClearMappedStatus")]
+extern u32 ClearMappedStatus();
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::UpdateControl")]
+extern b8 UpdateControl(mut u32 current, in u32 value, in u32 mask);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::CatchHardwareException")]
+extern u32 CatchHardwareException(in auto action);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasWindowsTraps")]
+extern const b8 s_HasWindowsTraps;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InvalidMask")]
+extern const u32 s_InvalidMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_OverflowMask")]
+extern const u32 s_OverflowMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ZeroDivideMask")]
+extern const u32 s_ZeroDivideMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_UnderflowMask")]
+extern const u32 s_UnderflowMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InexactMask")]
+extern const u32 s_InexactMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ControlExceptionMask")]
+extern const u32 s_ControlExceptionMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ControlDenormalMask")]
+extern const u32 s_ControlDenormalMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InvalidException")]
+extern const u32 s_InvalidException;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_OverflowException")]
+extern const u32 s_OverflowException;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ZeroDivideException")]
+extern const u32 s_ZeroDivideException;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_UnderflowException")]
+extern const u32 s_UnderflowException;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

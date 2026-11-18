@@ -41,7 +41,7 @@ extern u32 ReadU32Address(in NullableU32 value);
 extern class U32VectorView;
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_WideFormat")]
-extern const WideFormatView s_WideFormat;
+extern const WideStringView s_WideFormat;
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_NullFormat")]
 extern const NullableFormat s_NullFormat;
@@ -80,12 +80,6 @@ extern Expected<Base64Bytes> DecodeMeasuredBase64(in StringView text, mut HeapSt
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::EncodeBase64<::NWB::Tests::GlobalCases::Base64Text>")]
 extern Expected<Base64Text> EncodeMeasuredBase64(in BinaryByteView bytes, mut HeapStorage storage);
 
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::AppendTriviallyCopyableVector")]
-extern void AppendVectorView(mut auto values, in U32VectorView view);
-
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::AssignTriviallyCopyableVector")]
-extern void AssignVectorView(mut auto values, in U32VectorView view);
-
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::TopologicallySortPointers<u32>")]
 extern void SortU32Pointers(in NullableU32View items, in auto depends, mut auto state, mut auto sorted);
 
@@ -95,25 +89,11 @@ extern b8 CoversHalfOpenRange(in u64 first, in u64 last, in Span<IntervalProbe> 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::VisitOverlappingSortedIntervals")]
 extern void VisitOverlappingSortedIntervals(in Span<IntervalProbe> intervals, in auto begin, in auto end, in auto visitor);
 
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::SetDiagnosticEventCallback")]
-extern void SetCaseDiagnosticHook(in auto callback);
-
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::ClearDiagnosticEventCallback")]
-extern void ClearCaseDiagnosticHook(in auto callback);
-
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::CaptureDiagnosticEvent")]
-extern void CaptureDiagnosticAt(in StringView category, in StringView message, in StringView file, in u32 line);
-
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::WStringView")]
-extern class WideFormatView{
-    WideFormatView substr(in usize offset, in usize length)const;
-};
-
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::NullableFormat")]
 extern class NullableFormat;
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::MakeDiagnosticEventText")]
-extern DiagnosticEventText FormatWideDiagnostic(in WideFormatView format, in u32 value);
+extern DiagnosticEventText FormatWideDiagnostic(in WideStringView format, in u32 value);
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::MakeDiagnosticEventText")]
 extern DiagnosticEventText FormatNullableDiagnostic(in NullableFormat format, in u32 value);

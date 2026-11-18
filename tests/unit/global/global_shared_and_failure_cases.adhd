@@ -288,7 +288,7 @@ void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
 
     const NarrowChar highByteChar = bit_cast<NarrowChar>(cast<u8>(0x80u));
     EXPECT_EQ(PackFourCharTag('H', 'a', 'n', 'g'), 0x48616e67u);
-    EXPECT_EQ(PackTestCharTag(highByteChar, 'a', 'b', 'c'), (cast<u32>(cast<i32>(highByteChar)) << 24u) | 0x00616263u);
+    EXPECT_EQ(PackFourCharTag(cast<i8>(highByteChar), 'a', 'b', 'c'), (cast<u32>(cast<i32>(highByteChar)) << 24u) | 0x00616263u);
 
     const Expected<i64> minSignedDiff = SignedDifference(0u, cast<u64>(i64.max) + 1u);
     ASSERT_TRUE(minSignedDiff.has_value());
@@ -462,11 +462,11 @@ void VerifyGlobal_HashSharedHelpersPreserveEdgeCases(){
 
     {
         CharSink sink;
-        AppendSinkByte(0xAFu, sink);
+        AppendHexByte(cast<u8>(0xAFu), sink);
         EXPECT_EQ(sink.data[0u], 'a');
         EXPECT_EQ(sink.data[1u], 'f');
         sink.size = 0u;
-        AppendSinkSha1(Sha1Digest(), sink);
+        AppendSha1Hex(Sha1Digest(), sink);
         EXPECT_EQ(sink.size, s_Sha1DigestHexTextLength);
         EXPECT_EQ(sink.data[0u], '0');
         EXPECT_EQ(sink.data[sink.size - 1u], '0');
@@ -477,8 +477,8 @@ void VerifyNoexceptFailureTests_HashResultConversionFailurePreservesCombinedSeed
     usize seed = 17u;
     {
         HashProbe value;
-        RequireThrowingExpression(CombineProbeHash(seed, value));
-        ExpectUnsignedException(CombineProbeHash(seed, value));
+        RequireThrowingExpression(HashCombine(seed, value));
+        ExpectUnsignedException(HashCombine(seed, value));
     }
     EXPECT_EQ(seed, 17u);
 }
@@ -501,8 +501,8 @@ void VerifyNoexceptFailureTests_ThrowingByteGetterPreservesReadOffset(){
     usize offset = 0u;
     {
         ThrowingByteSource source;
-        RequireThrowingExpression(ReadProbePod<u32>(source, offset));
-        ExpectUnsignedException(ReadProbePod<u32>(source, offset));
+        RequireThrowingExpression(ReadPOD<u32>(source, offset));
+        ExpectUnsignedException(ReadPOD<u32>(source, offset));
     }
     EXPECT_EQ(offset, 0u);
 }
@@ -512,8 +512,8 @@ void VerifyNoexceptFailureTests_PodAddressAndMutableBufferGetterFailuresPropagat
     {
         Array<u8, 4u> bytes;
         const BinaryByteView source = BinaryViewFromBytes(bytes);
-        RequireThrowingExpression(ReadProbePod<ThrowingPodAddress>(source, offset));
-        ExpectUnsignedException(ReadProbePod<ThrowingPodAddress>(source, offset));
+        RequireThrowingExpression(ReadPOD<ThrowingPodAddress>(source, offset));
+        ExpectUnsignedException(ReadPOD<ThrowingPodAddress>(source, offset));
         ThrowingMutableByteSource mutableSource;
         RequireThrowingExpression(ProbeMutableReadBuffer(mutableSource));
         ExpectUnsignedException(ProbeMutableReadBuffer(mutableSource));
@@ -526,8 +526,8 @@ void VerifyNoexceptFailureTests_BoundedDiagnosticsNeverInvokeThrowingConversionO
     {
         const ThrowingDiagnosticView conversion(calls);
         const ThrowingDiagnosticCleanup cleanup(calls);
-        EXPECT_EQ(FormatProbeText("{}", conversion).view(), "<unprintable>");
-        EXPECT_EQ(FormatProbeText("{}", cleanup).view(), "<unprintable>");
+        EXPECT_EQ(MakeDiagnosticEventText("{}", conversion).view(), "<unprintable>");
+        EXPECT_EQ(MakeDiagnosticEventText("{}", cleanup).view(), "<unprintable>");
     }
     EXPECT_EQ(calls, 0u);
 }
@@ -627,22 +627,22 @@ void VerifyNoexceptFailureTests_HexAppendCapacityAndOutputFailuresPreservePublis
     CompactString hex32LiteralPrefix = CompactString();
     {
         CompactString compactFixed;
-        RequireNothrowExpression(AppendProbeHex32(0u, compactFixed));
-        RequireNothrowExpression(AppendProbeHex64(cast<u64>(0u), compactFixed));
-        RequireNothrowExpression(AppendProbeLiteral(0u, compactFixed));
+        RequireNothrowExpression(AppendHexU32(0u, compactFixed));
+        RequireNothrowExpression(AppendHexU64(cast<u64>(0u), compactFixed));
+        RequireNothrowExpression(AppendHexU32UnsignedLiteral(0u, compactFixed));
 
         ThrowingHexCapacityString capacity;
-        RequireThrowingExpression(AppendProbeHex64(cast<u64>(0u), capacity));
-        ExpectUnsignedException(AppendProbeHex64(1u, capacity));
+        RequireThrowingExpression(AppendHexU64(cast<u64>(0u), capacity));
+        ExpectUnsignedException(AppendHexU64(cast<u64>(1u), capacity));
         capacityEmpty = capacity.text.empty();
 
         ThrowingHexAppendString output;
-        RequireThrowingExpression(AppendProbeHex64(cast<u64>(0u), output));
-        ExpectUnsignedException(AppendProbeHex64(0xabcdef0123456789u, output));
+        RequireThrowingExpression(AppendHexU64(cast<u64>(0u), output));
+        ExpectUnsignedException(AppendHexU64(cast<u64>(0xabcdef0123456789u), output));
         hex64Prefix = output.text;
         output.text.clear();
-        RequireThrowingExpression(AppendProbeLiteral(0u, output));
-        ExpectUnsignedException(AppendProbeLiteral(0x89abcdefu, output));
+        RequireThrowingExpression(AppendHexU32UnsignedLiteral(0u, output));
+        ExpectUnsignedException(AppendHexU32UnsignedLiteral(0x89abcdefu, output));
         hex32LiteralPrefix = output.text;
     }
     EXPECT_TRUE(capacityEmpty);

@@ -12,7 +12,7 @@
 b8 CookSingleGraphicsMeta(in StringView metaText, in StringView assetDirectory, in StringView assetFilename, in CookCase cookCase, mut TestArena testArena){
     const GraphicsTestPath assetRoot = JoinGraphicsPath(cookCase.root, s_AssetsDirectory);
     const GraphicsTestPath metaPath = JoinGraphicsPath2(assetRoot, assetDirectory, assetFilename);
-    if(!WriteTextFile(metaPath, metaText))
+    if(!WriteGraphicsFixtureText(metaPath, metaText))
         return false;
     return CookSingleAssetRoot(testArena, cookCase.root, cookCase.outputDirectory, assetRoot);
 }
@@ -25,7 +25,7 @@ b8 CookSmokeAssetMeta(in StringView assetDirectory, in StringView assetFilename,
     const Expected<TestAString> metaText = ReadSmokeMeta(testArena, assetDirectory, assetFilename);
     if(!metaText.has_value())
         return false;
-    return CookSingleGraphicsMeta(ViewTestString(metaText.value()), assetDirectory, assetFilename, cookCase, testArena);
+    return CookSingleGraphicsMeta(StringView(metaText.value()), assetDirectory, assetFilename, cookCase, testArena);
 }
 
 

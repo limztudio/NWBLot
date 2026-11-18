@@ -9,6 +9,9 @@
 
 
 const RuntimeMeshHandle s_InvalidRuntimeMeshHandle();
+[cpp_header("<impl/assets/graphics/mesh/runtime_bounds_constants.h>"), cpp_name("NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE")]
+extern const u32 s_RuntimeMeshBoundsByteSize;
+
 const i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
 const i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
 // ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
@@ -122,6 +125,8 @@ class RuntimeMeshLocalBounds{
     public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
     public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
 }
+
+static_assert(size_of<RuntimeMeshLocalBounds>() == s_RuntimeMeshBoundsByteSize, "Runtime mesh bounds byte size must match shader ABI");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

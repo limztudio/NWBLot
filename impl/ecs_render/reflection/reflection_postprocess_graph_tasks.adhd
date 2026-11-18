@@ -85,11 +85,7 @@ class ReflectionDepthReduceTask{
         this.m_groupSize = groupSize;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_pipeline.valid())
@@ -113,11 +109,7 @@ class ReflectionSpatialTask{
         this.m_groupSize = groupSize;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         DispatchReflectionPostprocess(commandList, this.m_graphics, this.m_pipeline.deref(), this.m_parameters, s_TimingScopeReflectionSpatial, this.m_parameters.width, this.m_parameters.height, this.m_groupSize);
@@ -165,11 +157,7 @@ class ReflectionTemporalTask{
         this.hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.snapshot.history.eligible)
@@ -214,11 +202,7 @@ class ReflectionStatisticsReadbackTask{
         this.feedbackReserved = feedbackReserved;
         this.hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Transfer;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.source.valid() || !this.destination.valid() || !this.reservation.valid())

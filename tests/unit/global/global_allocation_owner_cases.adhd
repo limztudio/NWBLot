@@ -34,14 +34,14 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
     b8 failedValue = false;
     b8 snapshotsConsistent = true;
     {
-        const usize poolBytes = PoolAllocationSize(4096u);
+        const usize poolBytes = PersistentArenaStructureAlignedSize(4096u);
         TestAtomic<b8> failed(false);
         TestAtomic<b8> releaseFirstAllocations(false);
         TestAtomic<usize> completed(0u);
-        TestLatch firstAllocationsReady(threadCount);
-        Array<Optional<TestThread>, 4u> workers;
+        Latch firstAllocationsReady(threadCount);
+        Array<Optional<JoiningThread>, 4u> workers;
 
-        for(mut Optional<TestThread> worker : workers){
+        for(mut Optional<JoiningThread> worker : workers){
             worker.emplace(lambda[in owner, mut failed, mut releaseFirstAllocations, mut completed, mut firstAllocationsReady, in poolBytes, in iterations]() -> void{
                 for(usize iteration = 0u; iteration < iterations; ++iteration){
                     {
@@ -110,7 +110,7 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
             if(completed.load(MemoryOrder::acquire) == threadCount)
                 break;
         }
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
         failedValue = failed.load(MemoryOrder::relaxed);
     }
@@ -149,7 +149,7 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
         TestAtomic<b8> consumed(false);
         TestAtomic<b8> releaseWorkers(false);
 
-        TestThread producer(lambda[mut producerReady, mut startProducer, mut failed, mut allocations, mut allocatedBytes, mut produced, mut releaseWorkers, in allocationCount]() -> void{
+        JoiningThread producer(lambda[mut producerReady, mut startProducer, mut failed, mut allocations, mut allocatedBytes, mut produced, mut releaseWorkers, in allocationCount]() -> void{
             const RawAllocation warmup = AllocateBacking(1u);
             FreeBacking(warmup);
             producerReady.store(true, MemoryOrder::release);
@@ -168,7 +168,7 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
             produced.store(true, MemoryOrder::release);
             WaitForFlag(releaseWorkers);
         });
-        TestThread consumer(lambda[mut consumerReady, mut startConsumer, mut failed, mut allocations, mut consumed, mut releaseWorkers, in allocationCount]() -> void{
+        JoiningThread consumer(lambda[mut consumerReady, mut startConsumer, mut failed, mut allocations, mut consumed, mut releaseWorkers, in allocationCount]() -> void{
             const RawAllocation warmup = AllocateBacking(1u);
             FreeBacking(warmup);
             consumerReady.store(true, MemoryOrder::release);
@@ -536,10 +536,10 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     b8 failedValue = false;
     u64 elapsed = 0u;
     {
-        TestLatch startGate(threadCount + 1u);
+        Latch startGate(threadCount + 1u);
         TestAtomic<b8> failed(false);
-        Array<Optional<TestThread>, 4u> workers;
-        for(mut Optional<TestThread> worker : workers){
+        Array<Optional<JoiningThread>, 4u> workers;
+        for(mut Optional<JoiningThread> worker : workers){
             worker.emplace(lambda[in owner, mut startGate, mut failed, in allocationCount]() -> void{
                 HeapStorage arena(owner);
                 startGate.arrive_and_wait();
@@ -555,7 +555,7 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
         }
         const Timer begin = TimerNow();
         startGate.arrive_and_wait();
-        for(mut Optional<TestThread> worker : workers)
+        for(mut Optional<JoiningThread> worker : workers)
             worker.value().join();
         elapsed = DurationInNS<u64>(TimerNow(), begin);
         failedValue = failed.load(MemoryOrder::relaxed);

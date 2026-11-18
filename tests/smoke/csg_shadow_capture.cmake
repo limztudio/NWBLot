@@ -3,7 +3,6 @@
         nwb_target_adhd_sources(nwb_csg_shadow_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_probes_and_atlas.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_runtime.adhd"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.adhd"
         )
         nwb_target_adhd_definitions(nwb_csg_shadow_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_shadow_smoke "${_nwb_csg_shadow_runtime_root}" csg_shadow_runtime)
@@ -53,7 +52,6 @@
         nwb_target_adhd_sources(nwb_csg_caustic_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_probes_and_atlas.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_runtime.adhd"
-            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.adhd"
         )
         nwb_target_adhd_definitions(nwb_csg_caustic_smoke NWB_CSG_CAUSTIC_SMOKE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_caustic_smoke "${_nwb_csg_caustic_runtime_root}" csg_shadow_runtime nwb_ecs_csg)

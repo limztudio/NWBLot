@@ -25,6 +25,7 @@ type Document = MetascriptDocument;
 type Value = MetascriptValue;
 const StringView s_MetaRuntimeItemsField = s_MetascriptValueItemsField;
 const usize s_MetaRuntimeInitialCount = s_MetascriptValueInitialCount;
+const Array<usize, 3u> s_ReallocationSourceIndices(0u, 3u, 7u);
 
 static_assert(!s_InvalidCharacterDecoded && s_InvalidCharacterValue == 7);
 static_assert(!s_CountsCopyConstructible && !s_CountsCopyAssignable);
@@ -73,6 +74,15 @@ class ScopedHeldFloatingPointEnvironment : NoCopy{
 const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
 const i32 s_FeAllExcept = FE_ALL_EXCEPT;
 const i32 s_FeInvalid = FE_INVALID;
+usize FillIntegerListToCapacity(mut Value list, mut HeapStorage arena){
+    list.makeList();
+    list.asList().reserve(s_MetaRuntimeInitialCount);
+    const usize count = list.asList().capacity();
+    for(usize index = 0u; index < count; ++index)
+        list.append(Value(cast<i64>(index), arena));
+    return count;
+}
+
 void MetaRuntime_MakeSingleStringList(mut Value list, mut HeapStorage arena, in StringView text){
     list.makeList();
     Value item(text, arena);
@@ -100,7 +110,7 @@ String BuildStructGrowthDocumentSource(){
     String source("struct Description{ float value; }; Description runtime;\n");
     for(usize index = 0u; index < 128u; ++index){
         source.append("float extra");
-        AppendUnsignedU64Text(source, index);
+        AppendUnsignedU64Text(source, cast<u64>(index));
         source.append(";\n");
     }
     return source;
@@ -369,22 +379,12 @@ void VerifyMetascript_ListAppendExistingElementCopiesBeforeReallocation(){
 }
 
 void VerifyMetascript_AppendsFirstMiddleAndLastElementsAcrossReallocation(){
-    Array<usize, 3u> sourceIndices = Array<usize, 3u>();
-    sourceIndices[0u] = 0u;
-    sourceIndices[1u] = 3u;
-    sourceIndices[2u] = 7u;
-    Array<b8, 2u> moveFlags = Array<b8, 2u>();
-    moveFlags[0u] = false;
-    moveFlags[1u] = true;
-    for(in usize sourceIndex : sourceIndices){
+    const Array<b8, 2u> moveFlags(false, true);
+    for(in usize sourceIndex : s_ReallocationSourceIndices){
         for(in b8 moveSource : moveFlags){
             DestinationArena arena = DestinationArena();
             Value list = Value(arena.arena);
-            list.makeList();
-            list.asList().reserve(s_MetaRuntimeInitialCount);
-            const usize originalCount = list.asList().capacity();
-            for(usize index = 0u; index < originalCount; ++index)
-                list.append(Value(cast<i64>(index), arena.arena));
+            const usize originalCount = FillIntegerListToCapacity(list, arena.arena);
 
             if(moveSource){
                 AppendMovedValue(list, list.asList()[sourceIndex]);
@@ -405,19 +405,11 @@ void VerifyMetascript_AppendsFirstMiddleAndLastElementsAcrossReallocation(){
 }
 
 void VerifyMetascript_ConcatenatesNestedListElementsAcrossReallocation(){
-    Array<usize, 3u> sourceIndices = Array<usize, 3u>();
-    sourceIndices[0u] = 0u;
-    sourceIndices[1u] = 3u;
-    sourceIndices[2u] = 7u;
     const auto text = MakeRepeatedCharString(128u, 'n');
-    for(in usize sourceIndex : sourceIndices){
+    for(in usize sourceIndex : s_ReallocationSourceIndices){
         DestinationArena arena = DestinationArena();
         Value list = Value(arena.arena);
-        list.makeList();
-        list.asList().reserve(s_MetaRuntimeInitialCount);
-        const usize originalCount = list.asList().capacity();
-        for(usize index = 0u; index < originalCount; ++index)
-            list.append(Value(cast<i64>(index), arena.arena));
+        const usize originalCount = FillIntegerListToCapacity(list, arena.arena);
         MetaRuntime_MakeSingleStringList(list.asList()[sourceIndex], arena.arena, text);
 
         list += list.asList()[sourceIndex];

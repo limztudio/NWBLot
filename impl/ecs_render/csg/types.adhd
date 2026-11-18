@@ -10,6 +10,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_SHAPE_PLANE")]
+extern const u32 s_ShaderCsgRayShapePlane;
+
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_CONTEXT_BYTES")]
+extern const u32 s_ShaderCsgRayContextBytes;
+
 const usize s_RendererCsgStateByteSize = 360u;
 const usize s_CsgReceiverSpanResourceUseCapacity = 6u;
 const usize s_CsgIntervalCombineResourceUseCapacity = 11u;

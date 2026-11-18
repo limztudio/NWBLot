@@ -18,8 +18,6 @@ extern class NameProbeShader<Interface>;
 extern class ComparisonAsset{
     Name virtualPath()const;
 };
-[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Core::Assets::AssetArena"), cpp_flags(no_copy, no_assign)]
-extern class NativeAssetArena;
 [cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::ExplicitConversion")]
 extern b8 ExplicitNameConversion<T>();
 [cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::ImplicitConversion")]
@@ -48,8 +46,8 @@ static_assert(ExplicitNameConversion<NameProbeAsset>());
 static_assert(!ImplicitNameConversion<NameProbeAsset>());
 static_assert(!DefaultNameConstructor<NameProbeAsset>());
 static_assert(!DefaultNameConstructor<NameProbeAssetCodec>());
-static_assert(!StorageNameConstructor<NameProbeShaderAsset, NativeAssetArena>());
-static_assert(!PathNameConstructor<NameProbeShaderAsset, NativeAssetArena>());
+static_assert(!StorageNameConstructor<NameProbeShaderAsset, GlobalAllocator>());
+static_assert(!PathNameConstructor<NameProbeShaderAsset, GlobalAllocator>());
 static_assert(!DefaultNameConstructor<NameProbeShaderCodec>());
 static_assert(AssetNameCompareNoThrow<ComparisonAsset>());
 static_assert(!AssetNameCastNoThrow<ComparisonAsset>());

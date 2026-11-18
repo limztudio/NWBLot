@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/win32_window_styles.adhd>
 #include <tests/common/memory.adhd>
 
 
@@ -96,11 +97,6 @@ extern const u32 s_WinInvalidColor;
 [cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("OPAQUE")]
 extern const i32 s_WinOpaque;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("WS_POPUP")]
-extern const u32 s_WinPopup;
-
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("WS_CHILD")]
-extern const u32 s_WinChild;
 
 [cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("GMEM_INVALID_HANDLE")]
 extern const u32 s_WinInvalidMemory;

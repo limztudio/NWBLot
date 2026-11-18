@@ -17,14 +17,6 @@ class TelemetryTestArena{
     public HeapStorage arena;
     public ScratchStorage scratchArena = ScratchStorage(s_TelemetryScratch);
 }
-class TelemetryOwnedArena{
-    public HeapStorage arena;
-    public TelemetryOwnedArena(in Name scopeName){ this.arena = HeapStorage(scopeName); }
-}
-class TelemetryScratchArena{
-    public ScratchStorage scratchArena;
-    public TelemetryScratchArena(in Name scopeName){ this.scratchArena = ScratchStorage(scopeName); }
-}
 class OwnedAllocation : NoCopy{
     private mut HeapStorage m_owner;
     private RawAllocation m_block;
@@ -75,10 +67,9 @@ void ReadTelemetryPod<T>(in TelemetryBytes payload, in usize byteOffset, mut T o
     usize offset = byteOffset;
     outValue = ReadPOD<T>(ByteOutputView(payload), offset).value();
 }
-void WriteTelemetryPod<T>(mut TelemetryBytes payload, in usize offset, in T value){
-    const Span<u8> bytes = PodBytes(value);
-    for(usize i = 0u; i < bytes.size(); ++i)
-        payload[offset + i] = bytes[i];
+void WriteTelemetryPod<T>(mut Span<u8> payload, in usize offset, in T value){
+    if(!OverwritePOD<T>(offset, value, payload))
+        assert(false, "Telemetry value exceeds the test buffer");
 }
 b8 RecordBinarySpan(mut TelemetryRecorder recorder, in EventKind kind, in u64 frameIndex, in Span<u8> payload, in usize byteCount, in u32 streamId){
     return recorder.recordBinary(kind, frameIndex, TestArrayData<u8>(payload), byteCount, streamId);
@@ -120,8 +111,9 @@ Expected<TextLogPayload> ParseTextLogSpan(in Span<u8> bytes, in usize count){
     return ParseTextLogPayloadData(TestArrayData<u8>(bytes), count);
 }
 
-Expected<FrameGraphPayload> ParseFrameGraphSpan(mut HeapStorage arena, mut ScratchStorage scratch, in Span<u8> payload, in usize byteCount){
-    return ParseFrameGraphPayloadData(arena, scratch, TestArrayData<u8>(payload), byteCount);
+Expected<FrameGraphPayload> ParseFrameGraphPrefix(mut HeapStorage arena, mut ScratchStorage scratch, in Span<u8> payload, in usize byteCount){
+    const Span<u8> prefix = payload.first(byteCount);
+    return ParseFrameGraphPayload(arena, scratch, prefix);
 }
 Expected<DecodedEvent, DecodeResult> DecodeEventSpan(mut HeapStorage arena, in Span<u8> bytes, in usize byteCount){
     return DecodeEventData(arena, TestArrayData<u8>(bytes), byteCount);
@@ -161,35 +153,23 @@ b8 RecordSessionFrameGraph(mut CaptureSession session, mut ScratchStorage scratc
     return session.recordFrameGraph(scratchArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 }
 
-Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut HeapStorage arena, mut ScratchStorage scratchArena, in TelemetryBytes payload, in usize byteCount){
-    return ParseFrameGraphSpan(arena, scratchArena, payload, byteCount);
-}
-
 Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut HeapStorage arena, mut ScratchStorage scratchArena, in TelemetryBytes payload){
-    return ParseTestFrameGraphPayload(arena, scratchArena, payload, payload.size());
+    return ParseFrameGraphPayload(arena, scratchArena, ByteOutputView(payload));
 }
 
 Expected<FrameGraphPayload> ParseFrameGraphEventAt(mut HeapStorage arena, mut ScratchStorage scratchArena, in EventView events, in usize eventIndex){
     const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
     if(!payload.has_value())
         return MakeUnexpected(Failure());
-    return ParseFrameGraphSpan(arena, scratchArena, payload.value(), payload.value().size());
-}
-
-Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut HeapStorage arena, in TelemetryBytes bytes, in usize byteCount){
-    return DecodeEventSpan(arena, bytes, byteCount);
+    return ParseFrameGraphPayload(arena, scratchArena, payload.value());
 }
 
 Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut HeapStorage arena, in TelemetryBytes bytes){
-    return DecodeTestEventBytes(arena, bytes, bytes.size());
-}
-
-Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, in usize byteCount, mut HeapStorage arena, mut TelemetryRecorder recorder){
-    return DecodeEventStreamSpan(bytes, byteCount, arena, recorder);
+    return DecodeEventSpan(arena, bytes, bytes.size());
 }
 
 Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, mut HeapStorage arena, mut TelemetryRecorder recorder){
-    return DecodeTestEventStreamBytes(bytes, bytes.size(), arena, recorder);
+    return DecodeEventStreamSpan(bytes, bytes.size(), arena, recorder);
 }
 
 type PerfSession = Session;
@@ -412,57 +392,27 @@ Expected<u8> EventPayloadBackAt(in EventView events, in usize eventIndex){
     return bytes[bytes.size() - 1u];
 }
 
-Expected<PerfMemoryPayload> ParsePerfMemoryBytes(in TelemetryBytes payload, in usize byteCount){
-    return ParsePerfMemorySpan(payload, byteCount);
+Expected<T> ParseTelemetryEventAt<T>(in EventView events, in usize index, in Func<0u, Expected<T>(in Span<u8>, in usize)> parse){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, index);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure());
+    return parse(payload.value(), payload.value().size());
 }
 
 Expected<PerfMemoryPayload> ParsePerfMemoryBytes(in TelemetryBytes payload){
-    return ParsePerfMemoryBytes(payload, payload.size());
-}
-
-Expected<PerfTimingPayload> ParsePerfTimingBytes(in TelemetryBytes payload, in usize byteCount){
-    return ParsePerfTimingSpan(payload, byteCount);
+    return ParsePerfMemorySpan(payload, payload.size());
 }
 
 Expected<PerfTimingPayload> ParsePerfTimingBytes(in TelemetryBytes payload){
-    return ParsePerfTimingBytes(payload, payload.size());
-}
-
-Expected<PerfTimingPayload> ParsePerfTimingEventAt(in EventView events, in usize eventIndex){
-    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
-    if(!payload.has_value())
-        return MakeUnexpected(Failure());
-    return ParsePerfTimingSpan(payload.value(), payload.value().size());
-}
-
-Expected<DiagnosticPayload> ParseDiagnosticBytes(in TelemetryBytes payload, in usize byteCount){
-    return ParseDiagnosticSpan(payload, byteCount);
+    return ParsePerfTimingSpan(payload, payload.size());
 }
 
 Expected<DiagnosticPayload> ParseDiagnosticBytes(in TelemetryBytes payload){
-    return ParseDiagnosticBytes(payload, payload.size());
-}
-
-Expected<DiagnosticPayload> ParseDiagnosticEventAt(in EventView events, in usize eventIndex){
-    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
-    if(!payload.has_value())
-        return MakeUnexpected(Failure());
-    return ParseDiagnosticSpan(payload.value(), payload.value().size());
-}
-
-Expected<TextLogPayload> ParseTextLogBytes(in TelemetryBytes payload, in usize byteCount){
-    return ParseTextLogSpan(payload, byteCount);
+    return ParseDiagnosticSpan(payload, payload.size());
 }
 
 Expected<TextLogPayload> ParseTextLogBytes(in TelemetryBytes payload){
-    return ParseTextLogBytes(payload, payload.size());
-}
-
-Expected<TextLogPayload> ParseTextLogEventAt(in EventView events, in usize eventIndex){
-    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
-    if(!payload.has_value())
-        return MakeUnexpected(Failure());
-    return ParseTextLogSpan(payload.value(), payload.value().size());
+    return ParseTextLogSpan(payload, payload.size());
 }
 
 StringView ReportJsonView(in TelemetryReport report){
@@ -1232,7 +1182,7 @@ b8 Suite_ReparsePerfMemoryCandidate(
     if(invalidCase < 9u)
         Suite_ApplyInvalidPerfMemoryHeaderCase(invalidCase, header);
     WriteTelemetryPod(scratchBytes, 0u, header);
-    return ParsePerfMemoryBytes(scratchBytes, candidateByteCount).has_value();
+    return ParsePerfMemorySpan(scratchBytes, candidateByteCount).has_value();
 }
 
 void VerifyAllocationOwnerTelemetry_RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue(){
@@ -1337,8 +1287,8 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     ASSERT_TRUE(scratchNameResult.has_value());
     const Name scratchName = scratchNameResult.value();
 
-    TelemetryOwnedArena owner = TelemetryOwnedArena(ownerName);
-    OwnedAllocation allocation = OwnedAllocation(owner.arena, 53u);
+    HeapStorage owner(ownerName);
+    OwnedAllocation allocation = OwnedAllocation(owner, 53u);
     ASSERT_TRUE(allocation.valid());
     const u64 firstBytes = allocation.usableBytes();
     EXPECT_GE(firstBytes, allocation.requestedBytes);
@@ -1361,7 +1311,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
 
     perfSession.setCaptureOptions(MakePerfMemoryCaptureOptions());
     perfSession.beginFrame(41u);
-    ASSERT_TRUE(perfSession.recordMemorySnapshot(ownerName, owner.arena));
+    ASSERT_TRUE(perfSession.recordMemorySnapshot(ownerName, owner));
     perfSession.publishFrame();
     const MemorySnapshot first = perfSession.memoryView().snapshot(ownerName, MemorySource::Arena);
     ASSERT_TRUE(first.valid());
@@ -1443,8 +1393,8 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     const Name heapName = s_GlobalArenaMemoryHeapBacking;
     EXPECT_TRUE(HasOwnerMemoryEvent(capture.view(), heapName, MemorySource::HeapBacking));
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseJsonChecks);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseJsonChecks);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -1482,14 +1432,14 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
 
     PerfSession perfSession = PerfSession(testArena.arena);
     perfSession.setCaptureOptions(MakePerfMemoryCaptureOptions());
-    TelemetryOwnedArena firstArena = TelemetryOwnedArena(ownerName);
-    OwnedAllocation firstAllocation = OwnedAllocation(firstArena.arena, 53u);
+    HeapStorage firstArena(ownerName);
+    OwnedAllocation firstAllocation = OwnedAllocation(firstArena, 53u);
     ASSERT_TRUE(firstAllocation.valid());
     const u64 firstBytes = firstAllocation.usableBytes();
     u64 secondBytes = 0u;
     {
-        TelemetryOwnedArena secondArena = TelemetryOwnedArena(ownerName);
-        OwnedAllocation secondAllocation = OwnedAllocation(secondArena.arena, 101u);
+        HeapStorage secondArena(ownerName);
+        OwnedAllocation secondAllocation = OwnedAllocation(secondArena, 101u);
         ASSERT_TRUE(secondAllocation.valid());
         secondBytes = secondAllocation.usableBytes();
         perfSession.beginFrame(71u);
@@ -1522,8 +1472,8 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
     capture.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     const PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -1560,8 +1510,8 @@ void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirU
             delta.usedBytes = 10;
         ASSERT_TRUE(RecordTestPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseHeapJsonChecks);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseHeapJsonChecks);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -1619,8 +1569,8 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
     ASSERT_TRUE(RecordTestPerfMemory(recorder, secondOwner, StringView(secondHashText), Suite_MakeOwnerSnapshot(secondOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 92u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, "Producer Display Name", Suite_MakeOwnerSnapshot(firstOwner, MemorySource::ExplicitScope), MakeTestMemoryDelta(-1), 93u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, unknownOwner, StringView(unknownHashText), Suite_MakeOwnerSnapshot(unknownOwner, MemorySource::HeapBacking), MakeTestMemoryDelta(-1), 94u));
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> beforeReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> beforeReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(beforeReportResult.has_value());
     const TelemetryReport beforeReport = beforeReportResult.value();
     const StringView beforeJson = ReportJsonView(beforeReport);
@@ -1634,8 +1584,8 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
         firstHashText,
         secondHashText
     );
-    ASSERT_TRUE(LoadFromMemory(StringView(namesymText), reportScratch.scratchArena));
-    const Expected<TelemetryReport> afterReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ASSERT_TRUE(LoadFromMemory(StringView(namesymText), reportScratch));
+    const Expected<TelemetryReport> afterReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(afterReportResult.has_value());
     const TelemetryReport afterReport = afterReportResult.value();
     EXPECT_EQ(afterReport.summary.parseFailureCount, 0u);

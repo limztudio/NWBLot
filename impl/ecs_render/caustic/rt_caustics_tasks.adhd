@@ -209,11 +209,7 @@ class CausticAccumulatorDecayGraphTask{
         this.hardwareCaustics = hardwareCaustics;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         // Match the producer's no-work behavior: keep the dep, but skip dispatch unless the producer would run.
@@ -282,11 +278,7 @@ class CausticProducerGraphTask{
         this.hardware = hardware;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         this.causticProducerDispatched = false;
@@ -353,11 +345,7 @@ class CausticGeometryDownsampleGraphTask{
         this.causticResolveTiming = causticResolveTiming;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         DiscardGpuTimingMeasure(this.causticResolveTiming);
@@ -400,11 +388,7 @@ class CausticResolvePhaseGraphTask{
         this.passIndex = passIndex;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.activity.matches(this.raytracingSystem.causticResolveActivitySnapshot(this.targets)))

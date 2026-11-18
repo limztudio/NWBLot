@@ -3,36 +3,11 @@
 
 
 #include "../name_cases.adhd"
-#include <logger/server/crash_symbolicate.adhd>
+#include "../symbolication_sdk.adhd"
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/memory.adhd>
-#include "minidump_records.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcessDumpFileName")]
-extern const StringView s_WindowsProcessDumpFile;
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashSymbolicationConfig"), cpp_flags(no_copy, no_assign)]
-extern class DumpSymbolicationConfig;
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashPackageSummary"), cpp_flags(no_copy, no_assign)]
-extern class DumpSymbolicationSummary{
-    String platform;
-    u64 threadId;
-};
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashScratchPath")]
-extern class DumpScratchPath;
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashReportText")]
-extern class DumpReportText;
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::BuildCrashSymbolicationReport")]
-extern DumpReportText SymbolicateDump(in DumpScratchPath directory, in DumpSymbolicationSummary summary, in DumpSymbolicationConfig config, mut HeapStorage storage, mut ScratchStorage scratch);
+#include <tests/integration/windows/minidump_records.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,11 +30,11 @@ class MinidumpBoundaryTests{
     }
 
     public Path dumpPath()const{
-        return this.m_directory / s_WindowsProcessDumpFile;
+        return this.m_directory / s_ProcessDumpFileName;
     }
 
     public String symbolicate(in u64 threadId){
-        DumpSymbolicationSummary summary(this.m_storage);
+        CrashPackageSummary summary(this.m_storage);
         summary.platform = "windows";
         summary.threadId = threadId;
         DumpSymbolicationConfig config(this.m_storage);
@@ -94,7 +69,7 @@ Vector<u8> ExceptionDump(in u32 secondStream, in usize secondStreamBytes){
     const usize s_DirectoryCount = 2u;
     const usize s_ExceptionOffset = size_of<WinDumpHeader>() + s_DirectoryCount * size_of<WinDumpDirectory>();
     const usize s_ContextOffset = s_ExceptionOffset + size_of<WinDumpException>();
-    const usize s_SecondStreamOffset = s_ContextOffset + size_of<WinDumpContext>();
+    const usize s_SecondStreamOffset = s_ContextOffset + size_of<WinContext>();
     Vector<u8> bytes;
     bytes.resize(s_SecondStreamOffset + secondStreamBytes, 0u);
     WinDumpHeader header = WinDumpHeader();
@@ -110,7 +85,7 @@ Vector<u8> ExceptionDump(in u32 secondStream, in usize secondStreamBytes){
     StoreDumpRecord(size_of<WinDumpHeader>(), exceptionDirectory, bytes);
     WinDumpException exception = WinDumpException();
     exception.ThreadId = 1u;
-    exception.ThreadContext.DataSize = size_of<WinDumpContext>();
+    exception.ThreadContext.DataSize = size_of<WinContext>();
     exception.ThreadContext.Rva = s_ContextOffset;
     StoreDumpRecord(s_ExceptionOffset, exception, bytes);
     WinDumpDirectory secondDirectory = WinDumpDirectory();
@@ -185,7 +160,7 @@ void VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFil
     const usize s_ExceptionOffset = size_of<WinDumpHeader>() + 2u * size_of<WinDumpDirectory>();
     WinDumpException exception = WinDumpException();
     exception.ThreadId = 1u;
-    exception.ThreadContext.DataSize = size_of<WinDumpContext>() - 1u;
+    exception.ThreadContext.DataSize = size_of<WinContext>() - 1u;
     exception.ThreadContext.Rva = s_ExceptionOffset + size_of<WinDumpException>();
     StoreDumpRecord(s_ExceptionOffset, exception, bytes);
     const auto actual = self.report(Span<u8>(bytes));
@@ -290,7 +265,7 @@ void VerifyMinidumpBoundaryTests_UnalignedExceptionAndContextRecordsKeepTheirBou
     StoreDumpRecord(size_of<WinDumpHeader>(), directory, bytes);
     WinDumpException exception = WinDumpException();
     exception.ThreadId = 1u;
-    exception.ThreadContext.DataSize = size_of<WinDumpContext>();
+    exception.ThreadContext.DataSize = size_of<WinContext>();
     exception.ThreadContext.Rva = s_ExceptionOffset + size_of<WinDumpException>() + 1u;
     StoreDumpRecord(s_ExceptionOffset + 1u, exception, bytes);
     const auto actual = self.report(Span<u8>(bytes));

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/input_service_fixture.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 
@@ -26,14 +27,7 @@ class FakeTextInput : QueuedTextInputService{
     public u32 starts = 0u;
     public u32 ends = 0u;
 
-    public TextInputCapabilities capabilities()const override{
-        TextInputCapabilities result();
-        result.commit = true;
-        result.preedit = true;
-        result.surrounding = true;
-        result.deleteSurrounding = true;
-        return result;
-    }
+    public TextInputCapabilities capabilities()const override{ return FullTestTextInputCapabilities(); }
 
     public TextInputAdmission sendCommit(in TextInputSessionToken token, in StringView text){ return this.emitCommit(token, text); }
     public TextInputRect currentCaret()const{ return this.caretRect(); }
@@ -66,14 +60,7 @@ class FakeClipboard : QueuedClipboardService{
     public ClipboardOperation startedOperation = ClipboardOperation::ReadText;
     public b8 delayed;
 
-    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{
-        ClipboardCapabilities result();
-        if(channel == ClipboardChannel::Clipboard){
-            result.readText = true;
-            result.writeText = true;
-        }
-        return result;
-    }
+    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{ return TestClipboardTextCapabilities(channel); }
     public b8 finishRequest(in ClipboardRequestToken token, in ClipboardStatus status, in StringView text){
         return this.completeNativeRequest(token, status, text);
     }

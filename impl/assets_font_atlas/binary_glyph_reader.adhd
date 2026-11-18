@@ -60,16 +60,6 @@ b8 IsValidFontAtlasBinaryCounts(
     return cursor <= totalByteCount && minimumRemaining <= cast<u64>(totalByteCount - cursor);
 }
 
-b8 AreFontAtlasByteSpansEqual(in Span<u8> lhs, in Span<u8> rhs){
-    if(lhs.size() != rhs.size())
-        return false;
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(lhs[i] != rhs[i])
-            return false;
-    }
-    return true;
-}
-
 Expected<FontAtlasGlyph> TryReadFontAtlasGlyph(in Span<u8> bytes, mut usize cursor){
     FontAtlasGlyph glyph;
     const Expected<u32> glyphId = ReadU32LittleEndian(bytes, cursor);

@@ -68,11 +68,7 @@ class AvboitPreGraphTaskPayload{
         this.timingTicket = timingTicketIn;
         this.transparentCsgIntervalsTiming = transparentCsgIntervalsTimingIn;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Graphics | GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics | GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
     public void discarded(){
@@ -116,11 +112,7 @@ class TransparentCsgIntervalRecordInputs{
         this.timingTicket = timingTicketIn;
         this.transparentCsgIntervalsTiming = transparentCsgIntervalsTimingIn;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
     public void discarded(){

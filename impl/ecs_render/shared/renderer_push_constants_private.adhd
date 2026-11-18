@@ -70,9 +70,6 @@ extern const u32 s_ShaderMeshEmulationVertexColorByteOffset;
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET")]
 extern const u32 s_ShaderMeshEmulationVertexWorldPositionByteOffset;
 
-[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT")]
-extern const u32 s_ShaderSceneShadingBufferFloatCount;
-
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX")]
 extern const u32 s_ShaderMeshEmulationVertexBufferIndex;
 static_assert(size_of<MeshFrameHeapSlots>() == size_of<u32>() * s_ShaderMeshFrameHeapSlotCount, "Mesh frame heap-slot payload must stay a uint4");
@@ -99,7 +96,6 @@ static_assert(offset_of<EmulatedVertex>(uv0) == s_ShaderMeshEmulationVertexUv0By
 static_assert(offset_of<EmulatedVertex>(color) == s_ShaderMeshEmulationVertexColorByteOffset, "EmulatedVertex color offset must match the mesh emulation shader");
 static_assert(offset_of<EmulatedVertex>(worldPosition) == s_ShaderMeshEmulationVertexWorldPositionByteOffset, "EmulatedVertex world-position offset must match the mesh emulation shader");
 static_assert(align_of<EmulatedVertex>() >= align_of<f32x4>(), "EmulatedVertex must stay SIMD-aligned");
-static_assert(size_of<SceneShadingGpuData>() == size_of<f32>() * s_ShaderSceneShadingBufferFloatCount, "SceneShadingGpuData layout must match the shading shaders");
 static_assert(align_of<SceneShadingGpuData>() >= align_of<f32x4>(), "SceneShadingGpuData must stay SIMD-aligned");
 static_assert(size_of<SceneLightGpuData>() == size_of<f32>() * s_ShaderSceneLightRecordFloatCount, "SceneLightGpuData layout must match the shading shaders");
 static_assert(align_of<SceneLightGpuData>() >= align_of<f32x4>(), "SceneLightGpuData must stay SIMD-aligned");

@@ -12,6 +12,52 @@ const StringView s_TextAreaPanelKey = "panel";
 const StringView s_TextAreaKey = "area";
 type UiFixtureHook = Func<128u, void()>;
 
+class UiTextAreaModelSnapshot{
+    public String text;
+    public u64 instance;
+    public u64 revision;
+    public u64 external;
+    public u64 selection;
+    public u64 composition;
+    public usize anchor;
+    public usize caret;
+    public b8 composing;
+    public b8 undo;
+    public b8 redo;
+
+    public UiTextAreaModelSnapshot(in EditModel model){
+        const StringView view = model.text();
+        if(!view.empty())
+            this.text.assign(view.data(), view.size());
+        this.instance = model.instanceGeneration();
+        this.revision = model.revision();
+        this.external = model.externalRevision();
+        this.selection = model.selectionGeneration();
+        this.composition = model.compositionGeneration();
+        this.anchor = model.anchor();
+        this.caret = model.caret();
+        this.composing = model.composition().active;
+        this.undo = model.canUndo();
+        this.redo = model.canRedo();
+    }
+
+    public StringView textView()const{ return StringView(this.text.data(), this.text.size()); }
+
+    public void expect(in EditModel model)const{
+        EXPECT_EQ(model.text(), this.textView());
+        EXPECT_EQ(model.instanceGeneration(), this.instance);
+        EXPECT_EQ(model.revision(), this.revision);
+        EXPECT_EQ(model.externalRevision(), this.external);
+        EXPECT_EQ(model.selectionGeneration(), this.selection);
+        EXPECT_EQ(model.compositionGeneration(), this.composition);
+        EXPECT_EQ(model.anchor(), this.anchor);
+        EXPECT_EQ(model.caret(), this.caret);
+        EXPECT_EQ(model.composition().active, this.composing);
+        EXPECT_EQ(model.canUndo(), this.undo);
+        EXPECT_EQ(model.canRedo(), this.redo);
+    }
+}
+
 class AreaEvent{
     public String text;
     public usize anchor = 0u;

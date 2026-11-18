@@ -37,11 +37,7 @@ class AvboitComputeEffectGraphTask{
         this.m_effect = effect;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Compute;
-        return requirements;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{

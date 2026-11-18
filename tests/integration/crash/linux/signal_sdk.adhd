@@ -35,8 +35,6 @@ extern TerminationHandler ExchangeTerminationHandler(in auto handler);
 extern b8 TerminationHandlerMatches(in auto handler);
 [cpp_header("<signal.h>"), cpp_name("SIGILL")]
 extern const i32 s_IllegalInstruction;
-[cpp_header("<global/termination.h>"), cpp_name("::TerminateInvariant")]
-extern void FailTestCleanup();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,6 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES")]
+extern const u32 s_ShaderLightSpaceDrawArgumentBytes;
+
 const Name s_LightSpaceShaderScope = "ECSRender_LightSpaceShadow";
 const Name s_LightSpaceResourceCsgDiagnosticReadback = "light_space_csg_diagnostic_readback";
 const Name s_LightSpaceResourceCsgContext = "light_space_csg_context";

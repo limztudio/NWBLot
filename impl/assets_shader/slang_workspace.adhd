@@ -67,9 +67,9 @@ Expected<Path> CreateSlangWorkDirectory(in Path parent){
             return MakeUnexpected(Failure());
         String name(s_ShaderWorkspacePrefix);
         name.reserve(name.size() + s_ShaderWorkspaceHexPidAndSeqReserveBytes);
-        AppendHexU64Text(cast<u64>(CurrentProcessId()), name);
+        AppendHexU64(cast<u64>(CurrentProcessId()), name);
         name.push_back('_');
-        AppendHexU64Text(sequence, name);
+        AppendHexU64(sequence, name);
         const Path directory = parent / StringView(name);
         const Expected<b8, ErrorCode> created = CreateDirectories(directory);
         if(!created.has_value()){

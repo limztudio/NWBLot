@@ -4,83 +4,7 @@
 
 #include "benchmark_support.adhd"
 #include "pow_packed_single.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <utilities/cli/tool_cli.adhd>
-
 #include <tests/common/test_helpers.adhd>
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadRawStatus")]
-extern u64 PowReadRawStatus();
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadRawControl")]
-extern u64 PowReadRawControl();
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteRawStatus")]
-extern void PowWriteRawStatus(in u64 value);
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteRawControl")]
-extern void PowWriteRawControl(in u64 value);
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadNativeStatus")]
-extern u32 PowReadNativeStatus();
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ClearMappedStatus")]
-extern u32 PowClearMappedStatus();
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::UpdateControl")]
-extern b8 PowUpdateControl(mut u32 current, in u32 value, in u32 mask);
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::CatchHardwareException")]
-extern u32 PowCatchHardwareException(in auto action);
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasWindowsTraps")]
-extern const b8 s_PowHasWindowsTraps;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasPowerStatus")]
-extern const b8 s_PowHasPowerStatus;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_DenormalSave")]
-extern const u32 s_PowDenormalSave;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_DenormalFlush")]
-extern const u32 s_PowDenormalFlush;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InvalidMask")]
-extern const u32 s_PowInvalidMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_OverflowMask")]
-extern const u32 s_PowOverflowMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ZeroDivideMask")]
-extern const u32 s_PowZeroDivideMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_UnderflowMask")]
-extern const u32 s_PowUnderflowMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InexactMask")]
-extern const u32 s_PowInexactMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ControlExceptionMask")]
-extern const u32 s_PowControlExceptionMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ControlDenormalMask")]
-extern const u32 s_PowControlDenormalMask;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InvalidException")]
-extern const u32 s_PowInvalidException;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_OverflowException")]
-extern const u32 s_PowOverflowException;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ZeroDivideException")]
-extern const u32 s_PowZeroDivideException;
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_UnderflowException")]
-extern const u32 s_PowUnderflowException;
 
 [cpp_header("<cerrno>"), cpp_name("EDOM")]
 extern const i32 s_PowEDOM;
@@ -240,9 +164,9 @@ VectorSingle PackedDoublePow(in VectorSingle x, in VectorSingle y){
     result = VectorSelect(result, quiet, VectorSingle(nanLanes));
     result = VectorSelect(result, VectorSingle(1.0f), VectorSingle(oneLanes));
     if(domainError)
-        SetMathErrno(s_PowEDOM);
+        WritePowerError(s_PowEDOM);
     else if(poleError || TestFloatingPointExceptions(FE_OVERFLOW | FE_UNDERFLOW) != 0)
-        SetMathErrno(s_PowERANGE);
+        WritePowerError(s_PowERANGE);
     return result;
 }
 
@@ -258,16 +182,16 @@ VectorSingle EvaluatePow(in u8 variant, in b8 reference, in VectorSingle x, in V
 
 b8 ObservePowKernel(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y, mut Array<u32, 4> bits,
     mut i32 standardFlags, mut u32 mappedFlags, mut u64 nativeBits, mut i32 storedError){
-    PowWriteRawStatus(0u);
-    PowClearMappedStatus();
+    WriteRawStatus(0u);
+    ClearMappedStatus();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     const VectorSingle value = EvaluatePow(variant, reference, x, y);
-    storedError = CurrentMathErrno();
+    storedError = ReadPowerError();
     standardFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    mappedFlags = PowReadNativeStatus();
-    nativeBits = PowReadRawStatus();
+    mappedFlags = ReadNativeStatus();
+    nativeBits = ReadRawStatus();
     for(usize lane = 0u; lane < 4u; ++lane)
         bits[lane] = SimdGetSingleLaneBits(value, lane);
     return true;
@@ -286,14 +210,14 @@ class PowQualificationEnvironmentScope : NoCopy{
 
     private void capture(in b8 restoreControl){
         this.m_restoreControl = restoreControl;
-        this.m_error = CurrentMathErrno();
+        this.m_error = ReadPowerError();
         if(restoreControl){
-            this.m_status = PowReadRawStatus();
-            this.m_control = PowReadRawControl();
+            this.m_status = ReadRawStatus();
+            this.m_control = ReadRawControl();
         }
         this.m_environment = HoldFloatingPointExceptions();
         if(!restoreControl)
-            this.m_status = PowReadRawStatus();
+            this.m_status = ReadRawStatus();
     }
 
     public b8 available()const{ return this.m_environment.has_value(); }
@@ -303,29 +227,29 @@ class PowQualificationEnvironmentScope : NoCopy{
             return;
         if(!SetFloatingPointEnvironment(this.m_environment.value()))
             TerminateInvariant();
-        PowWriteRawStatus(this.m_status);
+        WriteRawStatus(this.m_status);
         if(this.m_restoreControl)
-            PowWriteRawControl(this.m_control);
-        SetMathErrno(this.m_error);
+            WriteRawControl(this.m_control);
+        WritePowerError(this.m_error);
     }
 }
 
 u32 ObservePowTrap(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y){
     u32 initial = 0u;
     u32 control = 0u;
-    if(!PowUpdateControl(initial, 0u, 0u))
+    if(!UpdateControl(initial, 0u, 0u))
         return 1u;
-    PowClearMappedStatus();
-    if(!PowUpdateControl(control, initial & ~(s_PowInvalidMask | s_PowOverflowMask | s_PowZeroDivideMask), s_PowControlExceptionMask))
+    ClearMappedStatus();
+    if(!UpdateControl(control, initial & ~(s_InvalidMask | s_OverflowMask | s_ZeroDivideMask), s_ControlExceptionMask))
         return 2u;
-    const u32 code = PowCatchHardwareException(lambda[in variant, in reference, in x, in y]() -> void{
+    const u32 code = CatchHardwareException(lambda[in variant, in reference, in x, in y]() -> void{
         const VectorSingle value = EvaluatePow(variant, reference, x, y);
         ObserveValue<u32>(SimdGetSingleLaneBits(value, 0u));
     });
-    const u32 flags = PowClearMappedStatus();
-    if(!PowUpdateControl(control, initial, s_PowControlExceptionMask))
+    const u32 flags = ClearMappedStatus();
+    if(!UpdateControl(control, initial, s_ControlExceptionMask))
         return 3u;
-    WriteBenchmarkStdout(StringFormat("trap exception=0x{:x} flags=0x{:x} mask=0x{:x}\n", code, flags, control & s_PowControlExceptionMask));
+    WriteBenchmarkStdout(StringFormat("trap exception=0x{:x} flags=0x{:x} mask=0x{:x}\n", code, flags, control & s_ControlExceptionMask));
     return code;
 }
 
@@ -346,34 +270,34 @@ class PowTrapEdge{
 Expected<PowTrapEdge> ObservePowTrapEdge(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y, in u32 enabled){
     u32 initial = 0u;
     u32 control = 0u;
-    if(!PowUpdateControl(initial, 0u, 0u) || !ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+    if(!UpdateControl(initial, 0u, 0u) || !ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure());
-    const u64 initialNativeControl = PowReadRawControl();
-    PowWriteRawStatus(0u);
-    if(!PowUpdateControl(control, (initial | s_PowControlExceptionMask) & ~enabled, s_PowControlExceptionMask))
+    const u64 initialNativeControl = ReadRawControl();
+    WriteRawStatus(0u);
+    if(!UpdateControl(control, (initial | s_ControlExceptionMask) & ~enabled, s_ControlExceptionMask))
         return MakeUnexpected(Failure());
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     PowTrapEdge edge;
     u32 valueBits = 0u;
-    edge.code = PowCatchHardwareException(lambda[in variant, in reference, in x, in y, mut valueBits]() -> void{
+    edge.code = CatchHardwareException(lambda[in variant, in reference, in x, in y, mut valueBits]() -> void{
         const VectorSingle value = EvaluatePow(variant, reference, x, y);
         valueBits = ObserveValue<u32>(SimdGetSingleLaneBits(value, 0u));
     });
-    edge.error = CurrentMathErrno();
+    edge.error = ReadPowerError();
     edge.valueBits = valueBits;
-    edge.nativeStatus = PowReadRawStatus();
-    edge.nativeControl = PowReadRawControl();
-    if(!PowUpdateControl(edge.control, 0u, 0u))
+    edge.nativeStatus = ReadRawStatus();
+    edge.nativeControl = ReadRawControl();
+    if(!UpdateControl(edge.control, 0u, 0u))
         return MakeUnexpected(Failure());
-    edge.flags = PowClearMappedStatus();
-    if(!PowUpdateControl(control, initial, s_PowControlExceptionMask))
+    edge.flags = ClearMappedStatus();
+    if(!UpdateControl(control, initial, s_ControlExceptionMask))
         return MakeUnexpected(Failure());
-    PowWriteRawControl(initialNativeControl);
+    WriteRawControl(initialNativeControl);
     return edge;
 }
 
 i32 VerifyPowTrapsKernel(in u8 variant){
-    if(!s_PowHasWindowsTraps){
+    if(!s_HasWindowsTraps){
         WriteBenchmarkStdout("trap qualification unavailable on this platform\n");
         return 2;
     }
@@ -381,7 +305,7 @@ i32 VerifyPowTrapsKernel(in u8 variant){
         f32x4(0.0f,1.0f,1.0f,1.0f), f32x4(0x1.fffffep127f,-1.0f,1.0f,1.0f), f32x4(-1.0f,0x1.fffffep127f,1.0f,1.0f));
     const Array<f32x4, 5> powers(f32x4(0.5f,1.0f,1.0f,1.0f), f32x4(2.0f,1.0f,1.0f,1.0f),
         f32x4(-1.0f,1.0f,1.0f,1.0f), f32x4(2.0f,0.5f,1.0f,1.0f), f32x4(0.5f,2.0f,1.0f,1.0f));
-    const Array<u32, 3> categories(s_PowInvalidException, s_PowOverflowException, s_PowZeroDivideException);
+    const Array<u32, 3> categories(s_InvalidException, s_OverflowException, s_ZeroDivideException);
     u32 failures = 0u;
     b8 delivered = true;
     for(usize index = 0u; index < bases.size(); ++index){
@@ -392,7 +316,7 @@ i32 VerifyPowTrapsKernel(in u8 variant){
         if(index < categories.size())
             delivered = delivered && expected == categories[index];
         else
-            delivered = delivered && (expected == s_PowInvalidException || expected == s_PowOverflowException);
+            delivered = delivered && (expected == s_InvalidException || expected == s_OverflowException);
         failures += cast<u32>(expected != actual);
     }
     WriteBenchmarkStdout(StringFormat("trap differences={} distinguishable={}\n", failures, cast<u32>(delivered)));
@@ -402,22 +326,22 @@ i32 VerifyPowTrapsKernel(in u8 variant){
 }
 
 i32 VerifyPowTrapEdgesKernel(in u8 variant){
-    if(!s_PowHasWindowsTraps)
+    if(!s_HasWindowsTraps)
         return 2;
     PowQualificationEnvironmentScope guard(true);
     if(!guard.available())
         return 2;
-    const Array<u32, 2> denormalModes(s_PowDenormalSave, s_PowDenormalFlush);
-    const Array<u32, 2> enabledMasks(s_PowUnderflowMask, s_PowUnderflowMask | s_PowInexactMask);
+    const Array<u32, 2> denormalModes(s_DenormalSave, s_DenormalFlush);
+    const Array<u32, 2> enabledMasks(s_UnderflowMask, s_UnderflowMask | s_InexactMask);
     const Array<f32x4, 3> bases(f32x4(0.5f,1.0f,1.0f,1.0f), f32x4(0.5f,1.0f,1.0f,1.0f), f32x4(VectorSingle(u32x4(1u,0x3f800000u,0x3f800000u,0x3f800000u))));
     const Array<f32x4, 3> powers(f32x4(149.0f,1.0f,1.0f,1.0f), f32x4(127.0f,1.0f,1.0f,1.0f), f32x4(0.0f,1.0f,1.0f,1.0f));
     u32 differences = 0u;
     u32 cases = 0u;
     b8 delivered = true;
-    for(usize denormalIndex = 0u; denormalIndex < 1u + cast<usize>(s_PowHasPowerStatus); ++denormalIndex){
+    for(usize denormalIndex = 0u; denormalIndex < 1u + cast<usize>(s_HasPowerStatus); ++denormalIndex){
         const u32 denormal = denormalModes[denormalIndex];
         u32 control = 0u;
-        if(!PowUpdateControl(control, denormal, s_PowControlDenormalMask) || (control & s_PowControlDenormalMask) != denormal)
+        if(!UpdateControl(control, denormal, s_ControlDenormalMask) || (control & s_ControlDenormalMask) != denormal)
             return 2;
         for(usize modeIndex = 0u; modeIndex < 4u; ++modeIndex){
             const i32 mode = SimdRoundingModeByIndex(modeIndex);
@@ -433,8 +357,8 @@ i32 VerifyPowTrapEdgesKernel(in u8 variant){
                         return 2;
                     const PowTrapEdge lhs = expected.value();
                     const PowTrapEdge rhs = actual.value();
-                    if(index < 2u && denormal == s_PowDenormalSave)
-                        delivered = delivered && lhs.code == s_PowUnderflowException;
+                    if(index < 2u && denormal == s_DenormalSave)
+                        delivered = delivered && lhs.code == s_UnderflowException;
                     const b8 different = !(lhs == rhs);
                     differences += cast<u32>(different);
                     ++cases;
@@ -852,19 +776,6 @@ i32 RunPowQualificationCli(in Span<StringView> args){
     return 1;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 RunPowQualificationCliEntry(in ConsoleArguments arguments){
-    if(arguments.count <= 0)
-        return 2;
-    Array<StringView, 4> args;
-    const usize count = Min(cast<usize>(arguments.count), args.size());
-    for(usize index = 0u; index < count; ++index)
-        args[index] = arguments.text(cast<i32>(index));
-    return RunPowQualificationCli(Span<StringView>(args).first(count));
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

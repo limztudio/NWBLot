@@ -488,76 +488,37 @@ GpuTaskCommandRequirements ComputeCommands(){
     return requirements;
 }
 
-Expected<GpuGraphResourceId> AddTextureMetadata(
-    mut GpuTaskGraph graph,
-    in Name identity,
-    in StringView label,
-    in ResourceStatesMask initialState,
-    in ResourceQueueSharingMask queueSharing
-){
-    GpuGraphResourceDesc desc = GpuGraphResourceDesc();
+Expected<GpuGraphResourceId> AddResourceMetadata(mut GpuTaskGraph graph, in GpuGraphResourceType type, in Name identity, in StringView label, in ResourceStates initialState, in ResourceQueueSharing queueSharing){
+    GpuGraphResourceDesc desc;
     desc.setIdentity(identity);
     desc.setMarkerLabel(label);
-    desc.setType(GpuGraphResourceType::Texture);
+    desc.setType(type);
     desc.setInitialState(initialState);
     desc.setQueueSharing(queueSharing);
     return graph.importResource(desc);
 }
 
-Expected<GpuGraphResourceId> AddTextureMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in ResourceStatesMask initialState){
-    return AddTextureMetadata(graph, identity, label, initialState, ResourceQueueSharing::Exclusive);
+Expected<GpuGraphResourceId> AddResourceMetadata(mut GpuTaskGraph graph, in GpuGraphResourceType type, in Name identity, in StringView label, in ResourceStates initialState){
+    return AddResourceMetadata(graph, type, identity, label, initialState, ResourceQueueSharing::Exclusive);
 }
 
-Expected<GpuGraphResourceId> AddTextureMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label){
-    return AddTextureMetadata(graph, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
+Expected<GpuGraphResourceId> AddResourceMetadata(mut GpuTaskGraph graph, in GpuGraphResourceType type, in Name identity, in StringView label){
+    return AddResourceMetadata(graph, type, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
 }
 
-Expected<GpuGraphResourceId> AddBufferMetadata(
-    mut GpuTaskGraph graph,
-    in Name identity,
-    in StringView label,
-    in ResourceStatesMask initialState,
-    in ResourceQueueSharingMask queueSharing
-){
-    GpuGraphResourceDesc desc = GpuGraphResourceDesc();
-    desc.setIdentity(identity);
-    desc.setMarkerLabel(label);
-    desc.setType(GpuGraphResourceType::Buffer);
-    desc.setInitialState(initialState);
-    desc.setQueueSharing(queueSharing);
-    return graph.importResource(desc);
+Optional<T> CopyGpuSnapshotValue<T>(in Optional<in T> found){
+    if(!found.has_value())
+        return Optional<T>();
+    in T value = found.value();
+    return value;
 }
 
-Expected<GpuGraphResourceId> AddBufferMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in ResourceStatesMask initialState){
-    return AddBufferMetadata(graph, identity, label, initialState, ResourceQueueSharing::Exclusive);
+Optional<GpuTaskTimingAssignmentState> FindStoreTimingAssignmentValue(in GpuTaskTimingHistoryStore source, in GpuTaskTimingAssignmentKey key){
+    return CopyGpuSnapshotValue<GpuTaskTimingAssignmentState>(BorrowStoreTimingAssignment(source, key));
 }
 
-Expected<GpuGraphResourceId> AddBufferMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label){
-    return AddBufferMetadata(graph, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
-}
-
-Expected<GpuGraphResourceId> AddAccelStructMetadata(
-    mut GpuTaskGraph graph,
-    in Name identity,
-    in StringView label,
-    in ResourceStatesMask initialState,
-    in ResourceQueueSharingMask queueSharing
-){
-    GpuGraphResourceDesc desc = GpuGraphResourceDesc();
-    desc.setIdentity(identity);
-    desc.setMarkerLabel(label);
-    desc.setType(GpuGraphResourceType::AccelStruct);
-    desc.setInitialState(initialState);
-    desc.setQueueSharing(queueSharing);
-    return graph.importResource(desc);
-}
-
-Expected<GpuGraphResourceId> AddAccelStructMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in ResourceStatesMask initialState){
-    return AddAccelStructMetadata(graph, identity, label, initialState, ResourceQueueSharing::Exclusive);
-}
-
-Expected<GpuGraphResourceId> AddAccelStructMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label){
-    return AddAccelStructMetadata(graph, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
+Expected<GpuUploadBlobId> CopyGpuUploadBytes(mut GpuTaskGraph graph, in Span<u8> bytes, in usize alignment){
+    return graph.copyAlignedUploadBytes(BinaryViewFromBytes(bytes), alignment);
 }
 
 Expected<GpuGraphResourceId> AddHazardDomain(mut GpuTaskGraph graph, in Name identity, in StringView label){

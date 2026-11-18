@@ -3,6 +3,7 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/task/gpu/gpu_task_fixture_compile.adhd>
 
 
@@ -11,6 +12,9 @@
 
 const GpuTaskId s_CommandIrTask = GpuTaskId(17u, 4u);
 const GpuSubmissionPacketId s_CommandIrPacket = GpuSubmissionPacketId(19u, 2u);
+[cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::ClearCallbackInvocation")]
+extern void ClearCallbackInvocation<T>(mut T callback);
+
 const GpuPhysicalQueueId s_CommandIrQueue = GpuPhysicalQueueId(1u, 3u);
 const GpuGraphResourceId s_CommandIrSource = GpuGraphResourceId(17u, 5u);
 const GpuGraphResourceId s_CommandIrDestination = GpuGraphResourceId(17u, 6u);
@@ -46,35 +50,9 @@ Optional<PodT> ReadCommandIrPodAt<PodT>(in BinaryByteView bytes, in usize offset
     return Optional<PodT>();
 }
 
-void CopyCommandIrWord(in usize offset, in Span<u8> word, mut GraphicsBytes bytes){
-    assert(offset <= bytes.size() && word.size() <= bytes.size() - offset, "Command IR word exceeds the test buffer");
-    for(usize i = 0u; i < word.size(); ++i)
-        bytes[offset + i] = word[i];
-}
-
-void WriteCommandIrU8(in usize offset, in u8 value, mut GraphicsBytes bytes){
-    const Array<u8, 1u> word = bit_cast<Array<u8, 1u>>(value);
-    CopyCommandIrWord(offset, Span<u8>(word), bytes);
-}
-
-void WriteCommandIrU16(in usize offset, in u16 value, mut GraphicsBytes bytes){
-    const Array<u8, 2u> word = bit_cast<Array<u8, 2u>>(value);
-    CopyCommandIrWord(offset, Span<u8>(word), bytes);
-}
-
-void WriteCommandIrU32(in usize offset, in u32 value, mut GraphicsBytes bytes){
-    const Array<u8, 4u> word = bit_cast<Array<u8, 4u>>(value);
-    CopyCommandIrWord(offset, Span<u8>(word), bytes);
-}
-
-void WriteCommandIrU64(in usize offset, in u64 value, mut GraphicsBytes bytes){
-    const Array<u8, 8u> word = bit_cast<Array<u8, 8u>>(value);
-    CopyCommandIrWord(offset, Span<u8>(word), bytes);
-}
-
-void WriteCommandIrF32(in usize offset, in f32 value, mut GraphicsBytes bytes){
-    const Array<u8, 4u> word = bit_cast<Array<u8, 4u>>(value);
-    CopyCommandIrWord(offset, Span<u8>(word), bytes);
+void WriteCommandIrWord<T>(in usize offset, in T value, mut Span<u8> bytes){
+    if(!OverwritePOD<T>(offset, value, bytes))
+        assert(false, "Command IR word exceeds the test buffer");
 }
 
 class RecordProbeTask{
@@ -169,16 +147,10 @@ void CopyCommandIrBytes(in BinaryByteView source, mut GraphicsBytes outBytes){
 b8 BinaryByteViewsEqual(in BinaryByteView lhs, in BinaryByteView rhs){
     if(lhs.size() != rhs.size())
         return false;
-    const Span<u8> lhsBytes = ByteViewSpan(lhs);
-    const Span<u8> rhsBytes = ByteViewSpan(rhs);
-    for(usize i = 0u; i < lhsBytes.size(); ++i){
-        if(lhsBytes[i] != rhsBytes[i])
-            return false;
-    }
-    return true;
+    return BytesMatch(ByteViewSpan(lhs), ByteViewSpan(rhs));
 }
 
-b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
+b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture, in GpuTaskId task, in GpuSubmissionPacketId packet, in GpuPhysicalQueueId queue, in GpuGraphResourceId source, in GpuGraphResourceId destination){
     TextureSlice sourceSlice = TextureSlice();
     sourceSlice.setOrigin(1u, 2u, 3u);
     sourceSlice.setSize(4u, 5u, 6u);
@@ -190,7 +162,7 @@ b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
     destinationSlice.setMipLevel(15u);
     destinationSlice.setArraySlice(16u);
     GpuClearTextureTaskDesc clearTexture = GpuClearTextureTaskDesc();
-    clearTexture.destination = s_CommandIrDestination;
+    clearTexture.destination = destination;
     clearTexture.subresources = TextureSubresourceSet(2u, 3u, 4u, 5u);
     clearTexture.valueType = GpuClearTextureTaskValueType::DepthStencil;
     clearTexture.floatValue = Color(0.25f, 0.5f, 0.75f, 1.0f);
@@ -201,10 +173,14 @@ b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
     clearTexture.clearDepth = true;
     clearTexture.clearStencil = true;
 
-    return capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 16u, s_CommandIrDestination, 32u, 64u)
-        && capture.captureCopyTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, sourceSlice, s_CommandIrDestination, destinationSlice)
-        && capture.captureClearBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadu)
-        && capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture);
+    return capture.captureCopyBuffer(task, packet, queue, source, 16u, destination, 32u, 64u)
+        && capture.captureCopyTexture(task, packet, queue, source, sourceSlice, destination, destinationSlice)
+        && capture.captureClearBuffer(task, packet, queue, destination, 0xdecafbadu)
+        && capture.captureClearTexture(task, packet, queue, destination, clearTexture);
+}
+
+b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
+    return CaptureAllBuiltinCommandIrRecords(capture, s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, s_CommandIrDestination);
 }
 
 

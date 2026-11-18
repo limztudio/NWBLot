@@ -10,6 +10,11 @@ nwb_target_adhd_sources(nwb_crash_test_paths NAMESPACE "NWB::Tests::CrashTestPat
     "${CMAKE_CURRENT_LIST_DIR}/crash/crash_test_paths.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/crash/archive_sdk.adhd"
 )
+if(WIN32)
+    nwb_target_adhd_sources(nwb_crash_test_paths NAMESPACE "NWB::Tests::WindowsCrashSdk" SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/windows/minidump_records.adhd"
+    )
+endif()
 target_link_libraries(nwb_crash_test_paths PUBLIC nwb_crash_package nwb_common nwb_alloc nwb::gtest nwb_test_common_names)
 
 if(TARGET nwb_crash)

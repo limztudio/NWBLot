@@ -185,7 +185,7 @@ void CheckInactiveLoop(in b8 renderUnfocused){
     const u32 mainThread = NativeThreadId();
     TestAtomic<b8> watchdogFired(false);
     TestAtomic<u32> watchdogPostError(0u);
-    TestThread watchdog(lambda[in mainThread, in window, mut watchdogFired, mut watchdogPostError](in StopToken stop) -> void{
+    JoiningThread watchdog(lambda[in mainThread, in window, mut watchdogFired, mut watchdogPostError](in StopToken stop) -> void{
         const u64 deadline = TickMilliseconds() + s_FrameTestInactiveLoopWatchdogMS;
         while(!stop.stop_requested() && TickMilliseconds() < deadline)
             SleepMS(s_FrameTestWatchdogPollMS);

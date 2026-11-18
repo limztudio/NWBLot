@@ -9,6 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> PositionSkinRemap{ Deduplicate, PreserveIndices }
+
 class StreamSortEntry<Value>{
     public Value value;
     public usize sourceIndex = 0u;
@@ -61,50 +63,16 @@ b8 LessStreamSortEntry<Value>(in StreamSortEntry<Value> lhs, in StreamSortEntry<
     return lhs.sourceIndex < rhs.sourceIndex;
 }
 
-void SiftDownStreamEntries<Value>(mut Vector<StreamSortEntry<Value>> entries, in usize start, in usize count){
-    usize root = start;
-    while(root * 2u + 1u < count){
-        const usize left = root * 2u + 1u;
-        usize best = root;
-        if(LessStreamSortEntry<Value>(entries[best], entries[left]))
-            best = left;
-        const usize right = left + 1u;
-        if(right < count && LessStreamSortEntry<Value>(entries[best], entries[right]))
-            best = right;
-        if(best == root)
-            return;
-        const StreamSortEntry<Value> temp = entries[root];
-        entries[root] = entries[best];
-        entries[best] = temp;
-        root = best;
-    }
+void FillIdentityRemap(mut Vector<u32> remap){
+    for(usize index = 0u; index < remap.size(); ++index)
+        remap[index] = cast<u32>(index);
 }
 
-void SortStreamEntries<Value>(mut Vector<StreamSortEntry<Value>> entries){
-    const usize count = entries.size();
-    if(count < 2u)
-        return;
-
-    usize buildIndex = count / 2u;
-    while(buildIndex > 0u){
-        --buildIndex;
-        SiftDownStreamEntries<Value>(entries, buildIndex, count);
-    }
-
-    usize end = count;
-    while(end > 1u){
-        --end;
-        const StreamSortEntry<Value> top = entries[0u];
-        entries[0u] = entries[end];
-        entries[end] = top;
-        SiftDownStreamEntries<Value>(entries, 0u, end);
-    }
-}
-
-CanonicalStreamResult<Value> DeduplicateCanonicalStream<Value>(in Span<Value> sourceStream){
+CanonicalStreamResult<Value> DeduplicateCanonicalStream<Value>(in Span<Value> sourceStream, in b8 preserveIndices){
     CanonicalStreamResult<Value> outResult;
     outResult.remap.resize(sourceStream.size(), 0u);
-    if(sourceStream.empty()){
+    if(sourceStream.empty() || preserveIndices){
+        FillIdentityRemap(outResult.remap);
         outResult.ok = true;
         return outResult;
     }
@@ -116,7 +84,9 @@ CanonicalStreamResult<Value> DeduplicateCanonicalStream<Value>(in Span<Value> so
         sortedEntries[index].sourceIndex = index;
     }
 
-    SortStreamEntries<Value>(sortedEntries);
+    SortSequence<StreamSortEntry<Value>>(sortedEntries, lambda[](in StreamSortEntry<Value> left, in StreamSortEntry<Value> right) -> b8{
+        return LessStreamSortEntry<Value>(left, right);
+    });
 
     usize uniqueCount = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
@@ -125,8 +95,7 @@ CanonicalStreamResult<Value> DeduplicateCanonicalStream<Value>(in Span<Value> so
     }
 
     if(uniqueCount == sourceStream.size()){
-        for(usize index = 0u; index < outResult.remap.size(); ++index)
-            outResult.remap[index] = cast<u32>(index);
+        FillIdentityRemap(outResult.remap);
         outResult.ok = true;
         return outResult;
     }
@@ -150,7 +119,21 @@ CanonicalStreamResult<Value> DeduplicateCanonicalStream<Value>(in Span<Value> so
     return outResult;
 }
 
-Expected<CanonicalizeMeshStreamsResult> CanonicalizeCanonicalMeshStreams(
+b8 CheckCanonicalStream(in b8 ok, in StringView name){
+    if(!ok)
+        error("Failed to canonicalize mesh: {} stream has too many unique values", name);
+    return ok;
+}
+
+usize TakeCanonicalStream<Value>(mut CanonicalStreamResult<Value> stream, mut Vector<Value> output, mut b8 compacted){
+    compacted = stream.compacted;
+    if(!compacted)
+        return stream.remap.size();
+    output.swap(stream.compact);
+    return output.size();
+}
+
+Expected<CanonicalizeMeshStreamsResult> CanonicalizeMeshStreams(
     in Span<Vec3> positions,
     in Span<Vec3> normals,
     in Span<Vec4> tangents,
@@ -158,8 +141,12 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeCanonicalMeshStreams(
     in Span<Vec4> colors,
     in Span<MeshSkinInfluence> skin,
     in usize indexCount,
-    mut Span<SourceVertexRef> inOutVertexRefs
+    mut Span<SourceVertexRef> inOutVertexRefs,
+    in PositionSkinRemap positionSkin
 ){
+    const b8 preserveIndices = positionSkin == PositionSkinRemap::PreserveIndices;
+    if(preserveIndices && !ValidateSkinnedMeshCanonicalizeCounts(positions.size(), skin.size()))
+        return MakeUnexpected(Failure());
     CanonicalizeMeshStreamsResult out;
     out.report.before = MakeSourceMeshStreamCounts(
         positions.size(),
@@ -180,49 +167,37 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeCanonicalMeshStreams(
     CanonicalStreamResult<MeshSkinInfluence> skinResult;
 
     parallel TaskPositions{
-        positionResult = DeduplicateCanonicalStream<Vec3>(positions);
+        positionResult = DeduplicateCanonicalStream<Vec3>(positions, preserveIndices);
     }
     parallel TaskNormals{
-        normalResult = DeduplicateCanonicalStream<Vec3>(normals);
+        normalResult = DeduplicateCanonicalStream<Vec3>(normals, false);
     }
     parallel TaskTangents{
-        tangentResult = DeduplicateCanonicalStream<Vec4>(tangents);
+        tangentResult = DeduplicateCanonicalStream<Vec4>(tangents, false);
     }
     parallel TaskUv0{
-        uv0Result = DeduplicateCanonicalStream<Vec2>(uv0);
+        uv0Result = DeduplicateCanonicalStream<Vec2>(uv0, false);
     }
     parallel TaskColors{
-        colorResult = DeduplicateCanonicalStream<Vec4>(colors);
+        colorResult = DeduplicateCanonicalStream<Vec4>(colors, false);
     }
     parallel TaskSkin{
-        skinResult = DeduplicateCanonicalStream<MeshSkinInfluence>(skin);
+        skinResult = DeduplicateCanonicalStream<MeshSkinInfluence>(skin, preserveIndices);
     }
     wait(TaskPositions, TaskNormals, TaskTangents, TaskUv0, TaskColors, TaskSkin);
 
-    if(!positionResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_VertexRefPositionName);
+    StringView colorLabel = s_VertexRefColorName;
+    if(preserveIndices)
+        colorLabel = s_MeshColorsFieldNameView;
+    if(
+        !CheckCanonicalStream(positionResult.ok, s_VertexRefPositionName)
+        || !CheckCanonicalStream(normalResult.ok, s_VertexRefNormalName)
+        || !CheckCanonicalStream(tangentResult.ok, s_VertexRefTangentName)
+        || !CheckCanonicalStream(uv0Result.ok, s_MeshUv0FieldNameView)
+        || !CheckCanonicalStream(colorResult.ok, colorLabel)
+        || !CheckCanonicalStream(skinResult.ok, s_SkinStreamLabel)
+    )
         return MakeUnexpected(Failure());
-    }
-    if(!normalResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_VertexRefNormalName);
-        return MakeUnexpected(Failure());
-    }
-    if(!tangentResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_VertexRefTangentName);
-        return MakeUnexpected(Failure());
-    }
-    if(!uv0Result.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_MeshUv0FieldNameView);
-        return MakeUnexpected(Failure());
-    }
-    if(!colorResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_VertexRefColorName);
-        return MakeUnexpected(Failure());
-    }
-    if(!skinResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_SkinStreamLabel);
-        return MakeUnexpected(Failure());
-    }
 
     if(!RemapSourceVertexRefs(
         positionResult.remap,
@@ -235,42 +210,12 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeCanonicalMeshStreams(
     ))
         return MakeUnexpected(Failure());
 
-    usize afterPositions = positions.size();
-    if(positionResult.compacted){
-        afterPositions = positionResult.compact.size();
-        out.compactedPositions = true;
-        out.positions.swap(positionResult.compact);
-    }
-    usize afterNormals = normals.size();
-    if(normalResult.compacted){
-        afterNormals = normalResult.compact.size();
-        out.compactedNormals = true;
-        out.normals.swap(normalResult.compact);
-    }
-    usize afterTangents = tangents.size();
-    if(tangentResult.compacted){
-        afterTangents = tangentResult.compact.size();
-        out.compactedTangents = true;
-        out.tangents.swap(tangentResult.compact);
-    }
-    usize afterUv0 = uv0.size();
-    if(uv0Result.compacted){
-        afterUv0 = uv0Result.compact.size();
-        out.compactedUv0 = true;
-        out.uv0.swap(uv0Result.compact);
-    }
-    usize afterColors = colors.size();
-    if(colorResult.compacted){
-        afterColors = colorResult.compact.size();
-        out.compactedColors = true;
-        out.colors.swap(colorResult.compact);
-    }
-    usize afterSkin = skin.size();
-    if(skinResult.compacted){
-        afterSkin = skinResult.compact.size();
-        out.compactedSkin = true;
-        out.skin.swap(skinResult.compact);
-    }
+    const usize afterPositions = TakeCanonicalStream<Vec3>(positionResult, out.positions, out.compactedPositions);
+    const usize afterNormals = TakeCanonicalStream<Vec3>(normalResult, out.normals, out.compactedNormals);
+    const usize afterTangents = TakeCanonicalStream<Vec4>(tangentResult, out.tangents, out.compactedTangents);
+    const usize afterUv0 = TakeCanonicalStream<Vec2>(uv0Result, out.uv0, out.compactedUv0);
+    const usize afterColors = TakeCanonicalStream<Vec4>(colorResult, out.colors, out.compactedColors);
+    const usize afterSkin = TakeCanonicalStream<MeshSkinInfluence>(skinResult, out.skin, out.compactedSkin);
 
     out.report.after = MakeSourceMeshStreamCounts(
         afterPositions,
@@ -279,129 +224,6 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeCanonicalMeshStreams(
         afterUv0,
         afterColors,
         afterSkin,
-        inOutVertexRefs.size(),
-        indexCount
-    );
-    return out;
-}
-
-Expected<CanonicalizeMeshStreamsResult> CanonicalizeSkinnedCanonicalMeshStreams(
-    in Span<MeshSkinInfluence> skinInfluences,
-    in Span<Vec3> positions,
-    in Span<Vec3> normals,
-    in Span<Vec4> tangents,
-    in Span<Vec2> uv0,
-    in Span<Vec4> colors,
-    in usize indexCount,
-    mut Span<SourceVertexRef> inOutVertexRefs
-){
-    if(!ValidateSkinnedMeshCanonicalizeCounts(positions.size(), skinInfluences.size()))
-        return MakeUnexpected(Failure());
-
-    CanonicalizeMeshStreamsResult out;
-    out.report.before = MakeSourceMeshStreamCounts(
-        positions.size(),
-        normals.size(),
-        tangents.size(),
-        uv0.size(),
-        colors.size(),
-        skinInfluences.size(),
-        inOutVertexRefs.size(),
-        indexCount
-    );
-
-    Vector<u32> positionRemap;
-    positionRemap.resize(positions.size(), 0u);
-    Vector<u32> skinRemap;
-    skinRemap.resize(skinInfluences.size(), 0u);
-
-    CanonicalStreamResult<Vec3> normalResult;
-    CanonicalStreamResult<Vec4> tangentResult;
-    CanonicalStreamResult<Vec2> uv0Result;
-    CanonicalStreamResult<Vec4> colorResult;
-
-    parallel TaskPositionRemap{
-        for(usize i = 0u; i < positionRemap.size(); ++i)
-            positionRemap[i] = cast<u32>(i);
-    }
-    parallel TaskSkinRemap{
-        for(usize i = 0u; i < skinRemap.size(); ++i)
-            skinRemap[i] = cast<u32>(i);
-    }
-    parallel TaskNormals{
-        normalResult = DeduplicateCanonicalStream<Vec3>(normals);
-    }
-    parallel TaskTangents{
-        tangentResult = DeduplicateCanonicalStream<Vec4>(tangents);
-    }
-    parallel TaskUv0{
-        uv0Result = DeduplicateCanonicalStream<Vec2>(uv0);
-    }
-    parallel TaskColors{
-        colorResult = DeduplicateCanonicalStream<Vec4>(colors);
-    }
-    wait(TaskPositionRemap, TaskSkinRemap, TaskNormals, TaskTangents, TaskUv0, TaskColors);
-
-    if(!normalResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_VertexRefNormalName);
-        return MakeUnexpected(Failure());
-    }
-    if(!tangentResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_VertexRefTangentName);
-        return MakeUnexpected(Failure());
-    }
-    if(!uv0Result.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_MeshUv0FieldNameView);
-        return MakeUnexpected(Failure());
-    }
-    if(!colorResult.ok){
-        error("Failed to canonicalize mesh: {} stream has too many unique values", s_MeshColorsFieldNameView);
-        return MakeUnexpected(Failure());
-    }
-
-    if(!RemapSourceVertexRefs(
-        positionRemap,
-        normalResult.remap,
-        tangentResult.remap,
-        uv0Result.remap,
-        colorResult.remap,
-        skinRemap,
-        inOutVertexRefs
-    ))
-        return MakeUnexpected(Failure());
-
-    usize afterNormals = normals.size();
-    if(normalResult.compacted){
-        afterNormals = normalResult.compact.size();
-        out.compactedNormals = true;
-        out.normals.swap(normalResult.compact);
-    }
-    usize afterTangents = tangents.size();
-    if(tangentResult.compacted){
-        afterTangents = tangentResult.compact.size();
-        out.compactedTangents = true;
-        out.tangents.swap(tangentResult.compact);
-    }
-    usize afterUv0 = uv0.size();
-    if(uv0Result.compacted){
-        afterUv0 = uv0Result.compact.size();
-        out.compactedUv0 = true;
-        out.uv0.swap(uv0Result.compact);
-    }
-    usize afterColors = colors.size();
-    if(colorResult.compacted){
-        afterColors = colorResult.compact.size();
-        out.compactedColors = true;
-        out.colors.swap(colorResult.compact);
-    }
-
-    out.report.after = MakeSourceMeshStreamCounts(
-        positions.size(),
-        afterNormals,
-        afterTangents,
-        afterUv0,
-        afterColors,
-        skinInfluences.size(),
         inOutVertexRefs.size(),
         indexCount
     );

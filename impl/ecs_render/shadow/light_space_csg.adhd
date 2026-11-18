@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/types.adhd>
 #include <impl/ecs_render/shadow/light_space_plan.adhd>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
@@ -38,8 +39,6 @@ const u32 s_CsgShadowFlagCurrentReceiverCaps = s_ShaderCsgShadowFlagCurrentRecei
 [cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_INSTANCE_BYTES")]
 extern const u32 s_ShaderCsgRayInstanceBytes;
 
-[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_CONTEXT_BYTES")]
-extern const u32 s_ShaderCsgRayContextBytes;
 
 [cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES")]
 extern const u32 s_ShaderCsgRayMembershipWordBytes;

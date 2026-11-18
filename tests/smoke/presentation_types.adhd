@@ -229,69 +229,36 @@ class PresentationPacingRing{
 }
 
 class PresentationFpsProbe{
-    private PresentationFpsSample m_interval;
-    private PresentationFpsSample m_total;
+    private PresentationFpsSample m_interval = PresentationFpsSample();
+    private PresentationFpsSample m_total = PresentationFpsSample();
     private f64 m_warmupSeconds;
     private f64 m_measurementSeconds;
-    private Timer m_warmupBegin;
-    private Timer m_measurementBegin;
-    private Timer m_intervalBegin;
-    private Timer m_previousObservation;
-    private u64 m_previousPresentationCount;
-    private u64 m_intervalPresentationCount;
-    private b8 m_started;
-    private b8 m_measuring;
-    private b8 m_complete;
+    private Timer m_warmupBegin = Timer();
+    private Timer m_measurementBegin = Timer();
+    private Timer m_intervalBegin = Timer();
+    private Timer m_previousObservation = Timer();
+    private u64 m_previousPresentationCount = 0u;
+    private u64 m_intervalPresentationCount = 0u;
+    private b8 m_started = false;
+    private b8 m_measuring = false;
+    private b8 m_complete = false;
     private b8 m_invalid;
 
     public PresentationFpsProbe(){
-        this.m_interval = PresentationFpsSample();
-        this.m_total = PresentationFpsSample();
         this.m_warmupSeconds = 0.25;
         this.m_measurementSeconds = 0.0;
-        this.m_warmupBegin = Timer();
-        this.m_measurementBegin = Timer();
-        this.m_intervalBegin = Timer();
-        this.m_previousObservation = Timer();
-        this.m_previousPresentationCount = 0u;
-        this.m_intervalPresentationCount = 0u;
-        this.m_started = false;
-        this.m_measuring = false;
-        this.m_complete = false;
         this.m_invalid = false;
     }
 
     public PresentationFpsProbe(in f64 warmupSeconds){
-        this.m_interval = PresentationFpsSample();
-        this.m_total = PresentationFpsSample();
         this.m_warmupSeconds = warmupSeconds;
         this.m_measurementSeconds = 0.0;
-        this.m_warmupBegin = Timer();
-        this.m_measurementBegin = Timer();
-        this.m_intervalBegin = Timer();
-        this.m_previousObservation = Timer();
-        this.m_previousPresentationCount = 0u;
-        this.m_intervalPresentationCount = 0u;
-        this.m_started = false;
-        this.m_measuring = false;
-        this.m_complete = false;
         this.m_invalid = !IsFinite(warmupSeconds) || warmupSeconds < 0.0;
     }
 
     public PresentationFpsProbe(in f64 warmupSeconds, in f64 measurementSeconds){
-        this.m_interval = PresentationFpsSample();
-        this.m_total = PresentationFpsSample();
         this.m_warmupSeconds = warmupSeconds;
         this.m_measurementSeconds = measurementSeconds;
-        this.m_warmupBegin = Timer();
-        this.m_measurementBegin = Timer();
-        this.m_intervalBegin = Timer();
-        this.m_previousObservation = Timer();
-        this.m_previousPresentationCount = 0u;
-        this.m_intervalPresentationCount = 0u;
-        this.m_started = false;
-        this.m_measuring = false;
-        this.m_complete = false;
         this.m_invalid = !IsFinite(warmupSeconds) || warmupSeconds < 0.0 || !IsFinite(measurementSeconds) || measurementSeconds < 0.0;
     }
 
@@ -359,31 +326,17 @@ class PresentationFpsProbe{
 
 class FpsProbe{
     private StringView m_label;
-    private f64 m_elapsedSeconds;
-    private f64 m_intervalSeconds;
-    private f64 m_minFrameSeconds;
-    private f64 m_maxFrameSeconds;
-    private u32 m_intervalFrames;
-    private b8 m_samplingStarted;
+    private f64 m_elapsedSeconds = 0.0;
+    private f64 m_intervalSeconds = 0.0;
+    private f64 m_minFrameSeconds = 0.0;
+    private f64 m_maxFrameSeconds = 0.0;
+    private u32 m_intervalFrames = 0u;
+    private b8 m_samplingStarted = false;
 
-    public FpsProbe(){
-        this.m_label = "";
-        this.m_elapsedSeconds = 0.0;
-        this.m_intervalSeconds = 0.0;
-        this.m_minFrameSeconds = 0.0;
-        this.m_maxFrameSeconds = 0.0;
-        this.m_intervalFrames = 0u;
-        this.m_samplingStarted = false;
-    }
+    public FpsProbe(){ this.m_label = ""; }
 
     public FpsProbe(in StringView label){
         this.m_label = label;
-        this.m_elapsedSeconds = 0.0;
-        this.m_intervalSeconds = 0.0;
-        this.m_minFrameSeconds = 0.0;
-        this.m_maxFrameSeconds = 0.0;
-        this.m_intervalFrames = 0u;
-        this.m_samplingStarted = false;
     }
 
     public void recordFrame(in f32 delta){

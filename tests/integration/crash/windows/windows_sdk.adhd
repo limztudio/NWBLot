@@ -2,16 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/integration/windows/minidump_records.adhd>
 #include "../protocol_sdk.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::CONTEXT"), cpp_flags(self_defaulted, binary_serializable)]
-extern class WinContext{
-    u32 ContextFlags;
-};
 
 [cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("void*"), cpp_flags(self_defaulted, binary_serializable)]
 extern class WinAddress;
@@ -26,25 +22,6 @@ extern class WinRecord{
 extern class WinPointers{
     WinAddress ContextRecord;
     WinAddress ExceptionRecord;
-};
-
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::MINIDUMP_LOCATION_DESCRIPTOR"), cpp_flags(self_defaulted, binary_serializable)]
-extern class WinDumpLocation{
-    u32 DataSize;
-    u32 Rva;
-};
-
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::MINIDUMP_EXCEPTION"), cpp_flags(self_defaulted, binary_serializable)]
-extern class WinDumpRecord{
-    u32 ExceptionCode;
-    u64 ExceptionAddress;
-};
-
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::MINIDUMP_EXCEPTION_STREAM"), cpp_flags(self_defaulted, binary_serializable)]
-extern class WinDumpException{
-    u32 ThreadId;
-    WinDumpRecord ExceptionRecord;
-    WinDumpLocation ThreadContext;
 };
 
 [cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::DumpStream"), cpp_flags(self_defaulted, binary_serializable)]
@@ -83,8 +60,6 @@ extern const u32 s_WinCreateAlways;
 extern const u32 s_WinTemporary;
 [cpp_header("<windows.h>"), cpp_name("WAIT_OBJECT_0")]
 extern const u32 s_WinWaitSignaled;
-[cpp_header("<dbghelp.h>"), cpp_name("ExceptionStream")]
-extern const u32 s_WinExceptionStream;
 [cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::s_WindowsContextArchitecture")]
 extern const u32 s_WindowsContextArchitecture;
 [cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::s_WindowsExtendedContextFlag")]
@@ -131,8 +106,5 @@ extern WinTransportStatus RequestHandler(in CrashRequest request, in u32 timeout
 [cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::TryConsumeSuppressedPlatformCrashCapture")]
 extern b8 ConsumeSuppressedCapture();
 
-
-[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcessDumpFileName")]
-extern const StringView s_ProcessDumpFileName;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

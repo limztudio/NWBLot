@@ -214,12 +214,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
             return true;
         }
 
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        f32 safeDelta = 0.0f;
-        if(fixedDelta > 0.0f)
-            safeDelta = fixedDelta;
-        else if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        const f32 safeDelta = SafeRendererBaselineDelta(delta);
 
         if(!this.samplePresentationFps())
             return false;

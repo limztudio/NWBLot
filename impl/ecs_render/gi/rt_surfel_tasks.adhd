@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/gi/quality_settings.adhd>
 #include <impl/ecs_render/gi/rt_surfel_internal.adhd>
 #include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/kernel/timing_names.adhd>
@@ -16,11 +17,6 @@ extern const u32 s_ShaderSurfelConstantsFloat4Count;
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPDATE_DIVISOR")]
 extern const u32 s_ShaderSurfelUpdateDivisor;
 
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CELL_SIZE")]
-extern const f32 s_ShaderSurfelCellSize;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_DEFAULT_RADIUS")]
-extern const f32 s_ShaderSurfelDefaultRadius;
 
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_MAX_AGE")]
 extern const u32 s_ShaderSurfelMaxAge;
@@ -76,11 +72,7 @@ class SurfelGiPhaseTask{
         this.m_phase = phase;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{

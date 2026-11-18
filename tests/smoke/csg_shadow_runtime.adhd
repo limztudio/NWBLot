@@ -151,10 +151,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
             this.m_atlas.moveCutters(SmokeWorldRef(this.m_world));
             [essential] info("CsgShadowSmokeProject: cutters moved at update40");
         }
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        f32 tickDelta = delta;
-        if(fixedDelta > 0.0f)
-            tickDelta = fixedDelta;
+        const f32 tickDelta = RendererBaselineDelta(delta);
         if(!TickSmokeWorld(tickDelta, SmokeWorldRef(this.m_world)))
             return false;
         if(s_CsgCausticSmokeEnabled && this.m_timingActive && !this.m_timing.update())

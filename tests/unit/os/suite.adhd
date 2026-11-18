@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/input_service_fixture.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 
@@ -16,22 +17,9 @@
 type OsServiceHook = Func<128u, void()>;
 type OsSessionHook = Func<128u, void(in TextInputSessionToken)>;
 
-TextInputCapabilities FullOsTextCapabilities(){
-    return TextInputCapabilities(true, true, true, true);
-}
-
-ClipboardCapabilities OsClipboardCapabilities(in ClipboardChannel channel){
-    if(channel == ClipboardChannel::Clipboard)
-        return ClipboardCapabilities(true, true);
-    return ClipboardCapabilities();
-}
-
-TextInputSessionDesc MakeEmptySessionDesc(){ return TextInputSessionDesc(); }
-
 TextInputSessionDesc MakeSessionDesc(in StringView text, in usize anchor, in usize caret){
     return TextInputSessionDesc(TextInputRect(), text, anchor, caret);
 }
-TextInputRect MakeTextInputRect(in i32 x, in i32 y, in i32 width, in i32 height){ return TextInputRect(x, y, width, height); }
 TextInputDeletionBasis MakeInvalidDeletionBasis(){ return cast<TextInputDeletionBasis>(255u); }
 TextInputChangeCause MakeInvalidChangeCause(){ return cast<TextInputChangeCause>(255u); }
 
@@ -42,7 +30,7 @@ void AppendByteGlobalString(mut String target, in u8 value){ target.push_back(ca
 class SelectionTextInput : QueuedTextInputService{
     [cpp_base(QueuedTextInputService, storage)]
     public SelectionTextInput(mut HeapStorage storage){}
-    public TextInputCapabilities capabilities()const override{ return FullOsTextCapabilities(); }
+    public TextInputCapabilities capabilities()const override{ return FullTestTextInputCapabilities(); }
 
     public TextInputAdmission sendCommit(in TextInputSessionToken token, in StringView text){ return this.emitCommit(token, text); }
     public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret){ return this.emitPreedit(token, text, anchor, caret); }
@@ -61,7 +49,7 @@ class FakeClipboardService : QueuedClipboardService{
     public usize m_writeCount = 0u;
     private ClipboardRequestToken m_nativeToken;
 
-    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{ return OsClipboardCapabilities(channel); }
+    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{ return TestClipboardTextCapabilities(channel); }
     public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView input)override{
         this.m_nativeToken = token;
         if(operation == ClipboardOperation::ReadText){
@@ -100,7 +88,7 @@ class DelayedClipboardService : QueuedClipboardService{
     public usize m_startCount = 0u;
     public usize m_cancelCount = 0u;
 
-    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{ return OsClipboardCapabilities(channel); }
+    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{ return TestClipboardTextCapabilities(channel); }
     public b8 deliver(in ClipboardRequestToken token, in ClipboardStatus status){ return this.deliver(token, status, ""); }
     public b8 deliver(in ClipboardRequestToken token, in ClipboardStatus status, in StringView text){
         const b8 completed = this.completeNativeRequest(token, status, text);
@@ -147,7 +135,7 @@ class FakeTextInputService : QueuedTextInputService{
 
     public TextInputCapabilities capabilities()const override{
         if(this.m_supported)
-            return FullOsTextCapabilities();
+            return FullTestTextInputCapabilities();
         return TextInputCapabilities();
     }
     public b8 sendCancel(in TextInputSessionToken token, in TextInputCancelReason reason){ return this.cancelSession(token, reason); }
@@ -235,10 +223,10 @@ class ClipboardTextTestContext{
     private HeapStorage storage = HeapStorage();
     private TestValueSlot<ClipboardTextAccumulator> accSlot;
     public mut ClipboardTextAccumulator accumulator;
-    private TestValueSlot<OsHeapString> firstSlot;
-    public mut OsHeapString first;
-    private TestValueSlot<OsHeapString> secondSlot;
-    public mut OsHeapString second;
+    private TestValueSlot<GlobalString> firstSlot;
+    public mut GlobalString first;
+    private TestValueSlot<GlobalString> secondSlot;
+    public mut GlobalString second;
 
     public ClipboardTextTestContext(){
         this.accumulator = this.accSlot.constructIn(this.storage);
@@ -600,7 +588,7 @@ void VerifyClipboard_WrongThreadCallsNeverTouchRequestStorage(){
     const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
     ASSERT_TRUE(tokenAdmission.has_value());
     const ClipboardRequestToken token = tokenAdmission.value();
-    TestThread worker = TestThread(lambda[mut ctx, in token]() -> void{
+    JoiningThread worker = JoiningThread(lambda[mut ctx, in token]() -> void{
         EXPECT_FALSE(ctx.service.isOwnerThread());
         const auto wrongThreadRead = ctx.service.requestReadText(ClipboardChannel::Clipboard);
         ASSERT_FALSE(wrongThreadRead.has_value());
@@ -851,29 +839,29 @@ void VerifyClipboardText_ByteLimitIsInclusiveAndBoundsIncrementalAccumulation(){
 void VerifyClipboardText_Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput(){
     ClipboardTextTestContext ctx = ClipboardTextTestContext();
     const StringView source = StringView("\x80\xFF", 2u);
-    ASSERT_EQ(DecodeOsClipboardLatin1(source, ctx.first), ClipboardStatus::Success);
+    ASSERT_EQ(DecodeClipboardLatin1(source, ctx.first), ClipboardStatus::Success);
     EXPECT_EQ(ctx.first, "\xC2\x80\xC3\xBF");
-    ASSERT_EQ(EncodeOsClipboardLatin1(StringView(ctx.first), ctx.second), ClipboardStatus::Success);
+    ASSERT_EQ(EncodeClipboardLatin1(StringView(ctx.first), ctx.second), ClipboardStatus::Success);
     EXPECT_EQ(ctx.second, source);
-    EXPECT_EQ(EncodeOsClipboardLatin1(StringView("\xC4\x80\xFF", 3u), ctx.second), ClipboardStatus::InvalidText);
+    EXPECT_EQ(EncodeClipboardLatin1(StringView("\xC4\x80\xFF", 3u), ctx.second), ClipboardStatus::InvalidText);
     EXPECT_TRUE(ctx.second.empty());
-    EXPECT_EQ(EncodeOsClipboardLatin1("\xE2\x98\x83", ctx.second), ClipboardStatus::Unsupported);
+    EXPECT_EQ(EncodeClipboardLatin1("\xE2\x98\x83", ctx.second), ClipboardStatus::Unsupported);
     EXPECT_TRUE(ctx.second.empty());
-    EXPECT_EQ(DecodeOsClipboardLatin1(StringView("a\0b", 3u), ctx.first), ClipboardStatus::InvalidText);
+    EXPECT_EQ(DecodeClipboardLatin1(StringView("a\0b", 3u), ctx.first), ClipboardStatus::InvalidText);
     EXPECT_TRUE(ctx.first.empty());
 }
 
 void VerifyClipboardText_Latin1ConversionAcceptsAliasedOutputAndSubviews(){
     ClipboardTextTestContext ctx = ClipboardTextTestContext();
     ctx.first.assign(StringView("\x80\xFF", 2u));
-    ASSERT_EQ(DecodeOsClipboardLatin1(StringView(ctx.first), ctx.first), ClipboardStatus::Success);
+    ASSERT_EQ(DecodeClipboardLatin1(StringView(ctx.first), ctx.first), ClipboardStatus::Success);
     EXPECT_EQ(ctx.first, "\xC2\x80\xC3\xBF");
-    ASSERT_EQ(EncodeOsClipboardLatin1(StringView(ctx.first), ctx.first), ClipboardStatus::Success);
+    ASSERT_EQ(EncodeClipboardLatin1(StringView(ctx.first), ctx.first), ClipboardStatus::Success);
     EXPECT_EQ(StringView(ctx.first), StringView("\x80\xFF", 2u));
 
     ctx.first.assign("prefix\xC2\x80");
     const StringView suffix = StringView(ctx.first).substr(6u);
-    ASSERT_EQ(EncodeOsClipboardLatin1(suffix, ctx.first), ClipboardStatus::Success);
+    ASSERT_EQ(EncodeClipboardLatin1(suffix, ctx.first), ClipboardStatus::Success);
     EXPECT_EQ(StringView(ctx.first), StringView("\x80", 1u));
 }
 
@@ -881,7 +869,7 @@ void VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit(){
     ClipboardTextTestContext ctx = ClipboardTextTestContext();
     ctx.first.assign(s_ClipboardMaxTextBytes / 2u + 1u, cast<u8>(0xFFu));
     ctx.second.assign("stale bytes");
-    EXPECT_EQ(DecodeOsClipboardLatin1(StringView(ctx.first), ctx.second), ClipboardStatus::TooLarge);
+    EXPECT_EQ(DecodeClipboardLatin1(StringView(ctx.first), ctx.second), ClipboardStatus::TooLarge);
     EXPECT_TRUE(ctx.second.empty());
 }
 
@@ -891,20 +879,20 @@ void VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit(){
 
 void VerifyTextInput_BeginRequiresFocusCapabilityAndOnlyOneActiveSession(){
     FakeTextInputContext ctx = FakeTextInputContext();
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = ctx.service.begin(TextInputSessionDesc());
     ASSERT_FALSE(unavailableBegin.has_value());
     EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
     ASSERT_TRUE(ctx.service.setFocused(true));
     ctx.service.m_supported = false;
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unsupportedBegin = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unsupportedBegin = ctx.service.begin(TextInputSessionDesc());
     ASSERT_FALSE(unsupportedBegin.has_value());
     EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
     ctx.service.m_supported = true;
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> first = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> first = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(first.has_value());
     ASSERT_TRUE(first.value().valid());
     EXPECT_EQ(ctx.service.activeSession(), first.value());
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> busyBegin = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> busyBegin = ctx.service.begin(TextInputSessionDesc());
     ASSERT_FALSE(busyBegin.has_value());
     EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
     ASSERT_TRUE(ctx.service.end(first.value()));
@@ -937,15 +925,15 @@ void VerifyTextInput_EndRejectsLateEventsForeignTokensAndReusedGenerations(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
     ASSERT_TRUE(ctx.foreign.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> oldAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> oldAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(oldAdmission.has_value());
     const TextInputSessionToken old = oldAdmission.value();
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> otherAdmission = ctx.foreign.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> otherAdmission = ctx.foreign.begin(TextInputSessionDesc());
     ASSERT_TRUE(otherAdmission.has_value());
     const TextInputSessionToken other = otherAdmission.value();
     ASSERT_EQ(ctx.service.sendCommit(old, "queued"), TextInputAdmission::Accepted);
     ASSERT_TRUE(ctx.service.end(old));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> currentAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> currentAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(currentAdmission.has_value());
     const TextInputSessionToken current = currentAdmission.value();
     ASSERT_TRUE(current.valid());
@@ -962,7 +950,7 @@ void VerifyTextInput_EndRejectsLateEventsForeignTokensAndReusedGenerations(){
 void VerifyTextInput_FocusLossReplacesQueuedWorkWithOneTerminalCancellation(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     ASSERT_EQ(ctx.service.sendCommit(token, "unconsumed"), TextInputAdmission::Accepted);
@@ -976,11 +964,11 @@ void VerifyTextInput_FocusLossReplacesQueuedWorkWithOneTerminalCancellation(){
     EXPECT_EQ(ctx.event.cancelReason, TextInputCancelReason::FocusLost);
     EXPECT_TRUE(ctx.event.text.empty());
     EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::InvalidSession);
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = ctx.service.begin(TextInputSessionDesc());
     ASSERT_FALSE(unavailableBegin.has_value());
     EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> resumed = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> resumed = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(resumed.has_value());
     EXPECT_TRUE(resumed.value().valid());
 }
@@ -988,11 +976,11 @@ void VerifyTextInput_FocusLossReplacesQueuedWorkWithOneTerminalCancellation(){
 void VerifyTextInput_NewSessionInvalidatesUnpolledCancellation(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> oldAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> oldAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(oldAdmission.has_value());
     const TextInputSessionToken old = oldAdmission.value();
     ASSERT_TRUE(ctx.service.sendCancel(old, TextInputCancelReason::NativeCancelled));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> currentAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> currentAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(currentAdmission.has_value());
     const TextInputSessionToken current = currentAdmission.value();
     EXPECT_EQ(ctx.service.poll(old, ctx.event), TextInputPollResult::InvalidSession);
@@ -1036,7 +1024,7 @@ void VerifyTextInput_ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion(
 void VerifyTextInput_QueueOverflowCancelsInsteadOfApplyingPartialCommittedText(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     for(usize index = 0u; index < s_TextInputMaxEvents; ++index){
@@ -1053,7 +1041,7 @@ void VerifyTextInput_QueueOverflowCancelsInsteadOfApplyingPartialCommittedText()
 void VerifyTextInput_QueuedByteBudgetCancelsEvenBelowEventCountLimit(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     FillGlobalString(ctx.scratch, s_TextInputMaxEventTextBytes, 0x78u);
@@ -1079,7 +1067,7 @@ void VerifyTextInput_InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8Boundarie
     EXPECT_EQ(ctx.service.currentCaretByte(), 4u);
     EXPECT_EQ(ctx.service.surroundingRevision(token), 1u);
     const u64 revision = ctx.service.surroundingRevision(token);
-    EXPECT_EQ(ctx.service.updateCaret(token, MakeTextInputRect(0, 0, 0, 1)), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(ctx.service.updateCaret(token, TextInputRect(0, 0, 0, 1)), TextInputAdmission::InvalidRange);
     EXPECT_EQ(ctx.service.currentRectangle().width, 1);
     EXPECT_EQ(ctx.service.sendDeletion(token, 1u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
     EXPECT_EQ(ctx.service.sendDeletion(token, 5u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
@@ -1097,7 +1085,7 @@ void VerifyTextInput_InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8Boundarie
 void VerifyTextInput_MalformedNativeTextAndPreeditSelectionsCannotEnterQueue(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     EXPECT_EQ(ctx.service.sendCommit(token, StringView("a\0b", 3u)), TextInputAdmission::InvalidText);
@@ -1111,7 +1099,7 @@ void VerifyTextInput_MalformedNativeTextAndPreeditSelectionsCannotEnterQueue(){
 void VerifyTextInput_CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     ctx.service.m_onEnd = lambda[mut ctx, in token](in TextInputSessionToken ended) -> void{
@@ -1126,7 +1114,7 @@ void VerifyTextInput_CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry
     ASSERT_FALSE(HasFatalTestFailure());
     ctx.service.m_onEnd = OsSessionHook();
     EXPECT_EQ(ctx.service.m_endCount, 1u);
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> resumed = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> resumed = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(resumed.has_value());
     ASSERT_TRUE(resumed.value().valid());
 }
@@ -1140,7 +1128,7 @@ void VerifyTextInput_NativeStartFailureRetiresTokenAndAnyEarlyEvent(){
         EXPECT_EQ(ctx.service.sendCommit(failed, "early event"), TextInputAdmission::Accepted);
     };
     ctx.service.m_startAdmission = TextInputAdmission::NativeFailure;
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> nativeFailureBegin = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> nativeFailureBegin = ctx.service.begin(TextInputSessionDesc());
     ASSERT_FALSE(nativeFailureBegin.has_value());
     EXPECT_EQ(nativeFailureBegin.error(), TextInputAdmission::NativeFailure);
     EXPECT_FALSE(ctx.service.activeSession().valid());
@@ -1151,10 +1139,10 @@ void VerifyTextInput_NativeStartFailureRetiresTokenAndAnyEarlyEvent(){
 void VerifyTextInput_WrongThreadCannotMutateOrPollOwnerSession(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
-    TestThread worker = TestThread(lambda[mut ctx, in token]() -> void{
+    JoiningThread worker = JoiningThread(lambda[mut ctx, in token]() -> void{
         TextInputEvent threadEvent = TextInputEvent();
         EXPECT_FALSE(ctx.service.isOwnerThread());
         EXPECT_FALSE(ctx.service.activeSession().valid());
@@ -1192,13 +1180,13 @@ void VerifyTextInput_NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput
 void VerifyTextInput_ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     ctx.service.m_onCaret = lambda[mut ctx, in token]() -> void{
         EXPECT_TRUE(ctx.service.sendCancel(token, TextInputCancelReason::NativeFailure));
     };
-    EXPECT_EQ(ctx.service.updateCaret(token, MakeTextInputRect(20, 30, 2, 18)), TextInputAdmission::NativeFailure);
+    EXPECT_EQ(ctx.service.updateCaret(token, TextInputRect(20, 30, 2, 18)), TextInputAdmission::NativeFailure);
     EXPECT_FALSE(ctx.service.activeSession().valid());
     ASSERT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Event);
     EXPECT_EQ(ctx.event.kind, TextInputEventKind::Cancelled);
@@ -1208,7 +1196,7 @@ void VerifyTextInput_ReentrantNativeCaretCancellationReturnsFailureAndRetainsTer
 void VerifyTextInput_ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     ctx.service.m_onSurrounding = lambda[mut ctx, in token]() -> void{
@@ -1225,7 +1213,7 @@ void VerifyTextInput_ReentrantNativeSurroundingCancellationReturnsFailureAndReta
 void VerifyTextInput_UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState(){
     FakeTextInputContext ctx = FakeTextInputContext();
     ASSERT_TRUE(ctx.service.setFocused(true));
-    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(MakeEmptySessionDesc());
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = ctx.service.begin(TextInputSessionDesc());
     ASSERT_TRUE(tokenAdmission.has_value());
     const TextInputSessionToken token = tokenAdmission.value();
     ASSERT_EQ(ctx.service.updateSurrounding(token, "local change", 0u, 12u), TextInputAdmission::Accepted);
@@ -1276,12 +1264,12 @@ void VerifyTextInputText_BoundariesUseBytesForBmpAndSupplementaryScalars(){
 }
 
 void VerifyTextInputText_CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins(){
-    EXPECT_TRUE(IsTextInputCaretRectValid(MakeTextInputRect(-20, -10, 2, 20)));
-    EXPECT_TRUE(IsTextInputCaretRectValid(MakeTextInputRect(i32.max - 1, i32.max - 1, 1, 1)));
-    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(0, 0, 0, 1)));
-    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(0, 0, 1, -1)));
-    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(i32.max, 0, 1, 1)));
-    EXPECT_FALSE(IsTextInputCaretRectValid(MakeTextInputRect(0, i32.max - 10, 1, 11)));
+    EXPECT_TRUE(IsTextInputCaretRectValid(TextInputRect(-20, -10, 2, 20)));
+    EXPECT_TRUE(IsTextInputCaretRectValid(TextInputRect(i32.max - 1, i32.max - 1, 1, 1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(TextInputRect(0, 0, 0, 1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(TextInputRect(0, 0, 1, -1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(TextInputRect(i32.max, 0, 1, 1)));
+    EXPECT_FALSE(IsTextInputCaretRectValid(TextInputRect(0, i32.max - 10, 1, 11)));
 }
 
 void VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength(){

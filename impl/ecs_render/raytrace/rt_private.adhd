@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/quality_settings.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 #include <impl/ecs_render/raytrace/scene_bvh_build.adhd>
 #include <impl/ecs_render/raytrace/raytracing_system.adhd>
@@ -51,8 +52,6 @@ extern const u32 s_ShaderRtCsgInstanceMask;
 [cpp_header("<impl/assets/graphics/raytrace/constants.h>"), cpp_name("NWB_RT_REFRACTIVE_INSTANCE_MASK")]
 extern const u32 s_ShaderRtRefractiveInstanceMask;
 
-[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADOW_SLOT_COUNT")]
-extern const u32 s_ShaderSceneShadowSlotCount;
 
 [cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_SORT_GROUP_SIZE")]
 extern const u32 s_ShaderBvhSortGroupSize;

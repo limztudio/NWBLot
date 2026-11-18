@@ -3,7 +3,7 @@
 
 
 [cpp_header("<global/filesystem/retention.h>"), cpp_name("::ApplyDirectoryRetention"), cpp_flags(scratch_arena)]
-extern Expected<void, ErrorCode> ApplyDirectoryRetention(in Path a0, in isize a1);
+extern Expected<void, ErrorCode> ApplyDirectoryRetention(in Path directory, in isize maxEntries, in auto shouldRetainPath = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

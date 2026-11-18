@@ -8,9 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/allocation_size.h>"), cpp_name("::Alignment")]
-extern usize AlignedAllocationSize(in usize alignment, in usize size);
-
 [cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::SortAllocationKeys")]
 extern void SortAllocationKeys(mut Vector<u64> keys);
 
@@ -32,8 +29,6 @@ extern const b8 s_DebugAllocator;
 [cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::s_MaxAlignment")]
 extern const usize s_MaxAlignment;
 
-[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
-extern usize PersistentStructureAlignedSize(...);
 
 [cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::PersistentTestArray"), cpp_flags(no_copy, no_assign)]
 extern class PersistentTestArray<T>;

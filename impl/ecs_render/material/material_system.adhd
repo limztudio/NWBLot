@@ -89,14 +89,11 @@ class RendererMaterialSystem : IPreparedMaterialLookup{
     [cpp_unwind]
     public b8 createObjectGeometryPipelineResources(mut MaterialPipelineResources resources);
     [cpp_unwind]
-    public void renderPreparedAvboitMaterialPass(mut CommandList commandList, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings, in usize instanceCount,
-        in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned, in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned, in b8 emulationOutputReused);
-    [cpp_unwind]
-    public void renderPreparedAvboitMaterialPass(mut CommandList commandList, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings, in usize instanceCount,
-        in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned, in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
-        in b8 emulationOutputReused, mut Optional<GpuTimingMeasure> emulationOutputTiming);
+    public void renderPreparedAvboitMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
+        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources,
+        in MeshFrameBindingSnapshot frameBindings, in usize instanceCount, in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned,
+        in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
+        in b8 emulationOutputReused, in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming);
     [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState);
     [cpp_unwind]
@@ -153,12 +150,6 @@ class RendererMaterialSystem : IPreparedMaterialLookup{
     public void prepareMaterialPassInstanceUploadData(in CsgGraphResourceSnapshot csgResources, mut Span<InstanceGpuData> instanceData);
     [cpp_unwind]
     private void releaseMaterialResourceReferences();
-    [cpp_unwind]
-    private void recordPreparedMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources,
-        in MeshFrameBindingSnapshot frameBindings, in usize instanceCount, in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned,
-        in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
-        in b8 emulationOutputReused, in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming);
     [cpp_unwind]
     private b8 prepareMaterialPassResourcesImpl(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in b8 avboitTargetsValid);
 }

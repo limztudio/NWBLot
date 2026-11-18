@@ -96,6 +96,17 @@ Expected<GpuTaskId> GpuResVersionAddTask(
     );
 }
 
+Expected<GpuTaskId> GpuResVersionAddTask(
+    in Name identity,
+    in borrow GpuResVersionUses uses,
+    in Span<GpuTaskId> dependencies,
+    in Span<GpuExternalCompletionId> externalDependencies,
+    mut GpuTaskGraph graph
+){
+    return GpuResVersionAddTask(identity, SpanOf<GpuTaskResourceUse>(uses.resourceUse),
+        SpanOf<GpuTaskResourceVersionUse>(uses.versionUse), dependencies, externalDependencies, graph);
+}
+
 void GpuResVersionExpectRejectedQueueSharingWithoutMutation(
     in GpuGraphResourceTypeEnum resourceType,
     in ResourceQueueSharingMask queueSharing,
@@ -976,15 +987,10 @@ void VerifyGpuResVersion_OrdersConsumerBeforeProducerAndPublishesCompileStatisti
     const GpuTaskId consumer = consumerResult.value();
     ASSERT_TRUE(consumer.valid());
 
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     const Expected<GpuTaskId> producerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionOrderedProducer,
-        producerResourceUses,
-        producerVersionUses,
+        producerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1029,15 +1035,10 @@ void VerifyGpuResVersion_ExportsDependencyAndLifetimeReasonsWithExplicitOverlap(
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     const Expected<GpuTaskId> producerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionTelemetryProducer,
-        producerResourceUses,
-        producerVersionUses,
+        producerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1046,17 +1047,12 @@ void VerifyGpuResVersion_ExportsDependencyAndLifetimeReasonsWithExplicitOverlap(
     const GpuTaskId producer = producerResult.value();
     ASSERT_TRUE(producer.valid());
 
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     Array<GpuTaskId, 1> consumerDeps = Array<GpuTaskId, 1>();
     consumerDeps[0u] = producer;
     const Expected<GpuTaskId> consumerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionTelemetryConsumer,
-        consumerResourceUses,
-        consumerVersionUses,
+        consumerUses,
         consumerDeps,
         Span<GpuExternalCompletionId>(),
         graph
@@ -1148,31 +1144,23 @@ void VerifyGpuResVersion_DeduplicatesVersionAndPhysicalHazardsInQueueScore(){
     ASSERT_TRUE(version.valid());
 
     const GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     GpuTaskDesc producerDesc = GpuTaskDesc();
     producerDesc.setIdentity(s_GpuVersionScoreProducer);
     producerDesc.setMarkerLabel("Resource Version Queue Score Producer");
-    producerDesc.setResourceUses(producerResourceUses);
-    producerDesc.setResourceVersionUses(producerVersionUses);
+    producerDesc.setResourceUses(SpanOf<GpuTaskResourceUse>(producerUses.resourceUse));
+    producerDesc.setResourceVersionUses(SpanOf<GpuTaskResourceVersionUse>(producerUses.versionUse));
     const Expected<GpuTaskId> producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult.has_value());
     const GpuTaskId producer = producerResult.value();
 
     const GpuTaskCommandRequirements computeCommands = ComputeCommands();
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     GpuTaskDesc consumerDesc = GpuTaskDesc();
     consumerDesc.setIdentity(s_GpuVersionScoreConsumer);
     consumerDesc.setMarkerLabel("Resource Version Queue Score Consumer");
-    consumerDesc.setResourceUses(consumerResourceUses);
-    consumerDesc.setResourceVersionUses(consumerVersionUses);
+    consumerDesc.setResourceUses(SpanOf<GpuTaskResourceUse>(consumerUses.resourceUse));
+    consumerDesc.setResourceVersionUses(SpanOf<GpuTaskResourceVersionUse>(consumerUses.versionUse));
     const Expected<GpuTaskId> consumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(consumerResult.has_value());
     const GpuTaskId consumer = consumerResult.value();
@@ -1367,15 +1355,10 @@ void VerifyGpuResVersion_ReportsClosedMixedExplicitAndResourceVersionCycle(){
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     const Expected<GpuTaskId> consumerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionMixedCycleConsumer,
-        consumerResourceUses,
-        consumerVersionUses,
+        consumerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1384,17 +1367,12 @@ void VerifyGpuResVersion_ReportsClosedMixedExplicitAndResourceVersionCycle(){
     const GpuTaskId consumer = consumerResult.value();
     ASSERT_TRUE(consumer.valid());
 
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     Array<GpuTaskId, 1> producerDeps = Array<GpuTaskId, 1>();
     producerDeps[0u] = consumer;
     const Expected<GpuTaskId> producerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionMixedCycleProducer,
-        producerResourceUses,
-        producerVersionUses,
+        producerUses,
         producerDeps,
         Span<GpuExternalCompletionId>(),
         graph
@@ -1444,15 +1422,10 @@ void VerifyGpuResVersion_PreservesProducedVersionUntilAllConsumersFinish(){
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     const Expected<GpuTaskId> producerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionLifetimeProducer,
-        producerResourceUses,
-        producerVersionUses,
+        producerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1473,15 +1446,10 @@ void VerifyGpuResVersion_PreservesProducedVersionUntilAllConsumersFinish(){
     ASSERT_TRUE(clobberResult.has_value());
     const GpuTaskId clobber = clobberResult.value();
 
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     const Expected<GpuTaskId> consumerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionLifetimeConsumer,
-        consumerResourceUses,
-        consumerVersionUses,
+        consumerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1521,15 +1489,10 @@ void VerifyGpuResVersion_ReportsExplicitClobberCycleWithVersionLifetimeProvenanc
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     const Expected<GpuTaskId> producerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionLifetimeCycleProducer,
-        producerResourceUses,
-        producerVersionUses,
+        producerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1552,17 +1515,12 @@ void VerifyGpuResVersion_ReportsExplicitClobberCycleWithVersionLifetimeProvenanc
     ASSERT_TRUE(clobberResult.has_value());
     const GpuTaskId clobber = clobberResult.value();
 
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     Array<GpuTaskId, 1> consumerDeps = Array<GpuTaskId, 1>();
     consumerDeps[0u] = clobber;
     const Expected<GpuTaskId> consumerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionLifetimeCycleConsumer,
-        consumerResourceUses,
-        consumerVersionUses,
+        consumerUses,
         consumerDeps,
         Span<GpuExternalCompletionId>(),
         graph
@@ -1629,17 +1587,12 @@ void VerifyGpuResVersion_HonorsExplicitClobberBeforeVersionProducer(){
     ASSERT_TRUE(clobberResult.has_value());
     const GpuTaskId clobber = clobberResult.value();
 
-    const GpuResVersionProducerUses producerUses = GpuResVersionMakeProducerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> producerResourceUses = Array<GpuTaskResourceUse, 1>();
-    producerResourceUses[0u] = producerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> producerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    producerVersionUses[0u] = producerUses.versionUse;
+    const GpuResVersionUses producerUses = GpuResVersionMakeProducerUses(resource, version);
     Array<GpuTaskId, 1> producerDeps = Array<GpuTaskId, 1>();
     producerDeps[0u] = clobber;
     const Expected<GpuTaskId> producerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionEarlyClobberProducer,
-        producerResourceUses,
-        producerVersionUses,
+        producerUses,
         producerDeps,
         Span<GpuExternalCompletionId>(),
         graph
@@ -1647,15 +1600,10 @@ void VerifyGpuResVersion_HonorsExplicitClobberBeforeVersionProducer(){
     ASSERT_TRUE(producerResult.has_value());
     const GpuTaskId producer = producerResult.value();
 
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     const Expected<GpuTaskId> consumerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionEarlyClobberConsumer,
-        consumerResourceUses,
-        consumerVersionUses,
+        consumerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph
@@ -1694,15 +1642,10 @@ void VerifyGpuResVersion_ProtectsImportedRootConsumerFromLaterClobber(){
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const GpuResVersionConsumerUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
-    Array<GpuTaskResourceUse, 1> consumerResourceUses = Array<GpuTaskResourceUse, 1>();
-    consumerResourceUses[0u] = consumerUses.resourceUse;
-    Array<GpuTaskResourceVersionUse, 1> consumerVersionUses = Array<GpuTaskResourceVersionUse, 1>();
-    consumerVersionUses[0u] = consumerUses.versionUse;
+    const GpuResVersionUses consumerUses = GpuResVersionMakeConsumerUses(resource, version);
     const Expected<GpuTaskId> consumerResult = GpuResVersionAddTask(
         s_GpuCaseTaskGraphResourceVersionImportedLifetimeConsumer,
-        consumerResourceUses,
-        consumerVersionUses,
+        consumerUses,
         Span<GpuTaskId>(),
         Span<GpuExternalCompletionId>(),
         graph

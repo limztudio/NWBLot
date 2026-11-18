@@ -62,8 +62,6 @@ class OwnerThreadTimingSink : TimingSink{
     }
 }
 
-class CpuTaskProfileTestArena{ public HeapStorage arena; }
-
 const StringView s_ScopeDiagnosticCategory = "scope_diagnostic";
 const StringView s_TelemetryGuardCategory = "telemetry_guard";
 const StringView s_ErrorEvent = "error";
@@ -334,13 +332,13 @@ void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
     u32 callbackCount = 0u;
     {
         TestProcessValue<ExistingCallbackObservations>().calls = 0u;
-        InstallTelemetryDiagnosticCallback(ExistingDiagnosticCallback);
+        SetDiagnosticEventCallback(ExistingDiagnosticCallback);
         {
             DiagnosticCaptureGuard guard(recorder);
             EXPECT_FALSE(guard.installed());
             CaptureDiagnosticEvent(MakeDiagnosticEvent(s_DiagnosticEventError, "", "existing callback should keep ownership", "", 0u));
         }
-        RemoveTelemetryDiagnosticCallback(ExistingDiagnosticCallback);
+        ClearDiagnosticEventCallback(ExistingDiagnosticCallback);
         callbackCount = TestProcessValue<ExistingCallbackObservations>().calls;
     }
     EXPECT_EQ(callbackCount, 1u);
@@ -407,7 +405,7 @@ void VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDia
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
 
     ASSERT_TRUE(RecordTestDiagnostic(recorder, source));
-    const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(recorder.view(), 1u);
+    const Expected<DiagnosticPayload> parsed = ParseTelemetryEventAt<DiagnosticPayload>(recorder.view(), 1u, ParseDiagnosticSpan);
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed.value().message, StringView(message));
     const Expected<usize> retainedBoundedSize = EventPayloadSizeAt(recorder.view(), 0u);
@@ -437,7 +435,7 @@ void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
     EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
     EXPECT_EQ(captured.allocationCount, prepared.allocationCount);
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
-    const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(recorder.view(), 0u);
+    const Expected<DiagnosticPayload> parsed = ParseTelemetryEventAt<DiagnosticPayload>(recorder.view(), 0u, ParseDiagnosticSpan);
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed.value().category, "unwind");
 }
@@ -535,7 +533,7 @@ void VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuring
     ASSERT_NE(diagnosticAddress, 0u);
     ASSERT_TRUE(RecordFilledPayload(recorder, EventKind::PerfFrame, 9u, 0u, 0u, 0u));
     EXPECT_EQ(EventRecordAddressAt(events, 0u), diagnosticAddress);
-    const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(events, 0u);
+    const Expected<DiagnosticPayload> parsed = ParseTelemetryEventAt<DiagnosticPayload>(events, 0u, ParseDiagnosticSpan);
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed.value().message, "builder callback");
 }
@@ -559,8 +557,8 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
             for(usize attempt = 0u; attempt < s_AttemptsPerThread; ++attempt)
                 guard.capture(source);
         };
-        TestThread first(capture);
-        TestThread second(capture);
+        JoiningThread first(capture);
+        JoiningThread second(capture);
         start.store(true, MemoryOrder::release);
         start.notify_all();
         first.join();
@@ -591,7 +589,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
     {
         TestAtomic<b8> captureThreadStarted(false);
         TestAtomic<b8> stopCaptureThread(false);
-        TestThread captureThread(lambda[mut captureThreadStarted, mut stopCaptureThread]() -> void{
+        JoiningThread captureThread(lambda[mut captureThreadStarted, mut stopCaptureThread]() -> void{
             captureThreadStarted.store(true, MemoryOrder::release);
             captureThreadStarted.notify_all();
             while(!stopCaptureThread.load(MemoryOrder::acquire)){
@@ -653,7 +651,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
 
     const EventView events = recorder.view();
     for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
-        const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(events, eventIndex);
+        const Expected<DiagnosticPayload> parsed = ParseTelemetryEventAt<DiagnosticPayload>(events, eventIndex, ParseDiagnosticSpan);
         ASSERT_TRUE(parsed.has_value());
         EXPECT_EQ(parsed.value().event, s_DiagnosticEventError);
         EXPECT_EQ(parsed.value().category, "telemetry_guard");
@@ -679,9 +677,9 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
     u64 nextFrameIndex = 1u;
     {
         const u32 kWriters = 4u;
-        TestLatch startGate(kWriters + 1u);
+        Latch startGate(kWriters + 1u);
         TestAtomic<u32> activeWriters(kWriters);
-        Array<Optional<TestThread>, 4u> writers;
+        Array<Optional<JoiningThread>, 4u> writers;
         for(u32 writerIndex = 0u; writerIndex < kWriters; ++writerIndex){
             writers[writerIndex].emplace(lambda[mut startGate, mut activeWriters, in s_MessagesPerWriter]() -> void{
                 startGate.arrive_and_wait();
@@ -725,7 +723,7 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
         EXPECT_GE(header.value().streamId, s_BaseStreamId);
         EXPECT_LE(header.value().streamId, s_BaseStreamId + 7u);
 
-        const Expected<TextLogPayload> parsed = ParseTextLogEventAt(events, eventIndex);
+        const Expected<TextLogPayload> parsed = ParseTelemetryEventAt<TextLogPayload>(events, eventIndex, ParseTextLogSpan);
         ASSERT_TRUE(parsed.has_value());
         EXPECT_EQ(parsed.value().type, LogType::EssentialInfo);
         EXPECT_NE(parsed.value().messageUtf8.find("concurrent capture scope text"), usize.max);
@@ -733,8 +731,8 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
 }
 
 void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtLaterPublication(){
-    CpuTaskProfileTestArena arena = CpuTaskProfileTestArena();
-    PerfSession perf = PerfSession(arena.arena);
+    HeapStorage arena;
+    PerfSession perf = PerfSession(arena);
     PerfCaptureOptions perfOptions = PerfCaptureOptions();
     perfOptions.enabled = true;
     perfOptions.cpuTiming = true;
@@ -768,14 +766,14 @@ void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtL
     EXPECT_EQ(timing.stats(taskName).lastSampleFrameIndex, 41u);
     EXPECT_EQ(timing.stats(taskName).publishFrameIndex, 42u);
 
-    TelemetryCaptureSession telemetry = TelemetryCaptureSession(arena.arena);
+    TelemetryCaptureSession telemetry = TelemetryCaptureSession(arena);
     telemetry.setCaptureOptions(TelemetryCaptureOptionsAll());
     const PerfSessionRecordResult result = telemetry.recordPerfReport(perf.report());
     ASSERT_TRUE(result.ok());
     b8 foundNamedTask = false;
     const EventView events = telemetry.view();
     for(usize index = 0u; index < events.eventCount(); ++index){
-        const Expected<PerfTimingPayload> payload = ParsePerfTimingEventAt(events, index);
+        const Expected<PerfTimingPayload> payload = ParseTelemetryEventAt<PerfTimingPayload>(events, index, ParsePerfTimingSpan);
         ASSERT_TRUE(payload.has_value());
         if(payload.value().scopeName == taskName){
             foundNamedTask = true;
@@ -787,8 +785,8 @@ void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtL
 }
 
 void VerifyCpuTaskProfileIntegration_DisabledTimingSinkDiscardsBufferedSamples(){
-    CpuTaskProfileTestArena arena = CpuTaskProfileTestArena();
-    TimingRecorder timing = TimingRecorder(arena.arena);
+    HeapStorage arena;
+    TimingRecorder timing = TimingRecorder(arena);
     CpuTaskScheduler scheduler = CpuTaskScheduler(0u);
     scheduler.setProfiling(true, 7u);
     const auto cpuTaskAdmission = scheduler.submit(lambda[]() -> void{});
@@ -806,8 +804,8 @@ void VerifyCpuTaskProfileIntegration_DisabledTimingSinkDiscardsBufferedSamples()
 }
 
 void VerifyCpuTaskProfileIntegration_CollectorConsumesOnlyItsInitialPendingSnapshot(){
-    CpuTaskProfileTestArena arena = CpuTaskProfileTestArena();
-    TimingRecorder timing = TimingRecorder(arena.arena);
+    HeapStorage arena;
+    TimingRecorder timing = TimingRecorder(arena);
     timing.setEnabled(true);
     CpuTaskScheduler scheduler = CpuTaskScheduler(0u);
     scheduler.setProfiling(true, 11u);
@@ -825,8 +823,8 @@ void VerifyCpuTaskProfileIntegration_CollectorConsumesOnlyItsInitialPendingSnaps
 }
 
 void VerifyCpuTaskProfileIntegration_NativeWorkerSamplesAreRecordedOnTheCollectorThread(){
-    CpuTaskProfileTestArena arena = CpuTaskProfileTestArena();
-    TimingRecorder timing = TimingRecorder(arena.arena);
+    HeapStorage arena;
+    TimingRecorder timing = TimingRecorder(arena);
     timing.setEnabled(true);
     const Name taskName = s_CpuTaskTestsWorker;
     CpuTaskSchedulerConfig config = CpuTaskSchedulerConfig();
@@ -960,7 +958,7 @@ void VerifyTelemetry_FrameGraphPayloadRejectsHistoricalEmptyPayloads(){
         header.version = cast<u16>(versionIndex + 1u);
         ScopedTestTrace trace = ScopedTestTrace(header.version);
         WriteTelemetryPod(payload, 0u, header);
-        EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, historicalHeaderBytes[versionIndex]).has_value());
+        EXPECT_FALSE(ParseFrameGraphPrefix(testArena.arena, testArena.scratchArena, payload, historicalHeaderBytes[versionIndex]).has_value());
     }
 }
 
@@ -1277,7 +1275,7 @@ void VerifyTelemetry_FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformed
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
+    EXPECT_FALSE(ParseFrameGraphPrefix(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
 void VerifyTelemetry_PhysicalQueueDecodeShrinkingInputClearsPreviousRecords(){
@@ -1416,7 +1414,7 @@ void VerifyTelemetry_FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalfo
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
+    EXPECT_FALSE(ParseFrameGraphPrefix(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
 

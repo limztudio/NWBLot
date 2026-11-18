@@ -8,15 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TimingProbeUnfocusedPass : IRenderPass{
-    public TimingProbeUnfocusedPass(mut GraphicsRuntime graphics){}
-    public b8 shouldRenderUnfocused()override{ return true; }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const u32 s_TimingProbeInFlightRanges = 32u;
 const StringView s_AvboitTimingProbeName = "AvboitTimingProbe";
 const StringView s_ShadowTimingProbeName = "ShadowTimingProbe";
@@ -25,31 +16,58 @@ const StringView s_ShadowTimingProbeName = "ShadowTimingProbe";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PrepareTimingProbeScopes(mut GraphicsRuntime graphics, in Span<Name> scopes, in StringView probeName){
-    for(usize i = 0u; i < scopes.size(); ++i){
-        const Name scope = scopes[i];
-        if(!graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), s_TimingProbeInFlightRanges)){
-            error("{}: failed to prepare scope '{}'", probeName, scope.resolvedText());
-            return false;
+class TimingProbeUnfocusedPass : IRenderPass{
+    private b8 m_registered = false;
+
+    public TimingProbeUnfocusedPass(mut GraphicsRuntime graphics){}
+    public ~TimingProbeUnfocusedPass(){ this.stop(); }
+    public b8 shouldRenderUnfocused()override{ return true; }
+    public b8 registered()const{ return this.m_registered; }
+
+    public b8 prepareScope(in Name scope, in u32 ranges){
+        mut GraphicsRuntime graphics = this.getGraphics();
+        return graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), ranges);
+    }
+
+    public b8 prepareScopes(in Span<Name> scopes, in StringView probeName, in StringView scopeLabel){
+        for(in Name scope : scopes){
+            if(!this.prepareScope(scope, s_TimingProbeInFlightRanges)){
+                error("{}: failed to prepare {} '{}'", probeName, scopeLabel, scope.resolvedText());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void registerPass(){
+        if(!this.m_registered){
+            this.getGraphics().addRenderPassToBack(this);
+            this.m_registered = true;
         }
     }
-    return true;
-}
 
-void RegisterTimingProbeRenderPass(mut GraphicsRuntime graphics, mut TimingProbeUnfocusedPass pass, in StringView probeName){
-    graphics.addRenderPassToBack(pass);
-    [essential] info("{}: in-flight ranges {}", probeName, s_TimingProbeInFlightRanges);
-    [essential] info("{}: render unfocused 1", probeName);
+    public b8 start(in Span<Name> scopes, in StringView probeName){
+        if(this.m_registered)
+            return true;
+        if(!this.prepareScopes(scopes, probeName, "scope"))
+            return false;
+        this.registerPass();
+        [essential] info("{}: in-flight ranges {}", probeName, s_TimingProbeInFlightRanges);
+        [essential] info("{}: render unfocused 1", probeName);
+        return true;
+    }
+
+    public void stop(){
+        if(this.m_registered){
+            this.getGraphics().removeRenderPass(this);
+            this.m_registered = false;
+        }
+    }
 }
 
 class AvboitTimingRenderPass{
     public AvboitTimingRenderPass(mut GraphicsRuntime graphics){
-        this.m_graphics = graphics;
         this.m_pass = TimingProbeUnfocusedPass(graphics);
-    }
-
-    public ~AvboitTimingRenderPass(){
-        this.stop();
     }
 
     public b8 start(){
@@ -57,45 +75,43 @@ class AvboitTimingRenderPass{
     }
 
     public b8 start(in b8 includeCaustics){
-        if(this.m_registered)
+        if(this.m_pass.registered())
             return this.m_includeCaustics == includeCaustics;
 
-        Array<Name, 24u> scopes;
-        scopes[0u] = s_TimingScopeFrame.identity;
-        scopes[1u] = s_TimingScopeOpaqueRegular.identity;
-        scopes[2u] = s_TimingScopeShadowVisibility.identity;
-        scopes[3u] = s_TimingScopeLightSpaceShadowViews.identity;
-        scopes[4u] = s_TimingScopeLightSpaceShadowOpaqueCapture.identity;
-        scopes[5u] = s_TimingScopeLightSpaceShadowTransparentCapture.identity;
-        scopes[6u] = s_TimingScopeLightSpaceShadowShade.identity;
-        scopes[7u] = s_TimingScopeLightSpaceShadowMapOpaque.identity;
-        scopes[8u] = s_TimingScopeLightSpaceShadowMapTransparent.identity;
-        scopes[9u] = s_TimingScopeLightSpaceShadowFallbackOpaque.identity;
-        scopes[10u] = s_TimingScopeLightSpaceShadowFallbackTransparent.identity;
-        scopes[11u] = s_TimingScopeDeferredLighting.identity;
-        scopes[12u] = s_TimingScopeDeferredComposite.identity;
-        scopes[13u] = s_TimingScopeDeferredPresent.identity;
-        scopes[14u] = s_TimingScopeAvboitClear.identity;
-        scopes[15u] = s_TimingScopeAvboitOccupancy.identity;
-        scopes[16u] = s_TimingScopeAvboitDepthWarp.identity;
-        scopes[17u] = s_TimingScopeAvboitExtinction.identity;
-        scopes[18u] = s_TimingScopeAvboitIntegration.identity;
-        scopes[19u] = s_TimingScopeAvboitAccumulate.identity;
-        scopes[20u] = s_TimingScopeRefractionResolve.identity;
-        scopes[21u] = s_TimingScopeRefractionClassifyTiles.identity;
-        scopes[22u] = s_TimingScopeRefractionClearTileArguments.identity;
-        scopes[23u] = s_TimingScopeOpticalBoundsFinalize.identity;
+        const Array<Name, 26u> scopes(
+            s_TimingScopeFrame.identity,
+            s_TimingScopeOpaqueRegular.identity,
+            s_TimingScopeShadowVisibility.identity,
+            s_TimingScopeLightSpaceShadowViews.identity,
+            s_TimingScopeLightSpaceShadowOpaqueCapture.identity,
+            s_TimingScopeLightSpaceShadowTransparentCapture.identity,
+            s_TimingScopeLightSpaceShadowShade.identity,
+            s_TimingScopeLightSpaceShadowMapOpaque.identity,
+            s_TimingScopeLightSpaceShadowMapTransparent.identity,
+            s_TimingScopeLightSpaceShadowFallbackOpaque.identity,
+            s_TimingScopeLightSpaceShadowFallbackTransparent.identity,
+            s_TimingScopeDeferredLighting.identity,
+            s_TimingScopeDeferredComposite.identity,
+            s_TimingScopeDeferredPresent.identity,
+            s_TimingScopeAvboitClear.identity,
+            s_TimingScopeAvboitOccupancy.identity,
+            s_TimingScopeAvboitDepthWarp.identity,
+            s_TimingScopeAvboitExtinction.identity,
+            s_TimingScopeAvboitIntegration.identity,
+            s_TimingScopeAvboitAccumulate.identity,
+            s_TimingScopeRefractionResolve.identity,
+            s_TimingScopeRefractionClassifyTiles.identity,
+            s_TimingScopeRefractionClearTileArguments.identity,
+            s_TimingScopeOpticalBoundsFinalize.identity,
+            s_TimingScopeCausticPhotons.identity,
+            s_TimingScopeCausticResolve.identity
+        );
 
-        Array<Name, 2u> causticScopes;
-        causticScopes[0u] = s_TimingScopeCausticPhotons.identity;
-        causticScopes[1u] = s_TimingScopeCausticResolve.identity;
-
-        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, s_AvboitTimingProbeName))
+        usize scopeCount = scopes.size() - 2u;
+        if(includeCaustics)
+            scopeCount = scopes.size();
+        if(!this.m_pass.start(Span<Name>(scopes).first(scopeCount), s_AvboitTimingProbeName))
             return false;
-        if(includeCaustics && !PrepareTimingProbeScopes(this.m_graphics, causticScopes, s_AvboitTimingProbeName))
-            return false;
-        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, s_AvboitTimingProbeName);
-        this.m_registered = true;
         this.m_includeCaustics = includeCaustics;
         if(includeCaustics)
             [essential] info("AvboitTimingProbe: caustic in-flight ranges {}", s_TimingProbeInFlightRanges);
@@ -103,65 +119,47 @@ class AvboitTimingRenderPass{
     }
 
     public void stop(){
-        if(!this.m_registered)
-            return;
-        this.m_graphics.removeRenderPass(this.m_pass);
-        this.m_registered = false;
+        this.m_pass.stop();
         this.m_includeCaustics = false;
     }
 
-    private mut GraphicsRuntime m_graphics;
     private TimingProbeUnfocusedPass m_pass;
-    private b8 m_registered = false;
     private b8 m_includeCaustics = false;
 }
 
 class ShadowTimingRenderPass{
     public ShadowTimingRenderPass(mut GraphicsRuntime graphics){
-        this.m_graphics = graphics;
         this.m_pass = TimingProbeUnfocusedPass(graphics);
     }
 
-    public ~ShadowTimingRenderPass(){
-        this.stop();
-    }
-
     public b8 start(){
-        if(this.m_registered)
+        if(this.m_pass.registered())
             return true;
 
-        Array<Name, 13u> scopes;
-        scopes[0u] = s_TimingScopeFrame.identity;
-        scopes[1u] = s_TimingScopeOpaqueRegular.identity;
-        scopes[2u] = s_TimingScopeDeferredLighting.identity;
-        scopes[3u] = s_TimingScopeDeferredComposite.identity;
-        scopes[4u] = s_TimingScopeDeferredPresent.identity;
-        scopes[5u] = s_TimingScopeShadowVisibility.identity;
-        scopes[6u] = s_TimingScopeShadowOpaqueTrace.identity;
-        scopes[7u] = s_TimingScopeShadowGeometryDownsample.identity;
-        scopes[8u] = s_TimingScopeShadowOpaqueTemporal.identity;
-        scopes[9u] = s_TimingScopeShadowOpaqueResolve.identity;
-        scopes[10u] = s_TimingScopeShadowTransparentTrace.identity;
-        scopes[11u] = s_TimingScopeShadowTransparentTemporal.identity;
-        scopes[12u] = s_TimingScopeShadowTransparentResolve.identity;
+        const Array<Name, 13u> scopes(
+            s_TimingScopeFrame.identity,
+            s_TimingScopeOpaqueRegular.identity,
+            s_TimingScopeDeferredLighting.identity,
+            s_TimingScopeDeferredComposite.identity,
+            s_TimingScopeDeferredPresent.identity,
+            s_TimingScopeShadowVisibility.identity,
+            s_TimingScopeShadowOpaqueTrace.identity,
+            s_TimingScopeShadowGeometryDownsample.identity,
+            s_TimingScopeShadowOpaqueTemporal.identity,
+            s_TimingScopeShadowOpaqueResolve.identity,
+            s_TimingScopeShadowTransparentTrace.identity,
+            s_TimingScopeShadowTransparentTemporal.identity,
+            s_TimingScopeShadowTransparentResolve.identity
+        );
 
-        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, s_ShadowTimingProbeName))
-            return false;
-        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, s_ShadowTimingProbeName);
-        this.m_registered = true;
-        return true;
+        return this.m_pass.start(scopes, s_ShadowTimingProbeName);
     }
 
     public void stop(){
-        if(!this.m_registered)
-            return;
-        this.m_graphics.removeRenderPass(this.m_pass);
-        this.m_registered = false;
+        this.m_pass.stop();
     }
 
-    private mut GraphicsRuntime m_graphics;
     private TimingProbeUnfocusedPass m_pass;
-    private b8 m_registered = false;
 }
 
 

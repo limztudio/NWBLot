@@ -301,7 +301,7 @@ extern class VertexAttributeDesc{
 extern b8 HasUnorderedAccess(in auto a0);
 
 [cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::IsValid")]
-extern b8 IsResourceQueueSharingValid(in auto a0);
+extern b8 IsResourceQueueSharingValid(in ResourceQueueSharing value);
 
 [cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet::RangeEnd")]
 extern u64 TextureSubresourceSetRangeEnd(in isize a0, in isize a1, in isize a2);

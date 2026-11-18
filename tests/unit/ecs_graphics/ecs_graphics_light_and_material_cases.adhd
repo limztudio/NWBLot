@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/quality_settings.adhd>
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/value_storage.adhd>
@@ -54,13 +55,9 @@ extern const f32 s_TestLayoutAvboitRefractionDisabled;
 extern const u64 s_TestLayoutLightSpaceEventsPerTexel;
 [cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_EVENT_BYTES")]
 extern const u64 s_TestLayoutLightSpaceEventBytes;
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES")]
-extern const u64 s_TestLayoutLightSpaceDrawArgumentBytes;
 [cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_MESHLETS_PER_DRAW")]
 extern const u32 s_TestLayoutLightSpaceMeshletsPerDraw;
-[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADOW_SLOT_COUNT")]
-extern const usize s_TestLayoutSceneShadowSlotCount;
-type ShadowSlotLightRequestArray = Array<LightSpaceLightRequest, s_TestLayoutSceneShadowSlotCount>;
+type ShadowSlotLightRequestArray = Array<LightSpaceLightRequest, s_ShaderSceneShadowSlotCount>;
 
 MatrixSingle MakeTranslationJointMatrix(in f32 x, in f32 y, in f32 z){
     return MatrixSingle(VectorSingle(1.0f, 0.0f, 0.0f, x), VectorSingle(0.0f, 1.0f, 0.0f, y),
@@ -499,7 +496,6 @@ class MaterialTypedByteRangeTestContext{
             this.data.uploadBytes[i] ^= 255u;
     }
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1242,7 +1238,7 @@ void VerifyLightSpacePlan_ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRa
     settings.memoryBudgetBytes = 16u * 1024u * 1024u;
     Array<LightSpaceLightRequest, 1> light = Array<LightSpaceLightRequest, 1>();
     const u32 drawCount = 65536u;
-    const u64 argumentBytes = cast<u64>(drawCount) * s_TestLayoutLightSpaceDrawArgumentBytes;
+    const u64 argumentBytes = cast<u64>(drawCount) * s_ShaderLightSpaceDrawArgumentBytes;
     Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(settings, light, argumentBytes, drawCount, false);
     ASSERT_TRUE(plan.has_value());
     ASSERT_EQ(plan.value().lightCount, 1u);
@@ -1330,7 +1326,7 @@ void VerifyLightSpaceShadowStorage_ReservesWholeCasterAndRoundedMeshletGroupDraw
     ASSERT_TRUE(plan.has_value());
     ASSERT_EQ(plan.value().lightCount, 2u);
     ASSERT_EQ(plan.value().viewCount, 7u);
-    EXPECT_EQ(plan.value().drawArgumentByteSize, 7u * 7u * s_TestLayoutLightSpaceDrawArgumentBytes);
+    EXPECT_EQ(plan.value().drawArgumentByteSize, 7u * 7u * s_ShaderLightSpaceDrawArgumentBytes);
 }
 
 void VerifyLightSpaceShadowStorage_RejectsInvalidAndOverflowingDrawSpansWithoutWrapping(){
@@ -1691,7 +1687,6 @@ NWB_ADHD_GTEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected, Ver
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 
 registration GoogleTestFinalCase(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette, VerifyEcsGraphics_MeshSkinningPayloadValidatesSkeletonAndPalette);

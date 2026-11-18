@@ -12,3 +12,7 @@ nwb_target_adhd_sources(nwb_graphics_resource_tests NAMESPACE "NWB::Tests::Graph
     "${CMAKE_CURRENT_LIST_DIR}/resource_*.adhd"
 )
 target_link_libraries(nwb_graphics_resource_tests PRIVATE nwb_graphics nwb_graphics_backend nwb_common nwb_alloc)
+
+foreach(nwb_graphics_test IN ITEMS nwb_graphics_presentation_tests nwb_graphics_resource_tests)
+    nwb_target_adhd_sources(${nwb_graphics_test} NAMESPACE "NWB::Tests::VulkanSdk" SOURCES "${CMAKE_CURRENT_LIST_DIR}/vulkan_types.adhd")
+endforeach()

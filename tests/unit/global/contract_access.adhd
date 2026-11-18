@@ -61,17 +61,11 @@ extern mut T ContractTarget<T>(in ContractOwner<T> owner);
 [cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::SameProbe")]
 extern b8 SameProbe(in auto lhs, in auto rhs);
 
-[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::WStringView")]
-extern class ContractWideView;
-
 [cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::s_WideDecimal")]
-extern const ContractWideView s_WideDecimal;
+extern const WideStringView s_WideDecimal;
 
 [cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::ParseDecimalPrefixU64<wchar_t>")]
-extern u64 ParseWideDecimal(in ContractWideView text);
-
-[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::testing::ExitedWithCode")]
-extern class ContractExitCode;
+extern u64 ParseWideDecimal(in WideStringView text);
 
 [cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("NWB_CONTRACT_LINUX_CASE")]
 extern registration LinuxContractCase(suite, caseName, verifier);

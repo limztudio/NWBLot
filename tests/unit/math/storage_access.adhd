@@ -122,8 +122,6 @@ extern usize VectorValueAddress(in borrow auto result);
 [cpp_header("<global/simd/collision_triangle.h>"), cpp_name("::TriangleTests::Intersects")]
 extern b8 SingleTrianglesIntersect(in VectorSingle a, in VectorSingle b, in VectorSingle c, in VectorSingle d, in VectorSingle e, in VectorSingle f);
 
-[cpp_header("<global/simd/collision_triangle.h>"), cpp_name("::TriangleDoubleTests::Intersects")]
-extern b8 DoubleTrianglesIntersect(in VectorDouble a, in VectorDouble b, in VectorDouble c, in VectorDouble d, in VectorDouble e, in VectorDouble f);
 
 [cpp_header("<global/simd/result.h>"), cpp_name("::SIMDVectorSingleResult"), cpp_flags(small_value, brace_init)]
 extern class SingleResultCell;

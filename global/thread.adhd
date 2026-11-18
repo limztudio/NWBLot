@@ -3,10 +3,17 @@
 
 
 [cpp_name("::JoiningThread"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
-extern class JoiningThread;
+extern class JoiningThread{
+    void join();
+    b8 request_stop();
+};
 
 [cpp_name("::Latch"), cpp_flags(binary_serializable, no_copy, no_assign)]
-extern class Latch;
+extern class Latch{
+    void count_down();
+    void wait()const;
+    void arrive_and_wait();
+};
 
 [cpp_name("::StopToken"), cpp_flags(self_defaulted, brace_init, equality_switch)]
 extern class StopToken{

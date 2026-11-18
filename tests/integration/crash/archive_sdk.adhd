@@ -18,8 +18,6 @@ extern class PersistentCrashConfig{
     StringView handlerExecutablePath;
 };
 
-[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
-extern usize CrashStorageAlignedSize(in usize bytes);
 
 [cpp_header("<core/crash/package_archive.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::CrashBytesT<::NWB::Core::Alloc::GlobalArena>")]
 extern class ObservationArchiveBytes{

@@ -19,8 +19,9 @@ const StringView s_BunchLabel = "label";
 const StringView s_ASeparatelyOwnedMetadataString = "a separately owned metadata string";
 const StringView s_StaleRelativeOutput = "stale/output";
 
+
 [cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch")]
-extern Expected<ExpandedAssetMetadataVector> ExpandFixtureAssetBunch(in GraphicsOwnedPath root, in StringView virtualRoot, in GraphicsOwnedPath path, in MetascriptDocument document, mut ScratchStorage storage);
+extern Expected<ExpandedAssetMetadataVector> ExpandFixtureAssetBunch(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut ScratchStorage storage);
 
 [ordered]
 class BunchFixture{
@@ -28,8 +29,8 @@ class BunchFixture{
     public HeapStorage outputArena(s_AssetCaseTestsAssetBunchOutput);
     public ScratchStorage scratchArena(s_AssetCaseTestsAssetBunchScratch);
     public MetascriptDocument document(this.metadataArena);
-    public GraphicsOwnedPath assetRoot(this.outputArena, "tests/asset_bunch/assets");
-    public GraphicsOwnedPath filePath(this.outputArena, "tests/asset_bunch/assets/fixtures/bundle.nwb");
+    public GlobalPath assetRoot(this.outputArena, "tests/asset_bunch/assets");
+    public GlobalPath filePath(this.outputArena, "tests/asset_bunch/assets/fixtures/bundle.nwb");
 }
 
 b8 HasMetaField(in MetascriptValue value, in StringView field){ return value.hasField(field); }

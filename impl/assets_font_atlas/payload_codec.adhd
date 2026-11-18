@@ -181,7 +181,7 @@ b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
         b8 matchedTable = false;
         for(in FontAtlasPositioningTable exported : payload.positioningTables){
             if(exported.tag == tag){
-                matchedTable = AreFontAtlasByteSpansEqual(exported.bytes, tableEntry.bytes);
+                matchedTable = BytesMatch(Span<u8>(exported.bytes), tableEntry.bytes);
                 break;
             }
         }

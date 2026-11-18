@@ -4,7 +4,8 @@ nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/common/memory.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/name_symbols.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/backend_allocation.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/common/asset_codec_fixture.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/integration/asset_fixture_paths.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/input_service_fixture.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/threads.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/posix_child.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/process_capture.adhd"
@@ -16,6 +17,7 @@ nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/common/ecs_test_world.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/filesystem_platform.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/filesystem_helpers.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/floating_point_control.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/floating_point_environment_guard.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/font_fixture.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/simd_memory_guard_fixture.adhd"
@@ -25,6 +27,9 @@ nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests::Smoke" SOUR
     "${CMAKE_CURRENT_LIST_DIR}/common/frame_graph_snapshot_validation.adhd"
 )
 nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::UiWidgetTests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/unit/ui/arithmetic_fixture_rows.adhd")
+if(WIN32)
+    nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/common/win32_window_styles.adhd")
+endif()
 target_link_libraries(nwb_test_common_names PUBLIC nwb::gtest nwb_common nwb_alloc PRIVATE nwb_assets_font_types)
 
 # Use the engine entry point so all GoogleTest suites share runtime initialization.

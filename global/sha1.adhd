@@ -12,7 +12,7 @@ extern class Sha1Digest{
 
 
 [cpp_header("<global/sha1.h>"), cpp_name("::AppendSha1Hex")]
-extern void AppendSha1Hex(in auto a0, mut String a1);
+extern void AppendSha1Hex(in Sha1Digest digest, mut auto output);
 
 [cpp_header("<global/sha1.h>"), cpp_name("::ComputeSha1"), cpp_flags(byte_view_arg0)]
 extern Sha1Digest ComputeSha1(in auto a0);

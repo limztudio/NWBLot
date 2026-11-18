@@ -59,7 +59,7 @@ TestAString BuildMeshIndexMeta(in StringView indexList){
     TestAString meta = TestAString();
     meta.append(s_MinimalMeshMeta.substr(0u, indexFieldOffset));
     meta.append("asset.indices = ");
-    AppendTestMeta(indexList, meta);
+    meta.append(indexList);
     meta.append(";\n");
     return meta;
 }
@@ -146,7 +146,7 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
     MaterialShaderCookEntryVector materialEntries(testArena.arena);
     AppendMaterialInterfaceTestEntry(testArena, s_ProjectMaterialInterfacesTestSurface, 0xF091u, 0x2Au, materialEntries);
 
-    EXPECT_FALSE(ValidateTestMaterialCookInterfaces(bindEntries, materialEntries, scratch));
+    EXPECT_FALSE(ValidateMaterialCookInterfaces(bindEntries, materialEntries));
     EXPECT_TRUE(SawCapturedError(logger, "Material bind interface 'project/material_interfaces/test_surface' is duplicated"));
     EXPECT_EQ(materialEntries[0u].typedLayoutHash, 0xF091u);
     ASSERT_EQ(materialEntries[0u].typedBlockBytes.size(), 1u);
@@ -185,7 +185,7 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
         retiredFixtureBind.append("[material_constant] struct NwbResourceMaterial{ [fixture(\"builtin/material_fixture/checker_rgba8\")] ");
         retiredFixtureBind.append(resourceType);
         retiredFixtureBind.append(" resource; }; NwbResourceMaterial surface;");
-        ExpectMaterialBindParseFailure(ViewTestString(retiredFixtureBind), resourceType, "has unsupported attribute 'fixture'", testArena, scratch);
+        ExpectMaterialBindParseFailure(StringView(retiredFixtureBind), resourceType, "has unsupported attribute 'fixture'", testArena, scratch);
     }
 
     ExpectMaterialBindParseFailure(s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", "duplicate variable declaration", testArena, scratch);
@@ -197,12 +197,12 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     TestAString unknownInstance = TestAString();
     unknownInstance.append(validStruct);
     unknownInstance.append("Unknown surface;");
-    ExpectMaterialBindParseFailure(ViewTestString(unknownInstance), "material_bind_unknown_instance_type", "instance 'surface' references unknown struct type 'Unknown'", testArena, scratch);
+    ExpectMaterialBindParseFailure(StringView(unknownInstance), "material_bind_unknown_instance_type", "instance 'surface' references unknown struct type 'Unknown'", testArena, scratch);
 
     TestAString assignedInstance = TestAString();
     assignedInstance.append(validStruct);
     assignedInstance.append("Surface surface; surface.roughness = 0.5;");
-    ExpectMaterialBindParseFailure(ViewTestString(assignedInstance), "material_bind_assigned_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratch);
+    ExpectMaterialBindParseFailure(StringView(assignedInstance), "material_bind_assigned_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratch);
 
     const Expected<GraphicsTestPath> float1DefaultRootResult = PrepareCaseRoot(testArena, "material_bind_float1_default");
     ASSERT_TRUE(float1DefaultRootResult.has_value());
@@ -345,7 +345,7 @@ void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterface
         s_BlockScopedMaterialMeta,
         s_OtherMaterialBindShaderProbeSource
     );
-    const b8 wroteOtherBind = WriteTextFile(JoinGraphicsPath2(identityAssetRoot, s_MaterialInterfacesDirectory, "other_surface.bind"), s_MinimalMaterialBindSource);
+    const b8 wroteOtherBind = WriteGraphicsFixtureText(JoinGraphicsPath2(identityAssetRoot, s_MaterialInterfacesDirectory, "other_surface.bind"), s_MinimalMaterialBindSource);
     const b8 cookedIdentity = CookSingleAssetRoot(testArena, identityMismatchCase.root, identityMismatchCase.outputDirectory, identityAssetRoot);
     EXPECT_TRUE(wroteIdentityAssets);
     EXPECT_TRUE(wroteOtherBind);
@@ -364,14 +364,14 @@ void VerifyAssetsGraphics_ShadowSurfaceDispatchIsolatesOverlappingBindApis(){
 
     const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
     const b8 assetsWritten =
-        WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, "shadow_dispatch_first.bind"), s_ShadowDispatchFirstMaterialBindSource)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, "shadow_dispatch_second.bind"), s_ShadowDispatchSecondMaterialBindSource)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_shared_surface_helper.slangi"), s_ShadowDispatchSharedSurfaceHelperSource)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_first.surface"), s_ShadowDispatchFirstMaterialSurfaceSource)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_second.surface"), s_ShadowDispatchSecondMaterialSurfaceSource)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch.bxdf"), s_MaterialBindBxdfSource)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialsDirectory, "shadow_dispatch_first.nwb"), s_ShadowDispatchFirstMaterialMeta)
-        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialsDirectory, "shadow_dispatch_second.nwb"), s_ShadowDispatchSecondMaterialMeta)
+        WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, "shadow_dispatch_first.bind"), s_ShadowDispatchFirstMaterialBindSource)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, "shadow_dispatch_second.bind"), s_ShadowDispatchSecondMaterialBindSource)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_shared_surface_helper.slangi"), s_ShadowDispatchSharedSurfaceHelperSource)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_first.surface"), s_ShadowDispatchFirstMaterialSurfaceSource)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_second.surface"), s_ShadowDispatchSecondMaterialSurfaceSource)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch.bxdf"), s_MaterialBindBxdfSource)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_MaterialsDirectory, "shadow_dispatch_first.nwb"), s_ShadowDispatchFirstMaterialMeta)
+        && WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_MaterialsDirectory, "shadow_dispatch_second.nwb"), s_ShadowDispatchSecondMaterialMeta)
     ;
     ASSERT_TRUE(assetsWritten);
 
@@ -446,7 +446,7 @@ void VerifyAssetsGraphics_MaterialBindDependencyInvalidation(){
     ASSERT_TRUE(initialChecksumResult.has_value());
     const u64 initialPixelSourceChecksum = initialChecksumResult.value();
 
-    EXPECT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename), s_UpdatedDefaultMaterialBindSource));
+    EXPECT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename), s_UpdatedDefaultMaterialBindSource));
     EXPECT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
 
     TestValueSlot<MaterialAsset> updatedMaterialStorage;
@@ -628,7 +628,7 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
         MaterialAssetCodec codec = MaterialAssetCodec();
         material.setTransparent(true);
         AssetBytes invalidBinary = MakeAssetBytes(testArena);
-        EXPECT_FALSE(SerializeMaterialAsset(codec, material, invalidBinary));
+        EXPECT_FALSE(codec.serialize(material, GraphicsCodecBytes(invalidBinary)));
         EXPECT_TRUE(invalidBinary.empty());
         SetGeneratedMaterialAvboitPixelShaders(material);
         ASSERT_TRUE(CanRoundTripMaterialAssetCodec(material, testArena, codec));
@@ -641,7 +641,7 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
         LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
         MaterialAssetCodec codec = MaterialAssetCodec();
         AssetBytes binary = MakeAssetBytes(testArena);
-        EXPECT_TRUE(SerializeMaterialAsset(codec, material, binary));
+        EXPECT_TRUE(codec.serialize(material, GraphicsCodecBytes(binary)));
 
         const Expected<MaterialBinaryTypedLayoutOffsets> typedLayoutOffsets = FindTestMaterialBinaryTypedLayoutOffsets(binary);
         ASSERT_TRUE(typedLayoutOffsets.has_value());
@@ -651,7 +651,7 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
         AssetBytes retiredFixtureLayoutBinary = MakeAssetBytes(testArena);
         CopyAssetBytes(binary, retiredFixtureLayoutBinary);
         EXPECT_TRUE(OverwriteU32InAssetBytes(0u, 0x4D544C39u, retiredFixtureLayoutBinary));
-        RejectMaterialCodecBinary(codec, material.virtualPath(), retiredFixtureLayoutBinary, testArena);
+        CheckCodecRejectsBinary(codec, material.virtualPath(), retiredFixtureLayoutBinary, testArena);
 
         AssetBytes hashMismatchBinary = MakeAssetBytes(testArena);
         CopyAssetBytes(binary, hashMismatchBinary);
@@ -659,13 +659,13 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
         if(material.typedLayoutHash() == u64.max)
             invalidLayoutHash = material.typedLayoutHash() - 1u;
         EXPECT_TRUE(OverwriteU64InAssetBytes(layoutHashOffset, invalidLayoutHash, hashMismatchBinary));
-        RejectMaterialCodecBinary(codec, material.virtualPath(), hashMismatchBinary, testArena);
+        CheckCodecRejectsBinary(codec, material.virtualPath(), hashMismatchBinary, testArena);
 
         AssetBytes byteSizeMismatchBinary = MakeAssetBytes(testArena);
         CopyAssetBytes(binary, byteSizeMismatchBinary);
         EXPECT_FALSE(material.typedBlockBytes().empty());
         EXPECT_TRUE(OverwriteU32InAssetBytes(blockByteCountOffset, cast<u32>(material.typedBlockBytes().size() - 1u), byteSizeMismatchBinary));
-        RejectMaterialCodecBinary(codec, material.virtualPath(), byteSizeMismatchBinary, testArena);
+        CheckCodecRejectsBinary(codec, material.virtualPath(), byteSizeMismatchBinary, testArena);
 
         ASSERT_GE(binary.size(), s_AvboitPixelShaderEntryBytes * 3u);
         const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderEntryBytes * 2u;
@@ -673,7 +673,7 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
         CopyAssetBytes(binary, missingOccupancyBinary);
         EXPECT_TRUE(OverwriteU32InAssetBytes(occupancyPresenceOffset, 0u, missingOccupancyBinary));
         EraseAssetByteRange(missingOccupancyBinary, occupancyPresenceOffset + 4u, occupancyPresenceOffset + s_AvboitPixelShaderEntryBytes);
-        RejectMaterialCodecBinary(codec, material.virtualPath(), missingOccupancyBinary, testArena);
+        CheckCodecRejectsBinary(codec, material.virtualPath(), missingOccupancyBinary, testArena);
 
         EXPECT_EQ(logger.errorCount(), 4u);
         EXPECT_TRUE(SawCapturedError(logger, "typed layout hash mismatch"));
@@ -701,17 +701,17 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
 
     MaterialAssetCodec codec = MaterialAssetCodec();
     AssetBytes binary = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeMaterialAsset(codec, material, binary));
-    ASSERT_TRUE(LoadMaterialAssetBinary(material, binary));
+    ASSERT_TRUE(codec.serialize(material, GraphicsCodecBytes(binary)));
+    ASSERT_TRUE(material.loadBinary(binary));
 
     for(usize prefix = 0u; prefix < binary.size(); ++prefix){
         const ScopedTestTrace trace(prefix);
         AssetBytes malformed = MakeAssetBytes(testArena);
         CopyAssetBytes(binary, malformed);
         malformed.resize(prefix);
-        EXPECT_FALSE(LoadMaterialAssetBinary(material, malformed));
+        EXPECT_FALSE(material.loadBinary(malformed));
         AssetBytes retained = MakeAssetBytes(testArena);
-        ASSERT_TRUE(SerializeMaterialAsset(codec, material, retained));
+        ASSERT_TRUE(codec.serialize(material, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, binary);
     }
 
@@ -743,9 +743,9 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
             break;
         default: break;
         }
-        EXPECT_FALSE(LoadMaterialAssetBinary(material, malformed));
+        EXPECT_FALSE(material.loadBinary(malformed));
         AssetBytes retained = MakeAssetBytes(testArena);
-        ASSERT_TRUE(SerializeMaterialAsset(codec, material, retained));
+        ASSERT_TRUE(codec.serialize(material, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, binary);
     }
     EXPECT_EQ(logger.errorCount(), binary.size() + 5u);
@@ -920,7 +920,7 @@ void VerifyAssetsGraphics_MeshFailedReloadPreservesEveryPreviouslyPublishedStrea
 
     MeshAssetCodec codec = MeshAssetCodec();
     AssetBytes original = MakeAssetBytes(testArena);
-    ASSERT_TRUE(SerializeMeshAsset(codec, mesh, original));
+    ASSERT_TRUE(codec.serialize(mesh, GraphicsCodecBytes(original)));
 
     for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
         const ScopedTestTrace trace(invalidCase);
@@ -935,9 +935,9 @@ void VerifyAssetsGraphics_MeshFailedReloadPreservesEveryPreviouslyPublishedStrea
         else
             ASSERT_TRUE(OverwriteU32InAssetBytes(0u, 0x4D534837u, malformed));
 
-        EXPECT_FALSE(LoadMeshAssetBinary(mesh, malformed));
+        EXPECT_FALSE(mesh.loadBinary(malformed));
         AssetBytes retained = MakeAssetBytes(testArena);
-        ASSERT_TRUE(SerializeMeshAsset(codec, mesh, retained));
+        ASSERT_TRUE(codec.serialize(mesh, GraphicsCodecBytes(retained)));
         EXPECT_EQ(retained, original);
     }
     EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
@@ -965,7 +965,7 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
         const CookCase prepared = cookCase.value();
 
         const TestAString meta = BuildMeshIndexMeta(indexList);
-        ASSERT_TRUE(CookSingleMeshMeta(ViewTestString(meta), prepared, testArena));
+        ASSERT_TRUE(CookSingleMeshMeta(StringView(meta), prepared, testArena));
 
         GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder);
         TestValueSlot<MeshAsset> meshStorage;
@@ -975,7 +975,7 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
             ASSERT_TRUE(loadedMesh.has_value());
             mesh = loadedMesh.value();
         }
-        const Expected<ScratchU32Vector> triangleIndices = BuildTestMeshletTriangleIndices(mesh, scratch);
+        const Expected<ScratchU32Vector> triangleIndices = BuildMeshletTriangleIndices(mesh);
         ASSERT_TRUE(triangleIndices.has_value());
         ASSERT_EQ(triangleIndices.value().size(), 3u);
 
@@ -1016,7 +1016,7 @@ void VerifyAssetsGraphics_MeshCookerReportsFirstInvalidNestedIndex(){
         ASSERT_TRUE(cookCase.has_value());
         const CookCase prepared = cookCase.value();
         const TestAString meta = BuildMeshIndexMeta(testCase.m_indices);
-        const b8 cooked = CookSingleMeshMeta(ViewTestString(meta), prepared, testArena);
+        const b8 cooked = CookSingleMeshMeta(StringView(meta), prepared, testArena);
         EXPECT_FALSE(cooked);
         EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
         EXPECT_TRUE(SawCapturedError(logger, testCase.m_diagnostic));
@@ -1035,14 +1035,14 @@ void VerifyAssetsGraphics_MeshCookerValidationFailures(){
 
     ExpectMeshCookFailure(s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields", testArena);
     ExpectMeshCookFailure(s_MismatchedMeshMeta, "mismatched_mesh_streams", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta("", s_TriangleTangentsField, s_TriangleVertexRefsField)), "missing_mesh_normal_field", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_TriangleTangentsField, s_TriangleMissingNormalVertexRefsField)), "missing_mesh_normal_vertex_ref", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_EmptyNormalListField, s_TriangleTangentsField, s_TriangleVertexRefsField)), "empty_list_mesh_normal", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_EmptyNormalMapField, s_TriangleTangentsField, s_TriangleVertexRefsField)), "empty_map_mesh_normal", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, "", s_TriangleVertexRefsField)), "missing_mesh_tangent_field", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_TriangleTangentsField, s_TriangleMissingTangentVertexRefsField)), "missing_mesh_tangent_vertex_ref", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_EmptyTangentListField, s_TriangleVertexRefsField)), "empty_list_mesh_tangent", testArena);
-    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_EmptyTangentMapField, s_TriangleVertexRefsField)), "empty_map_mesh_tangent", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta("", s_TriangleTangentsField, s_TriangleVertexRefsField)), "missing_mesh_normal_field", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_TriangleNormalsField, s_TriangleTangentsField, s_TriangleMissingNormalVertexRefsField)), "missing_mesh_normal_vertex_ref", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_EmptyNormalListField, s_TriangleTangentsField, s_TriangleVertexRefsField)), "empty_list_mesh_normal", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_EmptyNormalMapField, s_TriangleTangentsField, s_TriangleVertexRefsField)), "empty_map_mesh_normal", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_TriangleNormalsField, "", s_TriangleVertexRefsField)), "missing_mesh_tangent_field", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_TriangleNormalsField, s_TriangleTangentsField, s_TriangleMissingTangentVertexRefsField)), "missing_mesh_tangent_vertex_ref", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_TriangleNormalsField, s_EmptyTangentListField, s_TriangleVertexRefsField)), "empty_list_mesh_tangent", testArena);
+    ExpectMeshCookFailure(StringView(BuildMeshTriangleMeta(s_TriangleNormalsField, s_EmptyTangentMapField, s_TriangleVertexRefsField)), "empty_map_mesh_tangent", testArena);
 
     EXPECT_GE(logger.errorCount(), 10u);
     EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field"));
@@ -1065,7 +1065,7 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
     const GraphicsTestPath root = rootResult.value();
 
     const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
 
     Vector<ObjectGeometryCase> cases = Vector<ObjectGeometryCase>();
     cases.reserve(8u);
@@ -1085,7 +1085,7 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
         metadata.append(testCase.m_shaderType);
         metadata.append(" asset;\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.m_fields);
-        ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
+        ASSERT_TRUE(WriteGraphicsFixtureText(metadataPath, StringView(metadata)));
         const u32 priorErrors = logger.errorCount();
         EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch), testCase.m_accepted);
         if(testCase.m_accepted)

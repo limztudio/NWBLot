@@ -148,6 +148,28 @@ f32 RendererBaselineFixedDelta(){
     return InitializeOnce<f32>(lambda[]() -> f32{ return ParseRendererBaselineFixedDelta(); });
 }
 
+f32 RendererBaselineDelta(in f32 frameDelta){
+    const f32 fixedDelta = RendererBaselineFixedDelta();
+    if(fixedDelta > 0.0f)
+        return fixedDelta;
+    return frameDelta;
+}
+
+f32 SafeRendererBaselineDelta(in f32 frameDelta){
+    const f32 delta = RendererBaselineDelta(frameDelta);
+    if(!IsFinite(delta))
+        return 0.0f;
+    return Max(delta, 0.0f);
+}
+
+void SuspendSmokeCapture(mut GraphicsRuntime graphics, mut b8 paused, in StringView projectName, in u32 frameCount, in StringView frameUnit){
+    if(paused)
+        return;
+    graphics.setFrameSubmissionSuspended(true);
+    paused = true;
+    [essential] info("{}: renderer baseline capture ready after {} {}; render submission suspended", projectName, frameCount, frameUnit);
+}
+
 VectorSingle CalculateSmokeYawDisplay(in VectorSingle yaw, in VectorSingle turn){
     const f32 turnScalar = turn.x;
     f32 wrapped = FMod(yaw.x, turnScalar);

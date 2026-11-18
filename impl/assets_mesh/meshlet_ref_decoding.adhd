@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_mesh/meshlet_cone_packing.adhd>
+#include <impl/assets_mesh/meshlet_triangle_visit.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -231,37 +232,11 @@ b8 DecodeMeshletTriangleIndicesInto(
     in usize positionCount,
     mut Span<u32> outIndices
 ){
-    const usize localVertexRefCount = localVertexRefs.size();
-    const usize primitiveIndexCount = primitiveIndices.size();
-    if(outIndices.size() < primitiveIndexCount)
+    if(outIndices.size() < primitiveIndices.size())
         return false;
-
-    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc meshlet = meshlets[meshletIndex];
-        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
-
-        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
-            const usize primitiveBase = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * cast<usize>(s_MeshletTriangleIndexCount);
-
-            for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
-                const usize primitiveByte = primitiveBase + cast<usize>(corner);
-                if(primitiveByte >= primitiveIndexCount)
-                    return false;
-
-                const u32 localVertexIndex = cast<u32>(primitiveIndices[primitiveByte]);
-                const usize localVertexRefIndex = cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertexIndex);
-                if(localVertexRefIndex >= localVertexRefCount)
-                    return false;
-
-                u32 decodedIndex = 0u;
-                if(!TryDecodeMeshletTriangleCornerPosition(positionRefDeltas, meshlet, localVertexRefs[localVertexRefIndex], positionCount, decodedIndex))
-                    return false;
-                outIndices[primitiveByte] = decodedIndex;
-            }
-        }
-    }
-
-    return true;
+    return ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, lambda[in positionRefDeltas, in positionCount, mut outIndices](in MeshletDesc meshlet, in usize byteIndex, in MeshletLocalVertexRef localRef) -> b8{
+        return TryDecodeMeshletTriangleCornerPosition(positionRefDeltas, meshlet, localRef, positionCount, outIndices[byteIndex]);
+    });
 }
 
 b8 DecodeMeshletTriangleAttributesInto(
@@ -273,37 +248,11 @@ b8 DecodeMeshletTriangleAttributesInto(
     in Span<f32x2u> uv0Stream,
     mut Span<AttribGpu> outAttributes
 ){
-    const usize localVertexRefCount = localVertexRefs.size();
-    const usize primitiveIndexCount = primitiveIndices.size();
-    if(outAttributes.size() < primitiveIndexCount)
+    if(outAttributes.size() < primitiveIndices.size())
         return false;
-
-    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc meshlet = meshlets[meshletIndex];
-        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
-
-        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
-            const usize primitiveBase = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * cast<usize>(s_MeshletTriangleIndexCount);
-
-            for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
-                const usize primitiveByte = primitiveBase + cast<usize>(corner);
-                if(primitiveByte >= primitiveIndexCount)
-                    return false;
-
-                const u32 localVertexIndex = cast<u32>(primitiveIndices[primitiveByte]);
-                const usize localVertexRefIndex = cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertexIndex);
-                if(localVertexRefIndex >= localVertexRefCount)
-                    return false;
-
-                AttribGpu decodedAttribute;
-                if(!TryDecodeMeshletTriangleCornerAttribute(attributeRefDeltas, meshlet, localVertexRefs[localVertexRefIndex], normalStream, uv0Stream, decodedAttribute))
-                    return false;
-                outAttributes[primitiveByte] = decodedAttribute;
-            }
-        }
-    }
-
-    return true;
+    return ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, lambda[in attributeRefDeltas, in normalStream, in uv0Stream, mut outAttributes](in MeshletDesc meshlet, in usize byteIndex, in MeshletLocalVertexRef localRef) -> b8{
+        return TryDecodeMeshletTriangleCornerAttribute(attributeRefDeltas, meshlet, localRef, normalStream, uv0Stream, outAttributes[byteIndex]);
+    });
 }
 
 

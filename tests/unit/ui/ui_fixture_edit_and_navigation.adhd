@@ -362,7 +362,7 @@ b8 PlaceMultilineViewFixture(mut MultilineViewFixture self, in f32 width, in f32
 }
 
 Expected<DrawSnapshot> PaintMultilineViewFixture(mut MultilineViewFixture self, in EditBoxStyle style, in EditBoxPaintFlags flags){
-    self.m_paint.begin(DisplayMetrics(MultilineViewViewport().width, MultilineViewViewport().height, 1.0f, 1.0f), 1u, 1u, MakeUiSkinAssetRef(s_MultilineViewSkinPath), self.m_skin);
+    self.m_paint.begin(DisplayMetrics(MultilineViewViewport().width, MultilineViewViewport().height, 1.0f, 1.0f), 1u, 1u, MakeUiFixtureAssetRef<UiSkin>(s_MultilineViewSkinPath), self.m_skin);
     if(!self.m_view.paint(self.m_text, self.m_paint, self.m_skin, self.m_placement, style, flags))
         return MakeUnexpected(Failure());
     EXPECT_FALSE(self.m_paint.popClip());

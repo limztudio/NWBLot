@@ -37,11 +37,6 @@ extern b8 EncodeTelemetryData(in EventHeader header, in TestArrayData<u8> data, 
 extern const b8 s_TelemetryGuardCaptureIsNothrow;
 [cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::LogString")]
 extern class TelemetryLogString;
-[cpp_header("<global/diagnostics.h>"), cpp_name("::SetDiagnosticEventCallback")]
-extern void InstallTelemetryDiagnosticCallback(in auto callback);
-[cpp_header("<global/diagnostics.h>"), cpp_name("::ClearDiagnosticEventCallback")]
-extern void RemoveTelemetryDiagnosticCallback(in auto callback);
-
 [cpp_header("<core/telemetry/recorder.h>"), cpp_name("::AString<::NWB::Core::Telemetry::TelemetryArena>")]
 extern class TelemetryLabelString{
     void assign(in StringView text);
@@ -80,9 +75,6 @@ extern Expected<DiagnosticPayload> ParseDiagnosticPayloadData(in TestArrayData<u
 
 [cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::ParseTextLogPayload")]
 extern Expected<TextLogPayload> ParseTextLogPayloadData(in TestArrayData<u8> data, in usize size);
-
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::ParseFrameGraphPayload")]
-extern Expected<FrameGraphPayload> ParseFrameGraphPayloadData(mut HeapStorage arena, mut ScratchStorage scratch, in TestArrayData<u8> data, in usize size);
 
 [cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeEvent")]
 extern Expected<DecodedEvent, DecodeResult> DecodeEventData(mut HeapStorage arena, in TestArrayData<u8> data, in usize size);

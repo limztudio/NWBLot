@@ -143,110 +143,9 @@ class RendererAvboitSystem : NoCopy{
             framebuffer = targets.avboit.accumulationFramebuffer;
         const auto draws = snapshot.drawItemsView();
         const auto csgFrame = snapshot.csgFrameDataView();
-        if(timing.has_value())
-            this.renderAvboitMaterialPass(commands, framebuffer, pass, targets.avboit, draws, csgFrame, csg, bindings,
-                snapshot.instanceCount, snapshot.materialTypedByteCount, frameOwned, geometryOwned, outputOwned, csgOutputOwned, reused, timing.value());
-        else
-            this.renderAvboitMaterialPass(commands, framebuffer, pass, targets.avboit, draws, csgFrame, csg, bindings,
-                snapshot.instanceCount, snapshot.materialTypedByteCount, frameOwned, geometryOwned, outputOwned, csgOutputOwned, reused);
+        this.renderAvboitMaterialPass(commands, framebuffer, pass, targets.avboit, draws, csgFrame, csg, bindings,
+            snapshot.instanceCount, snapshot.materialTypedByteCount, frameOwned, geometryOwned, outputOwned, csgOutputOwned, reused, timing);
     }
-    public void renderAvboitOccupancyPass(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in MaterialPassDrawItemPartitionsView preparedOccupancyDrawItems,
-        in CsgFrameGpuDataView preparedOccupancyCsgFrameData,
-        in CsgGraphResourceSnapshot preparedOccupancyCsgResources,
-        in MeshFrameBindingSnapshot preparedOccupancyFrameBindings,
-        in usize preparedOccupancyInstanceCount,
-        in usize preparedOccupancyMaterialTypedByteCount,
-        in b8 occupancyMaterialFrameStatesGraphOwned,
-        in b8 occupancyMaterialGeometryStatesGraphOwned,
-        // Graph may generate alias-free vertices; shared/direct paths keep local work.
-        in b8 occupancyComputeEmulationOutputStatesGraphOwned,
-        // A frozen CSG-only producer may own this handoff; keep it separate.
-        in b8 occupancyCsgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused
-    );
-    public void renderAvboitOccupancyPass(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in MaterialPassDrawItemPartitionsView preparedOccupancyDrawItems,
-        in CsgFrameGpuDataView preparedOccupancyCsgFrameData,
-        in CsgGraphResourceSnapshot preparedOccupancyCsgResources,
-        in MeshFrameBindingSnapshot preparedOccupancyFrameBindings,
-        in usize preparedOccupancyInstanceCount,
-        in usize preparedOccupancyMaterialTypedByteCount,
-        in b8 occupancyMaterialFrameStatesGraphOwned,
-        in b8 occupancyMaterialGeometryStatesGraphOwned,
-        in b8 occupancyComputeEmulationOutputStatesGraphOwned,
-        in b8 occupancyCsgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused,
-        mut Optional<GpuTimingMeasure> occupancyComputeEmulationTiming
-    );
-    public void renderAvboitExtinctionPass(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in MaterialPassDrawItemPartitionsView preparedExtinctionDrawItems,
-        in CsgFrameGpuDataView preparedExtinctionCsgFrameData,
-        in CsgGraphResourceSnapshot preparedExtinctionCsgResources,
-        in MeshFrameBindingSnapshot preparedExtinctionFrameBindings,
-        in usize preparedExtinctionInstanceCount,
-        in usize preparedExtinctionMaterialTypedByteCount,
-        in b8 extinctionMaterialFrameStatesGraphOwned,
-        in b8 extinctionMaterialGeometryStatesGraphOwned,
-        in b8 extinctionComputeEmulationOutputStatesGraphOwned,
-        // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        in b8 extinctionCsgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused
-    );
-    public void renderAvboitExtinctionPass(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in MaterialPassDrawItemPartitionsView preparedExtinctionDrawItems,
-        in CsgFrameGpuDataView preparedExtinctionCsgFrameData,
-        in CsgGraphResourceSnapshot preparedExtinctionCsgResources,
-        in MeshFrameBindingSnapshot preparedExtinctionFrameBindings,
-        in usize preparedExtinctionInstanceCount,
-        in usize preparedExtinctionMaterialTypedByteCount,
-        in b8 extinctionMaterialFrameStatesGraphOwned,
-        in b8 extinctionMaterialGeometryStatesGraphOwned,
-        in b8 extinctionComputeEmulationOutputStatesGraphOwned,
-        in b8 extinctionCsgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused,
-        mut Optional<GpuTimingMeasure> extinctionComputeEmulationTiming
-    );
-    public void renderAvboitAccumulatePass(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in MaterialPassDrawItemPartitionsView preparedAccumulationDrawItems,
-        in CsgFrameGpuDataView preparedAccumulationCsgFrameData,
-        in CsgGraphResourceSnapshot preparedAccumulationCsgResources,
-        in MeshFrameBindingSnapshot preparedAccumulationFrameBindings,
-        in usize preparedAccumulationInstanceCount,
-        in usize preparedAccumulationMaterialTypedByteCount,
-        in b8 accumulationMaterialFrameStatesGraphOwned,
-        in b8 accumulationMaterialGeometryStatesGraphOwned,
-        in b8 accumulationComputeEmulationOutputStatesGraphOwned,
-        // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        in b8 accumulationCsgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused
-    );
-    public void renderAvboitAccumulatePass(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in MaterialPassDrawItemPartitionsView preparedAccumulationDrawItems,
-        in CsgFrameGpuDataView preparedAccumulationCsgFrameData,
-        in CsgGraphResourceSnapshot preparedAccumulationCsgResources,
-        in MeshFrameBindingSnapshot preparedAccumulationFrameBindings,
-        in usize preparedAccumulationInstanceCount,
-        in usize preparedAccumulationMaterialTypedByteCount,
-        in b8 accumulationMaterialFrameStatesGraphOwned,
-        in b8 accumulationMaterialGeometryStatesGraphOwned,
-        in b8 accumulationComputeEmulationOutputStatesGraphOwned,
-        in b8 accumulationCsgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused,
-        mut Optional<GpuTimingMeasure> accumulationComputeEmulationTiming
-    );
     public void dispatchAvboitDepthWarp(mut CommandList commandList, mut AvboitFrameTargets targets);
     public void dispatchAvboitDepthWarp(mut CommandList commandList, mut AvboitFrameTargets targets, in GpuTimingSampleAttribution timingAttribution, mut b8 timingRecorded);
     public void dispatchAvboitIntegration(mut CommandList commandList, mut AvboitFrameTargets targets);
@@ -267,25 +166,8 @@ class RendererAvboitSystem : NoCopy{
         in b8 materialGeometryStatesGraphOwned,
         in b8 computeEmulationOutputStatesGraphOwned,
         in b8 csgComputeEmulationOutputStatesGraphOwned,
-        in b8 generatedGeometryReused
-    );
-    private void renderAvboitMaterialPass(
-        mut CommandList commandList,
-        in FramebufferHandle framebuffer,
-        in MaterialPipelinePass pass,
-        mut AvboitFrameTargets avboitTargets,
-        in MaterialPassDrawItemPartitionsView preparedDrawItems,
-        in CsgFrameGpuDataView preparedCsgFrameData,
-        in CsgGraphResourceSnapshot preparedCsgResources,
-        in MeshFrameBindingSnapshot preparedFrameBindings,
-        in usize preparedInstanceCount,
-        in usize preparedMaterialTypedByteCount,
-        in b8 materialFrameStatesGraphOwned,
-        in b8 materialGeometryStatesGraphOwned,
-        in b8 computeEmulationOutputStatesGraphOwned,
-        in b8 csgComputeEmulationOutputStatesGraphOwned,
         in b8 generatedGeometryReused,
-        mut Optional<GpuTimingMeasure> computeEmulationTiming
+        in Optional<mut Optional<GpuTimingMeasure>> computeEmulationTiming
     );
 }
 

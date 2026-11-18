@@ -176,95 +176,16 @@ class UiPopupToolsSmokeScene : IUiSmokeInputScene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView UiNestedPopupSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "open";
-    case 1u:
-        return "counter";
-    case 2u:
-        return "parent";
-    case 3u:
-        return "child";
-    case 4u:
-        return "before_button";
-    case 5u:
-        return "before_edit";
-    case 6u:
-        return "before_list";
-    case 7u:
-        return "before_row2";
-    case 8u:
-        return "child_open";
-    case 9u:
-        return "after_button";
-    case 10u:
-        return "after_edit";
-    case 11u:
-        return "after_list";
-    case 12u:
-        return "after_row2";
-    case 13u:
-        return "child_action";
-    case 14u:
-        return "child_edit";
-    case 15u:
-        return "close_branch";
-    case 16u:
-        return "combo";
-    case 17u:
-        return "combo_popup";
-    case 18u:
-        return "combo_row2";
-    case 19u:
-        return "search";
-    case 20u:
-        return "search_popup";
-    case 21u:
-        return "search_query";
-    case 22u:
-        return "search_row2";
-    case 23u:
-        return "menu_anchor";
-    case 24u:
-        return "menu";
-    case 25u:
-        return "menu_row2";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 26u> s_UiNestedPopupSmokeRectNames(
+    "open", "counter", "parent", "child", "before_button", "before_edit", "before_list", "before_row2", "child_open", "after_button", "after_edit", "after_list",
+    "after_row2", "child_action", "child_edit", "close_branch", "combo", "combo_popup", "combo_row2", "search", "search_popup", "search_query", "search_row2",
+    "menu_anchor", "menu", "menu_row2"
+);
 
-StringView UiNumericEditSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "integer_bounds";
-    case 1u:
-        return "integer_content";
-    case 2u:
-        return "integer_caret";
-    case 3u:
-        return "integer_selection";
-    case 4u:
-        return "float_bounds";
-    case 5u:
-        return "float_content";
-    case 6u:
-        return "float_caret";
-    case 7u:
-        return "float_selection";
-    case 8u:
-        return "clipboard_bounds";
-    case 9u:
-        return "clipboard_content";
-    case 10u:
-        return "clipboard_caret";
-    case 11u:
-        return "clipboard_selection";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 12u> s_UiNumericEditSmokeRectNames(
+    "integer_bounds", "integer_content", "integer_caret", "integer_selection", "float_bounds", "float_content", "float_caret", "float_selection",
+    "clipboard_bounds", "clipboard_content", "clipboard_caret", "clipboard_selection"
+);
 
 b8 IsCoherentNumericSmokeEdit(in EditModel model, in EditBoxState state){
     return state.modelGeneration == model.instanceGeneration()
@@ -518,47 +439,14 @@ void UiNestedPopupSmokeScene::observeState(mut UiPaintContext context){
     );
     const Array<u64, 29u> current = this.values();
     const b8 geometryChanged = !SameSmokeRectSpan(this.m_rectangles, this.m_lastRectangles);
-    if(this.m_sequence != 0u && !this.m_displayChanged && !geometryChanged && SameSmokeU64Span(current, this.m_lastValues))
+    if(this.m_sequence != 0u && !this.m_displayChanged && !geometryChanged && current == this.m_lastValues)
         return;
     ++this.m_sequence;
     this.m_lastValues = current;
     this.m_lastRectangles = this.m_rectangles;
     this.m_displayChanged = false;
-    [essential] info(
-        "UiNestedPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_sequence
-        , current[0u]
-        , current[1u]
-        , current[2u]
-        , current[3u]
-        , current[4u]
-        , current[5u]
-        , current[6u]
-        , current[7u]
-        , current[8u]
-        , current[9u]
-        , current[10u]
-        , current[11u]
-        , current[12u]
-        , current[13u]
-        , current[14u]
-        , current[15u]
-        , current[16u]
-        , current[17u]
-        , current[18u]
-        , current[19u]
-        , current[20u]
-        , current[21u]
-        , current[22u]
-        , current[23u]
-        , current[24u]
-        , current[25u]
-        , current[26u]
-        , current[27u]
-        , current[28u]
-    );
-    for(usize index = 0u; index < this.m_rectangles.size(); ++index)
-        LogSmokeRect(s_UiNestedPopupSmokeTag, this.m_sequence, UiNestedPopupSmokeRectName(index), this.m_rectangles[index]);
+    LogSmokeValues(s_UiNestedPopupSmokeTag, this.m_sequence, current);
+    LogSmokeRectangles(s_UiNestedPopupSmokeTag, this.m_sequence, s_UiNestedPopupSmokeRectNames, this.m_rectangles);
 }
 
 void UiNestedPopupSmokeScene::paintMarkers(mut UiPaintContext context)const{
@@ -603,9 +491,7 @@ Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
 
 Rect UiNestedPopupSmokeScene::rowBounds(in ListState state, in Expected<u64> index)const{
     const ScrollPlacement placement = state.placement();
-    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
-        return Rect();
-    return VisibleSmokeListRow(placement, index.value());
+    return VisibleSmokeListRow(placement, index);
 }
 
 
@@ -767,62 +653,19 @@ void UiNumericEditSmokeScene::observeState(in DisplayMetrics display, mut TextSe
     CaptureNumericSmokeFieldGeometry(this.m_selectionView, text, this.m_integer.draft(), this.m_states[0u].placement, 0u, current.rectangles);
     CaptureNumericSmokeFieldGeometry(this.m_selectionView, text, this.m_float.draft(), this.m_states[1u].placement, 4u, current.rectangles);
     CaptureNumericSmokeFieldGeometry(this.m_selectionView, text, this.m_clipboard, this.m_states[2u].placement, 8u, current.rectangles);
-    const b8 changed = !SameSmokeU64Span(current.values, this.m_snapshot.values)
+    const b8 changed = current.values != this.m_snapshot.values
         || !SameSmokeRectSpan(current.rectangles, this.m_snapshot.rectangles);
     const DisplayMetrics previous = this.m_snapshot.display;
-    const b8 displayChanged = display.logicalWidth != previous.logicalWidth
-        || display.logicalHeight != previous.logicalHeight
-        || display.pixelScaleX != previous.pixelScaleX
-        || display.pixelScaleY != previous.pixelScaleY;
+    const b8 displayChanged = !SameSmokeDisplay(display, previous);
     if(this.m_snapshot.sequence != 0u && !changed && !displayChanged)
         return;
     current.sequence = this.m_snapshot.sequence + 1u;
     this.m_snapshot = current;
     if(displayChanged){
-        [essential] info(
-            "UiNumericEditSmoke: display logical={}x{} scale={}x{}"
-            , display.logicalWidth
-            , display.logicalHeight
-            , display.pixelScaleX
-            , display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiNumericEditSmokeTag, display);
     }
-    [essential] info(
-        "UiNumericEditSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_snapshot.sequence
-        , this.m_snapshot.values[0u]
-        , this.m_snapshot.values[1u]
-        , this.m_snapshot.values[2u]
-        , this.m_snapshot.values[3u]
-        , this.m_snapshot.values[4u]
-        , this.m_snapshot.values[5u]
-        , this.m_snapshot.values[6u]
-        , this.m_snapshot.values[7u]
-        , this.m_snapshot.values[8u]
-        , this.m_snapshot.values[9u]
-        , this.m_snapshot.values[10u]
-        , this.m_snapshot.values[11u]
-        , this.m_snapshot.values[12u]
-        , this.m_snapshot.values[13u]
-        , this.m_snapshot.values[14u]
-        , this.m_snapshot.values[15u]
-        , this.m_snapshot.values[16u]
-        , this.m_snapshot.values[17u]
-        , this.m_snapshot.values[18u]
-        , this.m_snapshot.values[19u]
-        , this.m_snapshot.values[20u]
-        , this.m_snapshot.values[21u]
-        , this.m_snapshot.values[22u]
-        , this.m_snapshot.values[23u]
-        , this.m_snapshot.values[24u]
-        , this.m_snapshot.values[25u]
-        , this.m_snapshot.values[26u]
-        , this.m_snapshot.values[27u]
-        , this.m_snapshot.values[28u]
-        , this.m_snapshot.values[29u]
-    );
-    for(usize index = 0u; index < this.m_snapshot.rectangles.size(); ++index)
-        LogSmokeRect(s_UiNumericEditSmokeTag, this.m_snapshot.sequence, UiNumericEditSmokeRectName(index), this.m_snapshot.rectangles[index]);
+    LogSmokeValues(s_UiNumericEditSmokeTag, this.m_snapshot.sequence, this.m_snapshot.values);
+    LogSmokeRectangles(s_UiNumericEditSmokeTag, this.m_snapshot.sequence, s_UiNumericEditSmokeRectNames, this.m_snapshot.rectangles);
 }
 
 void UiNumericEditSmokeScene::paintMarkers(mut UiPaintContext context)const{
@@ -990,7 +833,7 @@ void UiPopupSmokeScene::observeState(){
     if(
         this.m_sequence != 0u
         && !this.m_displayChanged
-        && SameSmokeU32Span(current, this.m_lastValues)
+        && current == this.m_lastValues
         && SameSmokeRect(placement.bounds, this.m_lastPlacement.bounds)
         && SameSmokeRect(placement.viewport, this.m_lastPlacement.viewport)
     )
@@ -999,22 +842,7 @@ void UiPopupSmokeScene::observeState(){
     this.m_lastValues = current;
     this.m_lastPlacement = placement;
     this.m_displayChanged = false;
-    [essential] info(
-        "UiPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_sequence
-        , current[0u]
-        , current[1u]
-        , current[2u]
-        , current[3u]
-        , current[4u]
-        , current[5u]
-        , current[6u]
-        , current[7u]
-        , current[8u]
-        , current[9u]
-        , current[10u]
-        , current[11u]
-    );
+    LogSmokeValues(s_UiPopupSmokeTag, this.m_sequence, current);
     LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, s_UiPopupSmokePopupKey, placement.bounds);
     LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, "viewport", placement.viewport);
     LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, "trigger", Rect(32.0f, 64.0f, 120.0f, 36.0f));
@@ -1136,9 +964,7 @@ Rect UiPopupToolsSmokeScene::rowBounds(in u64 key)const{
     if(!this.m_menu.isOpen())
         return Rect();
     const Expected<u64> index = this.m_source.indexOf(key);
-    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
-        return Rect();
-    return VisibleSmokeListRow(placement, index.value());
+    return VisibleSmokeListRow(placement, index);
 }
 
 void UiPopupToolsSmokeScene::observeState(){
@@ -1150,7 +976,7 @@ void UiPopupToolsSmokeScene::observeState(){
     if(
         this.m_sequence != 0u
         && !this.m_displayChanged
-        && SameSmokeU64Span(current, this.m_lastValues)
+        && current == this.m_lastValues
         && list.offset == this.m_lastList.offset
         && list.contentHeight == this.m_lastList.contentHeight
         && SameSmokeRect(list.viewport, this.m_lastList.viewport)
@@ -1166,25 +992,7 @@ void UiPopupToolsSmokeScene::observeState(){
     this.m_lastTooltip = tooltip;
     this.m_lastSentinel = sentinel;
     this.m_displayChanged = false;
-    [essential] info(
-        "UiPopupToolsSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_sequence
-        , current[0u]
-        , current[1u]
-        , current[2u]
-        , current[3u]
-        , current[4u]
-        , current[5u]
-        , current[6u]
-        , current[7u]
-        , current[8u]
-        , current[9u]
-        , current[10u]
-        , current[11u]
-        , current[12u]
-        , current[13u]
-        , current[14u]
-    );
+    LogSmokeValues(s_UiPopupToolsSmokeTag, this.m_sequence, current);
     LogSmokeRect(s_UiPopupToolsSmokeTag, this.m_sequence, s_UiPopupToolsAnchorKey, Rect(32.0f, 64.0f, 220.0f, 36.0f));
     LogSmokeRect(s_UiPopupToolsSmokeTag, this.m_sequence, "menu", menu.bounds);
     LogSmokeRect(s_UiPopupToolsSmokeTag, this.m_sequence, "tooltip", tooltip.bounds);

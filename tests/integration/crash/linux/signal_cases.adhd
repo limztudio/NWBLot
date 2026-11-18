@@ -30,7 +30,7 @@ class SignalEnvironment{
         if(this.ready){
             UninstallCrashHandler();
             if(!this.action.install(s_IllegalInstruction) || !this.stack.install())
-                FailTestCleanup();
+                TerminateInvariant();
             ExchangeTerminationHandler(this.termination);
         }
     }
@@ -51,7 +51,7 @@ void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTermina
     ASSERT_TRUE(desired.clearMask());
     ASSERT_TRUE(desired.install(s_IllegalInstruction));
     ExchangeTerminationHandler(OriginalTerminateOwner);
-    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(installArena);
     config.applicationName = "restore-native-hooks";
@@ -77,7 +77,7 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
     SignalStackMemory memory;
     SignalEnvironment previous;
     ASSERT_TRUE(previous.save());
-    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> slot;
     mut PersistentCrashConfig config = slot.constructIn(installArena);
     config.applicationName = "preserve-foreign-hooks";

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_DefaultRootDirectoryName = "crashes";
 const StringView s_TestStorageDirectoryName = "test_storage";
 const StringView s_SpoolDirectoryName = "spool";
 

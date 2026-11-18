@@ -115,38 +115,11 @@ extern void WriteProbeFloat(in f32 value, in usize index, mut auto target);
 [cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::WatchAppend")]
 extern CaseCleanup WatchAppend(mut auto values, in auto callback);
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::SymmetrizeDenseBitMatrix")]
-extern void SymmetrizeDenseBitMatrix(mut auto matrix, in usize count, in usize words);
-
 [cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::SymmetrizeCompactBitMatrix")]
 extern void SymmetrizeCompactBitMatrix(mut auto matrix, in auto offsets, in auto ranges, in usize count, in usize words);
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendSha1Hex")]
-extern void AppendSinkSha1(in Sha1Digest digest, mut CharSink sink);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexByte")]
-extern void AppendSinkByte(in u8 value, mut CharSink sink);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::HashCombine")]
-extern void CombineProbeHash(mut usize seed, in HashProbe probe);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::ReadPOD")]
-extern Expected<T> ReadProbePod<T>(in auto bytes, mut usize offset);
-
 [cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::GlobalFilesystemDetail::MutableReadBuffer")]
 extern auto ProbeMutableReadBuffer(mut ThrowingMutableByteSource bytes);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::MakeDiagnosticEventText")]
-extern DiagnosticEventText FormatProbeText(in StringView format, in auto value);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexU32")]
-extern void AppendProbeHex32(in u32 value, mut auto text);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexU64")]
-extern void AppendProbeHex64(in u64 value, mut auto text);
-
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexU32UnsignedLiteral")]
-extern void AppendProbeLiteral(in u32 value, mut auto text);
 
 [cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::CaseIndexSet")]
 extern class CaseIndexSet{
@@ -160,9 +133,6 @@ extern void CallStoredFunction(mut FunctionStorage value);
 
 [cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::ThrowTestRuntime")]
 extern void ThrowTestRuntime(in auto text);
-
-[cpp_header("<global/bit.h>"), cpp_name("::PackFourCharTag")]
-extern u32 PackTestCharTag(in NarrowChar first, in auto second, in auto third, in auto fourth);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

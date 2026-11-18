@@ -625,7 +625,7 @@ void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResiz
         usize previousIndices = 0u;
         for(usize boundsIndex = 0u; boundsIndex < boundsList.size(); ++boundsIndex){
             const Rect bounds = boundsList[boundsIndex];
-            self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, scale, scale), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+            self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, scale, scale), generation, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
             ++generation;
             self.m_paint.pushClip(Rect(12.0f, 10.0f, 210.0f, 140.0f));
             const Rect inherited = Rect(25.0f, 24.0f, 110.0f, 70.0f);
@@ -659,7 +659,7 @@ void VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBefo
     emptyRegions[3u] = Rect(220.0f, 20.0f, 40.0f, 40.0f);
     for(usize regionIndex = 0u; regionIndex < emptyRegions.size(); ++regionIndex){
         const Rect bounds = emptyRegions[regionIndex];
-        self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+        self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
         ++generation;
         self.m_paint.pushClip(inherited);
         ASSERT_TRUE(label.paint(self.m_text, self.m_paint, bounds));
@@ -672,7 +672,7 @@ void VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBefo
         EXPECT_TRUE(snapshot.indices().empty());
     }
     ASSERT_EQ(label.setText(MakeUiDefaultShapeRequest("MMMMMMMMMMMM")), TextLayoutStatus::Success);
-    self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    self.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
     self.m_paint.pushClip(inherited);
     EXPECT_FALSE(label.paint(self.m_text, self.m_paint, Rect(20.0f, 20.0f, 30.0f, 20.0f), Color(1.0f, 1.0f, 1.0f, 2.0f)));
     ExpectUiRect(self.m_paint.currentClip(), inherited);
@@ -810,7 +810,7 @@ void VerifyUiTextRegionTests_SelectableCentersWithinAsymmetricVerticalPaddingIns
     ASSERT_TRUE(measured.has_value());
     ASSERT_LT(measured.value().height, content.height);
     PaintBuilder reference = PaintBuilder();
-    reference.begin(display, 2u, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    reference.begin(display, 2u, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
     reference.pushClip(content);
     const f32 centeredY = (content.height - measured.value().height) * 0.5f + content.y;
     const Point origin = Point(content.x - measured.value().x, centeredY - measured.value().y);
@@ -997,7 +997,7 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             EXPECT_GE(inkTop, state.placement.content.y - 0.0001f);
             EXPECT_LE(inkTop + measured.value().height, contentBottom + 0.0001f);
             PaintBuilder reference = PaintBuilder();
-            reference.begin(display, generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+            reference.begin(display, generation, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
             ++generation;
             ASSERT_TRUE(self.m_text.paint(reference, layout.value(), state.placement.textOrigin, self.m_builder.editStyle().text));
             const auto expectedCoverage = UiTextRegionGlyphCoverageArea(reference.freeze());
@@ -1110,7 +1110,7 @@ void VerifyUiTextRegionTests_SelectableMetricsUseEveryStatePaddingAndMinimumWith
     u64 generation = 1u;
     for(usize flagIndex = 0u; flagIndex < flagCases.size(); ++flagIndex){
         const SelectablePaintFlags flags = flagCases[flagIndex];
-        self.m_paint.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), generation, self.m_skinGeneration, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+        self.m_paint.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), generation, self.m_skinGeneration, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
         ++generation;
         ASSERT_TRUE(PaintSelectable(self.m_paint, self.m_text, self.m_skin, layout.value(), textBounds.value(), metrics.value().padding, Rect(20.0f, 30.0f, 180.0f, 70.0f), Rect(0.0f, 0.0f, 800.0f, 600.0f), style, flags, Color(), Color()));
         const DrawSnapshot snapshot = self.m_paint.freeze();
@@ -1293,7 +1293,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     self.m_paint.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
     ASSERT_TRUE(self.m_paint.drawGlyph(oldPage, Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
     PaintBuilder reference = PaintBuilder();
-    reference.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), 2u, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    reference.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), 2u, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
     ASSERT_TRUE(reference.prepareGlyphPages(prior));
     reference.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
     ASSERT_TRUE(reference.drawGlyph(oldPage, Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));

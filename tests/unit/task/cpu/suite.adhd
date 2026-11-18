@@ -228,7 +228,7 @@ void VerifyCpuTaskCleanupTests_SchedulerDestructorPropagatesCallerFailureToTheTe
     u32 handled = 0u;
     u32 retiredOnCatch = 0u;
     i32 result = 0;
-    result = CatchTaskFailure<TerminalTaskError>(lambda[mut retirements, mut callbacks]() -> i32{
+    result = InvokeTerminalEntry<TerminalTaskError>(lambda[mut retirements, mut callbacks]() -> i32{
         CpuTaskScheduler scheduler(0u);
         const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
             EXPECT_TRUE(active);
@@ -266,7 +266,7 @@ void VerifyCpuTaskCleanupTests_ScopeDestructorPropagatesCallerFailureAfterDraini
     u32 retiredOnCatch = 0u;
     usize outstandingOnCatch = 1u;
     i32 result = 0;
-    result = CatchTaskFailure<TerminalTaskError>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
+    result = InvokeTerminalEntry<TerminalTaskError>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
         CpuTaskScope scope(scheduler);
         const auto cpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
             EXPECT_TRUE(active);
@@ -302,7 +302,7 @@ void VerifyCpuTaskCleanupTests_UnrelatedUnwindCancelsQueuedTasksWithoutReplacing
     u32 callbacks = 0u;
     u32 retiredOnCatch = 0u;
     i32 result = 0;
-    result = CatchTaskFailure<TerminalTaskError>(lambda[mut retirements, mut callbacks]() -> i32{
+    result = InvokeTerminalEntry<TerminalTaskError>(lambda[mut retirements, mut callbacks]() -> i32{
         CpuTaskScheduler scheduler(0u);
         CpuTaskScope scope(scheduler);
         const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
@@ -390,7 +390,7 @@ void VerifyCpuTaskCleanupTests_NestedRangeFailureJoinsItsSubtreeBeforeUnwindingT
     u32 retiredOnCatch = 0u;
     usize outstandingOnCatch = 1u;
     i32 result = 0;
-    result = CatchTaskFailure<TerminalTaskError>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
+    result = InvokeTerminalEntry<TerminalTaskError>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
         CpuTaskScope scope(scheduler);
         const auto cpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut scope, mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
             EXPECT_TRUE(active);
@@ -458,7 +458,7 @@ void VerifyCpuTaskCleanupTests_LoaderShutdownJoinsPostCallbackTasksBeforeCallbac
     u32 lateRetiredOnCatch = 1u;
     usize outstandingOnCatch = 1u;
     i32 result = 0;
-    result = CatchTaskFailure<TerminalTaskError>(lambda[mut scope, mut retirements, mut callbacks, mut ownerAlive, mut lateRetirements]() -> i32{
+    result = InvokeTerminalEntry<TerminalTaskError>(lambda[mut scope, mut retirements, mut callbacks, mut ownerAlive, mut lateRetirements]() -> i32{
         ShutdownSubmittingCallbacks owner(scope, ownerAlive, retirements, lateRetirements, callbacks);
         LoaderShutdownGuard shutdown(owner, scope);
         shutdown.activate();

@@ -26,8 +26,6 @@ extern class SkinStorage{
     UfbxSkin view()const;
 };
 
-[cpp_header("<global/compile.h>"), cpp_name("FOUNDATION_OCCUR_WARNING")]
-extern const b8 s_OccurWarning;
 
 const f64 s_QuietNaNF64 = BitCast<f64>(cast<u64>(0x7ff8000000000000u));
 const f64 s_InfinityF64 = BitCast<f64>(cast<u64>(0x7ff0000000000000u));
@@ -164,7 +162,7 @@ void VerifyFbxOptions_MixedSkinningSelectionIsRejected(){
     EXPECT_FALSE(staticOnly.value());
     summary.observe(true);
     EXPECT_FALSE(summary.resolve().has_value());
-    if(s_OccurWarning)
+    if(s_RuntimeWarningsEnabled)
         EXPECT_TRUE(SawCapturedMessage(logger, s_WarnMixedSkinning));
     EXPECT_EQ(logger.errorCount(), 0u);
 }

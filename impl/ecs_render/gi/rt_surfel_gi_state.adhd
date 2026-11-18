@@ -38,8 +38,6 @@ extern const u32 s_ShaderSurfelGuideFloat4Stride;
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_POOL_CAPACITY")]
 extern const u32 s_ShaderSurfelPoolCapacity;
 
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_HASH_CELL_COUNT")]
-extern const u32 s_ShaderSurfelHashCellCount;
 static_assert(size_of<SurfelHeapPushConstants>() == size_of<u32>() * 15u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
 static_assert(s_ShaderSurfelConvergedRaysPerSurfel >= 1u && s_ShaderSurfelConvergedRaysPerSurfel <= s_ShaderSurfelRaysPerSurfel);
 static_assert(s_ShaderSurfelConvergedUniformRaysPerSurfel >= 1u && s_ShaderSurfelConvergedUniformRaysPerSurfel <= s_ShaderSurfelConvergedRaysPerSurfel);

@@ -11,7 +11,7 @@
 
 class AdhdTestArena{ public HeapStorage arena; }
 
-b8 CompileWithResolver(in StringView source, in StringView path, mut CompilerIncludeResolver resolver, mut HeapStorage arena, mut CompileResult result){
+b8 CompileWithResolver(in StringView source, in StringView path, mut MetascriptIIncludeResolver resolver, mut HeapStorage arena, mut CompileResult result){
     CompilerOptions options;
     options.source = source;
     options.virtualFilePath = path;
@@ -22,39 +22,39 @@ b8 CompileWithResolver(in StringView source, in StringView path, mut CompilerInc
 StringView GeneratedHeaderView(in CompileResult result){ return StringView(result.generatedHeader); }
 StringView GeneratedSourceView(in CompileResult result){ return StringView(result.generatedSource); }
 StringView FirstErrorMessage(in CompileResult result){ return StringView(result.errors[0u].message); }
-StringView MStringAsView(in MString text){ return StringView(text); }
+StringView MStringAsView(in GlobalString text){ return StringView(text); }
 
-class MockIncludeResolver : CompilerIncludeResolver{
+class MockIncludeResolver : MetascriptIIncludeResolver{
     public u32 resolveCallCount = 0u;
-    public b8 resolveInclude(in StringView includePath, in b8 isSystem, mut CompilerStorage arena, mut MString outResolvedKey, mut MString outContent)override{
+    public b8 resolveInclude(in StringView includePath, in b8 isSystem, mut GlobalAllocator arena, mut GlobalString outResolvedKey, mut GlobalString outContent)override{
         ++this.resolveCallCount;
-        outResolvedKey = MString(includePath, arena);
+        outResolvedKey = GlobalString(includePath, arena);
         if(includePath == "shared_service.adhd"){
             const StringView s_ServiceHeader =
                 "interface IStore<T> {\r\n    void put(in T value);\r\n}\r\n[reflect]\r\nclass SharedService {\r\n    private i32 m_total = 0;\r\n    public i32 accumulate(in i32 delta);\r\n}\r\n";
-            outContent = MString(s_ServiceHeader, arena);
+            outContent = GlobalString(s_ServiceHeader, arena);
             return true;
         }
         if(includePath == "foreign_bridge.adhd"){
             const StringView s_ForeignBridge =
                 "#include \"foreign_defs.adhd\"\r\nconst u32 kSameBridgeConst = 3u;\r\n";
-            outContent = MString(s_ForeignBridge, arena);
+            outContent = GlobalString(s_ForeignBridge, arena);
             return true;
         }
         if(includePath == "foreign_defs.adhd"){
             const StringView s_ForeignDefs =
                 "const u32 kForeignCap = 4;\r\nconst u32 kForeignConst = 7u;\r\nconst u32 kForeignOther = 11u;\r\nenum<u8> ForeignMode { Alpha = 1, Beta = 2, kCount }\r\n[serialize]\r\nclass ForeignItem {\r\n    public u32 tag = 1u;\r\n}\r\n[arena, asset(\"mock_foreign\")]\r\nclass ForeignAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nu32 ForeignFn(in u32 x) {\r\n    return x + kForeignOther;\r\n}\r\n";
-            outContent = MString(s_ForeignDefs, arena);
+            outContent = GlobalString(s_ForeignDefs, arena);
             return true;
         }
         if(includePath == "impl/modular_box.adhd"){
             const StringView s_ModularBoxHeader =
                 "class RefTarget {\r\n    public u32 value = 0u;\r\n}\r\n[modular]\r\nclass ModularBox : NoCopy {\r\n    private mut RefTarget m_target;\r\n    private Vector<u32> m_items;\r\n    public ModularBox(mut RefTarget target, in u32 seed);\r\n    public u32 read()const;\r\n    public void append(in u32 val);\r\n}\r\n";
-            outContent = MString(s_ModularBoxHeader, arena);
+            outContent = GlobalString(s_ModularBoxHeader, arena);
             return true;
         }
         const StringView s_HeaderCode = "const u32 kSharedLimit = 16;\r\n";
-        outContent = MString(s_HeaderCode, arena);
+        outContent = GlobalString(s_HeaderCode, arena);
         return true;
     }
     public StringView resolveIncludeNamespace(in StringView resolvedKey)const override{
@@ -600,7 +600,7 @@ void VerifyAdhdCompiler_PreservesNumericLiteralSuffixesUnderSingleLetterMacrosAn
     EXPECT_NE(cppView.find("f32 scale = 1.0f;"), usize.max);
     EXPECT_NE(cppView.find("u32 mask = (0x10u + 10u);"), usize.max);
 
-    const MString relNs = DeriveNamespaceFromPath("impl/2d_scene/node.adhd", arena.arena);
+    const GlobalString relNs = DeriveNamespaceFromPath("impl/2d_scene/node.adhd", arena.arena);
     EXPECT_EQ(MStringAsView(relNs), "NWB::Impl::_2dScene");
 
     ExpectCompileFails(arena, "[reflect, reflect]\r\nvoid DupAttr() {}\r\n", "impl/sim/dup_attr.adhd");
@@ -619,7 +619,7 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
             MetascriptPreprocessorMacro macro(arena.arena);
             macro.name.assign(name);
             macro.body.assign(value);
-            MString key(name, arena.arena);
+            GlobalString key(name, arena.arena);
             macros.store(key, macro);
         };
         const auto addUnary = lambda[mut arena, mut macros](in StringView name, in StringView value) -> void{
@@ -628,7 +628,7 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
             macro.parameters.emplace_back("x", arena.arena);
             macro.body.assign(value);
             macro.isFunctionLike = true;
-            MString key(name, arena.arena);
+            GlobalString key(name, arena.arena);
             macros.store(key, macro);
         };
         addObject("A", "answer");
@@ -638,7 +638,7 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
         MetascriptPreprocessorMacroExpander expander(arena.arena, macros, errors);
 
         const MStringView unchanged = "defined (A) native { A; } F and a long unchanged line";
-        MString storage("keep", other.arena);
+        GlobalString storage("keep", other.arena);
         StringView view = StringView();
         ASSERT_TRUE(expander.expandToView(unchanged, 1u, storage, view));
         EXPECT_EQ(view, unchanged);
@@ -649,7 +649,7 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
         EXPECT_EQ(TestDataAddress(view), 0u);
         EXPECT_EQ(MStringView(storage), "keep");
 
-        MString output("old", other.arena);
+        GlobalString output("old", other.arena);
         ASSERT_TRUE(expander.expand(unchanged, 1u, output));
         EXPECT_EQ(MStringView(output), unchanged);
         EXPECT_TRUE(TestUsesStorage(output, arena.arena));
@@ -671,7 +671,7 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
         variadic.body = "x|__VA_ARGS__|...";
         variadic.isFunctionLike = true;
         variadic.isVariadic = true;
-        MString variadicKey("V", arena.arena);
+        GlobalString variadicKey("V", arena.arena);
         macros.store(variadicKey, variadic);
         ASSERT_TRUE(expander.expand("V(A, two, (3,4))", 1u, output));
         EXPECT_EQ(MStringView(output), "answer|two, (3,4)|two, (3,4)");
@@ -698,9 +698,9 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
         EXPECT_EQ(MStringView(a.value().body), "VALUE");
         for(u32 i = 0u; i < 17u; ++i){
             String name = String("M");
-            AppendUnsignedU64Text(name, i);
+            AppendUnsignedU64Text(name, cast<u64>(i));
             String next = String("M");
-            AppendUnsignedU64Text(next, i + 1u);
+            AppendUnsignedU64Text(next, cast<u64>(i + 1u));
             addObject(name, next);
         }
         ASSERT_TRUE(expander.expand("M0", 1u, output));
@@ -1280,7 +1280,7 @@ void RunExternHeaderAndDeclEdgeCases(){
     const StringView kFullExternCompileSource = "\nextern \"<core/alloc/scratch.h>\";\nextern \"<core/metascript/parser.h>\";\nextern \"<core/graphics/rhi/gpu_descriptor_heap.h>\";\nextern \"<core/graphics/backend_selection/backend.h>\";\nextern \"<core/task/gpu/task_graph.h>\";\nextern \"<core/graphics/runtime/runtime.h>\";\n\nclass LocalIncludeResolver : MetascriptIIncludeResolver{\n    public b8 resolve(in StringView includePath, mut Arena arena, mut String outSource){\n        return false;\n    }\n}\n\nb8 InspectCoreExternApis(\n    in StringView src,\n    mut Document doc,\n    mut MetascriptDocument aliasDoc,\n    mut GraphicsRuntime runtime,\n    mut GpuTaskGraph graph\n){\n    const u32 invalidHandle = GpuDescriptorHandle::s_Invalid;\n    const b8 okDefault = doc.parse(src);\n    const b8 okAlias = aliasDoc.parse(src);\n    b8 visitedVar = false;\n    doc.visitVariable(\"flag\", lambda[mut visitedVar](in MetascriptValue val) -> void{\n        visitedVar = val.isNumeric();\n    });\n\n    const u64 frameIdx = runtime.getFrameIndex();\n    mut Device device = runtime.getDevice();\n    mut GpuDescriptorHeap heap = device.getDescriptorHeap();\n    const b8 heapReady = heap.isInitialized();\n    Expected<GpuDescriptorHandle> allocated = heap.allocate(GpuDescriptorClass::Sampler);\n    graph.reset();\n\n    return (invalidHandle != 0u) && okDefault && okAlias && visitedVar && (frameIdx >= 0u) && heapReady && allocated.hasValue();\n}\n";
 
     CompileResult fullRes(arena.arena);
-    MString emittedExterns(arena.arena);
+    GlobalString emittedExterns(arena.arena);
     CompilerOptions fullOpts;
     fullOpts.source = kFullExternCompileSource;
     fullOpts.virtualFilePath = "impl/edge_cases/full_extern.adhd";
@@ -1317,9 +1317,9 @@ void RunExternHeaderAndDeclEdgeCases(){
     EXPECT_FALSE(emittedExterns.empty());
     if(!emittedExterns.empty()){
         const StringView kRoundTripConsumer = "\n[cpp_name(\"::MyNs::DirectMode\"), cpp_header(\"<my_ns/types.h>\")]\nextern enum DirectMode{\n    Fast = 0,\n    Accurate = 1\n};\n\n[cpp_name(\"::MyNs::AccessBits\"), cpp_header(\"<my_ns/types.h>\")]\nextern flag AccessBits{\n    None = 0,\n    Read = 1,\n    Write = 2\n};\n\n[cpp_name(\"::MyNs::Counter\"), cpp_header(\"<my_ns/types.h>\")]\nextern class Counter : NoCopy{\n    static u32 s_Count;\n    static u32 Next();\n    u32 addWithDefault(in u32 delta = {});\n};\n\n[cpp_name(\"::MyNs::ComputeScale\"), cpp_header(\"<my_ns/types.h>\")]\nextern f32 ComputeScale(in DirectMode mode = {});\n\n[cpp_name(\"::MyNs::kMaxItems\"), cpp_header(\"<my_ns/types.h>\")]\nextern const u32 kMaxItems;\n\nb8 ExerciseEmittedAndManualExterns(\n    in StringView src,\n    mut Document doc,\n    mut MetascriptDocument aliasDoc,\n    mut Counter counter\n){\n    const u32 invalidHandle = GpuDescriptorHandle::s_Invalid;\n    const u32 count = Counter::s_Count;\n    const u32 nextVal = Counter::Next();\n    const u32 updated = counter.addWithDefault();\n    const f32 scale = ComputeScale();\n    const DirectMode mode = DirectMode::Accurate;\n    const AccessBits bits = AccessBits::Read | AccessBits::Write;\n    return doc.parse(src)\n        && aliasDoc.parse(src)\n        && (invalidHandle != 0u)\n        && (count <= kMaxItems)\n        && (nextVal > 0u)\n        && (updated > 0u)\n        && (scale > 0.0f)\n        && (mode != DirectMode::Fast)\n        && (bits != AccessBits::None);\n}\n";
-        MString roundTripSrc(arena.arena);
+        GlobalString roundTripSrc(arena.arena);
         roundTripSrc.append(emittedExterns);
-        roundTripSrc.push_back(10u);
+        roundTripSrc.push_back(cast<u8>(10u));
         roundTripSrc.append(kRoundTripConsumer);
 
         CompileResult roundTripRes(arena.arena);
@@ -1489,7 +1489,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_TRUE(foundParseSingleArg);
     EXPECT_FALSE(foundFindVariable);
 
-    const MString formattedExtern = FormatExternAdhd(unit, arena.arena);
+    const GlobalString formattedExtern = FormatExternAdhd(unit, arena.arena);
     EXPECT_FALSE(formattedExtern.empty());
     EXPECT_NE(MStringView(formattedExtern).find("[cpp_header(\"core/"), usize.max);
 

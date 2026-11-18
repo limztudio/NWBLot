@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "vulkan_types.adhd"
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/common/value_storage.adhd>
@@ -63,12 +64,6 @@ extern const VkCompositeAlphaFlagBitsKHR VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_
 
 [cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR")]
 extern const VkCompositeAlphaFlagBitsKHR VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-
-[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkExtent2D"), cpp_flags(self_defaulted, brace_init)]
-extern class VkExtent2D{
-    u32 width;
-    u32 height;
-};
 
 [cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkSurfaceFormatKHR"), cpp_flags(self_defaulted, brace_init)]
 extern class VkSurfaceFormatKHR{

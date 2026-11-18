@@ -3,7 +3,6 @@ nwb_target_adhd_sources(nwb_reflection_smoke NAMESPACE "NWB::Tests::Smoke" SOURC
             "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_scenes.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_suite_scenes.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_probes_and_runtime.adhd"
-            "${CMAKE_CURRENT_LIST_DIR}/reflection_project.adhd"
         )
 nwb_target_adhd_definitions(nwb_reflection_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
 nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}" reflection_probes_and_runtime nwb_ecs_model nwb_ecs_mesh_skinning)

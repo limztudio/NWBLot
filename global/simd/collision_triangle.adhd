@@ -30,6 +30,9 @@ extern b8 TriangleDoubleContainsPoint2D(in VectorDouble a0, in VectorDouble a1, 
 extern VectorDouble TriangleDoubleEdgeCross2D(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2);
 
 [cpp_name("::TriangleDoubleTests::Intersects")]
+extern b8 DoubleTrianglesIntersect(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble b0, in VectorDouble b1, in VectorDouble b2);
+
+[cpp_name("::TriangleDoubleTests::Intersects")]
 extern Expected<f64> TriangleDoubleIntersects(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble a3, in auto a4 = {}, in auto a5 = {});
 
 [cpp_name("::TriangleDoubleTests::SignedArea2D")]

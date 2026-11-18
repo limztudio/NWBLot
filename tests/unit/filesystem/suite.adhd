@@ -467,7 +467,7 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
             loggerBlocked = logger.blocked();
             Vector<u8> loaded;
             if(ReadBinaryFile(backup, loaded) && loaded.size() == original.size())
-                backupMatchedOriginal = SameVolumeBytes(loaded, original);
+                backupMatchedOriginal = BytesMatch(Span<u8>(loaded), Span<u8>(original));
         }
     }
 
@@ -512,7 +512,7 @@ void VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloa
         Vector<u8> loaded;
         ASSERT_TRUE(filesystem.readFile(s_FilesystemNameProjectTestsCompactTarget, loaded));
         ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_TRUE(SameVolumeBytes(loaded, payload));
+        EXPECT_TRUE(BytesMatch(Span<u8>(loaded), Span<u8>(payload)));
     }
 
     ASSERT_TRUE(filesystem.unmount());
@@ -700,7 +700,7 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
             for(in u8 byte : payload) expected.push_back(byte);
             ASSERT_TRUE(ReadBinaryFile(segmentPath, actual));
             ASSERT_EQ(actual.size(), expected.size());
-            EXPECT_TRUE(SameVolumeBytes(actual, expected));
+            EXPECT_TRUE(BytesMatch(Span<u8>(actual), Span<u8>(expected)));
         };
         verifyImage(0u);
         ASSERT_TRUE(filesystem.get().unmount());
@@ -714,7 +714,7 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
                 EXPECT_TRUE(loaded.empty());
             else{
                 ASSERT_EQ(loaded.size(), payload.size());
-                EXPECT_TRUE(SameVolumeBytes(loaded, payload));
+                EXPECT_TRUE(BytesMatch(Span<u8>(loaded), Span<u8>(payload)));
             }
         }
         ASSERT_TRUE(filesystem.get().unmount());
@@ -773,7 +773,7 @@ void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectorie
     EXPECT_FALSE(backupExists.value());
 }
 
-void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFiles(mut FilesystemVolumeTest self){
+void VerifyIncompletePublicationRollback(mut FilesystemVolumeTest self, in b8 throwingLogger){
     StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
@@ -792,15 +792,18 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
         {
             StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
             StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
-            BlockingRestoreLogger logger(output, false);
+            BlockingRestoreLogger logger(output, throwingLogger);
             LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
-            EXPECT_FALSE(PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratch, observer, stageCleanup, backupCleanup));
+            if(throwingLogger)
+                ExpectSignedException(PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratch, observer, stageCleanup, backupCleanup));
+            else
+                EXPECT_FALSE(PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratch, observer, stageCleanup, backupCleanup));
             EXPECT_TRUE(logger.blocked());
         }
         Vector<u8> loaded;
         ASSERT_TRUE(ReadBinaryFile(backup, loaded));
         ASSERT_EQ(loaded.size(), oldBytes.size());
-        EXPECT_TRUE(SameVolumeBytes(loaded, oldBytes));
+        EXPECT_TRUE(BytesMatch(Span<u8>(loaded), Span<u8>(oldBytes)));
         const auto stageExists = IsDirectory(paths.stageDirectory);
         ASSERT_TRUE(stageExists);
         EXPECT_TRUE(stageExists.value());
@@ -808,146 +811,76 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
     }
 
     EXPECT_TRUE(rollbackFailed);
+}
+
+void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFiles(mut FilesystemVolumeTest self){
+    VerifyIncompletePublicationRollback(self, false);
 }
 
 void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback(mut FilesystemVolumeTest self){
-    StagedDirectoryPaths paths = StagedDirectoryPaths();
-    b8 rollbackFailed = false;
+    VerifyIncompletePublicationRollback(self, true);
+}
+
+void VerifyFailedSegmentPromotion(mut FilesystemVolumeTest self, in b8 throwingLogger){
+    const Path baseDirectory = self.m_directory;
+    StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
+    stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
+    stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
+    ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
+
+    const auto firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
+    const auto firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
+
+    const Array<u8, 3> firstOld(1u, 2u, 3u);
+    const Array<u8, 4> secondOld(4u, 5u, 6u, 7u);
+    const Array<u8, 2> replacement(8u, 9u);
+
+    ASSERT_TRUE(WriteBinaryFile(firstOutput, firstOld));
+    ASSERT_TRUE(WriteBinaryFile(secondOutput, secondOld));
+    ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
 
     {
         ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
-        paths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
-        paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
-        ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
-        ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
-        const auto output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
-        const Array<u8, 3u> oldBytes(1u, 2u, 3u);
-        ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
-        RollbackSignal signal;
-        const VolumePublicationObserver observer = BindVolumeObserver(signal);
-        {
-            StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
-            StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
-            BlockingRestoreLogger logger(output, true);
-            LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
-            ExpectSignedException(PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratch, observer, stageCleanup, backupCleanup));
-            EXPECT_TRUE(logger.blocked());
+        if(throwingLogger){
+            ThrowingPublishLogger logger;
+            LoggerRegistrationGuard guard(logger, LoggerBreakPolicy::ReportOnly);
+            ExpectSignedException(PublishTestVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratch.arena));
         }
-        Vector<u8> loaded;
-        ASSERT_TRUE(ReadBinaryFile(backup, loaded));
-        ASSERT_EQ(loaded.size(), oldBytes.size());
-        EXPECT_TRUE(SameVolumeBytes(loaded, oldBytes));
-        const auto stageExists = IsDirectory(paths.stageDirectory);
-        ASSERT_TRUE(stageExists);
-        EXPECT_TRUE(stageExists.value());
-        rollbackFailed = signal.triggered;
+        else{
+            EXPECT_FALSE(PublishTestVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratch.arena));
+            EXPECT_TRUE(SawCapturedError(self.m_logger, "failed to promote staged segment"));
+        }
     }
 
-    EXPECT_TRUE(rollbackFailed);
+    Vector<u8> loaded;
+    ASSERT_TRUE(ReadBinaryFile(firstOutput, loaded).has_value());
+    ASSERT_EQ(loaded.size(), firstOld.size());
+    for(usize i = 0u; i < firstOld.size(); ++i)
+        EXPECT_EQ(loaded[i], firstOld[i]);
+
+    ASSERT_TRUE(ReadBinaryFile(secondOutput, loaded).has_value());
+    ASSERT_EQ(loaded.size(), secondOld.size());
+    for(usize i = 0u; i < secondOld.size(); ++i)
+        EXPECT_EQ(loaded[i], secondOld[i]);
+
+    if(!throwingLogger){
+        const auto absentOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
+        const Expected<b8, ErrorCode> absent = FileExists(absentOutput);
+        ASSERT_TRUE(absent.has_value());
+        EXPECT_FALSE(absent.value());
+        const Expected<b8, ErrorCode> backup = FileExists(stagedPaths.backupDirectory);
+        ASSERT_TRUE(backup.has_value());
+        EXPECT_FALSE(backup.value());
+    }
 }
 
 void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedBytes(mut FilesystemVolumeTest self){
-    const Path baseDirectory = self.m_directory;
-    StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
-    stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
-    stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
-    ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
-
-    const auto firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-    const auto secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
-    const auto absentOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
-    const auto firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
-
-    Array<u8, 3> firstOld = Array<u8, 3>();
-    firstOld[0u] = 1u;
-    firstOld[1u] = 2u;
-    firstOld[2u] = 3u;
-    Array<u8, 4> secondOld = Array<u8, 4>();
-    secondOld[0u] = 4u;
-    secondOld[1u] = 5u;
-    secondOld[2u] = 6u;
-    secondOld[3u] = 7u;
-    Array<u8, 2> replacement = Array<u8, 2>();
-    replacement[0u] = 8u;
-    replacement[1u] = 9u;
-
-    ASSERT_TRUE(WriteBinaryFile(firstOutput, firstOld));
-    ASSERT_TRUE(WriteBinaryFile(secondOutput, secondOld));
-    ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
-
-    b8 published = true;
-    {
-        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
-        published = PublishTestVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratch.arena);
-    }
-    EXPECT_FALSE(published);
-    EXPECT_TRUE(SawCapturedError(self.m_logger, "failed to promote staged segment"));
-
-    Vector<u8> loaded;
-    ASSERT_TRUE(ReadBinaryFile(firstOutput, loaded).has_value());
-    ASSERT_EQ(loaded.size(), firstOld.size());
-    for(usize i = 0u; i < firstOld.size(); ++i)
-        EXPECT_EQ(loaded[i], firstOld[i]);
-
-    ASSERT_TRUE(ReadBinaryFile(secondOutput, loaded).has_value());
-    ASSERT_EQ(loaded.size(), secondOld.size());
-    for(usize i = 0u; i < secondOld.size(); ++i)
-        EXPECT_EQ(loaded[i], secondOld[i]);
-
-    const Expected<b8, ErrorCode> absent = FileExists(absentOutput);
-    ASSERT_TRUE(absent.has_value());
-    EXPECT_FALSE(absent.value());
-    const Expected<b8, ErrorCode> backup = FileExists(stagedPaths.backupDirectory);
-    ASSERT_TRUE(backup.has_value());
-    EXPECT_FALSE(backup.value());
+    VerifyFailedSegmentPromotion(self, false);
 }
 
 void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedBytesDuringUnwind(mut FilesystemVolumeTest self){
-    const Path baseDirectory = self.m_directory;
-    StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
-    stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
-    stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
-    ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
-
-    const auto firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-    const auto secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
-    const auto firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
-
-    Array<u8, 3> firstOld = Array<u8, 3>();
-    firstOld[0u] = 1u;
-    firstOld[1u] = 2u;
-    firstOld[2u] = 3u;
-    Array<u8, 4> secondOld = Array<u8, 4>();
-    secondOld[0u] = 4u;
-    secondOld[1u] = 5u;
-    secondOld[2u] = 6u;
-    secondOld[3u] = 7u;
-    Array<u8, 2> replacement = Array<u8, 2>();
-    replacement[0u] = 8u;
-    replacement[1u] = 9u;
-
-    ASSERT_TRUE(WriteBinaryFile(firstOutput, firstOld));
-    ASSERT_TRUE(WriteBinaryFile(secondOutput, secondOld));
-    ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
-
-    {
-        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
-        ThrowingPublishLogger throwingLogger;
-        LoggerRegistrationGuard throwingLoggerGuard(throwingLogger, LoggerBreakPolicy::ReportOnly);
-        ExpectSignedException(PublishTestVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratch.arena));
-    }
-
-    Vector<u8> loaded;
-    ASSERT_TRUE(ReadBinaryFile(firstOutput, loaded).has_value());
-    ASSERT_EQ(loaded.size(), firstOld.size());
-    for(usize i = 0u; i < firstOld.size(); ++i)
-        EXPECT_EQ(loaded[i], firstOld[i]);
-
-    ASSERT_TRUE(ReadBinaryFile(secondOutput, loaded).has_value());
-    ASSERT_EQ(loaded.size(), secondOld.size());
-    for(usize i = 0u; i < secondOld.size(); ++i)
-        EXPECT_EQ(loaded[i], secondOld[i]);
+    VerifyFailedSegmentPromotion(self, true);
 }
 
 

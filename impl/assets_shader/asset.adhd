@@ -15,158 +15,183 @@ interface IShader{
     b8 loadBinary(in Span<u8> binary);
 }
 
+class ShaderEntryPointRange{
+    public usize offset = 0u;
+    public usize length = 0u;
+
+    public StringView view(in Span<u8> bytecode)const{
+        return ShaderEntryPointView(bytecode, this.offset, this.length);
+    }
+}
+
+b8 LoadShaderBinaryForStage(in IShader shaderAsset, in Span<u8> binary, in ShaderType shaderType, mut ShaderEntryPointRange outEntryPoint, mut Vector<u8> outBytecode){
+    if(!shaderAsset.checkVirtualPath("IShader::loadBinaryForStage"))
+        return false;
+
+    const Expected<AssetPayloadView, AssetPayloadDecodeFailure> payload = DecodeAssetPayload(binary);
+    if(!payload.has_value()){
+        ReportShaderAssetPayloadDecodeFailure(payload.error());
+        return false;
+    }
+
+    const Expected<StringView, SpirvEntryPointLookupResult> lookupResult = ResolveSpirvEntryPointName(
+        payload.value().bytecode,
+        payload.value().entryPoint,
+        ShaderType::ToMask(shaderType)
+    );
+    if(!lookupResult.has_value()){
+        error("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed", payload.value().entryPoint, shaderAsset.assetType().resolvedText());
+        return false;
+    }
+
+    const Expected<usize> entryPointOffset = FindBinaryTextOffset(payload.value().bytecode, lookupResult.value());
+    if(!entryPointOffset.has_value())
+        return false;
+    const usize entryPointLength = lookupResult.value().size();
+    AssignTriviallyCopyableVector(outBytecode, payload.value().bytecode);
+    outEntryPoint.offset = entryPointOffset.value();
+    outEntryPoint.length = entryPointLength;
+    return true;
+}
+
 [arena, asset("vertex_shader")]
 class VertexShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("hull_shader")]
 class HullShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("domain_shader")]
 class DomainShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("geometry_shader")]
 class GeometryShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("pixel_shader")]
 class PixelShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("compute_shader")]
 class ComputeShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("amplification_shader")]
 class AmplificationShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("mesh_shader")]
 class MeshShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("ray_generation_shader")]
 class RayGenerationShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("any_hit_shader")]
 class AnyHitShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("closest_hit_shader")]
 class ClosestHitShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("miss_shader")]
 class MissShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("intersection_shader")]
 class IntersectionShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 [arena, asset("callable_shader")]
 class CallableShader : IShader{
-    private usize m_entryPointOffset = 0u;
-    private usize m_entryPointLength = 0u;
+    private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
 
-    public StringView entryPoint()const override{ return ShaderEntryPointView(Span<u8>(this.m_bytecode), this.m_entryPointOffset, this.m_entryPointLength); }
+    public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_entryPoint, this.m_bytecode); }
 }
 
 

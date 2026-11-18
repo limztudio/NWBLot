@@ -48,9 +48,6 @@ extern class CpuSetBuffer{
     WindowsCpuSet at(in u32 offset)const;
 };
 
-[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::testing::ExitedWithCode")]
-extern class TopologyExitCode;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -115,11 +112,11 @@ void CheckProcessDefaultCpuSets(){
 }
 
 void VerifyProcessAffinityMask(){
-    ASSERT_EXIT(CheckProcessAffinityMask(), TopologyExitCode(0), "");
+    ASSERT_EXIT(CheckProcessAffinityMask(), ExitedWithCode(0), "");
 }
 
 void VerifyProcessDefaultCpuSets(){
-    ASSERT_EXIT(CheckProcessDefaultCpuSets(), TopologyExitCode(0), "");
+    ASSERT_EXIT(CheckProcessDefaultCpuSets(), ExitedWithCode(0), "");
 }
 
 void VerifyLinuxThreadAffinity(){
@@ -132,7 +129,7 @@ void VerifyLinuxThreadAffinity(){
     u32 processor = u32.max;
     u32 usableCount = 0u;
     b8 affinityIsAny = false;
-    TestThread worker(lambda[in target, mut applied, mut restrictedSize, mut processor, mut usableCount, mut affinityIsAny]() -> void{
+    JoiningThread worker(lambda[in target, mut applied, mut restrictedSize, mut processor, mut usableCount, mut affinityIsAny]() -> void{
         applied = SetCurrentThreadCpuPlacement(target);
         if(!applied)
             return;

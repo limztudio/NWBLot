@@ -121,10 +121,6 @@ b8 FinalizeRuntimeBufferUpload(
 
 const StringView s_MeshSkinningAssetLoadContext = "MeshSkinningRuntimeCache";
 
-[cpp_name("NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE"), cpp_header("<impl/assets/graphics/mesh/runtime_bounds_constants.h>")]
-extern const u32 s_ShaderRuntimeMeshBoundsBytes;
-static_assert(s_RuntimeMeshBoundsByteSize == s_ShaderRuntimeMeshBoundsBytes, "Runtime mesh bounds byte size must match shader ABI");
-
 b8 ValidateRuntimeMeshUploadPayload(in MeshSkinningRuntimeInstance instance){
     if(!ValidateRuntimeMeshUploadPayloadStreams(instance.sourceName, instance.hasCompleteSplitMeshPayload(), instance.restPositions.size(),
         instance.restNormals.size(), instance.restTangents.size(), instance.uv0.size(), instance.colors.size(), instance.skin.size(), instance.meshlets,

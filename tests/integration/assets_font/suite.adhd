@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/integration/asset_fixture_paths.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/font_fixture.adhd>
 #include <tests/common/memory.adhd>
@@ -14,9 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("NWB_REPO_ROOT")]
-extern const StringView s_RepoRoot;
-
 [cpp_header("<tests/integration/assets_font/freetype_probe.h>"), cpp_name("::NWB::Tests::FontCases::FreeTypeProbe"), cpp_flags(no_copy, no_assign)]
 extern class FreeTypeProbe{
     i32 initialize();
@@ -27,14 +25,6 @@ extern class FreeTypeProbe{
 
 const usize s_FontBinaryHeaderSize = size_of<FontBinaryHeader>();
 const usize s_PreparedGroupSize = size_of<PreparedFontImageGroup>();
-
-Vector<u8> CopyAssetBytes(in Span<u8> source){
-    Vector<u8> bytes;
-    bytes.reserve(source.size());
-    for(in u8 value : source)
-        bytes.push_back(value);
-    return bytes;
-}
 
 const u32 s_CollectionSignature = 0x74746366u;
 
@@ -124,10 +114,6 @@ class CutCase{
     }
 }
 
-Path BundledFontRoot(){
-    return Path(s_RepoRoot) / "impl" / "assets" / "ui" / "fonts" / "default";
-}
-
 void WriteBigU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset] = cast<u8>(value >> 24u);
     bytes[offset + 1u] = cast<u8>(value >> 16u);
@@ -165,7 +151,7 @@ b8 SpanDataOffsetMatches(in Span<u8> tableBytes, in Vector<u8> source, in usize 
 }
 
 b8 LoadLatin(mut Font outFont){
-    const Path path = BundledFontRoot() / "latin.font";
+    const Path path = BundledFontFixtureDirectory(s_CookTestRepoRoot) / "latin.font";
     Expected<Vector<u8>, StringView> sourceResult = ReadBundledFontBytes(path);
     if(!sourceResult.has_value())
         return false;
@@ -192,7 +178,7 @@ b8 SerializeFixtureSource(in SourceFixture fixture, mut Vector<u8> outBinary){
 }
 
 b8 WriteCase(in StringView filename, in Vector<u8> binary, mut Path outPath){
-    const Path candidate = Path(s_RepoRoot) / "__artifacts" / "font_source_tests" / filename;
+    const Path candidate = Path(s_CookTestRepoRoot) / "__artifacts" / "font_source_tests" / filename;
     if(!EnsureDirectories(candidate.parentPath()).has_value() || !WriteBinaryFile(candidate, binary))
         return false;
     outPath = candidate;
@@ -332,7 +318,7 @@ void VerifyAssetsFont_SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAdding
 void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRuntimeImport(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    const Path bundledRoot = BundledFontRoot();
+    const Path bundledRoot = BundledFontFixtureDirectory(s_CookTestRepoRoot);
     Array<StringView, 2u> bundledFilenames = Array<StringView, 2u>();
     bundledFilenames[0u] = "latin.font";
     bundledFilenames[1u] = "korean.font";
@@ -344,8 +330,8 @@ void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedBy
         const Path bundledPath = bundledRoot / bundledFilenames[index];
         const Expected<Vector<u8>, StringView> sourceResult = ReadBundledFontBytes(bundledPath);
         ASSERT_TRUE(sourceResult.has_value());
-        const Vector<u8> source = CopyAssetBytes(sourceResult.value());
-        Vector<u8> sourceCopy = CopyAssetBytes(source);
+        const Vector<u8> source = CopyFontFixtureBytes(sourceResult.value());
+        Vector<u8> sourceCopy = CopyFontFixtureBytes(source);
         font.setFontBytes(sourceCopy);
         ASSERT_TRUE(font.validatePayload());
         Vector<u8> prepared;
@@ -366,7 +352,7 @@ void VerifyAssetsFont_MalformedBinaryPreservesThePreviouslyLoadedFont(){
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
     ASSERT_TRUE(LoadLatin(font));
-    const Vector<u8> original = CopyAssetBytes(font.fontBytes());
+    const Vector<u8> original = CopyFontFixtureBytes(font.fontBytes());
     FontBinaryHeader validHeader = FontBinaryHeader();
     validHeader.byteCount = original.size();
     for(u32 variant = 0u; variant < 7u; ++variant){
@@ -427,7 +413,7 @@ void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
     unsupportedSignatures[2u] = 0x774f4632u;
     unsupportedSignatures[3u] = 0x74727565u;
     for(usize index = 0u; index < unsupportedSignatures.size(); ++index){
-        Vector<u8> bytes = CopyAssetBytes(font.fontBytes());
+        Vector<u8> bytes = CopyFontFixtureBytes(font.fontBytes());
         WriteBigU32At(bytes, 0u, unsupportedSignatures[index]);
         EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     }
@@ -435,7 +421,7 @@ void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
     variableTags[0u] = 0x66766172u;
     variableTags[1u] = 0x43464632u;
     for(usize index = 0u; index < variableTags.size(); ++index){
-        Vector<u8> bytes = CopyAssetBytes(font.fontBytes());
+        Vector<u8> bytes = CopyFontFixtureBytes(font.fontBytes());
         WriteBigU32At(bytes, s_FontSfntHeaderBytes, variableTags[index]);
         EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     }
@@ -449,7 +435,7 @@ void VerifyAssetsFont_RejectsMalformedDirectoriesAndNativeFaceMetrics(){
     ASSERT_TRUE(LoadLatin(font));
     for(u32 variant = 0u; variant < 7u; ++variant){
         const ScopedTestTrace trace(variant);
-        Vector<u8> bytes = CopyAssetBytes(font.fontBytes());
+        Vector<u8> bytes = CopyFontFixtureBytes(font.fontBytes());
         switch(variant){
         case 0u:
             bytes[s_SfntTableCountHighByte] = 0u;
@@ -547,7 +533,7 @@ void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCo
     usize imageOffset = s_PixelOffset;
     for(usize index = 0u; index < corruptImageFilenames.size(); ++index){
         const ScopedTestTrace trace(index);
-        Vector<u8> corrupted = CopyAssetBytes(binary);
+        Vector<u8> corrupted = CopyFontFixtureBytes(binary);
         usize corruptionOffset = s_HeaderBytes + 16u;
         if(index < s_GroupCount)
             corruptionOffset = imageOffset;
@@ -588,7 +574,7 @@ void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
         usize offset = s_FontOffset;
         if(index == 1u)
             offset = 24u;
-        Vector<u8> corrupted = CopyAssetBytes(binary);
+        Vector<u8> corrupted = CopyFontFixtureBytes(binary);
         corrupted[offset] ^= 0x40u;
         ASSERT_TRUE(WriteCase(corruptSfntFilenames[index], corrupted, path));
         EXPECT_FALSE(CanReadPrepared(path, false));
@@ -600,7 +586,7 @@ void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
 
 void CheckMalformedPreparedField(in MalformedField field, in Vector<u8> binary, mut HeapStorage outputArena){
     const ScopedTestTrace trace(field.m_filename);
-    Vector<u8> malformed = CopyAssetBytes(binary);
+    Vector<u8> malformed = CopyFontFixtureBytes(binary);
     WriteLittleU32At(malformed, field.m_offset, field.m_value);
     Path path = Path();
     ASSERT_TRUE(WriteCase(field.m_filename, malformed, path));
@@ -661,7 +647,7 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
         CheckMalformedPreparedField(fields[index], binary, outputArena);
 
     // Valid maximum dimensions still require their full payload length before any SFNT/image allocation.
-    Vector<u8> oversized = CopyAssetBytes(binary);
+    Vector<u8> oversized = CopyFontFixtureBytes(binary);
     WriteLittleU32At(oversized, s_HeaderBytes, s_MaxImageSide);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupHeightField, s_MaxImageSide);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount);
@@ -698,7 +684,7 @@ void VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadMod
 
     for(usize index = 0u; index < cuts.size(); ++index){
         const ScopedTestTrace trace(cuts[index].m_filename);
-        Vector<u8> malformed = CopyAssetBytes(binary);
+        Vector<u8> malformed = CopyFontFixtureBytes(binary);
         malformed.resize(cuts[index].m_byteCount);
         ASSERT_TRUE(WriteCase(cuts[index].m_filename, malformed, path));
         EXPECT_FALSE(CanReadPrepared(path, false));

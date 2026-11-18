@@ -147,7 +147,7 @@ class TextBakedTests{
         auto payload = DeserializeFontAtlasPayload(binary.value());
         if(!payload.has_value())
             return false;
-        payload.value().font = MakeUiFontAssetRef(path);
+        payload.value().font = MakeUiFixtureAssetRef<Font>(path);
         this.m_atlas.setPayload(payload.value());
         return true;
     }
@@ -216,48 +216,8 @@ const AStringView s_UiTextScrollChildPopupKey = "child";
 const AStringView s_UiTextBakedSampleGlyphText = "A";
 
 
-class UiTextAreaModelSnapshot{
-    public String text;
-    public u64 instance;
-    public u64 revision;
-    public u64 external;
-    public u64 selection;
-    public u64 composition;
-    public usize anchor;
-    public usize caret;
-    public b8 composing;
-    public b8 undo;
-    public b8 redo;
-
-    public UiTextAreaModelSnapshot(in EditModel model){
-        const StringView view = model.text();
-        if(!view.empty())
-            this.text.assign(view.data(), view.size());
-        this.instance = model.instanceGeneration();
-        this.revision = model.revision();
-        this.external = model.externalRevision();
-        this.selection = model.selectionGeneration();
-        this.composition = model.compositionGeneration();
-        this.anchor = model.anchor();
-        this.caret = model.caret();
-        this.composing = model.composition().active;
-        this.undo = model.canUndo();
-        this.redo = model.canRedo();
-    }
-}
-
 void ExpectUiTextAreaScrollLifetimeModel(in UiTextAreaScrollLifetimeTests self, in EditModel model, in UiTextAreaModelSnapshot before){
-    EXPECT_EQ(model.text(), StringView(before.text.data(), before.text.size()));
-    EXPECT_EQ(model.instanceGeneration(), before.instance);
-    EXPECT_EQ(model.revision(), before.revision);
-    EXPECT_EQ(model.externalRevision(), before.external);
-    EXPECT_EQ(model.selectionGeneration(), before.selection);
-    EXPECT_EQ(model.compositionGeneration(), before.composition);
-    EXPECT_EQ(model.anchor(), before.anchor);
-    EXPECT_EQ(model.caret(), before.caret);
-    EXPECT_EQ(model.composition().active, before.composing);
-    EXPECT_EQ(model.canUndo(), before.undo);
-    EXPECT_EQ(model.canRedo(), before.redo);
+    before.expect(model);
     EXPECT_EQ(self.m_host.loans, 0u);
     EXPECT_EQ(self.m_host.publishes, 0u);
 }

@@ -384,7 +384,7 @@ Expected<MeshBuildResult> BuildMesh(in Span<MeshInstance> instances, in Span<usi
         result.inverseBindMatrices.swap(skinContext.inverseBindMatrices);
     }
 
-    const auto canonicalized = CanonicalizeCanonicalMeshStreams(
+    const auto canonicalized = CanonicalizeMeshStreams(
         result.mesh.positions,
         result.mesh.normals,
         result.mesh.tangents,
@@ -392,7 +392,8 @@ Expected<MeshBuildResult> BuildMesh(in Span<MeshInstance> instances, in Span<usi
         result.mesh.colors,
         result.mesh.skin,
         result.mesh.indices.size(),
-        result.mesh.vertexRefs
+        result.mesh.vertexRefs,
+        PositionSkinRemap::Deduplicate
     );
     if(!canonicalized.has_value())
         return MakeUnexpected(Failure());

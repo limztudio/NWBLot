@@ -8,13 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/cli/tool_cli.adhd>
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasAvx")]
 extern const b8 s_MaskHasAvx;
-
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
-extern const b8 s_MaskUsesSsePairs;
 
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::AvxMoveMask")]
 extern u32 BenchmarkAvxMoveMask(in VectorDouble value);
@@ -31,7 +26,7 @@ extern VectorSingle BenchmarkLowSingleBits(in VectorDouble value);
 u32 MaskKernelBaselineMoveDouble(in VectorDouble value){
     if(s_MaskHasAvx)
         return BenchmarkAvxMoveMask(value);
-    if(s_MaskUsesSsePairs)
+    if(s_BenchmarkUsesSsePairs)
         return BenchmarkPairMoveMask(value, false) | (BenchmarkPairMoveMask(value, true) << 2u);
     const VectorDouble bits = BenchmarkSignLanes(value);
     return cast<u32>(SimdGetDoubleLaneBits(bits, 0u) | (SimdGetDoubleLaneBits(bits, 1u) << 1u) |
@@ -60,17 +55,6 @@ b8 MaskKernelEqualDouble3<const b8 Candidate>(in VectorDouble a, in VectorDouble
     if(Candidate)
         return VectorDouble3Equal(a, b);
     return (MaskKernelBaselineMoveDouble(VectorDoubleEqual(a, b)) & 7u) == 7u;
-}
-
-u32 MaskKernelObserve<const u32 KindIndex, const b8 Candidate>(in VectorDouble a, in VectorDouble b){
-    if(KindIndex == 0u)
-        return MaskKernelMoveDouble<Candidate>(a);
-    else if(KindIndex == 1u)
-        return MaskKernelEqualFloat4<Candidate>(BenchmarkLowSingleBits(a), BenchmarkLowSingleBits(b));
-    else if(KindIndex == 2u)
-        return MaskKernelEqualDouble4<Candidate>(a, b);
-    else
-        return MaskKernelEqualDouble3<Candidate>(a, b);
 }
 
 u32 MaskKernelApply<const u32 KindIndex, const b8 Candidate>(in VectorDouble a, in VectorDouble b){
@@ -114,15 +98,15 @@ b8 MaskKernelCheckMoveMaskDoubleEquivalence(in VectorDouble value){
 u32 MaskKernelAuditCompareImpl<const u32 KindIndex>(in VectorDouble a, in VectorDouble b){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return 3u;
-    SetMathErrno(0);
-    const u32 baselineValue = MaskKernelObserve<KindIndex, false>(a, b);
+    WritePowerError(0);
+    const u32 baselineValue = MaskKernelApply<KindIndex, false>(a, b);
     const i32 baselineFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    const i32 baselineErrno = CurrentMathErrno();
+    const i32 baselineErrno = ReadPowerError();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return 3u;
-    SetMathErrno(0);
-    const u32 candidateValue = MaskKernelObserve<KindIndex, true>(a, b);
-    if(candidateValue != baselineValue || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags || CurrentMathErrno() != baselineErrno)
+    WritePowerError(0);
+    const u32 candidateValue = MaskKernelApply<KindIndex, true>(a, b);
+    if(candidateValue != baselineValue || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags || ReadPowerError() != baselineErrno)
         return 4u;
     return 0u;
 }
@@ -305,19 +289,6 @@ i32 RunMaskBenchmarkCli(in Span<StringView> args){
     return 0;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 RunMaskBenchmarkCliEntry(in ConsoleArguments arguments){
-    if(arguments.count <= 0)
-        return 2;
-    Array<StringView, 8> args;
-    const usize count = Min(cast<usize>(arguments.count), args.size());
-    for(usize index = 0u; index < count; ++index)
-        args[index] = arguments.text(cast<i32>(index));
-    return RunMaskBenchmarkCli(Span<StringView>(args).first(count));
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

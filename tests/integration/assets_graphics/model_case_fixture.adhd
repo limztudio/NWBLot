@@ -33,9 +33,7 @@ const StringView s_SkeletonJointRight = "right";
 
 
 [cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Bytes")]
-extern GraphicsOwnedBytes NewGraphicsBytes(mut HeapStorage storage);
-[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::AssetBytes")]
-extern class GraphicsOwnedBytes;
+extern AssetByteBuffer NewGraphicsBytes(mut HeapStorage storage);
 
 
 [ordered]

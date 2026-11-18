@@ -5,6 +5,7 @@
 #include "crash_observation.adhd"
 #include "protocol_sdk.adhd"
 #include "shutdown_capture.adhd"
+#include "symbolication_sdk.adhd"
 #include <logger/server/crash_auth.adhd>
 #include <logger/server/crash_manifest_validator.adhd>
 #include <logger/server/crash_path_names.adhd>
@@ -38,11 +39,6 @@ extern class CrashIngestResult{
 
 [cpp_header("<logger/server/crash_ingest.adhd.h>"), cpp_name("::NWB::Log::ProcessCrashUpload")]
 extern CrashIngestResult ProcessCrashUpload(mut HeapStorage storage, in Path archive, in CrashIngestConfig config);
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashPackageSummary")]
-extern class CrashPackageSummary{
-    String triggerMessage;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

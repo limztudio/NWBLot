@@ -4,7 +4,7 @@
 
 #include <impl/assets_graphics/mesh_subsystem.adhd>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
-#include <impl/ecs_render/csg/csg_resources_and_peel.adhd>
+#include <impl/ecs_render/csg/cutter_gpu_data.adhd>
 #include <impl/ecs_render/shared/renderer_push_constants_private.adhd>
 #include <impl/ecs_render/material/instance_typed_ranges.adhd>
 #include <impl/ecs_render/material/material_internal.adhd>
@@ -253,7 +253,7 @@ class MaterialDrawGather{
             revision = this.registry.revision();
         }
         in FramebufferInfoEx framebufferInfo = this.framebuffer.getFramebufferInfo();
-        const MaterialPipelineKey key = BuildMaterialPassPipelineKey(material.materialName, BuildCsgFramebufferInfo(framebufferInfo), this.pass, material.twoSided, clipActive, evaluator, revision);
+        const MaterialPipelineKey key = BuildMaterialPassPipelineKey(material.materialName, FramebufferInfo(framebufferInfo), this.pass, material.twoSided, clipActive, evaluator, revision);
         const auto primary = this.pipeline(material, key);
         if(!primary.has_value() || !this.prepareGeometry(mesh, primary.value()))
             return false;
@@ -411,28 +411,16 @@ void RendererMaterialSystem::gatherDraws(in FramebufferHandle framebuffer, in Ma
 
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION")]
 extern const u32 s_EmulationVertexPositionLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET")]
-extern const u32 s_EmulationVertexPositionOffset;
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION")]
 extern const u32 s_EmulationVertexNormalLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET")]
-extern const u32 s_EmulationVertexNormalOffset;
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION")]
 extern const u32 s_EmulationVertexTangentLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET")]
-extern const u32 s_EmulationVertexTangentOffset;
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_UV0_LOCATION")]
 extern const u32 s_EmulationVertexUv0Location;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET")]
-extern const u32 s_EmulationVertexUv0Offset;
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION")]
 extern const u32 s_EmulationVertexColorLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET")]
-extern const u32 s_EmulationVertexColorOffset;
 [cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION")]
 extern const u32 s_EmulationVertexWorldPositionLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET")]
-extern const u32 s_EmulationVertexWorldPositionOffset;
 
 [cpp_unwind]
 Expected<BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
@@ -467,12 +455,12 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
 
     if(!this.m_materialState.m_emulationInputLayout.valid()){
         Array<VertexAttributeDesc, 6u> attributes;
-        SetEmulatedVertexAttribute(Format::RGBA32_FLOAT, s_EmulationVertexPositionOffset, "POSITION", attributes[s_EmulationVertexPositionLocation]);
-        SetEmulatedVertexAttribute(Format::RGBA16_FLOAT, s_EmulationVertexNormalOffset, "NORMAL", attributes[s_EmulationVertexNormalLocation]);
-        SetEmulatedVertexAttribute(Format::RGBA16_FLOAT, s_EmulationVertexTangentOffset, "TANGENT", attributes[s_EmulationVertexTangentLocation]);
-        SetEmulatedVertexAttribute(Format::RG32_FLOAT, s_EmulationVertexUv0Offset, "TEXCOORD", attributes[s_EmulationVertexUv0Location]);
-        SetEmulatedVertexAttribute(Format::RGBA16_FLOAT, s_EmulationVertexColorOffset, "COLOR", attributes[s_EmulationVertexColorLocation]);
-        SetEmulatedVertexAttribute(Format::RGBA32_FLOAT, s_EmulationVertexWorldPositionOffset, "POSITION1", attributes[s_EmulationVertexWorldPositionLocation]);
+        SetEmulatedVertexAttribute(Format::RGBA32_FLOAT, s_ShaderMeshEmulationVertexPositionByteOffset, "POSITION", attributes[s_EmulationVertexPositionLocation]);
+        SetEmulatedVertexAttribute(Format::RGBA16_FLOAT, s_ShaderMeshEmulationVertexNormalByteOffset, "NORMAL", attributes[s_EmulationVertexNormalLocation]);
+        SetEmulatedVertexAttribute(Format::RGBA16_FLOAT, s_ShaderMeshEmulationVertexTangentByteOffset, "TANGENT", attributes[s_EmulationVertexTangentLocation]);
+        SetEmulatedVertexAttribute(Format::RG32_FLOAT, s_ShaderMeshEmulationVertexUv0ByteOffset, "TEXCOORD", attributes[s_EmulationVertexUv0Location]);
+        SetEmulatedVertexAttribute(Format::RGBA16_FLOAT, s_ShaderMeshEmulationVertexColorByteOffset, "COLOR", attributes[s_EmulationVertexColorLocation]);
+        SetEmulatedVertexAttribute(Format::RGBA32_FLOAT, s_ShaderMeshEmulationVertexWorldPositionByteOffset, "POSITION1", attributes[s_EmulationVertexWorldPositionLocation]);
 
         mut Device device = this.m_graphics.getDevice();
         auto emulationInputLayoutResult = device.createInputLayout(attributes, this.m_materialState.m_emulationVertexShader.deref());

@@ -34,10 +34,10 @@ extern const StringView s_ConstantBoundedText;
 extern const b8 s_DebugNameBuild;
 
 [cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_RuntimeWideName")]
-extern const WideView s_RuntimeWideName;
+extern const WideStringView s_RuntimeWideName;
 
 [cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_InvalidWideNameText")]
-extern const WideView s_InvalidWideNameText;
+extern const WideStringView s_InvalidWideNameText;
 
 [cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::InteropNameText")]
 extern class InteropNameText;
@@ -52,16 +52,16 @@ extern Expected<NameHash, NameTextError> NullNameHash();
 extern NameHash LiteralHash(in auto text);
 
 [cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::Name::FromText<wchar>")]
-extern Expected<Name, NameTextError> WideNameFromText(in WideView value);
+extern Expected<Name, NameTextError> WideNameFromText(in WideStringView value);
+
+[cpp_header("<global/diagnostics.h>"), cpp_name("::MakeDiagnosticEventText")]
+extern DiagnosticEventText FormatDiagnosticName(in StringView format, in Name value);
 
 [cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::ToName<wchar>")]
-extern Expected<Optional<Name>, NameTextError> ToWideName(in WideView text);
+extern Expected<Optional<Name>, NameTextError> ToWideName(in WideStringView text);
 
 [cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::ToName")]
 extern Expected<Optional<Name>, NameTextError> ToContainerName(in auto text);
-
-[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::MakeDiagnosticEventText")]
-extern DiagnosticEventText FormatDiagnosticName(in StringView format, in Name value);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

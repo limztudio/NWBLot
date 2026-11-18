@@ -50,15 +50,11 @@ Expected<GpuTaskId> DeclareCsgRayProbe(in CsgRayProbeTask payload, mut GpuTaskGr
     const Array<BufferHandle, 2u> buffers(payload.output, payload.readback);
     Array<GpuTaskResourceUse, 2u> uses;
     for(u32 i = 0u; i < buffers.size(); ++i){
-        GpuGraphResourceDesc description;
-        description.setIdentity(buffers[i].deref().getCreationDescription().debugName).setMarkerLabel("CSG ray edge probe buffer")
-            .setType(GpuGraphResourceType::Buffer).setInitialState(ResourceStates::CopyDest).setExternalFinalState(ResourceStates::CopyDest);
-        const auto imported = graph.importBuffer(buffers[i], description);
-        if(!imported.has_value())
+        const ProbeBufferImport buffer(buffers[i], "CSG ray edge probe buffer", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite);
+        const auto use = buffer.importUse(graph);
+        if(!use.has_value())
             return MakeUnexpected(Failure());
-        uses[i].resource = imported.value();
-        uses[i].requiredState = ResourceStates::CopyDest;
-        uses[i].access = GpuTaskResourceAccess::ReadWrite;
+        uses[i] = use.value();
     }
     GpuTaskDesc description;
     description.setIdentity(Name("tests/csg_ray/dispatch")).setMarkerLabel("CSG ray edge probe").setResourceUses(uses);

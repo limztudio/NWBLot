@@ -19,24 +19,6 @@ namespace Tests::MathCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ::NWB::Tests::FloatingPointControl::ReadPowerError;
-using ::NWB::Tests::FloatingPointControl::WritePowerError;
-using ::NWB::Tests::FloatingPointControl::s_SeedPowerError;
-using ::NWB::Tests::FloatingPointControl::s_HasPowerStatus;
-using ::NWB::Tests::FloatingPointControl::s_DenormalSave;
-using ::NWB::Tests::FloatingPointControl::s_DenormalFlush;
-using ::NWB::Tests::FloatingPointControl::WriteRawStatus;
-using ::NWB::Tests::FloatingPointControl::ReadRawStatus;
-using ::NWB::Tests::FloatingPointControl::ClearNativeStatus;
-using ::NWB::Tests::FloatingPointControl::ReadNativeStatus;
-using ::NWB::Tests::FloatingPointControl::s_HasMxcsr;
-using ::NWB::Tests::FloatingPointControl::ReadMxcsr;
-using ::NWB::Tests::FloatingPointControl::WriteMxcsr;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline constexpr b8 ShouldSkipNeon32SqrtCase()noexcept{
 #if defined(FOUNDATION_HAS_NEON) && !defined(FOUNDATION_HAS_NEON64)
     return true;

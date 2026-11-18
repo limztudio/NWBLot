@@ -30,7 +30,7 @@ b8 BuildGraphicsRoots(in Path root, in Path output, in Span<Path> assetRoots, in
     CpuTaskScheduler scheduler(workers);
     AssetBuildOptions options(scheduler);
     const Path normal = root.lexicallyNormal();
-    const auto material = GraphicsFileExists(root / s_AssetsDirectory / s_ShadersDirectory / "material_mesh.nwb");
+    const auto material = FileExists(root / s_AssetsDirectory / s_ShadersDirectory / "material_mesh.nwb");
     if(!material.has_value())
         return false;
     b8 useCaseRoot = !material.value();

@@ -2,17 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_control.adhd>
 #include <tests/common/floating_point_environment_guard.adhd>
 #include <utilities/cli/tool_cli.adhd>
 
-[cpp_header("<cerrno>"), cpp_name("E2BIG")]
-extern const i32 s_ArgumentListTooLong;
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
+extern const b8 s_BenchmarkUsesSsePairs;
 
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadPowerError")]
-extern i32 CurrentMathErrno();
-
-[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WritePowerError")]
-extern void SetMathErrno(in i32 value);
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::ConsumeChecksum")]
+extern void ConsumeBenchmarkChecksum(in u64 value);
 
 void WriteBenchmarkStdout(in StringView text){ ConsoleWrite(text); }
 void WriteBenchmarkStderr(in StringView text){ ConsoleWriteError(text); }
@@ -176,10 +174,10 @@ Expected<Observation> ObserveBinary<EvalT : IDoubleBinaryEvaluator>(
     Observation observation = Observation();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure());
-    SetMathErrno(s_ArgumentListTooLong);
+    WritePowerError(s_SeedPowerError);
     const VectorDouble value = evaluator.evaluate(lhs, rhs);
     observation.flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    observation.error = CurrentMathErrno();
+    observation.error = ReadPowerError();
     for(usize lane = 0u; lane < 4u; ++lane)
         observation.bits[lane] = VectorDoubleGetIntByIndex(value, lane);
     return observation;

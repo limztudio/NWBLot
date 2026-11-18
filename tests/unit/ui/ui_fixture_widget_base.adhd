@@ -280,7 +280,7 @@ class WidgetFixture{
         Font korean(Name("tests/ui/fonts/korean"));
         if(!LoadBundledFixtureFont("korean.font", korean))
             return false;
-        const Array<FontSource, 2u> sources(FontSource(MakeUiFontAssetRef(s_TestLatinFontPath), this.m_font, 1u), FontSource(MakeUiFontAssetRef(s_TestKoreanFontPath), korean, 1u));
+        const Array<FontSource, 2u> sources(FontSource(MakeUiFixtureAssetRef<Font>(s_TestLatinFontPath), this.m_font, 1u), FontSource(MakeUiFixtureAssetRef<Font>(s_TestKoreanFontPath), korean, 1u));
         return this.m_text.setFonts(sources);
     }
     public Expected<Rect> skinQuad(in DrawSnapshot snapshot, in u32 slot)const{ return FindUiSkinSlotQuad(snapshot, slot); }
@@ -333,7 +333,7 @@ void ExpectUiSamePaintSnapshots(in DrawSnapshot actual, in DrawSnapshot expected
 b8 BeginWidgetFixtureFrame(mut WidgetFixture self, in u64 generation, in DisplayMetrics display){
     if(!self.m_context.beginFrame(generation))
         return false;
-    self.m_paint.begin(display, generation, self.m_skinGeneration, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    self.m_paint.begin(display, generation, self.m_skinGeneration, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
     return self.m_context.beginRoot(self.m_root);
 }
 

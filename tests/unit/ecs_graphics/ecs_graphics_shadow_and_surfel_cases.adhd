@@ -48,12 +48,6 @@ extern b8 nwbSurfelSpawnCoversCandidate(in b8 sameCell, in f32 alignment, in f32
 extern const f32 s_TestSurfelGatherFullCoverageWeight;
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPSAMPLE_NORMAL_GATE")]
 extern const f32 s_TestSurfelUpsampleNormalGate;
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CELL_SIZE")]
-extern const f32 s_TestSurfelCellSize;
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_HASH_CELL_COUNT")]
-extern const u32 s_TestSurfelHashCellCount;
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_DEFAULT_RADIUS")]
-extern const f32 s_ShaderSurfelDefaultRadius;
 type CommandQueueEnum = CommandQueue;
 type TransparentShadowSamplingEnum = TransparentShadowSampling;
 type ShadowReceiverResolutionEnum = ShadowReceiverResolution;
@@ -221,13 +215,13 @@ class SurfelFieldRecord{
     public SurfelFieldRecord(in f32x3u position, in f32 radiance){
         this.position = position;
         this.radiance = radiance;
-        this.cell = nwbSurfelCellCoord(position, s_TestSurfelCellSize);
+        this.cell = nwbSurfelCellCoord(position, s_ShaderSurfelCellSize);
     }
 }
 
 f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
     const f32x3u biasedPosition(position.x, position.y, position.z + 0.05f);
-    const SurfelHashInt3 baseCell = nwbSurfelCellCoord(biasedPosition, s_TestSurfelCellSize);
+    const SurfelHashInt3 baseCell = nwbSurfelCellCoord(biasedPosition, s_ShaderSurfelCellSize);
     const Array<SurfelFieldRecord, 2> records(SurfelFieldRecord(f32x3u(0.61f, 0.61f, 0.0f), 1.0f), SurfelFieldRecord(f32x3u(1.21f, 0.61f, 0.0f), 0.0f));
     f32 irradiance = 0.0f;
     f32 totalWeight = 0.0f;
@@ -235,9 +229,9 @@ f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
     for(i32 y = -2; y <= 2; ++y)
     for(i32 x = -2; x <= 2; ++x){
         const SurfelHashInt3 visitedCell(baseCell.x + x, baseCell.y + y, baseCell.z + z);
-        const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_TestSurfelHashCellCount);
+        const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_ShaderSurfelHashCellCount);
         for(in SurfelFieldRecord record : records){
-            if(nwbSurfelHashCell(record.cell, s_TestSurfelHashCellCount) != visitedBucket)
+            if(nwbSurfelHashCell(record.cell, s_ShaderSurfelHashCellCount) != visitedBucket)
                 continue;
             if(validateCell && !nwbSurfelSameCell(record.cell, visitedCell))
                 continue;
@@ -252,8 +246,6 @@ f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
     }
     return irradiance / totalWeight;
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -933,22 +925,22 @@ void VerifySurfelGiQualitySettings_EmptyAndLargestExtentsDoNotWrapTheReducedSize
 void VerifySurfelHash_SymmetricHashCollisionAdmitsEachResidentCellOnce(){
     const SurfelHashInt3 negative = SurfelHashInt3(-1, -1, 0);
     const SurfelHashInt3 positive = SurfelHashInt3(1, 1, 0);
-    ASSERT_EQ(nwbSurfelHashCell(negative, s_TestSurfelHashCellCount), nwbSurfelHashCell(positive, s_TestSurfelHashCellCount));
+    ASSERT_EQ(nwbSurfelHashCell(negative, s_ShaderSurfelHashCellCount), nwbSurfelHashCell(positive, s_ShaderSurfelHashCellCount));
     Array<f32x3u, 2> residents = Array<f32x3u, 2>();
     residents[0u] = f32x3u(-0.01f, -0.01f, 0.0f);
     residents[1u] = f32x3u(0.61f, 0.61f, 0.0f);
     Array<SurfelHashInt3, 2> residentCells = Array<SurfelHashInt3, 2>();
-    residentCells[0u] = nwbSurfelCellCoord(residents[0u], s_TestSurfelCellSize);
-    residentCells[1u] = nwbSurfelCellCoord(residents[1u], s_TestSurfelCellSize);
+    residentCells[0u] = nwbSurfelCellCoord(residents[0u], s_ShaderSurfelCellSize);
+    residentCells[1u] = nwbSurfelCellCoord(residents[1u], s_ShaderSurfelCellSize);
     Array<u32, 2> bucketVisits = Array<u32, 2>();
     Array<u32, 2> admittedVisits = Array<u32, 2>();
     for(i32 z = -2; z <= 2; ++z){
         for(i32 y = -2; y <= 2; ++y){
             for(i32 x = -2; x <= 2; ++x){
                 const SurfelHashInt3 visitedCell = SurfelHashInt3(x, y, z);
-                const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_TestSurfelHashCellCount);
+                const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_ShaderSurfelHashCellCount);
                 for(usize index = 0u; index < 2u; ++index){
-                    if(nwbSurfelHashCell(residentCells[index], s_TestSurfelHashCellCount) != visitedBucket)
+                    if(nwbSurfelHashCell(residentCells[index], s_ShaderSurfelHashCellCount) != visitedBucket)
                         continue;
                     ++bucketVisits[index];
                     if(nwbSurfelSameCell(residentCells[index], visitedCell))
@@ -966,16 +958,16 @@ void VerifySurfelHash_SymmetricHashCollisionAdmitsEachResidentCellOnce(){
 void VerifySurfelHash_NeighborCellBoundaryPreservesTheNormalizedField(){
     const f32x3u before = f32x3u(1.2f - 1e-6f, 0.61f, 0.0f);
     const f32x3u after = f32x3u(1.2f + 1e-6f, 0.61f, 0.0f);
-    ASSERT_EQ(nwbSurfelCellCoord(before, s_TestSurfelCellSize).x, 1);
-    ASSERT_EQ(nwbSurfelCellCoord(after, s_TestSurfelCellSize).x, 2);
+    ASSERT_EQ(nwbSurfelCellCoord(before, s_ShaderSurfelCellSize).x, 1);
+    ASSERT_EQ(nwbSurfelCellCoord(after, s_ShaderSurfelCellSize).x, 2);
     EXPECT_GT(Abs(GatherBoundaryValue(before, false) - GatherBoundaryValue(after, false)), 0.1f);
     EXPECT_NEAR(GatherBoundaryValue(before, true), GatherBoundaryValue(after, true), 1e-5f);
 }
 
 void VerifySurfelHash_CollidingDistantCellsRetainUpperCoordinateBits(){
     const SurfelHashInt3 nearCell = SurfelHashInt3(1, -1, 0);
-    const SurfelHashInt3 distantCell = SurfelHashInt3(1 + cast<i32>(s_TestSurfelHashCellCount), -1, 0);
-    ASSERT_EQ(nwbSurfelHashCell(nearCell, s_TestSurfelHashCellCount), nwbSurfelHashCell(distantCell, s_TestSurfelHashCellCount));
+    const SurfelHashInt3 distantCell = SurfelHashInt3(1 + cast<i32>(s_ShaderSurfelHashCellCount), -1, 0);
+    ASSERT_EQ(nwbSurfelHashCell(nearCell, s_ShaderSurfelHashCellCount), nwbSurfelHashCell(distantCell, s_ShaderSurfelHashCellCount));
     EXPECT_FALSE(nwbSurfelSameCell(distantCell, nearCell));
     EXPECT_FALSE(nwbSurfelSameCell(nearCell, distantCell));
 }
@@ -998,13 +990,6 @@ void VerifySurfelSpawnPolicy_DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel(){
     EXPECT_FALSE(nwbSurfelSpawnCoversCandidate(true, 1.0f, 0.1f * 0.1f, 0.08f, radius, normalBias));
 }
 
-GpuPhysicalQueueId MakePhysicalQueueId(in u16 index, in u16 deviceGeneration){
-    GpuPhysicalQueueId queue = GpuPhysicalQueueId();
-    queue.index = index;
-    queue.deviceGeneration = deviceGeneration;
-    return queue;
-}
-
 GpuTaskTimingKey MakeTaskTimingKey(in Name task, in CommandQueueEnum queue){
     GpuTaskTimingKey key = GpuTaskTimingKey();
     key.task = task;
@@ -1024,7 +1009,7 @@ GpuTaskTimingKey MakeVariantTaskTimingKey(in Name task, in u32 variant, in u32 r
 void VerifyRendererTaskTimingFeedbackState_PublishedSampleBeforeAcceptanceDrainsAssignmentAndDurationWithoutAllocation(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingSampleFirst;
-    const GpuPhysicalQueueId queue = MakePhysicalQueueId(2u, 7u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(2u, 7u);
     const GpuTaskTimingKey key = MakeVariantTaskTimingKey(s_EcsCaseTestsRendererTimingSampleFirstTask, 3u, 4u, CommandQueue::Compute);
     const Expected<GpuTimingSampleAttribution> attributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(attributionResult.has_value());
@@ -1078,7 +1063,7 @@ void VerifyRendererTaskTimingFeedbackState_FailedCollectionEnableAndDisablePrese
 void VerifyRendererTaskTimingFeedbackState_RejectedAndDiscardedCallbacksDoNotAllocate(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingCallbackAllocation;
-    const GpuPhysicalQueueId queue = MakePhysicalQueueId(1u, 2u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(1u, 2u);
     const GpuTaskTimingKey key = MakeTaskTimingKey(s_EcsCaseTestsRendererTimingCallbackAllocationTask, CommandQueue::Compute);
     const Expected<GpuTimingSampleAttribution> rejectedAttributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(rejectedAttributionResult.has_value());
@@ -1103,7 +1088,7 @@ void VerifyRendererTaskTimingFeedbackState_RejectedAndDiscardedCallbacksDoNotAll
 void VerifyRendererTaskTimingFeedbackState_AcceptancePublishesAssignmentBeforeLateDurationWithoutDoubleCommit(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingAcceptFirst;
-    const GpuPhysicalQueueId queue = MakePhysicalQueueId(1u, 5u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(1u, 5u);
     const GpuTaskTimingKey key = MakeVariantTaskTimingKey(s_EcsCaseTestsRendererTimingAcceptFirstTask, 1u, 2u, CommandQueue::Compute);
     const Expected<GpuTimingSampleAttribution> attributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(attributionResult.has_value());
@@ -1145,7 +1130,7 @@ void VerifyRendererTaskTimingFeedbackState_AcceptancePublishesAssignmentBeforeLa
 
 void VerifyRendererTaskTimingFeedbackState_UnpublishedSamplesRetireInEitherRaceOrderWithoutLosingAssignments(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
-    const GpuPhysicalQueueId queue = MakePhysicalQueueId(0u, 3u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(0u, 3u);
     const Name firstScope = s_EcsGraphicsNameTestsRendererTimingUnpublishedFirst;
     const Name secondScope = s_EcsGraphicsNameTestsRendererTimingUnpublishedSecond;
     const GpuTaskTimingKey firstKey = MakeTaskTimingKey(s_EcsCaseTestsRendererTimingUnpublishedFirstTask, CommandQueue::Compute);
@@ -1179,7 +1164,7 @@ void VerifyRendererTaskTimingFeedbackState_UnpublishedSamplesRetireInEitherRaceO
 void VerifyRendererTaskTimingFeedbackState_InvalidPublishedMetadataIsTerminalButKeepsAcceptedAssignment(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingInvalidMetadata;
-    const GpuPhysicalQueueId queue = MakePhysicalQueueId(3u, 9u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(3u, 9u);
     const GpuTaskTimingKey key = MakeTaskTimingKey(s_EcsCaseTestsRendererTimingInvalidMetadataTask, CommandQueue::Graphics);
     const Expected<GpuTimingSampleAttribution> attributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(attributionResult.has_value());
@@ -1206,7 +1191,7 @@ void VerifyRendererTaskTimingFeedbackState_InvalidPublishedMetadataIsTerminalBut
 void VerifyRendererTaskTimingFeedbackState_NonFiniteDurationIsTerminalButKeepsAcceptedAssignment(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingNonFiniteDuration;
-    const GpuPhysicalQueueId queue = MakePhysicalQueueId(2u, 10u);
+    const GpuPhysicalQueueId queue = GpuPhysicalQueueId(2u, 10u);
     const GpuTaskTimingKey key = MakeTaskTimingKey(s_EcsCaseTestsRendererTimingNonFiniteDurationTask, CommandQueue::Compute);
     const Expected<GpuTimingSampleAttribution> attributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(attributionResult.has_value());
@@ -1228,7 +1213,7 @@ void VerifyRendererTaskTimingFeedbackState_NonFiniteDurationIsTerminalButKeepsAc
 void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsAcceptedEntryAwaitingOldSample(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingDeviceChange;
-    const GpuPhysicalQueueId oldQueue = MakePhysicalQueueId(0u, 6u);
+    const GpuPhysicalQueueId oldQueue = GpuPhysicalQueueId(0u, 6u);
     const GpuTaskTimingKey key = MakeTaskTimingKey(s_EcsCaseTestsRendererTimingDeviceChangeTask, CommandQueue::Compute);
     const Expected<GpuTimingSampleAttribution> attributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(attributionResult.has_value());
@@ -1262,7 +1247,7 @@ void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsAcceptedEn
 void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsEntryBeforeSubmissionResolution(){
     TaskTimingFeedbackContext context = TaskTimingFeedbackContext();
     const Name scopeName = s_EcsGraphicsNameTestsRendererTimingUnresolvedDeviceChange;
-    const GpuPhysicalQueueId oldQueue = MakePhysicalQueueId(0u, 12u);
+    const GpuPhysicalQueueId oldQueue = GpuPhysicalQueueId(0u, 12u);
     const GpuTaskTimingKey key = MakeTaskTimingKey(s_EcsCaseTestsRendererTimingUnresolvedDeviceChangeTask, CommandQueue::Compute);
     const Expected<GpuTimingSampleAttribution> attributionResult = context.allocateSampleAttribution();
     ASSERT_TRUE(attributionResult.has_value());

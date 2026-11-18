@@ -7,7 +7,6 @@
 #include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
 #include <tests/unit/ui/snapshot_fault_fixture.adhd>
 #include <tests/common/capturing_logger.adhd>
-#include <tests/common/asset_codec_fixture.adhd>
 #include <tests/common/memory.adhd>
 #include <impl/ecs_ui/toolkit/gpu/image_resources.adhd>
 #include <impl/ecs_ui/toolkit/images/image_loader.adhd>
@@ -23,8 +22,8 @@
 extern b8 ImageFixtureMoveAssignable<T>();
 
 static_assert(!is_cpp_constructible<ImageSource>());
-static_assert(!is_cpp_constructible<ImageSource, mut AssetCodecFixtureStorage, in Texture>());
-static_assert(!is_cpp_constructible<ImageSource, mut AssetCodecFixtureStorage, in Texture, u64>());
+static_assert(!is_cpp_constructible<ImageSource, mut GlobalAllocator, in Texture>());
+static_assert(!is_cpp_constructible<ImageSource, mut GlobalAllocator, in Texture, u64>());
 static_assert(!is_cpp_constructible<ImageSource, in ImageSource>());
 static_assert(!is_cpp_constructible<ImageSource, ImageSource>());
 static_assert(!ImageFixtureMoveAssignable<ImageSource>());
@@ -33,14 +32,14 @@ type GpuTextureImageValidationFixture = PaintImageFixture;
 const Name s_ImageFixtureTexturePath = "tests/ui/image_loader/texture";
 const Name s_ImageFixtureTextureType = "texture";
 
-class MisdirectedImageCodec : AssetCodecFixtureBase{
+class MisdirectedImageCodec : IAssetCodec{
     private b8 m_wrongType;
 
-    [cpp_base(AssetCodecFixtureBase, type)]
+    [cpp_base(IAssetCodec, type)]
     public MisdirectedImageCodec(in borrow Name type, in b8 wrongType){ this.m_wrongType = wrongType; }
 
     [cpp_unwind]
-    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> binary, mut AssetCodecFixtureStorage storage)const override{
+    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> binary, mut GlobalAllocator storage)const override{
         if(this.m_wrongType){
             UniquePtr<IAsset> skin = MakeUnique<UiSkin>(storage, path);
             return skin;

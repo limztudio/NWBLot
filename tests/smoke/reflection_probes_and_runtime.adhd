@@ -48,16 +48,11 @@ const StringView s_ReflectionOpaqueGlassCase = "opaque_glass";
 
 class ReflectionTimingRenderPass{
     public ReflectionTimingRenderPass(mut GraphicsRuntime graphics){
-        this.m_graphics = graphics;
         this.m_pass = TimingProbeUnfocusedPass(graphics);
     }
 
-    public ~ReflectionTimingRenderPass(){
-        this.stop();
-    }
-
     public b8 start(in u32 width, in u32 height){
-        if(this.m_registered)
+        if(this.m_pass.registered())
             return true;
         u32 mipCount = 0u;
         for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
@@ -85,38 +80,21 @@ class ReflectionTimingRenderPass{
         singleRangeScopes[15u] = s_TimingScopeReflectionTemporal.identity;
         singleRangeScopes[16u] = s_TimingScopeReflectionSpatial.identity;
         // Reserve enough timer queries to cover all in-flight passes and depth mips.
-        for(usize i = 0u; i < singleRangeScopes.size(); ++i){
-            const Name scope = singleRangeScopes[i];
-            if(!this.m_graphics.gpuTiming().prepareScopeQueries(scope, this.m_graphics.getDevice(), s_ReflectionTimingInFlightRanges)){
-                error("ReflectionSmokeProject: failed to prepare timing scope '{}'", scope.resolvedText());
-                return false;
-            }
-        }
-        if(!this.m_graphics.gpuTiming().prepareScopeQueries(
-            s_TimingScopeReflectionDepthPyramid.identity,
-            this.m_graphics.getDevice(),
-            s_ReflectionTimingInFlightRanges * mipCount
-        )){
+        if(!this.m_pass.prepareScopes(singleRangeScopes, "ReflectionSmokeProject", "timing scope"))
+            return false;
+        if(!this.m_pass.prepareScope(s_TimingScopeReflectionDepthPyramid.identity, s_TimingProbeInFlightRanges * mipCount)){
             error("ReflectionSmokeProject: failed to prepare depth timing capacity");
             return false;
         }
-        [essential] info("ReflectionSmokeProject: timing in-flight ranges {}", s_ReflectionTimingInFlightRanges);
+        [essential] info("ReflectionSmokeProject: timing in-flight ranges {}", s_TimingProbeInFlightRanges);
         [essential] info("ReflectionSmokeProject: timing depth mip count {}", mipCount);
-        this.m_graphics.addRenderPassToBack(this.m_pass);
-        this.m_registered = true;
+        this.m_pass.registerPass();
         return true;
     }
 
-    public void stop(){
-        if(!this.m_registered)
-            return;
-        this.m_graphics.removeRenderPass(this.m_pass);
-        this.m_registered = false;
-    }
+    public void stop(){ this.m_pass.stop(); }
 
-    private mut GraphicsRuntime m_graphics;
     private TimingProbeUnfocusedPass m_pass;
-    private b8 m_registered = false;
 }
 
 Expected<NotNullUniquePtr<World>> CreateReflectionSmokeWorld(mut ProjectRuntimeContext context){
@@ -1027,10 +1005,7 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicat
             this.m_gpuPassTimingProbe.recordFrame(delta, this.m_context.gpuTimingView());
         }
 
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        f32 tickDelta = delta;
-        if(fixedDelta > 0.0f)
-            tickDelta = fixedDelta;
+        const f32 tickDelta = RendererBaselineDelta(delta);
         if(!TickSmokeWorld(tickDelta, SmokeWorldRef(this.m_world)))
             return false;
         this.reportReflectionStatistics();

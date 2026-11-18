@@ -286,7 +286,7 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     const i32 child = ForkTestChild();
     ASSERT_GE(child, 0);
     if(child == 0){
-        PersistentStorage installArena(s_AssertChildInstallArena, CrashStorageAlignedSize(64u * 1024u));
+        PersistentStorage installArena(s_AssertChildInstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
         TestValueSlot<PersistentCrashConfig> configSlot;
         mut PersistentCrashConfig config = configSlot.constructIn(installArena);
         config.applicationName = s_ApplicationName;
@@ -362,7 +362,7 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
     const Path archiveInputDirectory = ArchiveInputDirectory(group);
     const Path archivePath = ArchivePath(group, stem);
     b8 externalSymbolizerAvailable = false;
-    PersistentStorage installArena(s_RecoverableErrorInstallArena, CrashStorageAlignedSize(64u * 1024u));
+    PersistentStorage installArena(s_RecoverableErrorInstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));
     TestValueSlot<PersistentCrashConfig> configSlot;
     mut PersistentCrashConfig config = configSlot.constructIn(installArena);
     config.applicationName = s_ApplicationName;

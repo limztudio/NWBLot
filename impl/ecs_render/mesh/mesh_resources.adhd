@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/runtime/buffer_names.adhd>
 #include <impl/ecs_render/mesh/mesh_resources_internal.adhd>
 #include <impl/ecs_render/shared/frame_push_constants.adhd>
 #include <impl/ecs_render/mesh/mesh_object_cache_and_view_resources.adhd>
@@ -23,9 +24,6 @@ b8 HasCompleteMeshRawBoundsBuffer(in b8 heapInitialized, in u64 bufferByteSize, 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<impl/assets/graphics/mesh/runtime_bounds_constants.h>"), cpp_name("NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE")]
-extern const u32 s_MeshBoundsPayloadBytes;
 
 [cpp_unwind]
 b8 RendererMeshSystem::prepareComputeEmulationResources(mut MeshResources mesh){
@@ -87,7 +85,7 @@ b8 RendererMeshSystem::createMeshRenderBindings(mut MeshResources mesh){
         mut Device device = this.m_graphics.getDevice();
         mut GpuDescriptorHeap heap = device.getDescriptorHeap();
         in BufferDesc desc = mesh.runtimeLocalBoundsBuffer.deref().getCreationDescription();
-        if(!HasCompleteMeshRawBoundsBuffer(heap.isInitialized(), desc.byteSize, s_MeshBoundsPayloadBytes, desc.canHaveRawViews)){
+        if(!HasCompleteMeshRawBoundsBuffer(heap.isInitialized(), desc.byteSize, s_RuntimeMeshBoundsByteSize, desc.canHaveRawViews)){
             this.releaseMeshGeometryHeapHandles(mesh);
             error("RendererSystem: runtime local bounds require a complete raw GPU buffer");
             return false;
@@ -102,7 +100,7 @@ b8 RendererMeshSystem::createMeshRenderBindings(mut MeshResources mesh){
     if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer.valid() && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
         mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
         in BufferDesc desc = mesh.runtimeMeshletLocalBoundsBuffer.deref().getCreationDescription();
-        const u64 requiredBytes = RequiredRuntimeMeshletBoundsByteSize(mesh.meshletCount, s_MeshBoundsPayloadBytes);
+        const u64 requiredBytes = RequiredRuntimeMeshletBoundsByteSize(mesh.meshletCount, s_RuntimeMeshBoundsByteSize);
         if(!(HasCompleteMeshRawBoundsBuffer(heap.isInitialized(), desc.byteSize, requiredBytes, desc.canHaveRawViews)
             && AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.deref()), mesh.runtimeMeshletLocalBoundsHeapHandle)))
             warning("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows", mesh.meshName.resolvedText());

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/input_service_fixture.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_ui/suite.adhd>
 
@@ -20,14 +21,7 @@ class DelayedClipboard : QueuedClipboardService{
     [cpp_base(QueuedClipboardService, storage)]
     public DelayedClipboard(mut HeapStorage storage){}
 
-    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{
-        ClipboardCapabilities result();
-        if(channel == ClipboardChannel::Clipboard){
-            result.readText = true;
-            result.writeText = true;
-        }
-        return result;
-    }
+    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{ return TestClipboardTextCapabilities(channel); }
     public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text)override{}
     public b8 finishRequest(in ClipboardRequestToken token, in ClipboardStatus status, in StringView text){
         return this.completeNativeRequest(token, status, text);

@@ -8,6 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT")]
+extern const Format s_ShaderAvboitTransmittanceCoreFormat;
+
 const u32 s_AvboitDownsample = 4u;
 const u32 s_AvboitVirtualSlices = 128u;
 const u32 s_AvboitPhysicalSlices = 64u;

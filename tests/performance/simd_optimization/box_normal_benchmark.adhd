@@ -8,16 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/cli/tool_cli.adhd>
-
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDetail::Vector3SignedUnitMask")]
 extern VectorSingle BenchmarkSingleSignedUnitMask(in VectorSingle position, in VectorSingle componentMask);
 
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDoubleDetail::VectorDouble3SignedUnitMask")]
 extern VectorDouble BenchmarkDoubleSignedUnitMask(in VectorDouble position, in VectorDouble componentMask);
-
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::ConsumeChecksum")]
-extern void ConsumeBenchmarkChecksum(in u64 value);
 
 VectorSingle OriginalSingle(in VectorSingle position, in VectorSingle halfExtents, in VectorSingle fallback, in f32 minLengthSquared){
     const VectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
@@ -138,16 +133,16 @@ u64 WorkloadDouble<const b8 Candidate, const b8 Latency>(in Array<BoxNormalDoubl
 b8 CompareBoxNormalSingleKernel(in BoxNormalSingleCase input, mut b8 outEqual, mut i32 outOriginalFlags, mut i32 outCandidateFlags, mut i32 outOriginalErrno, mut i32 outCandidateErrno){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(71);
+    WritePowerError(71);
     const VectorSingle original = RunSingle<false>(input);
     outOriginalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outOriginalErrno = CurrentMathErrno();
+    outOriginalErrno = ReadPowerError();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(71);
+    WritePowerError(71);
     const VectorSingle candidate = RunSingle<true>(input);
     outCandidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outCandidateErrno = CurrentMathErrno();
+    outCandidateErrno = ReadPowerError();
     b8 equal = outOriginalFlags == outCandidateFlags && outOriginalErrno == outCandidateErrno;
     for(usize lane = 0u; lane < 4u; ++lane)
         equal &= SimdGetSingleLaneBits(original, lane) == SimdGetSingleLaneBits(candidate, lane);
@@ -158,16 +153,16 @@ b8 CompareBoxNormalSingleKernel(in BoxNormalSingleCase input, mut b8 outEqual, m
 b8 CompareBoxNormalDoubleKernel(in BoxNormalDoubleCase input, mut b8 outEqual, mut i32 outOriginalFlags, mut i32 outCandidateFlags, mut i32 outOriginalErrno, mut i32 outCandidateErrno){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(71);
+    WritePowerError(71);
     const VectorDouble original = RunDouble<false>(input);
     outOriginalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outOriginalErrno = CurrentMathErrno();
+    outOriginalErrno = ReadPowerError();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    SetMathErrno(71);
+    WritePowerError(71);
     const VectorDouble candidate = RunDouble<true>(input);
     outCandidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outCandidateErrno = CurrentMathErrno();
+    outCandidateErrno = ReadPowerError();
     b8 equal = outOriginalFlags == outCandidateFlags && outOriginalErrno == outCandidateErrno;
     for(usize lane = 0u; lane < 4u; ++lane)
         equal &= SimdGetDoubleLaneBits(original, lane) == SimdGetDoubleLaneBits(candidate, lane);
@@ -484,19 +479,6 @@ i32 RunBoxNormalBenchmarkCli(in Span<StringView> args){
     return 2;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 RunBoxNormalBenchmarkCliEntry(in ConsoleArguments arguments){
-    if(arguments.count <= 0)
-        return 2;
-    Array<StringView, 8> args;
-    const usize count = Min(cast<usize>(arguments.count), args.size());
-    for(usize index = 0u; index < count; ++index)
-        args[index] = arguments.text(cast<i32>(index));
-    return RunBoxNormalBenchmarkCli(Span<StringView>(args).first(count));
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

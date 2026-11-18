@@ -77,7 +77,7 @@ trace fix; it is neither a GPU timing measurement nor an overall performance or
 hardware ray-savings claim. The capture passed with the existing 96-step limit
 and unchanged image assertion thresholds.
 
-The dedicated `nwb_reflection_smoke` target uses `reflection_project.adhd` and
+The dedicated `nwb_reflection_smoke` target uses `reflection_probes_and_runtime.adhd` and
 `framebuffer_capture.adhd`. It reads back the actual 960x720 framebuffer after
 16 graphics presentation frames, then exits through normal application shutdown.
 Run from `Testing/smoke_runtime/<configuration>` so `cwd/res` selects the matching

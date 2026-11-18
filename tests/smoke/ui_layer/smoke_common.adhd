@@ -53,46 +53,19 @@ StringView FormatSmokeRowLabel(in u64 rowKey, mut CompactString label){
     if(rowKey == 0u)
         return "";
     label.assign("Row ");
-    AppendUnsignedDecimal(label, rowKey);
+    AppendUnsignedU64Text(label, rowKey);
     return label.view();
 }
 
 
-class UiListSmokeSource : IListDataSource, NoCopy{
-    private UiListSmokeSourceState m_storage;
-    private mut UiListSmokeSourceState m_state;
+class UiNumberedSmokeSource : IListDataSource, NoCopy{
+    private UiNumberedSmokeRows m_storage;
+    private mut UiNumberedSmokeRows m_state;
     private CompactString m_buffer;
     private mut CompactString m_label;
 
-    public UiListSmokeSource(){
-        this.m_state = this.m_storage;
-        this.m_label = this.m_buffer;
-    }
-
-    public u64 instanceGeneration()const override{ return this.m_state.instanceGeneration(); }
-    public u64 revision()const override{ return this.m_state.revision(); }
-    public u64 rowCount()const override{ return this.m_state.rowCount(); }
-    public u64 key(in u64 index)const override{ return this.m_state.key(index); }
-    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.indexOf(keyValue); }
-    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.findEnabled(start, reverse); }
-    public StringView text(in u64 index)const override{ return FormatSmokeRowLabel(this.m_state.readRowKey(index), this.m_label); }
-    public b8 enabled(in u64 index)const override{ return this.m_state.enabled(index); }
-    public void reverse(){ this.m_state.reverse(); }
-    public void remove(in u64 keyValue){ this.m_state.remove(keyValue); }
-    public void beginFrame(){ this.m_state.beginFrame(); }
-    public b8 reversed()const{ return this.m_state.reversed(); }
-    public u64 removedKey()const{ return this.m_state.removedKey(); }
-    public u32 labelReads()const{ return this.m_state.labelReads(); }
-}
-
-
-class UiComboSmokeSource : IListDataSource, NoCopy{
-    private UiComboSmokeSourceState m_storage;
-    private mut UiComboSmokeSourceState m_state;
-    private CompactString m_buffer;
-    private mut CompactString m_label;
-
-    public UiComboSmokeSource(){
+    public UiNumberedSmokeSource(in u64 initialRevision){
+        this.m_storage = UiNumberedSmokeRows(initialRevision);
         this.m_state = this.m_storage;
         this.m_label = this.m_buffer;
     }
@@ -501,7 +474,20 @@ Expected<Rect> SmokeListRowBounds(in ScrollPlacement placement, in u64 index){
     return CalculateScrollRowBounds(index, placement, height);
 }
 
-Rect VisibleSmokeListRow(in ScrollPlacement placement, in u64 index){
+Expected<Rect> SmokeListRowBounds(in ScrollPlacement placement, in Expected<u64> index){
+    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
+        return MakeUnexpected(Failure());
+    return SmokeListRowBounds(placement, index.value());
+}
+
+Rect SmokePlacedListRow(in ScrollPlacement placement, in Expected<u64> index){
+    const Expected<Rect> bounds = SmokeListRowBounds(placement, index);
+    if(bounds.has_value())
+        return bounds.value();
+    return Rect();
+}
+
+Rect VisibleSmokeListRow(in ScrollPlacement placement, in Expected<u64> index){
     const Expected<Rect> rectangle = SmokeListRowBounds(placement, index);
     if(!rectangle.has_value())
         return Rect();
@@ -528,16 +514,34 @@ void LogSmokeRect(in StringView tag, in u32 sequence, in StringView name, in Rec
     LogSmokeRect(tag, cast<u64>(sequence), name, rectangle);
 }
 
-void ObserveSmokeDisplay(in StringView tag, in DisplayMetrics display, mut DisplayMetrics inOutLastDisplay, mut b8 inOutDisplayChanged){
-    if(
-        inOutLastDisplay.logicalWidth == display.logicalWidth
-        && inOutLastDisplay.logicalHeight == display.logicalHeight
-        && inOutLastDisplay.pixelScaleX == display.pixelScaleX
-        && inOutLastDisplay.pixelScaleY == display.pixelScaleY
-    )
-        return;
-    inOutLastDisplay = display;
-    inOutDisplayChanged = true;
+void LogSmokeRectangles<const usize Count>(in StringView tag, in u64 sequence, in Array<StringView, Count> names, in Array<Rect, Count> rectangles){
+    for(usize index = 0u; index < Count; ++index)
+        LogSmokeRect(tag, sequence, names[index], rectangles[index]);
+}
+
+String FormatSmokeValues<T, const usize Count>(in Array<T, Count> values){
+    String text;
+    text.reserve(values.size() * 4u);
+    for(in T value : values){
+        if(!text.empty())
+            text.push_back(',');
+        AppendUnsignedU64Text(text, cast<u64>(value));
+    }
+    return text;
+}
+
+void LogSmokeValues<T, const usize Count>(in StringView tag, in u64 sequence, in Array<T, Count> values){
+    [essential] info("{}: state sequence={} values={}", tag, sequence, FormatSmokeValues(values));
+}
+
+b8 SameSmokeDisplay(in DisplayMetrics left, in DisplayMetrics right){
+    return left.logicalWidth == right.logicalWidth
+        && left.logicalHeight == right.logicalHeight
+        && left.pixelScaleX == right.pixelScaleX
+        && left.pixelScaleY == right.pixelScaleY;
+}
+
+void LogSmokeDisplay(in StringView tag, in DisplayMetrics display){
     [essential] info(
         "{}: display logical={}x{} scale={}x{}"
         , tag
@@ -546,6 +550,14 @@ void ObserveSmokeDisplay(in StringView tag, in DisplayMetrics display, mut Displ
         , display.pixelScaleX
         , display.pixelScaleY
     );
+}
+
+void ObserveSmokeDisplay(in StringView tag, in DisplayMetrics display, mut DisplayMetrics inOutLastDisplay, mut b8 inOutDisplayChanged){
+    if(SameSmokeDisplay(inOutLastDisplay, display))
+        return;
+    inOutLastDisplay = display;
+    inOutDisplayChanged = true;
+    LogSmokeDisplay(tag, display);
 }
 
 b8 SameSmokePlacement(in EditBoxPlacement left, in EditBoxPlacement right){
@@ -655,10 +667,7 @@ PassiveSmokeSnapshotUpdate EvaluatePassiveSmokeSnapshotChange(
     in Span<SnapshotRect> previousRectangles,
     in u64 previousSequence
 ){
-    const b8 displayChanged = currentDisplay.logicalWidth != previousDisplay.logicalWidth
-        || currentDisplay.logicalHeight != previousDisplay.logicalHeight
-        || currentDisplay.pixelScaleX != previousDisplay.pixelScaleX
-        || currentDisplay.pixelScaleY != previousDisplay.pixelScaleY;
+    const b8 displayChanged = !SameSmokeDisplay(currentDisplay, previousDisplay);
     const b8 changed = stateChanged || !SameSmokeRectSpan(currentRectangles, previousRectangles);
     if(previousSequence != 0u && !changed && !displayChanged)
         return PassiveSmokeSnapshotUpdate();
@@ -668,39 +677,7 @@ PassiveSmokeSnapshotUpdate EvaluatePassiveSmokeSnapshotChange(
     return update;
 }
 
-PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(in b8 stateChanged, mut UiImageSnapshot current, mut UiImageSnapshot snapshot){
-    const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
-        stateChanged,
-        current.display,
-        snapshot.display,
-        current.rectangles,
-        snapshot.rectangles,
-        snapshot.sequence
-    );
-    if(update.published){
-        current.sequence = snapshot.sequence + 1u;
-        snapshot = current;
-    }
-    return update;
-}
-
-PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(in b8 stateChanged, mut UiProgressSnapshot current, mut UiProgressSnapshot snapshot){
-    const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
-        stateChanged,
-        current.display,
-        snapshot.display,
-        current.rectangles,
-        snapshot.rectangles,
-        snapshot.sequence
-    );
-    if(update.published){
-        current.sequence = snapshot.sequence + 1u;
-        snapshot = current;
-    }
-    return update;
-}
-
-PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(in b8 stateChanged, mut UiTextureImageSnapshot current, mut UiTextureImageSnapshot snapshot){
+PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot<Snapshot>(in b8 stateChanged, mut Snapshot current, mut Snapshot snapshot){
     const PassiveSmokeSnapshotUpdate update = EvaluatePassiveSmokeSnapshotChange(
         stateChanged,
         current.display,

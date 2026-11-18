@@ -183,7 +183,7 @@ void GpuAnalysis_BuildVersionChain(
         minTasks = 3u;
     ASSERT_GE(taskCount, minTasks);
 
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationVersionBuffer, "Analysis Version Buffer");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationVersionBuffer, "Analysis Version Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());
@@ -299,7 +299,7 @@ void VerifyGpuAnalysis_VersionLifetimeConstraintsDoNotInventProducedVersionOrder
         const ScopedTestTrace trace = ScopedTestTrace(reversed);
         TestArena testArena = TestArena();
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-        const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationAmbiguousVersionBuffer, "Ambiguous Version Buffer");
+        const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationAmbiguousVersionBuffer, "Ambiguous Version Buffer");
         ASSERT_TRUE(bufferResult.has_value());
         const GpuGraphResourceId buffer = bufferResult.value();
         ASSERT_TRUE(buffer.valid());
@@ -386,8 +386,8 @@ void VerifyGpuAnalysis_VersionLifetimeConstraintsDoNotInventProducedVersionOrder
 void VerifyGpuAnalysis_ResourceVersionPreBirthReachabilityHandlesFrozenSemanticCycles(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto buffersAdmission0 = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationSemanticCycleBufferA, "Semantic Cycle Buffer A");
-    const auto buffersAdmission1 = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationSemanticCycleBufferB, "Semantic Cycle Buffer B");
+    const auto buffersAdmission0 = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationSemanticCycleBufferA, "Semantic Cycle Buffer A");
+    const auto buffersAdmission1 = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationSemanticCycleBufferB, "Semantic Cycle Buffer B");
     ASSERT_TRUE(buffersAdmission0.has_value());
     ASSERT_TRUE(buffersAdmission1.has_value());
     Array<GpuGraphResourceId, 2> buffers = Array<GpuGraphResourceId, 2>();
@@ -503,8 +503,8 @@ void VerifyGpuAnalysis_VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrder()
         const ScopedTestTrace trace = ScopedTestTrace(reversed);
         TestArena testArena = TestArena();
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-        const auto buffersAdmission0 = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationLifetimeBufferA, "Lifetime Buffer A");
-        const auto buffersAdmission1 = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationLifetimeBufferB, "Lifetime Buffer B");
+        const auto buffersAdmission0 = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationLifetimeBufferA, "Lifetime Buffer A");
+        const auto buffersAdmission1 = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationLifetimeBufferB, "Lifetime Buffer B");
         ASSERT_TRUE(buffersAdmission0.has_value());
         ASSERT_TRUE(buffersAdmission1.has_value());
         Array<GpuGraphResourceId, 2> buffers = Array<GpuGraphResourceId, 2>();
@@ -615,7 +615,7 @@ void VerifyGpuAnalysis_ReportsEarlierUncoveredVersionUseBeforeLaterDuplicate(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseAnalysisOptimizationBindingFailureBuffer, "Version Binding Failure Buffer");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseAnalysisOptimizationBindingFailureBuffer, "Version Binding Failure Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(buffer.valid());

@@ -145,12 +145,12 @@ void VerifyLoggerTelemetryPublication_ConcurrentTelemetryPublishersCannotReplace
     mut LoggerPublicationPath firstPath = firstSlot.constructIn(firstArena, destination);
     TestValueSlot<LoggerPublicationPath> secondSlot;
     mut LoggerPublicationPath secondPath = secondSlot.constructIn(secondArena, destination);
-    TestLatch start(1);
-    TestThread first(lambda[mut start, in firstPath, in firstBytes, mut firstPublished]() -> void{
+    Latch start(1);
+    JoiningThread first(lambda[mut start, in firstPath, in firstBytes, mut firstPublished]() -> void{
         start.wait();
         firstPublished = PublishDurableBytes(firstPath, Span<u8>(firstBytes)).published;
     });
-    TestThread second(lambda[mut start, in secondPath, in secondBytes, mut secondPublished]() -> void{
+    JoiningThread second(lambda[mut start, in secondPath, in secondBytes, mut secondPublished]() -> void{
         start.wait();
         secondPublished = PublishDurableBytes(secondPath, Span<u8>(secondBytes)).published;
     });

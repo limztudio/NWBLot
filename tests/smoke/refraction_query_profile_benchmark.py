@@ -71,9 +71,7 @@ def runner_identity():
 def run(args):
     arm = SimpleNamespace(name="candidate", scheduling="tiled", **{name: getattr(args, name) for name in ("executable", "runtime", "logserver", "namesym", "source_manifest")})
     frozen = density.freeze(arm)
-    sources = frozen["source"]["files"]
-    if any(not any(path.replace("\\", "/").endswith("/source/" + required) for path in sources) for required in density.FIXTURE_SOURCE_FILES):
-        raise density.SmokeFailure("profile manifest lacks both compiled fixture source files")
+    density.fixture_source_digests(frozen)
     args.output_directory.mkdir(parents=True, exist_ok=False)
     plan = RefractionProfilePlan.create_plan(args, arm, frozen, runner_identity)
     density.write(args.output_directory / "plan.json", plan)

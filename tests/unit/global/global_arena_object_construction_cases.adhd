@@ -143,7 +143,7 @@ void VerifyArenaObjectConstruction_GlobalUniqueObjectFailureReleasesAlignedStora
 
 [cpp_unwind]
 void VerifyArenaObjectConstruction_PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
-    PersistentStorage storage(s_GlobalArenaCaseArenaObjectPersistentConstructorFailure, PoolAllocationSize(16384u));
+    PersistentStorage storage(s_GlobalArenaCaseArenaObjectPersistentConstructorFailure, PersistentArenaStructureAlignedSize(16384u));
     VerifyConstructionFailure(storage, 1u, lambda[mut storage](mut ConstructionState state) -> b8{
         return ProbePresent(PersistentObject<ScalarKind>(storage, storage, state));
     });
@@ -170,7 +170,7 @@ void VerifyArenaObjectConstruction_GlobalArrayFailureDestroysOnlyCompletedElemen
 
 [cpp_unwind]
 void VerifyArenaObjectConstruction_PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
-    PersistentStorage storage(s_GlobalArenaCaseArenaObjectPersistentArrayFailure, PoolAllocationSize(16384u));
+    PersistentStorage storage(s_GlobalArenaCaseArenaObjectPersistentArrayFailure, PersistentArenaStructureAlignedSize(16384u));
     VerifyConstructionFailure(storage, 3u, lambda[mut storage](mut ConstructionState state) -> b8{
         return ProbePresent(PersistentObject<ProbeArrayKind>(storage, 4u));
     });
@@ -212,7 +212,7 @@ void VerifyArenaObjectConstruction_FailedRawAllocationsNeverRunConstructorsOrDes
 
 void VerifyArenaObjectConstruction_ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectCanonicalGlobalPlacement);
-    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectCanonicalPersistentPlacement, PoolAllocationSize(4096u));
+    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectCanonicalPersistentPlacement, PersistentArenaStructureAlignedSize(4096u));
     const ArenaMemoryStats globalBefore = global.memoryStats();
     const ArenaMemoryStats persistentBefore = persistent.memoryStats();
     mut usize placements = PlacementCalls();
@@ -247,7 +247,7 @@ void VerifyArenaObjectConstruction_ArenaFactoriesRetainStorageIdentityAndBypassC
 [cpp_unwind]
 void VerifyArenaObjectConstruction_ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectGlobalArgumentCleanupFailure);
-    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure, PoolAllocationSize(4096u));
+    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure, PersistentArenaStructureAlignedSize(4096u));
     const ArenaMemoryStats globalBefore = global.memoryStats();
     const ArenaMemoryStats persistentBefore = persistent.memoryStats();
     ConstructionState globalState;
@@ -267,7 +267,7 @@ void VerifyArenaObjectConstruction_ArgumentTemporaryFailureDestroysCompletedMemb
 [cpp_unwind]
 void VerifyArenaObjectConstruction_CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectPrivateGlobalDestructor);
-    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor, PoolAllocationSize(4096u));
+    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor, PersistentArenaStructureAlignedSize(4096u));
     const ArenaMemoryStats globalBefore = global.memoryStats();
     const ArenaMemoryStats persistentBefore = persistent.memoryStats();
     ConstructionState globalState;
@@ -302,7 +302,7 @@ void VerifyArenaObjectConstruction_CanonicalPrivateDestructorsRetainOwningRollba
 [cpp_unwind]
 void VerifyArenaObjectConstruction_IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectOperatorFriendGlobalDestructor);
-    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor, PoolAllocationSize(4096u));
+    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor, PersistentArenaStructureAlignedSize(4096u));
     const ArenaMemoryStats globalBefore = global.memoryStats();
     const ArenaMemoryStats persistentBefore = persistent.memoryStats();
     ConstructionState globalState;
@@ -343,7 +343,7 @@ void VerifyArenaObjectConstruction_IndividualDeleterFriendRetainsCompletedRollba
 
 void VerifyArenaObjectConstruction_PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectPolymorphicGlobal);
-    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPolymorphicPersistent, PoolAllocationSize(4096u));
+    PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPolymorphicPersistent, PersistentArenaStructureAlignedSize(4096u));
     ScratchStorage scratch(s_GlobalArenaCaseArenaObjectPolymorphicScratch);
     VerifyPolymorphicAllocationIdentity<HeapStorageHandle>(global);
     VerifyPolymorphicAllocationIdentity<PersistentStorage>(persistent);
@@ -356,8 +356,8 @@ void VerifyArenaObjectConstruction_PolymorphicTransfersRetainCompleteAllocationA
 void VerifyArenaObjectConstruction_StatefulCleanupSurvivesPreallocatedOwnerReentry(){
     HeapStorageHandle oldGlobal(s_GlobalArenaCaseArenaObjectReentryOldGlobal);
     HeapStorageHandle newGlobal(s_GlobalArenaCaseArenaObjectReentryNewGlobal);
-    PersistentStorage oldPersistent(s_GlobalArenaCaseArenaObjectReentryOldPersistent, PoolAllocationSize(4096u));
-    PersistentStorage newPersistent(s_GlobalArenaCaseArenaObjectReentryNewPersistent, PoolAllocationSize(4096u));
+    PersistentStorage oldPersistent(s_GlobalArenaCaseArenaObjectReentryOldPersistent, PersistentArenaStructureAlignedSize(4096u));
+    PersistentStorage newPersistent(s_GlobalArenaCaseArenaObjectReentryNewPersistent, PersistentArenaStructureAlignedSize(4096u));
     ScratchStorage oldScratch(s_GlobalArenaCaseArenaObjectReentryOldScratch);
     ScratchStorage newScratch(s_GlobalArenaCaseArenaObjectReentryNewScratch);
     VerifyScalarOwnerReentry<HeapStorageHandle>(oldGlobal, newGlobal);

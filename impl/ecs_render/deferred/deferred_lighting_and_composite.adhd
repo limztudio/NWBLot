@@ -24,15 +24,6 @@ const Name s_DeferredLightingShaderDebugName = "ECSRender_DeferredLightingCS";
 const Name s_DeferredCompositeShaderDebugName = "ECSRender_DeferredCompositeCS";
 const Name s_DeferredPresentShaderDebugName = "ECSRender_DeferredPresentPS";
 
-FramebufferInfo BuildDeferredFramebufferInfo(in FramebufferInfoEx infoEx){
-    FramebufferInfo framebufferInfo;
-    framebufferInfo.sampleCount = infoEx.sampleCount;
-    framebufferInfo.sampleQuality = infoEx.sampleQuality;
-    framebufferInfo.depthFormat = infoEx.depthFormat;
-    framebufferInfo.colorFormats = infoEx.colorFormats;
-    return framebufferInfo;
-}
-
 b8 EnsureDeferredBuffer(
     in BufferDesc desc,
     in StringView errorMessage,
@@ -239,7 +230,7 @@ b8 RendererDeferredSystem::createDeferredPresentPipeline(mut Framebuffer present
     if(!this.createDeferredCompositeResources())
         return false;
 
-    const FramebufferInfo framebufferInfo = BuildDeferredFramebufferInfo(presentationFramebuffer.getFramebufferInfo());
+    const FramebufferInfo framebufferInfo = FramebufferInfo(presentationFramebuffer.getFramebufferInfo());
     if(this.m_deferredState.m_presentPipeline.valid() && this.m_deferredState.m_presentPipeline.deref().getFramebufferInfo() == framebufferInfo)
         return true;
 
@@ -295,7 +286,7 @@ b8 RendererDeferredSystem::renderDeferredPresent(mut CommandList commandList, mu
     mut Framebuffer presentationFramebuffer = presentationFrame.framebuffer.deref();
     assert(
         presentationFramebuffer.getDescription().colorAttachments.size() == 1u
-        && this.m_deferredState.m_presentPipeline.deref().getFramebufferInfo() == BuildDeferredFramebufferInfo(presentationFramebuffer.getFramebufferInfo())
+        && this.m_deferredState.m_presentPipeline.deref().getFramebufferInfo() == FramebufferInfo(presentationFramebuffer.getFramebufferInfo())
     );
 
     // Graph owns the composite transition and the acquired texture's render-target state.
@@ -393,11 +384,7 @@ class DeferredLightingGraphTask{
         this.m_timingTicket = timingTicket;
         this.m_useLaggedLightingHistory = useLaggedLightingHistory;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Compute;
-        return requirements;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope recording(this.m_timingTicket);
@@ -423,11 +410,7 @@ class DeferredCompositeGraphTask{
         this.m_timingTicket = timingTicket;
         this.m_reflectionInputs = reflectionInputs;
     }
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Compute;
-        return requirements;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope recording(this.m_timingTicket);

@@ -87,7 +87,6 @@ const SmokeMeshRef s_RefractionSceneSphereMesh = "project/meshes/caustic_sphere"
 const usize s_RefractionLifecyclePhaseCount = 7u;
 const u32 s_RefractionDefaultCaptureFrameCount = 16u;
 const u64 s_RefractionFrameGraphRequiredFrames = 360u;
-const u64 s_RefractionMaxU32Value = 4294967295u;
 
 AStringView RefractionSmokeProjectName(){
     return "RefractionSmokeProject";
@@ -156,6 +155,37 @@ RefractionLifecyclePhase RefractionLifecyclePhaseAt(in usize phase){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RefractionTargetFrames{
+    public ProjectFrameClientSize extent;
+    public u64 currentFrame;
+    public u64 startFrame;
+    public RefractionTargetFrames(in ProjectFrameClientSize extent, in u64 currentFrame, in u64 startFrame){
+        this.extent = extent;
+        this.currentFrame = currentFrame;
+        this.startFrame = startFrame;
+    }
+}
+
+Optional<RefractionTargetFrames> ObserveRefractionTargetFrames(mut GraphicsRuntime graphics, in u64 requiredFrames, mut Optional<u64> targetStart){
+    i32 width = 0;
+    i32 height = 0;
+    graphics.getWindowDimensions(width, height);
+    const ProjectFrameClientSize extent = GetProjectFrameClientSize();
+    const u64 currentFrame = graphics.getFrameIndex();
+    if(width != cast<i32>(extent.width) || height != cast<i32>(extent.height) || (targetStart.has_value() && currentFrame < targetStart.value())){
+        targetStart.reset();
+        return Optional<RefractionTargetFrames>();
+    }
+    if(!targetStart.has_value()){
+        targetStart = currentFrame;
+        return Optional<RefractionTargetFrames>();
+    }
+    const u64 startFrame = targetStart.value();
+    if(currentFrame - startFrame < requiredFrames)
+        return Optional<RefractionTargetFrames>();
+    return RefractionTargetFrames(extent, currentFrame, startFrame);
+}
+
 class RefractionQueryDiagnostics : ISmokeCapturePredicate{
     public RefractionQueryDiagnostics(mut ProjectRuntimeContext context){
         this.m_context = context;
@@ -205,41 +235,23 @@ class RefractionQueryDiagnostics : ISmokeCapturePredicate{
     public void update(mut World world){
         if(!this.m_enabled || this.m_reported)
             return;
-        i32 width = 0;
-        i32 height = 0;
-        this.m_context.graphics.getWindowDimensions(width, height);
-        const ProjectFrameClientSize target = GetProjectFrameClientSize();
-        const u32 targetWidth = target.width;
-        const u32 targetHeight = target.height;
-        const u64 currentFrame = this.m_context.graphics.getFrameIndex();
-        if(
-            width != cast<i32>(targetWidth)
-            || height != cast<i32>(targetHeight)
-            || (this.m_targetStart.has_value() && currentFrame < this.m_targetStart.value())
-        ){
-            this.m_targetStart.reset();
+        const auto observation = ObserveRefractionTargetFrames(this.m_context.graphics, s_RefractionDiagnosticsRequiredTargetFrames, this.m_targetStart);
+        if(!observation.has_value())
             return;
-        }
-        if(!this.m_targetStart.has_value()){
-            this.m_targetStart = currentFrame;
-            return;
-        }
-        const u64 targetStart = this.m_targetStart.value();
-        if(currentFrame - targetStart < s_RefractionDiagnosticsRequiredTargetFrames)
-            return;
+        const RefractionTargetFrames frames = observation.value();
 
         const Expected<RefractionStatistics> result = SmokeRendererSystemRef(world).tryGetLatestRefractionStatistics();
         if(!result.has_value())
             return;
         const RefractionStatistics statistics = result.value();
         if(
-            statistics.width == targetWidth
-            && statistics.height == targetHeight
-            && statistics.graphicsFrameIndex >= targetStart
-            && statistics.graphicsFrameIndex - targetStart >= s_RefractionDiagnosticsRequiredTargetFrames
-            && statistics.graphicsFrameIndex <= currentFrame
+            statistics.width == frames.extent.width
+            && statistics.height == frames.extent.height
+            && statistics.graphicsFrameIndex >= frames.startFrame
+            && statistics.graphicsFrameIndex - frames.startFrame >= s_RefractionDiagnosticsRequiredTargetFrames
+            && statistics.graphicsFrameIndex <= frames.currentFrame
         ){
-            LogRefractionQueryDiagnosticsCounters(statistics, currentFrame, targetStart);
+            LogRefractionQueryDiagnosticsCounters(statistics, frames.currentFrame, frames.startFrame);
             this.m_sourceFrame = statistics.graphicsFrameIndex;
             this.m_reported = true;
         }
@@ -617,12 +629,9 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
             this.m_fpsProbe.recordFrame(delta);
             this.m_gpuPassTimingProbe.recordFrame(delta, this.m_context.gpuTimingView());
         }
-        f32 fixedDelta = RendererBaselineFixedDelta();
+        f32 tickDelta = RendererBaselineDelta(delta);
         if(this.m_densityEnabled)
-            fixedDelta = 1.0f / 60.0f;
-        f32 tickDelta = delta;
-        if(fixedDelta > 0.0f)
-            tickDelta = fixedDelta;
+            tickDelta = 1.0f / 60.0f;
         return TickSmokeWorld(tickDelta, SmokeWorldRef(this.m_world));
     }
 
@@ -657,32 +666,15 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
     private b8 updateFrameGraphSnapshot(){
         if(this.m_frameGraphSnapshotPath.empty() || this.m_frameGraphSnapshotCompleted)
             return true;
-        i32 width = 0;
-        i32 height = 0;
-        this.m_context.graphics.getWindowDimensions(width, height);
-        const ProjectFrameClientSize target = GetProjectFrameClientSize();
-        const u32 targetWidth = target.width;
-        const u32 targetHeight = target.height;
-        const u64 currentFrame = this.m_context.graphics.getFrameIndex();
-        if(
-            width != cast<i32>(targetWidth)
-            || height != cast<i32>(targetHeight)
-            || (this.m_frameGraphTargetStart.has_value() && currentFrame < this.m_frameGraphTargetStart.value())
-        ){
-            this.m_frameGraphTargetStart.reset();
+        const auto observation = ObserveRefractionTargetFrames(this.m_context.graphics, s_RefractionFrameGraphRequiredFrames, this.m_frameGraphTargetStart);
+        if(!observation.has_value())
             return true;
-        }
-        if(!this.m_frameGraphTargetStart.has_value()){
-            this.m_frameGraphTargetStart = currentFrame;
-            return true;
-        }
-        const u64 completedFrames = currentFrame - this.m_frameGraphTargetStart.value();
-        if(completedFrames < s_RefractionFrameGraphRequiredFrames || currentFrame == 0u)
-            return true;
+        const RefractionTargetFrames frames = observation.value();
+        const u64 completedFrames = frames.currentFrame - frames.startFrame;
         if(!CaptureStressFrameGraphSnapshot(StringView(this.m_frameGraphSnapshotPath), completedFrames, this.m_context))
             return false;
         this.m_frameGraphSnapshotCompleted = true;
-        [essential] info("RefractionFrameGraphSnapshot: target_extent {}x{} completed_target_frames {}", targetWidth, targetHeight, completedFrames);
+        [essential] info("RefractionFrameGraphSnapshot: target_extent {}x{} completed_target_frames {}", frames.extent.width, frames.extent.height, completedFrames);
         RequestSmokeQuit(this.m_context);
         return true;
     }
@@ -695,15 +687,10 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
                 return false;
             }
             const StringView outputView = StringView(output.value());
-            u32 captureFrames = s_RefractionDefaultCaptureFrameCount;
-            const Expected<String> framesText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-            if(framesText.has_value()){
-                const Expected<u64> parsed = ParseU64(StringView(framesText.value()));
-                if(!parsed.has_value() || parsed.value() == 0u || parsed.value() > s_RefractionMaxU32Value){
-                    error("RefractionSmokeProject: lifecycle frame count must be a positive u32");
-                    return false;
-                }
-                captureFrames = cast<u32>(parsed.value());
+            const auto captureFrames = ReadSmokeCaptureFrameCount(s_RefractionDefaultCaptureFrameCount);
+            if(!captureFrames.has_value()){
+                error("RefractionSmokeProject: lifecycle frame count must be a positive u32");
+                return false;
             }
             this.m_lifecyclePaths.reserve(s_RefractionLifecyclePhaseCount);
             for(usize phase = 0u; phase < s_RefractionLifecyclePhaseCount; ++phase){
@@ -725,7 +712,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
             options.quitWhenReady = false;
             return StartNewSmokeFramebufferCapture(
                 firstPath,
-                captureFrames,
+                captureFrames.value(),
                 this.m_context,
                 options,
                 this.m_framebufferCapture

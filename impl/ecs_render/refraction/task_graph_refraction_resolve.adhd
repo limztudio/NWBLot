@@ -51,11 +51,7 @@ class RefractionClassifyTilesGraphTask{
         this.resources = resources;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Compute;
-        return requirements;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return this.renderer.recordRefractionTileClassification(commands, this.targets, this.resources);
@@ -183,11 +179,7 @@ class RefractionClearTileArgumentsGraphTask{
         this.m_resource = resource;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Transfer;
-        return commands;
-    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const GpuGraphResourceId resource = this.m_resource;

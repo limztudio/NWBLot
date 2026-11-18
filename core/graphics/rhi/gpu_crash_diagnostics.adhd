@@ -15,9 +15,9 @@ extern enum GpuCrashDumpKind : u8{
 
 [cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashMarkerTracker"), cpp_flags(no_copy, no_assign)]
 extern class GpuCrashMarkerTracker{
-    void popEvent(...);
-    usize pushEvent(...);
-    void resetEventStack(...);
+    void popEvent();
+    usize pushEvent(in StringView name);
+    void resetEventStack();
 };
 
 [cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashReport")]

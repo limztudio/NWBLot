@@ -143,7 +143,7 @@ void VerifyCpuTaskRangeTests_InlineFailureRetiresSubmittedDescendantsBeforeTermi
     usize outstandingOnCatch = 1u;
     CpuTaskScheduler scheduler(0u);
     i32 result = 0;
-    result = CatchTaskFailure<InlineRangeFailure>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
+    result = InvokeTerminalEntry<InlineRangeFailure>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
         EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, lambda[mut scheduler, mut retirements, mut callbacks](in usize index) -> void{
             const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe capture, in b8 active) -> void{
                 EXPECT_TRUE(active);
@@ -363,7 +363,7 @@ void ExecuteWorkerSelfWaitDeath(in TestSchedulerConfig config){
         scheduler.wait(self);
     });
     if(!selfTaskAdmission.has_value())
-        ExitTestProcess(0u);
+        ExitTestChild(0);
     self = selfTaskAdmission.value();
     start.open();
     scheduler.wait();
@@ -385,12 +385,12 @@ void ExecuteDescendantAncestorWaitDeath(in TestSchedulerConfig config){
             scheduler.wait(parent);
         });
         if(!childTaskAdmission.has_value())
-            ExitTestProcess(0u);
+            ExitTestChild(0);
         const CpuTaskHandle child = childTaskAdmission.value();
         EXPECT_TRUE(child.valid());
     });
     if(!cpuTaskAdmission.has_value())
-        ExitTestProcess(0u);
+        ExitTestChild(0);
     parent = cpuTaskAdmission.value();
     start.open();
     scheduler.wait();
@@ -445,7 +445,7 @@ u32 ExecuteDirectParentDependencyRejection(){
 
 void VerifyCpuTaskSchedulerTests_ChildCannotDependDirectlyOnItsStructuredParent(){
     const i32 expectedExitCode = 0;
-    EXPECT_EXIT(ExitTestProcess(ExecuteDirectParentDependencyRejection()), testing::ExitedWithCode(expectedExitCode), "");
+    EXPECT_EXIT(ExitTestChild(cast<i32>(ExecuteDirectParentDependencyRejection())), ExitedWithCode(expectedExitCode), "");
 }
 
 u32 ExecuteTransitiveParentDependencyRejection(in u32 chainDepth){
@@ -485,7 +485,7 @@ u32 ExecuteTransitiveParentDependencyRejection(in u32 chainDepth){
 void VerifyCpuTaskSchedulerTests_ChildCannotDependOnATransitiveDependentOfItsStructuredParent(){
     const u32 chainDepth = 3u;
     const i32 expectedExitCode = 0;
-    EXPECT_EXIT(ExitTestProcess(ExecuteTransitiveParentDependencyRejection(chainDepth)), testing::ExitedWithCode(expectedExitCode), "");
+    EXPECT_EXIT(ExitTestChild(cast<i32>(ExecuteTransitiveParentDependencyRejection(chainDepth))), ExitedWithCode(expectedExitCode), "");
 }
 
 void ExecuteCrossWorkerAncestorScopeJoinDeath(in TestSchedulerConfig config){
@@ -498,7 +498,7 @@ void ExecuteCrossWorkerAncestorScopeJoinDeath(in TestSchedulerConfig config){
         parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
         const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut scope, mut scheduler, mut parentGate, mut parentWorker]() -> void{
             if(!WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
-                ExitTestProcess(0u);
+                ExitTestChild(0);
             scope.wait();
         });
         EXPECT_TRUE(secondCpuTaskAdmission.has_value());
@@ -528,11 +528,11 @@ void ExecuteIndependentDependentWaitDeath(in TestSchedulerConfig config){
         scheduler.wait(dependent);
     });
     if(!runningTaskAdmission.has_value())
-        ExitTestProcess(0u);
+        ExitTestChild(0);
     running = runningTaskAdmission.value();
     const auto dependentTaskAdmission = scheduler.submit(lambda[]() -> void{}, running);
     if(!dependentTaskAdmission.has_value()){
-        ExitTestProcess(0u);
+        ExitTestChild(0);
     }
     dependent = dependentTaskAdmission.value();
     start.open();
@@ -559,12 +559,12 @@ void ExecuteTransitiveDependentWaitDeath(in TestSchedulerConfig config, in u32 c
             EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
     });
     if(!cpuTaskAdmission.has_value())
-        ExitTestProcess(0u);
+        ExitTestChild(0);
     dependent = cpuTaskAdmission.value();
     for(u32 depth = 0u; depth < chainDepth; ++depth){
         const auto dependentTaskAdmission = scheduler.submit(lambda[]() -> void{}, dependent);
         if(!dependentTaskAdmission.has_value()){
-            ExitTestProcess(0u);
+            ExitTestChild(0);
         }
         dependent = dependentTaskAdmission.value();
     }
@@ -819,14 +819,14 @@ void VerifyCpuTaskSubmissionTests_CallableConstructionFailurePublishesNoSchedule
         ++handled;
         return cast<i32>(err);
     };
-    schedulerResult = CatchTaskFailure<u32>(lambda[mut scheduler, mut callable]() -> i32{
+    schedulerResult = InvokeTerminalEntry<u32>(lambda[mut scheduler, mut callable]() -> i32{
         const auto task = scheduler.submit(callable);
         EXPECT_FALSE(task);
         return -1;
     }, handleError, lambda[]() -> i32{ return -2; });
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 
-    scopeResult = CatchTaskFailure<u32>(lambda[mut scope, mut callable]() -> i32{
+    scopeResult = InvokeTerminalEntry<u32>(lambda[mut scope, mut callable]() -> i32{
         const auto task = scope.submit(callable);
         EXPECT_FALSE(task);
         return -1;
@@ -886,22 +886,22 @@ void VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndC
 void ExecuteWorkerCallbackFailureDeath(in u32 workerCount, in u32 exceptionCode){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     i32 result = 0;
-    result = CatchTaskFailure<u32>(lambda[in workerCount, in exceptionCode]() -> i32{
+    result = InvokeTerminalEntry<u32>(lambda[in workerCount, in exceptionCode]() -> i32{
         CpuTaskScheduler scheduler(workerCount);
         const auto cpuTaskAdmission = scheduler.submit(lambda[mut scheduler, in exceptionCode]() -> void{
             if(scheduler.currentWorkerIndex() == 0u)
-                ExitTestProcess(0u);
+                ExitTestChild(0);
             ThrowTestException<u32>(exceptionCode);
         });
         if(!cpuTaskAdmission.has_value())
-            ExitTestProcess(0u);
+            ExitTestChild(0);
         const auto task = cpuTaskAdmission.value();
         if(!task.valid())
             return 0;
         scheduler.wait(task);
         return 0;
     }, lambda[](in u32 index) -> i32{ return 0; }, lambda[]() -> i32{ return 0; });
-    ExitTestProcess(cast<u32>(result));
+    ExitTestChild(result);
 }
 
 void VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery(){
@@ -914,7 +914,7 @@ void VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferred
 void ExecuteParallelRangeWorkerFailureDeath(in u32 workerCount, in usize itemCount, in u32 exceptionCode){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     i32 result = 0;
-    result = CatchTaskFailure<u32>(lambda[in workerCount, in exceptionCode, in itemCount]() -> i32{
+    result = InvokeTerminalEntry<u32>(lambda[in workerCount, in exceptionCode, in itemCount]() -> i32{
         CpuTaskScheduler scheduler(workerCount);
         AtomicFlag workerEntered;
         EXPECT_TRUE((scheduler.parallelFor(0u, itemCount, lambda[mut scheduler, in exceptionCode, mut workerEntered](in usize index) -> void{
@@ -929,7 +929,7 @@ void ExecuteParallelRangeWorkerFailureDeath(in u32 workerCount, in usize itemCou
         })));
         return 0;
     }, lambda[](in u32 index) -> i32{ return 0; }, lambda[]() -> i32{ return 0; });
-    ExitTestProcess(cast<u32>(result));
+    ExitTestChild(result);
 }
 
 void VerifyCpuTaskSubmissionTests_ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery(){

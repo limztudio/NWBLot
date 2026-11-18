@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/optics/types.adhd>
 #include <impl/ecs_render/optics/graph_types.adhd>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
 #include <impl/ecs_render/kernel/timing_names.adhd>
@@ -13,8 +14,6 @@
 [cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED")]
 extern const u32 s_ShaderRtOpticalBoundaryUnspecified;
 
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED")]
-extern const u32 s_ShaderRtOpticalBoundaryClosedNested;
 
 [cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY")]
 extern const u32 s_ShaderRtOpticalBoundaryClosedPriority;

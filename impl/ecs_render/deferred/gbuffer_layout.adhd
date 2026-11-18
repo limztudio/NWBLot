@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_BASE_COLOR_LOCATION")]
+extern const u32 s_ShaderMeshGbufferBaseColorLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_NORMAL_LOCATION")]
+extern const u32 s_ShaderMeshGbufferNormalLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION")]
+extern const u32 s_ShaderMeshGbufferWorldPositionLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION")]
+extern const u32 s_ShaderMeshGbufferSpecularRoughnessLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_TARGET_COUNT")]
+extern const u32 s_ShaderMeshGbufferTargetCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

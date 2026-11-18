@@ -177,7 +177,7 @@ void VerifyBuildInputSelection_EmptyBuildDomainIsRejectedBeforeInputDiscovery(mu
     EXPECT_TRUE(SawCapturedError(self.m_logger, "unsupported --asset-type ''"));
     EXPECT_EQ(self.m_logger.errorCount(), 1u);
 
-    ASSERT_TRUE(self.m_options.assetType.assign(s_AssetVolumeName));
+    ASSERT_TRUE(self.m_options.assetType.assign(s_CookAssetVolumeName));
     EXPECT_FALSE(BuildAssets(self.m_options));
     EXPECT_TRUE(SawCapturedError(self.m_logger, "no asset roots specified"));
     EXPECT_EQ(self.m_logger.errorCount(), 2u);
@@ -335,7 +335,7 @@ void VerifyAssetsGraphics_RendererComponentCookAndSerializePreservesOpticalField
     const GraphicsTestPath assetRoot = JoinGraphicsPath(root, s_AssetsDirectory);
     const Name virtualPath = s_ProjectEntitiesLensRenderer;
 
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath3(assetRoot, "entities", "lens", "renderer.nwb"), s_RendererComponentMetadata));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath3(assetRoot, "entities", "lens", "renderer.nwb"), s_RendererComponentMetadata));
     ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot, 1u));
 
     const Expected<RendererComponent> loadedComponent = LoadCookedRendererComponent(testArena, outputDirectory, virtualPath, 1u);
@@ -395,11 +395,11 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
 
     const GraphicsTestPath bindRoot = JoinGraphicsPath(root, "bind");
     const GraphicsTestPath csgRoot = JoinGraphicsPath(root, "csg");
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(bindRoot, "unused.slangi"), "// Empty bind root.\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "#include \"common.slangi\"\nvoid main(){}\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "common.slangi"), "static const uint sharedValue = 1u;\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(csgRoot, "first.slangi"), "#include \"../common.slangi\"\n"));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(csgRoot, "second.slangi"), "#include \"../common.slangi\"\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(bindRoot, "unused.slangi"), "// Empty bind root.\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "shader.slang"), "#include \"common.slangi\"\nvoid main(){}\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(root, "common.slangi"), "static const uint sharedValue = 1u;\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(csgRoot, "first.slangi"), "#include \"../common.slangi\"\n"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(csgRoot, "second.slangi"), "#include \"../common.slangi\"\n"));
 
     ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
@@ -443,7 +443,7 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
             ASSERT_EQ(inheritedValues.size(), 2u);
             EXPECT_EQ(StringView(inheritedValues[0u]), "0");
             EXPECT_EQ(StringView(inheritedValues[1u]), "1");
-            ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(csgRoot, "second.slangi"), "#include \"../common.slangi\"\n// Changed module.\n"));
+            ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath(csgRoot, "second.slangi"), "#include \"../common.slangi\"\n// Changed module.\n"));
             PreparedShaderPlan changedPlan(testArena.arena);
             {
                 Expected<PreparedShaderPlan> changedResult = PrepareEvaluatorShaderPlan(testArena, scratch, paths, bindRoot, csgRoot, includeMetadata, s_CsgAuthoredDefine, mode);
@@ -474,7 +474,7 @@ void VerifyAssetsGraphics_CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegis
     // The cooker normalizes its input by name, while the runtime deliberately receives the inverse order.
     AddCsgShapeCookEntry(zebraShape, zebraModule, zebraInclude, testArena, cookedEntries);
     AddCsgShapeCookEntry(alphaShape, alphaModule, alphaInclude, testArena, cookedEntries);
-    ASSERT_TRUE(AssignTestCsgShapeCookIds(cookedEntries, scratch));
+    ASSERT_TRUE(AssignCsgShapeCookIds(cookedEntries));
 
     const CsgShapeTypeId cookedAlphaId = FindCookedCsgShapeTypeId(cookedEntries, alphaShape);
     const CsgShapeTypeId cookedZebraId = FindCookedCsgShapeTypeId(cookedEntries, zebraShape);
@@ -502,7 +502,7 @@ void VerifyAssetsGraphics_CsgShapeIdsRejectDuplicateCanonicalNamesBeforePublishi
     AddCsgShapeCookEntry(Name("project/csg/duplicate"), Name(s_CsgModulePath), s_CsgGeneratedModulePath, testArena, entries);
     AddCsgShapeCookEntry(Name("PROJECT/CSG/DUPLICATE"), Name(s_CsgModulePath), s_CsgGeneratedModulePath, testArena, entries);
 
-    EXPECT_FALSE(AssignTestCsgShapeCookIds(entries, scratch));
+    EXPECT_FALSE(AssignCsgShapeCookIds(entries));
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_NE(entries[0u].shapeTypeId, s_InvalidCsgShapeTypeId);
     EXPECT_EQ(entries[1u].shapeTypeId, s_InvalidCsgShapeTypeId);
@@ -520,7 +520,7 @@ void VerifyAssetsGraphics_CsgMixedCaseModuleIncludeRetainsCookedPathAndRuntimeId
     const GraphicsTestPath root = rootResult.value();
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse("csg_shape asset;\nasset.shape = \"project/csg/mixed_case_shape\";\nasset.module = \"project/csg/mixed_case_module\";\nasset.module_include = \"project/csg/Generated/MixedCaseEvaluator.slangi\";\nasset.eval = \"project/csg/MixedCaseEval.slangi\";\n"));
-    const Expected<CsgShapeCookEntry> cookedResult = ParseTestCsgShapeMetadata(JoinGraphicsPath(root, "shape.nwb"), document, testArena, scratch);
+    const Expected<CsgShapeCookEntry> cookedResult = ParseCsgShapeCookMetadata(JoinGraphicsPath(root, "shape.nwb"), document);
     ASSERT_TRUE(cookedResult.has_value());
     const CsgShapeCookEntry cooked = cookedResult.value();
     const StringView moduleInclude = "project/csg/Generated/MixedCaseEvaluator.slangi";
@@ -528,7 +528,7 @@ void VerifyAssetsGraphics_CsgMixedCaseModuleIncludeRetainsCookedPathAndRuntimeId
     TestValueSlot<CsgShapeCookEntryVector> entriesStorage;
     mut CsgShapeCookEntryVector entries = entriesStorage.constructIn(testArena);
     entries.push_back(cooked);
-    ASSERT_TRUE(AssignTestCsgShapeCookIds(entries, scratch));
+    ASSERT_TRUE(AssignCsgShapeCookIds(entries));
     const Expected<GraphicsTestPath> generatedRoot = EmitTestCsgShapeModules(JoinGraphicsPath(root, s_CacheDirectory), "tests", entries, scratch);
     ASSERT_TRUE(generatedRoot.has_value());
     const Expected<b8, ErrorCode> generatedExists = GraphicsFileExists(JoinGraphicsPath(generatedRoot.value(), moduleInclude));
@@ -666,7 +666,7 @@ void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreO
     const Expected<GraphicsBytes> encodedResult = SerializeTestShaderIndex(records, testArena, scratch);
     ASSERT_TRUE(encodedResult.has_value());
     GraphicsBytes encoded = encodedResult.value();
-    const Expected<ShaderArchiveRecordVector> decodedResult = DeserializeTestShaderIndex(testArena, encoded);
+    const Expected<ShaderArchiveRecordVector> decodedResult = DeserializeShaderIndexFromBytes(testArena, encoded);
     ASSERT_TRUE(decodedResult.has_value());
     const ShaderArchiveRecordVector decoded = decodedResult.value();
     ASSERT_EQ(decoded.size(), 1u);

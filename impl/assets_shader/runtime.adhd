@@ -2,138 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_shader/shader_types.adhd>
-#include <impl/assets_shader/types.adhd>
+#include <impl/assets_shader/asset.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateResolvedSpirvEntryPoint(
-    in b8 resolved,
-    in StringView entryPoint,
-    in Name assetType
-){
-    if(resolved)
-        return true;
+type ShaderAssetRegistration<T> = AssetCodecRegistration<ShaderAssetCodec<T>>;
 
-    error(
-        "IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed",
-        entryPoint,
-        assetType.resolvedText()
-    );
-    return false;
-}
-
-b8 LoadShaderBinaryForStage(
-    in IShader shaderAsset,
-    in Span<u8> binary,
-    in ShaderType shaderType,
-    mut usize outEntryPointOffset,
-    mut usize outEntryPointLength,
-    mut Vector<u8> outBytecode
-){
-    if(!shaderAsset.checkVirtualPath("IShader::loadBinaryForStage"))
-        return false;
-
-    const Expected<AssetPayloadView, AssetPayloadDecodeFailure> payload = DecodeAssetPayload(binary);
-    if(!payload.has_value()){
-        ReportShaderAssetPayloadDecodeFailure(payload.error());
-        return false;
-    }
-
-    const Expected<StringView, SpirvEntryPointLookupResult> lookupResult = ResolveSpirvEntryPointName(
-        payload.value().bytecode,
-        payload.value().entryPoint,
-        ShaderType::ToMask(shaderType)
-    );
-    if(!ValidateResolvedSpirvEntryPoint(lookupResult.has_value(), payload.value().entryPoint, shaderAsset.assetType()))
-        return false;
-
-    const Expected<usize> entryPointOffset = FindBinaryTextOffset(payload.value().bytecode, lookupResult.value());
-    if(!entryPointOffset.has_value())
-        return false;
-    const usize entryPointLength = lookupResult.value().size();
-    AssignTriviallyCopyableVector(outBytecode, payload.value().bytecode);
-    outEntryPointOffset = entryPointOffset.value();
-    outEntryPointLength = entryPointLength;
-    return true;
-}
-
-b8 VertexShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 HullShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 DomainShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 GeometryShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 PixelShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 ComputeShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 AmplificationShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 MeshShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 RayGenerationShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 AnyHitShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 ClosestHitShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 MissShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 IntersectionShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-b8 CallableShader::loadBinary(in Span<u8> binary){
-    return LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_entryPointOffset, this.m_entryPointLength, this.m_bytecode);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-register_asset VertexShader using AssetCodecRegistration<ShaderAssetCodec<VertexShader>>;
-register_asset HullShader using AssetCodecRegistration<ShaderAssetCodec<HullShader>>;
-register_asset DomainShader using AssetCodecRegistration<ShaderAssetCodec<DomainShader>>;
-register_asset GeometryShader using AssetCodecRegistration<ShaderAssetCodec<GeometryShader>>;
-register_asset PixelShader using AssetCodecRegistration<ShaderAssetCodec<PixelShader>>;
-register_asset ComputeShader using AssetCodecRegistration<ShaderAssetCodec<ComputeShader>>;
-register_asset AmplificationShader using AssetCodecRegistration<ShaderAssetCodec<AmplificationShader>>;
-register_asset MeshShader using AssetCodecRegistration<ShaderAssetCodec<MeshShader>>;
-register_asset RayGenerationShader using AssetCodecRegistration<ShaderAssetCodec<RayGenerationShader>>;
-register_asset AnyHitShader using AssetCodecRegistration<ShaderAssetCodec<AnyHitShader>>;
-register_asset ClosestHitShader using AssetCodecRegistration<ShaderAssetCodec<ClosestHitShader>>;
-register_asset MissShader using AssetCodecRegistration<ShaderAssetCodec<MissShader>>;
-register_asset IntersectionShader using AssetCodecRegistration<ShaderAssetCodec<IntersectionShader>>;
-register_asset CallableShader using AssetCodecRegistration<ShaderAssetCodec<CallableShader>>;
+register_asset VertexShader using ShaderAssetRegistration<VertexShader>;
+register_asset HullShader using ShaderAssetRegistration<HullShader>;
+register_asset DomainShader using ShaderAssetRegistration<DomainShader>;
+register_asset GeometryShader using ShaderAssetRegistration<GeometryShader>;
+register_asset PixelShader using ShaderAssetRegistration<PixelShader>;
+register_asset ComputeShader using ShaderAssetRegistration<ComputeShader>;
+register_asset AmplificationShader using ShaderAssetRegistration<AmplificationShader>;
+register_asset MeshShader using ShaderAssetRegistration<MeshShader>;
+register_asset RayGenerationShader using ShaderAssetRegistration<RayGenerationShader>;
+register_asset AnyHitShader using ShaderAssetRegistration<AnyHitShader>;
+register_asset ClosestHitShader using ShaderAssetRegistration<ClosestHitShader>;
+register_asset MissShader using ShaderAssetRegistration<MissShader>;
+register_asset IntersectionShader using ShaderAssetRegistration<IntersectionShader>;
+register_asset CallableShader using ShaderAssetRegistration<CallableShader>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -82,14 +82,14 @@ void VerifyAssetsGraphics_MeshletRefEncodingCrossesIndexWidthBoundaries(){
     EXPECT_EQ(MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingUv0Shift), MeshletDeltaWidth::U32);
 
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
-        const Expected<MeshletPositionStreamRef> decodedRef = DecodeMeshletPositionRefFromBytes(positionRefDeltas, meshlet, localPositionIndex, true);
+        const Expected<MeshletPositionStreamRef> decodedRef = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, true);
         ASSERT_TRUE(decodedRef.has_value());
         EXPECT_EQ(decodedRef.value().position, positionRefs[localPositionIndex].position);
         EXPECT_EQ(decodedRef.value().skin, positionRefs[localPositionIndex].skin);
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
-        const Expected<MeshletAttributeStreamRef> decodedRef = DecodeMeshletAttributeRefFromBytes(attributeRefDeltas, meshlet, localAttributeIndex);
+        const Expected<MeshletAttributeStreamRef> decodedRef = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
         ASSERT_TRUE(decodedRef.has_value());
         EXPECT_EQ(decodedRef.value().normal, attributeRefs[localAttributeIndex].normal);
         EXPECT_EQ(decodedRef.value().tangent, attributeRefs[localAttributeIndex].tangent);
@@ -215,7 +215,7 @@ void VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths(){
     TestArena testArena = TestArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRoots);
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
 
-    const GraphicsTestPath smokeAssets = JoinGraphicsPath3(GetAssetArenaRepoRoot(testArena), "tests", "smoke", "assets");
+    const GraphicsTestPath smokeAssets = JoinGraphicsPath3(GetGraphicsTestRepoRoot(testArena), "tests", "smoke", "assets");
     const GraphicsTestPath root = JoinGraphicsPath(smokeAssets, "textures");
     ResolvedAssetRootVector roots(testArena.arena);
     AppendResolvedAssetRoot(testArena, root, s_ProjectVirtualRoot, roots);
@@ -242,13 +242,13 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
 
     TestArena testArena = TestArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentity);
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch);
-    const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(testArena), s_BuildDirectory, "metadata_discovery_case_identity");
+    const GraphicsTestPath root = JoinGraphicsPath2(GetGraphicsTestRepoRoot(testArena), s_BuildDirectory, "metadata_discovery_case_identity");
     ASSERT_TRUE(EnsureTestEmptyDirectory(root));
 
     const GraphicsTestPath upperPath = JoinGraphicsPath(root, "Case.nwb");
     const GraphicsTestPath lowerPath = JoinGraphicsPath(root, "case.nwb");
-    ASSERT_TRUE(WriteTextFile(upperPath, "upper native input"));
-    ASSERT_TRUE(WriteTextFile(lowerPath, "lower native input"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(upperPath, "upper native input"));
+    ASSERT_TRUE(WriteGraphicsFixtureText(lowerPath, "lower native input"));
 
     b8 casePreserved = false;
     ASSERT_TRUE(ReadTextFileMatches(upperPath, "upper native input", scratch, casePreserved));
@@ -273,7 +273,7 @@ void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarli
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
 
-    const GraphicsTestPath repo = GetAssetArenaRepoRoot(testArena);
+    const GraphicsTestPath repo = GetGraphicsTestRepoRoot(testArena);
     const GraphicsTestPath invalidRoot = BuildUninspectableTestRoot(testArena, repo);
     ASSERT_FALSE(GraphicsFileExists(JoinGraphicsPath(invalidRoot, "CMakeLists.txt")).has_value());
     const Expected<b8, ErrorCode> validFile = GraphicsFileExists(JoinGraphicsPath(repo, "CMakeLists.txt"));
@@ -286,7 +286,7 @@ void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarli
     EXPECT_FALSE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", testArena, scratch));
 
     roots[0u].path = JoinGraphicsPath(repo, "__nwb_missing_virtual_path_root_31c68263");
-    const Expected<b8, ErrorCode> missing = GraphicsFileExists(roots[0u].path);
+    const Expected<b8, ErrorCode> missing = FileExists(roots[0u].path);
     ASSERT_TRUE(missing.has_value());
     ASSERT_FALSE(missing.value());
     EXPECT_TRUE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", testArena, scratch));
@@ -301,7 +301,7 @@ void VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPath
     const usize bucket = HashDiscoveredPath(StringView(first)) % seen.bucket_count();
     for(u32 index = 0u; index < 1024u; ++index){
         CompactString candidate("b/second_");
-        AppendUnsignedDecimal(candidate, index);
+        AppendUnsignedDecimal(candidate, cast<usize>(index));
         candidate.append(".asset.nwb");
         if(HashDiscoveredPath(candidate.view()) % seen.bucket_count() == bucket){
             second.assign(candidate.view());
@@ -570,7 +570,7 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
     CpuTaskScheduler cpuScheduler(0u);
-    const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(fixtureArena), s_BuildDirectory, "metadata_registry_storage");
+    const GraphicsTestPath root = JoinGraphicsPath2(GetGraphicsTestRepoRoot(fixtureArena), s_BuildDirectory, "metadata_registry_storage");
     ASSERT_TRUE(GraphicsEnsureDirectories(root).has_value());
 
     DiscoveredNwbFileVector files(fixtureArena.arena);
@@ -601,7 +601,7 @@ void VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket()
 
     CookEntryRegistry registry(testArena.arena);
     const Name type = s_MetadataRegistryNullBucket;
-    EXPECT_FALSE(TryRegisterNullAllocatedBucket(registry, type));
+    EXPECT_FALSE(RegisterTestCookBucket<NullAllocatedBucket>(registry, type));
     EXPECT_EQ(registry.bucketCount(), 0u);
     EXPECT_FALSE(HasCookEntryRegistryBucket(registry, type));
     EXPECT_TRUE(SawCapturedError(logger, "bucket allocation returned null"));
@@ -612,9 +612,9 @@ void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(
     ScratchString token = MakeScratchString("nwb_owned_token_71a7", scratch);
     ScratchString suffix = MakeScratchString("_nwb_owned_suffix_71a7", scratch);
     ScratchString extension = MakeScratchString(".nwb_owned_sidecar_71a7", scratch);
-    RegisterMetadataNonStandaloneAssetType(Name(s_AssetCaseTestsOwnedType71a7), ViewScratchString(token));
-    RegisterMetadataNonStandaloneFirstTokenSuffix(ViewScratchString(suffix));
-    RegisterMetadataPairedSidecarExtension(ViewScratchString(extension));
+    RegisterNonStandaloneAssetType(Name(s_AssetCaseTestsOwnedType71a7), StringView(token));
+    RegisterNonStandaloneFirstTokenSuffix(StringView(suffix));
+    RegisterMetadataPairedSidecarExtension(StringView(extension));
     token.assign("overwritten");
     suffix.assign("overwritten");
     extension.assign("overwritten");
@@ -625,7 +625,7 @@ void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(
 
     if(s_DebugNameBinding){
         Name fallback = s_NwbOwnedFallback71a7;
-        RegisterInferredAssetType(fallback);
+        RegisterNonStandaloneAssetType(fallback, StringView());
         fallback = Name(s_AssetCaseNwbReplacedFallback71a7);
         EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
     }
@@ -633,7 +633,7 @@ void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(
         SavedNameCallbacks previous;
         InstallRuntimeRegistry();
         const Name fallback = Name(StringView("nwb_owned_fallback_71a7"));
-        RegisterInferredAssetType(fallback);
+        RegisterNonStandaloneAssetType(fallback, StringView());
         const Name replacement = Name(StringView("nwb_replaced_fallback_71a7"));
         for(usize i = 0u; i < s_NameBufferCount; ++i)
             EXPECT_EQ(replacement.resolvedText(), "nwb_replaced_fallback_71a7");
@@ -651,17 +651,17 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
     tokens.push_back("nwb_owned_thread_d_71a7");
 
     {
-        Vector<TestThread> threads;
+        Vector<JoiningThread> threads;
         threads.reserve(tokens.size());
         for(in StringView token : tokens){
             threads.emplace_back(lambda[in token]() -> void{
                 GraphicsScratchArena scratch(s_AssetCaseTestsMetadataRegistryConcurrentTokens);
                 ScratchString text = MakeScratchString(token, scratch);
-                RegisterMetadataNonStandaloneAssetType(Name(), ViewScratchString(text));
+                RegisterNonStandaloneAssetType(Name(), StringView(text));
                 text.assign("overwritten");
             });
         }
-        for(mut TestThread thread : threads)
+        for(mut JoiningThread thread : threads)
             thread.join();
     }
 
@@ -678,7 +678,7 @@ void VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferenc
         if(countIndex == 1u)
             skeletonCount = 33u;
         ModelMetadata metadata = ModelMetadata();
-        PopulateIndexedModelObjects(skeletonCount, 257u, metadata);
+        AddIndexedModelObjects(skeletonCount, 257u, metadata);
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
 
@@ -950,25 +950,25 @@ void VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValid
 
     ModelAssetCodec codec = ModelAssetCodec();
     AssetBytes binary = MakeModelInputsBytes(inputs);
-    ASSERT_TRUE(SerializeModelAsset(codec, inputs.model, binary));
+    ASSERT_TRUE(codec.serialize(inputs.model, GraphicsCodecBytes(binary)));
     TestValueSlot<Model> loadedSlot;
     mut Model loaded = loadedSlot.constructIn(inputs.storage, inputs.model.virtualPath());
-    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
+    ASSERT_TRUE(loaded.loadBinary(binary));
 
     AssetBytes malformed = MakeModelInputsBytes(inputs);
     CopyAssetBytes(binary, malformed);
     CorruptModelBinarySkinnedName(Name(s_ModelPayloadProp), malformed);
-    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
-    EXPECT_TRUE(LoadModelAssetBinary(loaded, binary));
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    EXPECT_TRUE(loaded.loadBinary(binary));
 
     CopyAssetBytes(binary, malformed);
     CorruptModelBinaryStaticParent(Name(s_ModelBodySegment), malformed);
-    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
-    EXPECT_TRUE(LoadModelAssetBinary(loaded, binary));
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    EXPECT_TRUE(loaded.loadBinary(binary));
 
     inputs.skinnedMeshObjects[0u].name = Name(s_ModelRigSegment);
     inputs.publish();
-    EXPECT_FALSE(SerializeModelAsset(codec, inputs.model, malformed));
+    EXPECT_FALSE(codec.serialize(inputs.model, GraphicsCodecBytes(malformed)));
     EXPECT_TRUE(loaded.validatePayload());
 }
 
@@ -979,27 +979,27 @@ void VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndRe
 
     ModelAssetCodec codec = ModelAssetCodec();
     AssetBytes binary = MakeModelInputsBytes(inputs);
-    ASSERT_TRUE(SerializeModelAsset(codec, inputs.model, binary));
+    ASSERT_TRUE(codec.serialize(inputs.model, GraphicsCodecBytes(binary)));
     ASSERT_EQ(binary.size(), ExpectedSingleTripleModelBinaryBytes());
     TestValueSlot<Model> loadedSlot;
     mut Model loaded = loadedSlot.constructIn(inputs.storage, inputs.model.virtualPath());
-    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
+    ASSERT_TRUE(loaded.loadBinary(binary));
 
     AssetBytes malformed = MakeModelInputsBytes(inputs);
     CopyAssetBytes(binary, malformed);
     ASSERT_TRUE(OverwriteU32InAssetBytes(0u, 0x4D444C31u, malformed));
-    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
+    EXPECT_FALSE(loaded.loadBinary(malformed));
     AssetBytes retained = MakeModelInputsBytes(inputs);
-    ASSERT_TRUE(SerializeModelAsset(codec, loaded, retained));
+    ASSERT_TRUE(codec.serialize(loaded, GraphicsCodecBytes(retained)));
     EXPECT_EQ(retained, binary);
-    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
+    ASSERT_TRUE(loaded.loadBinary(binary));
 
     CopyAssetBytes(binary, malformed);
     malformed.pop_back();
-    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
-    ASSERT_TRUE(SerializeModelAsset(codec, loaded, retained));
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    ASSERT_TRUE(codec.serialize(loaded, GraphicsCodecBytes(retained)));
     EXPECT_EQ(retained, binary);
-    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
+    ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
     EXPECT_EQ(loaded.skinnedMeshObjects()[0u].skin.name(), inputs.skinnedMeshObjects[0u].skin.name());
     EXPECT_EQ(loaded.skinnedMeshObjects()[0u].skeletonObject, Name(s_ModelRigSegment));

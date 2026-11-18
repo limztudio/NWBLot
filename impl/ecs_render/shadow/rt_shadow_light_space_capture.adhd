@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/light_space_settings.adhd>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
 #include <impl/ecs_render/shadow/light_space_shadow.adhd>
 #include <impl/ecs_render/kernel/timing_names.adhd>
@@ -74,8 +75,6 @@ extern const u32 s_ShaderLightSpaceShadeMaxGroupsX;
 [cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_GROUP_SIZE")]
 extern const u32 s_ShaderLightSpaceGroupSize;
 
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES")]
-extern const u32 s_ShaderLightSpaceDrawArgumentBytes;
 
 static_assert(size_of<DrawIndexedIndirectArguments>() == s_ShaderLightSpaceDrawArgumentBytes);
 

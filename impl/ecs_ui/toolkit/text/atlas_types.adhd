@@ -111,13 +111,7 @@ b8 SameGlyphPageVersion<TFont>(
         return false;
     if(sameInstance)
         return true;
-    if(firstPixels.size() != secondPixels.size())
-        return false;
-    for(usize index = 0u; index < firstPixels.size(); ++index){
-        if(firstPixels[index] != secondPixels[index])
-            return false;
-    }
-    return true;
+    return BytesMatch(firstPixels, secondPixels);
 }
 
 b8 ValidGlyphPageBinding<TFont>(in GlyphPageBindingRecord<TFont> binding, in usize pixelByteCount){

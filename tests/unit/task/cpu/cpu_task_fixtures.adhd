@@ -14,13 +14,13 @@
 #include <tests/common/threads.adhd>
 
 class DeadlineGuard{
-    private TestThread watchdog;
+    private JoiningThread watchdog;
     public DeadlineGuard(in b8 deathTest, in u32 timeoutMS){
-        this.watchdog = TestThread(lambda[in deathTest, in timeoutMS](in StopToken stop) -> void{
+        this.watchdog = JoiningThread(lambda[in deathTest, in timeoutMS](in StopToken stop) -> void{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= timeoutMS){
-                    if(deathTest) ExitTestProcess(0u);
+                    if(deathTest) ExitTestChild(0);
                     TerminateInvariant();
                 }
                 SleepMS(s_PollIntervalMS);

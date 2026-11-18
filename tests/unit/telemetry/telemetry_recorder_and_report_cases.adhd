@@ -210,9 +210,9 @@ void RunConcurrentReset(in b8 disableCapture){
             const usize kWorkerCount = 4u;
             TestAtomic<usize> accepted(0u);
             TestAtomic<usize> damagedPayloads(0u);
-            TestLatch payloadsReady(kWorkerCount);
-            TestLatch releasePayloads(1u);
-            Array<Optional<TestThread>, 4u> workers;
+            Latch payloadsReady(kWorkerCount);
+            Latch releasePayloads(1u);
+            Array<Optional<JoiningThread>, 4u> workers;
             for(usize index = 0u; index < kWorkerCount; ++index){
                 workers[index].emplace(lambda[in index, mut recorder, mut payloadsReady, mut releasePayloads, mut accepted, mut damagedPayloads]() -> void{
                     b8 enteredBuilder = false;
@@ -659,7 +659,7 @@ void VerifyTelemetry_EventCodecRejectsInvalidInput(){
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
 
-    result = DecodeTestEventBytes(testArena.arena, encoded, s_EncodedEventHeaderByteSize - 1u);
+    result = DecodeEventSpan(testArena.arena, encoded, s_EncodedEventHeaderByteSize - 1u);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().status, DecodeStatus::TruncatedHeader);
 }
@@ -675,7 +675,7 @@ void VerifyTelemetry_EventCodecReportsTruncatedPayload(){
         EXPECT_TRUE(EncodeTelemetryData(header, TestArrayData<u8>(payload), payload.size(), encoded));
     }
 
-    const Expected<DecodedEvent, DecodeResult> result = DecodeTestEventBytes(testArena.arena, encoded, encoded.size() - 1u);
+    const Expected<DecodedEvent, DecodeResult> result = DecodeEventSpan(testArena.arena, encoded, encoded.size() - 1u);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().status, DecodeStatus::TruncatedPayload);
 }
@@ -784,7 +784,7 @@ void VerifyTelemetry_EventStreamCodecRejectsInvalidInput(){
     EXPECT_TRUE(EncodeTestEventStream(recorder.view(), encoded));
 
     TelemetryRecorder decoded = TelemetryRecorder(testArena.arena);
-    Expected<usize, DecodeResult> result = DecodeTestEventStreamBytes(encoded, s_EncodedStreamHeaderByteSize - 1u, testArena.arena, decoded);
+    Expected<usize, DecodeResult> result = DecodeEventStreamSpan(encoded, s_EncodedStreamHeaderByteSize - 1u, testArena.arena, decoded);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().status, DecodeStatus::TruncatedHeader);
 
@@ -795,7 +795,7 @@ void VerifyTelemetry_EventStreamCodecRejectsInvalidInput(){
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
 
-    result = DecodeTestEventStreamBytes(encoded, encoded.size() - 1u, testArena.arena, decoded);
+    result = DecodeEventStreamSpan(encoded, encoded.size() - 1u, testArena.arena, decoded);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().status, DecodeStatus::TruncatedPayload);
 
@@ -937,7 +937,7 @@ void VerifyTelemetry_RecorderAcceptsConcurrentRecords(){
     {
         const u32 kThreads = 4u;
         const u32 kEventsPerThread = 64u;
-        Array<Optional<TestThread>, 4u> threads;
+        Array<Optional<JoiningThread>, 4u> threads;
         for(u32 threadIndex = 0u; threadIndex < kThreads; ++threadIndex){
             threads[threadIndex].emplace(lambda[mut recorder, in threadIndex, in kEventsPerThread]() -> void{
                 for(u32 eventIndex = 0u; eventIndex < kEventsPerThread; ++eventIndex){
@@ -1329,8 +1329,8 @@ void VerifyTelemetry_TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame(
     nodes[0u].label = "Unmatched GBuffer Pass";
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 42u, nodes, edges, 9u));
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
@@ -1384,8 +1384,8 @@ void VerifyTelemetry_TelemetryReportDoesNotAttachAggregatedTimingToOneGraph(){
     nodes[0u].label = "Publish Frame GBuffer Pass";
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 44u, nodes, edges, 8u));
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     const StringView dot = ReportGraphView(report);
@@ -1406,18 +1406,18 @@ void VerifyTelemetry_TelemetryReportDistinguishesExactEmptyPacketSubmissionsFrom
     physicalQueueRuntimeStatistics.clear();
     packetSubmissionStatistics.clear();
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
     TelemetryRecorder exactRecorder = TelemetryRecorder(testArena.arena);
     exactRecorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(exactRecorder, testArena.scratchArena, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
-    const Expected<TelemetryReport> exactReportResult = BuildTestTelemetryReport(exactRecorder.view(), testArena.arena, reportScratch.scratchArena);
+    const Expected<TelemetryReport> exactReportResult = BuildTestTelemetryReport(exactRecorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(exactReportResult.has_value());
     const TelemetryReport exactReport = exactReportResult.value();
 
     TelemetryRecorder absentRecorder = TelemetryRecorder(testArena.arena);
     absentRecorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(absentRecorder, testArena.scratchArena, 59u, nodes, edges, 19u));
-    const Expected<TelemetryReport> absentReportResult = BuildTestTelemetryReport(absentRecorder.view(), testArena.arena, reportScratch.scratchArena);
+    const Expected<TelemetryReport> absentReportResult = BuildTestTelemetryReport(absentRecorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(absentReportResult.has_value());
     const TelemetryReport absentReport = absentReportResult.value();
 
@@ -1454,8 +1454,8 @@ void VerifyTelemetry_TelemetryReportRejectsNonCurrentFrameGraphPayloads(){
         ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 55u, payload, 15u));
     }
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.eventCount, unsupportedCount + 1u);
@@ -1474,8 +1474,8 @@ void VerifyTelemetry_TelemetryReportMarksAbsentRuntimeStatistics(){
     BuildTestCompiledFrameGraph(testArena, nodes, edges);
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 53u, nodes, edges, 13u));
 
-    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
+    ScratchStorage reportScratch(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
 

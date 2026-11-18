@@ -197,7 +197,7 @@ String BuildDeferredBxdfDispatchModuleSource(in Span<StringView> sourceById){
         outSource.append(s_DeferredBxdfFunctionMacro);
         outSource.push_back(' ');
         outSource.append(s_DeferredBxdfModelPrefix);
-        AppendDecimalU32(cast<u32>(id), outSource);
+        AppendUnsignedDecimal(outSource, cast<usize>(id));
         outSource.push_back('\n');
         outSource.append(s_GeneratedIncludeDirective);
         outSource.append(sourceById[id]);
@@ -213,10 +213,10 @@ String BuildDeferredBxdfDispatchModuleSource(in Span<StringView> sourceById){
         if(sourceById[id].empty())
             continue;
         outSource.append(s_GeneratedSwitchCaseLabel);
-        AppendDecimalU32(cast<u32>(id), outSource);
+        AppendUnsignedDecimal(outSource, cast<usize>(id));
         outSource.append(s_GeneratedSwitchCaseReturn);
         outSource.append(s_DeferredBxdfModelPrefix);
-        AppendDecimalU32(cast<u32>(id), outSource);
+        AppendUnsignedDecimal(outSource, cast<usize>(id));
         outSource.append("(surface, pixel);\n");
     }
     outSource.append(s_DeferredBxdfUnknownFallbackSource);

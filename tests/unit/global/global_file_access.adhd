@@ -46,9 +46,6 @@ extern void AppendSubpath(mut MeasuredPath path, in PlatformStringView text);
 [cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OversizedBinarySource")]
 extern class OversizedBinarySource;
 
-[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::WriteBinaryFile")]
-extern b8 WriteOversizedFile(in Path path, in OversizedBinarySource source);
-
 [cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CreateTestHardLink")]
 extern b8 CreateTestHardLink(in Path target, in Path linkPath);
 
@@ -85,15 +82,9 @@ extern Expected<void, SharedLibraryFailure> OpenTestLibrary(mut SharedLibrary li
 [cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ResolveProcessId")]
 extern Expected<ProcessIdFunction, SharedLibraryFailure> ResolveProcessId(mut SharedLibrary library, mut HeapStorage storage, in StringView name);
 
-[cpp_header("<global/filesystem/retention.h>"), cpp_name("::ApplyDirectoryRetention"), cpp_flags(scratch_arena)]
-extern Expected<void, ErrorCode> RetainWithPredicate(in Path path, in usize count, in auto predicate);
-
 
 [cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ThrowCaptureError")]
 extern void ThrowCaptureError(in auto message);
-
-[cpp_header("<global/filesystem/utility.h>"), cpp_name("::PathHasListedExtension")]
-extern b8 MeasuredHasExtension(in MeasuredPath path, in Span<StringView> extensions);
 
 [cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CreateStagedFile")]
 extern Expected<void, ErrorCode> CreateStagedFile(in Path path, in Span<u8> bytes, mut b8 created);

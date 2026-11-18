@@ -243,21 +243,11 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     public b8 onUpdate(in f32 delta)override{
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && this.m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
-            if(!this.m_rendererBaselineCapturePaused){
-                // Log the held update phase for the baseline capture runner.
-                this.m_context.graphics.setFrameSubmissionSuspended(true);
-                this.m_rendererBaselineCapturePaused = true;
-                [essential] info("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended", this.m_rendererBaselineRenderedFrameCount);
-            }
+            SuspendSmokeCapture(this.m_context.graphics, this.m_rendererBaselineCapturePaused, "SoftShadowTestSmokeProject", this.m_rendererBaselineRenderedFrameCount, "update callbacks");
             return true;
         }
 
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        f32 safeDelta = 0.0f;
-        if(fixedDelta > 0.0f)
-            safeDelta = fixedDelta;
-        else if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        const f32 safeDelta = SafeRendererBaselineDelta(delta);
         this.m_fpsProbe.recordFrame(safeDelta);
         if(this.m_timingEnabled)
             this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());

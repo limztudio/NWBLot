@@ -105,6 +105,15 @@ Optional<i32> ParsePipelineOptions(in ConsoleArguments arguments, in PipelineToo
     return Optional<i32>();
 }
 
+[cpp_unwind]
+i32 RunPipelineTool<Runner>(in ConsoleArguments arguments, in PipelineTool tool, in Runner run){
+    PipelineOptions options;
+    const auto status = ParsePipelineOptions(arguments, tool, options);
+    if(status.has_value())
+        return status.value();
+    return run(options);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

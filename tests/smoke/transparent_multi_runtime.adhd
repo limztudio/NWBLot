@@ -176,23 +176,11 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         }
 
         if(captureFreezeFrame != 0u && this.m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
-            if(!this.m_rendererBaselineCapturePaused){
-                this.m_context.graphics.setFrameSubmissionSuspended(true);
-                this.m_rendererBaselineCapturePaused = true;
-                [essential] info(
-                    "TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"
-                    , this.m_rendererBaselineRenderedFrameCount
-                );
-            }
+            SuspendSmokeCapture(this.m_context.graphics, this.m_rendererBaselineCapturePaused, "TransparentMultiSmokeProject", this.m_rendererBaselineRenderedFrameCount, "rendered frames");
             return true;
         }
 
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        f32 safeDelta = 0.0f;
-        if(fixedDelta > 0.0f)
-            safeDelta = fixedDelta;
-        else if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        const f32 safeDelta = SafeRendererBaselineDelta(delta);
 
         this.m_fpsProbe.recordFrame(safeDelta);
         this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());

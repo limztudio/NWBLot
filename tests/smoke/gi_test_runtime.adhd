@@ -213,11 +213,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
         }
 
         if(!this.m_complexSceneEnabled && captureFreezeFrame != 0u && captureProgress >= cast<u64>(captureFreezeFrame)){
-            if(!this.m_rendererBaselineCapturePaused){
-                this.m_context.graphics.setFrameSubmissionSuspended(true);
-                this.m_rendererBaselineCapturePaused = true;
-                [essential] info("GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended", this.m_rendererBaselineRenderedFrameCount);
-            }
+            SuspendSmokeCapture(this.m_context.graphics, this.m_rendererBaselineCapturePaused, "GiTestSmokeProject", this.m_rendererBaselineRenderedFrameCount, "rendered frames");
             return true;
         }
 
@@ -244,12 +240,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
             [essential] info("GiTestSmokeProject: requested shadow receiver switch factor={}", cast<u32>(settings.receiverResolution));
         }
 
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        f32 safeDelta = 0.0f;
-        if(fixedDelta > 0.0f)
-            safeDelta = fixedDelta;
-        else if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        const f32 safeDelta = SafeRendererBaselineDelta(delta);
         this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;

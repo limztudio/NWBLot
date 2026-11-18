@@ -9,6 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT")]
+extern const u32 s_ShaderSceneShadingBufferFloatCount;
+
 [cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT")]
 extern const u32 s_ShaderSceneLightRecordFloatCount;
 
@@ -224,6 +227,9 @@ class SceneShadingGpuData{
     // xyz = camera world position, w = active light count.
     public f32x4 cameraPositionLightCount(0.0f, 0.0f, 0.0f, 0.0f);
 }
+
+const usize s_SceneShadingGpuDataBytes = size_of<f32>() * s_ShaderSceneShadingBufferFloatCount;
+static_assert(size_of<SceneShadingGpuData>() == s_SceneShadingGpuDataBytes, "SceneShadingGpuData layout must match the shading shaders");
 
 [serialize]
 class SceneLightGpuData{

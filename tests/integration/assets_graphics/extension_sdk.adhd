@@ -54,8 +54,6 @@ extern class SavedNameCallbacks;
 extern const b8 s_DebugNameBinding;
 [cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NameDetail::s_SymbolTextBufferCount")]
 extern const usize s_NameBufferCount;
-[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneAssetType")]
-extern void RegisterInferredAssetType(in Name type);
 [cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::Hasher<Name>{}")]
 extern usize HashExtensionKey(in Name key);
 

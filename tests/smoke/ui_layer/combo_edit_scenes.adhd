@@ -27,7 +27,7 @@ const StringView s_UiListSmokeTag = "UiListSmoke";
 
 
 class UiComboSmokeScene : IUiSmokeInputScene{
-    private UiComboSmokeSource m_source = UiComboSmokeSource();
+    private UiNumberedSmokeSource m_source = UiNumberedSmokeSource(2u);
     private ComboState m_state = ComboState();
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
     private Array<u64, 16u> m_lastValues;
@@ -118,7 +118,7 @@ class UiInteractiveSmokeScene : IUiSmokeScene{
 
 
 class UiListSmokeScene : IUiSmokeInputScene{
-    private UiListSmokeSource m_source = UiListSmokeSource();
+    private UiNumberedSmokeSource m_source = UiNumberedSmokeSource(1u);
     private ListState m_state = ListState();
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
     private DisplayMetrics m_lastDisplay = DisplayMetrics();
@@ -142,44 +142,10 @@ class UiListSmokeScene : IUiSmokeInputScene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView UiImageSmokeRectName(in usize index){
-    switch(index){
-    case 0u:
-        return "before";
-    case 1u:
-        return "after";
-    case 2u:
-        return "natural_sprite";
-    case 3u:
-        return "natural_slice";
-    case 4u:
-        return "fixed_sprite";
-    case 5u:
-        return "fixed_slice";
-    case 6u:
-        return "stretch";
-    case 7u:
-        return "tinted";
-    case 8u:
-        return "transparent";
-    case 9u:
-        return "frozen";
-    case 10u:
-        return "external";
-    case 11u:
-        return "external_clip";
-    case 12u:
-        return "parent_image";
-    case 13u:
-        return "child_image";
-    case 14u:
-        return "parent";
-    case 15u:
-        return "child";
-    default:
-        return "";
-    }
-}
+const Array<StringView, 16u> s_UiImageSmokeRectNames(
+    "before", "after", "natural_sprite", "natural_slice", "fixed_sprite", "fixed_slice", "stretch", "tinted", "transparent", "frozen", "external", "external_clip",
+    "parent_image", "child_image", "parent", "child"
+);
 
 
 b8 UiComboSmokeScene::paint(mut UiPaintContext context){
@@ -283,12 +249,7 @@ Rect UiComboSmokeScene::cursorRow()const{
     if(!this.m_visible || !this.m_state.isOpen())
         return Rect();
     const Expected<u64> index = this.m_source.indexOf(this.m_state.listState().cursorKey());
-    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
-        return Rect();
-    const Expected<Rect> rectangle = SmokeListRowBounds(placement, index.value());
-    if(!rectangle.has_value())
-        return Rect();
-    return rectangle.value();
+    return SmokePlacedListRow(placement, index);
 }
 
 void UiComboSmokeScene::observeState(){
@@ -299,7 +260,7 @@ void UiComboSmokeScene::observeState(){
     if(
         this.m_sequence != 0u
         && !this.m_displayChanged
-        && SameSmokeU64Span(current, this.m_lastValues)
+        && current == this.m_lastValues
         && placement.offset == this.m_lastPlacement.offset
         && placement.contentHeight == this.m_lastPlacement.contentHeight
         && SameSmokeRect(placement.bounds, this.m_lastPlacement.bounds)
@@ -314,26 +275,7 @@ void UiComboSmokeScene::observeState(){
     this.m_lastPopup = popup;
     this.m_lastBounds = bounds;
     this.m_displayChanged = false;
-    [essential] info(
-        "UiComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_sequence
-        , current[0u]
-        , current[1u]
-        , current[2u]
-        , current[3u]
-        , current[4u]
-        , current[5u]
-        , current[6u]
-        , current[7u]
-        , current[8u]
-        , current[9u]
-        , current[10u]
-        , current[11u]
-        , current[12u]
-        , current[13u]
-        , current[14u]
-        , current[15u]
-    );
+    LogSmokeValues(s_UiComboSmokeTag, this.m_sequence, current);
     LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "trigger", bounds);
     LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "popup", popup.bounds);
     LogSmokeRect(s_UiComboSmokeTag, this.m_sequence, "list", placement.bounds);
@@ -449,7 +391,7 @@ void UiEditSmokeScene::observeState(mut TextService text){
     if(
         this.m_sequence != 0u
         && !this.m_displayChanged
-        && SameSmokeU32Span(current, this.m_lastValues)
+        && current == this.m_lastValues
         && SameSmokePlacement(primary, this.m_lastPrimary)
         && SameSmokePlacement(secondary, this.m_lastSecondary)
         && SameSmokeRect(primarySelection, this.m_lastPrimarySelection)
@@ -679,35 +621,15 @@ void UiImageSmokeScene::observeState(mut UiPaintContext context){
     current.values[5u] = cast<u64>(this.m_child.isOpen());
     current.values[6u] = context.ui.input().popupCount();
     current.values[7u] = cast<u64>(observation.passiveTargets);
-    const b8 stateChanged = !SameSmokeU64Span(current.values, this.m_snapshot.values);
+    const b8 stateChanged = current.values != this.m_snapshot.values;
     const PassiveSmokeSnapshotUpdate update = PublishPassiveSmokeSnapshot(stateChanged, current, this.m_snapshot);
     if(!update.published)
         return;
     if(update.displayChanged){
-        [essential] info(
-            "UiImageSmoke: display logical={}x{} scale={}x{}"
-            , current.display.logicalWidth
-            , current.display.logicalHeight
-            , current.display.pixelScaleX
-            , current.display.pixelScaleY
-        );
+        LogSmokeDisplay(s_UiImageSmokeTag, current.display);
     }
-    [essential] info(
-        "UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}"
-        , current.sequence
-        , current.values[0u]
-        , current.values[1u]
-        , current.values[2u]
-        , current.values[3u]
-        , current.values[4u]
-        , current.values[5u]
-        , current.values[6u]
-        , current.values[7u]
-        , current.values[8u]
-        , current.values[9u]
-    );
-    for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(s_UiImageSmokeTag, current.sequence, UiImageSmokeRectName(index), current.rectangles[index]);
+    LogSmokeValues(s_UiImageSmokeTag, current.sequence, current.values);
+    LogSmokeRectangles(s_UiImageSmokeTag, current.sequence, s_UiImageSmokeRectNames, current.rectangles);
 }
 
 void UiImageSmokeScene::paintMarkers(mut UiPaintContext context)const{
@@ -753,21 +675,10 @@ b8 UiInteractiveSmokeScene::paint(mut UiPaintContext context){
 }
 
 void UiInteractiveSmokeScene::observeDisplay(in DisplayMetrics display){
-    if(
-        this.m_lastDisplay.logicalWidth == display.logicalWidth
-        && this.m_lastDisplay.logicalHeight == display.logicalHeight
-        && this.m_lastDisplay.pixelScaleX == display.pixelScaleX
-        && this.m_lastDisplay.pixelScaleY == display.pixelScaleY
-    )
+    if(SameSmokeDisplay(this.m_lastDisplay, display))
         return;
     this.m_lastDisplay = display;
-    [essential] info(
-        "UiInteractiveSmoke: display logical={}x{} scale={}x{}"
-        , display.logicalWidth
-        , display.logicalHeight
-        , display.pixelScaleX
-        , display.pixelScaleY
-    );
+    LogSmokeDisplay("UiInteractiveSmoke", display);
 }
 
 void UiInteractiveSmokeScene::logAction(in StringView action){
@@ -879,12 +790,7 @@ Rect UiListSmokeScene::selectedRow()const{
     if(!this.m_visible)
         return Rect();
     const Expected<u64> index = this.m_source.indexOf(this.m_state.selectedKey());
-    if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
-        return Rect();
-    const Expected<Rect> rectangle = SmokeListRowBounds(placement, index.value());
-    if(!rectangle.has_value())
-        return Rect();
-    return rectangle.value();
+    return SmokePlacedListRow(placement, index);
 }
 
 void UiListSmokeScene::observeState(){
@@ -893,7 +799,7 @@ void UiListSmokeScene::observeState(){
     if(
         this.m_sequence != 0u
         && !this.m_displayChanged
-        && SameSmokeU64Span(current, this.m_lastValues)
+        && current == this.m_lastValues
         && placement.offset == this.m_lastPlacement.offset
         && placement.contentHeight == this.m_lastPlacement.contentHeight
         && SameSmokeRect(placement.bounds, this.m_lastPlacement.bounds)
@@ -904,22 +810,7 @@ void UiListSmokeScene::observeState(){
     this.m_lastValues = current;
     this.m_lastPlacement = placement;
     this.m_displayChanged = false;
-    [essential] info(
-        "UiListSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}"
-        , this.m_sequence
-        , current[0u]
-        , current[1u]
-        , current[2u]
-        , current[3u]
-        , current[4u]
-        , current[5u]
-        , current[6u]
-        , current[7u]
-        , current[8u]
-        , current[9u]
-        , current[10u]
-        , current[11u]
-    );
+    LogSmokeValues(s_UiListSmokeTag, this.m_sequence, current);
     LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "list", placement.bounds);
     LogSmokeRect(s_UiListSmokeTag, this.m_sequence, "viewport", placement.viewport);
     const Expected<Rect> first = SmokeListRowBounds(placement, placement.firstRow);

@@ -375,10 +375,10 @@ void VerifyUiWindowSkinTests_ReplacingAtlasChangesMetricsAndBindingsWithoutChang
     EXPECT_EQ(self.m_context.input().hitTest(Point(55.0f, 115.0f)), updated.id);
     EXPECT_FLOAT_EQ(state.bounds.width, 280.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 200.0f);
-    EXPECT_EQ(first.skinBinding().texture, MakeUiTextureAssetRef("tests/ui/texture"));
+    EXPECT_EQ(first.skinBinding().texture, MakeUiFixtureAssetRef<Texture>("tests/ui/texture"));
     EXPECT_EQ(first.skinBinding().generation, 1u);
     EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
-    EXPECT_EQ(second.skinBinding().texture, MakeUiTextureAssetRef("tests/ui/alternate_texture"));
+    EXPECT_EQ(second.skinBinding().texture, MakeUiFixtureAssetRef<Texture>("tests/ui/alternate_texture"));
     EXPECT_EQ(second.skinBinding().generation, 2u);
     EXPECT_EQ(second.skinBinding().atlasWidth, 256u);
     EXPECT_FLOAT_EQ(second.skinBinding().referenceDensity, 2.0f);

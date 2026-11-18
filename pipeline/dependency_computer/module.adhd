@@ -24,11 +24,7 @@ i32 RunPipelineOptions(mut PipelineOptions options){
 
 [cpp_unwind]
 i32 Run(in ConsoleArguments args){
-    PipelineOptions options;
-    const auto status = ParsePipelineOptions(args, PipelineTool::DependencyComputer, options);
-    if(status.has_value())
-        return status.value();
-    return RunPipelineOptions(options);
+    return RunPipelineTool(args, PipelineTool::DependencyComputer, RunPipelineOptions);
 }
 
 

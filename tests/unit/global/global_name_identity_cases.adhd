@@ -383,7 +383,7 @@ void VerifyGlobal_OptionalNameTextPreservesAbsenceAndOwnedContainerErrors(){
     ScopedNameCallbacks callbacks(probe);
     const auto emptyNarrow = ToName(StringView());
     emptyNarrowAbsent = emptyNarrow.has_value() && !emptyNarrow.value().has_value();
-    const auto emptyWide = ToWideName(WideView());
+    const auto emptyWide = ToWideName(WideStringView());
     emptyWideAbsent = emptyWide.has_value() && !emptyWide.value().has_value();
     const auto invalidView = ToName(invalid);
     invalidViewRejected = !invalidView.has_value() && invalidView.error() == NameTextError::EmbeddedNull;

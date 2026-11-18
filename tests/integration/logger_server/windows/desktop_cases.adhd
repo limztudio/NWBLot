@@ -49,9 +49,9 @@ void VerifyLogRowPainter_EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceConte
 
 void VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth(){
     HeapStorage storage;
-    WinStaticWindow parent(s_WinPopup, 60, 100);
+    WinStaticWindow parent(s_Win32PopupStyle, 60, 100);
     ASSERT_TRUE(parent.valid());
-    WinStaticWindow child(parent, s_WinChild, 60, 100);
+    WinStaticWindow child(parent, s_Win32ChildStyle, 60, 100);
     ASSERT_TRUE(child.valid());
     child.useDefaultGuiFont();
     const WinLogRow message(NativeLogText(storage, ProtocolText("A long message that must wrap across several narrow rows of the hidden logger window.")), LogType::Info);

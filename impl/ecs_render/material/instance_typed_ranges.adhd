@@ -196,13 +196,7 @@ usize HashMaterialTypedByteContent(in u64 byteHash, in usize byteCount){
 }
 
 b8 EqualMaterialTypedByteContent(in u64 lhsByteHash, in Span<u8> lhsBytes, in u64 rhsByteHash, in Span<u8> rhsBytes){
-    if(lhsByteHash != rhsByteHash || lhsBytes.size() != rhsBytes.size())
-        return false;
-    for(usize i = 0u; i < lhsBytes.size(); ++i){
-        if(lhsBytes[i] != rhsBytes[i])
-            return false;
-    }
-    return true;
+    return lhsByteHash == rhsByteHash && BytesMatch(lhsBytes, rhsBytes);
 }
 
 usize ResolveMaterialTypedBufferByteCount(in usize byteCount, in usize wordSize){

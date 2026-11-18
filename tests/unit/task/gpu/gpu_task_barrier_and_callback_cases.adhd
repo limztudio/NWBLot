@@ -10,12 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::ClearCallbackInvocation")]
-extern void ClearBarrierCallback(mut GpuTaskGraphTaskAcceptedCallback callback);
-
-[cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::ClearCallbackInvocation")]
-extern void ClearBarrierCallback(mut GpuTaskGraphTaskRecordedCallback callback);
-
 
 const u64 s_GpuBarrierAcceptedTokenValue = 7u;
 
@@ -134,7 +128,7 @@ void CheckInvalidCallbackBindings<TCallback>(in GpuTaskGraphDeclarationReadView 
     ExpectBindingRejectionAndReset<TCallback>(bindings, declarations, plan, range, entries, callbacks, saved);
     ++callbacks.back().task.generation;
     ExpectBindingRejectionAndReset<TCallback>(bindings, declarations, plan, range, entries, callbacks, saved);
-    ClearBarrierCallback(callbacks.back());
+    ClearCallbackInvocation(callbacks.back());
     ExpectBindingRejectionAndReset<TCallback>(bindings, declarations, plan, range, entries, callbacks, saved);
     callbacks.back().task = tasks[tasks.size() - 1u];
     ExpectBindingRejectionAndReset<TCallback>(bindings, declarations, plan, range, entries, callbacks, saved);
@@ -238,22 +232,22 @@ Optional<GpuCompiledBarrier> GpuBarrier_FindRangeBarrier(
 void VerifyGpuBarrier_ForcesMergedSameStateWriteDependenciesAcrossResourceKinds(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto textureCopyDestResult = AddTextureMetadata(graph, s_BarrierPlanningSameStateTextureCopyDest, "Same-state Texture Copy Destination");
+    const auto textureCopyDestResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningSameStateTextureCopyDest, "Same-state Texture Copy Destination");
     ASSERT_TRUE(textureCopyDestResult.has_value());
     const GpuGraphResourceId textureCopyDest = textureCopyDestResult.value();
-    const auto bufferCopyDestResult = AddBufferMetadata(graph, s_BarrierPlanningSameStateBufferCopyDest, "Same-state Buffer Copy Destination");
+    const auto bufferCopyDestResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_BarrierPlanningSameStateBufferCopyDest, "Same-state Buffer Copy Destination");
     ASSERT_TRUE(bufferCopyDestResult.has_value());
     const GpuGraphResourceId bufferCopyDest = bufferCopyDestResult.value();
-    const auto renderTargetResult = AddTextureMetadata(graph, s_BarrierPlanningSameStateRenderTarget, "Same-state Render Target");
+    const auto renderTargetResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningSameStateRenderTarget, "Same-state Render Target");
     ASSERT_TRUE(renderTargetResult.has_value());
     const GpuGraphResourceId renderTarget = renderTargetResult.value();
-    const auto depthWriteResult = AddTextureMetadata(graph, s_BarrierPlanningSameStateDepthWrite, "Same-state Depth Write");
+    const auto depthWriteResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningSameStateDepthWrite, "Same-state Depth Write");
     ASSERT_TRUE(depthWriteResult.has_value());
     const GpuGraphResourceId depthWrite = depthWriteResult.value();
-    const auto accelStructWriteResult = AddAccelStructMetadata(graph, s_BarrierPlanningSameStateAccelStructWrite, "Same-state Acceleration Structure Write");
+    const auto accelStructWriteResult = AddResourceMetadata(graph, GpuGraphResourceType::AccelStruct, s_BarrierPlanningSameStateAccelStructWrite, "Same-state Acceleration Structure Write");
     ASSERT_TRUE(accelStructWriteResult.has_value());
     const GpuGraphResourceId accelStructWrite = accelStructWriteResult.value();
-    const auto readOnlyResult = AddTextureMetadata(graph, s_BarrierPlanningSameStateReadOnly, "Same-state Read Only");
+    const auto readOnlyResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningSameStateReadOnly, "Same-state Read Only");
     ASSERT_TRUE(readOnlyResult.has_value());
     const GpuGraphResourceId readOnly = readOnlyResult.value();
     ASSERT_TRUE(textureCopyDest.valid());
@@ -352,7 +346,7 @@ void VerifyGpuBarrier_ForcesMergedSameStateWriteDependenciesAcrossResourceKinds(
 void VerifyGpuBarrier_PlansPacketBoundaryTransitionsAndUavDependencies(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, s_BarrierPlanningPlannedTransitions, "Planned Transitions");
+    const auto textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningPlannedTransitions, "Planned Transitions");
     ASSERT_TRUE(textureResult.has_value());
     const GpuGraphResourceId texture = textureResult.value();
     ASSERT_TRUE(texture.valid());
@@ -428,10 +422,10 @@ void VerifyGpuBarrier_PlansPacketBoundaryTransitionsAndUavDependencies(){
 void VerifyGpuBarrier_PlansCompositeUavDependencies(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, s_BarrierPlanningCompositeUavTexture, "Composite UAV Texture");
+    const auto textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningCompositeUavTexture, "Composite UAV Texture");
     ASSERT_TRUE(textureResult.has_value());
     const GpuGraphResourceId texture = textureResult.value();
-    const auto bufferResult = AddBufferMetadata(graph, s_BarrierPlanningCompositeUavBuffer, "Composite UAV Buffer");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_BarrierPlanningCompositeUavBuffer, "Composite UAV Buffer");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     ASSERT_TRUE(texture.valid());
@@ -491,7 +485,7 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
 
     {
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-        const auto textureResult = AddTextureMetadata(graph, s_BarrierPlanningIntraTaskFinalStateConsumer, "Intra-Task Final State Consumer");
+        const auto textureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningIntraTaskFinalStateConsumer, "Intra-Task Final State Consumer");
         ASSERT_TRUE(textureResult.has_value());
         const GpuGraphResourceId texture = textureResult.value();
         ASSERT_TRUE(texture.valid());
@@ -683,27 +677,21 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
 
-    const auto concurrentTextureResult = AddTextureMetadata(
-        graph,
-        s_BarrierPlanningConcurrentReadOnly,
+    const auto concurrentTextureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningConcurrentReadOnly,
         "Concurrent Read Only",
         ResourceStates::ShaderResource,
         ResourceQueueSharing::GraphicsAndAsyncCompute
     );
     ASSERT_TRUE(concurrentTextureResult.has_value());
     const GpuGraphResourceId concurrentTexture = concurrentTextureResult.value();
-    const auto defaultConcurrentTextureResult = AddTextureMetadata(
-        graph,
-        s_BarrierPlanningDefaultConcurrentReadOnly,
+    const auto defaultConcurrentTextureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningDefaultConcurrentReadOnly,
         "Default Concurrent Read Only",
         ResourceStates::Common,
         ResourceQueueSharing::GraphicsAndAsyncCompute
     );
     ASSERT_TRUE(defaultConcurrentTextureResult.has_value());
     const GpuGraphResourceId defaultConcurrentTexture = defaultConcurrentTextureResult.value();
-    const auto exclusiveTextureResult = AddTextureMetadata(
-        graph,
-        s_BarrierPlanningExclusiveReadOnly,
+    const auto exclusiveTextureResult = AddResourceMetadata(graph, GpuGraphResourceType::Texture, s_BarrierPlanningExclusiveReadOnly,
         "Exclusive Read Only",
         ResourceStates::Common,
         ResourceQueueSharing::Exclusive
@@ -910,7 +898,7 @@ void VerifyGpuBarrier_IndependentIntervalsKeepSeparateInitialStates(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseBufferRangeIndependent, "Independent Bytes");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseBufferRangeIndependent, "Independent Bytes");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     Array<GpuTaskResourceUse, 1> firstUses = Array<GpuTaskResourceUse, 1>();
@@ -953,7 +941,7 @@ void VerifyGpuBarrier_WideConsumerCollectsOlderPrefixAndTailAfterPartialOverwrit
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseBufferRangeFanIn, "Byte Fan In");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseBufferRangeFanIn, "Byte Fan In");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     Array<GpuTaskResourceUse, 1> wholeUses = Array<GpuTaskResourceUse, 1>();
@@ -1025,7 +1013,7 @@ void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseBufferRangeLocal, "Local Byte Ranges");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseBufferRangeLocal, "Local Byte Ranges");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     Array<GpuTaskResourceUse, 2> uses = Array<GpuTaskResourceUse, 2>();
@@ -1163,7 +1151,7 @@ void VerifyGpuBarrier_CrossQueueFanInTransfersOnlyIntersectingBytes(){
     queues[1u] = DedicatedComputeQueue();
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
-    const auto bufferResult = AddBufferMetadata(graph, s_GpuCaseBufferRangeCrossQueue, "Cross Queue Bytes");
+    const auto bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseBufferRangeCrossQueue, "Cross Queue Bytes");
     ASSERT_TRUE(bufferResult.has_value());
     const GpuGraphResourceId buffer = bufferResult.value();
     Array<GpuTaskResourceUse, 1> graphicsUses = Array<GpuTaskResourceUse, 1>();

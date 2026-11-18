@@ -23,26 +23,23 @@ extern class NarrowChar;
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::WideChar")]
 extern class WideChar;
 
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::WideView")]
-extern class WideView;
-
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::WideCompact")]
 extern class WideCompact{
     b8 empty()const;
-    b8 assign(in WideView value);
+    b8 assign(in WideStringView value);
 };
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_WideLimit")]
 extern const usize s_WideLimit;
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_MixedWideLines")]
-extern const WideView s_MixedWideLines;
+extern const WideStringView s_MixedWideLines;
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_ExpandedWideLines")]
-extern const WideView s_ExpandedWideLines;
+extern const WideStringView s_ExpandedWideLines;
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_UnchangedWide")]
-extern const WideView s_UnchangedWide;
+extern const WideStringView s_UnchangedWide;
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MoveOnlyCleanup")]
 extern class MoveOnlyCleanup;
@@ -58,26 +55,18 @@ extern CaseCleanup GuardCleanup(in auto action);
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::FormatDecimal")]
 extern StringView FormatTestDecimal(in usize value, mut auto buffer);
 
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::FixedBufferView")]
-extern StringView ReadFixedText(in auto buffer);
-
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::CopyFixedBuffer")]
-extern void CopyTestBuffer(mut auto buffer, in StringView text);
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::AppendFixedBuffer")]
 extern void AppendTestBuffer(mut auto buffer, in StringView text);
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::WidePrefix")]
-extern WideView WidePrefix(in auto buffer, in usize length);
+extern WideStringView WidePrefix(in auto buffer, in usize length);
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::CountBareLineFeeds<wchar>")]
-extern usize CountWideLineFeeds(in WideView text);
+extern usize CountWideLineFeeds(in WideStringView text);
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ExpandWideLines")]
-extern usize ExpandWideLines(in WideView text, mut auto buffer);
-
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::CountUtf8ScalarsAssumingValid")]
-extern usize CountUtf8Scalars(in StringView value);
+extern usize ExpandWideLines(in WideStringView text, mut auto buffer);
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_AbsentText")]
 extern const NullableFormat s_AbsentText;
@@ -92,18 +81,6 @@ extern class ReplacementOffset;
 extern class PointerFallbackProbe{
     u32 selected;
 };
-
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::UpperFallback")]
-extern void ProbeUpperIdentifier(in StringView text, in auto fallback, mut PointerFallbackProbe target);
-
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::PascalFallback")]
-extern void ProbePascalIdentifier(in StringView text, in auto fallback, mut PointerFallbackProbe target);
-
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::AppendAsciiUpperIdentifier")]
-extern void AppendAsciiUpperIdentifier(in StringView text, in auto fallback, mut String value);
-
-[cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::AppendUnderscoreSeparatedPascalIdentifier")]
-extern void AppendUnderscoreSeparatedPascalIdentifier(in StringView text, in auto fallback, mut String value);
 
 [cpp_header("<tests/unit/global/global_text_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ApplyEdits")]
 extern void ApplyEdits(mut auto edits, mut String text);

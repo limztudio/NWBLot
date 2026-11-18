@@ -9,6 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED")]
+extern const u32 s_ShaderRtOpticalBoundaryClosedNested;
+
 const usize s_RayTracingOpticalSceneHeaderBytes = 32u;
 const usize s_RayTracingOpticalInstanceBytes = 16u;
 const u32 s_RtOpticalSceneFlagBoundsValid = 1u;

@@ -2,10 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Core::Alloc::GlobalArena"), cpp_flags(no_copy, no_assign)]
-extern class TestHeapAllocator{
-    ArenaMemoryStats memoryStats()const;
-};
 [cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Core::Alloc::ScratchArena"), cpp_flags(no_copy, no_assign)]
 extern class TestScratchAllocator{
     ArenaMemoryStats memoryStats()const;
@@ -33,7 +29,7 @@ extern usize BackendSize(in RawAllocation block);
 
 [cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::HeapStorage"), cpp_flags(no_copy, no_assign)]
 extern class HeapStorageHandle{
-    TestHeapAllocator arena;
+    GlobalAllocator arena;
     T makeValue<T>(...);
     ArenaMemoryStats memoryStats()const;
     AllocationIdentity identity()const;

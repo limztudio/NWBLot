@@ -9,15 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Optional<GpuTaskTimingAssignmentState> FindTimingAssignmentStateValue(in GpuTaskTimingHistoryStore store, in GpuTaskTimingAssignmentKey key){
-    const Optional<in GpuTaskTimingAssignmentState> found = BorrowStoreTimingAssignment(store, key);
-    if(found.has_value()){
-        in GpuTaskTimingAssignmentState value = found.value();
-        return value;
-    }
-    return Optional<GpuTaskTimingAssignmentState>();
-}
-
 b8 FragmentHasNullState(in TrackedResourceStateFragment fragment){
     return !fragment.borrowState().has_value();
 }
@@ -645,7 +636,7 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
 
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.020));
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(timingKey);
-    EXPECT_FALSE(FindTimingAssignmentStateValue(timingHistory, assignmentKey).has_value());
+    EXPECT_FALSE(FindStoreTimingAssignmentValue(timingHistory, assignmentKey).has_value());
     timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 2u;
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
@@ -691,7 +682,7 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     EXPECT_NE(frameTwelveAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
 
     ASSERT_TRUE(intervalTimingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.020));
-    const Optional<GpuTaskTimingAssignmentState> intervalAssignmentStateOpt = FindTimingAssignmentStateValue(intervalTimingHistory, assignmentKey);
+    const Optional<GpuTaskTimingAssignmentState> intervalAssignmentStateOpt = FindStoreTimingAssignmentValue(intervalTimingHistory, assignmentKey);
     ASSERT_TRUE(intervalAssignmentStateOpt.has_value());
     const GpuTaskTimingAssignmentState intervalAssignmentState = intervalAssignmentStateOpt.value();
     EXPECT_EQ(intervalAssignmentState.lastAcceptedQueue, queues[0u].id);
@@ -1054,7 +1045,7 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(incumbentKey, incumbentQueue.id, 0.001));
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(candidateKey, candidateQueue.id, 0.010));
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(candidateKey);
-    const Optional<GpuTaskTimingAssignmentState> assignmentStateOpt = FindTimingAssignmentStateValue(timingHistory, assignmentKey);
+    const Optional<GpuTaskTimingAssignmentState> assignmentStateOpt = FindStoreTimingAssignmentValue(timingHistory, assignmentKey);
     ASSERT_TRUE(assignmentStateOpt.has_value());
     const GpuTaskTimingAssignmentState assignmentState = assignmentStateOpt.value();
     EXPECT_EQ(assignmentState.lastAcceptedQueue, candidateQueue.id);
@@ -1194,7 +1185,7 @@ void VerifyGpuScoring_CrossClassTimingCalibrationPreservesStaticBaselineAndHonor
     ASSERT_TRUE(timingHistory.recordSample(computeKey, queues[1u].id, 0.010, 3u));
     EXPECT_EQ(timingHistory.historyCount(), 2u);
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(computeKey);
-    const Optional<GpuTaskTimingAssignmentState> assignmentStateOpt = FindTimingAssignmentStateValue(timingHistory, assignmentKey);
+    const Optional<GpuTaskTimingAssignmentState> assignmentStateOpt = FindStoreTimingAssignmentValue(timingHistory, assignmentKey);
     ASSERT_TRUE(assignmentStateOpt.has_value());
     const GpuTaskTimingAssignmentState assignmentState = assignmentStateOpt.value();
     EXPECT_EQ(assignmentState.lastAcceptedQueue, queues[1u].id);
@@ -1458,7 +1449,7 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     // A non-committing sample adds route history but must not move the committed incumbent or restart its dwell.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(targetTimingKey, firstAuxiliaryGraphicsQueue.id, 0.020));
     const GpuTaskTimingAssignmentKey targetAssignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(targetTimingKey);
-    const Optional<GpuTaskTimingAssignmentState> targetAssignmentStateOpt = FindTimingAssignmentStateValue(timingHistory, targetAssignmentKey);
+    const Optional<GpuTaskTimingAssignmentState> targetAssignmentStateOpt = FindStoreTimingAssignmentValue(timingHistory, targetAssignmentKey);
     ASSERT_TRUE(targetAssignmentStateOpt.has_value());
     const GpuTaskTimingAssignmentState targetAssignmentState = targetAssignmentStateOpt.value();
     EXPECT_EQ(targetAssignmentState.lastAcceptedQueue, queues[0u].id);
@@ -1499,9 +1490,7 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    const Expected<GpuGraphResourceId> bufferResult = AddBufferMetadata(
-        graph,
-        s_GpuCaseTaskGraphTimingFeedbackCrossFamilyBuffer,
+    const Expected<GpuGraphResourceId> bufferResult = AddResourceMetadata(graph, GpuGraphResourceType::Buffer, s_GpuCaseTaskGraphTimingFeedbackCrossFamilyBuffer,
         "Timing Feedback Cross Family Buffer"
     );
     ASSERT_TRUE(bufferResult.has_value());

@@ -13,6 +13,8 @@ const StringView s_DoesNotTargetADeclaredAsset = "does not target a declared ass
 const StringView s_BunchOwnershipMetadata = "\nmetadata local = { \"label\": \"a separately owned metadata string\", \"items\": [1, 2, 3] };\nprobe first;\nprobe second;\nfirst.local = local;\nfirst.target = second;\nsecond.items = [local, { \"target\": first }];\nasset_bunch bunch = [second, first];\n";
 const StringView s_ModifiedSamplerCacheMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 3.5;\n";
 
+const Array<usize, 2u> s_BunchUnusedDeclarationCounts(0u, 32u);
+
 b8 CanExpandFixtureBunch(mut BunchFixture fixture){
     return ExpandFixtureAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena).has_value();
 }
@@ -35,14 +37,6 @@ Expected<ExpandedAssetMetadataVector> ExpandRegisteredBunch(mut BunchFixture fix
     if(!result.has_value())
         return MakeUnexpected(Failure());
     return result.value();
-}
-
-b8 BuildAndGatherWithRepoRootHelper(mut TestArena testArena, in GraphicsTestPath root, in GraphicsTestPath assetRoot, in GraphicsTestPath builtDir, in GraphicsTestPath outDir){
-    return BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, builtDir, outDir);
-}
-
-Expected<SamplerAsset> LoadSamplerFromOutput(in GraphicsTestPath outputDirectory, in Name assetName, in usize expectedVolumeFileCount, mut TestArena testArena){
-    return LoadCookedSamplerAsset(outputDirectory, assetName, expectedVolumeFileCount, testArena);
 }
 
 void PrepareCacheRecordHelper(in GraphicsTestPath root, in DiscoveredNwbFile discovered, in StringView metadataText, in Sha256Digest producer, mut GraphicsScratchArena scratch, mut ScratchString relativePath, mut ScratchString cacheName, mut NwbFileAssetCacheRecord outRecord){
@@ -374,125 +368,48 @@ void VerifyAssetBunchLookup_ExactCaseReferencesPreserveExportAndRepeatedLocalVal
     }
 }
 
-void VerifyAssetBunchLookup_CanonicalDuplicateExportsAreRejectedBeforeNestedResolution(){
-    Vector<usize> unusedCounts = Vector<usize>();
-    unusedCounts.reserve(2u);
-    unusedCounts.push_back(0u);
-    unusedCounts.push_back(32u);
+void ExpectBunchLookupFailure(in usize unusedDeclarations, in StringView metadata, in StringView expectedDiagnostic, in StringView unexpectedDiagnostic){
+    CapturingLogger logger;
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
+    BunchFixture fixture;
+    ASSERT_TRUE(ParseBunchLookupFixture(metadata, unusedDeclarations, fixture));
+    const ArenaMemoryStats baseline = fixture.metadataArena.memoryStats();
+    EXPECT_FALSE(CanExpandFixtureBunch(fixture));
+    EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baseline.usedBytes);
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
+    if(!unexpectedDiagnostic.empty())
+        EXPECT_FALSE(SawCapturedError(logger, unexpectedDiagnostic));
+}
 
-    const StringView metadata = "\nmetadata known;\nprobe Asset = { \"missing\": known.missing };\nprobe asset;\nasset_bunch bunch = [Asset, asset];\n";
-    for(in usize unusedDeclarations : unusedCounts){
-        CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-        BunchFixture fixture = BunchFixture();
-        ASSERT_TRUE(ParseBunchLookupFixture(metadata, unusedDeclarations, fixture));
-        EXPECT_FALSE(CanExpandFixtureBunch(fixture));
-        EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(SawCapturedError(logger, "variable 'asset' is listed more than once"));
-        EXPECT_FALSE(SawCapturedError(logger, "does not target a declared asset"));
-    }
+void VerifyAssetBunchLookup_CanonicalDuplicateExportsAreRejectedBeforeNestedResolution(){
+    for(in usize unused : s_BunchUnusedDeclarationCounts)
+        ExpectBunchLookupFailure(unused, "\nmetadata known;\nprobe Asset = { \"missing\": known.missing };\nprobe asset;\nasset_bunch bunch = [Asset, asset];\n", "variable 'asset' is listed more than once", "does not target a declared asset");
 }
 
 void VerifyAssetBunchLookup_LocalCycleDetectionKeepsCanonicalVariableIdentity(){
-    Vector<usize> unusedCounts = Vector<usize>();
-    unusedCounts.reserve(2u);
-    unusedCounts.push_back(0u);
-    unusedCounts.push_back(32u);
-
-    const StringView metadata = "\nmetadata Local;\nmetadata local = { \"id\": 5 };\nLocal.next = local;\nprobe asset = { \"nested\": Local };\nasset_bunch bunch = [asset];\n";
-    for(in usize unusedDeclarations : unusedCounts){
-        CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-        BunchFixture fixture = BunchFixture();
-        ASSERT_TRUE(ParseBunchLookupFixture(metadata, unusedDeclarations, fixture));
-        const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-        EXPECT_FALSE(CanExpandFixtureBunch(fixture));
-        EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-        EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(SawCapturedError(logger, "cyclic local metadata reference 'local'"));
-    }
+    for(in usize unused : s_BunchUnusedDeclarationCounts)
+        ExpectBunchLookupFailure(unused, "\nmetadata Local;\nmetadata local = { \"id\": 5 };\nLocal.next = local;\nprobe asset = { \"nested\": Local };\nasset_bunch bunch = [asset];\n", "cyclic local metadata reference 'local'", "");
 }
 
 void VerifyAssetBunchLookup_BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup(){
-    Vector<StringView> metadataCases = Vector<StringView>();
-    metadataCases.reserve(2u);
-    metadataCases.push_back("asset_bunch bunch; bunch = [bunch];");
-    metadataCases.push_back("probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];");
-
-    Vector<usize> unusedCounts = Vector<usize>();
-    unusedCounts.reserve(2u);
-    unusedCounts.push_back(0u);
-    unusedCounts.push_back(32u);
-
-    for(in usize unusedDeclarations : unusedCounts){
-        for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
-            CapturingLogger logger = CapturingLogger();
-            LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-            BunchFixture fixture = BunchFixture();
-            ASSERT_TRUE(ParseBunchLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
-            const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-            EXPECT_FALSE(CanExpandFixtureBunch(fixture));
-            EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-            EXPECT_EQ(logger.errorCount(), 1u);
-            StringView expectedDiagnostic = "reference 'bunch' does not target a declared asset";
-            if(caseIndex == 0u)
-                expectedDiagnostic = "item 0 references undeclared asset variable 'bunch'";
-            EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
-        }
+    for(in usize unused : s_BunchUnusedDeclarationCounts){
+        ExpectBunchLookupFailure(unused, "asset_bunch bunch; bunch = [bunch];", "item 0 references undeclared asset variable 'bunch'", "");
+        ExpectBunchLookupFailure(unused, "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];", "reference 'bunch' does not target a declared asset", "");
     }
 }
 
 void VerifyAssetBunchLookup_ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems(){
-    Vector<StringView> metadataCases = Vector<StringView>();
-    metadataCases.reserve(2u);
-    metadataCases.push_back("metadata known; probe asset; asset_bunch bunch = [known.missing, asset];");
-    metadataCases.push_back("probe asset; asset_bunch bunch = [\"asset\", asset];");
-
-    Vector<usize> unusedCounts = Vector<usize>();
-    unusedCounts.reserve(2u);
-    unusedCounts.push_back(0u);
-    unusedCounts.push_back(32u);
-
-    for(in usize unusedDeclarations : unusedCounts){
-        for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
-            CapturingLogger logger = CapturingLogger();
-            LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-            BunchFixture fixture = BunchFixture();
-            ASSERT_TRUE(ParseBunchLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
-            EXPECT_FALSE(CanExpandFixtureBunch(fixture));
-            EXPECT_EQ(logger.errorCount(), 1u);
-            StringView expectedDiagnostic = "item 0 must be a declared asset reference";
-            if(caseIndex == 0u)
-                expectedDiagnostic = "item 0 references undeclared asset variable 'known.missing'";
-            EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
-        }
+    for(in usize unused : s_BunchUnusedDeclarationCounts){
+        ExpectBunchLookupFailure(unused, "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];", "item 0 references undeclared asset variable 'known.missing'", "");
+        ExpectBunchLookupFailure(unused, "probe asset; asset_bunch bunch = [\"asset\", asset];", "item 0 must be a declared asset reference", "");
     }
 }
 
 void VerifyAssetBunchLookup_NestedListFailureFollowsSourceTraversalOrder(){
-    Vector<StringView> metadataCases = Vector<StringView>();
-    metadataCases.reserve(2u);
-    metadataCases.push_back("metadata known; metadata cycle; cycle.next = cycle; probe asset = [known.missing, cycle]; asset_bunch bunch = [asset];");
-    metadataCases.push_back("metadata known; metadata cycle; cycle.next = cycle; probe asset = [cycle, known.missing]; asset_bunch bunch = [asset];");
-
-    Vector<usize> unusedCounts = Vector<usize>();
-    unusedCounts.reserve(2u);
-    unusedCounts.push_back(0u);
-    unusedCounts.push_back(32u);
-
-    for(in usize unusedDeclarations : unusedCounts){
-        for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
-            CapturingLogger logger = CapturingLogger();
-            LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-            BunchFixture fixture = BunchFixture();
-            ASSERT_TRUE(ParseBunchLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
-            const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-            EXPECT_FALSE(CanExpandFixtureBunch(fixture));
-            EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-            EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_EQ(SawCapturedError(logger, "does not target a declared asset"), caseIndex == 0u);
-            EXPECT_EQ(SawCapturedError(logger, "cyclic local metadata reference"), caseIndex == 1u);
-        }
+    for(in usize unused : s_BunchUnusedDeclarationCounts){
+        ExpectBunchLookupFailure(unused, "metadata known; metadata cycle; cycle.next = cycle; probe asset = [known.missing, cycle]; asset_bunch bunch = [asset];", "does not target a declared asset", "cyclic local metadata reference");
+        ExpectBunchLookupFailure(unused, "metadata known; metadata cycle; cycle.next = cycle; probe asset = [cycle, known.missing]; asset_bunch bunch = [asset];", "cyclic local metadata reference", "does not target a declared asset");
     }
 }
 
@@ -502,10 +419,10 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     TestArena testArena = TestArena();
 
     AssetString emptySha1Hex(testArena.arena);
-    AppendGraphicsSha1Hex(ComputeSha1Text(""), emptySha1Hex);
+    AppendSha1Hex(ComputeSha1Text(""), emptySha1Hex);
     EXPECT_EQ(StringView(emptySha1Hex), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
     AssetString abcSha1Hex(testArena.arena);
-    AppendGraphicsSha1Hex(ComputeSha1Text("abc"), abcSha1Hex);
+    AppendSha1Hex(ComputeSha1Text("abc"), abcSha1Hex);
     EXPECT_EQ(StringView(abcSha1Hex), "a9993e364706816aba3e25717850c26c9cd0d89d");
 
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "nwb_asset_cache_sha1_param_checksum");
@@ -516,12 +433,12 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     const GraphicsTestPath mixedCaseNwbPath = JoinGraphicsPath2(assetRoot, "Samplers", "First_Sampler.nwb");
     const Name virtualPath = s_ProjectSamplersFirstSampler;
 
-    ASSERT_TRUE(WriteTextFile(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
-    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_first"), prepared.outputDirectory));
+    ASSERT_TRUE(WriteGraphicsFixtureText(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_first"), prepared.outputDirectory));
 
     const Sha1Digest expectedDigest = ComputeSha1Text("assets/samplers/first_sampler.nwb");
     AssetString expectedSha1Name(testArena.arena);
-    AppendGraphicsSha1Hex(expectedDigest, expectedSha1Name);
+    AppendSha1Hex(expectedDigest, expectedSha1Name);
 
     const GraphicsTestPath expectedCacheFilePath = JoinGraphicsPath2(root, s_CacheDirectory, StringView(expectedSha1Name));
     AssetBytes initialCacheBytes(testArena.arena);
@@ -541,7 +458,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         const Expected<Path, ErrorCode> executablePath = executablePaths.path();
         ASSERT_TRUE(executablePath.has_value());
         Vector<u8> executableBytes = Vector<u8>();
-        ASSERT_TRUE(GraphicsReadBinaryFile(executablePath.value(), executableBytes).has_value());
+        ASSERT_TRUE(ReadBinaryFile(executablePath.value(), executableBytes).has_value());
         const Sha256Digest producer = ComputeSha256(executableBytes);
         Sha256Digest otherProducer = producer;
         otherProducer.bytes[0u] = otherProducer.bytes[0u] ^ 1u;
@@ -563,7 +480,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         staleHeader.paramSha256 = staleProducer.paramSha256;
         ASSERT_TRUE(OverwritePOD(0u, staleHeader, staleBytes));
         ASSERT_TRUE(GraphicsWriteBinaryFile(expectedCacheFilePath, staleBytes));
-        ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_new_producer"), JoinGraphicsPath(root, "out_new_producer")));
+        ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_new_producer"), JoinGraphicsPath(root, "out_new_producer")));
         AssetBytes refreshed(testArena.arena);
         ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, refreshed).has_value());
         EXPECT_EQ(refreshed, initialCacheBytes);
@@ -571,8 +488,8 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         const GraphicsTestPath bunchPath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.nwb");
         const GraphicsTestPath fontPath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.font");
         const GraphicsTestPath texturePath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.tex");
-        ASSERT_TRUE(WriteTextFile(fontPath, "font-one"));
-        ASSERT_TRUE(WriteTextFile(texturePath, "texture-one"));
+        ASSERT_TRUE(WriteGraphicsFixtureText(fontPath, "font-one"));
+        ASSERT_TRUE(WriteGraphicsFixtureText(texturePath, "texture-one"));
         DiscoveredNwbFile bunch = MakeDiscoveredNwbFile(assetRoot, bunchPath, s_ProjectVirtualRoot, testArena, scratch);
         ScratchString largeMetadata(scratch.arena);
         largeMetadata.append(70000u, 32u);
@@ -582,20 +499,20 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         NwbFileAssetCacheRecord changedTexture(testArena.arena);
         PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, relativePath, cacheName, initialSidecars);
         ASSERT_TRUE(initialSidecars.canWriteCache);
-        ASSERT_TRUE(WriteTextFile(fontPath, "font-two"));
+        ASSERT_TRUE(WriteGraphicsFixtureText(fontPath, "font-two"));
         PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, relativePath, cacheName, changedFont);
         ASSERT_TRUE(changedFont.canWriteCache);
         EXPECT_NE(initialSidecars.paramSha256, changedFont.paramSha256);
-        ASSERT_TRUE(WriteTextFile(texturePath, "texture-two"));
+        ASSERT_TRUE(WriteGraphicsFixtureText(texturePath, "texture-two"));
         PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, relativePath, cacheName, changedTexture);
         ASSERT_TRUE(changedTexture.canWriteCache);
         EXPECT_NE(changedFont.paramSha256, changedTexture.paramSha256);
     }
 
     // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
-    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_second"), JoinGraphicsPath(root, "out_second")));
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_second"), JoinGraphicsPath(root, "out_second")));
 
-    const Expected<SamplerAsset> cachedSampler = LoadSamplerFromOutput(JoinGraphicsPath(root, "out_second"), virtualPath, 1u, testArena);
+    const Expected<SamplerAsset> cachedSampler = LoadCookedSamplerAsset(JoinGraphicsPath(root, "out_second"), virtualPath, 1u, testArena);
     ASSERT_TRUE(cachedSampler.has_value());
     EXPECT_FLOAT_EQ(cachedSampler.value().description().mipBias, 0.0f);
 
@@ -605,7 +522,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     corruptedHeader.payloadSectionHashFnv64 = corruptedHeader.payloadSectionHashFnv64 ^ 1u;
     ASSERT_TRUE(OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
     ASSERT_TRUE(GraphicsWriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
-    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_repaired"), JoinGraphicsPath(root, "out_repaired")));
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_repaired"), JoinGraphicsPath(root, "out_repaired")));
     AssetBytes repairedCacheBytes(testArena.arena);
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
@@ -616,13 +533,13 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     corruptedCacheBytes = initialCacheBytes;
     ASSERT_TRUE(OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
     ASSERT_TRUE(GraphicsWriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
-    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_bad_count"), JoinGraphicsPath(root, "out_bad_count")));
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_bad_count"), JoinGraphicsPath(root, "out_bad_count")));
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
     // Modify .nwb parameter; checksum changes and invalidates __asset_cache/<sha1>.
-    ASSERT_TRUE(WriteTextFile(mixedCaseNwbPath, s_ModifiedSamplerCacheMetadata));
-    ASSERT_TRUE(BuildAndGatherWithRepoRootHelper(testArena, root, assetRoot, JoinGraphicsPath(root, "built_third"), JoinGraphicsPath(root, "out_third")));
+    ASSERT_TRUE(WriteGraphicsFixtureText(mixedCaseNwbPath, s_ModifiedSamplerCacheMetadata));
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_third"), JoinGraphicsPath(root, "out_third")));
 
     AssetBytes updatedCacheBytes(testArena.arena);
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, updatedCacheBytes).has_value());
@@ -630,7 +547,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     ASSERT_TRUE(updatedHeader.has_value());
     EXPECT_NE(updatedHeader.value().paramSha256, initialHeader.paramSha256);
 
-    const Expected<SamplerAsset> updatedSampler = LoadSamplerFromOutput(JoinGraphicsPath(root, "out_third"), virtualPath, 1u, testArena);
+    const Expected<SamplerAsset> updatedSampler = LoadCookedSamplerAsset(JoinGraphicsPath(root, "out_third"), virtualPath, 1u, testArena);
     ASSERT_TRUE(updatedSampler.has_value());
     EXPECT_FLOAT_EQ(updatedSampler.value().description().mipBias, 3.5f);
     EXPECT_EQ(logger.errorCount(), 0u);

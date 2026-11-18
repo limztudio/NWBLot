@@ -239,7 +239,7 @@ void VerifyWin32TextInputFixture_IsolatedLowSurrogateCancelsWithExplicitFailure(
     EXPECT_TRUE(out.event.text.empty());
 
     b8 warningOk = true;
-    if(s_CheckWin32Warnings)
+    if(s_RuntimeWarningsEnabled)
         warningOk = self.m_logger.sawMessageContainingUtf8("Text input: native delivery rejected") && self.m_logger.lastType() == LogType::Warning;
     EXPECT_TRUE(warningOk);
 }
@@ -499,7 +499,7 @@ void VerifyWin32TextInputFixture_SceneFallbackBridgeRejectsForeignServiceAndWron
         unsupportedDecode = DecodeWin32FallbackCharInput(unsupported.value().deref(), 'A').has_value();
         unsupportedReset = ResetWin32FallbackCharInput(unsupported.value().deref());
     }
-    TestThread worker = TestThread(lambda[mut self, mut wrongThreadDecode, mut wrongThreadReset]() -> void{
+    JoiningThread worker = JoiningThread(lambda[mut self, mut wrongThreadDecode, mut wrongThreadReset]() -> void{
         wrongThreadDecode = DecodeWin32FallbackCharInput(self.m_service.deref(), 'A').has_value();
         wrongThreadReset = ResetWin32FallbackCharInput(self.m_service.deref());
     });

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_DeferredSceneShadingGpuByteCount = 16u;
 const usize s_DeferredLightGpuByteCount = 5120u;
 
 
@@ -30,7 +29,7 @@ class RendererDeferredState : NoCopy{
     public ShaderHandle m_presentPixelShader = ShaderHandle();
     public GraphicsPipelineHandle m_presentPipeline = GraphicsPipelineHandle();
     public u32 m_lightGpuDataCount = 0u;
-    public Array<u8, s_DeferredSceneShadingGpuByteCount> m_sceneShadingGpuData;
+    public Array<u8, s_SceneShadingGpuDataBytes> m_sceneShadingGpuData;
     public b8 m_sceneShadingGpuDataValid = false;
     // Cached bytes avoid redundant light-buffer uploads.
     public Array<u8, s_DeferredLightGpuByteCount> m_lightGpuData;

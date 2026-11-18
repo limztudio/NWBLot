@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "registry_sdk.adhd"
 #include "cook_tool_sdk.adhd"
 #include "name_contract_sdk.adhd"
 #include <tests/common/value_storage.adhd>
@@ -40,20 +39,11 @@ b8 SerializeNullAllocatedAsset(in NullAllocatedAsset asset, mut Vector<u8> bytes
 
 type NullAllocatedCodec = NameProbeCodec<NullAllocatedAsset>;
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookEntryBucket"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
-extern class TestCookBucket{
-    usize size()const;
-    b8 parseDocument(in GraphicsOwnedPath root, in StringView virtualRoot, in GraphicsOwnedPath path, in MetascriptDocument document, mut CookEntryParseContext context);
-    b8 parseValue(in Name path, in GraphicsOwnedPath file, in MetascriptValue value, mut CookEntryParseContext context);
-    b8 appendCachedEntry(in cpp_ref CookEntrySourceLocation source, in cpp_ref Name path, in Span<u8> bytes, mut CookEntryParseContext context);
-    b8 writeCookedAssets(mut CookEntryWriteContext context);
-};
-
-class NullAllocatedBucket : TestCookBucket, NullAllocation{
-    public NullAllocatedBucket(mut AssetCodecFixtureStorage storage){}
+class NullAllocatedBucket : ICookEntryBucket, NullAllocation{
+    public NullAllocatedBucket(mut GlobalAllocator storage){}
     public usize size()const override{ return 0u; }
-    public b8 parseDocument(in GraphicsOwnedPath root, in StringView virtualRoot, in GraphicsOwnedPath path, in MetascriptDocument document, mut CookEntryParseContext context)override{ return false; }
-    public b8 parseValue(in Name path, in GraphicsOwnedPath file, in MetascriptValue value, mut CookEntryParseContext context)override{ return false; }
+    public b8 parseDocument(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut CookEntryParseContext context)override{ return false; }
+    public b8 parseValue(in Name path, in GlobalPath file, in MetascriptValue value, mut CookEntryParseContext context)override{ return false; }
     public b8 appendCachedEntry(in CookEntrySourceLocation source, in Name path, in Span<u8> bytes, mut CookEntryParseContext context)override{ return false; }
     public b8 writeCookedAssets(mut CookEntryWriteContext context)override{ return false; }
 }
